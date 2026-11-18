@@ -38,7 +38,6 @@ import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import {
   passesFileFilters,
@@ -359,9 +358,11 @@ export function createDesktopWorkspaceIpc(
     initialCommand?: string,
   ) {
     return Effect.gen(function* () {
-      const session = yield* options.ptyHost
-        .create({ id: sessionId, cols, rows })
-        .pipe(Effect.mapError((cause) => hostFailed('ptyHost.create', cause)));
+      const session = yield* options.ptyHost.create({
+        id: sessionId,
+        cols,
+        rows,
+      });
       if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);

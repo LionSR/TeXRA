@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Ref } from 'effect';
 import { TestClock } from 'effect/testing';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
 import {
   DeviceAuthorizationPending,
@@ -14,7 +14,7 @@ function queuedPoll<T>(queue: Array<'pending' | 'slow_down' | T | Error>) {
   const poll = Effect.gen(function* () {
     yield* Ref.update(attempts, (n) => n + 1);
     const next = queue.shift();
-    if (next === undefined) throw new Error('queuedPoll ran out of answers');
+    assert(next !== undefined, 'queuedPoll ran out of answers');
     if (next === 'pending' || next === 'slow_down') {
       return yield* new DeviceAuthorizationPending({
         slowDown: next === 'slow_down',

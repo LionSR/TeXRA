@@ -2,8 +2,8 @@
 export const ELECTRON_WEBVIEW_MESSAGE_CHANNEL = 'texra:webview-message';
 export const ELECTRON_WEBVIEW_PUSH_CHANNEL = 'texra:webview-push';
 
-/** The session protocol's own pair: `UpMessage`s to main and
- *  `DownMessage`s back. Nothing on it is a command, so neither end tells the
+/** The session protocol's own pair: `rpc` messages in their session
+ *  envelope, to main and back. Nothing on it is a command, so neither end tells the
  *  two apart by shape. */
 export const ELECTRON_SESSION_MESSAGE_CHANNEL = 'texra:session-message';
 export const ELECTRON_SESSION_PUSH_CHANNEL = 'texra:session-push';

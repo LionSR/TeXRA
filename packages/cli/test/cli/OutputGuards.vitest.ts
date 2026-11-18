@@ -30,23 +30,19 @@ describe('dangling output symlinks', () => {
         const fileLink = join(root, 'file-link.tex');
         const directoryReferent = join(root, 'absent-directory');
         const directoryLink = join(root, 'directory-link');
-        const linkError = yield* Effect.match(
-          Effect.tryPromise({
-            try: async () => {
-              await symlink(fileReferent, fileLink, 'file');
-              await symlink(
-                directoryReferent,
-                directoryLink,
-                process.platform === 'win32' ? 'junction' : 'dir',
-              );
-            },
-            catch: (error: unknown) => error,
-          }),
-          {
-            onSuccess: () => undefined,
-            onFailure: (error: unknown) => error,
-          },
-        );
+        const linkError = yield* Effect.promise(async (): Promise<unknown> => {
+          try {
+            await symlink(fileReferent, fileLink, 'file');
+            await symlink(
+              directoryReferent,
+              directoryLink,
+              process.platform === 'win32' ? 'junction' : 'dir',
+            );
+            return undefined;
+          } catch (error) {
+            return error;
+          }
+        });
         if (linkError !== undefined) {
           const code =
             linkError instanceof Error && 'code' in linkError
@@ -71,11 +67,11 @@ describe('dangling output symlinks', () => {
         );
         expect(dirError).toBeInstanceOf(CliUsageError);
 
-        const statError = yield* Effect.flip(
-          Effect.tryPromise({
-            try: () => stat(directoryReferent),
-            catch: (error: unknown) => error,
-          }),
+        const statError = yield* Effect.promise(() =>
+          stat(directoryReferent).then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
         );
         expect(statError).toMatchObject({ code: 'ENOENT' });
       }).pipe(Effect.provide(nodePlatformLayer)),

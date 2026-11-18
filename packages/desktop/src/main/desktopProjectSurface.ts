@@ -20,7 +20,7 @@ import { agentDocumentForPath } from './desktopAgentDocuments.js';
 import { DesktopCommandFailed } from './desktopIpcTypes.js';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
-import type { DesktopPromptController } from './desktopPromptController.js';
+import type { makeDesktopPrompts } from './desktopPromptController.js';
 import type {
   DesktopProject,
   DesktopProjectRegistry,
@@ -50,7 +50,9 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly runtime: ProcessRuntime;
     readonly projects: DesktopProjectRegistry;
     readonly bindings: ProjectBindings;
-    readonly promptController: DesktopPromptController;
+    readonly promptController: Effect.Success<
+      ReturnType<typeof makeDesktopPrompts>
+    >;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
     const { host, runtime, projects, bindings } = options;
     const windowScope = yield* Scope.Scope;

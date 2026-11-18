@@ -1,20 +1,20 @@
 /**
  * What the service asks of a window: the host capabilities a run uses while
  * it runs in the service (a file's diagnostics, an inline criticism, a PDF
- * to open, a notice to show). A window
- * offers the capabilities it has when it attaches (`host.attach`); each call
- * reaches it as a frame of that stream, and it answers with `host.answer`.
- * A call's result enters the run's history only through the tool result
- * that used it.
+ * to open, a notice to show). The window serves them (`WindowRpcs`) and the
+ * service calls them, over the service's own protocol turned around: a
+ * window offers the capabilities it has when it attaches (`host.attach`),
+ * the service's `rpc` messages reach it as frames of that stream, and the
+ * window's replies go back with `host.answer`. A call's result enters the
+ * run's history only through the tool result that used it.
  */
 import { type Duration, Schema } from 'effect';
+import { Rpc, RpcGroup } from 'effect/rpc';
 
 import {
-  ApprovalPolicySchema,
   FileLocationSchema,
   LaunchNoticeSchema,
   RequestShowErrorPayloadSchema,
-  RunIdSchema,
   type OpenFilePayload,
 } from '@texra-ai/harness/schemas';
 import { ManualCriticismEntrySchema } from '@texra/tools/editorHost';
@@ -38,103 +38,72 @@ const NoticeSchema = Schema.Union([
 ]);
 export type Notice = typeof NoticeSchema.Type;
 
-/** The calls a run waits on, by kind: each is answered with
- *  `host.answer`. */
-const AskedCallSchema = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal('readDiagnostics'),
-    path: Schema.String,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('addCriticism'),
-    entry: ManualCriticismEntrySchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('openPdf'),
-    location: FileLocationSchema,
-    preserveFocus: Schema.Boolean,
-  }),
-]);
-export type AskedCall = typeof AskedCallSchema.Type;
+/** Why a window could not carry out a call, in the window's words; the
+ *  service reports it as the capability's own failure. */
+export class HostCallFailed extends Schema.TaggedError<HostCallFailed>()(
+  'HostCallFailed',
+  { message: Schema.String },
+) {}
 
-/** The calls nothing waits on: the window carries each out and says itself
- *  when it could not. */
-const ToldCallSchema = Schema.Union([
+/**
+ * The calls a window serves its project's tasks, one procedure per
+ * capability. A run waits on the first three, each for as long as
+ * {@link ASKED_WITHIN} says; `notices` and `filesWritten` are told: the
+ * service waits only until the window has them, and the window says itself
+ * when it could not carry one out.
+ */
+export const WindowRpcs = RpcGroup.make(
+  Rpc.make('readDiagnostics', {
+    payload: { path: Schema.String },
+    success: Schema.Array(GenericDiagnosticSchema),
+    error: HostCallFailed,
+  }),
+  Rpc.make('addCriticism', {
+    payload: { entry: ManualCriticismEntrySchema },
+    success: Schema.Boolean,
+    error: HostCallFailed,
+  }),
+  Rpc.make('openPdf', {
+    payload: { location: FileLocationSchema, preserveFocus: Schema.Boolean },
+    error: HostCallFailed,
+  }),
   // The runtime's notices and its approval-policy denials, which a window
   // with `emit` presents.
-  Schema.Struct({ kind: Schema.Literal('notices'), notice: NoticeSchema }),
+  Rpc.make('notices', { payload: { notice: NoticeSchema } }),
   // Files a task of the project wrote past the editor's own write path, as
   // the service's announcer heard them from the task's rows.
-  Schema.Struct({
-    kind: Schema.Literal('filesWritten'),
-    absolutePaths: Schema.Array(Schema.String),
+  Rpc.make('filesWritten', {
+    payload: { absolutePaths: Schema.Array(Schema.String) },
   }),
-]);
-export type ToldCall = typeof ToldCallSchema.Type;
-
-/** One call of the service on a window, by kind. */
-export type HostCall = AskedCall | ToldCall;
-
-/** What a window can do for a run: each kind of call is the capability a
- *  window offers to be sent it. */
-export const HostCapabilitySchema = Schema.Literals(
-  [...AskedCallSchema.members, ...ToldCallSchema.members].map(
-    (member) => member.fields.kind.literal,
-  ),
 );
-export type HostCapability = HostCall['kind'];
 
-/** What each call a run waits on answers with, and how long a run waits
- *  for it. A diagnostics read may build the document first, so it waits
- *  longest. */
-export const ANSWERED = Object.freeze({
-  readDiagnostics: Object.freeze({
-    result: Schema.Array(GenericDiagnosticSchema),
-    within: '2 minutes',
-  }),
-  addCriticism: Object.freeze({
-    result: Schema.Boolean,
-    within: '10 seconds',
-  }),
-  openPdf: Object.freeze({ result: Schema.Null, within: '30 seconds' }),
-} as const) satisfies Record<
-  AskedCall['kind'],
-  {
-    readonly result: Schema.Codec<unknown, unknown>;
-    readonly within: Duration.Input;
-  }
->;
+/** What a window can do for a run: each capability is the procedure a
+ *  window offers to be called with. */
+export const HostCapabilitySchema = Schema.Literals([
+  'readDiagnostics',
+  'addCriticism',
+  'openPdf',
+  'notices',
+  'filesWritten',
+] satisfies ReadonlyArray<RpcGroup.Rpcs<typeof WindowRpcs>['_tag']>);
+export type HostCapability = typeof HostCapabilitySchema.Type;
 
-/** A frame of `host.attach`: the attachment's id first, then the calls. A
- *  call a run waits on (`ask`) carries the id its answer names; a told one
- *  carries none, since nothing waits for its answer. */
+/** How long a run waits for each call it waits on. A diagnostics read may
+ *  build the document first, so it waits longest. */
+export const ASKED_WITHIN = Object.freeze({
+  readDiagnostics: '2 minutes',
+  addCriticism: '10 seconds',
+  openPdf: '30 seconds',
+} as const satisfies Partial<Record<HostCapability, Duration.Input>>);
+
+/** A frame of `host.attach`: the attachment's id first, then the service's
+ *  calls on the window, each one of `rpc`'s messages to the window's
+ *  `WindowRpcs` server, which `rpc` itself decodes. */
 export const HostAttachFrameSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('attached'),
     attachment: Schema.String,
   }),
-  Schema.Struct({
-    kind: Schema.Literal('ask'),
-    id: Schema.String,
-    call: AskedCallSchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('tell'),
-    call: ToldCallSchema,
-  }),
+  Schema.Struct({ kind: Schema.Literal('call'), message: Schema.Json }),
 ]);
 export type HostAttachFrame = typeof HostAttachFrameSchema.Type;
-
-/** A window's answer to one call. A failure says why in the window's
- *  words; the service reports it as the capability's own failure. */
-export const HostAnswerSchema = Schema.Union([
-  Schema.Struct({
-    ok: Schema.Literal(true),
-    value: Schema.Json,
-  }),
-  Schema.Struct({
-    ok: Schema.Literal(false),
-    message: Schema.String,
-  }),
-]);
-export type HostAnswer = typeof HostAnswerSchema.Type;

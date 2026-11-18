@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, Layer, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { listRunGeneratedFiles } from '@texra-ai/harness/host';
@@ -36,8 +36,9 @@ describe('listRunGeneratedFiles', () => {
         ),
       ).toBe(failure);
     }).pipe(
-      Effect.provide(nodePlatformLayer),
-      Effect.provide(FakeHost.layer()),
+      Effect.provide(
+        nodePlatformLayer.pipe(Layer.provideMerge(FakeHost.layer())),
+      ),
     ),
   );
 });

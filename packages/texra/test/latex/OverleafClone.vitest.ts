@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, FileSystem, Layer, PlatformError } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import {
@@ -83,9 +83,14 @@ describe('cloneOverleafProject', () => {
       const mkdirPorts = createPorts({
         runClone: vi.fn(() =>
           Effect.fail(
-            new Error(
-              "EACCES: permission denied, mkdir '/home/user/coauthor-paper'",
-            ),
+            PlatformError.systemError({
+              _tag: 'PermissionDenied',
+              module: 'FileSystem',
+              method: 'makeDirectory',
+              pathOrDescriptor: '/home/user/coauthor-paper',
+              description:
+                "EACCES: permission denied, mkdir '/home/user/coauthor-paper'",
+            }),
           ),
         ),
       });

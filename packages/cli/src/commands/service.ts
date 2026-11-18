@@ -4,7 +4,6 @@ import { Deferred, Effect, Exit, References } from 'effect';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
-import { stopService } from '@texra/controllers/server/client';
 import {
   SERVICE_SUBCOMMAND,
   servicePaths,
@@ -19,12 +18,12 @@ import {
   CliUsageError,
   type CliContext,
 } from '../runtime/platform/cliContext';
+import { isLinked, linkCliService } from '../runtime/platform/cliService';
 import {
-  CliServiceFailed,
-  isLinked,
-  linkCliService,
-} from '../runtime/platform/cliService';
-import { probeRecordedService } from '@texra/controllers/server/client';
+  probeRecordedService,
+  ServiceUnavailable,
+  stopService,
+} from '@texra/controllers/server/client';
 import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
@@ -196,15 +195,15 @@ const stopRunningService = Effect.gen(function* () {
       duration: STOP_TIMEOUT,
       orElse: () =>
         Effect.fail(
-          new CliServiceFailed({
-            message: `it did not exit within ${STOP_TIMEOUT}`,
+          new ServiceUnavailable({
+            reason: `it did not exit within ${STOP_TIMEOUT}`,
           }),
         ),
     }),
     Effect.mapError(
       (failure) =>
-        new CliServiceFailed({
-          message: `Could not stop ${service}: ${failure.message}`,
+        new ServiceUnavailable({
+          reason: `Could not stop ${service}: ${failure.message}`,
         }),
     ),
   );
@@ -253,11 +252,11 @@ const restartCommand = defineCliCommand({
       Effect.gen(function* () {
         const link = yield* linkCliService(context.storageRoot, true);
         if (!isLinked(link))
-          return yield* new CliServiceFailed({ message: link.none });
+          return yield* new ServiceUnavailable({ reason: link.none });
         const client = yield* link.client.get;
         if (client === null)
-          return yield* new CliServiceFailed({
-            message: 'The TeXRA service is not linked.',
+          return yield* new ServiceUnavailable({
+            reason: 'The TeXRA service is not linked.',
           });
         return yield* client['service.hello']({ protocol: PROTOCOL.digest });
       }),

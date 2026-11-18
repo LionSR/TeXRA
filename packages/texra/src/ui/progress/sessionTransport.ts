@@ -1,69 +1,64 @@
 /**
- * The webview side of the events transport: the decoder that turns host-bridge messages into frame
- * deliveries, request responses, and surface actions, and the signals the
- * root reads. The runtime and the per-session graphs are
- * `webviewSessionLayer`'s; the rest of the frontend reads signals and posts
- * `UpMessage`s, and nothing else touches the session layer. The host names
- * the pipe `UpMessage`s leave by and hands every message that arrives on
- * its session channel to `receive`: the extension's window carries nothing
- * else, and the desktop's session channel is its own.
+ * The webview side of the session channel: one `RpcClient` of the
+ * session's procedures (`SessionRpcs`) per open session, its view built
+ * from the frames it reads, and the signals the root reads. The rest of the
+ * frontend reads signals and calls `runtimeRequest` / `hostRequest`. The
+ * host names the pipe messages leave by and hands every message that
+ * arrives on its session channel to `receive`: the extension's window
+ * carries nothing else, and the desktop's session channel is its own.
  */
 import {
-  Deferred,
+  Cause,
   Effect,
   Exit,
   type ManagedRuntime,
-  Queue,
   Result,
   Schema,
   Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
+import { RpcClient, type RpcClientError, type RpcMessage } from 'effect/rpc';
 
 import {
   Rejected,
+  toErrorMessage,
   type OutcomeSchema,
   type RunId,
+  type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 import type { TranscriptInterest } from '@texra-ai/harness/transcript';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
-  DownMessageSchema,
-  type DownMessage,
-  type EventsFrame,
-  type HostFrame,
+  SessionEnvelopeSchema,
+  SessionRpcs,
   type HostOutcome,
-  type Response,
+  type HostSurfaceAction,
+  type SessionWire,
   type Subscribe,
-  type UpMessage,
 } from '@texra/shared/session/sessionFrames';
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import {
   installWebviewRuntime,
-  WebviewSessions,
+  remoteSessionView,
 } from '@texra/shared/session/webviewSessionLayer';
+import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import type { SessionView } from '@texra-ai/harness/schemas';
 import { Invalid, type BridgeError } from '@texra/shared/session/bridgeErrors';
 
-/** One session's graph as `WebviewSessions.open` hands it out. */
-type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;
-
-/** What the transport hands the surfaces: the host's `surface.action`, or
- *  its own report of a frame it could not read. */
+/** What the transport hands the surfaces: the host's action, or its own
+ *  report of a frame it could not read. */
 type WireSurfaceAction =
-  | Extract<DownMessage, { kind: 'surface.action' }>['action']
+  | HostSurfaceAction
   | Extract<SurfaceAction, { kind: 'reportError' }>;
 
-/** One open session: its two levels as signals and its `Subscribe`. */
+/** One open session: its two levels as signals. */
 export interface WebviewSession {
   readonly key: string;
   readonly view$: StreamSignal<SessionView>;
-  /** Null until the first frame carries the host's snapshot. */
+  /** Null until the host's first snapshot arrives. */
   readonly host$: StreamSignal<HostSnapshot | null>;
-  /** The frames service drops frames of an older generation. */
-  generation: number;
 }
 
 export interface WebviewTransport {
@@ -74,18 +69,19 @@ export interface WebviewTransport {
   receive(data: unknown): void;
   /** Open (or reuse) a session's graph. */
   open(session: string): WebviewSession;
-  /** A new generation over the named transcript aggregates. */
-  subscribe(session: WebviewSession, aggregates: Subscribe['aggregates']): void;
-  /** Answered by the `runtime.response` of its session under its id. Run
-   *  it with {@link run}: closing the session interrupts it, and an answer
-   *  that arrives after is dropped. */
-  runtimeRequest(
-    message: Extract<UpMessage, { kind: 'runtime.request' }>,
-  ): Effect.Effect<typeof OutcomeSchema.Type, BridgeError>;
-  /** Answered by the `host.response` of its session under its id, as
-   *  {@link runtimeRequest} is; `timeoutMs` passing fails it `Rejected`. */
+  /** Name the transcripts the session's view holds; the view asks the host
+   *  again from where it stands. */
+  subscribe(session: string, aggregates: Subscribe['aggregates']): void;
+  /** One runtime command, answered with its outcome. Run it with
+   *  {@link run}: closing the session interrupts it. */
+  runtimeRequest(message: {
+    readonly session: string;
+    readonly request: RuntimeCommand;
+  }): Effect.Effect<typeof OutcomeSchema.Type, BridgeError>;
+  /** One host command, as {@link runtimeRequest}; `timeoutMs` passing
+   *  fails it `Rejected`. */
   hostRequest(
-    message: Extract<UpMessage, { kind: 'host.request' }>,
+    message: { readonly session: string; readonly request: HostCommand },
     timeoutMs?: number,
   ): Effect.Effect<HostOutcome, BridgeError>;
   /** Run `program` as a fiber of the session's scope, so closing the session
@@ -94,143 +90,72 @@ export interface WebviewTransport {
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
-  /** Release a session's graph: its signals, its scope (the LayerMap
-   *  entry, the session view fiber, the frames), and its slot, so a later `open`
-   *  of the key builds a fresh one. A key that is not open is a no-op. */
+  /** Release a session's graph: its signals, its scope (its client and the
+   *  calls in flight, its view), and its slot, so a later `open` of the key
+   *  builds a fresh one. A key that is not open is a no-op. */
   close(session: string): void;
   dispose(): void;
 }
 
+type SessionClient = RpcClient.FromGroup<
+  typeof SessionRpcs,
+  RpcClientError.RpcClientError
+>;
+
 interface OpenSession extends WebviewSession {
-  readonly graph: WebviewGraph;
+  readonly client: SessionClient;
   readonly scope: Scope.Closeable;
   /** The shell's transcript set, held for the session's scope. */
   readonly shell: TranscriptInterest;
-  /** This session's requests awaiting their response, by request id. Each
-   *  waits in a fiber of the session's scope and removes its own entry. */
-  readonly pending: Map<string, Pending>;
-  /** The frames the host sent, in arrival order; one fiber of the session's
-   *  scope feeds them to the frames service. */
-  readonly inbox: Queue.Queue<EventsFrame | HostFrame>;
+  /** One message from the host to this session's client. */
+  readonly deliver: (
+    message: RpcMessage.FromServerEncoded,
+  ) => Effect.Effect<void>;
 }
 
-/** One request waiting for its response: `answer` takes the response
- *  that arrived under its id, `fail` a response that could not be read. */
-interface Pending {
-  readonly answer: (response: Response) => void;
-  readonly fail: (error: BridgeError) => void;
-}
-
-/** A response's result as its request's answer. */
-const answerOf = <A>(
-  result:
-    | { readonly ok: true; readonly outcome: A }
-    | {
-        readonly ok: false;
-        readonly error: BridgeError;
-      },
-): Effect.Effect<A, BridgeError> =>
-  result.ok ? Effect.succeed(result.outcome) : Effect.fail(result.error);
-
-/** A response of the other kind: the host's defect, said as `Invalid`. */
-const mismatched = (response: Response) =>
-  Effect.fail(
-    new Invalid({
-      reason: `The host answered with a ${response.kind} for a request of the other kind.`,
-    }),
-  );
-
-/** The routing fields of a down-message that failed its schema: enough to
- *  find the session, generation, or request it was for. */
-const DownEnvelopeSchema = Schema.Struct({
-  kind: Schema.String,
-  session: Schema.String,
-  generation: Schema.optional(Schema.Number),
-  requestId: Schema.optional(Schema.String),
-});
+/** A call the host could not answer as its procedure says (a reply that
+ *  did not decode, a request it could not read): the host's defect, said as
+ *  `Invalid`. */
+const unanswered = (cause: unknown) =>
+  new Invalid({
+    reason: `The host could not answer this request: ${toErrorMessage(cause)}`,
+  });
 
 export function installWebviewTransport(
-  post: (message: UpMessage) => void,
+  post: (message: SessionWire) => void,
 ): WebviewTransport {
   const runtime = installWebviewRuntime();
+  /** This page's name on the channel: a reloaded page is a new client. */
+  const self = crypto.randomUUID();
   const sessions = new Map<string, OpenSession>();
   let surfaceListener: (
     session: string,
     action: WireSurfaceAction,
   ) => void = () => undefined;
 
-  /** Queue one frame for its session's feeder, which hands them to the frames
-   *  service in arrival order; the frames service drops a frame of another
-   *  generation. A frame for a session that is not open is the host's
-   *  defect, dropped loudly. */
-  const deliver = (frame: EventsFrame | HostFrame): void => {
-    const session = sessions.get(frame.session);
-    if (!session) {
-      console.warn(
-        `[progress] dropped a frame for session ${frame.session}: not open`,
+  const receive = (data: unknown): void => {
+    const parsed = Schema.decodeUnknownResult(SessionEnvelopeSchema)(data);
+    if (!Result.isSuccess(parsed)) {
+      console.error(
+        '[progress] malformed session message',
+        data,
+        parsed.failure,
       );
       return;
     }
-    Queue.offerUnsafe(session.inbox, frame);
-  };
-
-  /** A down-message that failed its schema is the host's defect. A response
-   *  ends its request `Invalid` rather than hang it; a frame of the live
-   *  generation is said on the surface's notice, since its events are lost
-   *  until the view reopens. */
-  const reportMalformed = (data: unknown, error: Schema.SchemaError): void => {
-    console.error('[progress] malformed session message', data, error);
-    const envelope = Schema.decodeUnknownResult(DownEnvelopeSchema)(data);
-    if (!Result.isSuccess(envelope)) return;
-    const { kind, session: key, generation, requestId } = envelope.success;
+    const { session: key, client, message } = parsed.success;
+    // An answer to this page's predecessor on the same channel.
+    if (client !== self) return;
     const session = sessions.get(key);
-    if (!session) return;
-    if (
-      (kind === 'runtime.response' || kind === 'host.response') &&
-      requestId !== undefined
-    ) {
-      session.pending
-        .get(requestId)
-        ?.fail(new Invalid({ reason: 'The host sent a malformed response.' }));
-    } else if (kind === 'events' && generation === session.generation) {
-      surfaceListener(key, {
-        kind: 'reportError',
-        reason:
-          'The host sent a malformed update, so this transcript may be incomplete. Reopen the view to reload it.',
-      });
-    }
-  };
-
-  const receive = (data: unknown): void => {
-    const parsed = Schema.decodeUnknownResult(DownMessageSchema)(data);
-    if (!Result.isSuccess(parsed)) {
-      reportMalformed(data, parsed.failure);
+    if (!session) {
+      console.warn(`[progress] dropped a message for session ${key}: not open`);
       return;
     }
-    const message = parsed.success;
-    switch (message.kind) {
-      case 'events':
-      case 'host':
-        deliver(message);
-        return;
-      case 'runtime.response':
-      case 'host.response': {
-        const waiting = sessions
-          .get(message.session)
-          ?.pending.get(message.requestId);
-        if (!waiting) {
-          console.warn(
-            `[progress] dropped a response to request ${message.requestId} of session ${message.session}: not pending`,
-          );
-          return;
-        }
-        waiting.answer(message);
-        return;
-      }
-      case 'surface.action':
-        surfaceListener(message.session, message.action);
-        return;
-    }
+    // cast: `rpc` reads its own message, and a reply it cannot read fails
+    // the call it answers.
+    runtime.runFork(
+      session.deliver(message as unknown as RpcMessage.FromServerEncoded),
+    );
   };
 
   const close = (key: string): void => {
@@ -242,59 +167,63 @@ export function installWebviewTransport(
     runtime.runFork(Scope.close(session.scope, Exit.void));
   };
 
-  /** One request to the host, waiting for its response, which `read`
-   *  turns into the answer; `timeoutMs` turns a host that never answers
-   *  into a `Rejected` (its late answer is then dropped). A session closed
-   *  first interrupts the wait. */
-  const exchange = <A>(
-    message: Extract<UpMessage, { requestId: string }>,
-    read: (response: Response) => Effect.Effect<A, BridgeError>,
-    timeoutMs?: number,
+  /** One call of an open session's client; a session closed first
+   *  interrupts it. */
+  const call = <A>(
+    key: string,
+    use: (
+      client: SessionClient,
+    ) => Effect.Effect<A, BridgeError | RpcClientError.RpcClientError>,
   ): Effect.Effect<A, BridgeError> =>
     Effect.suspend(() => {
-      const session = sessions.get(message.session);
+      const session = sessions.get(key);
       if (!session) return Effect.interrupt;
-      return Effect.acquireUseRelease(
-        Effect.flatMap(Deferred.make<A, BridgeError>(), (reply) =>
-          Effect.sync(() => {
-            session.pending.set(message.requestId, {
-              answer: (response) => Deferred.doneUnsafe(reply, read(response)),
-              fail: (error) => Deferred.doneUnsafe(reply, Effect.fail(error)),
-            });
-            post(message);
-            return reply;
-          }),
+      return use(session.client).pipe(
+        Effect.catchTag('RpcClientError', (error) =>
+          Effect.fail(unanswered(error)),
         ),
-        (reply) =>
-          timeoutMs === undefined
-            ? Deferred.await(reply)
-            : Deferred.await(reply).pipe(
-                Effect.timeoutOrElse({
-                  duration: timeoutMs,
-                  orElse: () =>
-                    Effect.fail(
-                      new Rejected({
-                        reason: 'The host did not answer in time.',
-                      }),
-                    ),
-                }),
-              ),
-        () =>
-          Effect.sync(() => {
-            session.pending.delete(message.requestId);
-          }),
+        Effect.catchDefect((defect) => Effect.fail(unanswered(defect))),
       );
     });
 
-  const hostRequest: WebviewTransport['hostRequest'] = (message, timeoutMs) =>
-    exchange(
-      message,
-      (response) =>
-        response.kind === 'host.response'
-          ? answerOf(response.result)
-          : mismatched(response),
-      timeoutMs,
-    );
+  /** A frame the host sent malformed loses its events until the view
+   *  reopens: said on the surface's notice, and the read ends. */
+  const framesOf =
+    (key: string, client: SessionClient) =>
+    (
+      aggregates: Subscribe['aggregates'],
+      cursor: Subscribe['cursor'],
+      debug: boolean,
+    ) =>
+      client['session.frames']({ aggregates, cursor, debug }).pipe(
+        Stream.map((frame) => frame.inputs),
+        Stream.catchCause((cause) => {
+          // Ended either way, and never the view's updates with it; only a
+          // failure is the host's defect, not the host ending the call (its
+          // port closing).
+          if (Cause.hasFails(cause) || Cause.hasDies(cause)) {
+            console.error('[progress] malformed session frame', cause);
+            surfaceListener(key, {
+              kind: 'reportError',
+              reason:
+                'The host sent a malformed update, so this transcript may be incomplete. Reopen the view to reload it.',
+            });
+          }
+          return Stream.empty;
+        }),
+      );
+
+  /** A host stream that failed is the host's defect: logged, and ended. */
+  const logged =
+    (what: string) =>
+    <A, E>(stream: Stream.Stream<A, E>): Stream.Stream<A> =>
+      stream.pipe(
+        Stream.catchCause((cause) => {
+          if (Cause.hasFails(cause) || Cause.hasDies(cause))
+            console.error(`[progress] the host's ${what} stopped`, cause);
+          return Stream.empty;
+        }),
+      );
 
   return {
     runtime,
@@ -302,72 +231,76 @@ export function installWebviewTransport(
     open(key) {
       const held = sessions.get(key);
       if (held) return held;
-      // The graph lives under this scope: closing it releases the LayerMap
-      // entry once the last holder leaves.
-      const pending = new Map<string, Pending>();
-      const { scope, graph, shell, inbox } = runtime.runSync(
+      const opened = runtime.runSync(
         Effect.gen(function* () {
           const scope = yield* Scope.make();
-          const graph = yield* WebviewSessions.open(key).pipe(
-            Effect.provideService(Scope.Scope, scope),
+          const { protocol, receive: deliver } = yield* callOverMessages(
+            (message) =>
+              Effect.sync(() => post({ session: key, client: self, message })),
           );
-          const shell = yield* graph.view
+          const client = yield* RpcClient.make(SessionRpcs).pipe(
+            Effect.provideService(RpcClient.Protocol, protocol),
+            Scope.provide(scope),
+          );
+          // The view lives under this scope, and holds the shell's set.
+          const view = yield* remoteSessionView(
+            key,
+            framesOf(key, client),
+          ).pipe(Scope.provide(scope));
+          const shell = yield* view
             .subscribe([])
             .pipe(Effect.provideService(Scope.Scope, scope));
-          const inbox = yield* Queue.unbounded<EventsFrame | HostFrame>();
           yield* Effect.forkIn(
-            Stream.runForEach(Stream.fromQueue(inbox), graph.frames.feed),
+            client['session.actions']().pipe(
+              logged('actions'),
+              Stream.runForEach((action) =>
+                Effect.sync(() => surfaceListener(key, action)),
+              ),
+            ),
             scope,
           );
-          return { scope, graph, shell, inbox };
+          return { scope, client, view, shell, deliver };
         }),
       );
       const session: OpenSession = {
         key,
-        graph,
-        scope,
-        shell,
-        pending,
-        inbox,
-        view$: toSignal(runtime, graph.view.changes, graph.view.current()),
-        host$: toSignal(
+        client: opened.client,
+        scope: opened.scope,
+        shell: opened.shell,
+        deliver: opened.deliver,
+        view$: toSignal(runtime, opened.view.changes, opened.view.current()),
+        host$: toSignal<HostSnapshot | null>(
           runtime,
-          SubscriptionRef.changes(graph.frames.host),
+          opened.client['session.host']().pipe(logged('snapshot')),
           null,
         ),
-        generation: 0,
       };
       sessions.set(key, session);
       return session;
     },
-    subscribe(session, aggregates) {
-      session.generation += 1;
-      const message: Subscribe = {
-        kind: 'subscribe',
-        session: session.key,
-        generation: session.generation,
-        debug: session.view$.get().debug,
-        cursor: session.view$.get().cursor,
-        aggregates,
-      };
-      // Begin the generation and replace the shell's transcript set before
-      // the host answers: the session view reopens its reads on the set.
-      const open = sessions.get(session.key);
-      if (!open) throw new Error(`Session ${session.key} is not open`);
-      runtime.runSync(
-        open.graph.frames
-          .begin(message.generation)
-          .pipe(Effect.andThen(open.shell.set(aggregates))),
-      );
-      post(message);
+    subscribe(key, aggregates) {
+      const open = sessions.get(key);
+      if (!open) throw new Error(`Session ${key} is not open`);
+      runtime.runFork(open.shell.set(aggregates));
     },
-    runtimeRequest: (message) =>
-      exchange(message, (response) =>
-        response.kind === 'runtime.response'
-          ? answerOf(response.result)
-          : mismatched(response),
-      ),
-    hostRequest,
+    runtimeRequest: ({ session, request }) =>
+      call(session, (client) => client['session.request']({ request })),
+    hostRequest: ({ session, request }, timeoutMs) => {
+      const asked = call(session, (client) =>
+        client['host.request']({ request }),
+      );
+      return timeoutMs === undefined
+        ? asked
+        : asked.pipe(
+            Effect.timeoutOrElse({
+              duration: timeoutMs,
+              orElse: () =>
+                Effect.fail(
+                  new Rejected({ reason: 'The host did not answer in time.' }),
+                ),
+            }),
+          );
+    },
     run(key, program) {
       const session = sessions.get(key);
       if (session) runtime.runFork(Effect.forkIn(program, session.scope));

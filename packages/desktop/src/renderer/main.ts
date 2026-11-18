@@ -3,6 +3,7 @@
 // JetBrains Mono the code/terminal/path surfaces; both are self-hosted rather
 // than fetched, since the app must render identically offline.
 import { Schema } from 'effect';
+import type { RpcMessage } from 'effect/rpc';
 import {
   decodingDefault,
   extractErrorMessage,
@@ -385,8 +386,9 @@ const settingsDialog = createDesktopSettingsDialog(appRoot, {
 const logsController = createLogsPane();
 const logsPane = logsController.element;
 
-const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
-  postToMain(message),
+const promptOverlay = createDesktopPromptOverlay(
+  appRoot,
+  projectSessions.runtime,
 );
 const confirmDiscard = createDiscardChangesDialog(appRoot);
 applyTheme();
@@ -766,7 +768,9 @@ const routeMessage = createMessageRoutes({
     for (const project of projectWorkbenches.values())
       project.pdfPane.reportLoadFailure(message.pdfUrl, message.reason);
   },
-  'desktop:showPrompt': (message) => promptOverlay.open(message),
+  'desktop:showPrompt': ({ message }) =>
+    // cast: `rpc` reads its own message.
+    promptOverlay.receive(message as unknown as RpcMessage.FromClientEncoded),
   'desktop:terminal:data': (message) =>
     projectWorkbenches
       .get(message.session)

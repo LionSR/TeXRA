@@ -263,17 +263,7 @@ export const serviceHandlers = (
                 () => SubscriptionRef.update(control.watching, (n) => n - 1),
               );
               const session = yield* open(workspace);
-              // The frames name the session as the service keys it.
-              const key = session.roots.storage;
-              return frameSubscription(
-                { key, view: session.view },
-                {
-                  kind: 'subscribe',
-                  generation: 0,
-                  ...subscribe,
-                  session: key,
-                },
-              );
+              return frameSubscription({ view: session.view }, subscribe);
             }),
           ),
         'task.result': ({ workspace, runId, activation }) =>
@@ -384,7 +374,8 @@ export const serviceHandlers = (
             ),
           ),
         'host.focus': ({ attachment }) => hosts.focus(attachment),
-        'host.answer': ({ id, answer }) => hosts.answer(id, answer),
+        'host.answer': ({ attachment, message }) =>
+          hosts.answer(attachment, message),
         'task.resume': ({ workspace, runId, apiKeys }) =>
           Effect.scoped(
             Effect.gen(function* () {

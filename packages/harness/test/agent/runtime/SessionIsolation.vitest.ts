@@ -69,7 +69,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   observed,
                   environment.TEXRA_TEST_LAUNCH_VALUE,
                 );
-                yield* Effect.never;
+                return yield* Effect.never;
               }).pipe(
                 Effect.onInterrupt(() =>
                   endRunRows({ runId, outcome: RUN_OUTCOME.CANCELLED }).pipe(
@@ -139,9 +139,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     endRunRows({
                       runId,
                       outcome: RUN_OUTCOME.CANCELLED,
-                    })
-                      .pipe(Effect.orDie)
-                      .pipe(Effect.provide(session)),
+                    }).pipe(Effect.orDie, Effect.provide(session)),
                   ),
                 ),
               ),

@@ -109,9 +109,11 @@ layer(FakeHost.layer({ workspaceRoot: WORKSPACE_ROOT }), {
           runCatalog(roots, projectA),
         ).pipe(
           Effect.provide(
-            testSkillRoots([skillsRoot], yield* Effect.promise(createTempRoot)),
+            testSkillRoots(
+              [skillsRoot],
+              yield* Effect.promise(createTempRoot),
+            ).pipe(Layer.provideMerge(nodePlatformLayer)),
           ),
-          Effect.provide(nodePlatformLayer),
         );
         const rootsOf = (listed: typeof catalog) =>
           listed.flatMap(({ name, directory }) =>

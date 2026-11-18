@@ -1,62 +1,51 @@
 /**
- * The bridge between a session runtime and a renderer process: the wire
- * schemas, up and down, and `SessionFrames`, the webview's source of
- * session events.
+ * The channel between a host and the frontend that shows one of its
+ * sessions (the extension's webviews, the desktop renderer, the trace
+ * viewer's page): `effect/rpc` over the channel's `postMessage`, one
+ * connection per session.
  *
- * Down: an `EventsFrame` carries one batch of the session's view inputs,
- * as the runtime's reader orders them (`Session.view.watch`): a replay
- * whole, then each tail read; `cursor` is the commit the reader had
- * drained when it cut the batch and `generation` echoes the `Subscribe`
- * that started it. A `HostFrame` carries what the host renders but does
- * not own. A `runtime.response` or `host.response` answers one request of
- * its kind under its id, and a `SurfaceAction` is the host acting on state
- * the surface owns. Up:
- * `Subscribe`, `runtime.request`, and `host.request`.
+ * `SessionRpcs` are the procedures a host's bridge serves per port
+ * (`SessionBridge`) and a frontend calls (`sessionTransport.ts`):
  *
- * `SessionFrames` supplies one ordered queue of batches for the current
- * generation; a new generation discards the superseded queue.
+ * - `session.frames`: the session's view inputs from a cursor, with the
+ *   transcripts named, as the runtime's reader orders them
+ *   (`Session.view.watch`): a replay whole, then each tail read, each batch
+ *   one `EventsFrame`. A new transcript set is a new call; the frontend's
+ *   view interrupts the old one.
+ * - `session.host`: what the host renders but does not own, each time its
+ *   producers write it.
+ * - `session.actions`: the host acting on state the surface owns (the
+ *   composer's Send, a selection, the chime), the ones it sent before the
+ *   surface listened first.
+ * - `session.request` and `host.request`: one runtime or host command,
+ *   answered with its outcome or the error it failed with, as the class.
+ *
+ * Every message on the channel is a {@link SessionEnvelope}: the session it
+ * belongs to, the frontend instance that sent or is answered, and one of
+ * `rpc`'s own messages.
  */
-import {
-  Cause,
-  Context,
-  Effect,
-  Layer,
-  Queue,
-  Schema,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Schema } from 'effect';
+import { Rpc, RpcGroup, type RpcMessage } from 'effect/rpc';
 
 import {
   OutcomeSchema,
   RuntimeCommandSchema,
   RunIdSchema,
   StoredMediaSchema,
-  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
   SessionViewInputSchema,
   TranscriptSubscriptionSchema,
-  type SessionViewInput,
 } from '@texra-ai/harness/transcript';
 import { BridgeErrorSchema } from './bridgeErrors';
 import { HostCommandSchema } from './hostRequest';
-import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
+import { HostSnapshotSchema } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';
 
-/** The workspace root that keys the layer maps, on every message. */
-const SessionKeySchema = Schema.NonEmptyString;
-const GenerationSchema = NonNegativeIntSchema;
-const RequestIdSchema = Schema.NonEmptyString;
-
-/** A surface's request for one session's frames, up the wire. */
+/** What a frontend asks frames for: from where its view stands. */
 export const SubscribeSchema = Schema.Struct({
-  kind: Schema.Literal('subscribe'),
-  session: SessionKeySchema,
-  /** Chosen by the surface, monotone per view instance. */
-  generation: GenerationSchema,
-  /** The policy of the surface's currently published view. */
+  /** The policy of the frontend's currently published view. */
   debug: Schema.Boolean,
   /** 0 on a cold mount; the view's cursor on a resubscribe. */
   cursor: CommitOrdinalSchema,
@@ -66,24 +55,13 @@ export const SubscribeSchema = Schema.Struct({
 });
 export type Subscribe = typeof SubscribeSchema.Type;
 
-/** One batch of a subscription's view inputs, down the wire. */
+/** One batch of a subscription's view inputs. */
 export const EventsFrameSchema = Schema.Struct({
-  kind: Schema.Literal('events'),
-  session: SessionKeySchema,
-  generation: GenerationSchema,
   /** The commit the reader had drained when it cut this batch. */
   cursor: CommitOrdinalSchema,
   inputs: Schema.Array(SessionViewInputSchema),
 });
 export type EventsFrame = typeof EventsFrameSchema.Type;
-
-/** What the host renders but does not own, as its producers write it. */
-const HostFrameSchema = Schema.Struct({
-  kind: Schema.Literal('host'),
-  session: SessionKeySchema,
-  host: HostSnapshotSchema,
-});
-export type HostFrame = typeof HostFrameSchema.Type;
 
 /** What the host answers a `host.request` with: the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
@@ -112,158 +90,84 @@ const HostOutcomeSchema = Schema.Union([
 ]);
 export type HostOutcome = typeof HostOutcomeSchema.Type;
 
-/** A request's result: its outcome, or the error it failed with as the
- *  class itself. The wire carries the class's fields (a `postMessage` keeps
- *  no Error prototype); the one decode of the message makes it the class
- *  again. `Internal` is a handler defect whose cause stays in the host log
- *  under `ref`, the request id. */
-const resultOf = <Outcome extends Schema.Top>(outcome: Outcome) =>
-  Schema.Union([
-    Schema.Struct({ ok: Schema.Literal(true), outcome }),
-    Schema.Struct({ ok: Schema.Literal(false), error: BridgeErrorSchema }),
-  ]);
-
-/** The answer to one `runtime.request`, under its id. */
-const RuntimeResponseSchema = Schema.Struct({
-  kind: Schema.Literal('runtime.response'),
-  session: SessionKeySchema,
-  requestId: RequestIdSchema,
-  result: resultOf(OutcomeSchema),
-});
-
-/** The answer to one `host.request`, under its id. */
-const HostResponseSchema = Schema.Struct({
-  kind: Schema.Literal('host.response'),
-  session: SessionKeySchema,
-  requestId: RequestIdSchema,
-  result: resultOf(HostOutcomeSchema),
-});
-export type RuntimeResponse = typeof RuntimeResponseSchema.Type;
-export type HostResponse = typeof HostResponseSchema.Type;
-export type Response = RuntimeResponse | HostResponse;
-
 /** The host-initiated surface actions, and only these. */
-const SurfaceActionMessageSchema = Schema.Struct({
-  kind: Schema.Literal('surface.action'),
-  session: SessionKeySchema,
-  action: Schema.Union([
-    Schema.Struct({ kind: Schema.Literal('selectNew') }),
-    Schema.Struct({ kind: Schema.Literal('select'), runId: RunIdSchema }),
-    /** A run the window started, in the host's view as of commit `cursor`:
-     *  the surface's view, framed after the host's, selects it on arrival. */
-    Schema.Struct({
-      kind: Schema.Literal('selectOnArrival'),
-      runId: RunIdSchema,
-      cursor: CommitOrdinalSchema,
-    }),
-    /** Show Sessions (`texra.showProgressView`): a surface on the New-task
-     *  state opens `runId`, the newest session; one already showing a
-     *  session keeps it. The surface decides, since only it knows. */
-    Schema.Struct({ kind: Schema.Literal('showSessions'), runId: RunIdSchema }),
-    /** The run accelerator: the composer's Send for the surface's resolved
-     *  selection, a follow-up to the selected stream or a launch. */
-    Schema.Struct({ kind: Schema.Literal('submit') }),
-    /** A fork's composer holds the message "Fork from here" cut before,
-     *  with the media it attached as the composer's images. */
-    Schema.Struct({
-      kind: Schema.Literal('draft'),
-      runId: RunIdSchema,
-      text: Schema.String,
-      images: Schema.Array(
-        Schema.Struct({ fileName: Schema.String, media: StoredMediaSchema }),
-      ),
-    }),
-    /** A document task run of this session left running for finished or
-     *  cancelled: the host decides the transition once and sends it to one
-     *  port, which plays the completion chime. */
-    Schema.Struct({ kind: Schema.Literal('chime') }),
-    /** The setup agent selected by the onboarding funnel. */
-    Schema.Struct({ kind: Schema.Literal('launch'), patch: LaunchPatchSchema }),
-  ]),
-});
-export type SurfaceActionMessage = typeof SurfaceActionMessageSchema.Type;
-
-const RuntimeCommandMessageSchema = Schema.Struct({
-  kind: Schema.Literal('runtime.request'),
-  session: SessionKeySchema,
-  requestId: RequestIdSchema,
-  request: RuntimeCommandSchema,
-});
-
-const HostCommandMessageSchema = Schema.Struct({
-  kind: Schema.Literal('host.request'),
-  session: SessionKeySchema,
-  requestId: RequestIdSchema,
-  request: HostCommandSchema,
-});
-
-export const UpMessageSchema = Schema.Union([
-  SubscribeSchema,
-  RuntimeCommandMessageSchema,
-  HostCommandMessageSchema,
+const HostSurfaceActionSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('selectNew') }),
+  Schema.Struct({ kind: Schema.Literal('select'), runId: RunIdSchema }),
+  /** A run the window started, in the host's view as of commit `cursor`:
+   *  the surface's view, framed after the host's, selects it on arrival. */
+  Schema.Struct({
+    kind: Schema.Literal('selectOnArrival'),
+    runId: RunIdSchema,
+    cursor: CommitOrdinalSchema,
+  }),
+  /** Show Sessions (`texra.showProgressView`): a surface on the New-task
+   *  state opens `runId`, the newest session; one already showing a
+   *  session keeps it. The surface decides, since only it knows. */
+  Schema.Struct({ kind: Schema.Literal('showSessions'), runId: RunIdSchema }),
+  /** The run accelerator: the composer's Send for the surface's resolved
+   *  selection, a follow-up to the selected stream or a launch. */
+  Schema.Struct({ kind: Schema.Literal('submit') }),
+  /** A fork's composer holds the message "Fork from here" cut before,
+   *  with the media it attached as the composer's images. */
+  Schema.Struct({
+    kind: Schema.Literal('draft'),
+    runId: RunIdSchema,
+    text: Schema.String,
+    images: Schema.Array(
+      Schema.Struct({ fileName: Schema.String, media: StoredMediaSchema }),
+    ),
+  }),
+  /** A document task run of this session left running for finished or
+   *  cancelled: the host decides the transition once and sends it to one
+   *  port, which plays the completion chime. */
+  Schema.Struct({ kind: Schema.Literal('chime') }),
+  /** The setup agent selected by the onboarding funnel. */
+  Schema.Struct({ kind: Schema.Literal('launch'), patch: LaunchPatchSchema }),
 ]);
-export type UpMessage = typeof UpMessageSchema.Type;
+export type HostSurfaceAction = typeof HostSurfaceActionSchema.Type;
 
-export const DownMessageSchema = Schema.Union([
-  EventsFrameSchema,
-  HostFrameSchema,
-  RuntimeResponseSchema,
-  HostResponseSchema,
-  SurfaceActionMessageSchema,
-]);
-/** A down-message as the surface reads it, after its one decode. */
-export type DownMessage = typeof DownMessageSchema.Type;
-/** A down-message as a port posts it: a response's error as its fields. */
-export type DownWire = typeof DownMessageSchema.Encoded;
+/** The procedures of one session's connection, served by the host. */
+export const SessionRpcs = RpcGroup.make(
+  Rpc.make('session.frames', {
+    payload: SubscribeSchema,
+    success: EventsFrameSchema,
+    stream: true,
+  }),
+  Rpc.make('session.host', { success: HostSnapshotSchema, stream: true }),
+  Rpc.make('session.actions', {
+    success: HostSurfaceActionSchema,
+    stream: true,
+  }),
+  Rpc.make('session.request', {
+    payload: { request: RuntimeCommandSchema },
+    success: OutcomeSchema,
+    error: BridgeErrorSchema,
+  }),
+  Rpc.make('host.request', {
+    payload: { request: HostCommandSchema },
+    success: HostOutcomeSchema,
+    error: BridgeErrorSchema,
+  }),
+);
 
-/** One generation's ordered frames. */
-interface FrameRead {
-  readonly generation: number;
-  readonly queue: Queue.Queue<EventsFrame, Cause.Done>;
-}
+/**
+ * One message on a session channel. `client` names the frontend instance:
+ * a webview that reloads on the same port starts again with a new one, so
+ * the host drops what is still in flight for the old instance instead of
+ * answering the new one with it. `message` is an `rpc` message, which
+ * `rpc` itself decodes.
+ */
+export const SessionEnvelopeSchema = Schema.Struct({
+  session: Schema.NonEmptyString,
+  client: Schema.NonEmptyString,
+  message: Schema.Record(Schema.String, Schema.Unknown),
+});
+export type SessionEnvelope = typeof SessionEnvelopeSchema.Type;
 
-export class SessionFrames extends Context.Service<
-  SessionFrames,
-  {
-    /** The current generation's batches, in arrival order, each whole. */
-    readonly inputs: () => Stream.Stream<readonly SessionViewInput[]>;
-    readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
-    readonly begin: (generation: number) => Effect.Effect<void>;
-    /** Deliver one frame; the caller feeds them in arrival order. A frame
-     *  of another generation is dropped. */
-    readonly feed: (frame: EventsFrame | HostFrame) => Effect.Effect<void>;
-  }
->()('@texra-ai/texra/session/SessionFrames') {
-  static readonly layer = Layer.effect(
-    SessionFrames,
-    Effect.gen(function* () {
-      const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-      const current = yield* SubscriptionRef.make<FrameRead>({
-        generation: 0,
-        queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
-      });
-      return {
-        host,
-        inputs: () =>
-          Stream.unwrap(
-            Effect.map(SubscriptionRef.get(current), ({ queue }) =>
-              Stream.fromQueue(queue).pipe(Stream.map((frame) => frame.inputs)),
-            ),
-          ),
-        begin: Effect.fn('sessionFrames.begin')(function* (generation) {
-          yield* SubscriptionRef.set(current, {
-            generation,
-            queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
-          });
-        }),
-        feed: Effect.fn('sessionFrames.feed')(function* (frame) {
-          if (frame.kind === 'host')
-            return yield* SubscriptionRef.set(host, frame.host);
-          const read = yield* SubscriptionRef.get(current);
-          if (frame.generation !== read.generation) return;
-          yield* Queue.offer(read.queue, frame);
-        }),
-      };
-    }),
-  );
+/** A message as one end posts it: up, a client's; down, a server's. */
+export interface SessionWire {
+  readonly session: string;
+  readonly client: string;
+  readonly message: RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded;
 }

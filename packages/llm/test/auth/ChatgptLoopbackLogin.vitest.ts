@@ -6,7 +6,10 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
-import { loginWithLoopback } from '../../src/oauth/loopbackLogin.js';
+import {
+  loginWithLoopback,
+  LoopbackTransportUnavailableError,
+} from '../../src/oauth/loopbackLogin.js';
 import { SubscriptionAccounts } from '../../src/oauth/subscriptionAccounts.js';
 import type { ChatgptSession } from '../../src/oauth/chatgpt/chatgptProvider.js';
 import type { CredentialStore } from '../../src/providers/credentials.js';
@@ -114,7 +117,13 @@ describe('ChatGPT loopback login', () => {
       const accounts = yield* SubscriptionAccounts.make(store);
       const { signInWithBrowser } = accounts['chatgpt-subscription'];
       const failure = yield* Effect.flip(
-        signInWithBrowser(() => Effect.fail(new Error('No browser here.'))),
+        signInWithBrowser(() =>
+          Effect.fail(
+            new LoopbackTransportUnavailableError({
+              message: 'No browser here.',
+            }),
+          ),
+        ),
       ).pipe(Effect.provide(FetchHttpClient.layer));
       expect(failure.message).toBe('No browser here.');
     }),
