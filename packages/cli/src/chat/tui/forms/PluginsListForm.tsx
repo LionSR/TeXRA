@@ -19,7 +19,6 @@ import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   PLUGINS_PAGE,
-  PLUGINS_TUI,
   pluginRowKey,
   pluginRowName,
   pluginRowProblem,
@@ -29,6 +28,7 @@ import {
   pluginRowTrust,
   pluginRowUsedBy,
 } from '@ui/copy/plugins';
+import { PLUGINS_TUI } from '../commands/pluginsCopy';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';

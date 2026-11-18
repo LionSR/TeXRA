@@ -3,7 +3,8 @@
  * page and the TUI's `/plugins` both print: where it comes from, what it
  * adds, whether it is on, whether it is trusted, whether it can run here,
  * and which agents use it. A renderer lays these out; it spells none of
- * them itself.
+ * them itself. The `/plugins` command's own sentences, which spell its
+ * slash command and flag, are the terminal's.
  */
 import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
@@ -41,22 +42,6 @@ export const PLUGINS_PAGE = Object.freeze({
     `Trust ${name}${version ? ` ${version}` : ''} and enable it?`,
   trustAction: 'Trust and enable',
   declined: (name: string) => `${name} was not trusted, so it stays off.`,
-});
-
-/** The TUI's `/plugins` copy. */
-export const PLUGINS_TUI = Object.freeze({
-  description:
-    'Switch plugins on or off. Add one: /plugins add <URL or folder>',
-  compactTitle: '/plugins · Switch plugins on or off',
-  switchAction: 'switch on/off',
-  chooseAction: 'choose',
-  trustTitle: (name: string) => `/plugins · Trust ${name}?`,
-  trust: 'Trust and switch on',
-  decline: 'Keep it off',
-  addUsage:
-    'Usage: /plugins add <github.com/owner/repo[@ref], a repository URL, or a folder> [--plugin <name>]',
-  added: (names: readonly string[]) =>
-    `Added ${names.join(', ')}. Switch it on in /plugins to review what it declares and trust it.`,
 });
 
 /** The row's identity, unique across the three kinds: the page's repeat key
