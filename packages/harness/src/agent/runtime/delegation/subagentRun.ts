@@ -103,15 +103,20 @@ export function delegatedChildGrants(
   }
 }
 
-/** Metadata about how the delegation was approved, included in the tool result. */
+/** A value the person's approval changed: the one chosen over the one
+ *  proposed. */
+interface ApprovalOverride {
+  readonly chosen: string;
+  readonly proposed: string;
+}
+
+/** How the delegation was approved, included in the tool result. */
 export interface ApprovalMeta {
-  autoApproved: boolean;
-  /** How the child's own grants record the approval; `inherit` when absent. */
-  childApproval?: DelegatedChildApproval;
-  modelOverride?: string;
-  requestedModel?: string;
-  agentOverride?: string;
-  requestedAgent?: string;
+  /** How the child's own grants record the approval: `inherit` is a
+   *  person's approval, any other an approval bypass. */
+  readonly childApproval: DelegatedChildApproval;
+  readonly model?: ApprovalOverride;
+  readonly agent?: ApprovalOverride;
 }
 
 /**
@@ -154,15 +159,15 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     const meta = launch.approvalMeta;
     const metaLines: string[] = [];
     if (meta) {
-      const modelInfo = meta.modelOverride
-        ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
+      const modelInfo = meta.model
+        ? `Model: ${meta.model.chosen} (overridden from ${meta.model.proposed})`
         : `Model: ${childConfigPayload.model}`;
-      const agentInfo = meta.agentOverride
-        ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
+      const agentInfo = meta.agent
+        ? ` Agent: ${meta.agent.chosen} (overridden from ${meta.agent.proposed}).`
         : '';
-      metaLines.push(
-        `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
-      );
+      const approval =
+        meta.childApproval === 'inherit' ? 'user-approved' : 'auto-approved';
+      metaLines.push(`Approval: ${approval}. ${modelInfo}.${agentInfo}`);
     }
     const receipt = executed(
       [
