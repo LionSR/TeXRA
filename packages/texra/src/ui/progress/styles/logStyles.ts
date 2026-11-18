@@ -52,7 +52,7 @@ export const layoutStyles = css`
  * Combined log styles - includes layout and all modular styles.
  * Use this for components that need the full set of log styles.
  */
-export const logStyles = [
+export const logStyles = Object.freeze([
   commonViewStyles,
   katexStyleSheet,
   layoutStyles,
@@ -63,4 +63,4 @@ export const logStyles = [
   markdownStyles,
   lineChangeStatsStyles,
   toneStyles,
-];
+]);

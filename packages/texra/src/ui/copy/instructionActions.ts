@@ -12,11 +12,11 @@ import {
 
 /** Host-agnostic action tokens; `windowNotices` runs a window's button for
  *  each, and the CLI prints a hint. */
-export const INSTRUCTION_ACTION = {
+export const INSTRUCTION_ACTION = Object.freeze({
   SET_API_KEY: 'set-api-key',
   OPEN_CONFIGURATION_GUIDE: 'open-configuration-guide',
   OPEN_MODELS_DOC: 'open-models-doc',
-} as const;
+} as const);
 
 export type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];

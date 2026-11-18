@@ -19,7 +19,7 @@ type ScriptRequestScript = NonNullable<AgentProposalRequest['script']>;
  * every host. It leads with what approving allows and the first agent; the
  * code is evidence, folded under "Show code", never the first thing shown.
  */
-export const SCRIPT_REQUEST_COPY = {
+export const SCRIPT_REQUEST_COPY = Object.freeze({
   title: (script: ScriptRequestScript): string =>
     script.title === null
       ? 'Start agents for this script?'
@@ -32,7 +32,7 @@ export const SCRIPT_REQUEST_COPY = {
     `Code (${countLines(script.source)} lines)`,
   showCode: (script: ScriptRequestScript): string =>
     `Show code (${countLines(script.source)} lines)`,
-} as const;
+} as const);
 
 /** `First agent: referee · GPT-6.1 Sol — "Review chapter 2 as a referee…"`:
  *  the agent the request is for, and its instruction's first line. */

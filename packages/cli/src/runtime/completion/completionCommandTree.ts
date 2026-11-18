@@ -1,7 +1,11 @@
 // Third-party type imports
 import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
 
-export const CLI_COMPLETION_SHELLS = ['bash', 'zsh', 'fish'] as const;
+export const CLI_COMPLETION_SHELLS = Object.freeze([
+  'bash',
+  'zsh',
+  'fish',
+] as const);
 export type CliCompletionShell = (typeof CLI_COMPLETION_SHELLS)[number];
 
 /**

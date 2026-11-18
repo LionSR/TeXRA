@@ -1,9 +1,9 @@
 import { Schema } from 'effect';
 
-export const DESKTOP_PROMPT_COMMANDS = {
+export const DESKTOP_PROMPT_COMMANDS = Object.freeze({
   SHOW: 'desktop:showPrompt',
   ANSWER: 'desktop:settlePrompt',
-} as const;
+} as const);
 
 export const DesktopShowPromptMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.SHOW),

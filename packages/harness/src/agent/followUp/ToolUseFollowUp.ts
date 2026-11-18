@@ -63,9 +63,9 @@ export function presentFollowUpResult(
 const CHANNEL = 'ToolUseFollowUp';
 
 /** A resume's refusal of a run that cannot continue here. */
-export const REFUSED: { readonly failed: ResumeRefusal } = {
-  failed: { kind: 'notResumable' },
-};
+export const REFUSED: { readonly failed: ResumeRefusal } = Object.freeze({
+  failed: Object.freeze({ kind: 'notResumable' }),
+});
 
 /**
  * Resume `runId` for the input it holds (a wake, an interrupted task), with

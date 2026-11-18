@@ -72,29 +72,29 @@ const expandEquationMacro: ReplacementFunction = (
   return replacement ? `${leading}${replacement}${trailing}` : match;
 };
 
-export const EQUATION_MACRO_REPLACEMENTS: RegexRuleSet = {
+export const EQUATION_MACRO_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'gm',
-  patterns: {
+  patterns: Object.freeze({
     // Require macros to be on their own line so inline uses like "foo \\be bar"
     // remain untouched. We only support lowercase helpers here for backwards
     // compatibility with legacy documents that relied on these shorthands
     // (including the deprecated eqnarray environment).
     '^(\\s*)\\\\([a-z]+)(\\s*)$': expandEquationMacro,
-  },
-};
+  }),
+});
 
-export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexRuleSet = {
+export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'g',
-  patterns: {
+  patterns: Object.freeze({
     [FENCED_LATEX_BLOCK_PATTERN_MULTILINE]: convertFencedLatexBlock,
     [FENCED_LATEX_BLOCK_PATTERN_INLINE]: convertFencedLatexBlock,
-  },
-};
+  }),
+});
 
 // Parentheses sizing standardization
-export const PARENTHESES_REPLACEMENTS: RegexRuleSet = {
+export const PARENTHESES_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'g',
-  patterns: {
+  patterns: Object.freeze({
     // ===== Small delimiter normalization =====
     // Convert \big* delimiters to regular parentheses when content is simple
     '\\\\big\\(([^\\n]*?)\\\\big\\)': '($1)',
@@ -125,13 +125,13 @@ export const PARENTHESES_REPLACEMENTS: RegexRuleSet = {
     '\\\\Biggl\\(([^\\n]*?)\\\\Biggr\\)': '\\left($1\\right)',
     '\\\\Biggl\\[([^\\n]*?)\\\\Biggr\\]': '\\left[$1\\right]',
     '\\\\Biggl\\\\{([^\\n]*?)\\\\Biggr\\\\}': '\\left\\{$1\\right\\}',
-  },
-};
+  }),
+});
 
 // LaTeX inline math formatting fixes
-export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = {
+export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'g',
-  patterns: {
+  patterns: Object.freeze({
     // ===== Convert \( \) to $ $ =====
     '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
 
@@ -149,27 +149,28 @@ export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = {
     '\\\\vspace\\{-?\\d+pt\\}': '', // Remove \vspace{Npt} commands
     '\\\\vspace\\{-?\\d+mm\\}': '', // Remove \vspace{Nmm} commands
     '\\\\vspace\\{-?\\d+ex\\}': '\n', // Replace \vspace{Nex} with newline
-  },
-};
+  }),
+});
 
 // Context-aware personal style conversions
-export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexRuleSet = {
-  flags: 'g',
-  patterns: {
-    // Temporarily protect \mathrm{Tr} inside command definitions
-    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
-      '$1__TEXRA_PRESERVE_TR__',
-    // Temporarily protect \mathrm{tr} inside command definitions
-    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
-      '$1__TEXRA_PRESERVE_tr__',
-    // Apply preferred operator command forms
-    '\\\\mathrm\\{Tr\\}': '\\Tr',
-    '\\\\mathrm\\{tr\\}': '\\tr',
-    // Restore protected command definitions
-    __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
-    __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
-  },
-};
+export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexRuleSet =
+  Object.freeze({
+    flags: 'g',
+    patterns: Object.freeze({
+      // Temporarily protect \mathrm{Tr} inside command definitions
+      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
+        '$1__TEXRA_PRESERVE_TR__',
+      // Temporarily protect \mathrm{tr} inside command definitions
+      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
+        '$1__TEXRA_PRESERVE_tr__',
+      // Apply preferred operator command forms
+      '\\\\mathrm\\{Tr\\}': '\\Tr',
+      '\\\\mathrm\\{tr\\}': '\\tr',
+      // Restore protected command definitions
+      __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
+      __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
+    }),
+  });
 
 /**
  * LATEXDIFF USAGE NOTE:
@@ -303,9 +304,9 @@ function difCommandMarker(cmd: string): string {
 }
 
 // Latexdiff markup fixes using regex
-export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
+export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'gs',
-  patterns: {
+  patterns: Object.freeze({
     // Collapse redundant blank lines / spaces between a closing brace and \end{...}%DIFAUXCMD
     // Matches: newline + spaces/tabs + newline + spaces/tabs + }\end{align*}%DIFAUXCMD
     '\n[ \t]*\n[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
@@ -338,12 +339,12 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
         `\\${cmd}{~}${difCommandMarker(cmd)}`,
       ],
     ]),
-  },
-};
+  }),
+});
 
-export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
+export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'g',
-  patterns: {
+  patterns: Object.freeze<RegexRuleSet['patterns']>({
     // Swap order of superscript and subscript in integrals/sums/products to ensure subscript comes first
     // Example: \int^{x}_{t} -> \int_{t}^{x}
     '(\\\\int|\\\\sum|\\\\prod)\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
@@ -409,5 +410,5 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
     // Remove spaces inside caption*
     '\\\\caption\\*{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)}':
       createCaptionTrimmer('\\caption*'),
-  },
-};
+  }),
+});

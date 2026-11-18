@@ -15,10 +15,10 @@ import {
 // for Monaco's tokenizer, so the renderer never has to read disk. The
 // main process keeps the file paths around for its own logging.
 
-export const DESKTOP_DIFF_COMMANDS = {
+export const DESKTOP_DIFF_COMMANDS = Object.freeze({
   SHOW_DIFF: 'desktop:showDiff',
   CLOSE_DIFF: 'desktop:closeDiff',
-} as const;
+} as const);
 
 export const DesktopShowDiffMessageSchema = Schema.Struct({
   session: Schema.NonEmptyString,

@@ -22,36 +22,37 @@ const FileSelectConfigSchema = Schema.Struct({
 });
 export type FileSelectConfig = typeof FileSelectConfigSchema.Type;
 
-export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
-  {
-    type: 'input',
-    label: 'Input',
-    icon: 'file-code',
-    addOpenedLabel: 'Add opened files as input',
-    emptyListLabel: 'Clear all input files',
-    selectListLabel: 'Add input files',
-  },
-  {
-    type: 'context',
-    label: 'Context',
-    icon: 'book',
-    addOpenedLabel: 'Add opened files as context',
-    emptyListLabel: 'Clear all context files',
-    selectListLabel: 'Add context files',
-  },
-  {
-    type: 'media',
-    label: 'Media',
-    icon: 'video',
-    addOpenedLabel: 'Add opened files as media',
-    emptyListLabel: 'Clear all media files',
-    selectListLabel: 'Add media files',
-  },
-];
+export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> =
+  Object.freeze([
+    Object.freeze({
+      type: 'input',
+      label: 'Input',
+      icon: 'file-code',
+      addOpenedLabel: 'Add opened files as input',
+      emptyListLabel: 'Clear all input files',
+      selectListLabel: 'Add input files',
+    }),
+    Object.freeze({
+      type: 'context',
+      label: 'Context',
+      icon: 'book',
+      addOpenedLabel: 'Add opened files as context',
+      emptyListLabel: 'Clear all context files',
+      selectListLabel: 'Add context files',
+    }),
+    Object.freeze({
+      type: 'media',
+      label: 'Media',
+      icon: 'video',
+      addOpenedLabel: 'Add opened files as media',
+      emptyListLabel: 'Clear all media files',
+      selectListLabel: 'Add media files',
+    }),
+  ]);
 
 /** The `Surface.launch` field a file group's `type` names. */
-export const LAUNCH_FILE_LISTS = {
+export const LAUNCH_FILE_LISTS = Object.freeze({
   input: 'inputFiles',
   context: 'contextFiles',
   media: 'mediaFiles',
-} as const satisfies Record<DocumentFileType, string>;
+} as const satisfies Record<DocumentFileType, string>);

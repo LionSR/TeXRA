@@ -5,15 +5,31 @@ import { decodingDefaultType, getBasename } from '@texra-ai/harness/schemas';
 import type { IconName } from '@ui/wa/iconNames';
 import type { SerializedDockview } from 'dockview';
 
-export const WORKBENCH_KIND_META = {
-  agent: { icon: 'comment', label: 'Agent', singleton: true },
-  files: { icon: 'folder-tree', label: 'Files', singleton: true },
-  editor: { icon: 'file-code', label: 'Editor', singleton: false },
-  terminal: { icon: 'terminal', label: 'Terminal', singleton: false },
-  browser: { icon: 'globe', label: 'Browser', singleton: true },
-  review: { icon: 'plus-minus', label: 'Review', singleton: true },
-  logs: { icon: 'file-lines', label: 'Logs', singleton: true },
-  pdf: { icon: 'file-pdf', label: 'PDF', singleton: false },
+export const WORKBENCH_KIND_META = Object.freeze({
+  agent: Object.freeze({ icon: 'comment', label: 'Agent', singleton: true }),
+  files: Object.freeze({
+    icon: 'folder-tree',
+    label: 'Files',
+    singleton: true,
+  }),
+  editor: Object.freeze({
+    icon: 'file-code',
+    label: 'Editor',
+    singleton: false,
+  }),
+  terminal: Object.freeze({
+    icon: 'terminal',
+    label: 'Terminal',
+    singleton: false,
+  }),
+  browser: Object.freeze({ icon: 'globe', label: 'Browser', singleton: true }),
+  review: Object.freeze({
+    icon: 'plus-minus',
+    label: 'Review',
+    singleton: true,
+  }),
+  logs: Object.freeze({ icon: 'file-lines', label: 'Logs', singleton: true }),
+  pdf: Object.freeze({ icon: 'file-pdf', label: 'PDF', singleton: false }),
 } as const satisfies Record<
   string,
   {
@@ -21,7 +37,7 @@ export const WORKBENCH_KIND_META = {
     label: string;
     singleton: boolean;
   }
->;
+>);
 
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
 const WorkbenchTabSchema = Schema.Struct({

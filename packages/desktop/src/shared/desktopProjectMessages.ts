@@ -6,7 +6,7 @@
 
 import { Schema } from 'effect';
 
-export const DESKTOP_PROJECT_COMMANDS = {
+export const DESKTOP_PROJECT_COMMANDS = Object.freeze({
   PROJECTS: 'desktop:projects',
   /** The renderer's first ask after it boots: which projects are open. */
   REQUEST_PROJECTS: 'desktop:projects:request',
@@ -14,7 +14,7 @@ export const DESKTOP_PROJECT_COMMANDS = {
   CLOSE_PROJECT: 'desktop:projects:close',
   /** Reopen a folder from the recent list the last projects message sent. */
   OPEN_RECENT: 'desktop:projects:openRecent',
-} as const;
+} as const);
 
 export const DesktopProjectsMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_PROJECT_COMMANDS.PROJECTS),
