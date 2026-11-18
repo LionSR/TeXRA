@@ -98,9 +98,7 @@ export class SessionBanners extends LitElement {
         customDirSet: state.customDirSet,
       });
     // prettier-ignore
-    const message = state.agentName
-      ? html`Agent file for “<bdi dir="auto">${state.agentName}</bdi>” is missing.`
-      : 'Agent configuration is missing.';
+    const message = html`Agent file for “<bdi dir="auto">${state.agentName}</bdi>” is missing.`;
     return renderWarningBanner({
       id: 'agentConfigBanner',
       role: 'status',

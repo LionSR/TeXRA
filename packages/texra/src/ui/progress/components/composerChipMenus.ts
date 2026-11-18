@@ -68,8 +68,13 @@ export function modelMenu(
   const listed = host.modelOptions.find((option) => option.value === selected);
   const ref = modelRefOf(selected) ?? selected;
   const modifiers = selected.slice(ref.length).replace(/^[@+]/, '');
+  const hostOptions = host.modelOptions.map((option) => ({
+    value: option.value,
+    label: option.label,
+    disabled: !isModelOptionAvailable(option),
+  }));
   const options = listed
-    ? host.modelOptions
+    ? hostOptions
     : [
         {
           value: selected,
@@ -77,8 +82,9 @@ export function modelMenu(
             modifiers === ''
               ? getModelLabel(selected)
               : `${getModelLabel(selected)} (${modifiers})`,
+          disabled: false,
         },
-        ...host.modelOptions,
+        ...hostOptions,
       ];
   return {
     label: listed?.label ?? options[0].label,
@@ -90,7 +96,7 @@ export function modelMenu(
           value=${`model:${option.value}`}
           type="checkbox"
           .checked=${live(option.value === selected)}
-          ?disabled=${!isModelOptionAvailable(option)}
+          ?disabled=${option.disabled}
           >${option.label}</wa-dropdown-item
         >`,
     )}`,

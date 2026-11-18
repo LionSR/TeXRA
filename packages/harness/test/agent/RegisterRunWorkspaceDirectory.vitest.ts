@@ -50,7 +50,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             );
             yield* registerRun(runId, baseConfig, {
               ...options,
-              parentId,
+              parent: { id: parentId, call: null },
             }).pipe(Effect.provide(session));
             yield* Fiber.join(published);
             expect(
@@ -68,7 +68,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 baseConfig,
                 {
                   ...options,
-                  parentId: absentParentId,
+                  parent: { id: absentParentId, call: null },
                 },
               ).pipe(Effect.provide(session)),
             );

@@ -24,8 +24,8 @@ const WorkspaceRootOptionDataSchema = Schema.Struct({
 });
 
 const AgentConfigBannerDataSchema = Schema.Struct({
-  agentName: Schema.optional(Schema.NullOr(Schema.String)),
-  customDirSet: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  agentName: Schema.String,
+  customDirSet: Schema.Boolean,
 });
 
 /**

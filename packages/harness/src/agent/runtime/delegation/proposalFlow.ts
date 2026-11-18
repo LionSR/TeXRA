@@ -243,10 +243,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return {
       proposal,
-      approvalMeta: {
-        autoApproved: true,
-        childApproval: decision.childApproval,
-      },
+      approvalMeta: { childApproval: decision.childApproval },
     } satisfies ApprovedDelegation;
   }
 
@@ -324,14 +321,12 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       }),
     },
     approvalMeta: {
-      autoApproved: false,
+      childApproval: 'inherit',
       ...(modelOverride && {
-        modelOverride,
-        requestedModel: proposal.model,
+        model: { chosen: modelOverride, proposed: proposal.model },
       }),
       ...(agentOverride && {
-        agentOverride,
-        requestedAgent: proposal.agent,
+        agent: { chosen: agentOverride, proposed: proposal.agent },
       }),
     },
   } satisfies ApprovedDelegation;
