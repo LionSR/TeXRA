@@ -4,7 +4,6 @@ import {
   FileSystem,
   PlatformError,
   Result,
-  Schema,
   SemVer,
   SemVerRange,
 } from 'effect';
@@ -48,20 +47,6 @@ export interface DoctorReport {
   readonly ok: boolean;
   readonly checks: readonly DoctorCheck[];
 }
-
-/**
- * The failure of a probe this module drives itself: the LaTeX toolchain probe
- * and the telemetry consent read. It carries the value the foreign edge threw,
- * so the check that recovers from it renders the same hint it rendered when it
- * caught the rejection. The two probes the CLI root supplies are programs
- * already and keep their own `Error` failure.
- */
-class DoctorProbeFailed extends Schema.TaggedError<DoctorProbeFailed>()(
-  'DoctorProbeFailed',
-  {
-    cause: Schema.Defect(),
-  },
-) {}
 
 /**
  * The probes only the CLI root can build: platform init either failed
@@ -344,10 +329,6 @@ const TELEMETRY_STORED_KEY = `${TEXRA_SETTINGS.catalog.namespace}.${TELEMETRY_EN
 
 function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.usageLoggingOptOut.pipe(
-    // A config store that throws reports as this check's failure.
-    Effect.catchDefect((cause) =>
-      Effect.fail(new DoctorProbeFailed({ cause })),
-    ),
     Effect.map((optOut) => {
       if (optOut?.source === 'environment') {
         return skip(
@@ -371,13 +352,14 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_STORED_KEY}": false in ~/.texra/v1/global-storage/config.json.`,
       );
     }),
-    Effect.catch((failure) =>
+    // A config store that throws reports as this check's failure.
+    Effect.catchDefect((cause) =>
       Effect.succeed(
         failFromError(
           'telemetry',
           'Usage logging',
           'Could not read the usage-logging setting.',
-          failure.cause,
+          cause,
         ),
       ),
     ),
