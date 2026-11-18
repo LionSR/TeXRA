@@ -807,7 +807,8 @@ function validateLeanBlueprintProgram() {
         ),
       `the blueprint run should answer with its check's two problems (artifact: ${artifactPath})\nresponse:\n${response}`,
     );
-    // One child per round, each defined by the program, not the catalog.
+    // One child per round, each an inline persona the program defines
+    // (`agentSource.persona`), not a catalog agent.
     const rounds = records.filter(
       (record) =>
         record.event === 'run.config' &&
@@ -818,7 +819,7 @@ function validateLeanBlueprintProgram() {
       rounds.length === 2 &&
         rounds.every(
           ({ payload }) =>
-            payload.config.persona?.tools?.some(
+            payload.config.agentSource?.persona?.tools?.some(
               (tool) => (tool.name ?? tool) === 'lean_blueprint',
             ) && payload.config.instruction.includes('content.tex'),
         ),
