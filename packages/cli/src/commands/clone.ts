@@ -1,14 +1,12 @@
 // Node imports
 import { resolve } from 'node:path';
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 // Internal imports
 import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
-import { ensureError } from '@texra-ai/harness/schemas';
 import {
   cloneOverleafProject,
-  gitClone,
   type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
@@ -57,27 +55,9 @@ function buildOverleafClonePorts(
       });
       return token.trim() || null;
     }),
-    listWorkspaceEntries: (dir) =>
-      FileSystem.FileSystem.use((fs) => fs.readDirectory(dir)).pipe(
-        // A destination that does not exist yet is an empty destination, not
-        // an unreadable one: `runClone` creates it. Only `NotFound` counts,
-        // not all of `meansAbsent`: a path under a regular file (ENOTDIR)
-        // cannot be created, so it stays unreadable and stops the clone
-        // before the token prompt.
-        Effect.catchReason('PlatformError', 'NotFound', () =>
-          Effect.succeed<string[]>([]),
-        ),
-        Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
-      ),
-    runClone: (clone, cloneInto) =>
-      FileSystem.FileSystem.use((fs) =>
-        fs
-          .makeDirectory(cloneInto, { recursive: true })
-          .pipe(Effect.andThen(fs.realPath(cloneInto))),
-      ).pipe(
-        Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
-        Effect.tap((canonical) => gitClone(clone, canonical)),
-      ),
+    // The terminal prints nothing while git runs; git's own error, if any,
+    // follows the outcome line.
+    showProgress: (clone) => clone,
   };
 }
 
@@ -124,9 +104,7 @@ function presentCloneOutcome(
       );
       return CliExitCode.AgentError;
     case 'WorkspaceUnreadable':
-      writeTextStderr(
-        `Cannot read destination directory: ${outcome.error.message}`,
-      );
+      writeTextStderr(`Cannot read destination directory: ${outcome.message}`);
       return CliExitCode.AgentError;
     case 'WorkspaceNotEmpty':
       writeTextStderr(
