@@ -8,11 +8,11 @@
 
 /** The families the harness's own child runs deliver in, referenced by
  *  their producers instead of string literals. */
-export const DELIVERY_FAMILY = {
+export const DELIVERY_FAMILY = Object.freeze({
   subagent: 'subagent',
   background: 'background',
   script: 'script',
-} as const;
+} as const);
 
 /** A delivery's family: lowercase words joined by `-`. */
 export const DELIVERY_FAMILY_PATTERN = '[a-z][a-z0-9]*(?:-[a-z0-9]+)*';
