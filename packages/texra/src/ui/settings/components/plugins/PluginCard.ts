@@ -334,10 +334,10 @@ export class PluginCard extends LitElement {
     let disabled = false;
     let onChange: (on: boolean) => void;
     if (row.kind === 'texra') {
-      if (row.item.toggleable !== true)
+      if (row.item.switch === 'always-on')
         return html`<p class="plugin-line">Always available to agents</p>`;
       const { id } = row.item;
-      checked = row.item.enabled !== false;
+      checked = row.item.switch === 'on';
       onChange = (enabled) =>
         postToHost({
           command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,

@@ -78,7 +78,7 @@ export function PluginsListForm(
 
   const toggle = (row: PluginRow) => {
     if (row.kind === 'texra')
-      return setCliToolEnabled(row.item.id, row.item.enabled === false).pipe(
+      return setCliToolEnabled(row.item.id, row.item.switch === 'off').pipe(
         Effect.asVoid,
       );
     if (row.kind === 'installed')

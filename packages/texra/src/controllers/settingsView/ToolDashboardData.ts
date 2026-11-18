@@ -123,6 +123,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         status: 'available' as const,
         installActions: [],
         requiresSetup: false,
+        switch: 'always-on' as const,
         ...settingRows(card),
       }));
 
@@ -180,8 +181,12 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         configNotes,
         statusDetail,
         authNote,
-        toggleable: plugin.toggle !== undefined,
-        enabled: !disabledIds.has(plugin.id),
+        switch:
+          plugin.toggle === undefined
+            ? 'always-on'
+            : disabledIds.has(plugin.id)
+              ? 'off'
+              : 'on',
         ...settingRows(card),
       });
     }
