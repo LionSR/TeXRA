@@ -1,7 +1,6 @@
 // Third-party imports
 import {
   Clock,
-  Duration,
   Effect,
   Exit,
   Fiber,
@@ -42,6 +41,9 @@ const JsonFrameSchema = Schema.fromJsonString(Schema.Unknown);
 /** A connection older than this is replaced before its next turn. */
 const MAX_CONNECTION_AGE_MS = 55 * 60_000;
 
+/** A handshake that has not finished by then fails as a transport error. */
+const OPEN_TIMEOUT = '30 seconds';
+
 const closed = (cause?: unknown) =>
   new ModelError({
     kind: 'transport',
@@ -56,10 +58,19 @@ const transportFailure = (cause: unknown) =>
     cause,
   });
 
-const socketFailure = (error: Socket.SocketError) =>
-  error.reason._tag === 'SocketCloseError'
-    ? closed(error)
-    : transportFailure(error);
+const socketFailure = (error: Socket.SocketError) => {
+  if (error.reason._tag === 'SocketCloseError') return closed(error);
+  if (
+    error.reason._tag === 'SocketOpenError' &&
+    error.reason.kind === 'Timeout'
+  )
+    return new ModelError({
+      kind: 'transport',
+      message: `The Responses WebSocket did not open within ${OPEN_TIMEOUT}.`,
+      cause: error,
+    });
+  return transportFailure(error);
+};
 
 /**
  * One physical connection, which carries one turn at a time and is unusable
@@ -118,7 +129,7 @@ const connect = Effect.fnUntraced(function* (
     ws.terminate();
   };
   const socket = yield* Socket.fromWebSocket(Effect.succeed(ws), {
-    openTimeout: Duration.infinity,
+    openTimeout: OPEN_TIMEOUT,
   });
   // Opening runs inside the uninterruptible `ScopedRef` acquisition; the
   // handshake wait stays interruptible.
