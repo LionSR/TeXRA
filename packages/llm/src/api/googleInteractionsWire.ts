@@ -101,6 +101,9 @@ export const COMPLETED_STATUSES: readonly string[] = Object.freeze([
   'completed',
   'requires_action',
 ] satisfies InteractionStatus[]);
+/** The status of an interaction stopped at its per-request decode limit. */
+export const CONTINUATION_STATUS: string =
+  'requires_continuation' satisfies InteractionStatus;
 /** One event of a streamed interaction. */
 export const WireEventSchema = Schema.Union([
   Schema.Struct({

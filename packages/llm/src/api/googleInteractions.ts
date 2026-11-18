@@ -16,6 +16,7 @@ import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
+  CONTINUATION_STATUS,
   IN_FLIGHT_STATUSES,
   WireCompletedStepSchema,
   WireEventSchema,
@@ -469,7 +470,7 @@ function googleWire() {
           // Finishing needs another billed request carrying the
           // continuation token, which this one-request turn does not send;
           // the same request resent would stop at the same limit.
-          if (event.interaction.status === 'requires_continuation')
+          if (event.interaction.status === CONTINUATION_STATUS)
             return yield* new ModelError({
               kind: 'provider-rejection',
               retryable: false,
