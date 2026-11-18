@@ -118,7 +118,7 @@ Paths are under `packages/`. "Stays" names what remains hand-written and why.
 | 15  | One fact, many readers                             | one `SubscriptionRef` holding a union; readers take `changes` through `Stream.changes`                                                                                        | the link's three refs and five derivations; "a task is at work" computed two ways                                                                    | none                                                                                                                                                     |
 | 16  | A request and its answer, between TeXRA's own ends | `rpc`, with a `Protocol` over `postMessage` where the transport is a frame                                                                                                    | the tables in `texra/src/ui/progress/sessionTransport.ts`, `SessionBridge.ts`, `desktop/src/main/desktopPromptController.ts`                         | `harness/src/tools/jsonRpc.ts` (LSP: the peer also asks); `hostWindows.ts` `ask` (the direction `rpc` lacks)                                             |
 | 17  | A line from the terminal                           | the one readline wrapper, racing readline's `close`                                                                                                                           | the question that stayed pending when its input ended                                                                                                | readline: `Terminal.readLine` hides no input and prompts on stdout                                                                                       |
-| 18  | A WebSocket                                        | `Socket.fromWebSocket(ws, { openTimeout })`                                                                                                                                   | the iterator, `rejoin` and the open wait in `llm/src/api/openaiResponsesWebSocket.ts`                                                                | reading the handshake's status; a deadline per pull for liveness                                                                                         |
+| 18  | A WebSocket                                        | `Socket.fromWebSocket(ws, { openTimeout })`                                                                                                                                   | the iterator, `rejoin` and the open wait in `llm/src/api/openaiResponsesWebSocket.ts`                                                                | reading the handshake's status; the read that waits between turns (data with no turn makes the connection unusable); the ping                            |
 | 19  | A wait on something outside the process            | `Effect.timeoutOrElse`; a retry is a `Schedule` with an end                                                                                                                   | the untimed Lean request, TUI exit, `texra service stop` across builds; `READ_RETRY` without a bound; "retry on the next view"                       | a wait on a person, which ends with their window                                                                                                         |
 | 20  | A buffer                                           | `Queue.bounded`, `sliding` or `dropping`, chosen where the queue is made                                                                                                      | fifteen unbounded queues                                                                                                                             | none                                                                                                                                                     |
 | 21  | Ending a scope's fibers in bounded time            | `FiberSet.clear`, then `awaitEmpty` under one timeout                                                                                                                         | the close that is 5 s, then unbounded, then 5 s                                                                                                      | none                                                                                                                                                     |
@@ -295,6 +295,20 @@ Done, on the branch after PR 14927:
   answer admits.
 - Row 12, the GitHub deliveries: one fiber a run sends a poll round's
   events in their order, where each event was its own fork.
+- Row 18: the Responses model socket reads through `Socket.fromWebSocket`
+  (`llm/src/api/openaiResponsesWebSocket.ts`), which owns the listeners,
+  the open wait and backpressure (it pauses `ws` at 64 KiB unread); its
+  pull is interruptible, so the rejoin of a pending read and the Node
+  stream's iterator are gone. Between turns one read waits on the socket,
+  started at once so a frame already buffered is seen then: a frame or a
+  close it gets before the next turn claims it makes the connection
+  unusable, which the phase flag did. A handshake has a 30 s deadline
+  where it had none. A scripted local server pins the handshake, an idle
+  frame, a close mid-turn, reuse and a slow reader
+  (`responsesSocket.mjs` in the evidence directory), run on both versions:
+  a frame after a turn's terminal event no longer fails the completed turn
+  when it arrives after the turn's last read; the connection is dropped
+  instead. The live provider path is not exercised here (no credentials).
 - Row 13, the VS Code host: `scopedFork` (`harness/src/platform/processRuntime.ts`,
   exported from `@texra-ai/harness/host`) is `FiberSet.makeRuntime` with
   the fork-failure report a runtime's `runFork` has, so a converted
@@ -364,6 +378,10 @@ Left, with the reason:
   (`inOrder`'s caller awaits its message's route; a workspace route answers
   its request), and `routing` must be held from inside `did-navigate`'s own
   step, which a queued reset cannot do.
+- Row 18, a deadline per pull: not added. Whether the provider sends
+  anything over the socket while a model reasons for minutes is not known
+  here, so a deadline could fail a healthy turn; the 30 s open deadline
+  and the ping (a dead TCP connection fails it) stay the liveness checks.
 - Row 20: `settingsViewBody.ts`'s inputs (each page filters after the
   `PubSub`, so a dropped input only one page follows is a page that never
   rebuilds); `appSignals.ts` (a lost `credentialChanged` is a stale
@@ -371,9 +389,9 @@ Left, with the reason:
   uninterruptible turn, which must not wait); `sessionFrames.ts`,
   `hostWindows.ts` (rows 16 and 9) and the frontend's `sessionTransport.ts`.
 
-Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the model
-socket (row 18), the inbound queues (row 12), the remaining buffers
-(row 20, above), and slice 7. What the passes learned:
+Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the
+inbound queues (row 12), the remaining buffers (row 20, above), and
+slice 7. What the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
   opening (the run's fiber acquires its own resources) removes the
@@ -385,13 +403,33 @@ socket (row 18), the inbound queues (row 12), the remaining buffers
   `Fiber.interruptAll` in the run `FiberMap`'s finalizer, which waits for
   a run that does not unwind. No such run was reproduced, and a bounded
   closer would be hand-written, so it is left until one is observed.
-- Row 18: `llm/src/api/openaiResponsesWebSocket.ts` has no test and its
-  path is billed. Moving it to `Socket` starts with a scripted local
-  server that pins the handshake, an idle frame, a close mid-turn and the
-  connection's reuse; none exists yet.
-- Row 16: the frames reach three hosts (the VS Code webview, the desktop
-  renderer, the trace viewer), and only the desktop's can be driven here.
-  It is its own PR.
+- Row 16: `rpc` does the job, measured over a postMessage-shaped pair
+  (`rpcFrames.mjs` in the evidence directory): a stream keeps its order and
+  the server runs at most 32 chunks ahead of a slow reader; a reader that
+  stops interrupts the server's stream; a typed error arrives as its
+  class; a closed port or an interrupted call interrupts the handler,
+  while work the handler forked into a set the bridge owns finishes, which
+  is how a `stop` sent as a tab closes still completes. Three things the
+  move must do that `rpc` does not: a defect arrives with its message
+  text, so the bridge keeps answering `Internal`; a client whose port
+  closed waits until its own scope ends, so a session's close stays what
+  ends its calls; and the host asking the surface (`desktopPromptController.ts`,
+  `hostWindows.ts`'s `ask`) needs a second group served by the surface.
+  Not landed because the move is one change across every end at once:
+  every message carries its session key, so the wire becomes a session
+  envelope around `rpc`'s own messages; `SessionBridge.ts` becomes one
+  `RpcServer` per port (subscribe as a stream merging the host snapshot,
+  the two requests, the surface actions as a stream that holds what the
+  host sent before the surface listened); `sessionTransport.ts` and
+  `SessionFrames` become one `RpcClient` per open session, deleting the
+  pending table, the request ids `sessionSurfaces.ts` and
+  `projectWorkbench.ts` mint, the generation echo and the inbox queue; and
+  the trace viewer's stand-in host (`traceHostBridge.ts`) becomes a server
+  over the trace. Half of it would leave two protocols on one channel.
+  Next step: that change as its own PR, driven in the desktop app and the
+  trace viewer, with the VS Code webview checked by hand. The service's
+  wire is untouched by it: `task.watch` keeps `EventsFrameSchema`, so
+  `PROTOCOL`'s digest does not move unless the frame's fields do.
 - Rows 9 and 10 at the remaining lanes: a reopen must wait for a close and
   nothing shipped does that, so the session and desktop project lanes
   stay. The Codex probe keeps its lane and its map: it caches only what a
@@ -453,4 +491,6 @@ socket (row 18), the inbound queues (row 12), the remaining buffers
 - The surface counts: a script over `packages/*/src` at `7547ab0`.
 - Not verified: the registry on `TxHashMap` under the real stop cascade;
   whether any of the sixteen lanes needs call order; provider behaviour for
-  single-use refresh tokens; `rpc` over `postMessage` in the three frames.
+  single-use refresh tokens; `rpc` over `postMessage` in the three frames
+  (measured only over a postMessage-shaped pair in Node); the model
+  socket against the live provider.
