@@ -14,8 +14,6 @@
 // `--print`) path has no input and never creates a placeholder, so piped
 // output stays byte-identical.
 
-import type { SkillActivation } from '../forms/SkillsListForm';
-
 /** Collapse a paste into a chip when it exceeds either bound. */
 const PASTE_CHAR_THRESHOLD = 800;
 const PASTE_MAX_INLINE_LINES = 2;
@@ -98,7 +96,7 @@ export interface Draft {
   readonly attachments: ReadonlyMap<number, DraftAttachment>;
   readonly nextId: number;
   /** Skills activated for the next message, by name. */
-  readonly skills: readonly SkillActivation[];
+  readonly skills: readonly string[];
 }
 
 export const EMPTY_DRAFT: Draft = Object.freeze({
@@ -153,10 +151,10 @@ export function withPastedImage(
 }
 
 /** The skill activated for the next message, replacing one of its name. */
-export function withSkill(draft: Draft, skill: SkillActivation): Draft {
+export function withSkill(draft: Draft, skill: string): Draft {
   return {
     ...draft,
-    skills: [...draft.skills.filter((s) => s.name !== skill.name), skill],
+    skills: [...draft.skills.filter((s) => s !== skill), skill],
   };
 }
 
@@ -218,9 +216,7 @@ export function restoreDraft(current: Draft, returned: Draft): Draft {
     ...current,
     skills: [
       ...current.skills,
-      ...returned.skills.filter(
-        (skill) => !current.skills.some((s) => s.name === skill.name),
-      ),
+      ...returned.skills.filter((skill) => !current.skills.includes(skill)),
     ],
   };
   if (returned.text.length === 0) return next;

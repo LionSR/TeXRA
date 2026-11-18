@@ -21,6 +21,7 @@ import {
   LaunchApprovalSchema,
 } from '@shared/approvalBypassKind';
 import {
+  ActivatedSkillsSchema,
   AgentConfigSchema,
   InlinePersonaSchema,
   RequestDecisionSchema,
@@ -89,6 +90,9 @@ export const RuntimeCommandSchema = Schema.Union([
     ...runScoped,
     text: Schema.NonEmptyString,
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
+    /** The skills the user activated for this message: the session puts
+     *  their instructions before `text`, and the run records them. */
+    skills: Schema.optional(Schema.NullOr(ActivatedSkillsSchema)),
     /** What the message attaches: a file (a pasted image's), read and
      *  stored once here, or media the store already holds (a fork's). */
     media: Schema.optional(
@@ -305,6 +309,9 @@ export const StartOptionsSchema = Schema.Struct({
    *  process's environment, when its model binds and in what it hands a
    *  child agent CLI. Never stored: a resume passes them again. */
   apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  /** The skills the user activated for the instruction: the launch puts
+   *  their instructions before it, and the opening records them. */
+  skills: Schema.optional(ActivatedSkillsSchema),
 });
 
 /**

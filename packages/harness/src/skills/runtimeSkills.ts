@@ -1,4 +1,4 @@
-import { Context, Effect, Result, Schema } from 'effect';
+import { Context, Effect, Schema } from 'effect';
 
 import {
   installedPluginId,
@@ -7,13 +7,13 @@ import {
 } from '@common/plugins/pluginTrust';
 
 import {
-  ACTIVATED_SKILLS_MAX,
-  QualifiedSkillNameSchema,
+  ActivatedSkillsSchema,
   SKILL_CATALOG_MAX_SKILLS,
   type ActiveSkillSourceScope,
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
+import { Rejected } from '@shared/session/runtimeRequest';
 import { readDisabledTools } from '@shared/state/disabledTools';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { Settings } from '@shared/config/settings';
@@ -324,33 +324,8 @@ const catalogEntry = (
   );
 
 /**
- * The names of the skills a user activated in `texts`: each
- * `<skill_activation>` block names its skill as
- * {@link formatRuntimeSkillActivation} writes it. Only a well-formed skill
- * name counts, and only the last `ACTIVATED_SKILLS_MAX`; what a run records
- * of them is what a step's catalog resolves.
- */
-export const activatedSkillNames = (texts: readonly string[]): string[] =>
-  [
-    ...new Set(
-      texts.flatMap((text) =>
-        [
-          ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
-        ].flatMap(([, name]) =>
-          Result.isSuccess(
-            Schema.decodeUnknownResult(QualifiedSkillNameSchema)(name),
-          )
-            ? [name]
-            : [],
-        ),
-      ),
-    ),
-  ].slice(-ACTIVATED_SKILLS_MAX);
-
-/**
  * The block a message carries to activate one skill: the instruction to
- * use it, and its body with `${TEXRA_SKILL_DIR}` resolved. Its
- * `<skill name>` is what {@link activatedSkillNames} reads back.
+ * use it, and its body with `${TEXRA_SKILL_DIR}` resolved.
  */
 function formatRuntimeSkillActivation({ skill, source }: SourcedSkill): string {
   const body = escapeText(
@@ -370,6 +345,45 @@ function formatRuntimeSkillActivation({ skill, source }: SourcedSkill): string {
     '</skill_activation>',
   ].join('\n');
 }
+
+/**
+ * `text` as the message that activates `names`, the skills a user picked
+ * from {@link Skills.enabled}: each one's activation block, in the order
+ * named, then the request. A name that is malformed or no longer enabled,
+ * or more than `ACTIVATED_SKILLS_MAX` of them, is rejected.
+ */
+export const skillActivationText = Effect.fn('skills.activationText')(
+  function* (roots: SkillRoots, names: readonly string[], text: string) {
+    const wanted = yield* Schema.decodeUnknownEffect(ActivatedSkillsSchema)(
+      names,
+    ).pipe(
+      Effect.mapError(
+        (error) =>
+          new Rejected({ reason: `Activated skills: ${error.message}` }),
+      ),
+    );
+    const { skills } = yield* loadEnabledRuntimeSkills(
+      roots,
+      yield* readInstalledPluginLoad(roots),
+      yield* readDisabledSkills(roots),
+    );
+    const blocks: string[] = [];
+    for (const name of new Set(wanted)) {
+      const entry = skills.find(({ skill }) => skill.name === name);
+      if (entry === undefined)
+        return yield* new Rejected({
+          reason: `The skill ${name} is not enabled.`,
+        });
+      blocks.push(formatRuntimeSkillActivation(entry));
+    }
+    return [
+      blocks.join('\n\n'),
+      '<user_request>',
+      escapeText(text),
+      '</user_request>',
+    ].join('\n');
+  },
+);
 
 export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
   function* (run: {

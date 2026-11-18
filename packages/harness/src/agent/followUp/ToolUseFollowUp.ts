@@ -50,6 +50,9 @@ interface SubmitFollowUpOptions {
   /** The keys the run resumes with if the message wakes it: the sending
    *  client's (`followUp.send`'s `apiKeys`), never another run's. */
   readonly apiKeys?: Readonly<Record<string, string>>;
+  /** The skills a user activated with the message (`followUp.send`'s
+   *  `skills`), whose blocks its text already carries. */
+  readonly skills?: readonly string[];
 }
 
 export function presentFollowUpResult(
@@ -145,7 +148,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, attach, apiKeys } = options;
+  const { hold, attach, apiKeys, skills } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
@@ -195,7 +198,11 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
     const media = attach === undefined ? {} : yield* attach;
-    const landed = yield* inbox.send(runId, { ...item, ...media }, { hold });
+    const landed = yield* inbox.send(
+      runId,
+      { ...item, ...media },
+      { hold, skills },
+    );
     return { status: 'landed', landed, live: live !== undefined } as const;
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if (sent.status !== 'landed') return sent;

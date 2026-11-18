@@ -1,6 +1,7 @@
 import { Context, Effect, SubscriptionRef } from 'effect';
 
 import { Inbox } from '@agent/followUp/Inbox';
+import { LaunchRefused } from '@common/errors/agentErrors';
 import {
   SessionRoots,
   type StorageFs,
@@ -27,6 +28,8 @@ import {
   type RunHistory,
   type SessionLog,
 } from '@shared/session/runHistory';
+import { skillActivationText } from '@skills/runtimeSkills';
+
 import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
@@ -139,13 +142,35 @@ export const rootRun = Effect.fn('rootRun')(function* (
   // tools resolve in the opening, each refused before any run is registered.
   const { opened } = yield* runs.start(runId, {
     open: Effect.gen(function* () {
-      const config = launch.helperModel
-        ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)
+      const roots = yield* SessionRoots;
+      const chosen = launch.helperModel
+        ? yield* applyHelperModelPreference(launch.config, roots)
         : launch.config;
+      // The skills the user activated lead the instruction the run records;
+      // the transcript shows what was typed.
+      const skills = launch.skills ?? [];
+      const config =
+        skills.length === 0
+          ? chosen
+          : {
+              ...chosen,
+              instruction: yield* skillActivationText(
+                roots,
+                skills,
+                chosen.instruction,
+              ).pipe(
+                Effect.catchTag('Rejected', ({ reason }) =>
+                  Effect.fail(new LaunchRefused({ message: reason })),
+                ),
+              ),
+              displayInstruction:
+                chosen.displayInstruction ?? chosen.instruction,
+            };
       const definition = yield* prepareAgentDefinition({ config });
       return yield* executeAgent(definition, runId, {
         stopAfterCycle: launch.interactive !== true,
         tools: launch.tools,
+        skills,
         registration: {
           identity: { kind: 'agent', agent: definition.config.agent },
           grants: limit === undefined ? grants : { ...grants, limit },

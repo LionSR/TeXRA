@@ -1,6 +1,6 @@
-// `/skills` form. It lists discoverable runtime skills from the same source
-// registry that feeds prompt injection and builds activation payloads from the
-// shared runtime formatter instead of duplicating skill wiring in the UI layer.
+// `/skills` form. It lists the enabled skills from the same source registry
+// that feeds prompt injection; a selection is the skill's name, which the
+// next message carries and the session renders.
 
 import { Text } from 'ink';
 import { Effect } from 'effect';
@@ -19,13 +19,9 @@ import { useChatProcess } from '../chatProcess';
 
 interface SkillsListFormProps {
   readonly availableRows?: number;
-  readonly onSelect: (value: SkillActivation) => void;
+  /** Called with the selected skill's name. */
+  readonly onSelect: (name: string) => void;
   readonly onClose: () => void;
-}
-
-export interface SkillActivation {
-  readonly name: string;
-  readonly activationPrompt: string;
 }
 
 interface SkillsListData {
@@ -36,9 +32,9 @@ interface SkillsListData {
 
 function skillSelectItemsForTui(
   skills: readonly EnabledSkill[],
-): SelectItem<SkillActivation>[] {
-  return skills.map(({ display, activation }) => ({
-    value: { name: display.name, activationPrompt: activation },
+): SelectItem<string>[] {
+  return skills.map(({ display }) => ({
+    value: display.name,
     label: display.name,
     description: joinFacts([display.label, display.description]),
   }));
@@ -69,7 +65,7 @@ function skillIssueSummaryDetail(
 export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   const { roots } = useChatProcess();
   return (
-    <AsyncListForm<SkillsListData, SkillActivation>
+    <AsyncListForm<SkillsListData, string>
       title="/skills"
       loadingLabel="Loading skills…"
       load={() =>
