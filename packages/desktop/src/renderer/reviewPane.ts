@@ -10,6 +10,7 @@ import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyMessage, renderEmptyState } from '@ui/wa/emptyState';
+import { matchesQuery } from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
@@ -55,11 +56,8 @@ export function createReviewPane(): ReviewPaneController {
   function visibleEntries(
     shown: Map<string, DesktopShowDiffMessage>,
   ): readonly DesktopShowDiffMessage[] {
-    const query = filter.trim().toLocaleLowerCase();
-    const values = [...shown.values()];
-    if (!query) return values;
-    return values.filter((entry) =>
-      `${entry.displayPath} ${entry.title}`.toLocaleLowerCase().includes(query),
+    return [...shown.values()].filter((entry) =>
+      matchesQuery(`${entry.displayPath} ${entry.title}`, filter),
     );
   }
 

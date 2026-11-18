@@ -9,6 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { matchesQuery } from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
@@ -84,25 +85,18 @@ function commandPaletteOptionId(index: number): string {
   return `desktop-command-palette-option-${index}`;
 }
 
+/** A row matches on its label, category, trailing label and id, so a
+ *  category name finds rows whose `meta` is an accelerator. */
 function filterCommandPaletteEntries(
   entries: readonly CommandPaletteEntry[],
   query: string,
 ): CommandPaletteEntry[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return [...entries];
-
-  const queryParts = normalizedQuery.split(/\s+/);
-  return entries.filter((entry) => {
-    // Include both `category` and `meta` (separated by a space) so rows that
-    // reserve `meta` for an accelerator/reason can still surface by
-    // category-name match. Empty/undefined fields collapse to '' and don't
-    // affect matching.
-    const haystack =
-      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`
-        .replaceAll('.', ' ')
-        .toLowerCase();
-    return queryParts.every((part) => haystack.includes(part));
-  });
+  return entries.filter((entry) =>
+    matchesQuery(
+      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`,
+      query,
+    ),
+  );
 }
 
 function getNextCommandPaletteIndex(

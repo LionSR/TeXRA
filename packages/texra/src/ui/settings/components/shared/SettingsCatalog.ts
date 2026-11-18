@@ -9,6 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { matchesQuery } from '@ui/wa/listInteraction';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { settingsCatalogStyles } from './SettingsCatalog.styles';
@@ -39,13 +40,13 @@ export class SettingsCatalog extends LitElement {
   @state() private group = 'all';
 
   private get visibleItems() {
-    const query = this.query.trim().toLocaleLowerCase();
     const matches = this.items.filter(
       (item) =>
         (this.group === 'all' || item.group === this.group) &&
-        `${item.name} ${item.description} ${item.searchText ?? ''}`
-          .toLocaleLowerCase()
-          .includes(query),
+        matchesQuery(
+          `${item.name} ${item.description} ${item.searchText ?? ''}`,
+          this.query,
+        ),
     );
     return [...Map.groupBy(matches, (item) => item.group).values()].flat();
   }
