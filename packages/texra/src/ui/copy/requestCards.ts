@@ -36,6 +36,9 @@ export function requestDeclineLabel(kind: RequestPayload['kind']): string {
   return DECLINE_LABEL[REQUEST_ACTIONS[kind].n];
 }
 
+/** The label of the directory a command or a proposed agent runs in. */
+export const WORKING_DIRECTORY_LABEL = 'Working directory';
+
 /**
  * Each request's ask: the one line that says what the agent wants. A host
  * that marks up the object (a path in code, an agent in bold) puts it after

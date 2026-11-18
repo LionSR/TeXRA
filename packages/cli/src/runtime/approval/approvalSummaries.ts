@@ -13,7 +13,7 @@ import {
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { modelFailureText } from '@ui/copy/modelAccess';
-import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -177,7 +177,9 @@ function agentProposalApprovalSummary(
     `${REQUEST_ASK.proposal(proposal.task)} ${proposal.agent} (${agentProposalLabel(proposal)})`,
     `Model: ${getModelLabel(proposal.model)}`,
     ...definedAgentLines(proposal, promptLines),
-    ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
+    ...(workingDirectory
+      ? [`${WORKING_DIRECTORY_LABEL}: ${workingDirectory}`]
+      : []),
     ...fileGroups,
     'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
@@ -232,7 +234,7 @@ export function formatRetryRequestMessage(payload: RetryRequest): string {
 }
 
 export function formatBashApprovalSummary(payload: BashRequest): string {
-  const cwd = payload.cwd ? `Directory: ${payload.cwd}\n` : '';
+  const cwd = payload.cwd ? `${WORKING_DIRECTORY_LABEL}: ${payload.cwd}\n` : '';
   return `${REQUEST_ASK.command}:\n${cwd}${payload.command}`;
 }
 

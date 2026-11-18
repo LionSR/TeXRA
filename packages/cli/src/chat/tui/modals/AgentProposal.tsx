@@ -24,7 +24,7 @@ import {
   scriptRequestCallLine,
   scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
-import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -168,7 +168,7 @@ function agentProposalMetadataLines({
   if (payload.workingDirectory) {
     lines.push({
       segments: [
-        { text: 'Directory: ', bold: true },
+        { text: `${WORKING_DIRECTORY_LABEL}: `, bold: true },
         { text: payload.workingDirectory },
       ],
     });

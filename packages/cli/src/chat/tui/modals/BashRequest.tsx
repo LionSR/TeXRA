@@ -5,7 +5,7 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { truncateToWidth } from '@cli/runtime/terminal/terminalText';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
-import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
@@ -34,7 +34,7 @@ function bashCwdDisplayLine({
   const trimmedCwd = cwd?.trim();
   if (!trimmedCwd) return undefined;
 
-  return truncateToWidth(`Directory: ${trimmedCwd}`, width);
+  return truncateToWidth(`${WORKING_DIRECTORY_LABEL}: ${trimmedCwd}`, width);
 }
 
 export function BashRequest(props: BashRequestProps): React.JSX.Element {

@@ -1469,7 +1469,7 @@ const SCENARIOS = [
       'agent: chat · model: harness-model',
       'Run a command',
       '$ npm run typecheck',
-      'Directory:',
+      'Working directory:',
       'y approve',
       'a approve commands for this task',
     ],
@@ -1499,7 +1499,7 @@ const SCENARIOS = [
     expect: [
       'Run a command',
       '$ npm run typecheck',
-      'Directory:',
+      'Working directory:',
       'y approve',
       'n reject',
       'Esc reject',
@@ -1535,7 +1535,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     expect: [
       'Run a command',
-      'Directory:',
+      'Working directory:',
       "$ python3 << 'EOF'",
       'more rows',
       'scroll command',
@@ -1555,7 +1555,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Run a command',
-      'Directory:',
+      'Working directory:',
       "$ python3 << 'EOF'",
       'more rows',
       'scroll command',
@@ -1576,7 +1576,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Run a command',
-      'Directory:',
+      'Working directory:',
       'x2 = 1 + 2 * y * y',
       'previous',
       'more rows',
@@ -1598,7 +1598,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Run a command',
-      'Directory:',
+      'Working directory:',
       'for y in range(1, 100):',
       'previous',
       'more rows',
@@ -1616,7 +1616,7 @@ const SCENARIOS = [
     },
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
-    expect: ['Run a command', 'Directory:', 'rows hidden', 'y approve'],
+    expect: ['Run a command', 'Working directory:', 'rows hidden', 'y approve'],
     unexpect: ['Option-p tasks'],
   },
   {
