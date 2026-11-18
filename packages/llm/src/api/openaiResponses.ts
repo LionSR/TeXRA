@@ -7,7 +7,6 @@ import {
   Exit,
   identity,
   Ref,
-  Schema,
   type Scope,
   Stream,
   Struct,
@@ -309,34 +308,30 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
     },
     cancel: Effect.fnUntraced(function* (operation, learned) {
       const reply = yield* authorized(bearer, (token) =>
-        ownedAbortSafeRequest(async (signal) => {
-          const response = await client.responses
-            .cancel(operation.providerResponseId, {
-              signal,
-              headers: bearerHeaders(token),
-            })
-            .asResponse();
-          return {
-            requestId: response.headers.get('x-request-id') ?? undefined,
-            body: await response.text(),
-          };
-        }, openaiFailure),
+        ownedAbortSafeRequest(
+          (signal) =>
+            client.responses
+              .cancel(operation.providerResponseId, {
+                signal,
+                headers: bearerHeaders(token),
+              })
+              .withResponse(),
+          openaiFailure,
+        ),
       );
       yield* Ref.update(learned, (known) => ({
         ...known,
-        requestId: reply.requestId,
+        requestId: reply.request_id ?? undefined,
       }));
       // Cancellation cannot request encrypted output includes. Report status only.
       const invalid =
         'Cancellation returned invalid response identity or status.';
       const parsed = yield* decodeWireOrFail(
-        Schema.fromJsonString(
-          ResponseSchema.mapFields(
-            Struct.pick(['id', 'object', 'model', 'status']),
-          ),
+        ResponseSchema.mapFields(
+          Struct.pick(['id', 'object', 'model', 'status']),
         ),
         invalid,
-        reply.body,
+        reply.data,
       );
       if (parsed.id !== operation.providerResponseId)
         return yield* wireFail(invalid);
