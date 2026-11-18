@@ -251,7 +251,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ...parts,
             roots,
             showBuilt,
-            runtime,
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
             ...settings,
