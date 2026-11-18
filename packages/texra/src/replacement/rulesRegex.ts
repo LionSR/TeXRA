@@ -301,15 +301,15 @@ function difCommandMarker(cmd: string): string {
 }
 
 /**
- * The blank line latexdiff leaves before the closing brace of an `align` or
- * `aligned`, starred or not, whitespace-only lines included:
+ * The blank lines latexdiff leaves before the closing brace of an `align` or
+ * `aligned`, starred or not, however many and whitespace-only ones included:
  * `\n\n}\end{align*}%DIFAUXCMD` -> `\n}\end{align*}%DIFAUXCMD`. The
  * `latexdiff` category, enabled with the plain-rule categories.
  */
 export const LATEXDIFF_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'g',
   patterns: Object.freeze({
-    '\n[ \t]*\n[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
+    '\n(?:[ \t]*\n)+[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
       '\n}\\end{$1$2}%DIFAUXCMD',
   }),
 });
