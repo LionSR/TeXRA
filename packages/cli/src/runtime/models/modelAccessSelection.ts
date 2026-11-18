@@ -1,4 +1,4 @@
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 
 import { hasUsableApiKey, providerDisplayName } from '@texra-ai/llm';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
@@ -17,6 +17,7 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
@@ -34,16 +35,6 @@ import type { CliContext } from '../platform/cliContext';
 interface CliModelAccessSelectionResult {
   readonly message: string;
 }
-
-/** A subscription preference change the stores would not carry out, worded
- *  with the plan and the change it names. */
-class ModelAccessPreferenceFailed extends Schema.TaggedError<ModelAccessPreferenceFailed>()(
-  'ModelAccessPreferenceFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
 
 /**
  * A program: each coding plan's key status is a credential read that types its
@@ -113,7 +104,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     yield* provider.setPreferSubscription(stores, false).pipe(
       Effect.mapError(
         (cause) =>
-          new ModelAccessPreferenceFailed({
+          new SettingsRequestFailed({
             message: ACCOUNT_OUTCOME.subscriptionNotDisabled(
               displayName,
               toErrorMessage(cause),
@@ -135,7 +126,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     yield* provider.setPreferSubscription(stores, true).pipe(
       Effect.mapError(
         (cause) =>
-          new ModelAccessPreferenceFailed({
+          new SettingsRequestFailed({
             message: `${displayName} subscription could not be enabled: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -171,7 +162,7 @@ const updateKeyedCliModelAccess = Effect.fn(
     yield* runtime.setEnabled(stores, false).pipe(
       Effect.mapError(
         (cause) =>
-          new ModelAccessPreferenceFailed({
+          new SettingsRequestFailed({
             message: `${plan.preference.title} could not be disabled: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -194,7 +185,7 @@ const updateKeyedCliModelAccess = Effect.fn(
   yield* runtime.setEnabled(stores, true).pipe(
     Effect.mapError(
       (cause) =>
-        new ModelAccessPreferenceFailed({
+        new SettingsRequestFailed({
           message: `${plan.preference.title} could not be enabled: ${toErrorMessage(cause)}`,
           cause,
         }),
