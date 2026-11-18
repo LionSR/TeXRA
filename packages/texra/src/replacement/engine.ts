@@ -34,7 +34,6 @@ import {
   LATEX_XML_REPLACEMENTS,
   GPTNESS_REPLACEMENTS,
   PERSONAL_STYLE_REPLACEMENTS,
-  LATEXDIFF_REPLACEMENTS,
 } from './rules';
 import {
   MAX_STYLE_REPLACEMENTS,
@@ -44,6 +43,7 @@ import {
 import {
   EQUATION_MACRO_REPLACEMENTS,
   PARENTHESES_REPLACEMENTS,
+  LATEXDIFF_REPLACEMENTS,
   LATEXDIFF_MARKUP_REPLACEMENTS,
   INLINE_MATH_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
@@ -176,13 +176,23 @@ const replacementEngine = {
 };
 
 /**
- * The rules behind every non-regex category name the config accepts. A
- * `Record` over that universe: a name with no rules here, or rules here under
- * a name the config rejects, fails to typecheck, so the engine can neither
- * accept a no-op category nor run one nobody can enable. A key two
- * categories share takes the later category's value.
+ * `latexdiff` is enabled with the plain-rule categories, but its one rule is
+ * a pattern, so it runs in the regex pass from {@link REGEX_RULES}.
  */
-const NON_REGEX_RULES: Record<NonRegexReplacementCategory, PatternDict> = {
+type PatternRuleCategory = RegexReplacementCategory | 'latexdiff';
+
+/**
+ * The rules behind every non-regex category name the config accepts but
+ * `latexdiff`. The two tables are `Record`s over the config's universe: a
+ * name with rules in neither, or rules under a name the config rejects,
+ * fails to typecheck, so the engine can neither accept a no-op category nor
+ * run one nobody can enable. A key two categories share takes the later
+ * category's value.
+ */
+const NON_REGEX_RULES: Record<
+  Exclude<NonRegexReplacementCategory, 'latexdiff'>,
+  PatternDict
+> = {
   // LaTeX content formatting
   equations: EQUATION_REPLACEMENTS,
   sections: SECTION_REPLACEMENTS,
@@ -198,19 +208,19 @@ const NON_REGEX_RULES: Record<NonRegexReplacementCategory, PatternDict> = {
   // Personal style
   personal_style: PERSONAL_STYLE_REPLACEMENTS,
   max_style: MAX_STYLE_REPLACEMENTS,
-  // LaTeXdiff specific fixes
-  latexdiff: LATEXDIFF_REPLACEMENTS,
 };
 
 /**
- * The rules behind every regex category name, on the same contract; a regex
- * category applied later rewrites what an earlier one produced.
+ * The rules behind every regex category name and `latexdiff`, on the same
+ * contract; a regex category applied later rewrites what an earlier one
+ * produced.
  */
-const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
+const REGEX_RULES: Record<PatternRuleCategory, RegexRuleSet> = {
   equation_macros: EQUATION_MACRO_REPLACEMENTS,
   fenced_latex_blocks: FENCED_LATEX_BLOCK_REPLACEMENTS,
   inline_math: INLINE_MATH_REPLACEMENTS,
   parentheses: PARENTHESES_REPLACEMENTS,
+  latexdiff: LATEXDIFF_REPLACEMENTS,
   latexdiff_markup: LATEXDIFF_MARKUP_REPLACEMENTS,
   equation_style: EQUATION_STYLE_REPLACEMENTS,
   personal_style_contextual: PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
@@ -246,13 +256,16 @@ function getAllReplacements(config: ConfigProvider): OrderedRuleSet {
 }
 
 /**
- * Return every enabled regex category in application order, appending a custom
- * category built from user settings whenever custom regex replacements exist.
+ * Return every enabled regex category, and `latexdiff` when the plain-rule
+ * setting enables it, in application order, appending a custom category
+ * built from user settings whenever custom regex replacements exist. The two
+ * settings name disjoint categories, so their union selects from one table.
  */
 function getAllReplacementsRegex(config: ConfigProvider): RegexRuleSet[] {
-  const enabled = new Set<string>(
-    Settings.getConfig(config, ENABLED_REGEX_REPLACEMENTS_SETTING),
-  );
+  const enabled = new Set<string>([
+    ...Settings.getConfig(config, ENABLED_REGEX_REPLACEMENTS_SETTING),
+    ...Settings.getConfig(config, ENABLED_REPLACEMENTS_SETTING),
+  ]);
   const customReplacements = Settings.getConfig(
     config,
     CUSTOM_REGEX_REPLACEMENTS_SETTING,

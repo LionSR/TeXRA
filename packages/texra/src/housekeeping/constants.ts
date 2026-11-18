@@ -20,5 +20,3 @@ export const TEMP_EXTENSIONS = Object.freeze([
   '-blx.bib',
   'Notes.bib',
 ]);
-
-export const HISTORY_DIR = 'History';

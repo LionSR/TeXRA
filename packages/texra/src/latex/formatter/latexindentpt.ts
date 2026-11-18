@@ -4,29 +4,9 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-
-const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
-  logPath: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  // `remove` with `force` treats a path that is not there as the
-  // post-condition, exactly as the facade's provider-level delete did, so
-  // only a real failure is reported.
-  const removed = yield* fs.remove(logPath, { force: true }).pipe(
-    Effect.as(true),
-    Effect.catch((err) =>
-      Effect.logWarning(
-        `Error removing indent.log: ${toErrorMessage(err)}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
-    ),
-  );
-  if (removed) {
-    yield* Effect.logDebug(`Removed ${logPath}`).pipe(withLogChannel(CHANNEL));
-  }
-});
 
 /**
  * The files in `dir` whose names start with one of `prefixes`, found by a
@@ -67,36 +47,6 @@ const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
   );
 });
 
-/** Delete latexindent's `<base>.tex.bak*` and `<base>.bak*` backups in a directory. */
-const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
-  fileBaseName: string,
-  fileDir: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const backupFiles = yield* filesByPrefix(fileDir, [
-    `${fileBaseName}.tex.bak`,
-    `${fileBaseName}.bak`,
-  ]).pipe(withLogChannel(CHANNEL));
-
-  yield* Effect.forEach(
-    backupFiles,
-    (backupFile) =>
-      fs.remove(backupFile, { force: true }).pipe(
-        Effect.andThen(
-          Effect.logDebug(`Removed backup file: ${backupFile}`).pipe(
-            withLogChannel(CHANNEL),
-          ),
-        ),
-        Effect.catch((err) =>
-          Effect.logWarning(
-            `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
-          ).pipe(withLogChannel(CHANNEL)),
-        ),
-      ),
-    { concurrency: 8, discard: true },
-  );
-});
-
 /**
  * `workspaceRoot` is the root a relative `filePath` resolves against and the
  * cwd latexindent runs in, and `latexindentConfig` the configured config-file
@@ -127,16 +77,28 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
     cwd: workspaceRoot,
   });
 
-  // Always clean up backup files — latexindent creates .bak before modifying,
-  // so a crash or failure can still leave orphaned backups.
+  // Always clean up the `<base>.tex.bak*` and `<base>.bak*` backups —
+  // latexindent creates them before modifying, so a crash or failure can
+  // still leave orphaned backups — and its indent.log, which it may also
+  // write at the process cwd (the workspace root).
+  const fs = yield* FileSystem.FileSystem;
   const fileBaseName = path.basename(absolutePath, '.tex');
   const fileDir = path.dirname(absolutePath);
-  yield* cleanupBackupFiles(fileBaseName, fileDir);
-  yield* cleanupIndentLog(path.join(fileDir, 'indent.log'));
-  // latexindent may also create indent.log at the process cwd (workspace root)
-  if (workspaceRoot && fileDir !== workspaceRoot) {
-    yield* cleanupIndentLog(path.join(workspaceRoot, 'indent.log'));
-  }
+  const backupFiles = yield* filesByPrefix(fileDir, [
+    `${fileBaseName}.tex.bak`,
+    `${fileBaseName}.bak`,
+  ]);
+  yield* removeBestEffort(fs, backupFiles, 'backup file');
+  yield* removeBestEffort(
+    fs,
+    workspaceRoot && fileDir !== workspaceRoot
+      ? [
+          path.join(fileDir, 'indent.log'),
+          path.join(workspaceRoot, 'indent.log'),
+        ]
+      : [path.join(fileDir, 'indent.log')],
+    'latexindent log',
+  );
 
   if (success) {
     yield* Effect.logInfo(`Indented ${absolutePath}`);

@@ -38,7 +38,7 @@ import {
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
-import { HISTORY_DIR } from '@housekeeping/constants';
+import { PACKED_RUNS_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { fileNameTimestamp } from '@housekeeping/artifactFiles';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import {
@@ -429,7 +429,7 @@ export const createHostRunActions = Effect.fn(
                   // within the same second (the timestamp's granularity)
                   // don't collide.
                   to: path.posix.join(
-                    HISTORY_DIR,
+                    PACKED_RUNS_DIRECTORY,
                     `${yield* fileNameTimestamp}_${path.parse(inputFile).name}_${agentFileName(config.agent)}_${modelFileName(config.model)}_${runId.replaceAll('-', '').slice(0, 8)}`,
                   ),
                 }
