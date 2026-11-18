@@ -20,6 +20,9 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   account, keyed by its route
   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
   browser and (Grok's) device-code sign-in.
+- **Provider endpoints outside a turn**: [`fetchPlanUsage`](#fetchplanusage)
+  reads a coding plan's quota windows, and
+  [`transcribeAudio`](#transcribeaudio) a recording's text.
 
 ## Binding
 
@@ -103,6 +106,22 @@ A stored ChatGPT session.
 type ChatgptSession = typeof ChatgptSessionSchema.Type;
 ```
 
+## fetchPlanUsage
+
+Fetch and read a plan's usage with its API key. The GLM quota endpoint is
+on the same host as the region's Responses endpoint.
+
+```ts
+function fetchPlanUsage(
+  request: PlanUsageRequest,
+  apiKey: Redacted.Redacted<string>,
+): Effect.Effect<
+  PlanUsage,
+  HttpClientError.HttpClientError | Cause.TimeoutError,
+  HttpClient.HttpClient
+>
+```
+
 ## LoopbackTransportUnavailableError
 
 The loopback route could never be established — the registered callback
@@ -115,6 +134,43 @@ class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTrans
   'LoopbackTransportUnavailableError',
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 )
+```
+
+## PlanUsage
+
+A plan's reported usage. No window means the body named none it reads.
+
+```ts
+interface PlanUsage {
+  /** The plan's tier as the provider names it, when the body says. */
+  readonly planName?: string;
+  readonly windows: readonly PlanUsageWindow[];
+}
+```
+
+## PlanUsageRequest
+
+Which plan to ask, and for GLM which platform its key belongs to.
+
+```ts
+type PlanUsageRequest =
+  | { readonly plan: 'kimiCode' }
+  | { readonly plan: 'glm'; readonly region: 'china' | 'international' };
+```
+
+## PlanUsageWindow
+
+One quota window of a plan, as a share of its limit.
+
+```ts
+interface PlanUsageWindow {
+  /** The provider's own name for the window (`five_hour`, `glm-4.6:weekly`). */
+  readonly name: string;
+  readonly percentUsed: number;
+  readonly percentRemaining: number;
+  /** When the window resets, in epoch milliseconds. */
+  readonly resetAt?: number;
+}
 ```
 
 ## SessionToken
@@ -256,6 +312,15 @@ interface SubscriptionSessionStatus {
   email?: string;
   accountId?: string;
 }
+```
+
+## transcribeAudio
+
+The text of an audio file, from OpenAI's transcription model with an
+OpenAI key at `endpoint`. The SDK loads on the first call.
+
+```ts
+const transcribeAudio: (audioPath: string, credential: { readonly bearer: string; readonly endpoint: string; }) => Effect<string, ModelError, never>
 ```
 
 ## XaiSession

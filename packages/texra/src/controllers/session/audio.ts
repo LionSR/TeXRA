@@ -1,7 +1,3 @@
-// The transcription upload stays a Node read stream: the OpenAI SDK names the
-// multipart file from the stream's path, and the endpoint reads the audio
-// format from that name.
-import { createReadStream } from 'node:fs';
 import * as path from 'node:path';
 
 import {
@@ -24,7 +20,6 @@ import {
   meansAbsent,
   pathExists,
 } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 import { SOX_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 import {
   findCommand,
@@ -232,40 +227,3 @@ export const validateRecordingFile = Effect.fn('validateRecordingFile')(
     return recordingPath;
   },
 );
-
-/**
- * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI
- * route the caller resolved, so it arrives as data rather than as a store
- * this function would have to read from. The recorder is already terminated
- * by the time this runs. Interrupting the call aborts the upload. Stale
- * takes under the session's recordings directory are swept by the host take
- * fiber after a successful transcription.
- */
-export function transcribeRecording(
-  recordingPath: string,
-  credential: { readonly bearer: string; readonly endpoint: string },
-): Effect.Effect<string, AudioRecorderError> {
-  return Effect.tryPromise({
-    // The transcription endpoint is an OpenAI SDK operation the llm package
-    // does not model, so the client is built here — the one foreign call this
-    // module wraps. Imported lazily so the SDK stays out of the desktop
-    // startup graph.
-    try: async (signal) => {
-      const { default: OpenAI } = await import('openai');
-      const client = new OpenAI({
-        apiKey: credential.bearer,
-        baseURL: credential.endpoint,
-      });
-      const result = await client.audio.transcriptions.create(
-        {
-          file: createReadStream(recordingPath),
-          model: 'gpt-4o-transcribe',
-          response_format: 'json',
-        },
-        { signal },
-      );
-      return result.text;
-    },
-    catch: ensureError,
-  }).pipe(recorderFailure('transcribeRecording'));
-}
