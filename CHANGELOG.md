@@ -16,7 +16,8 @@ All notable changes to this project will be documented in this file.
   was. A workspace shows every agent unless you turn some off (Settings →
   Agents → Library, or `texra config agents --agents <agent,...>`);
   `texra config agents` no longer takes `--default-team`, `--agents inherit`
-  or `--agents team:<team>`, and its output has no `Effective agents` or
+  or `--agents team:<team>`, refuses a list naming an agent that does not
+  exist instead of storing it, and its output has no `Effective agents` or
   `Default team` line. The setup assistant no longer asks for your field to
   apply a team (its `apply_team` tool is removed), and the command
   **TeXRA: Agent Team Settings** is removed. A workspace whose stored

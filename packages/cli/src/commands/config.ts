@@ -11,6 +11,7 @@ import {
   failUsage,
   readCliAmbientState,
 } from '../runtime/platform/cliContext';
+import { missingAgentMessage } from '../runtime/agents';
 import {
   formatCliWorkspaceAgents,
   readCliWorkspaceAgents,
@@ -83,7 +84,8 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     },
   ) {
     const roots = services.roots;
-    const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
+    const catalog = yield* AgentCatalog;
+    const workspaceAgents = catalog.workspaceAgents(roots);
     // Each value is read once, trimmed; a keyword (`all`, `none`) reads in
     // any case.
     const agents = input.agents?.trim();
@@ -96,12 +98,17 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     }
     const keyword = (value: string | undefined) => value?.toLowerCase();
 
-    if (agents !== undefined) {
-      yield* workspaceAgents.select(
-        keyword(agents) === 'all'
-          ? { kind: 'all' }
-          : { kind: 'custom', agentKeys: parseAgentKeys(agents) },
-      );
+    if (keyword(agents) === 'all') {
+      yield* workspaceAgents.select({ kind: 'all' });
+    } else if (agents !== undefined) {
+      const agentKeys = parseAgentKeys(agents);
+      // A list replaces every agent it does not name, so one holding a name
+      // no agent has would only narrow the workspace: nothing is stored.
+      const unknown = agentKeys.filter((key) => catalog.get(key) === undefined);
+      if (unknown.length > 0) {
+        return yield* failUsage(missingAgentMessage(unknown.join(', ')));
+      }
+      yield* workspaceAgents.select({ kind: 'custom', agentKeys });
     }
 
     if (keyword(defaultAgent) === 'none') {

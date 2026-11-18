@@ -343,6 +343,35 @@ function validateBundledLeanAgents() {
   }
 }
 
+/** A list naming an agent that does not exist is a usage error and stores
+ *  nothing: stored, it would leave the workspace only the agents it names. */
+function validateUnknownWorkspaceAgent() {
+  const cwd = makeScratch('texra-cli-agents-cwd-');
+  const home = makeScratch('texra-cli-agents-home-');
+  const configAgents = (...args) =>
+    run(
+      process.execPath,
+      [binaryPath, 'config', 'agents', ...args, '--cwd', cwd, '--no-color'],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
+    );
+  try {
+    assertUsageError(
+      configAgents('--agents', 'assistant,inherit'),
+      'texra config agents with a name no agent has',
+      'Agent not found: inherit',
+    );
+    const shown = configAgents();
+    assertSuccess(shown, 'texra config agents after a refused list');
+    assert(
+      shown.stdout.includes('Workspace agents: all'),
+      `a refused list should leave the workspace agents unchanged\nstdout:\n${shown.stdout}`,
+    );
+  } finally {
+    removeScratch(cwd);
+    removeScratch(home);
+  }
+}
+
 function validateFileFlagMissingValues() {
   assertUsageError(
     run(process.execPath, [binaryPath, 'run', 'edit', '--input', '--print']),
@@ -3430,6 +3459,7 @@ async function validateCliRunArtifacts(options = {}) {
   }
   validateBinarySmoke();
   validateBundledLeanAgents();
+  validateUnknownWorkspaceAgent();
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
   validateRunCommand();
