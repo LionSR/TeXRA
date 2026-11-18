@@ -518,8 +518,8 @@ importers:
         specifier: 3.6.0
         version: 3.6.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)
       llm-zoo:
-        specifier: 4.4.0
-        version: 4.4.0(effect@4.1.4)
+        specifier: 4.5.0
+        version: 4.5.0(effect@4.1.4)
       ws:
         specifier: 8.23.0
         version: 8.23.0
@@ -3550,8 +3550,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@4.4.0:
-    resolution: {integrity: sha512-ubZBb5Xp4CBkDQCbi5sVSAL1bZLkDrgYSARhHlVjAjLNIWtztukjFH3nXj4wS0wygWAaqKytFpCV/5miYOxcbw==}
+  llm-zoo@4.5.0:
+    resolution: {integrity: sha512-1n7egemioRj6Q4axTR1L0bbPjsdtKsIj6xvUrFE6POiN/D9lLMB3w2f/SP22RtrGoyeFzWS9mgegyAwxqJJ4dg==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       effect: ^4.0.0
@@ -7648,7 +7648,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@4.4.0(effect@4.1.4):
+  llm-zoo@4.5.0(effect@4.1.4):
     optionalDependencies:
       effect: 4.1.4
 
