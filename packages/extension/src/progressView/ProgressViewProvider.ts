@@ -36,7 +36,7 @@ import {
   type ManualCriticismEntry,
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
-import type { DownWire } from '@texra/shared/session/sessionFrames';
+import type { SessionWire } from '@texra/shared/session/sessionFrames';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -407,11 +407,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     function* (
       id: keyof Surfaces,
       view: vscode.WebviewView | vscode.WebviewPanel,
-    ): Effect.fn.Return<void, HostFailed, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      void,
+      HostFailed,
+      FileSystem.FileSystem | ProcessServices
+    > {
       this.closeSurface(this.surfaces[id]);
       // The post starts synchronously inside the fork, so sends keep their
       // order.
-      const send = (message: DownWire): void => {
+      const send = (message: SessionWire): void => {
         this.fork(
           Effect.tryPromise({
             try: () => view.webview.postMessage(message),
@@ -421,12 +425,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               delivered
                 ? Effect.void
                 : Effect.logWarning(
-                    `A ${message.kind} message was not delivered to ${id}`,
+                    `A ${message.message._tag} message was not delivered to ${id}`,
                   ),
             ),
             Effect.catch((error) =>
               Effect.logWarning(
-                `Posting a ${message.kind} message to ${id} failed: ${error.message}`,
+                `Posting a ${message.message._tag} message to ${id} failed: ${error.message}`,
               ),
             ),
             withLogChannel(CHANNEL),

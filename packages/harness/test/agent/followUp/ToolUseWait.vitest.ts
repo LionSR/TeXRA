@@ -50,12 +50,12 @@ function loopProgram(init: LoopInit, model: ScriptedModel['model']) {
     (opened) => runToolUse({ resume: init.resume === true }, opened),
   ).pipe(
     Effect.provide(
-      Layer.mergeAll(
-        scriptedInvokerLayer,
-        nativeToolTestLayer({
-          run: { runId: init.runId, session: init.session, toolPolicy: {} },
-        }),
-      ).pipe(
+      scriptedInvokerLayer.pipe(
+        Layer.provideMerge(
+          nativeToolTestLayer({
+            run: { runId: init.runId, session: init.session, toolPolicy: {} },
+          }),
+        ),
         Layer.provideMerge(agentRunTestLayer({ ...init, model })),
         Layer.provideMerge(
           Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),

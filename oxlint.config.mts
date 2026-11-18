@@ -251,6 +251,9 @@ const RUNTIME_ENTRIES = [
   'packages/harness/src/agent/codeSandbox/worker.ts',
   'packages/texra/src/ui/progress/sessionTransport.ts',
   'packages/texra/src/shared/signals.ts',
+  // The trace page's stand-in host: it serves the shell before any bundle
+  // runtime exists.
+  'packages/trace-viewer/src/traceHostBridge.ts',
 ];
 
 /** The llm protocol code, which may load Node built-ins and vendor SDKs. */

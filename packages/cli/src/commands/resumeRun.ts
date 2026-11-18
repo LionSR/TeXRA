@@ -3,7 +3,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { pathExists } from '@texra-ai/harness/node';
-import { ensureError, programOf, type RunId } from '@texra-ai/harness/schemas';
+import { programOf, type RunId } from '@texra-ai/harness/schemas';
+import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -20,7 +21,6 @@ import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-  DocumentTaskOutputFailed,
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
@@ -35,14 +35,11 @@ function loadFailureMessage(id: RunId, error: unknown): string {
 }
 
 /** What a stored-destination reader threw: its own usage error, or the
- *  failure to read the recorded launch at all. */
-const storedDestinationFailure = (cause: unknown) =>
+ *  failure to read the run's recorded launch at all. */
+const storedDestinationFailure = (runId: RunId) => (cause: unknown) =>
   cause instanceof CliUsageError
     ? cause
-    : new DocumentTaskOutputFailed({
-        message: ensureError(cause).message,
-        cause,
-      });
+    : new TaskRecordsFailed({ runId, message: cliErrorMessage(cause) });
 
 /** Report a failed resume step: a usage refusal names itself, any other
  *  failure reads as a session that could not load. */
@@ -212,12 +209,12 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     Effect.gen(function* () {
       const outputFile = yield* Effect.try({
         try: () => resumeDocumentTaskOutputFile(config),
-        catch: storedDestinationFailure,
+        catch: storedDestinationFailure(id),
       });
       yield* assertOutputFileAvailable(outputFile, context.cwd);
       const outputDirectory = yield* Effect.try({
         try: () => resumeDocumentTaskOutputDirectory(config),
-        catch: storedDestinationFailure,
+        catch: storedDestinationFailure(id),
       });
       yield* assertOutputDirAvailable(outputDirectory, context.cwd);
       const recoveryInputIsDurable =

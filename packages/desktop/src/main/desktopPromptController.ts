@@ -1,10 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { Effect, Fiber, FiberSet, type Scope } from 'effect';
+import { RpcClient, type RpcMessage } from 'effect/rpc';
 
-import { Effect } from 'effect';
-
+import { withLogChannel } from '@texra-ai/harness/plugins';
+import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import {
   DESKTOP_PROMPT_COMMANDS,
   DesktopAnswerPromptMessageSchema,
+  DesktopPromptRpcs,
 } from '../shared/desktopPromptMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
@@ -15,63 +17,70 @@ interface DesktopPromptInput {
   password?: boolean;
 }
 
-type PromptResolver = (value: string | undefined) => void;
-
-/** Owns correlated desktop prompt requests and answers each exactly once. */
-export class DesktopPromptController {
-  private readonly pending = new Map<string, PromptResolver>();
-
-  /** An answer for no pending request (a duplicate, or one whose asker
-   *  was interrupted) does nothing. */
-  readonly routes: DesktopCommandRoutes = {
-    [DESKTOP_PROMPT_COMMANDS.ANSWER]: parsedRoute(
-      DesktopAnswerPromptMessageSchema,
-      ({ requestId, value }) =>
-        Effect.sync(() => {
-          this.answer(requestId, value ?? undefined);
-        }),
-    ),
-  };
-
-  private readonly post: (message: DesktopPush) => void;
-  constructor(post: (message: DesktopPush) => void) {
-    this.post = post;
-  }
-
-  /**
-   * Ask the renderer, and finish with what it answers. The request is
-   * registered when the program runs, and its entry leaves `pending` when the
-   * answer arrives or when the asking fiber is interrupted, so an abandoned
-   * prompt no longer waits for `dispose()` to clear it. A window that closes
-   * first disposes this controller, which answers every prompt still open.
-   */
-  request(input: DesktopPromptInput): Effect.Effect<string | undefined> {
-    return Effect.callback<string | undefined>((resume) => {
-      const requestId = randomUUID();
-      this.pending.set(requestId, (value) => resume(Effect.succeed(value)));
-      this.post({
+/**
+ * The window's prompts: main's client of the renderer's `DesktopPromptRpcs`,
+ * for the window's scope. Every prompt finishes: with the renderer's answer,
+ * or with no answer when the window closes or its document reloads
+ * (`reset`) first, since nothing else would answer it.
+ */
+export const makeDesktopPrompts = Effect.fnUntraced(function* (
+  post: (message: DesktopPush) => void,
+): Effect.fn.Return<
+  {
+    readonly routes: DesktopCommandRoutes;
+    readonly request: (
+      input: DesktopPromptInput,
+    ) => Effect.Effect<string | undefined>;
+    readonly reset: Effect.Effect<void>;
+  },
+  never,
+  Scope.Scope
+> {
+  const { protocol, receive } = yield* callOverMessages((message) =>
+    Effect.sync(() =>
+      post({
         command: DESKTOP_PROMPT_COMMANDS.SHOW,
-        requestId,
-        title: input.title,
-        prompt: input.prompt,
-        password: input.password ?? false,
-      });
-      return Effect.sync(() => {
-        this.pending.delete(requestId);
-      });
-    });
-  }
-
-  dispose(): void {
-    for (const requestId of this.pending.keys()) {
-      this.answer(requestId, undefined);
-    }
-  }
-
-  private answer(requestId: string, value: string | undefined): void {
-    const pending = this.pending.get(requestId);
-    if (!pending) return;
-    this.pending.delete(requestId);
-    pending(value);
-  }
-}
+        // cast: `rpc`'s messages are plain objects.
+        message: message as unknown as Record<string, unknown>,
+      }),
+    ),
+  );
+  const client = yield* RpcClient.make(DesktopPromptRpcs).pipe(
+    Effect.provideService(RpcClient.Protocol, protocol),
+  );
+  const asking = yield* FiberSet.make<string | null, unknown>();
+  return {
+    routes: {
+      [DESKTOP_PROMPT_COMMANDS.ANSWER]: parsedRoute(
+        DesktopAnswerPromptMessageSchema,
+        ({ message }) =>
+          // cast: `rpc` reads its own message, and a reply for no call in
+          // flight (one whose asker gave up) it drops.
+          receive(message as unknown as RpcMessage.FromServerEncoded),
+      ),
+    },
+    request: ({ title, prompt, password }) =>
+      FiberSet.run(
+        asking,
+        client.prompt({ title, prompt, password: password ?? false }),
+      ).pipe(
+        // An asker that gives up takes its call with it.
+        Effect.flatMap((call) =>
+          Fiber.join(call).pipe(
+            Effect.onInterrupt(() => Fiber.interrupt(call)),
+          ),
+        ),
+        Effect.map((value) => value ?? undefined),
+        // Ended by a reset or the window's close (or a renderer that could
+        // not answer): no answer.
+        Effect.catchCause((cause) =>
+          Effect.logDebug('A prompt ended with no answer').pipe(
+            Effect.annotateLogs({ data: cause }),
+            withLogChannel('desktop'),
+            Effect.as(undefined),
+          ),
+        ),
+      ),
+    reset: FiberSet.clear(asking),
+  };
+});

@@ -22,7 +22,6 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
-  ApprovalPromptFailed,
   type CliApprovalContent,
   type CliApprovalPromptHooks,
   askApproval,
@@ -49,7 +48,7 @@ import {
 import { CliInvocation } from '../platform/cliContext';
 import { formatLineChanges } from '@ui/copy/format';
 import { REQUEST_ASK } from '@ui/copy/requestCards';
-import { writeTextStderr } from '../platform/logSinks';
+import { CliPromptFailed, writeTextStderr } from '../platform/logSinks';
 import type { Session, SessionHost } from '@texra-ai/harness';
 import type { HostInteractions } from '@texra-ai/harness/host';
 
@@ -79,7 +78,7 @@ const askHeadlessUserQuestion = Effect.fn(
               ...payload,
               questions: [question],
             }),
-          catch: ApprovalPromptFailed.from,
+          catch: CliPromptFailed.from,
         });
         const answer = yield* whilePrompting(
           hooks,
@@ -92,7 +91,7 @@ const askHeadlessUserQuestion = Effect.fn(
         );
         const parsed = yield* Effect.try({
           try: () => parseUserQuestionAnswer(answer, question),
-          catch: ApprovalPromptFailed.from,
+          catch: CliPromptFailed.from,
         });
         if (parsed != null) answers[question.question] = parsed;
       }),

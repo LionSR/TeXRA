@@ -17,6 +17,7 @@ import {
 } from '@texra-ai/harness/node';
 
 // Local imports - shared
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   CLI_AGENT_SETTING,
@@ -41,12 +42,6 @@ import {
  * machine cannot run falls back to an available one with a notice.
  */
 export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
-
-/** A setting the terminal client was asked to change was not changed. */
-export class CliSettingUpdateFailed extends Schema.TaggedError<CliSettingUpdateFailed>()(
-  'CliSettingUpdateFailed',
-  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
-) {}
 
 /** The `texra.*` command sections: `texra.chat` and `texra.run`. */
 const COMMAND_SECTIONS = {
@@ -160,7 +155,7 @@ export const setWorkspaceCliChatAgent = Effect.fn(
 )(function* (stores: SettingsStores, agent: string | undefined) {
   const trimmed = agent?.trim();
   if (agent !== undefined && !trimmed) {
-    return yield* new CliSettingUpdateFailed({
+    return yield* new SettingsRequestFailed({
       message: 'The default chat agent must not be empty.',
     });
   }

@@ -11,20 +11,23 @@ import {
   Effect,
   FiberHandle,
   Ref,
+  type Schema,
   type Scope,
   Stream,
 } from 'effect';
+import { RpcServer, type RpcMessage } from 'effect/rpc';
 
 import { type HostInteractions } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
+import { serveOverMessages } from '@texra/shared/rpcOverMessages';
 import { WINDOW_OUTDATED, linkOutage, type ServiceLink } from './client';
 
 import {
+  HostCallFailed,
   HostCapabilitySchema,
-  type HostAnswer,
-  type HostCall,
+  WindowRpcs,
   type HostCapability,
   type HostAttachFrame,
 } from './hostCalls';
@@ -39,8 +42,8 @@ export interface WindowClient {
     readonly capabilities: readonly HostCapability[];
   }) => Stream.Stream<HostAttachFrame, Error>;
   readonly 'host.answer': (input: {
-    readonly id: string;
-    readonly answer: HostAnswer;
+    readonly attachment: string;
+    readonly message: typeof Schema.Json.Type;
   }) => Effect.Effect<void, Error>;
   readonly 'host.focus': (input: {
     readonly attachment: string;
@@ -64,46 +67,74 @@ const capabilitiesOf = (host: WindowHost): HostCapability[] =>
     (kind) => host[kind === 'notices' ? 'emit' : kind] !== undefined,
   );
 
-/** Carry out one call; its value, or the window's failure. */
-function perform(
-  host: WindowHost,
-  call: HostCall,
-): Effect.Effect<unknown, Error> {
-  switch (call.kind) {
-    case 'readDiagnostics':
-      return host.readDiagnostics?.(call.path) ?? unoffered(call);
-    case 'addCriticism':
-      return host.addCriticism?.(call.entry) ?? unoffered(call);
-    case 'openPdf':
-      return (
-        host
-          .openPdf?.({
-            location: call.location,
-            preserveFocus: call.preserveFocus,
-          })
-          .pipe(Effect.as(null)) ?? unoffered(call)
-      );
-    case 'notices':
-      return host.emit === undefined
-        ? unoffered(call)
-        : Effect.suspend(
-            () =>
-              host.emit?.(call.notice.event, call.notice.payload) ??
-              Effect.void,
-          ).pipe(Effect.as(null));
-    case 'filesWritten':
-      return host.filesWritten === undefined
-        ? unoffered(call)
-        : Effect.sync(() => {
-            host.filesWritten?.(call.absolutePaths);
-            return null;
-          });
-  }
-}
+/** A call `host` was asked but does not offer: the service routes a call
+ *  only to a window that offers it, so this is a service of another mind. */
+const unoffered = (kind: HostCapability) =>
+  Effect.fail(
+    new HostCallFailed({ message: `This window does not offer ${kind}.` }),
+  );
 
-const unofferedError = (call: HostCall) =>
-  new Error(`This window does not offer ${call.kind}.`);
-const unoffered = (call: HostCall) => Effect.fail(unofferedError(call));
+/** A call a run waits on, answered however it ends, a defect included, so
+ *  the service never waits on a call that died here. */
+const asked = <A>(
+  kind: HostCapability,
+  call: Effect.Effect<A, Error> | undefined,
+): Effect.Effect<A, HostCallFailed> =>
+  call === undefined
+    ? unoffered(kind)
+    : call.pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.fail(
+                new HostCallFailed({ message: toErrorMessage(cause) }),
+              ),
+        ),
+      );
+
+/** A told call: the service waits for nothing past this window having it,
+ *  so a failure is said here. */
+const told = (
+  kind: HostCapability,
+  call: Effect.Effect<void, Error> | undefined,
+): Effect.Effect<void> =>
+  (call ?? Effect.void).pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : Effect.logWarning(
+            `This window could not carry out a host call (${kind})`,
+          ).pipe(Effect.annotateLogs({ data: cause })),
+    ),
+    withLogChannel(CHANNEL),
+  );
+
+/** The calls `host` serves its project's tasks. */
+const windowHandlers = (host: WindowHost) =>
+  WindowRpcs.toLayer({
+    readDiagnostics: ({ path }) =>
+      asked('readDiagnostics', host.readDiagnostics?.(path)),
+    addCriticism: ({ entry }) =>
+      asked('addCriticism', host.addCriticism?.(entry)),
+    openPdf: ({ location, preserveFocus }) =>
+      asked('openPdf', host.openPdf?.({ location, preserveFocus })),
+    notices: ({ notice }) =>
+      told(
+        'notices',
+        host.emit === undefined
+          ? unoffered('notices')
+          : Effect.suspend(
+              () => host.emit?.(notice.event, notice.payload) ?? Effect.void,
+            ),
+      ),
+    filesWritten: ({ absolutePaths }) =>
+      told(
+        'filesWritten',
+        host.filesWritten === undefined
+          ? undefined
+          : Effect.sync(() => host.filesWritten?.(absolutePaths)),
+      ),
+  });
 
 /**
  * Attach `host` through `link` as a window of `workspace`, for the scope's
@@ -177,62 +208,53 @@ function attachTo(
   focused: Stream.Stream<void>,
   attached: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
-  const send = (id: string, answer: HostAnswer) =>
-    client['host.answer']({ id, answer });
   return Effect.gen(function* () {
-    /** Carry out a call; an asked one (it has an `id`) is answered however
-     *  it ends, a defect included, so the service never waits on a call
-     *  that died here; a told one says here when it could not be done. */
-    const answer = (id: string | undefined, call: HostCall) =>
-      perform(host, call).pipe(
-        Effect.matchCauseEffect({
-          onSuccess: (value) =>
-            id === undefined
-              ? Effect.void
-              : send(id, { ok: true, value: toJsonValue(value) }),
-          onFailure: (cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.failCause(cause)
-              : id === undefined
-                ? Effect.logWarning(
-                    `This window could not carry out a host call (${call.kind})`,
-                  ).pipe(Effect.annotateLogs({ data: cause }))
-                : send(id, {
-                    ok: false,
-                    message: toErrorMessage(cause),
-                  }),
-        }),
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.void
-            : Effect.logWarning(
-                `A host call (${call.kind}) was not answered`,
-              ).pipe(Effect.annotateLogs({ data: cause })),
-        ),
-      );
+    /** The attachment's server of `host`'s calls, from its first frame. */
+    let receive: (
+      message: RpcMessage.FromClientEncoded,
+    ) => Effect.Effect<void> = () => Effect.void;
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),
     }).pipe(
       Stream.runForEach((frame) => {
-        if (frame.kind === 'attached')
-          return Deferred.succeed(attached, undefined).pipe(
-            Effect.andThen(
-              Effect.forkScoped(
-                Stream.runForEach(focused, () =>
-                  client['host.focus']({
-                    attachment: frame.attachment,
-                  }).pipe(
-                    Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
-                  ),
+        if (frame.kind === 'call')
+          // cast: `rpc` reads its own message.
+          return receive(
+            frame.message as unknown as RpcMessage.FromClientEncoded,
+          );
+        return Effect.gen(function* () {
+          const served = yield* serveOverMessages((_service, message) =>
+            client['host.answer']({
+              attachment: frame.attachment,
+              // cast: `rpc`'s messages are JSON.
+              message: message as unknown as typeof Schema.Json.Type,
+            }).pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(
+                  `A host call's answer did not reach the service: ${error.message}`,
                 ),
               ),
             ),
           );
-        // Each call on its own fiber: a slow build never holds the next.
-        return Effect.forkScoped(
-          answer(frame.kind === 'ask' ? frame.id : undefined, frame.call),
-        );
+          // Each call on its own fiber: a slow build never holds the next.
+          yield* RpcServer.make(WindowRpcs).pipe(
+            Effect.provide(windowHandlers(host)),
+            Effect.provideService(RpcServer.Protocol, served.protocol),
+            Effect.forkScoped,
+          );
+          receive = (message) => served.receive('service', message);
+          yield* Deferred.succeed(attached, undefined);
+          yield* Effect.forkScoped(
+            Stream.runForEach(focused, () =>
+              client['host.focus']({
+                attachment: frame.attachment,
+              }).pipe(
+                Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
+              ),
+            ),
+          );
+        });
       }),
     );
   }).pipe(

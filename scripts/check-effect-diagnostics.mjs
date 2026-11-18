@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Runs the Effect language service over every source project and fails on any
-// diagnostic it reports. The editor shows the same diagnostics, but nothing
-// stopped a change that ignored them. Each rule's severity is the plugin's
-// `diagnosticSeverity` in the project's tsconfig, so the editor and this
-// check agree; one line is exempted with
+// Runs the Effect language service over every source project and the test
+// suites, and fails on any diagnostic it reports. The editor shows the same
+// diagnostics, but nothing stopped a change that ignored them. Each rule's
+// severity is the plugin's `diagnosticSeverity` in the project's tsconfig, so
+// the editor and this check agree; one line is exempted with
 // `// @effect-diagnostics-next-line <rule>:off` and a reason.
 
 import { execFile } from 'node:child_process';
@@ -14,10 +14,11 @@ import process from 'node:process';
 import { promisify } from 'node:util';
 
 const rootDir = path.resolve(import.meta.dirname, '..');
-// The root project covers the harness, the app and the extension. The suites
-// (`tsconfig.test-kernel.json`) are not checked.
+// The root project covers the harness, the app and the extension; the suites
+// project covers `src/test-kernel` and every package's `test/`.
 const PROJECTS = [
   'tsconfig.json',
+  'tsconfig.test-kernel.json',
   'packages/llm/tsconfig.json',
   'packages/cli/tsconfig.json',
   'packages/desktop/tsconfig.main.json',
@@ -25,6 +26,9 @@ const PROJECTS = [
   'packages/desktop/tsconfig.renderer.json',
   'packages/trace-viewer/tsconfig.json',
 ];
+const PROJECT_HEAP = ['--max-old-space-size=4096', process.env.NODE_OPTIONS]
+  .filter(Boolean)
+  .join(' ');
 const run = promisify(execFile);
 const bin = path.join(rootDir, 'node_modules/.bin/effect-language-service');
 
@@ -40,7 +44,13 @@ async function diagnose(project) {
       '--format',
       'json',
     ],
-    { cwd: rootDir, maxBuffer: 256 * 1024 * 1024 },
+    {
+      cwd: rootDir,
+      maxBuffer: 256 * 1024 * 1024,
+      // The suites project loads the sources and every suite: more than
+      // Node's default heap on a 16 GB machine holds.
+      env: { ...process.env, NODE_OPTIONS: PROJECT_HEAP },
+    },
   ).catch((failure) => {
     if (typeof failure.stdout === 'string' && failure.stdout.includes('{'))
       return failure;

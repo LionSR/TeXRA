@@ -24,20 +24,20 @@ import {
 } from '@texra-ai/harness/host';
 
 import {
+  Cause,
   Clock,
   Context,
-  Deferred,
   Effect,
   Equal,
   Layer,
   Queue,
   RcMap,
   Ref,
-  Result,
   Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { RpcClient, type RpcClientError, type RpcMessage } from 'effect/rpc';
 
 import {
   DiagnosticsReadFailed,
@@ -47,14 +47,14 @@ import {
 } from '@texra/tools/editorHost';
 
 import {
-  ANSWERED,
-  type HostAnswer,
-  type AskedCall,
+  ASKED_WITHIN,
+  WindowRpcs,
+  type HostCallFailed,
   type HostCapability,
   type HostAttachFrame,
   type Notice,
-  type ToldCall,
 } from './hostCalls';
+import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import { linkOver, type Linked, type ServiceLink } from './client';
 import type { WindowClient } from './windowHost';
 import type { Session, SessionHost } from '@texra-ai/harness';
@@ -84,7 +84,15 @@ class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
   },
 ) {}
 
-type Answered = typeof ANSWERED;
+/** Calls the service has sent a window that its stream has not carried
+ *  yet: a run that calls past them waits until the window reads. */
+const CALLS_AHEAD = 64;
+
+/** The service's client of one window's `WindowRpcs`. */
+type WindowCalls = RpcClient.FromGroup<
+  typeof WindowRpcs,
+  RpcClientError.RpcClientError
+>;
 
 interface Window {
   readonly id: string;
@@ -94,7 +102,11 @@ interface Window {
   readonly project: string;
   readonly capabilities: ReadonlySet<HostCapability>;
   focusedAt: number;
-  readonly frames: Queue.Queue<HostAttachFrame>;
+  readonly calls: WindowCalls;
+  /** One reply of the window to its client here. */
+  readonly reply: (
+    message: RpcMessage.FromServerEncoded,
+  ) => Effect.Effect<void>;
 }
 
 /** The project folder a session holds, or its store for a session with
@@ -110,15 +122,6 @@ const projectOf = (session: Session): string =>
  */
 export const makeWindowTable = () => {
   const windows = new Set<Window>();
-  /** Every unanswered call, by call id: the window asked and what its
-   *  answer completes. */
-  const calls = new Map<
-    string,
-    {
-      readonly window: Window;
-      readonly answered: Deferred.Deferred<unknown, WindowCallFailed>;
-    }
-  >();
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
@@ -135,78 +138,79 @@ export const makeWindowTable = () => {
   const offers = (key: string, capability: HostCapability) =>
     target(key, capability) !== undefined;
 
-  /** Send a call nothing waits on: the window carries it out and says
-   *  itself when it could not. */
-  const tell = (window: Window, call: ToldCall) =>
-    Queue.offer(window.frames, { kind: 'tell', call }).pipe(Effect.asVoid);
+  /** Send a call nothing waits on past the window having it: the window
+   *  carries it out and says itself when it could not. A window that went
+   *  first has it nowhere, which only its log here says. */
+  const tell = (
+    told: Effect.Effect<void, RpcClientError.RpcClientError>,
+  ): Effect.Effect<void> =>
+    told.pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning('A TeXRA window did not take a host call').pipe(
+          Effect.annotateLogs({ data: cause }),
+        ),
+      ),
+    );
 
-  /** Send a call to the window `key`'s project routes it to and wait for
-   *  its answer, decoded as its kind answers. */
-  const ask = Effect.fn('ask')(function* <K extends keyof Answered>(
+  /** Call the window `key`'s project routes `kind` to and wait for its
+   *  answer, for as long as the kind is waited on. The window going first
+   *  ends its client here, which ends the call. */
+  const ask = <K extends keyof typeof ASKED_WITHIN, A>(
     key: string,
-    call: AskedCall & { readonly kind: K },
-  ): Effect.fn.Return<Answered[K]['result']['Type'], WindowCallFailed> {
-    const { result, within }: Answered[K] = ANSWERED[call.kind];
-    const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
-    const value = yield* Effect.acquireUseRelease(
-      Effect.suspend(() => {
-        // Target selection and registration are one synchronous step. The
-        // acquisition installs cleanup before sending can be interrupted.
-        const window = target(key, call.kind);
-        if (window === undefined)
-          return Effect.fail(
-            new WindowCallFailed({
-              reason: 'detached',
-              message: 'No TeXRA window of this project is attached.',
-            }),
-          );
-        const id = randomUUID();
-        calls.set(id, { window, answered });
-        return Effect.succeed({ window, id });
-      }),
-      ({ window, id }) =>
-        Queue.offer(window.frames, { kind: 'ask', id, call }).pipe(
-          Effect.andThen(
-            Deferred.await(answered).pipe(
-              Effect.timeoutOrElse({
-                duration: within,
-                orElse: () =>
-                  Effect.fail(
-                    new WindowCallFailed({
-                      reason: 'no-answer',
-                      message: `The TeXRA window did not answer within ${within}.`,
-                    }),
-                  ),
+    kind: K,
+    call: (
+      calls: WindowCalls,
+    ) => Effect.Effect<A, HostCallFailed | RpcClientError.RpcClientError>,
+  ): Effect.Effect<A, WindowCallFailed> =>
+    Effect.suspend(() => {
+      const window = target(key, kind);
+      if (window === undefined)
+        return Effect.fail(
+          new WindowCallFailed({
+            reason: 'detached',
+            message: 'No TeXRA window of this project is attached.',
+          }),
+        );
+      const within = ASKED_WITHIN[kind];
+      return call(window.calls).pipe(
+        Effect.mapError(
+          (error) =>
+            new WindowCallFailed({ reason: 'failed', message: error.message }),
+        ),
+        Effect.timeoutOrElse({
+          duration: within,
+          orElse: () =>
+            Effect.fail(
+              new WindowCallFailed({
+                reason: 'no-answer',
+                message: `The TeXRA window did not answer within ${within}.`,
               }),
             ),
-          ),
+        }),
+        // A reply that did not decode is the window's; a call ended with no
+        // reply at all is its client closing as the window detached.
+        Effect.catchCause((cause) =>
+          Cause.hasFails(cause)
+            ? Effect.failCause(cause)
+            : Effect.fail(
+                Cause.hasDies(cause)
+                  ? new WindowCallFailed({
+                      reason: 'failed',
+                      message: `The TeXRA window answered ${kind} with a value it does not take.`,
+                    })
+                  : new WindowCallFailed({
+                      reason: 'detached',
+                      message: 'The TeXRA window closed before it answered.',
+                    }),
+              ),
         ),
-      ({ id }) => Effect.sync(() => calls.delete(id)),
-    );
-    const parsed = Schema.decodeUnknownResult(result)(value);
-    if (!Result.isSuccess(parsed))
-      return yield* new WindowCallFailed({
-        reason: 'failed',
-        message: `The TeXRA window answered ${call.kind} with a value it does not take.`,
-      });
-    return parsed.success;
-  });
+      );
+    });
 
-  /** The window went: what it was asked fails, and its project hears once
-   *  when no window of it is left. */
+  /** The window went: its project hears once when no window of it is
+   *  left. What it was asked ends as its client here closes. */
   const detach = Effect.fn('detach')(function* (window: Window) {
     windows.delete(window);
-    for (const [id, call] of calls) {
-      if (call.window !== window) continue;
-      calls.delete(id);
-      yield* Deferred.fail(
-        call.answered,
-        new WindowCallFailed({
-          reason: 'detached',
-          message: 'The TeXRA window closed before it answered.',
-        }),
-      );
-    }
     if (![...windows].some((other) => other.key === window.key))
       yield* Effect.logWarning(
         `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
@@ -223,7 +227,7 @@ export const makeWindowTable = () => {
           ? Effect.logWarning(`Host notice ${event}`).pipe(
               Effect.annotateLogs({ data: payload }),
             )
-          : tell(window, { kind: 'notices', notice });
+          : tell(window.calls.notices({ notice }, { discard: true }));
       },
     };
   };
@@ -233,7 +237,9 @@ export const makeWindowTable = () => {
     get readDiagnostics(): EditorCapabilities['readDiagnostics'] {
       if (!offers(key, 'readDiagnostics')) return undefined;
       return (path: string) =>
-        ask(key, { kind: 'readDiagnostics', path }).pipe(
+        ask(key, 'readDiagnostics', (calls) =>
+          calls.readDiagnostics({ path }),
+        ).pipe(
           Effect.mapError(
             (failure) =>
               new DiagnosticsReadFailed({
@@ -247,13 +253,15 @@ export const makeWindowTable = () => {
     },
     get addCriticism(): EditorCapabilities['addCriticism'] {
       if (!offers(key, 'addCriticism')) return undefined;
-      return (entry) => ask(key, { kind: 'addCriticism', entry });
+      return (entry) =>
+        ask(key, 'addCriticism', (calls) => calls.addCriticism({ entry }));
     },
     get openPdf(): EditorCapabilities['openPdf'] {
       if (!offers(key, 'openPdf')) return undefined;
       return ({ location, preserveFocus }) =>
-        ask(key, { kind: 'openPdf', location, preserveFocus }).pipe(
-          Effect.asVoid,
+        ask(key, 'openPdf', (calls) =>
+          calls.openPdf({ location, preserveFocus }),
+        ).pipe(
           Effect.mapError(
             (failure) =>
               new PdfOpenFailed({
@@ -264,25 +272,18 @@ export const makeWindowTable = () => {
         );
     },
   });
-  const answer = (id: string, reply: HostAnswer) =>
+  /** A window's reply to a call of its client here. */
+  const answer = (attachment: string, message: unknown) =>
     Effect.suspend(() => {
-      const pending = calls.get(id)?.answered;
-      if (pending !== undefined)
-        return (
-          reply.ok
-            ? Deferred.succeed(pending, reply.value)
-            : Deferred.fail(
-                pending,
-                new WindowCallFailed({
-                  reason: 'failed',
-                  message: reply.message,
-                }),
-              )
-        ).pipe(Effect.asVoid);
-      // Only an asked call has an id to answer, so an unknown one is late:
-      // its run gave up, or its window went.
+      for (const window of windows)
+        if (window.id === attachment)
+          // cast: `rpc` reads its own message, and a reply it cannot read
+          // fails the call it answers.
+          return window.reply(
+            message as unknown as RpcMessage.FromServerEncoded,
+          );
       return Effect.logWarning(
-        `A TeXRA window answered host call ${id} after its wait ended${reply.ok ? '' : `: ${reply.message}`}`,
+        `A TeXRA window answered a host call after its attachment ${attachment} ended`,
       );
     });
   const focus = (attachment: string) =>
@@ -307,7 +308,8 @@ export const makeWindowTable = () => {
             window.capabilities.has('filesWritten') &&
             absolutePaths.some((path) => isPathWithin(window.project, path)),
         ),
-        (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
+        (window) =>
+          tell(window.calls.filesWritten({ absolutePaths }, { discard: true })),
         { discard: true },
       ),
     /** What a session's project's windows offer its runs' editor tools, by
@@ -335,13 +337,27 @@ const make = Effect.fn('make')(function* (table: WindowTable) {
   ): Stream.Stream<HostAttachFrame> =>
     Stream.unwrap(
       Effect.gen(function* () {
+        const frames = yield* Queue.bounded<HostAttachFrame>(CALLS_AHEAD);
+        const { protocol, receive } = yield* callOverMessages((message) =>
+          // cast: `rpc`'s messages are JSON.
+          Queue.offer(frames, {
+            kind: 'call',
+            message: message as unknown as typeof Schema.Json.Type,
+          }).pipe(Effect.asVoid),
+        );
+        // Closed after the window is unlisted (finalizers run last-in
+        // first-out): a call still waiting then ends as detached.
+        const calls = yield* RpcClient.make(WindowRpcs).pipe(
+          Effect.provideService(RpcClient.Protocol, protocol),
+        );
         const window: Window = {
           id: randomUUID(),
           key: session.roots.storage,
           project: projectOf(session),
           capabilities: new Set(capabilities),
           focusedAt: yield* Clock.currentTimeMillis,
-          frames: yield* Queue.unbounded<HostAttachFrame>(),
+          calls,
+          reply: receive,
         };
         windows.add(window);
         yield* Effect.addFinalizer(() => detach(window));
@@ -353,7 +369,7 @@ const make = Effect.fn('make')(function* (table: WindowTable) {
             kind: 'attached',
             attachment: window.id,
           }),
-          Stream.fromQueue(window.frames),
+          Stream.fromQueue(frames),
         );
       }),
     );
@@ -371,7 +387,7 @@ const make = Effect.fn('make')(function* (table: WindowTable) {
         SubscriptionRef.make<Linked<WindowClient>>({
           client: {
             'host.attach': ({ capabilities }) => attach(session, capabilities),
-            'host.answer': (input) => answer(input.id, input.answer),
+            'host.answer': (input) => answer(input.attachment, input.message),
             'host.focus': ({ attachment }) => focus(attachment),
           },
         }),

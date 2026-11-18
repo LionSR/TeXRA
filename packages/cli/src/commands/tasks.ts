@@ -20,6 +20,7 @@ import {
   linkedClient,
   requestOnService,
   type ServiceClient,
+  ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
@@ -31,7 +32,7 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
 } from '../runtime/platform/cliContext';
-import { CliServiceFailed, isLinked } from '../runtime/platform/cliService';
+import { isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
@@ -84,7 +85,7 @@ function findTask(client: ServiceClient, id: string) {
 const serviceClient = Effect.gen(function* () {
   const { service } = yield* cliPlatform;
   if (!isLinked(service))
-    return yield* new CliServiceFailed({ message: service.none });
+    return yield* new ServiceUnavailable({ reason: service.none });
   return yield* linkedClient(service);
 });
 
@@ -201,7 +202,7 @@ const startCommand = defineCliCommand({
       });
     const services = yield* cliPlatform;
     if (!isLinked(services.service))
-      return yield* new CliServiceFailed({ message: services.service.none });
+      return yield* new ServiceUnavailable({ reason: services.service.none });
     const link = services.service;
     // The task runs in the service under the project's persisted policy,
     // with what this command asked for riding the launch

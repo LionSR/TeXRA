@@ -132,10 +132,14 @@ layer(SessionGraph.hosted)(
                 readFileString: () => Effect.succeed('base content\n'),
               }),
               AppSignals.layer,
+            ).pipe(
+              Layer.provideMerge(
+                sessionFsLayer({
+                  workspace: '/workspace',
+                  storage: '/storage',
+                }),
+              ),
             ),
-          ),
-          Effect.provide(
-            sessionFsLayer({ workspace: '/workspace', storage: '/storage' }),
           ),
         ),
     );

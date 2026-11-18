@@ -183,7 +183,7 @@ function openRequest(runId: RunId, payload: RequestPayload) {
       });
       return answer ?? (yield* decisionOf(runId, payload.data.requestId, from));
     }).pipe(Effect.provide(session));
-  }).pipe(Effect.mapError((cause) => new Error(String(cause))));
+  }).pipe(Effect.orDie);
 }
 
 function openRetry(permission: RetryRequest) {

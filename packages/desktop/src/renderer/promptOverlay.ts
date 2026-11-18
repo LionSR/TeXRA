@@ -2,22 +2,39 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { Effect, type ManagedRuntime } from 'effect';
+import { RpcServer, type RpcMessage } from 'effect/rpc';
+
+import { serveOverMessages } from '@texra/shared/rpcOverMessages';
 import { isCommitEnter } from '@ui/wa/keyActivation';
 import {
   DESKTOP_PROMPT_COMMANDS,
-  type DesktopAnswerPromptMessage,
-  type DesktopShowPromptMessage,
+  DesktopPromptRpcs,
 } from '../shared/desktopPromptMessages';
 import { createOverlayDialog, renderElement } from './overlayDialog';
+import { postToMain } from './messageRoutes';
 
 interface DesktopPromptOverlay {
-  open(message: DesktopShowPromptMessage): void;
+  /** One message of main's prompt client. */
+  receive(message: RpcMessage.FromClientEncoded): void;
 }
 
-/** Renders correlated text and password prompts in the desktop renderer. */
+/** One prompt as main asks it, and what answers it. */
+interface Prompt {
+  readonly title: string;
+  readonly prompt: string;
+  readonly password: boolean;
+  readonly answer: (value: string | null) => void;
+}
+
+/**
+ * Renders main's text and password prompts in the desktop renderer: it
+ * serves `DesktopPromptRpcs` on `runtime`, for the page's life, one prompt
+ * on screen at a time; a newer one answers the one it replaces with null.
+ */
 export function createDesktopPromptOverlay(
   appRoot: HTMLElement,
-  send: (message: DesktopAnswerPromptMessage) => void,
+  runtime: ManagedRuntime.ManagedRuntime<never, never>,
 ): DesktopPromptOverlay {
   const form = document.createElement('form');
   form.classList.add('desktop-prompt-form');
@@ -63,24 +80,13 @@ export function createDesktopPromptOverlay(
     content: form,
   });
   const dialog = shell.dialog;
-  let current: DesktopShowPromptMessage | undefined;
-
-  function sendAnswer(
-    request: DesktopShowPromptMessage,
-    value: string | null,
-  ): void {
-    send({
-      command: DESKTOP_PROMPT_COMMANDS.ANSWER,
-      requestId: request.requestId,
-      value,
-    });
-  }
+  let current: Prompt | undefined;
 
   function answer(value: string | null): void {
     const request = current;
     if (!request) return;
     current = undefined;
-    sendAnswer(request, value);
+    request.answer(value);
     dialog.open = false;
   }
 
@@ -96,8 +102,8 @@ export function createDesktopPromptOverlay(
   dialog.addEventListener('wa-hide', () => answer(null));
   dialog.addEventListener('wa-after-show', () => input.focus());
 
-  function open(message: DesktopShowPromptMessage): void {
-    if (current) sendAnswer(current, null);
+  function open(message: Prompt): void {
+    current?.answer(null);
     current = message;
     shell.titleEl.textContent = message.title;
     input.type = message.password ? 'password' : 'text';
@@ -106,9 +112,41 @@ export function createDesktopPromptOverlay(
     dialog.setAttribute('aria-label', message.title);
     dialog.open = true;
     void input.updateComplete.then(() => {
-      if (current?.requestId === message.requestId) input.focus();
+      if (current === message) input.focus();
     });
   }
 
-  return { open };
+  const served = runtime.runSync(
+    serveOverMessages((_main, message) =>
+      Effect.sync(() =>
+        postToMain({
+          command: DESKTOP_PROMPT_COMMANDS.ANSWER,
+          // cast: `rpc`'s messages are plain objects.
+          message: message as unknown as Record<string, unknown>,
+        }),
+      ),
+    ),
+  );
+  runtime.runFork(
+    RpcServer.make(DesktopPromptRpcs).pipe(
+      Effect.provide(
+        DesktopPromptRpcs.toLayer({
+          // Main stops waiting (its asker gave up) without closing the
+          // prompt: what the user answers then goes nowhere, as before.
+          prompt: (request) =>
+            Effect.callback<string | null>((resume) => {
+              open({
+                ...request,
+                answer: (value) => resume(Effect.succeed(value)),
+              });
+            }),
+        }),
+      ),
+      Effect.provideService(RpcServer.Protocol, served.protocol),
+    ),
+  );
+
+  return {
+    receive: (message) => runtime.runFork(served.receive('main', message)),
+  };
 }

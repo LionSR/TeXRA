@@ -74,7 +74,7 @@ describe('CLI workflow input lifecycle', () => {
                   materialized,
                   path.resolve(root, inputFiles[0]),
                 );
-                yield* Effect.never;
+                return yield* Effect.never;
               }),
           ),
         );

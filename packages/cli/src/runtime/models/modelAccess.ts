@@ -1,5 +1,7 @@
 // Third-party imports
-import { Effect, Result, Schema, absurd } from 'effect';
+import { Effect, Result, absurd } from 'effect';
+
+import { LaunchRefused } from '@texra-ai/harness';
 
 // Local imports
 import {
@@ -109,13 +111,6 @@ function formatModelStatusForCli(model: CliModelAccess): string {
   const plan = codingPlanForUsageRoute(model.model.usageRoute);
   return `api: ${plan?.displayName ?? model.status}`;
 }
-
-/** No model the command could run: the requested one is unavailable, or
- *  its option data is missing. */
-class CliModelUnavailable extends Schema.TaggedError<CliModelUnavailable>()(
-  'CliModelUnavailable',
-  { message: Schema.String },
-) {}
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.
 export type GetModelSwitchDisabledReason = (
@@ -297,7 +292,7 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
       yield* readModelOptions(options.stores, [hiddenModelId]),
     );
     if (!hiddenEntry) {
-      return yield* new CliModelUnavailable({
+      return yield* new LaunchRefused({
         message: `Model "${hiddenModelId}" is configured but has no option data.`,
       });
     }
@@ -435,6 +430,6 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
       availableIds,
       options,
     );
-    return yield* new CliModelUnavailable({ message: unavailableMessage });
+    return yield* new LaunchRefused({ message: unavailableMessage });
   },
 );

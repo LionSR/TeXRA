@@ -1,6 +1,6 @@
 import { layer } from '@effect/vitest';
 import { Effect, Layer, Schema, Context } from 'effect';
-import { expect } from 'vitest';
+import { assert, expect } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -85,9 +85,10 @@ layer(
       ]);
 
       const result = yield* assembleTrace(runId).pipe(Effect.provide(session));
-      if (result.status !== 'ok') {
-        throw new Error(`expected an ok trace, got ${result.status}`);
-      }
+      assert(
+        result.status === 'ok',
+        `expected an ok trace, got ${result.status}`,
+      );
       const { trace, record } = result;
 
       expect(trace.runId).toBe(runId);
@@ -117,7 +118,7 @@ layer(
       // A stage an earlier build exported, with its retired `kind`, fails the
       // parse instead of reading as this build's stage with the field dropped.
       const logRow = trace.events.find((event) => event.type === 'log');
-      if (logRow?.type !== 'log') throw new Error('expected a log row');
+      assert(logRow?.type === 'log', 'expected a log row');
       const { level: _l, message: _m, messageType: _t, ...envelope } = logRow;
       const earlier = {
         ...trace,
