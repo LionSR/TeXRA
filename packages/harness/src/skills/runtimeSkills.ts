@@ -225,13 +225,6 @@ function loadEnabledRuntimeSkills(
   );
 }
 
-/** One skill a person may activate: its display row, and the activation
- *  block a message carries to select it. */
-export interface EnabledSkill {
-  readonly display: SkillDisplayItem;
-  readonly activation: string;
-}
-
 /**
  * The skills the hosts list and activate, read for one session's roots:
  * project skills under its workspace, the user's under its storage root,
@@ -278,10 +271,7 @@ export const Skills = Object.freeze({
       options,
     );
     return {
-      skills: result.skills.map((entry): EnabledSkill => ({
-        display: skillDisplayItem(entry, disabled),
-        activation: formatRuntimeSkillActivation(entry),
-      })),
+      skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
       issues: result.errors,
     };
   }),

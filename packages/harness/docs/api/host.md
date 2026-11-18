@@ -890,18 +890,6 @@ interface DraftBlob {
 }
 ```
 
-## EnabledSkill
-
-One skill a person may activate: its display row, and the activation
-block a message carries to select it.
-
-```ts
-interface EnabledSkill {
-  readonly display: SkillDisplayItem;
-  readonly activation: string;
-}
-```
-
 ## ExportNode
 
 ```ts
@@ -2227,7 +2215,7 @@ installed plugins' as they load now, and the bundled ones the host
 installed. Every read answers with the discovery issues beside the skills.
 
 ```ts
-const Skills: Readonly<{ readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, StateReadFailed, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, StateReadFailed, FileSystem>; }>
+const Skills: Readonly<{ readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, StateReadFailed, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: SkillLoadIssue[]; }, StateReadFailed, FileSystem>; }>
 ```
 
 ## SkillSourceOptions

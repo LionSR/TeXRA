@@ -5,12 +5,12 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { Skills, type SkillLoadIssue } from '@texra-ai/harness/host';
 import {
-  Skills,
-  type EnabledSkill,
-  type SkillLoadIssue,
-} from '@texra-ai/harness/host';
-import { formatResultCount, joinFacts } from '@texra-ai/harness/schemas';
+  formatResultCount,
+  joinFacts,
+  type SkillDisplayItem,
+} from '@texra-ai/harness/schemas';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 
@@ -25,18 +25,18 @@ interface SkillsListFormProps {
 }
 
 interface SkillsListData {
-  readonly skills: readonly EnabledSkill[];
+  readonly skills: readonly SkillDisplayItem[];
   readonly issues: readonly SkillLoadIssue[];
   readonly offHint: string | undefined;
 }
 
 function skillSelectItemsForTui(
-  skills: readonly EnabledSkill[],
+  skills: readonly SkillDisplayItem[],
 ): SelectItem<string>[] {
-  return skills.map(({ display }) => ({
-    value: display.name,
-    label: display.name,
-    description: joinFacts([display.label, display.description]),
+  return skills.map(({ name, label, description }) => ({
+    value: name,
+    label: name,
+    description: joinFacts([label, description]),
   }));
 }
 
