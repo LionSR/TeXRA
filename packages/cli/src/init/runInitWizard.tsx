@@ -14,7 +14,7 @@ import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
-import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
+import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
 import type { InitAnswers } from '../runtime/platform/initConfig';
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';

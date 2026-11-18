@@ -4,10 +4,12 @@ import { AgentCatalog } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
-import { implicitDefaultToolUseAgents } from '@texra/shared/constants/agents';
+import {
+  implicitDefaultToolUseAgents,
+  pickDefaultToolUseAgent,
+} from '@texra/shared/constants/agents';
 import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
 import { type CliContext } from '../runtime/platform/cliContext';
-import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   buildInitConfig,
