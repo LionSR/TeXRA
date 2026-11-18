@@ -9,6 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { isCommitEnter } from '@ui/wa/keyActivation';
 import {
   listMoveOfKey,
   matchesQuery,
@@ -158,7 +159,7 @@ export function createDesktopCommandPalette({
 
   /** The filter keeps Home and End for its caret; the arrows move. */
   const handleFilterKeydown = (event: KeyboardEvent): void => {
-    if (event.key === 'Enter') {
+    if (isCommitEnter(event)) {
       event.preventDefault();
       runEntry(visibleEntries[activeIndex]);
       return;

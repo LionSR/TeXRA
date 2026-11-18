@@ -46,6 +46,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { isCommitEnter } from '@ui/wa/keyActivation';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
@@ -317,7 +318,7 @@ export class SessionComposer extends LitElement {
   };
 
   private handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    if (!isCommitEnter(event) || event.shiftKey) return;
     event.preventDefault();
     this.send();
   };
