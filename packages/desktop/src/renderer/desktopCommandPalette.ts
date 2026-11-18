@@ -9,7 +9,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
-import { matchesQuery } from '@ui/wa/listInteraction';
+import {
+  listMoveOfKey,
+  matchesQuery,
+  nextListIndex,
+} from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
@@ -99,15 +103,6 @@ function filterCommandPaletteEntries(
   );
 }
 
-function getNextCommandPaletteIndex(
-  currentIndex: number,
-  itemCount: number,
-  delta: number,
-): number {
-  if (itemCount <= 0) return -1;
-  return (currentIndex + delta + itemCount) % itemCount;
-}
-
 export function createDesktopCommandPalette({
   document,
   actions,
@@ -161,26 +156,19 @@ export function createDesktopCommandPalette({
     );
   };
 
+  /** The filter keeps Home and End for its caret; the arrows move. */
   const handleFilterKeydown = (event: KeyboardEvent): void => {
-    switch (event.key) {
-      case 'ArrowDown':
-      case 'ArrowUp': {
-        event.preventDefault();
-        const delta = event.key === 'ArrowDown' ? 1 : -1;
-        activeIndex = getNextCommandPaletteIndex(
-          activeIndex,
-          visibleEntries.length,
-          delta,
-        );
-        renderTemplate();
-        scrollActiveItemIntoView();
-        break;
-      }
-      case 'Enter':
-        event.preventDefault();
-        runEntry(visibleEntries[activeIndex]);
-        break;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      runEntry(visibleEntries[activeIndex]);
+      return;
     }
+    const move = listMoveOfKey(event.key, 'vertical');
+    if (move !== 'next' && move !== 'previous') return;
+    event.preventDefault();
+    activeIndex = nextListIndex(move, activeIndex, visibleEntries.length);
+    renderTemplate();
+    scrollActiveItemIntoView();
   };
 
   const handleItemMouseEnter = (index: number) => (): void => {

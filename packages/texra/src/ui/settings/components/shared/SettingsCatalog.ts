@@ -9,7 +9,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
-import { matchesQuery } from '@ui/wa/listInteraction';
+import {
+  listMoveOfKey,
+  matchesQuery,
+  nextListIndex,
+} from '@ui/wa/listInteraction';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { settingsCatalogStyles } from './SettingsCatalog.styles';
@@ -87,28 +91,14 @@ export class SettingsCatalog extends LitElement {
       !event.target.closest('.catalog-row-select')
     )
       return;
+    const move = listMoveOfKey(event.key, 'vertical');
+    if (move === undefined) return;
+    event.preventDefault();
     const items = this.visibleItems;
     const index = items.findIndex((item) => item.key === this.activeKey);
-    let next: number;
-    switch (event.key) {
-      case 'ArrowDown':
-        next = Math.min(index + 1, items.length - 1);
-        break;
-      case 'ArrowUp':
-        next = Math.max(index - 1, 0);
-        break;
-      case 'Home':
-        next = 0;
-        break;
-      case 'End':
-        next = items.length - 1;
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-    if (!items[next]) return;
-    this.select(items[next].key);
+    const next = items[nextListIndex(move, index, items.length)];
+    if (!next) return;
+    this.select(next.key);
     requestAnimationFrame(() =>
       this.shadowRoot
         ?.querySelector<HTMLElement>('.catalog-row-select[aria-current="true"]')
