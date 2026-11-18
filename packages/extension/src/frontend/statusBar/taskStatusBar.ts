@@ -22,6 +22,7 @@ import {
 } from '@ui/copy/approvalPolicy';
 import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
+import { visibleTokenStats } from '@ui/copy/tokenUsage';
 import { runStatusLabel, sectionCountLabel } from '@ui/copy/runStatus';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 
@@ -82,8 +83,9 @@ function paint(
         '| TeXRA usage | |',
         '| --- | ---: |',
         `| Cost | ${usageCostLabel(usage)} |`,
-        `| Input tokens | ${formatTokenCount(inputTokens)} |`,
-        `| Output tokens | ${formatTokenCount(outputTokens)} |`,
+        ...visibleTokenStats(usage).map(
+          ({ label, value }) => `| ${label} | ${formatTokenCount(value)} |`,
+        ),
         '',
         '*Click to show TeXRA sessions*',
       ].join('\n'),
