@@ -19,22 +19,13 @@ not a commit.
 
 ## 1. Audio transcription calls the OpenAI SDK from the app
 
-`packages/texra/src/controllers/session/audio.ts` imports `openai`, builds its own
-client and names the model (`gpt-4o-transcribe`). To get a key,
-`packages/texra/src/controllers/session/hostDraftRequests.ts` asks for the
-route of a pinned chat model it never calls. It is the only provider SDK
-import outside `packages/llm`, and the app package carries the `openai`
-dependency for it.
-
-```
-before  app: ownKeyCredential(roots, MODEL_CONFIGS['openai/gpt-4o-…'])
-        app: new OpenAI({ apiKey, baseURL }).audio.transcriptions.create(…)
-after   llm: transcribe(audio, credential)      // beside the other OpenAI wire code
-        app: transcribe(recording)              // no SDK, no model id, no chat-model lookup
-```
-
-Decision needed: what the harness exposes as "the credential for
-transcription" (a route of its own, or the OpenAI own-key route by provider).
+Taken in part on 2026-11-18: `transcribeAudio` in `@texra-ai/llm/node`
+(`packages/llm/src/api/openaiTranscription.ts`) owns the client and the
+model id, and the app no longer depends on `openai`. Still open: to get a
+key, `packages/texra/src/controllers/session/hostDraftRequests.ts` asks for
+the own-key route of a pinned chat model it never calls. Decision needed:
+what the harness exposes as "the credential for transcription" (a route of
+its own, or the OpenAI own-key route by provider).
 
 ## 2. The harness asks "is this Anthropic?" to choose prompt text
 
@@ -59,14 +50,10 @@ kept as a derived value for one release. It changes the plugins API report.
 
 ## 3. Provider usage endpoints live in app controllers
 
-`packages/texra/src/controllers/modelAccess/subscriptionUsage/` calls the Kimi
-and GLM quota endpoints and picks the GLM host by region, which
-`packages/llm/src/providers/providerPlugins.ts` already does for the same
-plans. The endpoint, the region choice and the response parsing belong beside
-the plan routes in `packages/llm`; the app keeps the cache
-(`SubscriptionUsageService.ts`) and the presentation. About 470 lines move.
-The refuted `G11g-usage-region-out-of-cache-key` is about the cache key, not
-this.
+Taken on 2026-11-18: `fetchPlanUsage` (`packages/llm/src/providers/planUsage.ts`)
+asks the Kimi Code and GLM quota endpoints, the GLM one on its region's host
+from `GLM_BASE_URLS`; the app keeps the cache and the snapshot
+(`SubscriptionUsageService.ts`).
 
 ## 4. The merge feature's edited file is a harness launch field
 
@@ -88,20 +75,14 @@ and "Completed" in the web tab and the terminal. Either the two readings
 become keys in `packages/texra/src/shared/session/runStatusKey.ts`, or the
 overrides go. Decision needed: which word is right.
 
-## 7. A tool call's time limit and its interrupted reading are decided in the web renderer
+## 7. An open call on an interrupted run reads differently per host
 
-- `getToolTimeoutMs` in
-  `packages/texra/src/ui/progress/formatters/logFormatters/toolFormatters/toolCard.ts`
-  keys on tool names and re-reads `timeout`, `run_in_background` and
-  `action === 'wait'` from raw input. `toolRowModel`
-  (`packages/harness/src/shared/transcript/toolRowModel.ts`) already parses
-  the same input into sections and can expose `timeoutMs`.
-- "An open call on an interrupted run is not running" is computed in
-  `StageList.ts` and `toolFormatters.ts`; the terminal's
-  `toolRenderers.tsx` has no such case and keeps painting the call as
-  running. The row model can carry it beside `cutByRunEnd`.
-
-Both change the transcript entry's API report.
+The time limit half is taken (`toolRowModel` carries `timeoutMs`).
+"An open call on an interrupted run is not running" is computed in
+`StageList.ts` and `toolFormatters.ts`; the terminal's `toolRenderers.tsx`
+has no such case and keeps painting the call as running. The row model can
+carry it beside `cutByRunEnd`, which changes the transcript entry's API
+report.
 
 ## 8. Child counts call every descendant an agent
 
