@@ -3,7 +3,7 @@
  * (`settingsViewBody.ts`): everything the host performs its own way,
  * and nothing it decides.
  */
-import { Cause, Effect, PubSub, Schema } from 'effect';
+import { Cause, Effect, Schema, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { formatError } from '@texra-ai/harness/schemas';
@@ -94,6 +94,15 @@ export type SettingsInput =
   | 'plugins'
   | 'latex';
 
+/**
+ * How many times each input changed since the view's body was built (absent
+ * is none). A page rebuilds when a count it follows moved, so only the latest
+ * counts matter: a page that skips an intermediate value has lost no change.
+ */
+export type SettingsInputCounts = Readonly<
+  Partial<Record<SettingsInput, number>>
+>;
+
 /** One page of the view: the message it builds, rebuilt as its inputs
  *  change. */
 export interface SettingsPage<R> {
@@ -139,7 +148,7 @@ export interface SettingsPresentation {
  *  holds the program that raised it. */
 export function settingsPresentation(
   bindings: SettingsHostBindings,
-  inputs: PubSub.PubSub<SettingsInput>,
+  inputs: SubscriptionRef.SubscriptionRef<SettingsInputCounts>,
 ): SettingsPresentation {
   const shown = (level: NoticeLevel, message: string) =>
     bindings.dialogs.notify(level, message);
@@ -152,7 +161,11 @@ export function settingsPresentation(
     alert(formatError(prefix, cause));
   return {
     post: bindings.post,
-    changed: (input) => Effect.asVoid(PubSub.publish(inputs, input)),
+    changed: (input) =>
+      SubscriptionRef.update(inputs, (counts) => ({
+        ...counts,
+        [input]: (counts[input] ?? 0) + 1,
+      })),
     notice: (message) => shown('info', message),
     alert,
     report,
