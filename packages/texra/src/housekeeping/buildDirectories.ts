@@ -4,7 +4,10 @@ import { glob } from 'glob';
 
 // Internal imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
-import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
+import {
+  FILE_HANDLING_RULES,
+  LATEX_BUILD_DIRECTORY,
+} from '@texra/common/files/fileHandlingRules';
 
 // Local file imports
 import { CHANNEL } from './constants';
@@ -23,14 +26,14 @@ export const findBuildDirectories = Effect.gen(function* () {
   // A `build/` inside a package or environment tree is not this project's
   // LaTeX output, so those trees are not searched.
   const ignorePatterns = FILE_HANDLING_RULES.ignored.bulkOperationDirectories
-    .filter((dir) => dir !== 'build')
+    .filter((dir) => dir !== LATEX_BUILD_DIRECTORY)
     .map((dir) => `**/${dir}/**`);
 
   // The trailing slash makes glob match directories only, so a plain file
   // named `build` is never listed for recursive removal; results still come
   // back without the slash. `posix` keeps them `/`-separated on Windows too,
   // the workspace-relative form every listing here uses.
-  const pattern = '**/build/';
+  const pattern = `**/${LATEX_BUILD_DIRECTORY}/`;
   const directories = yield* Effect.tryPromise({
     try: () =>
       glob(pattern, {

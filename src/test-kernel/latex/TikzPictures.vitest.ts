@@ -55,4 +55,19 @@ describe('extractTikzPictures', () => {
         ]);
       }),
   );
+
+  it.live('skips a commented-out figure', () =>
+    Effect.gen(function* () {
+      const result = yield* extractFromPaper(String.raw`
+% \begin{figure}
+%   \begin{tikzpicture}
+%     \node {old};
+%   \end{tikzpicture}
+%   \label{fig:old}
+% \end{figure}
+`);
+
+      expect(result).toEqual([]);
+    }),
+  );
 });
