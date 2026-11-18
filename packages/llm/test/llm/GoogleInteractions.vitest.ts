@@ -368,6 +368,43 @@ describe('canonical Google Interactions protocol', () => {
     }),
   );
 
+  // Failure mode: a stream that stops at Google's per-request decode limit
+  // needs another billed request with its continuation token; the turn
+  // fails without a resend, since an unchanged resend stops there again.
+  it.effect('fails a turn stopped at the decode limit as not retryable', () =>
+    Effect.gen(function* () {
+      fetchModel.mockImplementationOnce(async () =>
+        response([
+          {
+            event_type: 'interaction.created',
+            interaction: { id: 'int_1', status: 'in_progress' },
+          },
+          {
+            event_type: 'interaction.completed',
+            interaction: {
+              id: 'int_1',
+              status: 'requires_continuation',
+              continuation_token: 'synthetic-token',
+            },
+          },
+        ]),
+      );
+      const configured = configuredModel();
+      const turn = yield* configured.prepareTurn(REQUEST);
+      assert(turn.mode === 'foreground');
+      const failure = yield* Effect.flip(
+        completedTurn(configured.streamTurn(turn)),
+      );
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+      expect(failure).toMatchObject({
+        kind: 'provider-rejection',
+        retryable: false,
+        responseId: 'int_1',
+        message: expect.stringContaining('decode limit'),
+      });
+    }),
+  );
+
   // Failure mode: the SDK reports our own abort of a pending request as its
   // `APIUserAbortError`, which carries no cause. Joining that request after
   // an interruption must not raise the abort as an independent defect.

@@ -466,6 +466,16 @@ function googleWire() {
               ...usageParts(interaction.usage),
             ];
           done = true;
+          // Finishing needs another billed request carrying the
+          // continuation token, which this one-request turn does not send;
+          // the same request resent would stop at the same limit.
+          if (event.interaction.status === 'requires_continuation')
+            return yield* new ModelError({
+              kind: 'provider-rejection',
+              retryable: false,
+              message:
+                'Google stopped the response at its per-request decode limit; continuing it is not supported.',
+            });
           if (!COMPLETED_STATUSES.includes(event.interaction.status))
             return yield* fail(
               'Google ended without an authoritative completed turn.',
