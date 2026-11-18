@@ -662,7 +662,7 @@ function seedStanding(runId: RunId, standing: SeededStanding): void {
     publish({
       type: 'run.position',
       aggregateId: runId,
-      payload: { at: 'waiting' },
+      payload: { at: 'waiting', turn: run?.turn ?? 1 },
     });
   } else {
     publish({

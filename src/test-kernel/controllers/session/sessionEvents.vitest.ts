@@ -194,7 +194,7 @@ const runStartRow = runStart(RUN);
 const waiting: SessionRowDraft = {
   type: 'run.position',
   aggregateId: RUN,
-  payload: { at: 'waiting' },
+  payload: { at: 'waiting', turn: 0 },
 };
 
 const requested: SessionRowDraft = {

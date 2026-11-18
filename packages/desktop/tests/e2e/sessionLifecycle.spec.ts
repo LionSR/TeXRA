@@ -107,7 +107,7 @@ async function writeCanonicalRunFixtures(
           {
             type: 'run.position',
             aggregateId: id,
-            payload: { at: runFixture.step },
+            payload: { at: runFixture.step, turn: 0 },
           },
         ]);
       }

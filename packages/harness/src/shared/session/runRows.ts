@@ -170,16 +170,13 @@ export function applyRunRow(
     case 'run.position': {
       const p = row.payload;
       const rows = current ?? freshSharedRunRows();
-      if (p.turn != null && p.turn < rows.turn) {
+      if (p.turn < rows.turn) {
         return {
           kind: 'contradiction',
           detail: `turn ${p.turn} is below ${rows.turn}`,
         };
       }
-      return applied({
-        at: p.at,
-        turn: p.turn ?? rows.turn,
-      });
+      return applied({ at: p.at, turn: p.turn });
     }
     case 'request.opened': {
       if (current === null) return { kind: 'unchanged' };

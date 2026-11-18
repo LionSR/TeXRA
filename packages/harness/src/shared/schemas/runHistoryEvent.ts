@@ -93,7 +93,7 @@ export type PositionAt = typeof PositionAtSchema.Type;
  *  delivering `append` move it on), and the view as `RunView.position`. */
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
-  turn: Schema.optional(Schema.NullOr(NonNegativeIntSchema)),
+  turn: NonNegativeIntSchema,
   /** A `turn.end`'s: how the turn ended, `completed` with its answer or
    *  `failed` without one. The run's own end is its `run.end` row. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
