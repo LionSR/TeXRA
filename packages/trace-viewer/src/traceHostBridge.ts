@@ -88,7 +88,7 @@ function traceHandlers(document: Promise<TraceDocument>) {
   );
   return SessionRpcs.toLayer({
     'session.frames': (subscribe) =>
-      Stream.map(loaded, (trace) => traceFrame(trace, TRACE_SESSION, subscribe, cut)),
+      Stream.map(loaded, (trace) => traceFrame(trace, subscribe, cut)),
     'session.host': () => Stream.map(loaded, traceHost),
     'session.actions': () =>
       Stream.map(loaded, (trace) => ({

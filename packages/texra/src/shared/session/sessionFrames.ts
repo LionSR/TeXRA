@@ -32,7 +32,6 @@ import {
   RuntimeCommandSchema,
   RunIdSchema,
   StoredMediaSchema,
-  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
@@ -58,11 +57,6 @@ export type Subscribe = typeof SubscribeSchema.Type;
 
 /** One batch of a subscription's view inputs. */
 export const EventsFrameSchema = Schema.Struct({
-  kind: Schema.Literal('events'),
-  /** The workspace root that keys the layer maps. */
-  session: Schema.NonEmptyString,
-  /** Always 0: a new transcript set is a new call. */
-  generation: NonNegativeIntSchema,
   /** The commit the reader had drained when it cut this batch. */
   cursor: CommitOrdinalSchema,
   inputs: Schema.Array(SessionViewInputSchema),

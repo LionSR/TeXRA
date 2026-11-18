@@ -76,7 +76,6 @@ export function traceHost(trace: TraceDocument): HostSnapshot {
  */
 export function traceFrame(
   trace: TraceDocument,
-  session: string,
   subscribe: Subscribe,
   cut: number | null = null,
 ): EventsFrame {
@@ -93,9 +92,6 @@ export function traceFrame(
     ...new Set(listing.flatMap(referencedAggregates)),
   ];
   return {
-    kind: 'events',
-    session,
-    generation: 0,
     cursor: events.at(-1)?.commit ?? 0,
     inputs: replayInputs({
       debug: subscribe.debug,

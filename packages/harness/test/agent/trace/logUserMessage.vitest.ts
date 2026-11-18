@@ -47,9 +47,6 @@ describe('logUserMessage', () => {
     assert(draft);
     const prepared = prepareEventDraft(draft);
     const frame = Schema.decodeUnknownSync(EventsFrameSchema)({
-      kind: 'events',
-      session: '/synthetic/project',
-      generation: 0,
       cursor: 2,
       inputs: [
         {

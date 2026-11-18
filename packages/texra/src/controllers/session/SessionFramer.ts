@@ -31,10 +31,9 @@ import type { Session } from '@texra-ai/harness';
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;
 
-/** What a framer reads: the session key every frame carries, and the
- *  session's view, whose `watch` is the ordered input reader. */
+/** What a framer reads: the session's view, whose `watch` is the ordered
+ *  input reader. */
 interface FramerSource {
-  readonly key: string;
   readonly view: Pick<Session['view'], 'current' | 'watch'>;
 }
 
@@ -104,9 +103,6 @@ export function frameSubscription(
               batch.findLast((input) => input._tag === 'drained')?.cursor ??
               drained;
             const frame: EventsFrame = {
-              kind: 'events',
-              session: source.key,
-              generation: 0,
               cursor,
               inputs: framed(named, batch),
             };
