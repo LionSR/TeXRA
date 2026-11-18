@@ -206,7 +206,17 @@ export const transcribeAudio = (
   credential: { readonly bearer: string; readonly endpoint: string },
 ): Effect.Effect<string, ModelError> =>
   Effect.flatMap(
-    Effect.promise(() => import('./api/openaiTranscription.js')),
+    // A module that fails to load (a broken bundle) still fails as a
+    // ModelError, so the caller's one error case covers it.
+    Effect.tryPromise({
+      try: () => import('./api/openaiTranscription.js'),
+      catch: (cause) =>
+        new ModelError({
+          kind: 'transport',
+          message: `The transcription module failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
+          retryable: false,
+        }),
+    }),
     (module) => module.transcribeAudio(audioPath, credential),
   );
 export type {
