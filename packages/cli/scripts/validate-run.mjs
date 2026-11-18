@@ -1667,8 +1667,8 @@ prompt: |
             advance('/ commands', 'asked');
             pty.setTimer(() => pty.write('Run the held command.'), 500);
             pty.setTimer(() => pty.write('\r'), 900);
-          } else if (phase === 'asked' && plain.includes('Run command?')) {
-            advance('Run command?', 'running');
+          } else if (phase === 'asked' && plain.includes('Run a command')) {
+            advance('Run a command', 'running');
             pty.write('y');
             // The command writes its start marker, then waits. The TUI
             // confirms the follow-up was queued before we release it.
@@ -2964,7 +2964,7 @@ prompt: |
         const steps = [
           ['opening', 'list', '/ commands', ['/tasks', '\r']],
           ['list', 'attach', 'approval_validation', ['\r']],
-          ['attach', 'approved', 'Run command?', ['y']],
+          ['attach', 'approved', 'Run a command', ['y']],
           ['approved', 'sent', 'The approved command ran.', ['Ping', '\r']],
         ];
         const step = steps.find(([at]) => at === phase);
@@ -3396,11 +3396,16 @@ prompt: |
       records.every((record) => record.contract === 3),
       'every NDJSON line should carry the version-3 contract stamp',
     );
-    // A progress record carries the session row: its run is the `run`
-    // aggregate key, `["run", <run id>]`.
+    // A progress record carries the session row: its aggregate key is the
+    // run id, or a plugin's own key behind `plugin:`, which no run id spells.
     const runIdOf = (record) => {
-      const [kind, id] = JSON.parse(record.payload.aggregateId);
-      return kind === 'run' ? id : undefined;
+      const id = record.payload.aggregateId;
+      if (id.startsWith('plugin:')) return undefined;
+      assert(
+        /^[0-9a-f][-0-9a-f]{5,}$/i.test(id),
+        `a run's aggregate key should be its run id, got ${JSON.stringify(id)}`,
+      );
+      return id;
     };
     // A run id is opaque: the script's children are the runs whose
     // `run.start` names the headless run as their parent, never names parsed

@@ -81,8 +81,7 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
   const named = files.outputFiles.filter(Boolean);
   return {
     agent: name,
-    agentSource: AGENT_SOURCE.INLINE,
-    persona: { name },
+    agentSource: { kind: AGENT_SOURCE.INLINE, persona: {} },
     outputFiles: named.some((file) => !files.inputFiles.includes(file))
       ? named
       : [...(program.outputs ?? [])],

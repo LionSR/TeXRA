@@ -22,7 +22,7 @@ import { ModelListForm } from '../forms/ModelListForm';
 import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { TasksForm } from '../forms/TasksForm';
-import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
+import { SkillsListForm } from '../forms/SkillsListForm';
 import { selectedRunId, sessionMeta } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
@@ -62,6 +62,7 @@ import {
   type SlashFormProps,
 } from './slashRegistry';
 import { openRegisteredCliSlashForm } from './slashForms';
+import { SlashCommandFailed } from './handleSlashCommand';
 import { modelAccessContribution } from './modelAccessContribution';
 
 /** The built-in slash commands, with the two forms the chat opens itself:
@@ -213,7 +214,7 @@ export function builtinSlashCommands(options: {
         />
       )
     : undefined;
-  const SkillsListFormAdapter = makeSelectFormAdapter<SkillActivation>(
+  const SkillsListFormAdapter = makeSelectFormAdapter<string>(
     ({ context, ...formProps }) => <SkillsListForm {...formProps} />,
     (selection, context) => Effect.sync(() => context.activateSkill(selection)),
   );
@@ -249,14 +250,14 @@ export function builtinSlashCommands(options: {
     const [, source, pick] =
       /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
     if (verb?.toLowerCase() !== 'add' || !source)
-      return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
+      return yield* new SlashCommandFailed({ message: PLUGINS_TUI.addUsage });
     const { roots } = context.runSession;
     const origin = InstalledPlugins.origin(
       source,
       roots.workspace ?? context.cliContext.cwd,
       undefined,
     );
-    if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
+    if (Result.isFailure(origin)) return yield* origin.failure;
     const added = yield* InstalledPlugins.install(
       origin.success,
       pick === undefined ? [] : [pick],
@@ -381,9 +382,9 @@ export function builtinSlashCommands(options: {
               return yield* resumeInterruptedTasks(context.resumeTask);
             const id = parseCliHistoryId(remainder);
             if (!id)
-              return yield* Effect.fail(
-                new Error(`Invalid task id: ${remainder}`),
-              );
+              return yield* new SlashCommandFailed({
+                message: `Invalid task id: ${remainder}`,
+              });
             yield* context.resumeRun(id);
           }),
           formComponent: ResumeListFormAdapter,

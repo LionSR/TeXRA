@@ -3,7 +3,7 @@
 // lets `Esc` close the panel while it has nothing actionable to show.
 
 import { useInput } from 'ink';
-import { Cause, Effect, Fiber, FiberHandle, Scope } from 'effect';
+import { Cause, Effect, Fiber, FiberHandle } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -15,7 +15,8 @@ import {
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { useMountScope } from '@cli/chat/tui/state/useMountScope';
 import { useChatProcess } from '@cli/chat/tui/chatProcess';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ScopeRunner } from '@cli/chat/scopeRunner';
 
 interface AsyncResource<T, R = ProcessServices> {
   readonly data: T | undefined;
@@ -108,15 +109,15 @@ function shouldBufferAsyncListFormInput(args: {
 }
 
 /**
- * Run a form's write program on the Ink root's runtime. Every form write runs
- * through here as a `runFork`, not a fire-and-forget `runPromise`: shutdown
- * interrupts a write still in flight, and the process runtime's fork reporting
- * keeps that interrupts-only exit silent where a dropped promise would reject
- * unhandled. `Effect.suspend` builds the program inside the fiber, so a
- * synchronous throw lands in `onError` with a failed write.
+ * Run a form's write program on the Ink root's runner. Every form write runs
+ * through here: a write belongs to the root, not to the form that starts it,
+ * so a setting being saved is saved even when the form closes first, and the
+ * root's end interrupts a write still in flight. `Effect.suspend` builds the
+ * program inside the fiber, so a synchronous throw lands in `onError` with a
+ * failed write.
  */
 export function runFormWrite<A>(
-  runtime: ProcessRuntime,
+  chat: ScopeRunner,
   write: () => Effect.Effect<A, Error, ProcessServices>,
   handlers: {
     readonly onSuccess?: (value: A) => void;
@@ -124,7 +125,7 @@ export function runFormWrite<A>(
     readonly onError: (error: unknown) => void;
   },
 ): void {
-  runtime.runFork(
+  chat.fork(
     Effect.suspend(write).pipe(
       Effect.matchCause({
         onSuccess: (value) => handlers.onSuccess?.(value),
@@ -136,7 +137,7 @@ export function runFormWrite<A>(
 
 /**
  * Read `load` once on mount and hold its latest result, loading flag, and
- * error. Every read runs in one `FiberHandle` in a scope the mount owns: a
+ * error. Every read runs in one `FiberHandle` in the scope the mount owns: a
  * newer read interrupts the one in flight, and unmount interrupts the last,
  * so only the latest read lands and none lands after unmount.
  */
@@ -151,13 +152,8 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   const [error, setError] = useState<string | undefined>(undefined);
   const latest = useRef(options);
   latest.current = options;
-  const { runtime } = useChatProcess();
-  const scope = useMountScope(runtime);
-  const [reads] = useState(() =>
-    runtime.runSync(
-      FiberHandle.make<void>().pipe(Effect.provideService(Scope.Scope, scope)),
-    ),
-  );
+  const mount = useMountScope();
+  const [reads] = useState(() => mount.sync(FiberHandle.make<void>()));
 
   const reportError = useCallback((err: unknown) => {
     setError(toErrorMessage(err));
@@ -191,8 +187,8 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   );
 
   const reload = useCallback(() => {
-    runtime.runFork(refresh());
-  }, [runtime, refresh]);
+    mount.fork(refresh());
+  }, [mount, refresh]);
 
   useEffect(() => {
     reload();
@@ -238,9 +234,9 @@ export function useAsyncListForm<T>(
     }
   });
 
-  const { runtime } = useChatProcess();
+  const { chat } = useChatProcess();
   const update = (write: Effect.Effect<void, Error, ProcessServices>): void =>
-    runFormWrite(runtime, () => write, {
+    runFormWrite(chat, () => write, {
       onSuccess: resource.reload,
       onError: (err) => setTransientNotice(toErrorMessage(err)),
     });

@@ -82,6 +82,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
       agent: launch.agent,
       model: launch.model,
       instruction,
+      ...(launch.skills.length > 0 && { skills: launch.skills }),
       workingDirectory: launch.workingDirectory.trim() || undefined,
       // The form starts chats only; it shows its file lists only while open
       // on a program's proposal, so a launch carries none of them.
@@ -104,7 +105,8 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
 export function launchFormOf(
   config: AgentConfig,
 ): Effect.Effect<typeof LaunchPatchSchema.Type, Rejected> {
-  if (config.agentSource === AGENT_SOURCE.INLINE)
+  const source = config.agentSource?.kind;
+  if (source === AGENT_SOURCE.INLINE)
     return Effect.fail(
       new Rejected({
         reason: `'${config.agent}' was defined by the run that started it and is not in your agents, so the form cannot run it again.`,
@@ -113,12 +115,13 @@ export function launchFormOf(
   return Effect.succeed({
     // A form launch already names its agent by key.
     agent:
-      config.agentSource == null
+      source === undefined
         ? config.agent
-        : agentKey(config.agentSource, agentName(config.agent)),
+        : agentKey(source, agentName(config.agent)),
     // Effort and mode included: the model menu offers it as itself.
     model: config.model,
     instruction: config.instruction,
+    skills: [...(config.skills ?? [])],
     workingDirectory: config.workingDirectory ?? '',
     mediaFiles: [...config.mediaFiles],
   });

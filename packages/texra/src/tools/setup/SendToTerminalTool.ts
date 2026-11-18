@@ -50,10 +50,8 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
 ) {
   const { terminal } = yield* SetupPlatform;
   if (!terminal) {
-    return yield* Effect.fail(
-      new ToolError(
-        'VS Code integrated terminal execution is unavailable in this host.',
-      ),
+    return yield* new ToolError(
+      'VS Code integrated terminal execution is unavailable in this host.',
     );
   }
   const command = input.command.trim();

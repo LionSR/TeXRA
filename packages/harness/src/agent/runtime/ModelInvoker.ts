@@ -210,7 +210,10 @@ export const modelInvokerLayer = (): Layer.Layer<
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
       const attribution = {
-        agentName: usageAgentName(run.config.agent, run.config.agentSource),
+        agentName: usageAgentName(
+          run.config.agent,
+          run.config.agentSource?.kind,
+        ),
         runId,
       };
 
@@ -297,13 +300,11 @@ export const modelInvokerLayer = (): Layer.Layer<
             case 'defect':
               return yield* Effect.die(failed.defect);
             case 'error':
-              return yield* Effect.fail(
-                failed.error instanceof ModelError
-                  ? fillModelError(failed.error, {
-                      partialText: completed.streamedText,
-                    })
-                  : failed.error,
-              );
+              return yield* failed.error instanceof ModelError
+                ? fillModelError(failed.error, {
+                    partialText: completed.streamedText,
+                  })
+                : failed.error;
           }
         }
         const responseTimeMs = (yield* monotonicMillis) - started;

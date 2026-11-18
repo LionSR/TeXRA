@@ -78,6 +78,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   ),
                 ),
               ),
+            end: (_, exit) => exit,
           });
           const executing = yield* Deferred.await(observed);
           const management = yield* runs.inSession(ProjectEnvironment);

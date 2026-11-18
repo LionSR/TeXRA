@@ -8,6 +8,7 @@
  */
 import { Effect } from 'effect';
 
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import { WorkspaceFs } from '@texra-ai/harness/plugins';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { getFileListConfig } from '@texra/common/files/fileListingRules';
@@ -39,7 +40,7 @@ export const findLabelInWorkspace = Effect.fn(
   return yield* openFirstLabelMatch(
     label,
     new Set([...inputs, ...contexts]),
-    (file) => workspaceFs.readFileString(file),
+    (file) => readNormalizedFile(workspaceFs, file),
     (file, line) =>
       workspaceFs
         .resolve(file)

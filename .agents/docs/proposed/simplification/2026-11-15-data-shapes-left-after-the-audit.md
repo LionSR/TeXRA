@@ -129,3 +129,7 @@ the readers that needed the stated texts read them from the log
   (`packages/harness/src/shared/schemas/agentConfig.ts`) are a union written
   as optional fields plus a filter, with the name stored twice. Stored on
   `run.config`; about 75 sites.
+  Landed 2026-11-18: `agentSource` is one union, `{ kind }` for a catalog
+  source or `{ kind: 'inline', persona }` with the persona unnamed (it is
+  `agent`'s); no `persona` field and no filter clause. `run.config` v10 and
+  `request.opened` v15 (proposals carry the same field).

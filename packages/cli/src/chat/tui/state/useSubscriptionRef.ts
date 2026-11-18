@@ -1,31 +1,29 @@
 // The one bridge from an Effect `SubscriptionRef` to a React component: the
-// render reads the ref's current value, and its change stream, run on the
-// chat's runtime for as long as the component is subscribed, schedules the
-// next render. Unsubscribing interrupts that fiber.
+// render reads the ref's current value, and its change stream, followed on
+// the component's mount scope for as long as the component is subscribed,
+// schedules the next render. Unsubscribing interrupts that fiber.
 
 // Third-party imports
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 import { useCallback, useSyncExternalStore } from 'react';
 
 // Local imports
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ScopeRunner } from '../../scopeRunner';
 
 export function useSubscriptionRef<A>(
-  runtime: ProcessRuntime,
+  mount: ScopeRunner,
   ref: SubscriptionRef.SubscriptionRef<A>,
 ): A {
   const subscribe = useCallback(
     (notify: () => void) => {
-      const fiber = runtime.runFork(
+      const fiber = mount.fork(
         Stream.runForEach(SubscriptionRef.changes(ref), () =>
           Effect.sync(notify),
         ),
       );
-      return () => {
-        runtime.runFork(Fiber.interrupt(fiber));
-      };
+      return () => fiber.interruptUnsafe();
     },
-    [runtime, ref],
+    [mount, ref],
   );
   return useSyncExternalStore(subscribe, () => SubscriptionRef.getUnsafe(ref));
 }

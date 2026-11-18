@@ -7,7 +7,7 @@
  * can quickly understand each session.
  */
 
-import { Cause, Context, Effect, Exit, Fiber } from 'effect';
+import { Cause, Context, Effect, Exit, Fiber, Option } from 'effect';
 
 import { helperCall } from '@agent/runtime/helperModel';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -145,7 +145,7 @@ const generateSessionDescription = Effect.fn('generateSessionDescription')(
         const facts = yield* log.facts(runId);
         if (facts === null || facts.title !== null) return;
       }
-      const { text, usage } = yield* helperCall(
+      const answered = yield* helperCall(
         roots,
         {
           userPrompt: buildUserPrompt(
@@ -162,17 +162,12 @@ const generateSessionDescription = Effect.fn('generateSessionDescription')(
         // No automatic retry and a short deadline: the run's end joins this
         // fiber, and a label is not worth holding it through route backoff.
         { retries: 0, runModel: config.model },
-      ).pipe(
-        Effect.timeoutOrElse({
-          duration: DESCRIPTION_DEADLINE,
-          orElse: () =>
-            Effect.fail(
-              new Error(
-                `The helper model did not answer within ${DESCRIPTION_DEADLINE}.`,
-              ),
-            ),
-        }),
-      );
+      ).pipe(Effect.timeoutOption(DESCRIPTION_DEADLINE));
+      if (Option.isNone(answered))
+        return yield* warnFailure(
+          `The helper model did not answer within ${DESCRIPTION_DEADLINE}.`,
+        );
+      const { text, usage } = answered.value;
       const description = cleanSessionDescription(text);
       // No row to carry the request's spend: say where it went.
       if (!description)

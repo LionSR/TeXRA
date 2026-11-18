@@ -3,7 +3,6 @@ import {
   selectCliRunnableModel,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/models/modelAccess';
-import type { SkillActivation } from '@cli/chat/tui/forms/SkillsListForm';
 import { type CliSignInProgress } from '@cli/runtime/models/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
@@ -11,18 +10,18 @@ import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { Session } from '@texra-ai/harness';
 import type {
-  ProcessRuntime,
   ProcessServices,
   RunModelCandidate,
 } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
+import type { ScopeRunner } from '../../../scopeRunner';
 import type { BuiltinSlashCommands } from '../registerBuiltins';
 
 /**
  * What a slash command does, as a program the dispatcher runs: the chat's
- * Ink handlers fork these on the process runtime, so a handler takes the
+ * Ink handlers fork these on the chat's runners, so a handler takes the
  * session's services from context instead of running its own edge, and its
  * failure is the dispatcher's to report.
  */
@@ -44,12 +43,9 @@ export interface SlashCommandContext {
    * already holds.
    */
   readonly stores: SettingsStores;
-  /**
-   * The runtime the chat entry point holds. Model access is read as an Effect,
-   * so the handlers that ask for it run that program here rather than looking
-   * a runtime up.
-   */
-  readonly runtime: ProcessRuntime;
+  /** The chat's runner: what a form's selection starts runs here, so it
+   *  ends with the chat and not with the form. */
+  readonly chat: ScopeRunner;
   readonly processCwd?: CliContext['cwd'];
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => ApprovalPolicy;
@@ -65,8 +61,8 @@ export interface SlashCommandContext {
   readonly resumeTask: (
     id: RunId,
   ) => Effect.Effect<void, RequestRefusal, ProcessServices>;
-  /** Activate a skill for the next message (`/skills`). */
-  readonly activateSkill: (selection: SkillActivation) => void;
+  /** Activate a skill, by name, for the next message (`/skills`). */
+  readonly activateSkill: (name: string) => void;
   /** The project's policy `/config` wrote: the status bar follows it, and
    *  the chat's own `/approval` choice stays as it was. A plain callback:
    *  the shared write path takes it as a void-returning port. */
@@ -104,10 +100,9 @@ export const CHAT_KEY_RECOVERY = 'Add a provider API key with `/key`.';
 /** The model a chat run takes, worded in the chat's terms when none can. */
 export const selectChatModel = (
   stores: SettingsStores,
-  runtime: ProcessRuntime,
   candidate: RunModelCandidate,
 ) =>
   selectCliRunnableModel([candidate], {
-    stores: { ...stores, runtime },
+    stores,
     recovery: CHAT_KEY_RECOVERY,
   });

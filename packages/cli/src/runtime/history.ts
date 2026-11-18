@@ -295,7 +295,7 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
       })),
     } satisfies CliHistoryDeleteResult;
   const [refused] = failed;
-  if (refused) return yield* Effect.fail(refused.error);
+  if (refused) return yield* refused.error;
   let status: 'deleted' | 'active' | 'not-found' = 'not-found';
   if (deleted.length > 0) status = 'deleted';
   else if (active.length > 0) status = 'active';

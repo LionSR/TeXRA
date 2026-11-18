@@ -93,6 +93,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   .start(generateRunId(), {
                     open: Effect.void,
                     run: () => Effect.never,
+                    end: (_, exit) => exit,
                   })
                   .pipe(Effect.flip, Effect.orDie),
               ).message;

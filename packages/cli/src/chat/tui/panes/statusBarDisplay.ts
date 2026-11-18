@@ -42,6 +42,7 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
+import { taskCostStatus } from '../sessionStatus';
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runViewOf } from '../state/sessionView';
@@ -290,16 +291,13 @@ function formatUsage(
   };
 }
 
-// The task's spend so far, its agents included: the root's `treeUsage`,
-// whichever run the bar describes. A subscription that billed nothing
+// The task's total (`taskCostStatus`). A subscription that billed nothing
 // already reads as `subscription`, so a zero total earns no segment.
 function taskCostSegment(
   run: RunView | undefined,
   view: Pick<SessionView, 'runs'>,
 ): StatusBarSegment | undefined {
-  if (run === undefined) return undefined;
-  const root = view.runs.get(run.ancestors[0]?.id ?? run.id);
-  const cost = root?.treeUsage.cost ?? 0;
+  const cost = taskCostStatus(view, run)?.total.cost ?? 0;
   if (cost <= 0) return undefined;
   return {
     text: formatCostUsd(cost),

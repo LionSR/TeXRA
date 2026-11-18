@@ -64,7 +64,7 @@ export const childOutputSchema = (
   schema: Record<string, unknown> | null | undefined,
 ) =>
   schema == null
-    ? Effect.succeed(undefined)
+    ? Effect.undefined
     : Effect.try({
         try: () => normalizeStructuredOutputSchema(schema).jsonSchema,
         catch: (error) =>

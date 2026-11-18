@@ -335,9 +335,6 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = Object.freeze({
     ]),
   ),
 
-  // Math operators with no glyph twin
-  '&plusmn;': '\\pm',
-
   // Fraction glyphs
   '&frac12;': '\\frac{1}{2}',
   '&frac14;': '\\frac{1}{4}',
@@ -351,18 +348,6 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = Object.freeze({
   ...createPatterns(Object.keys(UPPERCASE_GREEK_LETTER_CHARACTERS), (name) => [
     [`&${name};`, `\\${name}`],
   ]),
-
-  // Logical and set operators with no glyph twin
-  '&forall;': '\\forall',
-  '&exist;': '\\exists',
-  '&there4;': '\\therefore',
-  '&oplus;': '\\oplus',
-  '&otimes;': '\\otimes',
-
-  // Directional arrows with no glyph twin
-  '&lArr;': '\\Leftarrow',
-  '&uArr;': '\\Uparrow',
-  '&dArr;': '\\Downarrow',
 });
 
 export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {

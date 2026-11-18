@@ -66,8 +66,8 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     const file = workspace ? yield* workspace.resolve(path) : path;
     return yield* Effect.gen(function* () {
       const exists = yield* entryExists(fs, path);
-      // All content is already LF-normalized at the FS read boundary,
-      // so comparisons work directly without extra normalization.
+      // The proposal read the file with `readNormalizedFile` too, so a file
+      // nobody touched meanwhile compares equal, BOM and line ends alike.
       const baseContent = exists ? yield* readNormalizedFile(fs, path) : '';
       const unchanged = { appliedContent: baseContent };
       if (exists && baseContent === finalContent) return unchanged;
@@ -75,14 +75,14 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       // deleted meanwhile is not recreated, one created meanwhile is not
       // merged into.
       if (exists !== (original !== null)) {
-        return yield* Effect.fail(new ApprovedEditConflictError(path));
+        return yield* new ApprovedEditConflictError(path);
       }
       if (original === finalContent) return unchanged;
       let appliedContent = finalContent;
       if (original !== null && baseContent !== original) {
         const merged = mergeEditOnto(original, finalContent, baseContent);
         if (merged === undefined) {
-          return yield* Effect.fail(new ApprovedEditConflictError(path));
+          return yield* new ApprovedEditConflictError(path);
         }
         appliedContent = merged;
       }

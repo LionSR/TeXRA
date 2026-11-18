@@ -10,7 +10,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError, type Scope } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  Schema,
+  type PlatformError,
+  type Scope,
+} from 'effect';
 
 // Local imports
 import {
@@ -30,6 +36,12 @@ import {
 } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'runStorage';
+
+/** A base file's pre-run snapshot could not be inspected or captured. */
+class SnapshotCaptureFailed extends Schema.TaggedError<SnapshotCaptureFailed>()(
+  'SnapshotCaptureFailed',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
 /** The directory under a run's storage that holds its pre-run snapshots. */
 const ORIGINAL_DIR = 'original';
@@ -91,7 +103,11 @@ export class RunWorkspace {
       options: {
         linkFiles?: FileLocation[];
       } = {},
-    ): Effect.fn.Return<FileLocation[], Error, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      FileLocation[],
+      SnapshotCaptureFailed | PlatformError.PlatformError,
+      FileSystem.FileSystem
+    > {
       if (this.preparedBaseFiles) return this.preparedBaseFiles;
 
       yield* this.ensureRunDirectory;
@@ -143,7 +159,7 @@ export class RunWorkspace {
    */
   private captureOriginalSnapshot(
     target: FileLocation,
-  ): Effect.Effect<FileLocation, Error, FileSystem.FileSystem> {
+  ): Effect.Effect<FileLocation, SnapshotCaptureFailed, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (target.kind !== 'workspace') return target;
 
@@ -165,10 +181,10 @@ export class RunWorkspace {
           Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
           Effect.mapError(
             (error) =>
-              new Error(
-                `Failed to inspect snapshot destination ${snapshotAbsolute}: ${toErrorMessage(error)}`,
-                { cause: error },
-              ),
+              new SnapshotCaptureFailed({
+                message: `Failed to inspect snapshot destination ${snapshotAbsolute}: ${toErrorMessage(error)}`,
+                cause: error,
+              }),
           ),
         );
         if (hasSnapshot) return snapshot;
@@ -187,10 +203,10 @@ export class RunWorkspace {
         meansAbsent(error)
           ? Effect.succeed(target)
           : Effect.fail(
-              new Error(
-                `Failed to capture original file ${target.absolutePath}: ${toErrorMessage(error)}`,
-                { cause: error },
-              ),
+              new SnapshotCaptureFailed({
+                message: `Failed to capture original file ${target.absolutePath}: ${toErrorMessage(error)}`,
+                cause: error,
+              }),
             ),
       ),
     );
@@ -229,7 +245,11 @@ export class RunWorkspace {
     function* (
       location: FileLocation,
       options: { snapshot?: boolean } = {},
-    ): Effect.fn.Return<FileLocation, Error, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      FileLocation,
+      SnapshotCaptureFailed | PlatformError.PlatformError,
+      FileSystem.FileSystem
+    > {
       if (location.kind !== 'workspace') return location;
 
       yield* this.ensureRunDirectory;

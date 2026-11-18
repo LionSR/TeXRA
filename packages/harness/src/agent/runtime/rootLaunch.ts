@@ -97,13 +97,12 @@ type RootLaunch = typeof StartOptionsSchema.Type &
   };
 
 /**
- * START HERE: a root launch, what `session.start` runs. It resolves the
- * model and the definition, commits the run's opening in this fiber
- * (`executeAgent`), and forks the run under its id on the session
- * (`RunRegistry.start`); it answers the commit of that opening. A launch
- * that fails before the run exists fails this with no run behind it; a
- * run that opened never fails this: its end, failed or not, is its
- * `run.end` row's.
+ * START HERE: a root launch, what `session.start` runs. It forks the run
+ * under its id on the session (`RunRegistry.start`), whose fiber resolves
+ * the model and the definition and opens the run (`executeAgent`); it
+ * answers the commit of that opening. A launch that fails before the run
+ * exists fails this with no run behind it; a run that opened never fails
+ * this: its end, failed or not, is its `run.end` row's.
  *
  * A run with a parent, or one that is resumed rather than registered here
  * (a child's strategy, `resumeRun`), runs the lower-level `executeAgent`
@@ -137,22 +136,31 @@ export const rootRun = Effect.fn('rootRun')(function* (
   // The model (the helper model swap reads the enabled-model list and the
   // routing switches from this session's setting slots), the agent and its
   // tools resolve in the opening, each refused before any run is registered.
-  const { opened } = yield* runs.start(runId, {
-    open: Effect.gen(function* () {
-      const config = launch.helperModel
-        ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)
-        : launch.config;
-      const definition = yield* prepareAgentDefinition({ config });
-      return yield* executeAgent(definition, runId, {
-        stopAfterCycle: launch.interactive !== true,
-        tools: launch.tools,
-        registration: {
-          identity: { kind: 'agent', agent: definition.config.agent },
-          grants: limit === undefined ? grants : { ...grants, limit },
-        },
-      });
-    }),
-    run: (prepared) => prepared.run,
-  });
+  const { opened } = yield* runs.start(
+    runId,
+    executeAgent(
+      runId,
+      Effect.gen(function* () {
+        const config = launch.helperModel
+          ? yield* applyHelperModelPreference(
+              launch.config,
+              yield* SessionRoots,
+            )
+          : launch.config;
+        const definition = yield* prepareAgentDefinition({ config });
+        return {
+          definition,
+          options: {
+            stopAfterCycle: launch.interactive !== true,
+            tools: launch.tools,
+            registration: {
+              identity: { kind: 'agent', agent: definition.config.agent },
+              grants: limit === undefined ? grants : { ...grants, limit },
+            },
+          },
+        };
+      }),
+    ),
+  );
   return opened.activation;
 });

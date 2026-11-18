@@ -3,7 +3,7 @@
  * when no service answers, and the link every command that runs or lists
  * tasks holds. `texra serve` itself is `serve` (`@texra/controllers/server`).
  */
-import { Effect, Result, type Scope } from 'effect';
+import { Effect, Result, Schema, type Scope } from 'effect';
 
 import { type GlobalValues } from '@texra-ai/harness/host';
 import { SERVICE_SUBCOMMAND } from '@texra/controllers/server/discovery';
@@ -23,6 +23,13 @@ import { writeTextStderr } from './logSinks';
 /** `TEXRA_NO_SERVICE=1`: this process uses no background service, so a
  *  chat runs here, as where the service cannot run. */
 const NO_SERVICE = 'TEXRA_NO_SERVICE';
+
+/** A command could not use the TeXRA service: none is linked or running,
+ *  or the one asked to stop did not. */
+export class CliServiceFailed extends Schema.TaggedError<CliServiceFailed>()(
+  'CliServiceFailed',
+  { message: Schema.String },
+) {}
 
 /** Start this build's service on `storageRoot`, detached. */
 const spawnOwnService = (storageRoot: string) =>
@@ -78,7 +85,10 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
     linkService(
       start || (info !== null && isOlder(info))
         ? spawnOwnService(storageRoot)
-        : { storageRoot, start: Effect.fail(new Error(NONE_RUNNING)) },
+        : {
+            storageRoot,
+            start: Effect.fail(new CliServiceFailed({ message: NONE_RUNNING })),
+          },
       // The wait lasts as long as the older build's tasks, so the command
       // says what it waits for and how to stop waiting.
       (waitingFor) =>

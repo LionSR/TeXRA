@@ -114,8 +114,6 @@ const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields(
         Schema.catchDecoding(() =>
           Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
         ),
-      )
-      .pipe(
         Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
       ),
     token_type: Schema.optional(Schema.NullOr(Schema.String)),

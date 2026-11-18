@@ -68,7 +68,7 @@ export function formatRoundLabel(round: number): string {
 const GENERIC_OUTPUT_STEMS = new Set(['output', 'output.xml', 'output.tex']);
 
 /** Whether a document name is a generic raw-wrapper stem rather than a name. */
-export function isGenericOutputStem(name: string): boolean {
+function isGenericOutputStem(name: string): boolean {
   return GENERIC_OUTPUT_STEMS.has(name);
 }
 

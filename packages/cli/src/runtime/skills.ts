@@ -2,9 +2,12 @@
 import { Effect } from 'effect';
 
 // Local imports - skills
-import { type EnabledSkill, type SkillLoadIssue } from '@texra-ai/harness/host';
+import type { SkillLoadIssue } from '@texra-ai/harness/host';
 import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
-import { AGENT_SKILLS_ENABLED_SETTING } from '@texra-ai/harness/schemas';
+import {
+  AGENT_SKILLS_ENABLED_SETTING,
+  type SkillDisplayItem,
+} from '@texra-ai/harness/schemas';
 
 /**
  * The notice a skill listing leads with while `texra.skills.enabled` is off:
@@ -30,12 +33,11 @@ export function formatCliSkillIssue(issue: SkillLoadIssue): string {
   return `${issue.severity}: ${issue.message}${location}`;
 }
 
-export function formatCliSkillList(skills: readonly EnabledSkill[]): string {
+export function formatCliSkillList(
+  skills: readonly SkillDisplayItem[],
+): string {
   if (skills.length === 0) return 'No skills found.';
   return skills
-    .map(
-      ({ display }) =>
-        `${display.scope}\t${display.name}\t${display.description}`,
-    )
+    .map(({ scope, name, description }) => `${scope}\t${name}\t${description}`)
     .join('\n');
 }

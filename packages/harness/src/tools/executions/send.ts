@@ -51,19 +51,15 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
   message: string,
 ) {
   if (target === caller) {
-    return yield* Effect.fail(
-      new ToolError('A run cannot send a message to itself.'),
-    );
+    return yield* new ToolError('A run cannot send a message to itself.');
   }
   const view = yield* (yield* SessionViewAccess).read([]);
   const recipient = view.runs.get(target);
   if (!recipient)
-    return yield* Effect.fail(
-      missingRun(
-        yield* Runs,
-        target,
-        `Run '${target}' not found. Use the executions tool to list runs.`,
-      ),
+    return yield* missingRun(
+      yield* Runs,
+      target,
+      `Run '${target}' not found. Use the executions tool to list runs.`,
     );
   const sender =
     caller === undefined
@@ -89,8 +85,8 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
   const name = `'${recipient.label}' (${target})`;
   const shown = presentFollowUpResult(result);
   if (shown.severity === 'warning') {
-    return yield* Effect.fail(
-      new ToolError(`${name} did not accept the message: ${shown.message}`),
+    return yield* new ToolError(
+      `${name} did not accept the message: ${shown.message}`,
     );
   }
   const verb = result.status === 'sent' ? 'Sent' : 'Queued';

@@ -35,7 +35,7 @@ import {
   reportRequestDefect,
 } from './transcript';
 import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ScopeRunner } from '../../scopeRunner';
 import type { RuntimeCommand, SessionView } from '@texra-ai/harness/schemas';
 
 interface TuiApprovalAdornments {
@@ -89,12 +89,13 @@ export interface PendingApproval {
 }
 
 /** Where a decision goes: the session its `request.decide` lands on, the
- *  runtime that request runs on, and the chat's attached host, which
+ *  chat's runner that request runs on (a decision lands even when its
+ *  modal has closed), and the chat's attached host, which
  *  performs the host command a decision names instead (a retry on the
  *  user's own key lands the decision itself once the key is in place). */
 export interface DecisionSurface {
   readonly requests: SessionRequests;
-  readonly runtime: ProcessRuntime;
+  readonly chat: ScopeRunner;
   readonly performHost: (command: HostCommand) => void;
 }
 
@@ -296,13 +297,13 @@ export function reopenRequest(requestId: string): void {
  */
 function issue(
   requests: SessionRequests,
-  runtime: ProcessRuntime,
+  chat: ScopeRunner,
   runId: RunId,
   requestId: string,
   request: RuntimeCommand,
 ): void {
   const reopen = (): void => reopenRequest(requestId);
-  runtime.runFork(
+  chat.fork(
     requests.request(request).pipe(
       Effect.match({
         onFailure: (error) => {
@@ -335,7 +336,7 @@ function issue(
  * once the credential is in place.
  */
 function decideRequest(
-  { requests, runtime, performHost }: DecisionSurface,
+  { requests, chat, performHost }: DecisionSurface,
   request: PendingApprovalFact,
   payload: RequestPayload,
   decision: SurfaceDecision,
@@ -347,6 +348,6 @@ function decideRequest(
     decision,
   );
   if ('runtime' in delivery)
-    issue(requests, runtime, runId, request.requestId, delivery.runtime);
+    issue(requests, chat, runId, request.requestId, delivery.runtime);
   else performHost(delivery.host);
 }

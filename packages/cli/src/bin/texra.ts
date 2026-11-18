@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 import { setLogSink } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCli } from '../commands/root';
 import { formatCrashReportLine } from '../runtime/platform/cliContext';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
+  CliEntryCrashed,
   cliErrorMessage,
   installCliPipeErrorHandlers,
   stderrDiagnosticSink,
@@ -29,9 +29,9 @@ await Effect.runPromise(
       const result = await runCli();
       process.exitCode = result.exitCode;
     },
-    catch: ensureError,
+    catch: (cause) => new CliEntryCrashed({ cause }),
   }).pipe(
-    Effect.catch((error: unknown) =>
+    Effect.catch(({ cause: error }) =>
       Effect.sync(() => {
         writeTextStderr(`TeXRA CLI failed: ${cliErrorMessage(error)}`);
         // Usage errors are handled inside runCli (exit 2) and classified run

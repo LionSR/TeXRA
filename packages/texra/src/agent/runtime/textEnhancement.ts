@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { helperCall, normalizeProviderError } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -28,6 +28,12 @@ const POLISH_PROMPT_PREFIX =
     'Text to correct:',
   ].join('\n') + '\n';
 
+/** A draft the helper model could not polish; the message says why. */
+class PolishFailed extends Schema.TaggedError<PolishFailed>()('PolishFailed', {
+  message: Schema.String,
+  cause: Schema.optional(Schema.Defect()),
+}) {}
+
 /**
  * Polish `text` with the configured helper model. Fails with the reason the
  * helper could not answer, formatted for the user.
@@ -47,7 +53,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
       { agentName: 'polish', runId: null },
     );
     if (responseText.trim() === '') {
-      return yield* Effect.fail(new Error('Model returned no text.'));
+      return yield* new PolishFailed({ message: 'Model returned no text.' });
     }
     const corrected = extractTextFromTag(responseText, 'corrected_text');
     if (!corrected) {
@@ -61,7 +67,9 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
       const { message } = normalizeProviderError(error);
       return Effect.logError(`Error polishing text: ${message}`).pipe(
         withLogChannel(CHANNEL),
-        Effect.andThen(Effect.fail(new Error(message, { cause: error }))),
+        Effect.andThen(
+          Effect.fail(new PolishFailed({ message, cause: error })),
+        ),
       );
     }),
   );

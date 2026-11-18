@@ -1,13 +1,16 @@
 import { type BrowserWindow, clipboard } from 'electron';
 import { Effect } from 'effect';
-import { ensureError } from '@texra-ai/harness/schemas';
 import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import { choose } from './desktopDialogs.js';
 
 /** A synchronous clipboard throw is a typed failure, so it reaches the
  *  presenter's `onError` and the failure dialog instead of skipping both. */
 const copyToClipboard = (text: string) =>
-  Effect.try({ try: () => clipboard.writeText(text), catch: ensureError });
+  Effect.try({
+    try: () => clipboard.writeText(text),
+    catch: (cause) => hostFailed('clipboard.writeText', cause),
+  });
 
 /**
  * The window's subscription sign-in dialogs: the "sign in in your other

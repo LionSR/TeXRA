@@ -33,6 +33,7 @@ import { decideRunModel } from '@model/runModelDecision';
 import {
   AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
+  ToolError,
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
@@ -229,7 +230,7 @@ export const selectAvailableDelegationModel = Effect.fn(
     ),
   ];
   if (availableModels.length === 0) {
-    return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
+    return yield* new ToolError(NO_DELEGATION_MODELS_MESSAGE);
   }
 
   const decision = decideRunModel(
@@ -242,13 +243,11 @@ export const selectAvailableDelegationModel = Effect.fn(
     (model) => availableModels.includes(modelRefOf(model) ?? model),
   );
   if (!decision) {
-    return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
+    return yield* new ToolError(NO_DELEGATION_MODELS_MESSAGE);
   }
   if (decision._tag === 'Unavailable') {
-    return yield* Effect.fail(
-      new Error(
-        `Model "${decision.model}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
-      ),
+    return yield* new ToolError(
+      `Model "${decision.model}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
     );
   }
   return decision;

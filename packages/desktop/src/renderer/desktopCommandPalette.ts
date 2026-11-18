@@ -9,6 +9,12 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { isCommitEnter } from '@ui/wa/keyActivation';
+import {
+  listMoveOfKey,
+  matchesQuery,
+  nextListIndex,
+} from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
@@ -84,34 +90,18 @@ function commandPaletteOptionId(index: number): string {
   return `desktop-command-palette-option-${index}`;
 }
 
+/** A row matches on its label, category, trailing label and id, so a
+ *  category name finds rows whose `meta` is an accelerator. */
 function filterCommandPaletteEntries(
   entries: readonly CommandPaletteEntry[],
   query: string,
 ): CommandPaletteEntry[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return [...entries];
-
-  const queryParts = normalizedQuery.split(/\s+/);
-  return entries.filter((entry) => {
-    // Include both `category` and `meta` (separated by a space) so rows that
-    // reserve `meta` for an accelerator/reason can still surface by
-    // category-name match. Empty/undefined fields collapse to '' and don't
-    // affect matching.
-    const haystack =
-      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`
-        .replaceAll('.', ' ')
-        .toLowerCase();
-    return queryParts.every((part) => haystack.includes(part));
-  });
-}
-
-function getNextCommandPaletteIndex(
-  currentIndex: number,
-  itemCount: number,
-  delta: number,
-): number {
-  if (itemCount <= 0) return -1;
-  return (currentIndex + delta + itemCount) % itemCount;
+  return entries.filter((entry) =>
+    matchesQuery(
+      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`,
+      query,
+    ),
+  );
 }
 
 export function createDesktopCommandPalette({
@@ -167,26 +157,19 @@ export function createDesktopCommandPalette({
     );
   };
 
+  /** The filter keeps Home and End for its caret; the arrows move. */
   const handleFilterKeydown = (event: KeyboardEvent): void => {
-    switch (event.key) {
-      case 'ArrowDown':
-      case 'ArrowUp': {
-        event.preventDefault();
-        const delta = event.key === 'ArrowDown' ? 1 : -1;
-        activeIndex = getNextCommandPaletteIndex(
-          activeIndex,
-          visibleEntries.length,
-          delta,
-        );
-        renderTemplate();
-        scrollActiveItemIntoView();
-        break;
-      }
-      case 'Enter':
-        event.preventDefault();
-        runEntry(visibleEntries[activeIndex]);
-        break;
+    if (isCommitEnter(event)) {
+      event.preventDefault();
+      runEntry(visibleEntries[activeIndex]);
+      return;
     }
+    const move = listMoveOfKey(event.key, 'vertical');
+    if (move !== 'next' && move !== 'previous') return;
+    event.preventDefault();
+    activeIndex = nextListIndex(move, activeIndex, visibleEntries.length);
+    renderTemplate();
+    scrollActiveItemIntoView();
   };
 
   const handleItemMouseEnter = (index: number) => (): void => {

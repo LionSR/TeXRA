@@ -102,7 +102,7 @@ export const runTabStyles = css`
   }
 
   /* Canonical states use only the glyph, except a pending approval, which
-     also says "Needs approval".
+     also says its word ("Waiting on you").
      Selection overrides both below so row hierarchy remains stronger than
      lifecycle. */
   .tab-status {

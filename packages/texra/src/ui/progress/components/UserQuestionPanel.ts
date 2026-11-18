@@ -56,10 +56,6 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
     this.writeDraft({ ...this.draft, answers });
   }
 
-  protected override get primaryLabel(): string {
-    return 'Submit';
-  }
-
   protected override get notePrompt(): string {
     return 'What should the agent do instead?';
   }

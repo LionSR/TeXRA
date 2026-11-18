@@ -20,6 +20,7 @@ import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  DocumentTaskOutputFailed,
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
@@ -32,6 +33,16 @@ import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
 }
+
+/** What a stored-destination reader threw: its own usage error, or the
+ *  failure to read the recorded launch at all. */
+const storedDestinationFailure = (cause: unknown) =>
+  cause instanceof CliUsageError
+    ? cause
+    : new DocumentTaskOutputFailed({
+        message: ensureError(cause).message,
+        cause,
+      });
 
 /** Report a failed resume step: a usage refusal names itself, any other
  *  failure reads as a session that could not load. */
@@ -201,12 +212,12 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     Effect.gen(function* () {
       const outputFile = yield* Effect.try({
         try: () => resumeDocumentTaskOutputFile(config),
-        catch: ensureError,
+        catch: storedDestinationFailure,
       });
       yield* assertOutputFileAvailable(outputFile, context.cwd);
       const outputDirectory = yield* Effect.try({
         try: () => resumeDocumentTaskOutputDirectory(config),
-        catch: ensureError,
+        catch: storedDestinationFailure,
       });
       yield* assertOutputDirAvailable(outputDirectory, context.cwd);
       const recoveryInputIsDurable =

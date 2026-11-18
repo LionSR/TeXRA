@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { withProcessServices } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -24,6 +24,13 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/platform/cliContext';
+
+/** The command's runtime could not be built; the report says so in its
+ *  platform row. */
+class CliRuntimeBuildFailed extends Schema.TaggedError<CliRuntimeBuildFailed>()(
+  'CliRuntimeBuildFailed',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
 /** The healthy report, on the command's runtime once its platform is up. */
 const readyReport = (context: CliContext) =>
@@ -60,7 +67,8 @@ const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
       setLogSink(silentLogSink, { trusted: true });
       return makeCliProcessRuntime(context);
     },
-    catch: ensureError,
+    catch: (cause) =>
+      new CliRuntimeBuildFailed({ message: ensureError(cause).message, cause }),
   }).pipe(
     Effect.flatMap((runtime) =>
       Effect.promise(() => runtime.runPromiseExit(readyReport(context))).pipe(

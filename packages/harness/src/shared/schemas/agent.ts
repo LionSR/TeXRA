@@ -10,7 +10,8 @@ export const AGENT_SOURCE = {
   BUILT_IN: 'builtIn',
   /** An installed Claude Code or Codex plugin's agent, named `<plugin>:<name>`. */
   PLUGIN: 'plugin',
-  /** A persona the launch carries (`AgentConfig.persona`): no file, no root. */
+  /** A persona the launch carries (`AgentConfig.agentSource`): no file, no
+   *  root. */
   INLINE: 'inline',
 } as const;
 
@@ -18,6 +19,15 @@ export const AGENT_SOURCE = {
 export const AgentSourceSchema = Schema.Enum(AGENT_SOURCE);
 
 export type AgentSource = typeof AgentSourceSchema.Type;
+
+/** The sources a catalog entry lives in: every source but `inline`. */
+export const CatalogAgentSourceSchema = Schema.Literals([
+  AGENT_SOURCE.CUSTOM,
+  AGENT_SOURCE.BUILT_IN,
+  AGENT_SOURCE.PLUGIN,
+]);
+
+export type CatalogAgentSource = typeof CatalogAgentSourceSchema.Type;
 
 /** The extension of an agent definition file: the agent index reads only
  *  files that carry it. */
@@ -100,7 +110,7 @@ export type AgentScanIssue = typeof AgentScanIssueSchema.Type;
 // ------------------------------------------------- the definition format
 // An agent definition, the one format a persona is written in: a YAML file
 // in an agent directory, or an embedder's inline persona, which a run's
-// config records (`AgentConfig.persona`).
+// config records (`AgentConfig.agentSource`).
 
 /**
  * Tool reference: a YAML name, parsed here into the bare `{ name }` entry

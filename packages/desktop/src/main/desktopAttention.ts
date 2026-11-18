@@ -8,7 +8,7 @@ import { app, Notification, type BrowserWindow } from 'electron';
 import { Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
 import { attentionOf } from '@texra-ai/harness/schemas';
-import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
+import { runAttentionLine, runStatus } from '@ui/copy/runStatus';
 
 import type {
   DesktopProject,
@@ -134,14 +134,18 @@ export const followDesktopAttention = Effect.fnUntraced(function* (
           const run = view.runs.get(runId);
           if (run === undefined || notices.some((n) => n.runId === runId))
             continue;
-          const line = `${run.title}: ${runStatusLabel('waitingOnUser')}.`;
-          notices.push({ runId, line });
+          notices.push({
+            runId,
+            line: runAttentionLine(run, 'waitingOnUser'),
+          });
         }
         // A child's ending is its parent's news.
         for (const run of finished) {
           if (run.parentId !== null) continue;
-          const line = `${run.title}: ${runStatus(run).word}.`;
-          notices.push({ runId: run.id, line });
+          notices.push({
+            runId: run.id,
+            line: runAttentionLine(run, runStatus(run).key),
+          });
         }
         const first = notices[0];
         if (first !== undefined) {

@@ -45,7 +45,7 @@ import {
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/host';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
@@ -672,14 +672,11 @@ function fileUriToPath(uri: string): Effect.Effect<string | null> {
   // throw. This runs on the JSON-RPC notification path, so map to null
   // (an untracked URI the caller skips) rather than letting the exception
   // escape and break diagnostics handling.
-  return Effect.try({
-    try: () => fileURLToPath(uri),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
+  return Effect.sync(() => fileURLToPath(uri)).pipe(
+    Effect.catchDefect((defect) =>
       Effect.logDebug(`Ignoring unmappable file URI ${uri}`).pipe(
         withLogChannel(LOG_CHANNEL),
-        Effect.annotateLogs({ data: error }),
+        Effect.annotateLogs({ data: defect }),
         Effect.as(null),
       ),
     ),

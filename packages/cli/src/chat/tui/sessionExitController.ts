@@ -9,6 +9,7 @@
 // with the signal's code through the platform's one exit.
 
 import { Effect, Exit, FiberHandle, Option, Scope } from 'effect';
+import type { ScopeRunner } from '../scopeRunner';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -67,13 +68,17 @@ interface SessionExitControllerContext {
   /** The chat's scope: what the session holds, closed and awaited on
    *  graceful exit. */
   readonly chatScope: Scope.Closeable;
-  /** The process's shutdown scope, closed last on every exit path: the
-   *  signal policies the chat holds are released there, so the hold lasts
-   *  through the whole exit and never outlives the process's platform. */
-  readonly shutdownScope: Scope.Scope;
+  /** The runner of that scope, which holds the exit confirmation's timer. */
+  readonly chat: ScopeRunner;
+  /** The runner of the process's shutdown scope, closed last on every exit
+   *  path: the signal policies the chat holds are released there, so the
+   *  hold lasts through the whole exit and never outlives the process's
+   *  platform. */
+  readonly untilShutdown: ScopeRunner;
   /** The TUI's hold on the terminal, suspended, resumed and released here. */
   readonly terminal: TuiTerminal;
-  /** The process runtime the exit drain runs on: one run per exit path. */
+  /** The process runtime whose services the exit drain runs over: the exit
+   *  is its own root program, off every scope it closes. */
   readonly runtime: ProcessRuntime;
   /** The platform's exit: its shutdown, the flushes, then `process.exit`. */
   readonly leaveProcess: (code: number) => Effect.Effect<never>;
@@ -116,18 +121,14 @@ export function createSessionExitController(
    *  shutdown, whichever comes first. */
   const hold = (policy: SignalPolicy): (() => void) => {
     const release = holdSignals(policy);
-    ctx.runtime.runSync(
-      Scope.addFinalizer(ctx.shutdownScope, Effect.sync(release)),
-    );
+    ctx.untilShutdown.sync(Effect.addFinalizer(() => Effect.sync(release)));
     return release;
   };
 
   // While its fiber sleeps, a second Ctrl-C leaves at once. The notice is
   // regenerable display state; replacing it must not change whether that
   // second Ctrl-C confirms the exit the first one asked for.
-  const confirmation = ctx.runtime.runSync(
-    Scope.provide(FiberHandle.make<void>(), ctx.chatScope),
-  );
+  const confirmation = ctx.chat.sync(FiberHandle.make<void>());
   const terminalJobControlSupported = supportsTerminalJobControl();
   // Persist the reopen hint to native scrollback: the session's root run,
   // through which its children resume too, read as the hint prints, so a
@@ -255,7 +256,7 @@ export function createSessionExitController(
       resumeId: rootRunIdSignal.get(),
       ttlMs: EXIT_CONFIRMATION_TTL_MS,
     });
-    ctx.runtime.runSync(
+    ctx.chat.sync(
       FiberHandle.run(confirmation, Effect.sleep(EXIT_CONFIRMATION_TTL_MS)),
     );
   };
