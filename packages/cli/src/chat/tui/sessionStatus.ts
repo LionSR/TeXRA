@@ -55,10 +55,11 @@ interface CliSessionCostStatus {
 /**
  * The spend of the task `run` belongs to, read off the session view: its root's
  * `treeUsage`, the root's own calls (`usage`), and each agent the root
- * started that spent anything, with that agent's `treeUsage`.
+ * started that spent anything, with that agent's `treeUsage`. `/status` and
+ * the status bar both read it, whichever run they describe.
  */
 export function taskCostStatus(
-  view: SessionView,
+  view: Pick<SessionView, 'runs'>,
   run: RunView | undefined,
 ): CliSessionCostStatus | undefined {
   if (run === undefined) return undefined;
