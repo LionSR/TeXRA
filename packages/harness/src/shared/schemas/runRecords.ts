@@ -82,6 +82,14 @@ export function serializeFilteredConfig(
   return JSON.stringify(filtered, null, 2);
 }
 
+/** Whether the run is a script's (`config.script`, a background script or a
+ *  program): its one response is its script call. It renders no prompt and
+ *  activates no skill, ends when that call does (no later turn, and its
+ *  `Stop` hook runs as already active), and is no conversation to fork or
+ *  start a goal from. */
+export const runsScript = (config: Pick<AgentConfig, 'script'>): boolean =>
+  config.script != null;
+
 /** The name of the registered program the run opened on (`script.name`),
  *  or null for any other run. A program's run is a script that ends: its
  *  value and its children's spend are its output, its end its record, and

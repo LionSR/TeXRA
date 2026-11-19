@@ -25,6 +25,7 @@ import {
   generateRunId,
   factName,
   runNoun,
+  runsScript,
   type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
@@ -87,7 +88,7 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
   const runHistory = yield* RunHistory;
   const records = getRunRecords(from);
   const config = yield* records.readConfig();
-  if (config === null || config.script != null) {
+  if (config === null || runsScript(config)) {
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = from;
