@@ -29,7 +29,7 @@ import {
 } from '@texra-ai/llm';
 
 import { environment } from '@utils/system/nodeWorkspace';
-import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { envNameKey } from '@utils/system/platformPaths';
 
 const ENV_FLAG_OFF_VALUES = new Set(['', '0', 'false', 'no', 'off']);
 
@@ -83,7 +83,6 @@ export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
   keep?: ApiKeyProviderId,
 ): Effect.fn.Return<Record<string, string>> {
   const env = yield* environment;
-  const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
   const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
   // A project's `.env` never reaches a nested harness process as a requested
   // approval policy: only the user's own invocation asks for one.
@@ -91,11 +90,11 @@ export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
     [
       ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
       APPROVAL_POLICY_ENV,
-    ].map(fold),
+    ].map(envNameKey),
   );
   return EffectRecord.filter(
     env,
     (value, name): value is string =>
-      value !== undefined && !withheld.has(fold(name)),
+      value !== undefined && !withheld.has(envNameKey(name)),
   );
 });

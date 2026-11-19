@@ -10,6 +10,7 @@ import { Context, Effect, Record as EffectRecord, String as Str } from 'effect';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
+import { envNameKey } from '@utils/system/platformPaths';
 
 /**
  * Resolve one physical workspace identity for storage and host adapters.
@@ -69,13 +70,14 @@ export const environment: Effect.Effect<
   Readonly<Record<string, string | undefined>>
 > = Effect.gen(function* () {
   const project = yield* ProjectEnvironment;
-  // Windows names are case-insensitive: the project's `PATH` replaces the
-  // process's `Path` rather than standing beside it.
-  const fold = (name: string) =>
-    process.platform === 'win32' ? name.toUpperCase() : name;
-  const named = new Set(Object.keys(project).map(fold));
+  // On Windows the project's `PATH` replaces the process's `Path` rather
+  // than standing beside it.
+  const named = new Set(Object.keys(project).map(envNameKey));
   return {
-    ...EffectRecord.filter(process.env, (_, name) => !named.has(fold(name))),
+    ...EffectRecord.filter(
+      process.env,
+      (_, name) => !named.has(envNameKey(name)),
+    ),
     ...project,
   };
 });
