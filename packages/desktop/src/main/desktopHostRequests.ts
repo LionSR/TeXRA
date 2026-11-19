@@ -12,6 +12,7 @@ import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   hostFailed,
   hostFailure,
+  openLink,
 } from '@texra/controllers/session/hostCallFailure';
 import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import type {
@@ -106,9 +107,9 @@ export const createDesktopHostRequests = (
               );
         }),
         // The desktop has no walkthrough of its own: the card's "Open
-        // walkthrough" opens the desktop docs.
+        // walkthrough" opens the desktop docs, as the other links open.
         openGettingStarted: Effect.suspend(() =>
-          options.openExternalUrl(DESKTOP_DOCS_URL),
+          openLink(options.openExternalUrl, DESKTOP_DOCS_URL),
         ),
       },
     };

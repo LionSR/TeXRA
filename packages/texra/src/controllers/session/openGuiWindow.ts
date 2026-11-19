@@ -111,7 +111,10 @@ import {
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
-import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  openLink,
+  type HostCommandFailure,
+} from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
  *  or in the background service), and the link the window attaches
@@ -480,14 +483,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       ),
     session,
   });
-  /** A page in the browser; one the host would not open is a rejection in
-   *  the host's words, so the view shows which address did not open. */
-  const openLink = (url: string) =>
-    bindings
-      .openExternal(url)
-      .pipe(
-        Effect.mapError((failed) => new Rejected({ reason: failed.message })),
-      );
   const exportTranscript = (runId: RunId) =>
     exportRunTranscript(runId, {
       pickFormat: host.export.pickFormat,
@@ -678,7 +673,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'apiKeyBanner':
           yield* request.action === 'set'
             ? bindings.setApiKey()
-            : openLink(texraGuideUrl('installation', 'setting-up-api-keys'));
+            : openLink(
+                bindings.openExternal,
+                texraGuideUrl('installation', 'setting-up-api-keys'),
+              );
           return done;
         case 'agentConfigBanner':
           switch (request.action) {
@@ -701,7 +699,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               return done;
             }
             case 'docs':
-              yield* openLink(texraGuideUrl('custom-agents'));
+              yield* openLink(
+                bindings.openExternal,
+                texraGuideUrl('custom-agents'),
+              );
               return done;
           }
           return done;
@@ -711,7 +712,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'openInstallGuide':
           // Every dependency the banner lists installs from the one guide
           // page.
-          yield* openLink(texraGuideUrl('installation'));
+          yield* openLink(bindings.openExternal, texraGuideUrl('installation'));
           return done;
         case 'onboarding':
           switch (request.action) {
