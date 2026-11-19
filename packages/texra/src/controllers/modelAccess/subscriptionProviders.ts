@@ -30,6 +30,7 @@ import {
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   codexAccountLabel,
+  type SubscriptionAccountNames,
   type SubscriptionAuthStatus,
   xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
@@ -184,12 +185,7 @@ interface SubscriptionProviderBindings<
   'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly id: Id;
-  readonly accountLabel: (
-    account:
-      | { readonly email?: string | null; readonly accountId?: string | null }
-      | null
-      | undefined,
-  ) => string;
+  readonly accountLabel: (account: SubscriptionAccountNames) => string;
 }
 
 /** A sign-in that could not finish: no transport this machine can use, or
