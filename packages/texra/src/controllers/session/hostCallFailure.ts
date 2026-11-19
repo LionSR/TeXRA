@@ -2,9 +2,11 @@
  * The one failure tag a GUI host's capability names (`hostFailure`), and
  * `fromHost`, which lifts a host API that still answers with a promise (a
  * VS Code command, an editor API, an Electron dialog) at the host edge
- * rather than at the depth that calls it. A refusal the callee
- * already worded travels as itself; every other rejection is tagged with the
- * member it came from, so the bridge can tell a refusal from a defect.
+ * rather than at the depth that calls it. `hostFailure` passes a refusal
+ * the callee already worded through as itself and tags every other
+ * rejection with the member it came from, so the bridge can tell a refusal
+ * from a defect; `fromHost` tags every rejection, since a host API raises
+ * no refusal.
  */
 import { Effect } from 'effect';
 
