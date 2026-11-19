@@ -1011,15 +1011,15 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 
 ## 删除清单
 
-| 删什么                                                                                                   | 行数（量于 `d173e42`） | 留什么                              |
-| -------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
-| 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、TeXRA 自己的 skill                            | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段    |
-| harness：agent 索引、catalog follower、workspace 选择、persona schema、`AgentBlock`                      | 约 2800                | skills 子系统                       |
-| team：预设、启动、CLI、标签页、`apply_team`（已删，2026-11-17）                                          | 1647                   | 无                                  |
-| agent 设置页（前端和后端）                                                                               | 1353                   | Skills 标签页；Plugins 页多一列程序 |
-| documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成 | 约 1000 of 2271        | 文档工具本身和 `revise`             |
-| CLI：`texra agents`（`team` 已计入上面）                                                                 | 271                    | `texra run`、`texra skills`         |
-| `latex-extract` 插件：`extract_figures`、`extract_tikz_figures`、`extract_bib_entries`                   | 514                    | 无                                  |
+| 删什么                                                                                                     | 行数（量于 `d173e42`） | 留什么                              |
+| ---------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
+| 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、TeXRA 自己的 skill                              | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段    |
+| harness：agent 索引、catalog follower、workspace 选择、persona schema、`AgentBlock`                        | 约 2800                | skills 子系统                       |
+| team：预设、启动、CLI、标签页、`apply_team`（已删，2026-11-17）                                            | 1647                   | 无                                  |
+| agent 设置页（前端和后端）                                                                                 | 1353                   | Skills 标签页；Plugins 页多一列程序 |
+| documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成   | 约 1000 of 2271        | 文档工具本身和 `revise`             |
+| CLI：`texra agents`（`team` 已计入上面）                                                                   | 271                    | `texra run`、`texra skills`         |
+| `latex-extract` 插件：`extract_figures`、`extract_tikz_figures`、`extract_bib_entries`（已删，2026-11-19） | 514                    | 无                                  |
 
 删掉的代码约 7600 行（"约"的两项是估计），提示词和 TeXRA 自己的 skill
 文本 5409 行。
@@ -1128,7 +1128,9 @@ history 的行。
 1. **工具是 CLI，bespoke 工具要有理由。** 一个插件工具只在三种情况下有资
    格存在：需要审批语义、需要写 run history 的行、需要结构化结果供脚本分
    支。其余的（arxiv、Zotero）变成随包的 CLI，模型用 bash 调。
-   `latex-extract` 的三个工具负责人已定直接去掉。是负责人问题 2。
+   `latex-extract` 的三个工具负责人已定直接去掉，已于 2026-11-19 删除：
+   agent 用 `grep`、`read_file`（图片和 PDF 作为附件返回）和 `bash` 读图和
+   文献，程序仍用 `autoExtractFigure` 等参数自己附图。其余是负责人问题 2。
 2. **headless 走文本流。** `texra run` 已经输出 NDJSON；再让它从 stdin 读
    文件列表、向 stdout 打产物路径，shell 组合就免费了。
 3. **缓存是一等机制。** 子运行结果的内容寻址复用今天已经覆盖任何子运行
@@ -1234,7 +1236,7 @@ history 的行。
    agents 目录（含 lean4 的）、agent 索引和 schema、workspace 选
    择（team 删后剩 `all` 和 `custom` 两种）、`AgentConfig` 上已无人写的
    `delegationAgentScope`、TeXRA 自己的 skill、customize、`agents` 这个
-   CLI 命令、`latex-extract` 插件、launch form 的 agent 列表；聊天
+   CLI 命令、launch form 的 agent 列表；聊天
    的 system 文本改由 app 的基础文本和插件的段拼出，根聊天能调的改为
    "开着的"、声明的改为一张短表，MCP 改为配了就能调；测试套件改写或
    删；文档、迁移说明和 `texra-action`。只有入口 agent 的 launch form 到
@@ -1258,6 +1260,12 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
 这个字段（app 里已经没有写它的地方；它是 `run.config` 的一部分，随第二
 次存法变更一起删，不为它单独升一次行版本）。过渡期的代价：一个没有手动
 勾选过的 workspace，picker 里是全部 agent。
+
+**`latex-extract` 插件已从第 5 期提前删除（2026-11-19）。** 它不依赖负
+责人问题 1：删掉的是插件登记、三个工具和它们共用的
+`figureExtractionShared.ts`、只有 `extract_bib_entries` 用的
+`extractBibliography.ts`，九个 bundled agent 的工具表和提示词里对它们的
+引用。存法没有变：存过这些调用的 run 照旧能读，卡片用通用图标。
 
 ## 负责人问题
 

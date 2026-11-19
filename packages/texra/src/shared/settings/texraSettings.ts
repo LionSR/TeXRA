@@ -141,7 +141,7 @@ export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
   schema: decodingDefault(Schema.String, ''),
   title: 'Default bibliography file',
   description:
-    'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
+    'Default path to bibliography file (.bib). Agents are told this path so they can search it for citations. Supports Zotero auto-exported .bib files.',
 } as const satisfies SettingRow<string>);
 
 /** The port of Zotero's local endpoints: the Connector API and Better

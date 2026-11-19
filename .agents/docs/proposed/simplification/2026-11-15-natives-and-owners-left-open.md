@@ -49,8 +49,8 @@ another open PR to merge first.
 - Item 2: `extractFigurePathsFromLatex` returns the absolute path it found,
   `latexMedia.ts` lost its second resolution and existence probe, and the
   defect it hid is fixed: `extract_figures` on a `.tex` in a subdirectory
-  failed with "Attachment not found" (regression test:
-  `src/test-kernel/tools/ExtractFiguresTool.vitest.ts`). A figure two files
+  failed with "Attachment not found". The tool and its regression test
+  went with the `latex-extract` plugin on 2026-11-19. A figure two files
   include now enters media once.
 - `describe` in `packages/harness/src/tools/core/toolSchema.ts` groups
   a field's copies with `Map.groupBy` instead of a hand-written loop.

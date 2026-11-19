@@ -6,7 +6,7 @@ import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCard
 
 [TikZ](https://github.com/pgf-tikz/pgf) is a LaTeX package for creating vector graphics programmatically. It is widely used in academia for diagrams, plots, and technical illustrations because of its output quality and its integration with LaTeX. Learning TikZ can feel like learning a new language. TeXRA helps with that, so the figures that illustrate a derivation or a result take less of your time than the theory itself.
 
-TeXRA offers features built for TikZ, centered on agents with tools, which write TikZ, compile it, and visually verify the result, together with dedicated extraction and compilation tools. This guide covers the TikZ-specific workflows.
+TeXRA offers features built for TikZ, centered on agents with tools, which write TikZ, compile it, and visually verify the result, together with automatic extraction for document programs and a compile command. This guide covers the TikZ-specific workflows.
 
 ::: info No dedicated `draw` agent
 Earlier versions of TeXRA shipped a standalone `draw` agent. Figure generation
@@ -110,21 +110,9 @@ You can also extract and compile TikZ figures manually from the Command Palette:
 
 This wraps each TikZ figure in a standalone file, compiles it to PDF, and lets you open the result.
 
-### Agent tool calls
+### In a chat
 
-Agents with the extraction tools can invoke `extract_tikz_figures` to perform the same discovery and optional compilation steps programmatically:
-
-```json
-{
-  "name": "extract_tikz_figures",
-  "arguments": {
-    "texPath": "figures/diagrams.tex",
-    "compile": true
-  }
-}
-```
-
-With `compile: true` the tool emits standalone PDFs (one per figure) and attaches them so multimodal models can read the binary output directly. Set `compile: false` if you only need a summary of labels or plan to edit the extracted TikZ code yourself.
+A chat agent has no dedicated extraction tool: to look at a TikZ figure it copies the `tikzpicture` into a standalone document, compiles it in the shell, and opens the PDF with `read_file`, which attaches it for a multimodal model. Ask for it in plain words ("render the second diagram and check the labels").
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Customizing TikZ processing
 

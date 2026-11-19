@@ -54,9 +54,6 @@ import {
   DocumentProposeTool,
 } from './documents/documentTools';
 import { DocumentReviewTool } from './documents/DocumentReviewTool';
-import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
-import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
-import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { githubActivity } from './github/plugin';
 import { externalInquiry } from './inquiry/plugin';
 import { lean4 } from './lean/plugin';
@@ -165,25 +162,6 @@ const serves = (capabilities: (storage: string) => Iterable<string>) =>
   Layer.succeed(HostCapabilities)({
     of: (storage) => new Set(capabilities(storage)),
   });
-
-const latexExtract: TexraPlugin = texraPlugin({
-  id: 'latex-extract',
-  tools: [
-    ExtractLatexFiguresTool,
-    ExtractTikzFiguresTool,
-    ExtractBibliographyTool,
-  ],
-  icons: {
-    extract_figures: 'image',
-    extract_tikz_figures: 'image',
-    extract_bib_entries: 'book',
-  },
-  dashboard: {
-    name: 'LaTeX Extraction',
-    description:
-      'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
-  },
-});
 
 /** The editor's diagnostics, offered while an editor attached for the
  *  session reads them: the plugin serves `HostCapabilities` from the same
@@ -376,7 +354,6 @@ export const texraPlugins = (host: {
           'Read, write, edit files and run shell commands. Includes glob/grep search.',
       },
     },
-    latexExtract,
     latexDiagnostics(editors),
     arxiv,
     {
