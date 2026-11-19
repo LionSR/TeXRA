@@ -24,7 +24,10 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import { sectionCountLabel } from '@ui/copy/runStatus';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import {
+  fromHost,
+  hostFailed,
+} from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   EXTENSION_CATEGORIES,
@@ -409,10 +412,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // order.
       const send = (message: SessionWire): void => {
         this.fork(
-          Effect.tryPromise({
-            try: () => view.webview.postMessage(message),
-            catch: (cause) => hostFailed('webview.postMessage', cause),
-          }).pipe(
+          fromHost('webview.postMessage', () =>
+            view.webview.postMessage(message),
+          ).pipe(
             Effect.flatMap((delivered) =>
               delivered
                 ? Effect.void

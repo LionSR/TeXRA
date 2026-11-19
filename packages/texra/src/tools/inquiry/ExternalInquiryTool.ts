@@ -25,6 +25,7 @@ import {
   ToolError,
   defineTool,
   type ToolResult,
+  logFailure,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 import {
@@ -299,10 +300,11 @@ const executeAsk = Effect.fn('executeAsk')(function* (
         // the commit failure this compensation runs under. Either way
         // the thread stays open, which the warning says, and the
         // original failure is what the tool reports.
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
+        Effect.catchCause(
+          logFailure(
+            CHANNEL,
             `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-          ).pipe(Effect.annotateLogs({ data: cause }), withLogChannel(CHANNEL)),
+          ),
         ),
       ),
     ),

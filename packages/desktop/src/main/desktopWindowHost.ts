@@ -8,7 +8,7 @@ import { Cause, Effect } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import { windowNotices } from '@texra/controllers/session/windowNotices';
 import { texraGuideUrl } from '@ui/copy/guide';
@@ -140,10 +140,9 @@ export function createDesktopWindowHost(options: {
         close: 'Later',
       });
       if (download)
-        yield* Effect.tryPromise({
-          try: () => shell.openExternal(DESKTOP_RELEASES_PAGE_URL),
-          catch: (cause) => hostFailed('shell.openExternal', cause),
-        });
+        yield* fromHost('shell.openExternal', () =>
+          shell.openExternal(DESKTOP_RELEASES_PAGE_URL),
+        );
     }),
     /** The folder the user picked, or undefined when they cancelled. */
     pickFolder: (
@@ -151,33 +150,27 @@ export function createDesktopWindowHost(options: {
       defaultPath: string,
       properties: Array<'openDirectory' | 'createDirectory'>,
     ) =>
-      Effect.tryPromise({
-        try: async () => {
-          const result = await dialog.showOpenDialog(window, {
-            title,
-            defaultPath,
-            properties,
-          });
-          return result.canceled ? undefined : result.filePaths[0];
-        },
-        catch: (cause) => hostFailed('pickFolder', cause),
+      fromHost('pickFolder', async () => {
+        const result = await dialog.showOpenDialog(window, {
+          title,
+          defaultPath,
+          properties,
+        });
+        return result.canceled ? undefined : result.filePaths[0];
       }),
     /** The native dialog that opens several files. */
     openFileDialog: ((dialogOptions) =>
-      Effect.tryPromise({
-        try: async () => {
-          const result = await dialog.showOpenDialog(window, {
-            title: dialogOptions.title,
-            defaultPath: dialogOptions.defaultPath,
-            filters: dialogOptions.filters.map(({ name, extensions }) => ({
-              name,
-              extensions: [...extensions],
-            })),
-            properties: ['openFile', 'multiSelections'],
-          });
-          return result.canceled ? undefined : result.filePaths;
-        },
-        catch: (cause) => hostFailed('openFileDialog', cause),
+      fromHost('openFileDialog', async () => {
+        const result = await dialog.showOpenDialog(window, {
+          title: dialogOptions.title,
+          defaultPath: dialogOptions.defaultPath,
+          filters: dialogOptions.filters.map(({ name, extensions }) => ({
+            name,
+            extensions: [...extensions],
+          })),
+          properties: ['openFile', 'multiSelections'],
+        });
+        return result.canceled ? undefined : result.filePaths;
       })) satisfies OpenFilesDialog,
     /**
      * What one project's runs present through: its dialogs name that project,

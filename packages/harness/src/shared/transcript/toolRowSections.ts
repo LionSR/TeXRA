@@ -5,7 +5,13 @@
  * keeps the section type definitions, the header preview, output suppression,
  * and the fold itself — the dispatch table is the only boundary between them.
  */
-import { Option, Predicate, Result, Schema } from 'effect';
+import {
+  Option,
+  Predicate,
+  Record as EffectRecord,
+  Result,
+  Schema,
+} from 'effect';
 import {
   AGENT_TOOL_NAME,
   LineChangesSchema,
@@ -462,12 +468,11 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
     return sections;
   }
   const unrendered = Predicate.isObject(ctx.parsedOutput)
-    ? Object.fromEntries(
-        Object.entries(ctx.parsedOutput).filter(
-          ([field]) =>
-            !MCP_STRUCTURED_FIELDS.has(field) &&
-            !TOOL_RESULT_METADATA_FIELDS.has(field),
-        ),
+    ? EffectRecord.filter(
+        ctx.parsedOutput,
+        (_, field) =>
+          !MCP_STRUCTURED_FIELDS.has(field) &&
+          !TOOL_RESULT_METADATA_FIELDS.has(field),
       )
     : {};
   if (Object.keys(unrendered).length > 0) {

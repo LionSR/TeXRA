@@ -4,7 +4,7 @@
 // hook reads and prints is `./hookProtocol`'s.
 
 // Third-party imports
-import { Predicate, Schema } from 'effect';
+import { Predicate, Record as EffectRecord, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
@@ -186,9 +186,7 @@ const renamed = (fields: Readonly<Record<string, string>>): Translation => ({
     ),
   back: (rewritten, issued) => ({
     ...issued,
-    ...Object.fromEntries(
-      Object.entries(fields).map(([ours, theirs]) => [ours, rewritten[theirs]]),
-    ),
+    ...EffectRecord.map(fields, (theirs) => rewritten[theirs]),
   }),
 });
 
@@ -302,10 +300,9 @@ export function claudeToolCall(
   const issued = input as Fields;
   return {
     toolName: tool.name,
-    toolInput: Object.fromEntries(
-      Object.entries(tool.input(issued, abs)).filter(
-        ([, value]) => value != null,
-      ),
+    toolInput: EffectRecord.filter(
+      tool.input(issued, abs),
+      Predicate.isNotNullish,
     ),
     fromHook: (rewritten) => tool.back(rewritten, issued),
   };

@@ -8,7 +8,7 @@ import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { inputBox } from '@frontend/ui/dialogs';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -97,10 +97,9 @@ const promptGitMissing = Effect.fnUntraced(function* () {
     undefined,
   );
   if (selected === 'Copy Command' && command) {
-    yield* Effect.tryPromise({
-      try: async () => vscode.env.clipboard.writeText(command),
-      catch: (cause) => hostFailed('clipboard.writeText', cause),
-    }).pipe(
+    yield* fromHost('clipboard.writeText', async () =>
+      vscode.env.clipboard.writeText(command),
+    ).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`Could not copy the command: ${error.message}`).pipe(
           withLogChannel(CHANNEL),
