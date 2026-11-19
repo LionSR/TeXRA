@@ -54,46 +54,41 @@ wa-button[hidden] {
   animation: spin 2s linear infinite;
 }
 
-/* Dialog titles and close actions share a row instead of floating at
+/* =====================================================================
+   Overlay dialogs (overlayDialog.ts): the text/password prompt, the
+   discard-changes confirmation and the Settings popup share one shell
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-overlay {
+  --width: min(520px, calc(100vw - var(--wa-space-l) * 2));
+}
+
+wa-dialog.desktop-overlay::part(dialog) {
+  border: var(--border-thin) solid var(--wa-color-menu-border);
+  border-radius: var(--wa-border-radius-xl);
+  background: var(--wa-color-surface-default);
+  box-shadow: var(--desktop-shadow-lg);
+}
+
+wa-dialog.desktop-overlay::part(body) {
+  padding: 0;
+}
+
+.desktop-overlay-body {
+  padding: var(--wa-space-l);
+}
+
+/* The title and the close action share a row instead of floating at
    unrelated offsets. Their control skin comes from the shared button sheet. */
 .desktop-overlay-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--control-size-s);
   align-items: center;
   column-gap: var(--wa-space-xs);
-}
-
-.desktop-overlay-subtitle {
-  grid-column: 1 / -1;
-}
-
-/* =====================================================================
-   Correlated text/password prompt and the discard-changes confirmation
-   (wa-dialog)
-   --------------------------------------------------------------------- */
-
-wa-dialog.desktop-prompt-overlay,
-wa-dialog.desktop-discard-overlay {
-  --width: min(520px, calc(100vw - var(--wa-space-l) * 2));
-}
-
-wa-dialog.desktop-prompt-overlay::part(body),
-wa-dialog.desktop-discard-overlay::part(body) {
-  padding: 0;
-}
-
-wa-dialog.desktop-prompt-overlay .desktop-prompt-body,
-wa-dialog.desktop-discard-overlay .desktop-discard-body {
-  padding: var(--wa-space-l);
-}
-
-wa-dialog.desktop-prompt-overlay .desktop-prompt-header,
-wa-dialog.desktop-discard-overlay .desktop-discard-header {
   margin-bottom: var(--wa-space-m);
 }
 
-wa-dialog.desktop-prompt-overlay .desktop-prompt-title,
-wa-dialog.desktop-discard-overlay .desktop-discard-title {
+.desktop-overlay-title {
   margin: 0;
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
@@ -122,46 +117,31 @@ wa-dialog.desktop-discard-overlay .desktop-discard-title {
   gap: var(--wa-space-xs);
 }
 
-/* =====================================================================
-   Settings popup (wa-dialog hosting <settings-app>)
-   --------------------------------------------------------------------- */
-
+/* Settings hosts <settings-app> edge to edge under a compact header bar. */
 wa-dialog.desktop-settings-overlay {
   --width: min(1040px, calc(100vw - var(--wa-space-l) * 2));
 }
 
-wa-dialog.desktop-settings-overlay::part(dialog),
-wa-dialog.desktop-prompt-overlay::part(dialog),
-wa-dialog.desktop-discard-overlay::part(dialog) {
-  border: var(--border-thin) solid var(--wa-color-menu-border);
-  border-radius: var(--wa-border-radius-xl);
-  background: var(--wa-color-surface-default);
-  box-shadow: var(--desktop-shadow-lg);
-}
-
 wa-dialog.desktop-settings-overlay::part(body) {
-  padding: 0;
   overflow: hidden;
 }
 
-wa-dialog.desktop-settings-overlay .desktop-settings-body {
+.desktop-settings-overlay .desktop-overlay-body {
   display: flex;
   flex-direction: column;
   height: min(720px, calc(100vh - var(--wa-space-xl) * 2));
+  padding: 0;
 }
 
-wa-dialog.desktop-settings-overlay .desktop-settings-header {
+.desktop-settings-overlay .desktop-overlay-header {
   flex: none;
+  margin-bottom: 0;
   padding: var(--wa-space-xs) var(--wa-space-m);
   border-bottom: var(--border-thin) solid var(--color-border);
 }
 
-wa-dialog.desktop-settings-overlay .desktop-settings-title {
-  margin: 0;
-  color: var(--wa-color-text-normal);
+.desktop-settings-overlay .desktop-overlay-title {
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-heading);
 }
 
 .desktop-settings-content {
