@@ -457,6 +457,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v4: the modules a script may import (`modules`); an earlier build's row
     // would resume a script against the modules shipped now.
     'tools.offered': Object.freeze({ version: 4, listing: 'none' }),
+    // The recorded request a blob holds is part of this kind's shape, its
+    // controls as each protocol prepares them: a resumed background turn is
+    // rebuilt from it, so a change to it is a version, never only new
+    // digests (`rowVersions.vitest.ts` holds it at a release).
     'context.blob': Object.freeze({ ...V1, listing: 'none' }),
     // v2: a `PreToolUse` answer is `decision` (allow, deny, ask) with its
     // `reason` and `updatedInput`, not a `deny` reason alone (an earlier
