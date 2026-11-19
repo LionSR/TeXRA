@@ -12,7 +12,11 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - export data and storage
 import { AgentDirectories, pathToLocationIn } from '@texra-ai/harness/host';
-import { StorageFs } from '@texra-ai/harness/plugins';
+import {
+  type SettingsStores,
+  StorageFs,
+  WorkspaceFs,
+} from '@texra-ai/harness/plugins';
 import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
@@ -25,7 +29,7 @@ import {
   TraceViewerMissing,
 } from '@texra/agent/export/standaloneTraceHtml';
 import { TranscriptExportFailed } from './transcriptExportFailure';
-import type { Session, WorkspaceRoots } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** Write one export beneath its run's storage directory. */
@@ -53,7 +57,8 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   runId: RunId,
   format: 'html' | 'md' | 'tex',
   options: {
-    readonly roots: WorkspaceRoots;
+    /** The settings a LaTeX export's compile reads. */
+    readonly roots: SettingsStores;
     /** The run's session, whose records the export reads: this process's
      *  own, or the service's. */
     readonly session: Session;
@@ -152,7 +157,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   if (format === 'md') return { ...result, format };
 
   const compiled = yield* compileLatex2Pdf(
-    pathToLocationIn(options.roots.workspace, result.absolutePath),
+    pathToLocationIn((yield* WorkspaceFs).root, result.absolutePath),
     options.roots,
   ).pipe(
     // No compiler still leaves the written source; the reason is its log.

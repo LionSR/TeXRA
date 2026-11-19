@@ -20,7 +20,7 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
-import { entryExists, entryTypeIn } from '@utils/files/fsEntryExists';
+import { entryTypeIn } from '@utils/files/fsEntryExists';
 
 import { createRunStorageLocation, pathToLocationIn } from './fileLocation';
 
@@ -63,21 +63,6 @@ function runStorageRelativePath(
 export function runDirUnder(storageRoot: string, id: RunId): string {
   return path.join(storageRoot, resolveRunStoragePath(id));
 }
-
-/**
- * The run-storage-relative path of `segments` under `storageRoot` when it
- * exists, so a caller that addresses run storage by relative path (the
- * storage view's own vocabulary) keeps doing so.
- */
-export const findExistingRunStoragePathUnder = Effect.fn(
-  'runStorage.findExistingRunStoragePath',
-)(function* (storageRoot: string, ...segments: string[]) {
-  const fs = yield* FileSystem.FileSystem;
-  const storagePath = resolveRunStoragePath(...segments);
-  return (yield* entryExists(fs, path.join(storageRoot, storagePath)))
-    ? storagePath
-    : undefined;
-});
 
 /**
  * Recover run identity from an absolute path inside the runs directory under

@@ -100,21 +100,8 @@ import {
   inquiryThreadFact,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
-import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-
-vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
-  const { Layer } = await import('effect');
-  const { LeanLanguageServices } =
-    await import('@texra/tools/lean/leanLanguageServices');
-  return {
-    directLeanLanguageServices: Layer.succeed(LeanLanguageServices)(
-      // cast: no case in this suite reaches the Lean language services.
-      {} as LeanLanguageServices['Service'],
-    ),
-  };
-});
 
 /** A second OS process's writer: this build's `Database` over the store at
  *  `storage`, creating `run`. */

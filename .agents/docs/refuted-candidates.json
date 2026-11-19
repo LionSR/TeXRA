@@ -4,7 +4,7 @@
     {
       "id": "EFF-ADOPT-config-provider",
       "candidate": "the platform config providers onto an Effect ConfigProvider",
-      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the Zod catalog row that owns it is a dual schema system with a ConfigError where Settings.get's validation already stands. Settings stay synchronous by ruling; Effect Config is for process.env reads, a separate lane.",
+      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the catalog row whose Effect Schema owns it is a dual schema system with a ConfigError where Settings.get's validation already stands. Settings stay synchronous: six readers cannot wait (named on ConfigProvider.get), and a read is a stat of each scope's config file it consults. Effect Config is for process.env reads, a separate lane.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
@@ -101,13 +101,13 @@
     {
       "id": "SCOPE-external-roots-standalone-service",
       "candidate": "ExternalRoots as a standalone service",
-      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today; recorded as a hazard on #12071.",
+      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today. The hazard of module state is a test that leaves a registration behind; a registration returns its own removal, which such a test runs.",
       "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-externalroots-stays-a-module-ruled-2026-09-20",
       "symbols": [
         {
           "file": "packages/harness/src/utils/files/externalRoots.ts",
           "symbol": "registerExternalRoot",
-          "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): void {…}"
+          "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): () => void {…}"
         }
       ]
     },
@@ -625,14 +625,14 @@
     },
     {
       "id": "RUN-trusted-script-launch-grants",
-      "candidate": "a task's recipe run's trust (isTrustedScript, five reads in four files: fixed tools and offered approval tools in step.ts, catalog agents and approved delegation in proposalFlow.ts, verbatim files and prompt in AgentTool.ts, no activated skills in templateInputs.ts) recorded as launch grants, either (a) stored on the run's run.start or run.config or (b) derived once into a grants record each site reads (E4's trust half)",
-      "why": "(a) stores a second copy of a fact run.config already stores as script.kind, which the documents plugin, recipeResult and isTaskConfig read: two owners that a resume or a fork could see disagree, for a run.config/run.start row-version bump and no deleted branch. A goal grant on the run's approval.policy is not that record either: goal grants pass down the run's ancestry (resolveBypass), so a recipe's children would start auto-approving their own delegations, and only one of the four grants is an approval. (b) is a table with two rows (task's recipe, anything else) whose four or five columns are always equal: a column derivable across its rows is the special case written as data (root AGENTS.md 'No option for a special case'), and every site keeps its branch. Resume and fork need no stored grant: a resume re-reads the run's run.config, and forkRun refuses a script run. What did hold is one fact under two names: isTrustedScript (agent/core/definition/RunRecord.ts) and the public isTaskConfig (shared/schemas/runRecords.ts) both test script.kind === 'recipe'. simplify/e4-launch-grants deletes isTrustedScript; the five reads call isTaskConfig, whose doc lists what a task's launch grants. Re-verified on main at 80a0153.",
+      "candidate": "a program run's trust (programOf(config) !== null, three reads in three files: fixed tools and offered approval tools in step.ts, approved delegation in proposalFlow.ts, verbatim files and prompt in AgentTool.ts) recorded as launch grants, either (a) stored on the run's run.start or run.config or (b) derived once into a grants record each site reads (E4's trust half)",
+      "why": "(a) stores a second copy of a fact run.config already stores as script.kind, which the documents plugin, readProgramResult and programOf read: two owners that a resume or a fork could see disagree, for a run.config/run.start row-version bump and no deleted branch. A goal grant on the run's approval.policy is not that record either: goal grants pass down the run's ancestry (resolveBypass), so a program's children would start auto-approving their own delegations, and only one of the grants is an approval. (b) is a table with two rows (a program, anything else) whose columns are always equal: a column derivable across its rows is the special case written as data (root AGENTS.md 'No option for a special case'), and every site keeps its branch. Resume and fork need no stored grant: a resume re-reads the run's run.config, and forkRun refuses a script run (runsScript). The trust reads call programOf (shared/schemas/runRecords.ts), whose doc lists what a program's launch grants; a separate trust predicate would be the same expression. No activated skill is not a trust read: templateInputs asks runsScript, which a background script answers the same. Re-verified on main at f7469ff.",
       "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/E-loop-tools.md#finding-4-a-script-run-is-a-model-less-run-dressed-as-a-tool-use-run-and-the-costume-shows-in-five-loop-branches",
       "symbols": [
         {
           "file": "packages/harness/src/shared/schemas/runRecords.ts",
-          "symbol": "isTaskConfig",
-          "signature": "export const isTaskConfig = ( config: typeof RunRecordFieldsSchema.Encoded, ): boolean => recipeBlockOf(config) !== null;"
+          "symbol": "programOf",
+          "signature": "export const programOf = ( config: Pick<AgentConfig, 'script'> | typeof RunRecordFieldsSchema.Encoded, ): Extract<AgentConfig['script'], { kind: 'program' }> | null =>"
         }
       ]
     },
@@ -795,19 +795,6 @@
           "file": "packages/harness/src/tools/executions/toolInput.ts",
           "symbol": "view_range",
           "signature": "view_range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({ description: 'Line range for paginating file and background-command output. Conversation pagination uses offset and limit.', }),"
-        }
-      ]
-    },
-    {
-      "id": "RF-TT-11-locate-tool-module",
-      "candidate": "Move locateTool into ProbeEnvironmentTool.ts and delete tools/setup/toolProbing.ts (TT-11 item 4, second half, of the 2026-11-15 design red-flag audit)",
-      "why": "toolProbing.ts is the vi.mock target of src/test-kernel/tools/setup/CredentialReporting.vitest.ts, its only stub for locateTool. Folding the function into the tool would make that suite mock lower modules (toolChecks, binaryResolver) instead, a larger and more brittle change than the one-export file it deletes. The other half of the item (the subscription probe beside its one reader) landed.",
-      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/TT-app-tools.md",
-      "symbols": [
-        {
-          "file": "packages/texra/src/tools/setup/toolProbing.ts",
-          "symbol": "locateTool",
-          "signature": "export const locateTool = …"
         }
       ]
     },

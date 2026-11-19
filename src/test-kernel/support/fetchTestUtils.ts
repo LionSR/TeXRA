@@ -5,7 +5,8 @@
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
-import { HttpClient } from 'effect/http';
+import { HttpClient, HttpClientResponse } from 'effect/http';
+import type { HttpClientRequest } from 'effect/http';
 
 /**
  * Builds a fetch-compatible `Response` from a JSON-serializable body, for
@@ -27,3 +28,26 @@ export const noHttpClientLayer = Layer.succeed(HttpClient.HttpClient)(
     ),
   ),
 );
+
+/**
+ * An HTTP client that answers each request from `answer` and reaches no
+ * network. `requests` records every request asked for, in order.
+ */
+export function scriptedHttpClientLayer(
+  answer: (request: HttpClientRequest.HttpClientRequest) => Response,
+): {
+  readonly layer: Layer.Layer<HttpClient.HttpClient>;
+  readonly requests: HttpClientRequest.HttpClientRequest[];
+} {
+  const requests: HttpClientRequest.HttpClientRequest[] = [];
+  const client = HttpClient.make((request) =>
+    Effect.sync(() => {
+      requests.push(request);
+      return HttpClientResponse.fromWeb(request, answer(request));
+    }),
+  );
+  return {
+    layer: Layer.succeed(HttpClient.HttpClient)(client),
+    requests,
+  };
+}

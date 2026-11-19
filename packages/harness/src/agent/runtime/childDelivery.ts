@@ -14,6 +14,7 @@ import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
+  backgroundScriptOf,
   RUN_OUTCOME,
   runEndErrorMessage,
   type AttachedMemoryMiss,
@@ -74,8 +75,8 @@ export const childEndReport = Effect.fn('childEndReport')(
     SessionRoots | SessionLog | SessionViewAccess | ToolRegistry
   > {
     const { runId, config } = ctx;
-    const { script } = config;
-    if (script?.kind === 'background') {
+    const script = backgroundScriptOf(config);
+    if (script !== null) {
       if (report.outcome === RUN_OUTCOME.CANCELLED)
         return record?.stop?.reason === 'user'
           ? yield* scriptStopNotice(runId, script.title, ctx.startedAt)
@@ -150,9 +151,9 @@ export const childEndReport = Effect.fn('childEndReport')(
         )({ runId, error: unbuilt }),
         {
           family:
-            config.script?.kind === 'background'
-              ? DELIVERY_FAMILY.script
-              : DELIVERY_FAMILY.subagent,
+            backgroundScriptOf(config) === null
+              ? DELIVERY_FAMILY.subagent
+              : DELIVERY_FAMILY.script,
           runId,
           message: `The run ${runId} ended ${report.outcome}, but its report could not be built: ${unbuilt.message}`,
         } satisfies ChildRunDelivery,

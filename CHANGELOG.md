@@ -88,7 +88,8 @@ All notable changes to this project will be documented in this file.
   `@texra-ai/harness/host`) builds the config that starts one.
   `AgentConfig.script` of kind `program` holds `{ name, args }` where kind
   `recipe` held source, a block and options; `isTaskConfig` and
-  `recipeBlockOf` are `programOf`, and `RunView.recipe` is
+  `recipeBlockOf` are `programOf`, which returns that program
+  (`{ kind, name, args }`) or null, and `RunView.recipe` is
   `RunView.program`. `AgentBlock`, `agentBlockOf`, `boundFile`,
   `AgentEntry.blocks`, `ITool.launchesTasks`, `ChildRuns.launch`,
   `CALL_FIELDS` and `fileList` are removed.
