@@ -60,7 +60,8 @@ export function applyLiveText(
   ix.live.set(chunk.rowId, text);
   // A chunk ahead of its row: the row paints when its event is applied,
   // joined with this text. A stream whose text is still blank paints none.
-  const row = slot && slotRow(slot, text, runLabels);
+  const row =
+    slot && slotRow(slot, text, { runLabels, interrupted: work.interrupted });
   if (row === undefined) return HELD;
   const next: TranscriptDraft = { ...transcript };
   upsertRow(work, next, row);
@@ -75,6 +76,31 @@ export function clearLiveText(ix: TranscriptIndexes): void {
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
+
+/**
+ * Paint the cards still open again, as `work.interrupted` now reads them:
+ * the run's holder went away, or a resume took the run up again. A waiting
+ * or ended run has no open card, its rows having closed them all.
+ */
+export function repaintOpenCards(
+  transcript: TranscriptView,
+  work: TranscriptWork,
+  runLabels: RunLabels,
+): TranscriptView {
+  const { ix } = work;
+  let next: TranscriptDraft | undefined;
+  for (const slot of ix.slots.values()) {
+    if (slot.kind !== 'tool' || !takesLiveText(slot)) continue;
+    const row = slotRow(slot, ix.live.get(slot.base.id), {
+      runLabels,
+      interrupted: work.interrupted,
+    });
+    if (row === undefined) continue;
+    next ??= { ...transcript };
+    upsertRow(work, next, row);
+  }
+  return next ?? transcript;
+}
 
 /** Finish the compactions still open when the turn ends. */
 export function finishOpenCompactions(

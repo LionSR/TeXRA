@@ -15,7 +15,7 @@ import { chmodSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Effect } from 'effect';
+import { Effect, Record } from 'effect';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import { withCommandDirs } from '@texra-ai/harness/node';
@@ -103,13 +103,13 @@ function defaultShell(): string {
  * so they are stripped.
  */
 function ptyEnvironment(): Effect.Effect<Record<string, string>> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value == null) continue;
-    if (key === 'ELECTRON_RUN_AS_NODE') continue;
-    if (key === 'ELECTRON_RENDERER_URL') continue;
-    env[key] = value;
-  }
+  const env: Record<string, string> = Record.filter(
+    process.env,
+    (value, key): value is string =>
+      value !== undefined &&
+      key !== 'ELECTRON_RUN_AS_NODE' &&
+      key !== 'ELECTRON_RENDERER_URL',
+  );
   // Programs branch on TERM for color and cursor support. xterm.js speaks
   // xterm-256color, and without this many tools fall back to dumb output.
   env.TERM = 'xterm-256color';

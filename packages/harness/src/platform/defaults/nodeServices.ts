@@ -270,15 +270,10 @@ const supervisedSpawner = Layer.effect(
               ),
               Effect.forkDetach,
             );
-            const closed = yield* Fiber.await(closing).pipe(
+            const closed = yield* Fiber.join(closing).pipe(
               Effect.timeoutOption(budgetMs),
             );
-            if (Option.isSome(closed)) {
-              if (Exit.isFailure(closed.value)) {
-                return yield* Effect.failCause(closed.value.cause);
-              }
-              return;
-            }
+            if (Option.isSome(closed)) return;
             yield* stopWaiting(handle, command, budgetMs, 'scope close');
             yield* Fiber.await(closing).pipe(
               Effect.flatMap((late) =>

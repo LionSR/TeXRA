@@ -699,10 +699,11 @@ interface ToolRowModel {
   /** A completed shell or MCP call that printed nothing: "it ran and printed
    *  nothing" is a result for a call whose output is the point. */
   readonly showsNoOutputMarker: boolean;
-  readonly status?: ToolCallStatus;
+  readonly status?: ToolRowStatus;
   readonly isUserFeedback: boolean;
   /** The limit a running call is stopped at, the one its tool enforces;
-   *  absent once it finished, and on a call with no limit. */
+   *  absent once it finished or was interrupted, and on a call with no
+   *  limit. */
   readonly timeoutMs?: number;
   readonly exitCode?: number;
 }
@@ -723,6 +724,17 @@ type ToolRowOutput =
       readonly reason: ToolOutputSuppression;
       readonly text: TranscriptText;
     };
+```
+
+## ToolRowStatus
+
+How a tool row's call stands: its call's own status, or `interrupted` for
+a call still open on a run nobody drives (its process died). Nothing works
+on such a call until the run resumes and issues it again, so no host
+shows it as running.
+
+```ts
+type ToolRowStatus = ToolCallStatus | 'interrupted';
 ```
 
 ## ToolSection

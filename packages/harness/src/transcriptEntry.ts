@@ -108,6 +108,7 @@ export type {
   ToolOutputSuppression,
   ToolRowModel,
   ToolRowOutput,
+  ToolRowStatus,
   ToolSection,
   ToolSectionBase,
   ToolSectionFile,
