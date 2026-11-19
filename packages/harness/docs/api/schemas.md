@@ -377,9 +377,8 @@ interface Attention<Request> {
 ## attentionOf
 
 The one attention rule every host reads (the extension's badge, reveal and
-chime, the desktop's dock badge, notifications, and rail): a request wants
-the user when this window can answer it (not one on a run another process
-holds or waiting for its run's resume), and a run when its outcome lands.
+chime, the desktop's dock badge, notifications, and rail): a pending
+request wants the user, and a run when its outcome lands.
 
 ```ts
 function attentionOf<View extends SessionView>(
@@ -1868,26 +1867,6 @@ function replayInputs(read: {
 }): SessionViewInput[]
 ```
 
-## requestAnswerability
-
-```ts
-function requestAnswerability(
-  run: Pick<RunView, 'approval'>,
-): RequestAnswerability
-```
-
-## RequestAnswerability
-
-Whether this window can answer a pending request of `run`: the one rule
-the host's attention badge and the request card both read, matching what
-`SessionRequests.decide` accepts. A request is answered by the call
-waiting on it, so only while its run waits here; an interrupted run has
-to be resumed first.
-
-```ts
-type RequestAnswerability = 'answerable' | 'resume';
-```
-
 ## RequestDecision
 
 ```ts
@@ -2329,8 +2308,8 @@ function serializeFilteredConfig(
 ## sessionActivity
 
 The project-level activity every title and status pill shows, read from the
-view and nothing else: a request this window can answer outranks a run
-working right now; a conversation waiting on its user is idle.
+view and nothing else: a pending request outranks a run working right
+now; a conversation waiting on its user is idle.
 
 ```ts
 function sessionActivity(view: SessionView): SessionTitleState

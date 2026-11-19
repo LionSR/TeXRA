@@ -257,34 +257,33 @@ export const sessionOwnersLayer = (
         roots,
         inSession: (effect) => Effect.provide(effect, services),
         fork: forkRun,
+        background: (effect) => void fork(effect),
         wake: (id) =>
-          void fork(
-            runs.inSession(
-              Effect.gen(function* () {
-                // The parent its last batch delivered to, as the store holds
-                // the edge: it outlives the run's fiber.
-                const parent = yield* Effect.exit(runs.attachedParent(id));
-                // And every other run its last end reported to.
-                const reported = yield* Effect.exit(lastReportRecipients(id));
-                yield* wakeIfOwed(id);
-                const woken = new Set<RunId>();
-                if (Exit.isSuccess(parent)) {
-                  if (parent.value !== null) woken.add(parent.value);
-                } else
-                  yield* logFailure(
-                    CHANNEL,
-                    `Run ${id}: its parent edge could not be read, so no parent is woken for its last delivery`,
-                  )(Cause.squash(parent.cause));
-                if (Exit.isSuccess(reported))
-                  for (const recipient of reported.value) woken.add(recipient);
-                else
-                  yield* logFailure(
-                    CHANNEL,
-                    `Run ${id}: who its last end reported to could not be read, so only its parent is woken for it`,
-                  )(Cause.squash(reported.cause));
-                for (const recipient of woken) yield* wakeIfOwed(recipient);
-              }),
-            ),
+          runs.background(
+            Effect.gen(function* () {
+              // The parent its last batch delivered to, as the store holds
+              // the edge: it outlives the run's fiber.
+              const parent = yield* Effect.exit(runs.attachedParent(id));
+              // And every other run its last end reported to.
+              const reported = yield* Effect.exit(lastReportRecipients(id));
+              yield* wakeIfOwed(id);
+              const woken = new Set<RunId>();
+              if (Exit.isSuccess(parent)) {
+                if (parent.value !== null) woken.add(parent.value);
+              } else
+                yield* logFailure(
+                  CHANNEL,
+                  `Run ${id}: its parent edge could not be read, so no parent is woken for its last delivery`,
+                )(Cause.squash(parent.cause));
+              if (Exit.isSuccess(reported))
+                for (const recipient of reported.value) woken.add(recipient);
+              else
+                yield* logFailure(
+                  CHANNEL,
+                  `Run ${id}: who its last end reported to could not be read, so only its parent is woken for it`,
+                )(Cause.squash(reported.cause));
+              for (const recipient of woken) yield* wakeIfOwed(recipient);
+            }),
           ),
       });
       yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));

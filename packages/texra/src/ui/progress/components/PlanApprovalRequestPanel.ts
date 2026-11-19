@@ -71,7 +71,6 @@ export class PlanApprovalRequestPanel extends BaseRequestPanel<'planApproval'> {
         text: PLAN_GOAL_COPY.action,
         title: `${PLAN_GOAL_COPY.action} (r)`,
         action: 'approve_and_goal',
-        disabled: this.readOnly,
         onClick: () => this.emitAction(REQUEST_ACTIONS.planApproval.r),
       }),
     );

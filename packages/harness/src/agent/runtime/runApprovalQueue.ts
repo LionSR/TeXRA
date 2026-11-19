@@ -197,7 +197,7 @@ export const sessionApprovals: Effect.Effect<
       );
       return next === null ? [] : [policyRow(runId, next)];
     }),
-    change: (runId, edit) => {
+    change: (runId, edit, except) => {
       // The view has applied every change by the time it returns, so a
       // change the view already shows writes nothing.
       const shown = view().runs.get(runId)?.grants;
@@ -205,7 +205,7 @@ export const sessionApprovals: Effect.Effect<
         return Effect.void;
       return log.transact((tx) =>
         Effect.gen(function* () {
-          const rows = yield* grantRows(log, view(), runId, edit);
+          const rows = yield* grantRows(log, view(), runId, edit, except);
           if (rows.length > 0) yield* runStateAppend(tx.append)(rows);
         }),
       );
@@ -299,9 +299,12 @@ const policyEdit = (
 export function setPolicy<A, R>(
   change: PolicyChange,
   decide: Effect.Effect<A, RequestError, R>,
+  /** A request of the run the grant leaves to its own decision
+   *  (`SessionApprovals.change`). */
+  except?: string,
 ): Effect.Effect<A, RequestError, R | Approvals> {
   return Approvals.use((approvals) =>
-    approvals.change(change.runId, policyEdit(change)),
+    approvals.change(change.runId, policyEdit(change), except),
   ).pipe(
     Effect.mapError(
       writeRejection(change.runId, 'The approval change could not be saved'),

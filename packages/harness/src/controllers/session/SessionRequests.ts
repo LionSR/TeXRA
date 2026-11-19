@@ -5,7 +5,7 @@
 import { Context, Effect, FileSystem, Path } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { resumeOwner, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import {
   narrows,
@@ -22,6 +22,7 @@ import { GlobalValues } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   answerMismatch,
+  describeRefusal,
   readToolEditContent,
   type RunAction,
   type RunId,
@@ -169,39 +170,73 @@ const pendingOf = (
     ),
   );
 
+/**
+ * Decide a pending request. One a fiber here waits on is one checked
+ * transaction (`decideRequest`, with its grant). One of a run no fiber here
+ * drives is answered by resuming that run: the registry holds the answer, and the run's
+ * activation commits it behind its `run.activate`, so the call that asked
+ * starts again and reads it. A resume that is refused rejects the decision
+ * with the resume's reason, as it does a message.
+ */
 const decideSurfaceRequest = (
   deps: SessionRequestsInit,
   req: Extract<RuntimeCommand, { kind: 'request.decide' }>,
-  heldHere: boolean,
+  runs: RunRegistry['Service'],
 ): Effect.Effect<Outcome, RequestError, GlobalValues | SessionServices> => {
+  const { runId, requestId, decision } = req;
+  const unavailable = (reason: string) => new Unavailable({ runId, reason });
+  const rejected = writeRejection(runId, 'The decision could not be recorded');
   const answer = Effect.fn('answer')(function* <R>(
     write: Effect.Effect<boolean, RequestError, R>,
   ) {
-    const pending = yield* pendingOf(deps, req.runId, req.requestId);
-    if (pending === undefined) return yield* notPending(req.runId);
-    // A request is answered by the call waiting on it, and that call died
-    // with the owner this decision takes over from: recording a decision
-    // would clear the panel without doing what it says. Resuming the run
-    // cancels this request; the call asks again and is answered then.
-    if (!heldHere) {
-      return yield* new Unavailable({
-        runId: req.runId,
-        reason: `The ${runNoun(deps.view.run(req.runId))} that asked is no longer running: resume it to answer this request.`,
-      });
+    const pending = yield* pendingOf(deps, runId, requestId);
+    if (pending === undefined) return yield* notPending(runId);
+    // The call that asked waits on the request here: the transaction
+    // decides it.
+    if (runs.get(runId) !== undefined) {
+      if (!(yield* write)) return yield* notPending(runId);
+      return done;
     }
-    if (!(yield* write)) return yield* notPending(req.runId);
+    // Nobody waits on the request: its run resumes for the answer, itself
+    // or through the parent whose open call owns it. The grant lands now
+    // and answers the run's other open requests it covers, but not this
+    // one, whose decision is the person's and commits after the activation.
+    if (req.grant != null)
+      yield* setPolicy(
+        { field: 'bypass', runId, bypass: req.grant, enabled: true },
+        Effect.void,
+        requestId,
+      );
+    runs.holdAnswer(runId, requestId, decision);
+    const resumed = yield* resumeOwner(runId).pipe(
+      Effect.mapError(rejected),
+      Effect.onError(() =>
+        Effect.sync(() => runs.dropAnswer(runId, requestId)),
+      ),
+    );
+    if ('failed' in resumed) {
+      runs.dropAnswer(runId, requestId);
+      return yield* unavailable(describeRefusal(resumed.failed));
+    }
+    // Where a fiber drives the run by now, its opening has committed its
+    // activation, which took the answer for a request still open.
+    yield* runs.opened(runId) ?? Effect.void;
+    if (!runs.heldAnswers(runId).has(requestId)) return done;
+    // Its parent resumed and its open call starts the run again: that
+    // activation takes the answer.
+    if (runs.get(runId) === undefined) return done;
+    // A fiber drove the run before this resume, or the request was decided
+    // meanwhile: the transaction decides, as for any held run.
+    runs.dropAnswer(runId, requestId);
+    if (!(yield* write)) return yield* notPending(runId);
     return done;
   });
   // An answer the request does not take is refused before its grant.
-  return Effect.flatMap(
-    pendingOf(deps, req.runId, req.requestId),
-    (pending) => {
-      const reason =
-        pending && answerMismatch(pending, req.decision, req.grant);
-      if (reason) return Effect.fail(new Rejected({ reason }));
-      return decideUnderGrant(req, answer);
-    },
-  );
+  return Effect.flatMap(pendingOf(deps, runId, requestId), (pending) => {
+    const reason = pending && answerMismatch(pending, decision, req.grant);
+    if (reason) return Effect.fail(new Rejected({ reason }));
+    return decideUnderGrant(req, answer);
+  });
 };
 
 /** Queued on the run's input by its live loop's controls, answered once the
@@ -236,7 +271,6 @@ const handle = (
   deps: SessionRequestsInit,
   req: Exclude<RuntimeCommand, { kind: 'run.stop' | `followUp.${string}` }>,
   accepted: AggregateState,
-  heldHere: boolean,
   runs: RunRegistry['Service'],
 ): Effect.Effect<Outcome, RequestError, RequestServices | SessionServices> => {
   switch (req.kind) {
@@ -256,7 +290,7 @@ const handle = (
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
     case 'request.decide':
-      return decideSurfaceRequest(deps, req, heldHere);
+      return decideSurfaceRequest(deps, req, runs);
     case 'request.preview':
       return Effect.flatMap(
         pendingOf(deps, req.runId, req.requestId),
@@ -374,11 +408,7 @@ export function sessionRequests(
     }
     yield* requireRunAction(deps, req);
     const accepted = yield* accept(deps, req);
-    // A launch here holds the run: a blocked request has a fiber here.
-    const heldHere =
-      runs.get(req.kind === 'policy.set' ? req.change.runId : req.runId) !==
-      undefined;
-    return yield* handle(deps, req, accepted, heldHere, runs).pipe(
+    return yield* handle(deps, req, accepted, runs).pipe(
       Effect.provideContext(
         Context.merge(servicesOf(deps.services), yield* sessionServices),
       ),
