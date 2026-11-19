@@ -187,7 +187,7 @@ export class BackgroundTasksPanel extends LitElement {
 
       .inquiry-id {
         flex: 0 0 auto;
-        font-family: var(--wa-font-family-code);
+        font-family: var(--wa-font-family-mono);
         font-size: var(--font-size-xs);
         font-variant-numeric: tabular-nums;
         color: var(--color-text-secondary);

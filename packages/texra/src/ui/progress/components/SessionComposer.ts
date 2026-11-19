@@ -108,7 +108,7 @@ export class SessionComposer extends LitElement {
       /* The shared field focus (selectStyles.ts), at card radius. */
       .composer:focus-within {
         border-color: var(--wa-color-focus);
-        box-shadow: 0 0 0 1px var(--wa-color-focus);
+        box-shadow: var(--field-focus-halo);
       }
       /* Follow-ups keep a writing area above the same action row as launch.
          Controls never move into the text line or appear only on focus. */
