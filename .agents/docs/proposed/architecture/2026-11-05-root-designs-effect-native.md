@@ -289,6 +289,22 @@ kind, `approval.policy`, in the birth batch, C5).
 **Gives up.** A run whose end could not be written reads as interrupted, not
 as FAILED-with-backstop; the trace viewer's scrubber stops at the end row.
 
+_State on 2026-11-19._ `RunOpening` (`shared/session/runHistory.ts`) is a
+union: a registration, an activation, or the job the caller is inside
+(`within`), and `RunHistory.open` with none reads the stored rows as they
+are. The lifecycle rows are built where they commit
+(`registrationRows`, `activationRows` and `endIn` in
+`agent/storage/runLifecycle.ts`); `Registration` is declared there. Two
+parts of the design above are not done. A registration is still an
+`Effect` of its rows although all three callers pass `Effect.succeed`
+(`registerRun`, `forkRun`, `openRun` in `agent/runtime/loop/runLoop.ts`):
+making it the rows is one line in each, left because `runLoop.ts` was
+another change's on that day. And `open` does not learn birth from
+activation by the rows' first kind: a registration rides the cell's first
+append and an activation commits at the open, so the two cases differ in
+when they commit, not only in their first row; merging them needs the
+opening batch to commit at the open, which is the loop's `openToolUse`.
+
 ## R5. Every child is a run that ends
 
 **Decision today.** A background child has no "finished": it is launched
@@ -740,8 +756,11 @@ started; that is no longer so for R6 and for part of R10.
   `LiveRun`, `awaitDrained`, `attachControls`, and `isResumableIdle` in the
   CLI (R2); `openResume`, `wakeRun`, `ResumeHandOff`, `viaControls`,
   `agent/storage/resumability.ts` (R3); `endVerdict`, `endIn`,
-  `registrationDrafts`, `activationDrafts`, `runEndDraft`, `RunOpening`
-  (R4); `markDecided`, `reopenRequest`, `stagePresentation`,
+  `RunOpening` (R4; on 2026-11-19 `registrationDrafts`,
+  `activationDrafts` and `runEndDraft` went, their rows built by the
+  transactions in `agent/storage/runLifecycle.ts` that commit them, and
+  `RunOpening` became one of three cases, not three optionals; what stays
+  of it is below R4's "Gives up"); `markDecided`, `reopenRequest`, `stagePresentation`,
   `dropPresentation`, `presentedOrder`, `createHeadlessCliHostInteractions`
   (R7; the TUI's own approval surface was kept on purpose, see PR 1's record
   §4); `PresentationProgram` (R8).
