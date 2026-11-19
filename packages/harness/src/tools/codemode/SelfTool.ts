@@ -7,7 +7,8 @@
  * Either way `selfTask` frames `prompt` as the one part of the script's work
  * the child does. It is the same agent with
  * the same tools, so nothing is proposed: the user approved the script.
- * The default goal strategy is this function in a loop (`builtIn:goal`).
+ * The default goal strategy (`builtIn:goal`) is this function in a loop:
+ * forked rounds, and a fresh one that judges a round's `done`.
  */
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 

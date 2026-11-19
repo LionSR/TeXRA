@@ -210,6 +210,20 @@ function goldenTurn(
         : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
+    // The judge of the round's `done` (a fresh `self()`): its claims.
+    if (said.includes('<goal_judge>'))
+      return Effect.succeed([
+        call('submit_output', {
+          claims: [
+            {
+              requirement: 'The golden chat is answered.',
+              status: 'verified',
+              check: 'Read the round report.',
+              observed: ANSWERED,
+            },
+          ],
+        }),
+      ]);
     // The goal's round (`self()`): a command its grant approves, a verdict.
     // Its first call is held, so the chat that started the goal finishes
     // its turn before the round goes on.
