@@ -17,14 +17,12 @@ const rows = [
 
 <template>
   <MockupFrame title="Dashboard — texra-paper">
+    <!-- Settings pages, in the order of SETTINGS_TAB_ORDER (General · Models ·
+         Agents · Memory · Plugins · LaTeX). -->
     <aside class="board dash-nav">
       <nav class="dash-tabs">
         <span class="dt"
-          ><wa-icon library="texra" name="database"></wa-icon> Memory</span
-        >
-        <span class="dt"
-          ><wa-icon library="texra" name="clock-rotate-left"></wa-icon>
-          History</span
+          ><wa-icon library="texra" name="gear"></wa-icon> General</span
         >
         <span class="dt dt-on"
           ><wa-icon library="texra" name="server"></wa-icon> Models</span
@@ -33,27 +31,20 @@ const rows = [
           ><wa-icon library="texra" name="robot"></wa-icon> Agents</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="screwdriver-wrench"></wa-icon>
-          Tools</span
+          ><wa-icon library="texra" name="database"></wa-icon> Memory</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="robot"></wa-icon> Integrations</span
-        >
-        <span class="dt"
-          ><wa-icon library="texra" name="code-branch"></wa-icon> Git</span
+          ><wa-icon library="texra" name="cube"></wa-icon> Plugins</span
         >
         <span class="dt"
           ><wa-icon library="texra" name="file-code"></wa-icon> LaTeX</span
         >
-        <span class="dt"
-          ><wa-icon library="texra" name="compass"></wa-icon> Goal</span
-        >
       </nav>
     </aside>
 
-    <!-- Models tab → API Configuration -->
+    <!-- Models page → API keys -->
     <div class="api-pane">
-      <h2 class="api-h2">API Configuration</h2>
+      <h2 class="api-h2">API keys</h2>
       <p class="api-desc">
         Store provider API keys in <code>~/.texra/secrets/</code> or sign in
         with a supported subscription.
