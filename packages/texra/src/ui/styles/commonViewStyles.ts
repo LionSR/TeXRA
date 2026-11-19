@@ -56,6 +56,17 @@ export const overlineDeclarations: CSSResult = css`
   color: var(--color-text-secondary);
 `;
 
+/**
+ * One line cut with an ellipsis: a name, path or title that must neither wrap
+ * nor push the rest of its row away. Interpolate it into the rule that places
+ * the text; a flex item still sets its own `min-width` and basis.
+ */
+export const truncateDeclarations: CSSResult = css`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
 /** {@link overlineDeclarations} as a class, for a tree that adopts sheets
  *  rather than composing rules (the desktop's light DOM). */
 export const overlineStyles: CSSResult = css`

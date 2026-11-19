@@ -1,4 +1,5 @@
 import { css, type CSSResult } from 'lit';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 
 export const settingsCatalogStyles: CSSResult = css`
   :host {
@@ -87,9 +88,7 @@ export const settingsCatalogStyles: CSSResult = css`
   }
   .catalog-row-name,
   .catalog-row-description {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
   }
   .catalog-row-name {
     font-size: var(--font-size-sm);

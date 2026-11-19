@@ -41,6 +41,7 @@ import {
 } from '@texra/shared/utils/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -85,9 +86,7 @@ export class SessionComposer extends LitElement {
       }
       .routing .routing-target {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
       .routing .routing-parent,
       .routing .routing-parent::part(base) {
@@ -216,9 +215,7 @@ export class SessionComposer extends LitElement {
       .chip-label {
         display: block;
         max-width: 14ch;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
       .recording::part(base) {
         color: var(--color-error);

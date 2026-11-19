@@ -10,6 +10,7 @@
 
 import { css } from 'lit';
 import { compactFormControlStyles } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { buttonStyles } from '@ui/styles/controlStyles';
 
 /** Core file-select layout styles. */
@@ -164,9 +165,7 @@ const multiFilesStyles = css`
   .file-name-main,
   .file-folder {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
   }
 
   .file-name-main {

@@ -1,6 +1,7 @@
 /** Component-scoped styles for {@link ModelSelectionList}. */
 
 import { css, type CSSResult } from 'lit';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 
 export const modelSelectionListStyles: CSSResult = css`
   /* ============================================
@@ -86,10 +87,8 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .model-name {
-    white-space: nowrap;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
   }
 
   .model-shortname {

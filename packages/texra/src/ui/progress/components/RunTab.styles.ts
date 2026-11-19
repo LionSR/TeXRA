@@ -2,7 +2,10 @@
 import { css } from 'lit';
 
 // Local imports - shared styles
-import { disclosureChevronStyles } from '@ui/styles/commonViewStyles';
+import {
+  disclosureChevronStyles,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 
 /** Styles for the individual <run-tab> row. */
@@ -82,9 +85,7 @@ export const runTabStyles = css`
   .tab-title {
     flex: 1;
     min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
   }
 
   /* Finished while the user was elsewhere: a quiet cue that clears once the
@@ -131,8 +132,7 @@ export const runTabStyles = css`
 
   .tab-status-label {
     display: var(--run-tab-status-label-display, inline);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
   }
 
   .tone-running:not(.has-pending-approval) .tab-status-icon {
@@ -209,9 +209,7 @@ export const runTabStyles = css`
     display: var(--run-tab-detail-display, block);
     width: 100%;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
     font-size: var(--font-size-xs);
     color: var(--color-warning);
   }
@@ -298,9 +296,7 @@ export const runTabStyles = css`
   .tab-meta .agent-name {
     flex-shrink: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
   }
 
   @media (forced-colors: active) {

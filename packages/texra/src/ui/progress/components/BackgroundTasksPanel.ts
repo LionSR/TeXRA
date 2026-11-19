@@ -49,7 +49,10 @@ import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
-import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  overlineDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
@@ -154,18 +157,14 @@ export class BackgroundTasksPanel extends LitElement {
         flex: 0 1 auto;
         min-width: 0;
         max-width: min(14rem, 45%);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         font-weight: var(--font-weight-medium);
       }
 
       .task-latest {
         flex: 1 1 8rem;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
       }

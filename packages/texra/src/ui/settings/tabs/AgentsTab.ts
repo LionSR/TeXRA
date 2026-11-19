@@ -31,6 +31,7 @@ import {
   designTokens,
   settingsBannerStyles,
 } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -61,9 +62,7 @@ export class AgentsTab extends SignalWatcher(LitElement) {
 
       .agents-dir-path {
         font-family: var(--wa-font-family-mono), monospace;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         min-width: 0;
       }
 
