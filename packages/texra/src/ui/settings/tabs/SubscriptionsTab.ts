@@ -8,6 +8,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
@@ -20,10 +21,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - settings view components (importing the descriptors also
 // registers the <subscription-section> element)
-import {
-  CHATGPT_SUBSCRIPTION_SECTION,
-  GROK_SUBSCRIPTION_SECTION,
-} from '../components/profile/SubscriptionSection';
+import { SUBSCRIPTION_SECTIONS } from '../components/profile/SubscriptionSection';
 
 @customElement('subscriptions-tab')
 export class SubscriptionsTab extends LitElement {
@@ -72,14 +70,13 @@ export class SubscriptionsTab extends LitElement {
               }),
           }),
         })}
-        <subscription-section
-          .provider=${CHATGPT_SUBSCRIPTION_SECTION}
-          .auth=${this.subscriptionAuth.chatgpt ?? null}
-        ></subscription-section>
-        <subscription-section
-          .provider=${GROK_SUBSCRIPTION_SECTION}
-          .auth=${this.subscriptionAuth.grok ?? null}
-        ></subscription-section>
+        ${SUBSCRIPTION_AUTH_PROVIDERS.map(
+          (provider) =>
+            html`<subscription-section
+              .provider=${SUBSCRIPTION_SECTIONS[provider]}
+              .auth=${this.subscriptionAuth[provider] ?? null}
+            ></subscription-section>`,
+        )}
       </div>
     `;
   }
