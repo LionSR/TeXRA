@@ -37,8 +37,8 @@ import './UserQuestionPanel';
 
 type CardTag = ReturnType<typeof literal>;
 
-/** The card element for each of the harness's request kinds. */
-const CARD_TAG: Record<Exclude<RequestPayload['kind'], 'plugin'>, CardTag> = {
+/** The card element for each request kind. */
+const CARD_TAG: Record<RequestPayload['kind'], CardTag> = {
   toolEdit: literal`tool-edit-request-panel`,
   bash: literal`bash-request-panel`,
   retry: literal`retry-request-panel`,
@@ -46,10 +46,6 @@ const CARD_TAG: Record<Exclude<RequestPayload['kind'], 'plugin'>, CardTag> = {
   planApproval: literal`plan-approval-request-panel`,
   userQuestion: literal`user-question-panel`,
 };
-
-/** No TeXRA plugin opens a request, so a plugin's request has no card. */
-const cardTag = (permission: RequestPayload): CardTag | undefined =>
-  permission.kind === 'plugin' ? undefined : CARD_TAG[permission.kind];
 
 /** Marks every rendered card so keyboard routing can find it. */
 const CARD_MARKER = 'data-request-panel';
@@ -109,21 +105,12 @@ export class RequestPanels extends LitElement {
     if (this.requests.length === 0) return nothing;
     return html`${repeat(this.requests, requestKey, (request) => {
       const permission = request.payload;
-      const tag = cardTag(permission);
-      // A request with no card is said, not dropped silently.
-      if (tag === undefined) {
-        console.warn(
-          `No request card is listed for request ${request.requestId}.`,
-        );
-        return nothing;
-      }
+      const tag = CARD_TAG[permission.kind];
       return staticHtml`<${tag}
         data-request-panel
         .permission=${permission}
         .answeredBy=${request.answeredBy}
-        .answerability=${
-          this.run ? requestAnswerability(this.run, permission) : 'resume'
-        }
+        .answerability=${this.run ? requestAnswerability(this.run) : 'resume'}
         .resumeRunId=${
           this.run?.actions.includes('resume') ? this.run.id : null
         }

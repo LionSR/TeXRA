@@ -14,12 +14,16 @@ All notable changes to this project will be documented in this file.
   `assistant`, `orchestrator` and `progressCheck` agents no longer carry
   it; `ask_user_question` still asks you directly. A custom agent file that
   lists `inquiry` still loads, with the warning that it names a tool this
-  build does not have. A stored run that used it opens and continues as
-  before; an inquiry still open in it stays a pending request that nothing
-  can answer and keeps the window's approval badge on, until you delete the
-  run. Stored thread
-  records are kept and no longer read. The premium-pricing hint on Pro
-  models no longer points to the tool.
+  build does not have. Stored thread records are kept and no longer read.
+  The premium-pricing hint on Pro models no longer points to the tool.
+  A stored run that holds any request, an inquiry or an approval, a
+  question or a retry, now reads as written by an earlier build: it opens
+  read-only (export, copy, delete) and does not resume. SDK: a plugin opens
+  no request of its own. The `plugin` request kind (`PluginRequest`),
+  `CallRequests.post`, `Plugin.decision` (`RequestDecisionHook`,
+  `RequestDecisionRecord`) and the `answer` decision are removed; every
+  request blocks the call that opened it, and `requestAnswerability` takes
+  the run alone.
 
 - **The `model.useGoogleBackgroundResponses` setting is removed.** It
   changed nothing: no request read it. A value left in `config.json` is

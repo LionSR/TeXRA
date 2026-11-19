@@ -197,19 +197,12 @@ whether the harness keeps a plugin request (`kind: 'plugin'`,
 tool removes it in a commit of its own, so that the owner can drop that
 commit. The typed fact read is small and stays as it is.
 
-Found by that PR, so it kept the capability: the harness design note
-promises it to embedders ("a plugin opens requests in its own vocabulary
-through the generic `plugin` case",
-[the general package design](./2026-10-21-harness-general-package-design.md)),
-and removing the `plugin` case from the request union bumps `request.opened`,
-so every stored run holding any request would read as an earlier build's.
-The terminal's filters and the panels' `plugin` branch stay with it.
-Nothing in the repo calls `CallRequests.post` now, and one session test
-stores a `plugin` request; the plugin's own
-aggregates (`ToolFact.aggregate`, `FactKind.accepts` and `supersedes`) and
-`SessionView.pluginFacts` have no consumer outside the session tests
-either. Removing them is
-the owner's call, with that note.
+Done in that PR, at the owner's word, in commits of their own after the
+tool's removal: the `plugin` case, `blocksCaller`, `CallRequests.post`,
+`Plugin.decision`, the `answer` decision, the panels' plugin branch and the
+terminal's filters are gone, and `request.opened` (v17) and
+`request.decided` (v4) moved, so an earlier build's request row reads as an
+earlier build's.
 
 ## 6. "Is this a script run" in four spellings
 

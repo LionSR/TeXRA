@@ -48,7 +48,7 @@ import {
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
-import { nodePlatform, nodePlatformServices } from '@texra-ai/harness/node';
+import { nodePlatform } from '@texra-ai/harness/node';
 import { definePlugin } from '@texra-ai/harness/plugins';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
@@ -464,99 +464,6 @@ describe('session events and view', () => {
  * holds ends.
  */
 describe('Sessions owner', () => {
-  // Neither a missing plugin nor its run's end may clear a durable request
-  // whose answer the plugin delivers: nothing waits on it, and the answer
-  // resumes the run.
-  it.live('keeps a plugin request pending without its plugin or its run', () =>
-    Effect.gen(function* () {
-      const directory = mkdtempSync(join(tmpdir(), 'texra-missing-plugin-'));
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => rmSync(directory, { recursive: true, force: true })),
-      );
-      const platform = nodePlatform({
-        agentsDir: join(directory, 'agents'),
-        storageDir: join(directory, 'storage'),
-        workspaceDir: directory,
-      });
-      mkdirSync(join(directory, 'agents'));
-      yield* Effect.gen(function* () {
-        const db = yield* Database;
-        yield* db.appendAll([
-          runStartRow,
-          waiting,
-          {
-            type: 'request.opened',
-            aggregateId: RUN,
-            requestId: 'plugin-answer',
-            payload: {
-              kind: 'plugin',
-              plugin: 'example',
-              blocksCaller: false,
-              answers: ['answer'],
-              data: { requestId: 'plugin-answer', runId: RUN },
-            },
-            answeredBy: 'person',
-          },
-        ]);
-      }).pipe(
-        Effect.provide(
-          databaseLayer('persistent').pipe(
-            Layer.provide(Layer.succeed(SessionWorkspace)(platform.roots)),
-            Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
-            Layer.provide(nodePlatformServices),
-          ),
-        ),
-      );
-      yield* Effect.gen(function* () {
-        const session = yield* (yield* Sessions).open(platform.roots, {
-          persistent: true,
-          answeredFromView: true,
-        });
-        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
-        yield* Stream.runHead(
-          Stream.filter(session.view.changes, (view) =>
-            view.requests.some(
-              ({ requestId }) => requestId === 'plugin-answer',
-            ),
-          ),
-        );
-        const error = yield* Effect.flip(
-          session.request({
-            kind: 'request.decide',
-            runId: RUN,
-            requestId: 'plugin-answer',
-            decision: { action: 'answer', answer: 'Preserve this answer.' },
-          }),
-        );
-        expect(error).toMatchObject({
-          _tag: 'Unavailable',
-          reason: expect.stringContaining('example'),
-        });
-        // A caller that only formats the error still shows why.
-        expect(error.message).toContain('example');
-        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
-        yield* session.request({
-          kind: 'run.stop',
-          runId: RUN,
-          reason: 'user',
-        });
-        yield* Stream.runHead(
-          Stream.filter(
-            session.view.changes,
-            (view) => view.runs.get(RUN)?.outcome != null,
-          ),
-        );
-        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
-      }).pipe(
-        Effect.provide(
-          Sessions.layer({ platform, plugins: [], client: HARNESS_APP.client }),
-        ),
-      );
-    }),
-  );
-
-  // A plugin's drain ends its process-wide work (the GitHub pollers of
-  // every project), so closing one project must not run it.
   it.live('drains the plugins at shutdown, not when one session closes', () =>
     Effect.gen(function* () {
       const directory = mkdtempSync(join(tmpdir(), 'texra-plugin-drain-'));

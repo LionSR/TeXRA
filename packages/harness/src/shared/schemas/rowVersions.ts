@@ -252,12 +252,17 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // inline agent's persona inside `agentSource`, no `persona` beside it.
     // v16: a proposal's agent source, working directory and root instruction
     // are absent when unset, never `null`, as `run.config` v12.
-    'request.opened': Object.freeze({ version: 16, listing: 'request' }),
+    // v17: no `plugin` kind: every request is one the harness declares,
+    // and blocks the call that opened it (an earlier build's plugin request
+    // would fail as damaged).
+    'request.opened': Object.freeze({ version: 17, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
     // v3: a decision's optional fields are absent when unset, never `null`
     // (an earlier build's `null` feedback would fail as damaged).
-    'request.decided': Object.freeze({ version: 3, listing: 'request' }),
+    // v4: no `answer` arm, which only a plugin's request took (an earlier
+    // build's would fail as damaged).
+    'request.decided': Object.freeze({ version: 4, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
     // its check).

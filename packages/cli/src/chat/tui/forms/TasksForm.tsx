@@ -46,7 +46,7 @@ import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';
 import { AsyncListForm } from './_shared/ListForm';
-import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
+import type { TuiRequest } from '../state/approvalQueue';
 
 interface TasksFormProps {
   readonly connect: ConnectService;
@@ -187,15 +187,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   };
 
-  // A plugin's request has no modal here, so it is named apart and never
-  // stands in front of a request this view can answer.
   const pending = level.requests.find(
-    (request): request is PendingApprovalFact =>
-      request.payload.kind !== 'plugin' && !decided.has(request.requestId),
+    (request) => !decided.has(request.requestId),
   );
-  const pluginRequests = level.requests.filter(
-    (request) => request.payload.kind === 'plugin',
-  ).length;
   // Previews of decided requests go: each holds two whole documents.
   useEffect(() => {
     const open = new Set(level.requests.map((request) => request.requestId));
@@ -362,13 +356,6 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           availableRows={10}
           onDecide={decide}
         />
-      )}
-      {pluginRequests > 0 && (
-        <Text dimColor>
-          {pluginRequests === 1
-            ? "A plugin's request waits; this view cannot answer it."
-            : `${pluginRequests} plugin requests wait; this view cannot answer them.`}
-        </Text>
       )}
     </Box>
   );

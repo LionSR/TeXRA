@@ -138,10 +138,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
     },
   );
 
-  /** One request, answered by the prompt. A plugin's request is not this
-   *  host's to answer: no plugin TeXRA loads opens one, so one listed was
-   *  opened elsewhere and is answered there; this handler waits until the
-   *  view drops the request (the answerer interrupts it then). */
+  /** One request, answered by the prompt. */
   const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
     payload: RequestPayload,
@@ -181,8 +178,6 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       }
       case 'userQuestion':
         return yield* askHeadlessUserQuestion(payload.data, hooks);
-      case 'plugin':
-        return yield* Effect.never;
     }
   });
 

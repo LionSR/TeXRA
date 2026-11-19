@@ -40,8 +40,6 @@
  *   [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
- *   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
- *   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
  *   [`FactKind`](#factkind), and [`Program`](#program) (how its run
  *   reads: [`ProgramResult`](#programresult)).
  */
@@ -75,8 +73,6 @@ export {
   type ProcessPluginLayer,
   type PromptSection,
   type ProgramChange,
-  type RequestDecisionHook,
-  type RequestDecisionRecord,
   type SessionPluginLayer,
   type ToolTable,
 } from '@tools/toolTable';
