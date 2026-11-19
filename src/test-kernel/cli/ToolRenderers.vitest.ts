@@ -66,6 +66,14 @@ describe('CLI tool display lines', () => {
     expect(lines).toContain('  split');
   });
 
+  it('paints a one-line range as its line', () => {
+    const lines = toolUseDisplayLines(
+      toolUse('read_file', { path: 'main.tex', range: [5, 5] }),
+    );
+    expect(lines.join('\n')).toContain('main.tex:5');
+    expect(lines.join('\n')).not.toContain(':5-5');
+  });
+
   it("does not paint the user's own rejection as an error", () => {
     const [header] = toolUseStyledLines(
       toolUse(

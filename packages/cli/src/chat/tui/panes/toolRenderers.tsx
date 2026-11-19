@@ -38,7 +38,7 @@ import {
   TOOL_USER_FEEDBACK_LABEL,
   toolRowLook,
 } from '@ui/copy/runStatus';
-import { formatLineChanges } from '@ui/copy/format';
+import { formatLineChanges, formatLineRange } from '@ui/copy/format';
 
 // Local imports - CLI TUI rendering
 import {
@@ -199,10 +199,7 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
     case 'badges':
       return [labeled(section.label, section.badges.join(', '))];
     case 'file': {
-      const range =
-        section.startLine === undefined
-          ? ''
-          : `:${section.startLine}${section.endLine === undefined ? '' : `-${section.endLine}`}`;
+      const range = formatLineRange(section.startLine, section.endLine);
       // The path vocabulary matters in a terminal, where nothing is clickable:
       // a memory or run path is not a workspace file.
       const namespace =
