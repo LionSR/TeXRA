@@ -135,9 +135,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .shell-project-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--control-size-s) var(
-      --control-size-s
-    );
+  grid-template-columns: minmax(0, 1fr) repeat(2, var(--height-control-compact));
   gap: var(--wa-space-2xs);
   align-items: center;
   min-height: 34px;
@@ -173,8 +171,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-menu {
   display: block;
   grid-column: 3;
-  width: var(--control-size-s);
-  height: var(--control-size-s);
+  width: var(--height-control-compact);
+  height: var(--height-control-compact);
   color: var(--wa-color-text-quiet);
 }
 .shell-project-rename {
@@ -184,10 +182,10 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-runs {
   --run-tab-padding-inline-start: var(--wa-space-xs);
   --run-tab-row-gap: var(--wa-space-3xs);
-  --run-tab-radius: var(--border-radius-medium);
+  --run-tab-radius: var(--row-radius);
   --run-tab-meta-display: none;
   --run-tab-detail-display: none;
-  --run-tab-status-width: var(--control-size-s);
+  --run-tab-status-width: var(--height-control-compact);
   --run-tab-status-label-display: none;
 }
 .shell-sidebar-sessions > run-tabs {
@@ -242,7 +240,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   display: flex;
   align-items: center;
   gap: var(--wa-space-xs);
-  padding: 0 10px;
+  padding: 0 var(--wa-space-s);
   border-top: var(--border-thin) solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
   min-width: 0;
@@ -286,5 +284,11 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   }
   .shell-workspace-toolbar {
     gap: var(--wa-space-xs);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-app * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

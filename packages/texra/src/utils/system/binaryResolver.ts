@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Context, Effect } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { hasExtension } from '@texra-ai/harness/host';
+import { hasExtension } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,

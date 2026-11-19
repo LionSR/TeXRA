@@ -37,6 +37,7 @@ import {
   type RunId,
   formatCompactDuration,
   formatResultCount,
+  NESTED_NOUNS,
 } from '@texra-ai/harness/schemas';
 import { dispatchedChildren } from '@texra-ai/harness/transcript';
 import type { Surface } from '@texra/shared/session/surface';
@@ -54,7 +55,7 @@ import {
   truncateDeclarations,
 } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
+import { dispatchSummary } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchDisclosureToggle } from './disclosureToggle';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';

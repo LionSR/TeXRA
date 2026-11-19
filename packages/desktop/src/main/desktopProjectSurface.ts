@@ -139,7 +139,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         pickFolder: (title) =>
           host.pickFolder(
             title,
-            projects.active().root ?? app.getPath('home'),
+            projects.active().roots.workspace ?? app.getPath('home'),
             ['openDirectory', 'createDirectory'],
           ),
         // The run verbs of the project these settings belong to, even while
@@ -181,7 +181,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           ),
         },
         roots: project.roots,
-        spawn: desktopSpawner(runtime, owner, project.root),
+        spawn: desktopSpawner(runtime, owner, project.roots.workspace),
       }).pipe(
         Effect.tap(() => installDesktopWindowTitle(host.window, project)),
         Scope.provide(owner),

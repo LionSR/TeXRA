@@ -12,11 +12,9 @@ import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   hostFailed,
   hostFailure,
+  openLink,
 } from '@texra/controllers/session/hostCallFailure';
-import {
-  pickLauncherFiles,
-  type OpenFilesDialog,
-} from '@texra/controllers/session/launcherFilePicker';
+import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import type {
   GuiWindowHost,
   OwnHostHandlers,
@@ -33,8 +31,6 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
-  /** The project's folder; undefined for the window with no folder. */
-  workspaceRoot: string | undefined;
   openFiles: OpenFilesDialog;
   postToRenderer(message: DesktopPush): void;
   /** The window's settings surface, absent while the window switches
@@ -63,8 +59,7 @@ export const createDesktopHostRequests = (
      *  view, and the project's launch path. */
     const bindings: SharedHostCommandBindings = {
       openPath: (file, line) => host.openPath(file, line),
-      pickFiles: (fileType) =>
-        pickLauncherFiles(options.workspaceRoot, fileType, options.openFiles),
+      openFiles: options.openFiles,
       latexdiff: {
         // Each diff opens in the PDF tab through the build display, as a
         // run's outputs do.
@@ -94,9 +89,6 @@ export const createDesktopHostRequests = (
           postDesktopSettingsView(options.postToRenderer, 'models/keys'),
         ),
       openExternal: (url) => options.openExternalUrl(url),
-      openInstallGuide: Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'plugins'),
-      ),
       onboarding: {
         signInChatGpt: Effect.suspend(() => {
           const settings = options.settings();
@@ -115,9 +107,9 @@ export const createDesktopHostRequests = (
               );
         }),
         // The desktop has no walkthrough of its own: the card's "Open
-        // walkthrough" opens the desktop docs.
+        // walkthrough" opens the desktop docs, as the other links open.
         openGettingStarted: Effect.suspend(() =>
-          options.openExternalUrl(DESKTOP_DOCS_URL),
+          openLink(options.openExternalUrl, DESKTOP_DOCS_URL),
         ),
       },
     };

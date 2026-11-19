@@ -60,6 +60,28 @@ export const SUBSCRIPTION_AUTH_COPY = Object.freeze({
 >);
 
 /**
+ * The two prompts a subscription sign-in shows (`SubscriptionSignInPresenter`),
+ * worded once. A host adds only its title, buttons and waiting line.
+ */
+export const SIGN_IN_PROMPT = Object.freeze({
+  /** Where to enter the one-time code. `copied`: the host put the code on
+   *  the clipboard. */
+  deviceCodeSteps: (
+    providerDisplayName: string,
+    prompt: { readonly verificationUrl: string; readonly userCode: string },
+    copied: boolean,
+  ): string =>
+    `To sign in with ${providerDisplayName}:\n  1. Open ${prompt.verificationUrl}\n  2. Enter the one-time code: ${prompt.userCode}${copied ? ' (copied to the clipboard)' : ''}`,
+  /** Beside the loopback sign-in link: the default browser may not be the
+   *  one signed in to the account (`sessionName`: 'ChatGPT', 'xAI'). */
+  otherBrowser: (sessionName: string): string =>
+    `If your ${sessionName} session is in another browser, open the sign-in link there instead.`,
+  /** A prompt the host failed to show. */
+  presentFailed: (providerDisplayName: string): string =>
+    `The ${providerDisplayName} sign-in instructions could not be shown`,
+});
+
+/**
  * Sign-in / sign-out outcome sentences that read the same for any account,
  * parameterized by the provider's display name.
  *

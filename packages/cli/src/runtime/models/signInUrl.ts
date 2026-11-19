@@ -6,6 +6,7 @@ import { Effect } from 'effect';
 import { launchBrowser } from './browser';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { HostFailed } from '@texra/hosts/uiHosts';
+import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 
 /** The URL is a loopback address on the machine running texra. */
 const REMOTE_CALLBACK_HINT =
@@ -35,10 +36,12 @@ export type CliSignInProgress = (
 export function presentCliSignInUrl(options: {
   readonly writeProgress: CliSignInProgress;
   readonly displayName: string;
+  /** The account the browser session belongs to ('ChatGPT', 'xAI'). */
+  readonly sessionName: string;
   readonly url: string;
   readonly noBrowser: boolean;
 }): Effect.Effect<void, HostFailed, ChildProcessSpawner> {
-  const { writeProgress, displayName, url, noBrowser } = options;
+  const { writeProgress, displayName, sessionName, url, noBrowser } = options;
   return Effect.gen(function* () {
     writeProgress(`${displayName} sign-in URL:\n${url}`, { copyable: true });
     if (noBrowser) {
@@ -57,7 +60,7 @@ export function presentCliSignInUrl(options: {
       ),
     );
     writeProgress(
-      'Browser opened. Wrong browser or account? Open the URL above in another browser.',
+      `Browser opened. ${SIGN_IN_PROMPT.otherBrowser(sessionName)}`,
     );
   });
 }

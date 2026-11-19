@@ -31,8 +31,7 @@ import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import { hasExtension } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { LatexProgress } from './progress';
 import {

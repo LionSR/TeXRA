@@ -1036,19 +1036,6 @@ class GlobalValues extends Context.Service<
 >()('@texra-ai/harness/GlobalValues')
 ```
 
-## hasExtension
-
-Check if a file path has a specific extension (case-insensitive).
-Consolidates scattered `.toLowerCase().endsWith('.ext')` patterns.
-
-- `@example` hasExtension('notes.md', '.md') // true
-  hasExtension('Notes.MD', '.md') // true
-  hasExtension('notes.pdf', '.md') // false
-
-```ts
-function hasExtension(filePath: string, extension: string): boolean
-```
-
 ## helperCall
 
 One helper call: bind the configured helper model (else `runModel`) for
