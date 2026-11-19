@@ -60,7 +60,21 @@ boot and before the final frame are gone.
 Measured on a 4-core Linux container, 143 scenarios, harness already built
 (`--no-build`):
 
-MEASURED_TABLE
+| Run               | `main` (fixed waits) | State waits    |
+| ----------------- | -------------------- | -------------- |
+| 1                 | 585 s, 143/143       | 248 s, 142/143 |
+| 2                 | 580 s, 143/143       | 243 s, 142/143 |
+| 3                 | 586 s, 143/143       | 240 s, 142/143 |
+| 4                 |                      | 249 s, 142/143 |
+| 5                 |                      | 249 s, 142/143 |
+| every CPU busy, 1 |                      | 318 s, 142/143 |
+| every CPU busy, 2 |                      | 328 s, 142/143 |
+
+The one failure in each state-wait run is `multi-agent-toggle`, which failed
+the same way on `main` once a plugin's removal moved its row's hotkey; it is
+fixed in the same PR, and the merged tree then ran 143/143 in 245 s. No
+scenario failed in only some runs. An earlier round, before the async-list
+waits below, lost `model-form-buffered-hotkey` in 2 of 7 runs.
 
 ## Open
 
