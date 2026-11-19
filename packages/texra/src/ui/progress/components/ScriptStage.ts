@@ -90,7 +90,7 @@ const scriptStageStyles = css`
   }
 
   .row.is-linked:hover {
-    background: var(--color-bg-secondary);
+    background: var(--surface-hover);
   }
 
   .row-icon {

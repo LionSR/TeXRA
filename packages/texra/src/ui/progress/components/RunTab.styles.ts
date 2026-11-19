@@ -166,11 +166,7 @@ export const runTabStyles = css`
   }
 
   .tab-container:hover {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 30%,
-      transparent
-    );
+    background-color: var(--surface-hover);
   }
 
   /* The selected row's background and foreground are one pair: VS Code's

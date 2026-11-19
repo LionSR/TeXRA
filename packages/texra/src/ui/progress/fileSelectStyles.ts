@@ -148,7 +148,7 @@ const multiFilesStyles = css`
   }
 
   .file-item:hover {
-    background-color: var(--wa-color-list-hover-bg);
+    background-color: var(--surface-hover);
   }
 
   /* Truncation lives on the .file-name-main / .file-folder children — this is

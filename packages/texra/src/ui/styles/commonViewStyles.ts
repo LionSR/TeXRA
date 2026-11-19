@@ -168,11 +168,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item:hover {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 30%,
-      transparent
-    );
+    background-color: var(--surface-hover);
   }
 
   .settings-disclosure-list {

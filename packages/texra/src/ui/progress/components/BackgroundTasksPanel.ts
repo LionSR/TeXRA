@@ -140,11 +140,7 @@ export class BackgroundTasksPanel extends LitElement {
         cursor: pointer;
       }
       .task-row:hover {
-        background: var(--wa-color-neutral-fill-quiet);
-      }
-      .task-row:focus-visible {
-        outline: var(--focus-ring-width) solid var(--wa-color-focus);
-        outline-offset: calc(-1 * var(--focus-ring-offset));
+        background: var(--surface-hover);
       }
 
       .task-icon {
@@ -369,6 +365,7 @@ export class BackgroundTasksPanel extends LitElement {
         role="listitem"
         class=${classMap({
           'task-row': true,
+          'focus-ring-inset': true,
           [`tone-${status.tone}`]: true,
         })}
         style=${styleMap({ '--tree-depth': String(depth) })}
