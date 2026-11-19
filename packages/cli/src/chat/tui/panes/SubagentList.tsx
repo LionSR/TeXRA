@@ -25,12 +25,9 @@ import {
   highlightChildListRun,
   type SessionListRow,
 } from '../state/cliState';
-import {
-  pendingApprovalKindsByRun,
-  type PendingRequestKind,
-} from '../state/approvalQueue';
+import { pendingApprovalKindsByRun } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
-import type { RunId, RunView } from '@texra-ai/harness/schemas';
+import type { RequestKind, RunId, RunView } from '@texra-ai/harness/schemas';
 import { formatResultCount, FACT_SEPARATOR } from '@texra-ai/harness/schemas';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
@@ -103,7 +100,7 @@ function SessionRow({
   readonly expanded: boolean;
   readonly metadataColumn: boolean;
   readonly nowMs: number;
-  readonly pendingKinds: readonly PendingRequestKind[] | undefined;
+  readonly pendingKinds: readonly RequestKind[] | undefined;
   readonly run: RunView;
 }): React.JSX.Element {
   const statusLabel = runStatus(run).word;

@@ -52,10 +52,11 @@ function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
-/** A child that cannot register under its parent: the parent is gone, or
- *  was stopped. */
-class ParentRunClosed extends Schema.TaggedError<ParentRunClosed>()(
-  'ParentRunClosed',
+/** A run that cannot open: a child under a parent that is gone or was
+ *  stopped, a resume with no state to continue from, a fresh launch onto a
+ *  run that has some, or a conversation with no task. */
+export class RunOpenRejected extends Schema.TaggedError<RunOpenRejected>()(
+  'RunOpenRejected',
   { message: Schema.String },
 ) {}
 
@@ -140,11 +141,11 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const log = yield* SessionLog;
     const parent = yield* log.facts(parentId);
     if (parent === null)
-      return yield* new ParentRunClosed({
+      return yield* new RunOpenRejected({
         message: `Parent run ${parentId} is unavailable.`,
       });
     if (parent.stop !== null || parent.end !== null)
-      return yield* new ParentRunClosed({
+      return yield* new RunOpenRejected({
         message: `Cannot launch child run ${runId} under run ${parentId}: that run was stopped.`,
       });
   }

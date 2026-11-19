@@ -65,6 +65,7 @@ export {
   ModelError,
   ModelErrorFieldsSchema,
   fillModelError,
+  isAuthFailureStatus,
   PLAN_ROUTES,
   RemoteOperationSchema,
 } from './errors.js';

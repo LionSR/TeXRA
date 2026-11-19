@@ -289,7 +289,7 @@ and `REFUSED` remain; `runRejection`, `earlierBuildRefusal` and
 and failures ended on 2026-11-19: `defectAsFailure` and `defectsAsErrors`
 are gone, and no `Effect.die(Cause.squash(…))` is left in the harness. A
 registration or an awaited child's launch fails with the typed errors its
-steps raise (`ParentRunClosed`, the store's, a `ToolError`); a defect
+steps raise (`RunOpenRejected`, the store's, a `ToolError`); a defect
 there stays a defect, which the tool boundary reports to the model as a
 failed call and logs as a crash (`defineTool`). The acceptance count is 15 files, not under ten. The open
 stop and resume rows are the same work as §5 of
@@ -356,7 +356,12 @@ the CLI decides in `packages/cli/src/runtime/platform/initPlatform.ts`
 (linking through `cliService.ts`, opening through the same module's
 `openLocalSession`), and `serviceProjectState` keeps its eight
 attempts (`STATE_CHANGE_ATTEMPTS`, `serviceSession.ts`), so the first row
-below is open for those two.
+below is open for those two. Checked on 2026-11-19, the CLI cannot take
+`openProjectRoots` / `openProjectSession` as they are: its config stores are
+open before its runtime exists, and it needs the local and the service
+session both, each opened lazily. The reasons are item 1 of
+`.agents/docs/proposed/simplification/2026-11-15-host-rules-and-app-facts-with-two-owners.md`.
+The CLI's copy of the decision ends when the dual does.
 
 | Fact                          | Keep                                                              | Delete                                                                                                                                                                                                                                          | Files |
 | ----------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |

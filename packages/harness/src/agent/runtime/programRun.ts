@@ -11,7 +11,9 @@ import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_SOURCE,
+  backgroundScriptOf,
   factName,
+  programOf,
   type AgentConfig,
   type RunId,
 } from '@shared/schemas';
@@ -104,14 +106,15 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
 export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
   config: AgentConfig,
 ): Effect.fn.Return<ScriptCall | null, ProgramNotRegistered, ToolRegistry> {
-  const { script } = config;
-  if (script == null) return null;
-  if (script.kind === 'background') return script;
-  const program = yield* registeredProgram(script.name);
+  const background = backgroundScriptOf(config);
+  if (background !== null) return background;
+  const program = programOf(config);
+  if (program === null) return null;
+  const { tools } = yield* registeredProgram(program.name);
   return {
-    code: programScript(script.name, script.args, config),
-    title: script.name,
-    tools: program.tools,
+    code: programScript(program.name, program.args, config),
+    title: program.name,
+    tools,
   };
 });
 
@@ -141,9 +144,9 @@ export const readProgramResult = Effect.fn('readProgramResult')(function* (
   DatabaseReadFailed,
   ToolRegistry | SessionLog
 > {
-  const script = config?.script;
-  if (script?.kind !== 'program') return undefined;
-  const { name } = script;
+  const program = config === null ? null : programOf(config);
+  if (program === null) return undefined;
+  const { name } = program;
   const refused = (reason: string) =>
     Effect.logWarning(
       `Run ${runId} of the program '${name}' reports nothing its registration reads: ${reason}`,

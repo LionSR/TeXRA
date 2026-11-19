@@ -22,6 +22,7 @@ import {
 import {
   AgentConfigSchema,
   ensureError,
+  formatWallTime,
   toErrorMessage,
   previewLabel,
   type RunId,
@@ -30,6 +31,9 @@ import {
 } from '@texra-ai/harness/schemas';
 
 import type { ClaimThread } from './agentCliSessionStores';
+
+/** How much of its prompt a delivery echoes. */
+const DELIVERY_PROMPT_MAX = 200;
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
@@ -92,8 +96,9 @@ export interface AgentCliTurn {
   readonly response: string;
   /** The turn's own spend; null when the provider reported none. */
   readonly usage: TokenUsageStats | null;
-  /** The delivery's attributes: the id a later call continues with. */
-  readonly attributes: ChildRunDelivery['attributes'];
+  /** The delivery's attributes after its prompt: the id a later call
+   *  continues with, when the provider gave one. */
+  readonly attributes: NonNullable<ChildRunDelivery['attributes']>;
   /** Body lines the delivery carries, failed or not (Claude's cost). */
   readonly lines?: readonly string[];
   /** Set when the provider reported the turn failed without throwing. */
@@ -254,12 +259,17 @@ function childTurn(params: {
   /** The claim on the thread this turn continues, closed as it ends. */
   claim: Scope.Closeable | undefined;
 }): ProcessTurn {
-  const { family, prompt, runId, logger, claim } = params;
+  const { family, runId, logger, claim } = params;
+  // The delivery echoes the start of the prompt the child took, first after
+  // its id, so the parent's model can tell its reports apart.
+  const prompt = {
+    name: 'prompt',
+    value: params.prompt.slice(0, DELIVERY_PROMPT_MAX),
+  };
   const run = Effect.gen(function* () {
     const startedAt = yield* Clock.currentTimeMillis;
     const turn = yield* params.turn;
     const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
-    const wallTime = `${(wallTimeMs / 1000).toFixed(1)}s`;
     // Every turn the provider returns, a failed one included, reports its
     // spend: the child has no model rows, so its `usage` rows are its one
     // record of spend.
@@ -272,14 +282,14 @@ function childTurn(params: {
       });
       logger.emit({ type: 'usage', usage: turn.usage });
     }
-    logger.info(`Turn completed in ${wallTime}`);
+    logger.info(`Turn completed in ${formatWallTime(wallTimeMs)}`);
     if (turn.failure !== undefined) {
       logger.error(turn.failure);
       return {
         report: {
           family,
           runId,
-          prompt,
+          attributes: [prompt],
           lines: turn.lines,
           message: turn.failure,
         },
@@ -290,9 +300,8 @@ function childTurn(params: {
       report: {
         family,
         runId,
-        prompt,
-        attributes: turn.attributes,
-        wallTime,
+        attributes: [prompt, ...turn.attributes],
+        wallTimeMs,
         response: turn.response,
         ...(turn.usage !== null && { usage: turn.usage }),
         lines: turn.lines,
@@ -308,7 +317,7 @@ function childTurn(params: {
     reportError: (error) => ({
       family,
       runId,
-      prompt,
+      attributes: [prompt],
       message: toErrorMessage(error),
     }),
   };

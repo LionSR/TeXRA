@@ -167,7 +167,7 @@ derived id, and a resume rejoins it by deriving the id again:
 | A blocking request (approval, plan, question, …) | `request.opened`, id `${responseId}/${callId}:${attempt}:${n}` | `resumedAttempt` (`shared/session/inFlight.ts:410-432`), the guard      |
 | A script's shared `agent()` request              | the script call's attempt-0 request                            | its own lookup (`agent/runtime/delegation/AgentTool.ts:190-228`)        |
 | A model retry request                            | `failed{next: ask}` with `request.opened`                      | `nextAttempt`'s ask case                                                |
-| A non-blocking plugin request (an inquiry)       | `request.opened`; the answer commits with its effects          | none: it stays open                                                     |
+| A non-blocking plugin request                    | `request.opened`; the answer commits with its effects          | none: it stays open                                                     |
 | An awaited child                                 | the child's `run.start` under `callChildRunId`                 | `earlierChild`, `standingOf` (`agent/runtime/delegation/agentChild.ts`) |
 | A detached child or a background command         | the child's `run.end` and its report on the parent             | `closeLeftoverRun`, `cutShort` (`agent/runtime/leftoverChildren.ts`)    |
 | A hook process                                   | `hook.outcome` per point                                       | the recorded outcome is reused (`agent/runtime/loop/hooks.ts`)          |
@@ -216,9 +216,9 @@ waiter itself.
 **Two cancel rules disagree.** A non-blocking request is promised to
 outlive a restart: "its plugin's decision hook delivers the answer to
 whichever process holds the run by then, so it stays open across every
-resume" (`shared/schemas/request.ts:172-178`); the inquiry tool says its
-answer arrives "even hours later, even after a restart"
-(`packages/texra/src/tools/inquiry/ExternalInquiryTool.ts:8-11`).
+resume" (`shared/schemas/request.ts:172-178`). The external inquiry, the
+one plugin that opened such a request, promised the same until it was
+removed on 2026-11-19.
 
 - A resume's activation cancels only the requests no attempt re-enters
   (`unboundRequests`, `shared/session/runState.ts:238-259`, applied at
@@ -229,11 +229,10 @@ answer arrives "even hours later, even after a restart"
   `endIn` at `:310`).
 - A clean close writes an end: a `CANCELLED` end with a `shutdown` stop,
   which a resume continues (`cutShort`, `agent/runtime/leftoverChildren.ts:95-97`).
-- The decide door answers only pending requests, as the inquiry plugin
-  notes ("the session decides only pending requests",
-  `packages/texra/src/tools/inquiry/inquiryActions.ts:113`).
+- The decide door answers only pending requests
+  (`controllers/session/SessionRequests.ts`).
 
-So an inquiry survives a crash, which writes no end, and is cancelled by a
+So a non-blocking request survives a crash, which writes no end, and is cancelled by a
 clean close, which does: the opposite of what both docs say. This chain is
 read step by step and not reproduced.
 
@@ -264,9 +263,8 @@ waiter call go.
 
 **One cancel rule.** A run's end cancels the blocking requests it leaves,
 which nothing waits on any more, and leaves a non-blocking request open
-until it is answered or the run is deleted, as `blocksCaller`'s doc and
-the inquiry tool say. Which rule wins is an owner decision; the docs and
-the plugin were written for this one.
+until it is answered or the run is deleted, as `blocksCaller`'s doc says.
+Which rule wins is an owner decision; the docs were written for this one.
 
 **What goes:** the rejection in the decide door, `requestAnswerability`
 and `RequestAnswerability` (public), the panels' resume state, the script
@@ -413,7 +411,10 @@ response only (`dsh:packages/core/tools/src/batch.ts`).
 
 ### The design
 
-Two choices; the owner picks one.
+Two choices; the owner picks one. The first landed in #15024, checked
+2026-11-19: the description says calls start in the order issued, names the
+declared tools that run alongside the calls around them, and says the rest
+wait. The second stays the owner's.
 
 - **Say what happens.** The description names the tools whose calls run
   together and says the rest run in the order issued. No behavior
@@ -488,8 +489,6 @@ other cases stand.
 - Finding 6 (a provider's facts in eight files) as written there.
 - The `history delete` race, recorded in
   [the session surfaces audit](../simplification/2026-11-10-session-surfaces-ad-hoc.md).
-- Two answers to one inquiry at once can leave the thread's record and the
-  decided row naming different answers.
 - The `takesFollowUps` question: ruled in #14986 (a message keeps reading
   the view), so finding 2's design A no longer decides it.
 - The `endTurn` defect: finding 4, now traced through the code.

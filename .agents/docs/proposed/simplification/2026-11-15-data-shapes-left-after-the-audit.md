@@ -130,6 +130,9 @@ the readers that needed the stated texts read them from the log
   (`packages/llm/src/turn.ts`): each belongs to one protocol, a filter enforces
   it, and nothing reads their contents. They are stored in every
   `model.message` response, so deleting them is a row version bump.
+  Landed 2026-11-17 (#15017, confirmed 2026-11-19): both fields, their
+  codec producers and the stored-turn schema fields are gone
+  (`model.message` v21).
 - `AgentConfig`'s `agent`, `agentSource` and `persona`
   (`packages/harness/src/shared/schemas/agentConfig.ts`) are a union written
   as optional fields plus a filter, with the name stored twice. Stored on

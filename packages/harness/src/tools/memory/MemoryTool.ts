@@ -350,8 +350,7 @@ const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
   const updated = replacement.content;
   yield* writeAttributed(resolvedPath, updated, invocation, meta);
 
-  const updatedLines = updated.split('\n');
-  const numbered = formatLinesWithNumbers(updatedLines);
+  const numbered = formatLinesWithNumbers(splitContentLines(updated));
 
   return {
     ...executed(
@@ -375,7 +374,9 @@ const insert = Effect.fn('MemoryTool.insert')(function* (
   if (readGate) return readGate;
 
   const { content, meta } = yield* readMemoryFile(resolvedPath);
-  const lines = content.split('\n');
+  // The lines a view numbers: the newline that ends the file is not one more
+  // line, so it is put back after the join instead of being counted here.
+  const lines = splitContentLines(content);
   const totalLines = lines.length;
   if (insertLine < 0 || insertLine > totalLines) {
     return yield* new ToolError(
@@ -392,7 +393,7 @@ const insert = Effect.fn('MemoryTool.insert')(function* (
 
   yield* writeAttributed(
     resolvedPath,
-    updatedLines.join('\n'),
+    `${updatedLines.join('\n')}${content.endsWith('\n') ? '\n' : ''}`,
     invocation,
     meta,
   );

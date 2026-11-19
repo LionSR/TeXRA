@@ -102,10 +102,8 @@ every other reasoning model's does, and `BindSpec.options.reasoningSummary`
 is gone. `codeMode.scriptOnly` is its own slice: the canned
 validation model (CI's `validate` job, the golden store) calls `plan` and
 `bash` directly, so flipping to script-only first rewrites that conversation
-to call them from scripts, then runs the GLM and `agent()` journeys. One
-key waits for the owner's word, a product-visible default:
-`model.useGoogleBackgroundResponses` (off: Google text-only turns would stop
-streaming). `model.openaiFastTier` stays, on the owner's word (2026-11-05):
+to call them from scripts, then runs the GLM and `agent()` journeys. `model.useGoogleBackgroundResponses` is deleted (#15081): no request read
+it, so nothing sent to a provider changed. `model.openaiFastTier` stays, on the owner's word (2026-11-05):
 paying more for a faster tier is the user's choice, not a fact the route
 holds, so the key keeps `BindSpec.options.fastTier` and has a settings-view
 row; the acceptance above no longer names it._

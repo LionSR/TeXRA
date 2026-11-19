@@ -1,7 +1,6 @@
 # Research tools
 
 <script setup>
-import InquiryFlowHero from '../.vitepress/components/InquiryFlowHero.vue';
 import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
 import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
@@ -93,14 +92,6 @@ The `research` agent runs Wolfram Language through `wolframscript` in the shell 
 ### <wa-icon library="texra" name="beaker"></wa-icon> Formalize proofs in Lean 4
 
 The `lean` agent formalizes mathematical statements and proofs directly in Lean 4. It searches Mathlib lemmas using Loogle, inspects live proof states and tactic goals, reads compiler diagnostics, and iterates on tactic scripts until the theorem compiles without `sorry`. Read the [Lean 4 proofs guide](./lean.md) for full details.
-
-### <wa-icon library="texra" name="comment-discussion"></wa-icon> External inquiry
-
-The `inquiry` tool lets a TeXRA agent ask one question in an external chat (ChatGPT, Claude, Gemini) through a copy/paste flow, then resume with the answer. Dispatch is non-blocking: the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key is required; it uses your existing subscription. The plugin is off until you switch on **External Inquiry** under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>); `assistant` and `orchestrator` carry the tool. The inquiry tool is not available in the CLI; there, agents use `ask_user_question` for synchronous terminal input.
-
-<InquiryFlowHero />
-
-<p class="hero-caption">The <code>inquiry</code> copy-out / paste-back loop: TeXRA prepares a question, you copy it into your chat (the panel links ChatGPT, Claude, Gemini and Grok), then paste the reply back and submit it to resume the run. No API key needed.</p>
 
 ## Which agent to use
 

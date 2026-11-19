@@ -13,7 +13,6 @@ tools:
   - bash
   - glob
   - grep
-  - inquiry
   - codex
   - claude_code
   - github_subscription
