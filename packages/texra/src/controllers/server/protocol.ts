@@ -356,9 +356,13 @@ export const TexraRpcs = RpcGroup.make(
     error: ProjectStateFailed,
   }),
   /** `writeFileIfUnchanged` in the service: write the file at the absolute
-   *  `path` while it is as `expected`. Answers whether it was written. Which
-   *  path a window's surface may name is the window's rule, as which path a
-   *  task may write is its tools'. */
+   *  `path` while it is as `expected`. Answers whether it was written. The
+   *  service is not a containment boundary: it runs as the user whose
+   *  windows connect over a socket only that user can open, and a window can
+   *  write any file the user can. Which path a surface may name is decided
+   *  in the window before the call (`resolveWritable`, an agent definition
+   *  by catalog name), and an accept may name a file outside the workspace,
+   *  as a task's tools may. */
   Rpc.make('file.write', {
     payload: {
       path: Schema.String,

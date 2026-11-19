@@ -217,7 +217,8 @@ const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
     absolutePath: string,
   ): Effect.fn.Return<string | undefined, PlatformError.PlatformError> {
     if (!(yield* fs.exists(absolutePath))) return undefined;
-    return yield* fs.readFileString(absolutePath);
+    // As the write checks it again (`writeFileIfUnchanged`).
+    return yield* readNormalizedFile(fs, absolutePath);
   },
 );
 

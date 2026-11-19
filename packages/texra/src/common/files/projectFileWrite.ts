@@ -16,21 +16,18 @@ import path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 import { withFileWriteLane } from '@texra-ai/harness/host';
-import { meansAbsent } from '@texra-ai/harness/node';
+import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
 import { Rejected } from '@texra-ai/harness/schemas';
 
 /** What the file must be for the write to land: anything, not there, or
- *  holding `contents` (line endings aside). A file that held `contents` and
- *  is gone is written again. */
+ *  holding `contents` as the editor reads a file (`readNormalizedFile`). A
+ *  file that held `contents` and is gone is written again. */
 export const ExpectedFileSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('anything') }),
   Schema.Struct({ kind: Schema.Literal('absent') }),
   Schema.Struct({ kind: Schema.Literal('holds'), contents: Schema.String }),
 ]);
 type ExpectedFile = typeof ExpectedFileSchema.Type;
-
-/** `text` with CRLF line endings as LF: the editor reads a file that way. */
-const lineFeeds = (text: string) => text.replaceAll('\r\n', '\n');
 
 /** Make the file at `path` hold `contents` while it is as `expected`;
  *  answers whether it holds them now. A filesystem failure is `Rejected`, in
@@ -42,8 +39,9 @@ export type WriteProjectFile = (
 ) => Effect.Effect<boolean, Rejected, FileSystem.FileSystem>;
 
 /**
- * {@link WriteProjectFile} in this process. A file that already holds
- * `contents` is the write done, whatever was expected: so a write repeated
+ * {@link WriteProjectFile} in this process. Both checks read the file as the
+ * editor does, so its line endings never count as a change. A file that
+ * already holds `contents` is the write done, whatever was expected: so a write repeated
  * after its answer was lost (the service wrote it, the reply never came)
  * reads as the success it was, never as someone else's change. The check
  * and the write hold the file's write lane, which an approved edit of a
@@ -58,15 +56,15 @@ export const writeFileIfUnchanged: WriteProjectFile = Effect.fn(
   function* (target, contents, expected) {
     const fs = yield* FileSystem.FileSystem;
     return yield* Effect.gen(function* () {
-      const onDisk = yield* fs
-        .readFileString(target)
-        .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(null)));
+      // As the editor reads it: line endings as LF, a leading BOM kept.
+      const onDisk = yield* readNormalizedFile(fs, target).pipe(
+        Effect.catchIf(meansAbsent, () => Effect.succeed(null)),
+      );
       if (onDisk === contents) return true;
       if (
         onDisk !== null &&
         (expected.kind === 'absent' ||
-          (expected.kind === 'holds' &&
-            lineFeeds(onDisk) !== lineFeeds(expected.contents)))
+          (expected.kind === 'holds' && onDisk !== expected.contents))
       )
         return false;
       const real = onDisk === null ? target : yield* fs.realPath(target);
