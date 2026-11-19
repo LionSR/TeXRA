@@ -66,13 +66,13 @@ The header provides a summary and actions for the selected stream:
 
 - **Task title**: Displays the title of the current task (select it to
   rename). Input files stay on the files panel, not on the task row.
-- **Status indicator**: A colored circle shows the current status. The four states read at a glance:
+- **Status indicator**: A colored circle shows the current status, with the status word beside it:
 
 <StatusDotLegend />
 
-<p class="hero-caption">The status dot: green while running, yellow while waiting on you or interrupted, gray once finished or stopped, red on error.</p>
+<p class="hero-caption">The status dot: green while running or completed, yellow while waiting on you or interrupted, gray when ready for your next message or stopped, red on error.</p>
 
-- **Token and cost summary**: Displays the combined input and output token counts from all completed revisions (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
+- **Token and cost summary**: A footer below the log shows the task's input and output token counts and its estimated cost, including the agents it started.
 - **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for a multi-pass program run), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
 - **Task actions menu (`⋯`)**:
   - **All tasks**:
@@ -121,13 +121,13 @@ policy a new task starts with. In the CLI, `/status` lists the same grants
 
 ### Context utilization
 
-A small percentage next to the token count shows how full the model's context window is. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session.
+A **Context** gauge next to the token count shows how full the model's context window is, as tokens used, the window size and a percentage. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session.
 
 ### After a workflow run
 
 To follow up on a finished program run in chat, use **Copy diagnostics** in the
 header menu to put the task's output paths and compile failures on the
-clipboard, then start a chat from the **New** view and paste that text
+clipboard, then start a chat with **New task** and paste that text
 into the instruction box.
 
 When a run recorded a compile failure, **Fix compile errors** still appears under
@@ -142,7 +142,7 @@ Agents can remember things between sessions. When memory is enabled (toggle in t
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
 
 - **Structure**: Logs are organized into expandable groups (e.g., `Revision 1`). Response cycles are logged within the corresponding revision group. Select the arrow next to a group name to expand or collapse it.
-- **Log levels**: Each line carries an icon for its severity. Debug-level lines, with timestamps and `INFO`, `DEBUG`, `WARN`, `ERROR` level prefixes, are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/v1/global-storage/config.json`; TeXRA does not read VS Code settings.
+- **Log levels**: Each line carries an icon for its severity. Debug-level lines and their extra detail are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/v1/global-storage/config.json`; TeXRA does not read VS Code settings.
 - **Agent thinking**: Model reasoning appears in shaded **Thinking** blocks, so you can spot when the model is exploring ideas.
 - **Errors**: Errors are highlighted and often show what went wrong.
 
