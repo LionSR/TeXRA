@@ -42,7 +42,6 @@ import {
 } from '@shared/session/runState';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionTransaction } from '@shared/session/sessionLog';
-import { ensureError } from '@utils/errors/errorMessage';
 import { getRunRecords } from './runOwnership';
 
 function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
@@ -59,9 +58,6 @@ class ParentRunClosed extends Schema.TaggedError<ParentRunClosed>()(
   'ParentRunClosed',
   { message: Schema.String },
 ) {}
-
-/** A defect is the path's failure, as a refusal is: its caller words it. */
-const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
 
 type RunConfigRow = Extract<SessionRowDraft, { readonly type: 'run.config' }>;
 
@@ -114,16 +110,14 @@ export const registerRun = Effect.fn('registerRun')(function* (
   record: RunRecord,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error, OpenServices | RunHistory> {
-  return yield* Effect.gen(function* () {
-    const opens = yield* registrationRows(runId, record, options);
-    const rows = Effect.succeed([...opens.rows, opens.config]);
-    const born = opens.start !== null;
-    const cell = yield* (yield* RunHistory).open(
-      runId,
-      born ? { registration: rows } : { activation: () => rows },
-    );
-    if (born) yield* cell.append([]);
-  }).pipe(defectAsFailure); // one that died wrote nothing: launch refused
+  const opens = yield* registrationRows(runId, record, options);
+  const rows = Effect.succeed([...opens.rows, opens.config]);
+  const born = opens.start !== null;
+  const cell = yield* (yield* RunHistory).open(
+    runId,
+    born ? { registration: rows } : { activation: () => rows },
+  );
+  if (born) yield* cell.append([]);
 });
 
 /** The rows that register a run, uncommitted, in commit order: a new run's
@@ -138,52 +132,50 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
   record: RunRecord,
   options: RegisterRunOptions,
 ): Effect.fn.Return<Registration, Error, OpenServices> {
-  return yield* Effect.gen(function* () {
-    const prior = yield* getRunRecords(runId).exists();
-    const parentId = options.parent?.id;
-    if (parentId !== undefined) {
-      // The database refuses a closed or unborn parent; this only words
-      // the refusal.
-      const log = yield* SessionLog;
-      const parent = yield* log.facts(parentId);
-      if (parent === null)
-        return yield* new ParentRunClosed({
-          message: `Parent run ${parentId} is unavailable.`,
-        });
-      if (parent.stop !== null || parent.end !== null)
-        return yield* new ParentRunClosed({
-          message: `Cannot launch child run ${runId} under run ${parentId}: that run was stopped.`,
-        });
-    }
-    const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
-      pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
-    );
-    const worktree = config.workingDirectory?.trim();
-    const start = prior
-      ? null
-      : ({
-          type: 'run.start',
-          aggregateId: runId,
-          identity: options.identity,
-          takesFollowUps: options.takesFollowUps ?? false,
-          worktree: worktree ? { workingDirectory: worktree } : null,
-          parent: options.parent ?? null,
-          provenance: options.provenance ?? null,
-          grants: options.grants ?? NO_APPROVAL_GRANTS,
-        } satisfies Registration['start']);
-    const rows: SessionRowDraft[] = [
-      ...(start === null ? [] : [start]),
-      { type: 'run.activate', aggregateId: runId },
-      ...(prior ? yield* (yield* Approvals).activationRows(runId) : []),
-    ];
-    if (options.description !== undefined)
-      rows.push(descriptionRow(runId, options.description, 'model'));
-    return {
-      rows,
-      start,
-      config: { type: 'run.config', aggregateId: runId, config },
-    } satisfies Registration;
-  }).pipe(defectAsFailure);
+  const prior = yield* getRunRecords(runId).exists();
+  const parentId = options.parent?.id;
+  if (parentId !== undefined) {
+    // The database refuses a closed or unborn parent; this only words
+    // the refusal.
+    const log = yield* SessionLog;
+    const parent = yield* log.facts(parentId);
+    if (parent === null)
+      return yield* new ParentRunClosed({
+        message: `Parent run ${parentId} is unavailable.`,
+      });
+    if (parent.stop !== null || parent.end !== null)
+      return yield* new ParentRunClosed({
+        message: `Cannot launch child run ${runId} under run ${parentId}: that run was stopped.`,
+      });
+  }
+  const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
+    pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
+  );
+  const worktree = config.workingDirectory?.trim();
+  const start = prior
+    ? null
+    : ({
+        type: 'run.start',
+        aggregateId: runId,
+        identity: options.identity,
+        takesFollowUps: options.takesFollowUps ?? false,
+        worktree: worktree ? { workingDirectory: worktree } : null,
+        parent: options.parent ?? null,
+        provenance: options.provenance ?? null,
+        grants: options.grants ?? NO_APPROVAL_GRANTS,
+      } satisfies Registration['start']);
+  const rows: SessionRowDraft[] = [
+    ...(start === null ? [] : [start]),
+    { type: 'run.activate', aggregateId: runId },
+    ...(prior ? yield* (yield* Approvals).activationRows(runId) : []),
+  ];
+  if (options.description !== undefined)
+    rows.push(descriptionRow(runId, options.description, 'model'));
+  return {
+    rows,
+    start,
+    config: { type: 'run.config', aggregateId: runId, config },
+  } satisfies Registration;
 });
 
 /** What ends a run: its outcome and the facts its `run.end` carries. */
