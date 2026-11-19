@@ -552,7 +552,7 @@ Left, with the reason:
   store's poll wakes its readers, whose own reads meet the failure typed;
   nothing waits on a read that may never succeed. The request answerer asks
   its handler once and records the decision again on one schedule, twelve
-  times in about two minutes, while the view lists the request
+  times in about two and a half minutes, while the view lists the request
   (`requestAnswerer.ts`, `DECIDE_RETRY`); "the next view" is no longer what
   a retry waits for. When the retries end the failure is logged, the person is told
   through the host's error notice, and the request stays open for another

@@ -173,6 +173,12 @@ export const sessionInputsLayer = Layer.effect(
                   first: true,
                   text: new Map() as InflightText,
                   local: initialLocal,
+                  // Every aggregate this view was handed a row of.
+                  shown: new Set(
+                    replay.flatMap((input) =>
+                      input._tag === 'event' ? [input.event.aggregateId] : [],
+                    ),
+                  ),
                 }),
                 Effect.fnUntraced(function* (previous) {
                   // Text first, then the batches: a row committed before a
@@ -200,10 +206,15 @@ export const sessionInputsLayer = Layer.effect(
                   const dropped = (taken.at(0)?.from ?? from) > from;
                   if (dropped)
                     yield* Effect.logWarning(
-                      `A session view fell too far behind the publisher to be handed every batch; reading commits ${from + 1} to ${cursor} from the store.`,
+                      `A session view fell too far behind the publisher to be handed every batch; reading commits ${(previous.first ? anchor : from) + 1} to ${cursor} from the store.`,
                     ).pipe(withLogChannel('sessionInputs'));
                   const readFrom = previous.first ? anchor : from;
                   const readThrough = dropped ? cursor : from;
+                  // A dropped batch may have removed a run whose deletion
+                  // marker the store has since collected, so no row read
+                  // back says so: the read checks every aggregate this view
+                  // was shown, and one the store no longer holds leaves it.
+                  const checked = dropped ? [...previous.shown] : [];
                   const stored =
                     readFrom < readThrough
                       ? yield* requiredRead(
@@ -211,7 +222,7 @@ export const sessionInputsLayer = Layer.effect(
                             aggregates.map(({ id }) => id),
                             readFrom,
                             readThrough,
-                            [],
+                            checked,
                           ),
                         )
                       : { events: [], state: [], damaged: [] };
@@ -223,6 +234,7 @@ export const sessionInputsLayer = Layer.effect(
                       ),
                     ),
                   ];
+                  for (const row of rows) previous.shown.add(row.aggregateId);
                   // A removal closes its run and the runs under it, which
                   // the marker names.
                   const closed = rows.flatMap((row) =>
@@ -232,7 +244,7 @@ export const sessionInputsLayer = Layer.effect(
                   );
                   const existence: ExistenceReconciliation = {
                     ...reconcileExistence([], stored),
-                    checkedAggregateIds: closed,
+                    checkedAggregateIds: [...checked, ...closed],
                   };
                   // The snapshot was read before the rows: it goes before
                   // them, as in the replay.
@@ -269,7 +281,13 @@ export const sessionInputsLayer = Layer.effect(
                     ...inputs,
                   ];
                   return [
-                    { cursor, first: false, text: nextText, local: snapshot },
+                    {
+                      cursor,
+                      first: false,
+                      text: nextText,
+                      local: snapshot,
+                      shown: previous.shown,
+                    },
                     batch.length === 0 ? [] : [batch],
                   ] as const;
                 }),

@@ -51,7 +51,7 @@ class DecisionMismatch extends Schema.TaggedError<DecisionMismatch>()(
 
 /** How a decision the session did not record is recorded again: after
  *  100 ms, doubling and jittered, each wait at most 30 s. With
- *  {@link DECIDE_RETRIES} it ends after about two minutes. */
+ *  {@link DECIDE_RETRIES} it ends after about two and a half minutes. */
 const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(
   Schedule.jittered,
   Schedule.modifyDelay(({ duration }) =>
