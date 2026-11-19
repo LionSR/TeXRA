@@ -58,7 +58,8 @@ what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
 plugin of the embedder's own beside them. `session.start` runs an agent as a conversation. A plugin can also register
 a program (`Plugin.programs`): one of its script modules, started by name
 with the `program` tool or a `script` of kind `program`, whose run is that
-module's default export called with the launch's arguments.
+module's default export called with the launch's arguments, instruction
+and files.
 `@texra-ai/harness` ships no built-in programs.
 
 ```ts

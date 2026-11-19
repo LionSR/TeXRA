@@ -129,9 +129,11 @@ export interface RequestDecisionRecord {
 /**
  * One of a plugin's script modules that a person or a model starts by name
  * (`Plugin.programs`): the module's default export is
- * `async (args) => result`, and a run opened on it
+ * `async (args, launch) => result`, and a run opened on it
  * (`AgentConfig.script` of kind `program`) is a script run that imports the
- * module and calls that export with the launch's `args`. The plugin wrote
+ * module and calls that export with the launch's `args` and
+ * `{ instruction, inputFiles, contextFiles, mediaFiles }`. A program that
+ * returns text answers with it when it registers no `result`. The plugin wrote
  * it, not a model, so the launch that chose it granted it: its tools are
  * the listed ones past any switch, its `agent` calls run under the launch's
  * approval, and its prompts and files pass as written.

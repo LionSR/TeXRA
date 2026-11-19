@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Live journey checks: the fitness function for the theorist bundle. Four
- * compile-graded journeys (edit, latexFixer, latexdiff, citations) run end to
- * end through the real `texra run ... --output-format ndjson` against each cheap
- * model in `MODEL_KEYS`, over the fixtures in `src/test-kernel/cli/fixtures/journeys/`. A
- * journey passes on simple invariants over the files it leaves behind and on a
- * real LaTeX build of them, never on how the prose reads.
+ * Live journey checks: the fitness function for the theorist bundle. The
+ * compile-graded journeys (edit, latexFixer, latexdiff, citations, and prove
+ * over a Lake project) run end to end through the real
+ * `texra run ... --output-format ndjson` against each cheap model in
+ * `MODEL_KEYS`, over the fixtures in `src/test-kernel/cli/fixtures/journeys/`.
+ * A journey passes on simple invariants over the files it leaves behind and
+ * on a real LaTeX or Lean build of them, never on how the prose reads.
  *
- * Run by hand only: it spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
+ * Run by hand only: it spends money and needs a TeX Live; a journey whose
+ * `requires` binary is not on PATH is skipped. `validate-run.mjs` is the hermetic sibling
  * that runs on every PR against the canned validation model.
  *
  *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey edit]...
@@ -209,6 +211,36 @@ const JOURNEYS = {
       unchanged(dir, 'latexdiff', 'new.tex');
     },
   },
+  // The lean4 plugin's prove program over a core-Lean project: Lean itself
+  // grades the result.
+  prove: {
+    requires: 'lake',
+    args: ['prove', '--input', 'Fixture.lean'],
+    instruction: 'Prove both theorems.',
+    approval: 'never',
+    check(dir) {
+      const proved = read(dir, 'Fixture.lean');
+      for (const kept of [
+        'theorem double_eq_add (n : Nat) : 2 * n = n + n',
+        'theorem oddSum_eq_sq (n : Nat) : oddSum n = n ^ 2',
+        '| n + 1 => oddSum n + (2 * n + 1)',
+      ])
+        assert(proved.includes(kept), `the proof changed: ${kept}`);
+      assert(
+        !/\b(sorry|admit|axiom)\b/.test(proved),
+        'Fixture.lean still has a sorry, an admit or an axiom',
+      );
+      const build = spawnSync('lake', ['env', 'lean', 'Fixture.lean'], {
+        cwd: dir,
+        encoding: 'utf8',
+        timeout: 300_000,
+      });
+      assert(
+        build.status === 0 && !build.stdout.includes('sorry'),
+        `Lean rejects Fixture.lean (exit ${build.status}):\n${build.stdout.slice(-1500)}`,
+      );
+    },
+  },
   citations: {
     args: ['latexFixer'],
     instruction:
@@ -361,12 +393,19 @@ if (unknownModels.length > 0) {
   );
   process.exit(2);
 }
-const names = values.journey ?? Object.keys(JOURNEYS);
-const unknown = names.filter((name) => !(name in JOURNEYS));
+const asked = values.journey ?? Object.keys(JOURNEYS);
+const unknown = asked.filter((name) => !(name in JOURNEYS));
 if (unknown.length > 0) {
   console.error(`[journeys] unknown journey: ${unknown.join(', ')}`);
   process.exit(2);
 }
+const names = asked.filter((name) => {
+  const { requires } = JOURNEYS[name];
+  if (requires === undefined) return true;
+  if (spawnSync(requires, ['--version']).status === 0) return true;
+  console.warn(`[journeys] ${requires} is not on PATH: skipping ${name}`);
+  return false;
+});
 const funded = models.filter((model) => {
   if (process.env[MODEL_KEYS[model]]) return true;
   console.warn(`[journeys] ${MODEL_KEYS[model]} is not set: skipping ${model}`);

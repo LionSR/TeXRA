@@ -98,7 +98,8 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
         }),
         /** A plugin's program, by the name its plugin registers it under
          *  (`Plugin.programs`): the run's script imports that module and
-         *  calls its default export with `args`. The registration lists
+         *  calls its default export with `args` and the run's instruction
+         *  and files. The registration lists
          *  its tools, and its `agent` calls were approved with its launch. */
         Schema.Struct({
           kind: Schema.Literal('program'),

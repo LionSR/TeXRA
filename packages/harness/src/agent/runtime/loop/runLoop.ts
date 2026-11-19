@@ -99,10 +99,13 @@ const nudge = (text: string) => ({
   content: [{ kind: 'text' as const, text }],
 });
 
-/** A failed handed-down call answers with its error; otherwise the turn's
- *  response rows supply its answer, including after a resume. */
-const turnResponse = (at: RunState): string =>
-  at.handedDown?.status === 'error' ? at.handedDown.error : at.answer;
+/** A failed handed-down call answers with its error and a script that
+ *  returned text with that text; otherwise the turn's response rows supply
+ *  its answer, including after a resume. */
+const turnResponse = ({ handedDown, answer }: RunState): string => {
+  if (handedDown?.status === 'error') return handedDown.error;
+  return typeof handedDown?.value === 'string' ? handedDown.value : answer;
+};
 
 /** What a resume's activation rows read of the session. */
 type ActivationServices = SessionLog | SessionRoots | Approvals;

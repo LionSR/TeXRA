@@ -60,6 +60,11 @@ All notable changes to this project will be documented in this file.
 - **A script imports modules by their exact specifier.** A relative
   specifier no longer reaches a module. `describeTool(name)` also returns
   the source of a module or program.
+- **SDK: a program is called with its launch's instruction and files.** A
+  program module's default export is `async (args, launch) => result`, the
+  second argument `{ instruction, inputFiles, contextFiles, mediaFiles }`;
+  a program that returns text and registers no `result` answers with that
+  text.
 - **SDK: `Plugin.programs` replaces `Plugin.agentBlock`.** A plugin
   registers those of its `scriptModules` that are started by name
   (`Program`: a description, its tools, the files it writes by default and
@@ -1326,6 +1331,15 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Lean programs: `prove` and `blueprint`.** The Lean plugin registers two
+  programs. `prove` completes the proofs in the `.lean` files you pass and
+  checks each round with Lean's diagnostics (no error, no `sorry`), giving
+  its agent up to three rounds; `blueprint` writes or updates a
+  LeanBlueprint document and checks each round with `leanblueprint web` and
+  `leanblueprint checkdecls`, so it needs the `leanblueprint` CLI. Start one with `texra run prove --input Basic.lean` or
+  ask an agent. The Lean agents and skills are unchanged. In a script,
+  `lean_diagnostics` now resolves to `{ output, summary, complete, errors,
+  sorries }`.
 - **Long Claude runs start answering sooner.** On Anthropic's own API,
   each request after the first now sends only the new messages and the id
   of the previous response (message threads, beta), instead of the whole
