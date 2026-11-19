@@ -36,6 +36,15 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { BaseRequestPanel } from './BaseRequestPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 
+/** The chats the panel links: the ones the External Inquiry plugin card
+ *  names. The question is pasted by hand, so any other chat works too. */
+const INQUIRY_CHATS = [
+  ['ChatGPT', 'https://chatgpt.com/'],
+  ['Claude', 'https://claude.ai/new'],
+  ['Gemini', 'https://gemini.google.com/app'],
+  ['Grok', 'https://grok.com/'],
+] as const;
+
 const EMPTY_DRAFT: InquiryDraft = Object.freeze({
   answer: '',
   sessionLinks: '',
@@ -233,22 +242,18 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
           })}
           <span class="external-inquiry-request__chat-links">
             Paste it into
-            ${renderDotMeta([
-              html`<a
-                class="clickable-link"
-                href="https://chatgpt.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                >ChatGPT</a
-              >`,
-              html`<a
-                class="clickable-link"
-                href="https://gemini.google.com/app"
-                target="_blank"
-                rel="noopener noreferrer"
-                >Gemini</a
-              >`,
-            ])}
+            ${renderDotMeta(
+              INQUIRY_CHATS.map(
+                ([name, url]) =>
+                  html`<a
+                    class="clickable-link"
+                    href=${url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >${name}</a
+                  >`,
+              ),
+            )}
           </span>
         </div>
       </div>

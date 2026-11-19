@@ -72,7 +72,7 @@ EOF
 6. The agent proposes an `edit` run on `draft.tex`. Check the files and the
    instruction on the proposal card, then approve it.
 
-The ProgressBoard opens and streams the run. When it finishes, the
+The Tasks view opens and streams the run. When it finishes, the
 revised file is listed under **Generated files**. Select its
 **Compare with base** button to see what changed.
 

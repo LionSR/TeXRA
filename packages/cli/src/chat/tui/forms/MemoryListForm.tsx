@@ -26,7 +26,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<readonly MemoryViewItem[], string>
       title="/memory"
-      loadingLabel="Loading memories..."
+      loadingLabel="Loading memories…"
       load={() =>
         Effect.map(withSessionFs(roots, MemoryStore.list), (items) =>
           items.slice(0, CLI_MEMORY_LIST_LIMIT),

@@ -503,6 +503,9 @@ texra tasks stop <id>                              # stop it; it can be resumed 
 `list` marks the tasks the service is running now with `*`. Any number of
 terminals can attach to the same task at once and all of them print the
 same transcript; Ctrl-C detaches one terminal and leaves the task running.
+Attached to a task that has not ended and that no service runs any more
+(the service stopped under it), `attach` prints what the task has so far,
+says so and exits 1; `texra tasks send` continues such a task.
 An id may be shortened to any prefix only one task has. `tasks start` runs
 the task under the project's approval policy; an approval policy it asks for
 (`--approval-policy`, `--no-input`, `TEXRA_APPROVAL_POLICY`) applies to that

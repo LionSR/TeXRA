@@ -100,7 +100,7 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 <InquiryFlowHero />
 
-<p class="hero-caption">The <code>inquiry</code> copy-out / paste-back loop: TeXRA prepares a question, you copy it into your chat (the panel links ChatGPT and Gemini), then paste the reply back and submit it to resume the run. No API key needed.</p>
+<p class="hero-caption">The <code>inquiry</code> copy-out / paste-back loop: TeXRA prepares a question, you copy it into your chat (the panel links ChatGPT, Claude, Gemini and Grok), then paste the reply back and submit it to resume the run. No API key needed.</p>
 
 ## Which agent to use
 

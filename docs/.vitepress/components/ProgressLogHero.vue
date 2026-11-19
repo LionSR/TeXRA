@@ -47,14 +47,14 @@ const sevTag = {
 </script>
 
 <template>
-  <div class="mockup mk-card pblog" role="group" aria-label="ProgressBoard log">
+  <div class="mockup mk-card pblog" role="group" aria-label="Tasks view log">
     <div class="mk-card-head pb-head">
       <wa-icon
         class="mk-card-head-ic"
         library="texra"
         name="list-check"
       ></wa-icon>
-      <span class="mk-card-title">ProgressBoard</span>
+      <span class="mk-card-title">Tasks</span>
       <span class="mk-card-sub">log</span>
     </div>
 

@@ -84,7 +84,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               // The error leads, followed by a pointer to the usage rather
               // than the full help screen that used to bury it.
               expect(stderr).toMatch(
-                /^Missing required positional argument: AGENT\nRun `texra run --help` for usage\.\n$/,
+                /^Missing required positional argument: TARGET\nRun `texra run --help` for usage\.\n$/,
               );
             }),
         );

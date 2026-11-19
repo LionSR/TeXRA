@@ -187,7 +187,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 ### Missing or truncated output files
 
 1. **Locate the run folder**:
-   - In VS Code, check **Generated files** in the ProgressBoard or choose **Open task folder** (<wa-icon library="texra" name="folder-open"></wa-icon>) from the task's `⋯` menu to open `executions/<run-id>/`.
+   - In VS Code, check **Generated files** in the Tasks view or choose **Open task folder** (<wa-icon library="texra" name="folder-open"></wa-icon>) from the task's `⋯` menu to open `executions/<run-id>/`.
    - Each revision writes its extracted file under its input filename (e.g., `r0/draft.tex`, `r1/draft.tex`), alongside the raw model response `r0/output.xml`.
 2. **Repair malformed XML**:
    - Programs wrap their output in `<documents><document name="...">...</document></documents>`.
@@ -226,16 +226,16 @@ memory` error.
 
 ## Debugging tips
 
-### Using ProgressBoard
+### Using the Tasks view
 
-The ProgressBoard is your main debugging tool in VS Code. Read the [ProgressBoard guide](./progress-board.md) for a full walkthrough.
+The Tasks view is your main debugging tool in VS Code. Read the [Tasks view guide](./progress-board.md) for a full walkthrough.
 
-1. **Open the ProgressBoard**: Select the TeXRA icon in the Secondary Side Bar and click **Tasks**, or run **TeXRA: Show Tasks** from the Command Palette.
+1. **Open the Tasks view**: Select the TeXRA icon in the Secondary Side Bar and click **Tasks**, or run **TeXRA: Show Tasks** from the Command Palette.
 2. **Inspect logs**: Entries are color-coded by severity (green for info/success, yellow for warnings, red for errors) and expand to show nested tool calls and model responses:
 
 <ProgressLogHero />
 
-<p class="hero-caption">ProgressBoard color-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
+<p class="hero-caption">The Tasks view color-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
 
 3. **Copy diagnostics**: Select `⋯` → **Copy diagnostics** on a task header to copy the task ID, model, status, output paths, and any compile errors for a bug report.
 
