@@ -91,9 +91,10 @@ function readDeclarations(
     if (match !== null) at = sticky.lastIndex;
     return match;
   };
-  /** Advance past whitespace and comments. */
+  /** Advance past whitespace and comments. A line comment ends at any of
+   *  JavaScript's line terminators, as it does for the engine. */
   const skip = (): void => {
-    while (take(/\s+|\/\/[^\n]*|\/\*[\s\S]*?\*\//) !== null);
+    while (take(/\s+|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\//) !== null);
   };
   /** A single- or double-quoted literal at the cursor, as the string it
    *  spells; undefined when there is none or it holds an escape or a line
