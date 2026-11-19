@@ -239,6 +239,13 @@ Still open: the 401/403 question has five deciders (`packages/llm/src/errors.ts:
 `packages/llm/src/oauth/oauthRequest.ts:58`, `githubClient.ts:113`,
 `SubscriptionUsageService.ts:316`, `overleafClone.ts:212`)._
 
+_Done 2026-11-19: `isAuthFailureStatus` (`packages/llm/src/errors.ts`,
+public in `@texra-ai/llm`) owns the 401/403 fact; `authOrRejectionKind`,
+`oauthTokenErrorKind` (a rejected grant: 400 or that), the GitHub client's
+`classifyFailure` and the subscription usage service read it. Kept:
+`isCloneAuthError` in `overleafClone.ts`, which reads git's own wording on
+exit 128, not a status._
+
 **Give up.** Nothing observable.
 
 ## 5. Stop and interruption: one answer to "did it stop or fail"
