@@ -14,7 +14,6 @@ import {
   type FileSystem,
   Layer,
   Schedule,
-  Scheduler,
   Schema,
   Stream,
   SubscriptionRef,
@@ -22,8 +21,6 @@ import {
 import { logFailure } from '@logger/effectLog';
 import {
   DatabaseOpenFailed,
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
   GlobalDatabase,
   INPUT_HISTORY_LIMIT,
   InputHistoryRecordSchema,
@@ -31,8 +28,8 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 import { currentValues, READ_RETRY } from './currentValues';
 import { SESSION_DATABASE_FILE, storeFile } from './databaseLayer';
-import { storeGate } from './rowCodec';
-import { mapDatabaseFailure, retryBusy } from './storeAside';
+import { mapDatabaseFailure } from './storeAside';
+import { storeConnection } from './storeConnection';
 import { openStore } from './storeSchema';
 
 /** Append an entry unless it repeats the latest; a row back when it did. */
@@ -60,42 +57,23 @@ export const globalDatabaseLayer = (
       const path = join(storage, SESSION_DATABASE_FILE);
       const openFailed = (cause: unknown) =>
         new DatabaseOpenFailed({ path, cause });
-      const readFailed = (cause: unknown) =>
-        new DatabaseReadFailed({ path, cause });
-      const writeFailed = (cause: unknown) =>
-        new DatabaseWriteFailed({ path, cause });
       const filename = yield* Effect.try({
         try: () => storeFile(storage, true),
         catch: (cause) => openFailed(ensureError(cause)),
       });
       // The driver waits out another process's lock while the file is
-      // prepared; `openStore` then leaves a 25 ms slice, and the retries
-      // below wait on the fiber's schedule instead of inside SQLite.
+      // prepared; `openStore` then leaves a 25 ms slice, and the
+      // connection's retries wait on the fiber's schedule instead of inside
+      // SQLite.
       const { sql } = yield* openStore(
         SqliteClient.make({ filename, busyTimeout: '5 seconds' }),
         path,
         filename,
       ).pipe(mapDatabaseFailure(openFailed));
-      const exec = (statement: string, params?: readonly unknown[]) =>
-        sql.unsafe<Record<string, unknown>>(statement, params);
-      const execOne = (statement: string, params?: readonly unknown[]) =>
-        exec(statement, params).pipe(Effect.map((rows) => rows.at(0)));
       // The store holds no plugin's rows, so the gate knows no fact kind.
-      const gate = storeGate(exec, {});
-      yield* gate.pipe(mapDatabaseFailure(openFailed));
-      const query = <A, E>(read: Effect.Effect<A, E>) =>
-        read.pipe(retryBusy, mapDatabaseFailure(readFailed));
-      // One uninterrupted turn per transaction (the driver is synchronous
-      // and a body awaits nothing), so this connection's writes land in call
-      // order; a lock another process holds runs the transaction again whole.
-      const transact = <A, E>(body: Effect.Effect<A, E>) =>
-        retryBusy(
-          Effect.provideService(
-            sql.withTransaction(Effect.andThen(gate, body)),
-            Scheduler.PreventSchedulerYield,
-            true,
-          ),
-        ).pipe(mapDatabaseFailure(writeFailed));
+      const store = storeConnection(sql, path, { shared: true, factKinds: {} });
+      const { exec, execOne, query, transact } = store;
+      yield* store.gate.pipe(mapDatabaseFailure(openFailed));
       /** Moved by every value write, this process's or (by the poll below)
        *  another's: what `values.changes` wakes on. */
       const written = yield* SubscriptionRef.make(0);
@@ -124,14 +102,7 @@ export const globalDatabaseLayer = (
         ),
       );
       return {
-        values: currentValues({
-          exec,
-          execOne,
-          transact,
-          query,
-          afterCommit: sql.afterCommit,
-          written,
-        }),
+        values: currentValues(store, written),
         inputHistory: {
           read: query(
             exec('SELECT at, value FROM input_history ORDER BY id').pipe(

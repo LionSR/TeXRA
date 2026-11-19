@@ -1,20 +1,12 @@
 /**
  * The session store's aside copies: the damaged files a store open renamed
  * beside it (`.corrupt-<stamp>`), kept until a storage prune deletes them;
- * the outermost transaction's busy retry; the test of whether a failed
+ * the test of whether a failed
  * open is SQLite reporting the file damaged; and the failure of a check on
  * what a store holds.
  */
 import { basename, dirname, join } from 'node:path';
-import {
-  type Cause,
-  Duration,
-  Effect,
-  FileSystem,
-  Predicate,
-  Schedule,
-  Schema,
-} from 'effect';
+import { type Cause, Effect, FileSystem, Predicate, Schema } from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
 import type * as SqlClient from 'effect/sql/SqlClient';
 import { causeChain } from '@utils/errors/errorMessage';
@@ -40,22 +32,9 @@ export const pragmaValue = (sql: Sql, pragma: string) =>
     .unsafe<Record<string, unknown>>(`PRAGMA ${pragma}`, [])
     .pipe(Effect.map((rows) => rows[0]?.[pragma]));
 
-/** A busy transaction's retry: from 5 ms, doubling and jittered, each sleep
- *  at most 250 ms, for at most 5 s. The fiber yields between attempts, so
- *  a lock another process holds never freezes the host thread. */
-const BUSY_RETRY = Schedule.exponential('5 millis').pipe(
-  Schedule.jittered,
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, Duration.millis(250))),
-  ),
-  Schedule.upTo({ duration: '5 seconds' }),
-);
 /** `SQLITE_BUSY` or `SQLITE_LOCKED`: another connection holds the lock. */
 export const isBusy = (error: unknown): boolean =>
   isSqlError(error) && error.reason._tag === 'LockTimeoutError';
-export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
-
 /** Interruption stays; a failure, or SQLite's error raised as a defect (a
  *  ROLLBACK or RELEASE that failed in a transaction's cleanup), becomes
  *  `failed`'s. Any other defect dies: a store's own protocol rejections are

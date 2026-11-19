@@ -22,10 +22,7 @@ import { expect } from 'vitest';
 
 // Local imports - store boundary
 import { currentValues } from '@controllers/session/currentValues';
-import {
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { storeConnection } from '@controllers/session/storeConnection';
 
 it.live(
   'notifies committed settings despite cancellation, never rolled-back ones',
@@ -86,28 +83,17 @@ it.live(
           ),
       });
       const written = yield* SubscriptionRef.make(0);
-      const exec = (statement: string, params?: readonly unknown[]) =>
-        sql.unsafe<Record<string, unknown>>(statement, params);
-      const store = {
-        exec,
-        execOne: (statement: string, params?: readonly unknown[]) =>
-          Effect.map(exec(statement, params), (rows) => rows.at(0)),
-        transact: <A, E>(body: Effect.Effect<A, E>) =>
-          transaction(body).pipe(
-            Effect.mapError(
-              (cause) => new DatabaseWriteFailed({ path: ':memory:', cause }),
-            ),
-          ),
-        query: <A, E>(read: Effect.Effect<A, E>) =>
-          read.pipe(
-            Effect.mapError(
-              (cause) => new DatabaseReadFailed({ path: ':memory:', cause }),
-            ),
-          ),
-        afterCommit: sql.afterCommit,
-        written,
-      };
-      const values = currentValues(store);
+      // The connection over the held commit above.
+      const store = storeConnection(
+        {
+          unsafe: (statement, params) => sql.unsafe(statement, params),
+          withTransaction: transaction,
+          afterCommit: sql.afterCommit,
+        },
+        ':memory:',
+        { shared: false, factKinds: {} },
+      );
+      const values = currentValues(store, written);
       const family = { name: 'settings', schema: Schema.Boolean };
       const ready = yield* Deferred.make<void>();
       const changed = yield* Deferred.make<boolean>();
