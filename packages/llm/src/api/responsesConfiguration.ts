@@ -124,8 +124,9 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   // xAI stores and chains too, but has no background mode or summary
   // control; a chained request reuses the stored instructions.
   const xai = config.provider === ModelProvider.XAI;
-  // Background responses serve the GPT family only; another model on this
-  // case (an o-series deep-research model, Meta's) streams in the foreground.
+  // Only a GPT-family model is submitted in the background; another model on
+  // this case (OpenAI's o3 and chat-latest, Meta's) streams in the foreground.
+  // llm-zoo carries no capability for background mode, so the id decides.
   return {
     ...base,
     protocol: 'openai-responses',

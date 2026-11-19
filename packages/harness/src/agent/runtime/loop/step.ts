@@ -44,7 +44,6 @@ import {
   Ref,
 } from 'effect';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { issuesParallelToolCalls } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
@@ -485,8 +484,6 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const { tools, skills } = step;
   const roots = yield* SessionRoots;
-  // The model-dependent text follows the step's model and settings.
-  const model = yield* ScopedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
     tools,
     roots,
@@ -494,16 +491,11 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const offered = tools.definitions.map(({ name }) => name);
   const context = {
-    ...stepInstructions(
-      step.contributing,
-      step.listed,
-      {
-        offered,
-        isChild: run.entry.parent !== null,
-        config: roots.config,
-      },
-      issuesParallelToolCalls(model.config),
-    ),
+    ...stepInstructions(step.contributing, step.listed, {
+      offered,
+      isChild: run.entry.parent !== null,
+      config: roots.config,
+    }),
     ...(delegation && { delegation }),
   };
   const base =
