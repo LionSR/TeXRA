@@ -5,8 +5,9 @@
 // formatCliHistoryText): id, ISO timestamp, agent, status, primary input —
 // the same runs the ProgressBoard shows as streams. Ids are the compact
 // 12-char hex execution ids; status words are the real set (completed /
-// error / resumable / …); `texra resume <id>` only works on a `resumable`
-// session, which it reopens in the interactive chat TUI.
+// error / …), then `(can resume)` for an interrupted or failed run and
+// `(can continue)` for a finished chat; `texra resume <id>` takes either and
+// reopens it in the interactive chat TUI.
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
@@ -14,14 +15,14 @@ const rows = [
     id: '9f3a6c81d24e',
     ts: '2025-11-04T14:31:08.412Z',
     agent: 'edit',
-    status: 'completed',
+    status: 'completed (can continue)',
     input: 'draft.tex',
   },
   {
     id: 'c4e19b07a52d',
     ts: '2025-11-04T11:02:44.917Z',
     agent: 'research',
-    status: 'no outcome (resumable)',
+    status: 'no outcome (can resume)',
     input: 'sections/intro.tex',
   },
   {
@@ -51,7 +52,9 @@ const rows = [
           class="chh-status"
           :class="{
             'chh-status--bad': r.status === 'failed',
-            'chh-status--resume': r.status.endsWith('(resumable)'),
+            'chh-status--resume':
+              r.status.endsWith('(can resume)') ||
+              r.status.endsWith('(can continue)'),
           }"
           >{{ r.status }}</span
         >

@@ -240,7 +240,7 @@ reader (`controllers/session/rowCodec.ts#decodeRow`):
   checked, with `unavailable` saying why; the row is unchanged, and
   a run holding one is refused resume as `pluginUnavailable`, naming the plugin
   (`controllers/session/rowCodec.ts#unavailableFactReason`,
-  `agent/storage/resumability.ts#'pluginUnavailable'`); a retired built-in kind
+  `agent/storage/continuation.ts#'pluginUnavailable'`); a retired built-in kind
   (`RETIRED_PLUGIN_FACTS`) is an earlier build's (`DatabaseRowEarlier`) instead
   (`controllers/session/rowCodec.ts#factKindOf`)
 
