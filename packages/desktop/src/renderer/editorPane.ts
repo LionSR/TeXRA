@@ -341,7 +341,7 @@ export function createEditorPane(
         <span>Files</span>
         ${renderIconActionButton({
           id: 'editor-tree-refresh',
-          icon: 'rotate-right',
+          icon: 'arrows-rotate',
           label: 'Refresh file list',
           tooltip: 'Refresh file list',
           className: 'desktop-editor-tree-refresh',

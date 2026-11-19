@@ -23,10 +23,7 @@ import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import {
-  openGuidePage,
-  vscodeOpener,
-} from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -60,7 +57,6 @@ import {
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { pickLauncherFiles } from '@texra/controllers/session/launcherFilePicker';
 import type {
   OwnHostHandlers,
   SharedHostCommandBindings,
@@ -268,8 +264,7 @@ export const createExtensionHostRequests = Effect.fn(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const bindings: SharedHostCommandBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
-    pickFiles: (fileType) =>
-      pickLauncherFiles(roots.workspace, fileType, openFilesDialog),
+    openFiles: openFilesDialog,
     latexdiff: {
       openDiffs: ([first, ...rest]) =>
         first === undefined
@@ -296,18 +291,7 @@ export const createExtensionHostRequests = Effect.fn(
     // launcher's credential check and catalogs follow.
     setApiKey: (provider) =>
       runHandler('setApiKey', setApiKey(roots, provider)),
-    // A link VS Code declines or cannot open is answered as a rejection, so
-    // the view shows which URL did not open.
-    openExternal: (url) =>
-      vscodeOpener
-        .openExternal(url)
-        .pipe(
-          Effect.mapError((failed) => new Rejected({ reason: failed.message })),
-        ),
-    // The banner refresh probes the dependencies again; the banner shows
-    // what is missing.
-    // Every dependency the banner lists installs from the one guide page.
-    openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
+    openExternal: (url) => vscodeOpener.openExternal(url),
     onboarding: {
       signInChatGpt: runHandler(
         'signInChatGpt',

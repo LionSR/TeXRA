@@ -184,7 +184,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             height: Math.round(bounds.height * zoom),
           };
         },
-        workspaceRoot: project.root,
+        workspaceRoot: project.roots.workspace,
       });
       return {
         workspace,
@@ -200,11 +200,15 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     const bindProject = Effect.fn('desktop.bindProject')(function* (
       project: DesktopProject,
     ) {
-      const spawn = desktopSpawner(runtime, yield* Scope.Scope, project.root);
+      const spawn = desktopSpawner(
+        runtime,
+        yield* Scope.Scope,
+        project.roots.workspace,
+      );
       const { workspace, browserViews, release } = createProjectWorkspace(
         project,
         spawn,
-        yield* terminalCwd(project.root),
+        yield* terminalCwd(project.roots.workspace),
       );
       const hosts = host.forProject(project);
       yield* Effect.forkScoped(workspace.followFilesWritten, {
@@ -272,7 +276,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         host: () =>
           createDesktopHostRequests({
             host: hosts.run,
-            workspaceRoot: project.root,
             openFiles: host.openFileDialog,
             postToRenderer: host.post,
             settings: options.settings,
