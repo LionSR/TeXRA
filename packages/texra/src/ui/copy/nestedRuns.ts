@@ -18,21 +18,8 @@
  */
 
 // Local imports
-import type { RunIdentity, RunView } from '@texra-ai/harness/schemas';
-import { formatResultCount, joinFacts } from '@texra-ai/harness/schemas';
-
-/** What a task started, by the kind of its run: the noun a count of them
- *  takes, in the order a summary lists them. */
-export const NESTED_NOUNS = Object.freeze({
-  agent: 'agent',
-  process: 'command',
-  script: 'script',
-} as const satisfies Record<RunIdentity['kind'], string>);
-
-/** What a run is called on screen: the task the user started, or what a
- *  task started, by the kind of its run. */
-export const runNoun = (run: Pick<RunView, 'parentId' | 'identity'>): string =>
-  run.parentId === null ? 'task' : NESTED_NOUNS[run.identity.kind];
+import type { RunView } from '@texra-ai/harness/schemas';
+import { formatResultCount, joinFacts, runNoun } from '@texra-ai/harness/schemas';
 
 /** The agents a task started. */
 export const NESTED_AGENT = Object.freeze({

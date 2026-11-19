@@ -383,6 +383,8 @@ export {
   RunEndSchema,
   runIdentityDisplayName,
   runIdentityName,
+  runNoun,
+  NESTED_NOUNS,
   RunIdSchema,
   RunRecordFieldsSchema,
   RunOutcomeSchema,

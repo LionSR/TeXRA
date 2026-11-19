@@ -12,7 +12,8 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
-import { runNoun, TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import { runNoun } from '@texra-ai/harness/schemas';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
