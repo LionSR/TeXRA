@@ -29,6 +29,7 @@ import {
   pluginRowUsedBy,
 } from '@ui/copy/plugins';
 import { PLUGINS_TUI } from '../commands/pluginsCopy';
+import { appendLocalNotice } from '../state/transcript';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -88,7 +89,10 @@ export function PluginsListForm(
       return row.plugin.enabled && row.plugin.trusted
         ? InstalledPlugins.disable(row.plugin.name, roots)
         : InstalledPlugins.enable(row.plugin.name, roots, confirmTrust).pipe(
-            Effect.asVoid,
+            Effect.map((outcome) => {
+              if (outcome === 'declined')
+                appendLocalNotice(PLUGINS_PAGE.declined(row.plugin.name));
+            }),
           );
     return Effect.void;
   };
@@ -103,10 +107,14 @@ export function PluginsListForm(
 
   return (
     <AsyncListForm<Effect.Success<ReturnType<typeof buildPluginRows>>, string>
-      title={pending ? PLUGINS_TUI.trustTitle(pending.review.name) : '/plugins'}
+      title={
+        pending
+          ? PLUGINS_TUI.trustTitle(pending.review.name, pending.review.version)
+          : '/plugins'
+      }
       compactTitle={
         pending
-          ? PLUGINS_TUI.trustTitle(pending.review.name)
+          ? PLUGINS_TUI.trustTitle(pending.review.name, pending.review.version)
           : PLUGINS_TUI.compactTitle
       }
       loadingLabel={PLUGINS_PAGE.loading}

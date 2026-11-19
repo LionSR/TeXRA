@@ -17,7 +17,6 @@ import {
   type Scope,
 } from 'effect';
 
-import { runNoun } from '@agent/runtime/forkRun';
 import { RunLive, type RunRegistry } from '@agent/runtime/runRegistry';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { logFailure, withLogChannel } from '@logger/effectLog';
@@ -27,7 +26,7 @@ import {
   WorkspaceFs,
   withSessionFs,
 } from '@platform/rootedFs';
-import { type RunId, type SessionRow } from '@shared/schemas';
+import { type RunId, runNoun, type SessionRow } from '@shared/schemas';
 import {
   DatabaseAggregateClosed,
   RunChanged,
@@ -257,7 +256,7 @@ export const deleteAcceptedRun = (
     if (accepted.startCommit === null) {
       return yield* new Unavailable({
         runId,
-        reason: `The ${runNoun(deps.view, runId)} has no recorded start.`,
+        reason: `The ${runNoun(deps.view.run(runId))} has no recorded start.`,
       });
     }
     yield* runs
@@ -268,7 +267,7 @@ export const deleteAcceptedRun = (
       .pipe(
         Effect.mapError((error): RequestError => {
           if (error instanceof RunLive) return new RunActive({ runId });
-          const noun = runNoun(deps.view, runId);
+          const noun = runNoun(deps.view.run(runId));
           return new Unavailable({
             runId,
             reason:

@@ -235,10 +235,9 @@ export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 export type { ProviderError } from '@shared/schemas';
-// Platform path containment, segments, POSIX form, case-free extension check.
+// Platform path containment, segments, POSIX form.
 export {
   getPathSegments,
-  hasExtension,
   isPathWithin,
   isStrictlyWithin,
   toPosixPath,
