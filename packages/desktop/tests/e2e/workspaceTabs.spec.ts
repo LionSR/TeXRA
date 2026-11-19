@@ -472,6 +472,22 @@ test('restarts an exited terminal in its own tab', async () => {
     `.shell-dock-terminal[data-panel-id="${tabId}"] .desktop-terminal-surface`,
   );
   const restart = surface.getByRole('button', { name: 'Restart' });
+  // The terminal paints the theme's terminal background in the scheme the
+  // window shows, here the light one.
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
+  const terminalBackground = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = 'var(--wa-color-terminal-background)';
+    document.body.append(probe);
+    const color = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return color;
+  });
+  await expect(surface.locator('.xterm-scrollable-element')).toHaveCSS(
+    'background-color',
+    terminalBackground,
+  );
   await surface.locator('.xterm').click();
   await page.keyboard.type('exit');
   await page.keyboard.press('Enter');
@@ -490,6 +506,7 @@ test('restarts an exited terminal in its own tab', async () => {
     .toMatch(/^\d+$/);
   await ownTab.locator('.shell-dock-tab-close wa-button').click();
   await expect(tab('terminal')).toHaveCount(before);
+  await page.emulateMedia({ colorScheme: null });
 });
 
 test('runs what is typed before a terminal has a shell', async () => {
