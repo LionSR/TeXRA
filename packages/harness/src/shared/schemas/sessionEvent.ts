@@ -184,7 +184,9 @@ const RunStartEventSchema = durable('run.start', {
   parent: Schema.NullOr(RunParentSchema),
   /** Null for a run that starts fresh. */
   provenance: Schema.NullOr(RunProvenanceSchema),
-  /** The run's own approval grants at launch. */
+  /** The run's approval grants at launch, from the session's single
+   *  authority. The name is `grants`, the fact it holds: the project's
+   *  `approvalPolicy` setting is a separate owner. */
   grants: ApprovalGrantsSchema,
 });
 

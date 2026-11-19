@@ -23,9 +23,11 @@ Proposed: drop `outcome` and its filter; make `turn` required.
 
 `turn` is required now (the `claude/sweep-2026-11-18-stored-shapes-once`
 branch). It needed no row version bump: every `run.position` at v6 was
-written with its turn. Still open: `outcome`. Dropping it changes the one
-`positionRow` caller in `runLoop.ts` (`turn.end`), and bumps `run.position`,
-since an earlier build's filter requires it on every `turn.end`.
+written with its turn.
+
+Landed: `outcome` and its filter are gone, `positionRow` is one signature,
+and `run.position` is v7 (an earlier build's `turn.end` carries `outcome` and
+its check requires it, so it reads as `DatabaseRowEarlier`).
 
 Landed 2026-11-19: no `outcome`, no filter, one `positionRow` signature
 (`run.position` v7).
@@ -42,10 +44,13 @@ Proposed: required `grants`, and `worktree: NullOr(...)` required.
 
 Both fields are required now, `worktree` as `NullOr`, and the
 `?? NO_APPROVAL_GRANTS` restatements are gone (`run.start` v5, same
-branch). Still open: the stored key is `approvalPolicy`, not `grants`;
-`packages/cli/scripts/validate-run.mjs` reads `$.approvalPolicy.limit`
-from the row, so the rename lands with that script's edit and another
-`run.start` bump.
+branch).
+
+Landed: the stored key is `grants`, the fact it holds (the project's
+`approvalPolicy` setting is a separate owner), at `run.start` v6;
+`packages/cli/scripts/validate-run.mjs` now reads `$.grants.limit`. Every
+producer (`runFacts.registrationDrafts`, `rowReader`, the fixtures and the
+design/CLI harnesses) and both readers name it `grants`.
 
 Landed 2026-11-19: the key is `grants` (`run.start` v6), the schema
 `ApprovalGrantsSchema`, and the script reads `$.grants.limit`.

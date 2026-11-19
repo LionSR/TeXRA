@@ -127,8 +127,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v5: `approvalPolicy` (the run's grants at launch) is always written and
     // `worktree` is null, never absent, for a run in the workspace (an
     // earlier build's row without them would fail as damaged).
-    // v6: the grants are stored as `grants`, not `approvalPolicy`: they are
-    // the run's own grants, not the project's policy.
+    // v6: that field is `grants`, the fact it holds, not `approvalPolicy`
+    // (an earlier build's row names `approvalPolicy`, not the required
+    // `grants`, so it would fail as damaged).
     'run.start': Object.freeze({ version: 6, listing: 'lifecycle' }),
     'run.activate': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a recipe's script names its block and options; `toolConfig` is gone
@@ -270,8 +271,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v6: no `response.ready` or `results.ready`: the run state reads them off
     // the `response` row and the delivering `append` (an earlier build's row
     // would fail as damaged).
-    // v7: a `turn.end` carries no `outcome`: nothing read it, and the run's
-    // own end is its `run.end` (an earlier build's check requires it).
+    // v7: no `turn.end` `outcome`: how a turn ended is a loop fact and the
+    // run's own end is its `run.end` row, so nothing read it (an earlier
+    // build's `turn.end` would have its `outcome` silently stripped).
     'run.position': Object.freeze({ version: 7, listing: 'own' }),
     // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
     // holds both.
