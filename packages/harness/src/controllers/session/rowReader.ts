@@ -144,8 +144,8 @@ const INLINE_BLOBS = `SELECT DISTINCT b.digest AS digest, b.value AS value
   FROM event_blob l JOIN blob b ON b.digest = l.digest
   WHERE l.inline = 1 AND l."commit" IN (SELECT value FROM json_each(?))`;
 const decodeCommit = Schema.decodeUnknownSync(Schema.Int);
-/** An earlier-build run row, as `EARLIER_RUNS` and `EARLIER_AGGREGATE_PARENTS` select it. */
-/** An earlier-build run row, as `EARLIER_RUNS` selects it. */
+/** An earlier-build run row, as `EARLIER_RUNS` and
+ *  `EARLIER_AGGREGATE_PARENTS` select it. */
 const EarlierRowSchema = Schema.Struct({
   logicalId: Schema.String,
   commit: Schema.Int,
