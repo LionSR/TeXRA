@@ -131,7 +131,7 @@ examples can be neutral, which changes the tool descriptions a run records.
   harness records the converted schema as the run's tool definition
   (`toolDigests`). Lowering it in llm would make the recorded schema differ
   from what the model saw.
-- **App settings rows that repeat provider console URLs**
-  (`settingSurfaces.ts` against `KEY_PAGES`), and the coding-plan catalog's
-  `apiProvider` against `PLAN_ROUTES`. Both are small. They belong with
-  open question 1 of the 2026-11-18 model-access note.
+- **The coding-plan catalog's `apiProvider` against `PLAN_ROUTES`.** It is
+  small and belongs with open question 1 of the 2026-11-18 model-access
+  note. (The settings rows that repeated provider key-page URLs now read
+  `KEY_PAGES` from `packages/texra/src/shared/model/providerKeyPages.ts`.)

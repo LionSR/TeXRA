@@ -50,6 +50,7 @@ import {
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
 } from '@texra-ai/harness/schemas';
+import { KEY_PAGES } from '@texra/shared/model/providerKeyPages';
 import type { SettingsViewSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 
 /**
@@ -286,7 +287,7 @@ export const HARNESS_ROW_SURFACES: Readonly<
     provider: 'moonshot',
     warning:
       'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
-    warningUrl: 'https://platform.moonshot.ai/console',
+    warningUrl: KEY_PAGES.moonshot.international,
     warningUrlLabel: 'International console',
   }),
   [DASHSCOPE_REGION_SETTING.key]: providerToggle({ provider: 'dashscope' }),
@@ -294,12 +295,12 @@ export const HARNESS_ROW_SURFACES: Readonly<
     provider: 'minimax',
     warning:
       'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
-    warningUrl: 'https://platform.minimax.io/',
+    warningUrl: KEY_PAGES.minimax.international,
     warningUrlLabel: 'Get API key',
   }),
   [GLM_REGION_SETTING.key]: providerToggle({
     provider: 'glm',
-    warningUrl: 'https://open.bigmodel.cn/',
+    warningUrl: KEY_PAGES.glm.china,
     warningUrlLabel: 'BigModel console',
   }),
   [GLM_CODING_PLAN_SETTING.key]: providerToggle(
