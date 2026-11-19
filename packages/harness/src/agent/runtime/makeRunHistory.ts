@@ -337,8 +337,7 @@ export function makeRunHistory(
    * request a dead process left waiting on a person, so no surface outlives
    * the process that asked and the call or turn that asked asks again, then
    * the activation's rows. The cancellations come first: a decision before
-   * the activation is not one its owner was given. A request that does not
-   * block its caller keeps nothing waiting and stays open.
+   * the activation is not one its owner was given.
    */
   const activate = <E>(
     run: RunId,

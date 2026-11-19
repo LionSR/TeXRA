@@ -35,7 +35,6 @@ tools:
   - accept_run_files
   - codex
   - claude_code
-  - inquiry
   - ask_user_question
   - github_subscription
 
@@ -84,9 +83,8 @@ prompt: |
     (1) Briefly say what a non-obvious command will do when you run it, so the user has context if their approval settings surface it for confirmation. Exercise extra care with destructive or irreversible commands (e.g. rm, overwriting moves, force-push). Prefer a non-destructive alternative when it serves the same purpose.
     (2) Use `agent` when the user asks for a TeXRA subagent, specialist, parallel check, or independent internal verification: route to the specialist whose lane fits (e.g. `research` for Wolfram-heavy derivations, `review` for manuscript audits, `lean` for formalization). For whole-document operations (proofread, polish, review, ...) that are better run as a single reviewed pass, call `program` (`edit`, `annotate`, `enhance`, `apply`) with the files as `inputFiles` and what to do as the `prompt`. Use `script` when several agents run together and their results combine in code.
     (3) Use `codex` or `claude_code` for substantial, self-contained coding work (a feature, a large refactor, an independent second opinion on code) while you stay in charge of the research thread.
-    (4) Reserve `inquiry` for external human-mediated checks where the user will copy a question to another AI system and paste the answer back later.
-    (5) Use `memory` for durable project knowledge worth keeping across sessions. Do not duplicate things the workspace files already state.
-    (6) When available (it is opt-in), use `github_subscription` when the user asks you to follow up on review comments or CI.
-    (7) If the user rejects or edits a proposed change, treat that as feedback and adjust your behavior accordingly.
+    (4) Use `memory` for durable project knowledge worth keeping across sessions. Do not duplicate things the workspace files already state.
+    (5) When available (it is opt-in), use `github_subscription` when the user asks you to follow up on review comments or CI.
+    (6) If the user rejects or edits a proposed change, treat that as feedback and adjust your behavior accordingly.
 
   Scientific Code Quality: Never hardcode expected phenomena or behaviors directly in code: use tests or explicit conditional checks with clear intent. Maintain a single source of truth for constants, parameters, and configuration rather than duplicating values across files. Verify that implementations match their mathematical specifications, and that TikZ diagrams accurately reflect the underlying equations and relationships.

@@ -43,8 +43,6 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
-  decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
   [`FactKind`](#factkind), and [`Program`](#program) (how its run
   reads: [`ProgramResult`](#programresult)).
 
@@ -480,20 +478,6 @@ interface CallRequests {
     },
     DatabaseAggregateClosed | CellError
   >;
-  /**
-   * Open a plugin's request the call does not wait on, under its
-   * `data.requestId`: its `request.opened` commits on the run's history
-   * through the one door every request opens at, with `data` stored as
-   * the JSON it writes, and the plugin's decision hook takes each answer
-   * when it lands (`Plugin.decision`). A person answers it. A failed
-   * commit is not proof that nothing landed: the run's rows decide.
-   */
-  readonly post: (
-    request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
-      readonly blocksCaller: false;
-      readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
-    },
-  ) => Effect.Effect<void, CellError>;
   /** Show the person something on the session's host (a file opened
    *  beside what they are looking at, a notice), answered by nothing. */
   readonly present: <K extends RuntimePresentationEvent>(
@@ -718,19 +702,11 @@ interface CurrentValues {
 ## DecisionOf
 
 The decisions a request of kind `K` takes: its own actions and the three
-refusals. A plugin's request declares its actions on its row, so its
-type accepts any decision.
+refusals.
 
 ```ts
-type DecisionOf<K extends RequestPayload['kind']> =
-  | Extract<
-      RequestDecision,
-      {
-        action: (typeof OWN_ANSWERS & {
-          readonly plugin: PluginRequest['answers'];
-        })[K][number];
-      }
-    >
+type DecisionOf<K extends RequestKind> =
+  | Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>
   | RefusalDecision;
 ```
 
@@ -1150,7 +1126,7 @@ interface ITool<E = Error, R = never> {
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, a plugin's request), which answers what the call's hooks
+   * question), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */
@@ -1514,8 +1490,6 @@ interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request it opened, on or off. */
-  readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
   /** Script module sources by name, imported as `builtIn:<name>`. */
@@ -1837,44 +1811,6 @@ Render a prompt string using nunjucks templating.
 
 ```ts
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
-```
-
-## RequestDecisionHook
-
-A plugin's side of a decision on a pending request it opened (a
-`PluginRequest` naming it), run before the decision commits: what the
-plugin records outside the session's store, and what commits with the
-decision in its one checked transaction ({@link RequestDecisionRecord}).
-The outside record must be idempotent: an answer tried again after a
-failure, or raced by another, records nothing twice, and the second
-reads the first's. A process that exits before the transaction leaves
-the request pending and answerable.
-
-```ts
-interface RequestDecisionHook {
-  readonly record: (request: {
-    readonly payload: PluginRequest;
-    readonly decision: RequestDecision;
-  }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>;
-}
-```
-
-## RequestDecisionRecord
-
-What commits with a plugin request's decision, in its transaction
-({@link RequestDecisionHook}).
-
-```ts
-interface RequestDecisionRecord {
-  /** Facts about the plugin's own aggregates, hung under the request's run
-   *  and checked in the transaction: one its kind refuses is logged and
-   *  left out. */
-  readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, accepted in the
-   *  transaction (one the run's closed input refuses is logged), the run
-   *  woken for it once that commits. */
-  readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
-}
 ```
 
 ## requestToolEditApproval

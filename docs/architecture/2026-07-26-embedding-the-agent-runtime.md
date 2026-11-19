@@ -361,14 +361,10 @@ resumes a waiting run.
 
 ### The request kinds
 
-The payload union is the vocabulary: the harness's own `toolEdit`, `bash`,
-`retry`, `proposal`, `planApproval` and `userQuestion`, and a plugin's
-request, `plugin` (`PermissionPayloadSchema`,
-`packages/harness/src/shared/schemas/request.ts`). Every kind of the
-harness's own blocks the tool or turn that opened it; a plugin's request
-declares whether it does (`blocksCaller`) and which answers it takes
-(`answers`). TeXRA's external inquiry is a plugin request that blocks
-nothing and is answered later.
+The payload union is the vocabulary, a closed set the harness declares:
+`toolEdit`, `bash`, `retry`, `proposal`, `planApproval` and `userQuestion`
+(`RequestPayloadSchema`, `packages/harness/src/shared/schemas/request.ts`).
+Every request blocks the tool or turn that opened it.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 

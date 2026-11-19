@@ -1,9 +1,8 @@
 // Local imports - shared formatting
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
 
-// Local imports - TUI state
-import type { PendingRequestKind } from '../state/approvalQueue';
 import {
+  type RequestKind,
   formatCompactTokenCount,
   formatResultCount,
   joinFacts,
@@ -12,7 +11,7 @@ import {
 /** A steady marker, so list updates never animate the whole live region. */
 export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;
 
-const PENDING_APPROVAL_ROW_LABELS: Record<PendingRequestKind, string> = {
+const PENDING_APPROVAL_ROW_LABELS: Record<RequestKind, string> = {
   bash: 'bash',
   toolEdit: 'edit',
   planApproval: 'plan',
@@ -55,7 +54,7 @@ export function childRowMetadataText({
  * count are separate so narrow layouts can preserve the actionable kind while
  * allowing the informational count to yield. */
 export function pendingApprovalRowDisplay(
-  kinds: readonly PendingRequestKind[] | undefined,
+  kinds: readonly RequestKind[] | undefined,
 ):
   | { readonly label: string; readonly overflow: string | undefined }
   | undefined {

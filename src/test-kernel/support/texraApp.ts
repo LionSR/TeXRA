@@ -32,7 +32,6 @@ export const texraHosted = Layer.provideMerge(
  *  agents with. */
 const FACT_KIND_PLUGINS: readonly Plugin[] = [
   { id: 'theory', factKinds: APP_FACT_KINDS.theory },
-  { id: 'external-inquiry', factKinds: APP_FACT_KINDS['external-inquiry'] },
 ];
 
 /** The plugin table a store or catalog suite runs over: every row kind
