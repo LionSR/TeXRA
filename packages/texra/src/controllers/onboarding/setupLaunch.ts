@@ -6,12 +6,12 @@ import {
   type AgentConfig,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { presentRunFailure, type Notices } from '@texra-ai/harness/host';
+import { presentRunFailure } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { Dialogs } from '@texra/hosts/uiHosts';
-import type { Run, Session } from '@texra-ai/harness';
+import type { Run, Session, Notices } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /** The setup assistant's log channel, for its launch and what follows it. */

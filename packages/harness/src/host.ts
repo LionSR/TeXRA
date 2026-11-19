@@ -30,14 +30,6 @@ export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@shared/transcript/conversationFormat';
-// What `SessionHost.emit` takes and answers: the notices a session's runs
-// ask a host to present.
-export type {
-  AgentRuntimeEmitOptions,
-  HostPresentation,
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
 // The process the hosts compose: one `processLayer` for every host.
 export type { ProcessLayerOptions } from './effect/processLayer.js';
 export type { ProcessServicesOptions } from '@controllers/session/sessionLayer';
@@ -86,10 +78,7 @@ export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 // and storage maintenance under a storage root.
 export { GlobalValues, StateStores } from '@platform/processRuntime';
 export type { ValueFamily } from '@shared/session/valueFamily';
-export {
-  DatabaseWriteFailed,
-  type CurrentValues,
-} from '@shared/session/database';
+export type { CurrentValues } from '@shared/session/database';
 export type { DraftBlob } from '@shared/session/historyTurns';
 export type { AppStateStore } from '@platform/interfaces';
 export {
@@ -99,13 +88,12 @@ export {
 } from '@controllers/session/projectDatabase';
 // Follow-up delivery helpers hosts share.
 export { presentFollowUpResult } from '@agent/followUp/ToolUseFollowUp';
-// A host's presentation surface: session and sessionless interactions, the
-// emit handlers (one per event), and a failed run's presentation, with the
-// notice a refused launch carries.
+// A host's presentation of the notices the root entry types
+// (`HostInteractions`, `Notices`): a window's own presenter, the emit
+// handlers (one per event), and a failed run's presentation, with the notice
+// a refused launch carries.
 export {
   presenterOn,
-  type HostInteractions,
-  type Notices,
   presentRunFailure,
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
@@ -119,14 +107,9 @@ export {
   type Hunk,
 } from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-export type { SessionCloseReport } from '@shared/schemas';
-// The agent-directories port and the process services plugins read.
-export {
-  AgentDirectories,
-  AgentDirectoriesFailed,
-  AppState,
-  type AgentDirectoriesPort,
-} from '@platform/interfaces';
+// The agent-directories service (its port is the root entry's) and the
+// process services plugins read.
+export { AgentDirectories, AppState } from '@platform/interfaces';
 // App-lifecycle signals: the process's hub, which `ProcessServices` serves,
 // and what hosts and the app publish and follow on it.
 export {
@@ -195,11 +178,8 @@ export { readMcpConfig } from '@tools/mcp/mcpConfig';
 export { mcpConfigPathOf } from '@common/plugins/mcpServers';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 // The skills a session's roots discover (the settings inventory, the enabled
-// ones a person activates) with their issues, and a host's skill sources and
-// source options.
+// ones a person activates) with their issues.
 export { Skills, type SkillRoots } from '@skills/runtimeSkills';
-export type { HostSkillOptions } from '@skills/skillSources';
-export type { SkillSourceOptions } from '@skills/skillSources';
 export type {
   SkillIssueCode,
   SkillIssueSeverity,

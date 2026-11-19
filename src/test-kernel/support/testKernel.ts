@@ -37,6 +37,7 @@ import {
   Sessions,
   type LocalSession,
   type OpenOptions,
+  type HostInteractions,
 } from '@texra-ai/harness';
 import {
   AgentCatalog,
@@ -49,7 +50,6 @@ import {
   ToolAvailability,
   ToolCatalog,
   UsageLog,
-  type HostInteractions,
   type ProcessRuntime,
   type StateStore,
   type ProcessServices,

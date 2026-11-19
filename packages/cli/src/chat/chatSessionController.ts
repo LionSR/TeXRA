@@ -16,11 +16,10 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { Run, Session } from '@texra-ai/harness';
+import type { Run, Session, Notices } from '@texra-ai/harness';
 import {
   presentFollowUpResult,
   presentRunFailure,
-  type Notices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness/host';

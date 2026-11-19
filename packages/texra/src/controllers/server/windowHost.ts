@@ -17,7 +17,7 @@ import {
 } from 'effect';
 import { RpcServer, type RpcMessage } from 'effect/rpc';
 
-import { type HostInteractions } from '@texra-ai/harness/host';
+import type { HostInteractions } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';

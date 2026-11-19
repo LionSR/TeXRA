@@ -20,7 +20,6 @@ import { randomUUID } from 'node:crypto';
 import {
   isPathWithin,
   type PresentationEventHandlers,
-  type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 
 import {
@@ -57,7 +56,11 @@ import {
 import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import { linkOver, type Linked, type ServiceLink } from './client';
 import type { WindowClient } from './windowHost';
-import type { Session, SessionHost } from '@texra-ai/harness';
+import type {
+  Session,
+  SessionHost,
+  RuntimePresentationEventPayloads,
+} from '@texra-ai/harness';
 
 /** Each runtime notice as the window call that carries it. */
 const NOTICE_OF: PresentationEventHandlers<

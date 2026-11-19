@@ -13,11 +13,8 @@ import {
   type LogLevel,
 } from 'effect';
 
-import { DatabaseOpenFailed } from '@texra-ai/harness';
-import {
-  type ConfigProvider,
-  type SkillSourceOptions,
-} from '@texra-ai/harness/host';
+import { DatabaseOpenFailed, type SkillSourceOptions } from '@texra-ai/harness';
+import type { ConfigProvider } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
