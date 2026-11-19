@@ -60,7 +60,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "1.10.0",
     "@google/genai": "3.6.0",
-    "llm-zoo": "4.5.0",
+    "llm-zoo": "4.6.0",
     "ws": "8.23.0"
   },
   "peerDependencies": {
