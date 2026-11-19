@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 99
+Exports: 100
 
 - `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "provider" | "reasoning">, route?: ModelRoute | undefined) => ReasoningEffort[]`
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
@@ -42,6 +42,7 @@ Exports: 99
 - `hint` — `function hint: (model: ModelConfig | string) => string`
 - `InputPart` — `type InputPart = Extract<ResolvedTurn['messages'][number], { role: 'user'; }>['content'][number]; ≡ { readonly base64: string; readonly detail?: "high" | "low" | "medium" | "ultra-high" | undefined; readonly kind: "image"; readonly mimeType: string; } | { readonly base64: string; readonly kind: "audio" | "document" | "video"; readonly mimeType: string; } | { readonly kind: "text"; readonly text: string; }`
 - `isApiProvider` — `function isApiProvider: (provider: string) => provider is "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai"`
+- `isAuthFailureStatus` — `const isAuthFailureStatus: (status: number | undefined) => boolean`
 - `isKimiCodeExclusiveModel` — `function isKimiCodeExclusiveModel: (model: Pick<ModelConfig, "baseUrl" | "kimiSubscription" | "provider">) => boolean`
 - `isKimiSubscriptionEligible` — `function isKimiSubscriptionEligible: (model: Pick<ModelConfig, "kimiSubscription" | "provider">) => boolean`
 - `issuesParallelToolCalls` — `function issuesParallelToolCalls: (config: Pick<ModelConfig, "provider">) => boolean`
