@@ -28,7 +28,6 @@ import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import {
   settingsTabByCommand,
   type CommandId,
-  type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
 import {
   definedHandler,
