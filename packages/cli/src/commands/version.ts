@@ -1,29 +1,25 @@
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
+import { Command } from 'effect/cli';
 
-import { readCliVersion } from '../runtime/platform/cliContext';
-import { CliExitCode } from '../runtime/platform/exitCodes';
+import {
+  provideCliInvocation,
+  readCliVersion,
+} from '../runtime/platform/cliContext';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { readCliGlobalArgs } from './_helpers/cliCommand';
+import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
 import { emitCliResult } from './_helpers/output';
 
-export const versionCommand = defineCliCommand({
-  meta: { name: 'version', description: 'Print the CLI version' },
-  args: {
-    ...GLOBAL_ARGS,
-  },
-  // No runtime: the version is the build's, and the output format the
-  // context's, read as every other command reads it.
-  layer: () => Layer.empty,
-  run: () => {
+// No runtime: the version is the build's, and the output format the
+// context's, so it prints from the parse itself.
+export const versionCommand = Command.make('version', {}, () =>
+  Effect.gen(function* () {
+    const context = yield* loadConfigAndWarn(yield* readCliGlobalArgs());
     const version = readCliVersion();
-    return Effect.as(
-      emitCliResult({
-        json: { version },
-        ndjson: { kind: 'version', version },
-        text: version,
-      }),
-      CliExitCode.Success,
-    );
-  },
-});
+    yield* emitCliResult({
+      json: { version },
+      ndjson: { kind: 'version', version },
+      text: version,
+    }).pipe(provideCliInvocation(context));
+  }),
+).pipe(Command.withDescription('Print the CLI version'));

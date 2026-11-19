@@ -5,8 +5,8 @@
  * live, sends it a follow-up, or stops it. The service owns every task it
  * runs, so a task outlives the terminal that started it.
  */
-import { defineCommand } from 'citty';
-import { Effect, Schema } from 'effect';
+import { Effect, Option, Schema } from 'effect';
+import { Argument, Command, Flag } from 'effect/cli';
 
 import {
   type RunId,
@@ -41,8 +41,7 @@ import { selectCliRunModel } from '../runtime/models/runModel';
 import { attachTask } from '../runtime/headless/taskAttach';
 import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { optString } from './_helpers/globalArgs';
+import { cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
@@ -51,11 +50,11 @@ import type { RuntimeCommand } from '@texra-ai/harness/schemas';
  *  so a saved transcript does not depend on who saved it. */
 const PIPED_COLUMNS = 100;
 
-const TASK_ID_ARG = {
-  type: 'positional',
-  required: true,
-  description: 'Task id (or a unique prefix) from `texra tasks list`',
-} as const;
+const TASK_ID_ARG = Argument.String('id').pipe(
+  Argument.withDescription(
+    'Task id (or a unique prefix) from `texra tasks list`',
+  ),
+);
 
 /** The task `id` names (`findTask`); naming none or several is a usage
  *  error. */
@@ -108,12 +107,10 @@ function taskLine(task: TaskSummary): string {
   return `${live} ${task.runId}  ${runStatusLabel(task.statusKey).padEnd(12)} ${task.label}  (${task.workspace})`;
 }
 
-const listCommand = defineCliCommand({
-  meta: {
-    name: 'list',
-    description:
-      'List the tasks of every project, newest first (* = running in the service)',
-  },
+const listCommand = cliCommand('list', {
+  description:
+    'List the tasks of every project, newest first (* = running in the service)',
+  config: {},
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('run')(function* () {
@@ -131,16 +128,13 @@ const listCommand = defineCliCommand({
   }, Effect.scoped),
 });
 
-const attachCommand = defineCliCommand({
-  meta: {
-    name: 'attach',
-    description:
-      'Follow a task live until it ends; Ctrl-C detaches and leaves it running',
-  },
-  args: { id: TASK_ID_ARG },
+const attachCommand = cliCommand('attach', {
+  description:
+    'Follow a task live until it ends; Ctrl-C detaches and leaves it running',
+  config: { id: TASK_ID_ARG },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) => {
+  run: (context, input) => {
     // A live transcript has no single JSON document to print.
     if (context.outputFormat === 'json')
       throw new CliUsageError({
@@ -149,7 +143,7 @@ const attachCommand = defineCliCommand({
       });
     return Effect.gen(function* () {
       const client = yield* serviceClient;
-      const task = yield* taskNamed(client, ctx.args.id);
+      const task = yield* taskNamed(client, input.id);
       const outcome = yield* attachTask(client, task, {
         format: context.outputFormat === 'ndjson' ? 'ndjson' : 'text',
         columns: context.stdoutIsTty
@@ -166,29 +160,25 @@ const attachCommand = defineCliCommand({
   },
 });
 
-const startCommand = defineCliCommand({
-  meta: {
-    name: 'start',
-    description:
-      'Start an agent as a task in the TeXRA service and print its id',
-  },
-  args: {
-    agent: {
-      type: 'positional',
-      required: true,
-      description: 'Agent name from `texra agents list`',
-    },
-    instruction: {
-      type: 'string',
-      required: true,
-      description: 'What the agent should do',
-    },
-    model: { type: 'string', alias: 'm', description: 'Model for the agent' },
+const startCommand = cliCommand('start', {
+  description: 'Start an agent as a task in the TeXRA service and print its id',
+  config: {
+    agent: Argument.String('agent').pipe(
+      Argument.withDescription('Agent name from `texra agents list`'),
+    ),
+    instruction: Flag.String('instruction').pipe(
+      Flag.withDescription('What the agent should do'),
+    ),
+    model: Flag.String('model').pipe(
+      Flag.withAlias('m'),
+      Flag.withDescription('Model for the agent'),
+      Flag.optional,
+    ),
   },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
-  run: Effect.fn('tasks.run')(function* (context, ctx) {
-    const instruction = ctx.args.instruction.trim();
+  run: Effect.fn('tasks.run')(function* (context, input) {
+    const instruction = input.instruction.trim();
     if (!instruction)
       return yield* new CliUsageError({
         message: '--instruction must not be empty.',
@@ -206,15 +196,15 @@ const startCommand = defineCliCommand({
       projectApprovalPolicy(services.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
-    const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
+    const agent = yield* resolveCliRunAgent(services, input.agent);
     const model = yield* selectCliRunModel(
       context,
-      optString(ctx.args.model),
+      Option.getOrUndefined(input.model),
       'chat',
       services,
     );
     const payload: AgentConfigPayload = {
-      agent: ctx.args.agent,
+      agent: input.agent,
       agentSource: { kind: agent.source },
       model,
       inputFiles: [],
@@ -242,23 +232,21 @@ const startCommand = defineCliCommand({
   }),
 });
 
-const sendCommand = defineCliCommand({
-  meta: { name: 'send', description: 'Send a running task a follow-up' },
-  args: {
+const sendCommand = cliCommand('send', {
+  description: 'Send a running task a follow-up',
+  config: {
     id: TASK_ID_ARG,
-    text: {
-      type: 'positional',
-      required: true,
-      description: 'The follow-up message',
-    },
+    text: Argument.String('text').pipe(
+      Argument.withDescription('The follow-up message'),
+    ),
   },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
-  run: (_, ctx) =>
-    requestTask(ctx.args.id, (runId) => ({
+  run: (_, input) =>
+    requestTask(input.id, (runId) => ({
       kind: 'followUp.send',
       runId,
-      text: ctx.args.text,
+      text: input.text,
     })).pipe(
       Effect.flatMap(({ task, outcome }) => {
         const { status } = outcome;
@@ -273,16 +261,13 @@ const sendCommand = defineCliCommand({
     ),
 });
 
-const stopCommand = defineCliCommand({
-  meta: {
-    name: 'stop',
-    description: 'Stop a running task; it can be resumed later',
-  },
-  args: { id: TASK_ID_ARG },
+const stopCommand = cliCommand('stop', {
+  description: 'Stop a running task; it can be resumed later',
+  config: { id: TASK_ID_ARG },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
-  run: (_, ctx) =>
-    requestTask(ctx.args.id, (runId) => ({
+  run: (_, input) =>
+    requestTask(input.id, (runId) => ({
       kind: 'run.stop',
       runId,
       reason: 'user',
@@ -299,17 +284,15 @@ const stopCommand = defineCliCommand({
     ),
 });
 
-export const tasksCommand = defineCommand({
-  meta: {
-    name: 'tasks',
-    description:
-      'List, start, follow and steer the tasks the TeXRA service runs for every window',
-  },
-  subCommands: {
-    list: listCommand,
-    start: startCommand,
-    attach: attachCommand,
-    send: sendCommand,
-    stop: stopCommand,
-  },
-});
+export const tasksCommand = Command.make('tasks').pipe(
+  Command.withDescription(
+    'List, start, follow and steer the tasks the TeXRA service runs for every window',
+  ),
+  Command.withSubcommands([
+    listCommand,
+    startCommand,
+    attachCommand,
+    sendCommand,
+    stopCommand,
+  ]),
+);

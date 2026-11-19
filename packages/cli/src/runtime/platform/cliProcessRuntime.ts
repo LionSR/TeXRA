@@ -1,7 +1,7 @@
 /**
  * What a CLI command runs over. Every command builds its own runtime from
  * the layer its program needs, and disposes it when the command ends
- * (`defineCliCommand`): the process services over `texraProcessLayer`, with
+ * (`cliCommand`): the process services over `texraProcessLayer`, with
  * the command's {@link CliPlatform} for a command over the `--cwd` project;
  * the process services alone for the background service, which serves many
  * projects; and only the Node services and the credential store for the two
