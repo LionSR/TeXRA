@@ -360,13 +360,18 @@ export const openToolUse = Effect.fn('toolUse.open')(
           const handed = [yield* handedDown(run, script)];
           return { content, offered: step.rows, handed };
         }
-        openingSystem = yield* buildOpeningSystemPrompt(
-          run.persona.prompt,
-          run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
-          { roots, textOnly: bound.textOnly },
+        const inputs =
+          run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
+        // The first step renders the prompt over the tools it offers, and
+        // stores its base text.
+        const step = yield* stepFor(run, opening, false, (offered) =>
+          buildOpeningSystemPrompt(run.persona.prompt, inputs, {
+            roots,
+            textOnly: bound.textOnly,
+            offered,
+          }),
         );
-        // The first step renders the prompt, and stores its base text.
-        const step = yield* stepFor(run, opening, false, openingSystem);
+        openingSystem = step.base;
         // The user's task is the user message.
         const userRequest = run.config.instruction.trim();
         if (!userRequest)
