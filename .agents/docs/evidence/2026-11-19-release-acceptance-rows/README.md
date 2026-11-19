@@ -20,7 +20,7 @@ This note records what was done about it and the rerun:
 - Every deterministic check was run again on that tree. **All passed; no
   product defect was found.**
 
-Tree: this PR's branch with `main` @ `fb12553` (#15080) merged into it, in a
+Tree: this PR's branch with `main` @ `42f24da` (#15081) merged into it, in a
 Linux container (Node 22.23.5, 4 cores). The real-model half did not run
 here; its status is in
 [`2026-11-03-harness-real-model/`](../2026-11-03-harness-real-model/README.md).
@@ -32,12 +32,19 @@ each as `.github/workflows/ci.yml` invokes it.
 
 | Check                                           | Command                                                                                 | Result                                                                |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Kernel tests (CI step 1, unsharded)             | `pnpm run test --project pure --project kernel --sequence.shuffle.files --maxWorkers=2` | 233 files, 564 passed, 1 skipped; seed `1795106423218`                |
+| Kernel tests (CI step 1, unsharded)             | `pnpm run test --project pure --project kernel --sequence.shuffle.files --maxWorkers=2` | 233 files, 564 passed, 1 skipped; seed `1795108779813`                |
 | Isolated and crash tests (CI step 2, unsharded) | `pnpm run test --project isolated --project crash --maxWorkers=2`                       | 25 files, 58 passed                                                   |
-| CLI real-runtime validation (nightly job)       | `pnpm --filter @texra-ai/cli validate:run`                                              | "CLI run validation passed"                                           |
+| CLI real-runtime validation (nightly job)       | `pnpm --filter @texra-ai/cli validate:run`                                              | passed on the second of two runs (see below)                          |
 | TUI frames, every scenario (CI runs `--smoke`)  | `pnpm --filter @texra-ai/cli validate:tui -- --snapshot-dir <dir>`                      | all 143 scenarios passed                                              |
 | Packed example ladder                           | `pnpm --filter @texra-ai/harness run example:packed`                                    | tarballs installed outside the repo, type-checked, examples 01–13 ran |
 | Static checks                                   | `npm run typecheck`, `npm run gate`                                                     | both exit 0                                                           |
+
+`validate:run` failed once on this tree and passed when run again. The
+failure was `database is locked` in its fork scenario (`validateFork`), on the
+read of the store straight after the scenario stopped its background service:
+the service had not yet released the store. Nothing in this PR is on that
+path, and the two runs on the branch before #15081 was merged both passed. It
+is a race in the validator's own teardown, recorded here and not fixed.
 
 ## The failure each new check is for
 
