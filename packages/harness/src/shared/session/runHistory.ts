@@ -40,14 +40,16 @@ import type { SessionViewAccessShape } from './sessionViewAccess';
  * degradation defect in a different costume, so `open` and `load` keep
  * them in their error channel beside it.
  *
- * Which arms are reachable, and from where:
- * - `not-owner`: from `RunCell.append`, where the session's log refuses a
- *   closed target as `DatabaseAggregateClosed`, nothing written. It is never
+ * `reason` says why the run's stored rows cannot be used, the one thing a
+ * reader asks of a refusal ({@link runReadRefusal}); a refused write that
+ * says nothing about the stored rows has none, and its `detail` words it.
+ * From where each comes:
+ * - no reason: from `RunCell.append`. Either the session's log refused a
+ *   closed target as `DatabaseAggregateClosed`, nothing written (never
  *   synthesised from any other write failure: a disk error stays a
- *   `DatabaseWriteFailed`. A loop that meets it mid-turn stops with it,
- *   no retry and no second write.
- * - `unsafe-endpoint`: a pre-publish assertion over every durable origin,
- *   the loud restatement of the package's endpoint constraint.
+ *   `DatabaseWriteFailed`; a loop that meets it mid-turn stops with it, no
+ *   retry and no second write), or a durable origin in the batch is not a
+ *   scheme, host and path alone, checked before anything is published.
  * - `unprepared-history`: `PreparedHistorySchema` over the history the batch
  *   assembles, at the write boundary of every batch that appends to or
  *   rewrites it, and on cold load.
@@ -59,25 +61,26 @@ import type { SessionViewAccessShape } from './sessionViewAccess';
  *   the history replays was recorded on another protocol than the run's
  *   binding speaks now, so no request could replay it.
  * A violated `RunCell.append` precondition is a caller defect
- * (`Effect.die`), not an arm: the loop must not handle it.
+ * (`Effect.die`), not a refusal: the loop must not handle it.
  */
 export class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
   'RunHistoryRefused',
   {
-    reason: Schema.Literals([
-      'not-owner',
-      'unsafe-endpoint',
-      'unprepared-history',
-      'inconsistent',
-      'foreign-protocol',
-    ]),
+    reason: Schema.optional(
+      Schema.Literals([
+        'unprepared-history',
+        'inconsistent',
+        'foreign-protocol',
+      ]),
+    ),
     runId: RunIdSchema,
     detail: Schema.String,
     cause: Schema.optional(RunHistoryInconsistent),
   },
 ) {
   override get message(): string {
-    return `The run history refused a write (${this.reason}): ${this.detail}`;
+    const why = this.reason === undefined ? '' : ` (${this.reason})`;
+    return `The run history refused a write${why}: ${this.detail}`;
   }
 }
 
@@ -111,7 +114,7 @@ export function findStorageRefusal(
 
 /**
  * `refusal` as run `runId` ends with it: a closed aggregate is the run
- * history's `not-owner` refusal; a disk or history refusal is itself.
+ * history's refusal of the write; a disk or history refusal is itself.
  */
 export function runRefusal(
   runId: RunId,
@@ -127,7 +130,7 @@ export function runRefusal(
 ): DatabaseWriteFailed | RunHistoryRefused {
   if (!(refusal instanceof DatabaseAggregateClosed)) return refusal;
   const detail = 'the run aggregate is closed';
-  return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
+  return new RunHistoryRefused({ runId, detail });
 }
 
 /** The same append, every row type allowed: used by the run's cell and the
@@ -153,12 +156,7 @@ export const runReadRefusal = (
   for (const cause of causeChain(error)) {
     if (cause instanceof DatabaseRowEarlier) return 'earlierBuild';
     if (cause instanceof DatabaseRowCorrupt) return 'damaged';
-    if (
-      cause instanceof RunHistoryRefused &&
-      (cause.reason === 'inconsistent' ||
-        cause.reason === 'unprepared-history' ||
-        cause.reason === 'foreign-protocol')
-    )
+    if (cause instanceof RunHistoryRefused && cause.reason !== undefined)
       return 'unusable';
   }
   return undefined;
@@ -237,29 +235,36 @@ export interface RunCell {
   >;
 }
 
-/** How {@link RunHistory} opens a cell. */
-export interface RunOpening<E = never> {
-  /**
-   * A new run's registration (`run.start` first), decided inside the job
-   * of the cell's first append, which it rides: the run exists with what
-   * that append writes or not at all.
-   */
-  readonly registration?: Effect.Effect<readonly SessionRowDraft[]>;
-  /**
-   * A resume: commit, in one batch, the cancellation of every request the
-   * previous launch left unbound and the rows this decides from the stored
-   * state (its `run.activate`, the grants it ends, a changed configuration).
-   */
-  readonly activation?: (
-    state: RunState | null,
-  ) => Effect.Effect<readonly SessionRowDraft[], E>;
-  /**
-   * The publisher job the caller is inside: the cell reads the run's rows
-   * in that job and appends through its transaction, never a nested one,
-   * so the job's other rows and the cell's commit together.
-   */
-  readonly within?: Append;
-}
+/** How {@link RunHistory} opens a cell: exactly one of a new run's
+ *  registration, a resume's activation, or the job the caller is inside. */
+export type RunOpening<E = never> =
+  | {
+      /**
+       * A new run's registration (`run.start` first), decided inside the
+       * job of the cell's first append, which it rides: the run exists
+       * with what that append writes or not at all.
+       */
+      readonly registration: Effect.Effect<readonly SessionRowDraft[]>;
+    }
+  | {
+      /**
+       * A resume: commit, in one batch, the cancellation of every request
+       * the previous launch left unbound and the rows this decides from the
+       * stored state (its `run.activate`, the grants it ends, a changed
+       * configuration).
+       */
+      readonly activation: (
+        state: RunState | null,
+      ) => Effect.Effect<readonly SessionRowDraft[], E>;
+    }
+  | {
+      /**
+       * The publisher job the caller is inside: the cell reads the run's
+       * rows in that job and appends through its transaction, never a
+       * nested one, so the job's other rows and the cell's commit together.
+       */
+      readonly within: Append;
+    };
 
 /** The run history over one session's log. */
 export class RunHistory extends Context.Service<
@@ -280,8 +285,9 @@ export class RunHistory extends Context.Service<
     ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
      * The run's cell, seeded with its stored state (a fresh state when it
-     * has none). A resume (`activation`) decides from the stored state
-     * before any resume side effect, in the transaction that activates it.
+     * has none); with no `opening`, over the stored rows as they are. A
+     * resume (`activation`) decides from the stored state before any resume
+     * side effect, in the transaction that activates it.
      */
     readonly open: <E = never>(
       run: RunId,

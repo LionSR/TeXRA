@@ -43,21 +43,40 @@ onboarding sign-in) and `2026-11-03-git-reads-and-subscription-facts-overlap.md`
 
 In order of size. Each needs the decision named.
 
-1. **Opening a project's roots.** Four sites open the config stores, show
-   their warnings and call `openNodeWorkspaceRoots`, adding
-   `workspaceState: serviceProjectState(...)` when the service was reached:
-   `packages/extension/src/extension.ts`,
-   `packages/desktop/src/main/desktopProjects.ts`,
-   `packages/cli/src/runtime/platform/initPlatform.ts` and (without the
-   service state) `packages/texra/src/controllers/server/serve.ts`.
-   `openProjectSession`
-   (`packages/texra/src/controllers/session/openProjectSession.ts`) then
-   decides "service or local" a second time from the same result. The guards
-   differ: only the extension also asks that a workspace root exists. The
-   config warnings are shown three ways (a toast, a log line and a warning,
-   a log line only). Proposed: one function beside `openProjectSession` that
-   returns the roots and the service-or-local choice together. Decision: how
-   a config warning is shown when a host has no window yet.
+1. **Opening a project's roots.** Landed for the extension, the desktop
+   and the service: `openProjectRoots`
+   (`packages/texra/src/controllers/session/openProjectSession.ts`) opens a
+   project's config stores and roots, and `openProjectSession` decides
+   "service or local" for a window. The CLI
+   (`packages/cli/src/runtime/platform/initPlatform.ts`) stays on its own
+   open. Checked on 2026-11-19 against both files, its difference is real:
+   - **The config stores are already open.** `buildCliContext` opens the
+     project, local and user stores before the command's runtime exists
+     (`loadCliStartupConfig`), because the runtime is built from what they
+     say: the log level, the output format, the approval policy, the model.
+     `openProjectRoots` opens the project and local stores itself, so
+     calling it would give the process two providers over the same files,
+     `context.config` (which every command holds) and `roots.config`, and a
+     value written through one would reach the other only through the file.
+     Taking an open provider instead would make its config parameter a union
+     and leave the `serviceProjectState` spread as the only shared lines.
+   - **The CLI needs both sessions, lazily.** `openProjectSession` opens one
+     session when called and answers a window's link
+     (`HostWindows.localLink`). The CLI opens none until a step asks
+     (`auth`, `doctor` and `models` never do), a headless `run` reads the
+     local session (`services.session`) whether or not a service is linked,
+     and each command words an unreachable service itself from the
+     `ServiceUnavailable` it keeps. The CLI would call `openLocalSession`
+     beside `openProjectSession`, not instead of it.
+
+   What the CLI restates is one conditional
+   (`link === undefined ? openSession : serviceSession(...)`) over the app's
+   own `serviceSession`, `serviceProjectState` and `openLocalSession`. It
+   goes away with the dual itself (part C of
+   `.agents/docs/proposed/architecture/2026-11-03-one-fact-one-representation.md`),
+   not before. The config warnings are still shown three ways (a toast, a
+   log line and a warning, a log line only); that decision is open.
+
 2. **Building a TeX file to show it.** The extension
    (`packages/extension/src/frontend/latex/openBuild.ts`) and the desktop
    (`packages/desktop/src/main/desktopPreviewHost.ts`) each write "the file

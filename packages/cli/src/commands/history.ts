@@ -4,7 +4,6 @@ import { Argument, Command, Flag } from 'effect/cli';
 import { type RunId } from '@texra-ai/harness/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { traceHtml } from '@texra/agent/export/standaloneTraceHtml';
-import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
@@ -19,6 +18,7 @@ import {
   readCliHistoryExportInput,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
+import { formatCliHistoryDeletionSummary } from '../runtime/historyLabels';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
   cliErrorMessage,

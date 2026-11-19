@@ -58,7 +58,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       // advertisement, so an unreadable run record costs the row its Resume
       // affordance, never its place in history.
       it.effect(
-        'keeps a row whose resumability read fails, not resumable',
+        'keeps a row whose continuation read fails, not continuing',
         () =>
           Effect.gen(function* () {
             const session = yield* processSession;
@@ -79,7 +79,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(yield* listRuns().pipe(Effect.provide(session))).toEqual([
               expect.objectContaining({
                 id,
-                resumable: false,
+                continues: false,
               }),
             ]);
           }),
