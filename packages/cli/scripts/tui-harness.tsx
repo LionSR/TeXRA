@@ -942,10 +942,7 @@ function seedSubagentFollowupTranscript(): void {
     {
       family: 'subagent',
       runId: 'child-c',
-      attributes: [
-        { name: 'agent', value: 'reviewer' },
-        { name: 'retryable', value: 'true' },
-      ],
+      attributes: [{ name: 'agent', value: 'reviewer' }],
       message: 'rate limit: <tokens> & retries exhausted',
     },
   ];

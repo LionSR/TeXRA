@@ -134,8 +134,7 @@ function deliverySummary(delivery: ChildRunDelivery): string {
     );
     return preview ? `${head}\n${preview}` : head;
   }
-  const retryable = attribute('retryable') === 'true';
-  const head = `✗ ${name} failed${wall}${retryable ? ' (retryable)' : ''}`;
+  const head = `✗ ${name} failed${wall}`;
   return message ? `${head}\n${message}` : head;
 }
 
