@@ -36,19 +36,19 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      * this instead of re-resolving the ambiguous bare name. Absent only on a
      * payload not yet launched, which launch resolves by name.
      */
-    agentSource: Schema.optional(Schema.NullOr(AgentOriginSchema)),
+    agentSource: Schema.optional(AgentOriginSchema),
     /**
      * A `self()` child: it runs as its caller, so it is offered the installed
      * plugins' tools as a top-level run is, still narrowed to what its
      * caller's step offered.
      */
-    asCaller: Schema.optional(Schema.NullOr(Schema.Boolean)),
+    asCaller: Schema.optional(Schema.Boolean),
     model: Schema.String,
     instruction: decodingDefault(Schema.String, ''),
     /** Original user instruction preserved across nested tool-use delegation. */
-    rootUserInstruction: Schema.optional(Schema.NullOr(Schema.String)),
+    rootUserInstruction: Schema.optional(Schema.String),
     /** Optional user-facing text for logs when instruction contains hidden context. */
-    displayInstruction: Schema.optional(Schema.NullOr(Schema.String)),
+    displayInstruction: Schema.optional(Schema.String),
     /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
     memories: decodingDefault(Schema.Array(Schema.String), []),
     /**
@@ -58,30 +58,24 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      */
     skills: Schema.optional(ActivatedSkillsSchema),
     /** Working directory override for subagent tool calls (e.g. a git worktree). */
-    workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
+    workingDirectory: Schema.optional(Schema.String),
     /**
      * What the launching app records about its own launch (where a command
      * line copies the output) and reads back on resume. The harness never
      * reads it, and a child run does not inherit it; each owner decodes its
      * own keys.
      */
-    launch: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
-    ),
+    launch: Schema.optional(Schema.Record(Schema.String, Schema.Json)),
     /** The agents this run and its children may delegate to, pinned at its
      *  launch; absent, the workspace's visible agents. */
-    delegationAgentScope: Schema.optional(
-      Schema.NullOr(AgentDelegationScopeSchema),
-    ),
+    delegationAgentScope: Schema.optional(AgentDelegationScopeSchema),
     /**
      * JSON Schema (a plain object) describing a structured output the agent must
      * submit through the synthetic `submit_output` terminal tool. Serializable by
      * design: a live schema or ITool must never travel through config. Absent
      * for ordinary runs.
      */
-    outputSchema: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-    ),
+    outputSchema: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
     /**
      * What a run does instead of asking its model: it opens with one
      * `script` call as its one response and ends when that call does. A
@@ -89,32 +83,28 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      * for every other run.
      */
     script: Schema.optional(
-      Schema.NullOr(
-        Schema.Union([
-          /** The parent's model wrote it and sent it to the background; the run
-           *  is that script, and its `agent` calls propose themselves. */
-          Schema.Struct({
-            kind: Schema.Literal('background'),
-            code: Schema.NonEmptyString,
-            title: Schema.NonEmptyString,
-            /** The tools the run offers the script, by name. */
-            tools: Schema.Array(Schema.NonEmptyString),
-            /** The script's wall-clock limit, when it set one. */
-            timeoutMs: Schema.optional(
-              Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-            ),
-          }),
-          /** A plugin's program, by the name its plugin registers it under
-           *  (`Plugin.programs`): the run's script imports that module and
-           *  calls its default export with `args`. The registration lists
-           *  its tools, and its `agent` calls were approved with its launch. */
-          Schema.Struct({
-            kind: Schema.Literal('program'),
-            name: Schema.NonEmptyString,
-            args: Schema.Record(Schema.String, Schema.Json),
-          }),
-        ]),
-      ),
+      Schema.Union([
+        /** The parent's model wrote it and sent it to the background; the run
+         *  is that script, and its `agent` calls propose themselves. */
+        Schema.Struct({
+          kind: Schema.Literal('background'),
+          code: Schema.NonEmptyString,
+          title: Schema.NonEmptyString,
+          /** The tools the run offers the script, by name. */
+          tools: Schema.Array(Schema.NonEmptyString),
+          /** The script's wall-clock limit, when it set one. */
+          timeoutMs: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+        }),
+        /** A plugin's program, by the name its plugin registers it under
+         *  (`Plugin.programs`): the run's script imports that module and
+         *  calls its default export with `args`. The registration lists
+         *  its tools, and its `agent` calls were approved with its launch. */
+        Schema.Struct({
+          kind: Schema.Literal('program'),
+          name: Schema.NonEmptyString,
+          args: Schema.Record(Schema.String, Schema.Json),
+        }),
+      ]),
     ),
   }),
 );

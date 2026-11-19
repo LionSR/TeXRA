@@ -153,7 +153,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v11: the skills the user activated are named (`skills`) beside the
     // instruction as typed, no longer written into it (an earlier build's
     // instruction would carry the blocks and its rerun would activate none).
-    'run.config': Object.freeze({ version: 11, listing: 'own' }),
+    // v12: an optional field is absent when unset, never `null` (an earlier
+    // build's `null` would fail as damaged).
+    'run.config': Object.freeze({ version: 12, listing: 'own' }),
     // v2: no `shutdown` reason: a process that exits writes nothing for its
     // runs (an earlier build's shutdown stop would fail as damaged).
     'run.stop': Object.freeze({ version: 2, listing: 'own' }),
@@ -247,7 +249,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // turns before it (`earlierTurns`); an earlier build's would not render.
     // v15: a proposal names its agent's source as `run.config` v10 does: an
     // inline agent's persona inside `agentSource`, no `persona` beside it.
-    'request.opened': Object.freeze({ version: 15, listing: 'request' }),
+    // v16: a proposal's agent source, working directory and root instruction
+    // are absent when unset, never `null`, as `run.config` v12.
+    'request.opened': Object.freeze({ version: 16, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
     'request.decided': Object.freeze({ version: 2, listing: 'request' }),

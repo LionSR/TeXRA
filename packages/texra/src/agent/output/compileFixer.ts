@@ -118,19 +118,22 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
       });
     }
 
+    // The catalog's latexFixer, not the program's own empty persona, in a
+    // chat, not the task's program again.
+    const {
+      agentSource: _programSource,
+      script: _program,
+      ...taskConfig
+    } = savedTaskConfig;
     return {
-      ...savedTaskConfig,
+      ...taskConfig,
       agent: 'latexFixer',
-      // The catalog's latexFixer, not the program's own empty persona.
-      agentSource: null,
       model,
       instruction: buildCompileFixerQuestion(
         compileFailures,
         targets,
         input.runId,
       ),
-      // A chat with latexFixer, not the task's program again.
-      script: null,
       inputFiles: targets.map((target) => target.path),
       outputFiles: [],
     };

@@ -42,6 +42,9 @@ const config = Schema.decodeUnknownSync(AgentConfigSchema)(
   }),
 );
 
+// The same launch as a tool-use run, with no program.
+const { script: _program, ...toolUseConfig } = config;
+
 const tempDirs = useTempDirs();
 
 const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
@@ -161,8 +164,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               // paths.
               yield* publishRunFacts(session, decodeRunId('a1a1a1'), {
                 record: Schema.decodeUnknownSync(AgentConfigSchema)({
-                  ...config,
-                  script: null,
+                  ...toolUseConfig,
                   inputFiles: [],
                   outputFiles: [],
                   workingDirectory: workspace,
