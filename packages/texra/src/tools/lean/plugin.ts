@@ -13,7 +13,6 @@ import { directLeanLanguageServices } from './direct/leanServerPool';
 import { LeanLanguageServices } from './leanLanguageServices';
 import { isLeanServerActive, summarizeLeanServers } from './leanServerInfo';
 import { LEAN4_EXTENSION_ID } from './leanTypes';
-import { LeanBlueprintTool } from './BlueprintTool';
 import { LEAN_MODULES, LEAN_PROGRAMS } from './programs';
 import {
   LeanDiagnosticsTool,
@@ -36,7 +35,6 @@ export const lean4: TexraPlugin = {
       LeanFileTool,
       LeanProjectTool,
       LeanInspectTool,
-      LeanBlueprintTool,
     ],
     // The script tool's description lists the programs; a run offered
     // `program` without it reads them here.
@@ -83,7 +81,6 @@ export const lean4: TexraPlugin = {
     lean_file: 'file-code',
     lean_project: 'folder-tree',
     lean_inspect: 'magnifying-glass-chart',
-    lean_blueprint: 'diagram-project',
   },
   dashboard: {
     name: 'Lean 4 Proof Assistant',

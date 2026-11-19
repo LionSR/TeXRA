@@ -204,7 +204,8 @@ an agent can start one only while that plugin is enabled.
 
 The Lean plugin adds two more: `prove` completes the proofs in `.lean` files
 until Lean reports no error and no `sorry`, and `blueprint` writes or updates
-a LeanBlueprint document until its dependency graph checks clean. Read
+a LeanBlueprint document until `leanblueprint web` and `leanblueprint checkdecls`
+pass. Read
 [Lean 4 proofs](./lean.md#lean-programs).
 
 ### `edit`

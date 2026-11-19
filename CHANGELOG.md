@@ -1330,9 +1330,8 @@ All notable changes to this project will be documented in this file.
   programs. `prove` completes the proofs in the `.lean` files you pass and
   checks each round with Lean's diagnostics (no error, no `sorry`), giving
   its agent up to three rounds; `blueprint` writes or updates a
-  LeanBlueprint document and checks its dependency graph with the new
-  `lean_blueprint` tool (labels, `\uses`, `\proves`, cycles, `\leanok`
-  without `\lean`). Start one with `texra run prove --input Basic.lean` or
+  LeanBlueprint document and checks each round with `leanblueprint web` and
+  `leanblueprint checkdecls`, so it needs the `leanblueprint` CLI. Start one with `texra run prove --input Basic.lean` or
   ask an agent. The Lean agents and skills are unchanged. In a script,
   `lean_diagnostics` now resolves to `{ output, summary, complete, errors,
   sorries }`.
