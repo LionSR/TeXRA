@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Effect, Latch, Result, Schema } from 'effect';
+import { Effect, Latch, Predicate, Result, Schema } from 'effect';
 
 import { hasExtension } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -247,9 +247,7 @@ export class SettingsViewProvider {
           if (Result.isFailure(parsed)) {
             // Every click must either run its command or explain why it did not.
             const command =
-              typeof message === 'object' &&
-              message !== null &&
-              'command' in message &&
+              Predicate.hasProperty(message, 'command') &&
               typeof message.command === 'string'
                 ? message.command
                 : 'unknown';

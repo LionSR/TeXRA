@@ -10,7 +10,14 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { glob, hasMagic, type GlobOptionsWithFileTypesFalse } from 'glob';
-import { Effect, FileSystem, Schema, type PlatformError, Scope } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  Schema,
+  type PlatformError,
+  Result,
+  Scope,
+} from 'effect';
 
 // Local imports
 import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
@@ -246,9 +253,7 @@ export const resolveTaskFiles = Effect.fn('resolveTaskFiles')(function* (
       ),
     { concurrency: 8 },
   );
-  const paths = yield* Effect.forEach(expanded, (entry) =>
-    Effect.fromResult(entry),
-  );
+  const paths = yield* Effect.fromResult(Result.all(expanded));
 
   const writtenFiles: string[] = [];
   const filesOf = Effect.fn('taskFiles.filesOf')(function* (

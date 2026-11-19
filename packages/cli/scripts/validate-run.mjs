@@ -12,6 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { zstdDecompressSync } from 'node:zlib';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
@@ -1277,6 +1278,201 @@ if (!input.stop_hook_active)
         outcomes[1].context === null &&
         outcomes[1].ignored === '[]',
       `the first stop should block and the second, after the block's turn, should let the run end (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * An installed plugin's program, end to end. A synthetic plugin carries one
+ * program that reads its input through `read_file` and also lists a tool of
+ * a plugin a fresh install leaves switched off (no headless command flips
+ * a switch), and one malformed program file. The trust
+ * review and the listing name the program, the review names the malformed
+ * file, a model offered `program` is told of it, `texra run` starts it in
+ * the script sandbox and prints its answer, its run is offered `read_file`
+ * and not the switched-off tool, and starting the malformed one is refused
+ * by file name. The review, the answer and the run's offered tools are the
+ * artifact.
+ */
+function validatePluginProgram() {
+  const cwd = makeScratch('texra-cli-plugin-program-');
+  try {
+    const project = echoProject(cwd);
+    const plugin = path.join(cwd, 'review-kit');
+    mkdirSync(path.join(plugin, '.claude-plugin'), { recursive: true });
+    mkdirSync(path.join(plugin, 'programs'), { recursive: true });
+    writeFileSync(
+      path.join(plugin, '.claude-plugin', 'plugin.json'),
+      `${JSON.stringify({ name: 'review-kit', version: '1.0.0' })}\n`,
+    );
+    writeFileSync(
+      path.join(plugin, 'programs', 'first-line.js'),
+      `// Reads each input file and answers with what it was offered.
+export const description = 'Quote the first line of each input file.';
+export const uses = ['read_file', 'github_subscription', 'agent'];
+
+export default async (args, { inputFiles }) => {
+  const lines = [];
+  for (const file of inputFiles) {
+    const { output } = await tools.read_file({ path: file });
+    lines.push(file + ' holds the marker: ' + output.includes('plugin-program-marker-7391'));
+  }
+  return ['first-line ran in the sandbox.', ...lines, 'Offered: ' + Object.keys(tools).join(', ')].join('\\n');
+};
+`,
+    );
+    // Its description would have to be evaluated to be read.
+    writeFileSync(
+      path.join(plugin, 'programs', 'broken.js'),
+      `export const description = 'Computed ' + String(Date.now());
+export const uses = ['bash'];
+export default async () => 'never runs';
+`,
+    );
+    writeFileSync(
+      path.join(project.work, 'notes.txt'),
+      'plugin-program-marker-7391\nsecond line\n',
+    );
+    // A chat offered `program`: its script tool lists what it may start.
+    writeFileSync(
+      path.join(
+        path.dirname(project.work),
+        'home',
+        '.texra',
+        'v1',
+        'global-storage',
+        'custom_agents',
+        'program-list-validation.yaml',
+      ),
+      `name: program_list_validation
+description: Say what the model was shown.
+
+tools:
+  - script
+  - program
+prompt: |
+  Say what you were shown.
+`,
+    );
+    const cli = (args, input) =>
+      run(process.execPath, [binaryPath, ...args], {
+        cwd: project.work,
+        env: project.ptyEnv,
+        input,
+      });
+    const runArgs = (target, policy) => [
+      'run',
+      target,
+      '--model',
+      'openai/gpt-5.6-sol',
+      '--cwd',
+      project.work,
+      '--approval-policy',
+      policy,
+      '--output-format',
+      'json',
+      '--print',
+    ];
+    assertSuccess(cli(['plugin', 'install', plugin]), 'texra plugin install');
+    const review = cli(['plugin', 'enable', 'review-kit'], 'y\n');
+    assertSuccess(review, 'texra plugin enable');
+    const reviewText = `${review.stdout}\n${review.stderr}`;
+    const listing = cli(['plugin', 'list']);
+    assertSuccess(listing, 'texra plugin list');
+    const chat = cli([
+      ...runArgs('program_list_validation', 'yolo'),
+      '--instruction',
+      'Which programs can you start?',
+    ]);
+    assertSuccess(chat, 'texra run of an agent offered program');
+    const started = cli([
+      ...runArgs('review-kit:first-line', 'never'),
+      '--input',
+      'notes.txt',
+    ]);
+    assertSuccess(started, 'texra run review-kit:first-line');
+    const result = parseJson(started.stdout, 'plugin program run');
+    const response = String(result.output?.response ?? '');
+    const offered = project
+      .readStore(
+        `SELECT s.logical_id AS run, json_extract(e.data, '$.payload.tools') AS tools,
+           json_extract(e.data, '$.payload.modules') AS modules
+         FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE e.type = 'tools.offered' ORDER BY e."commit"`,
+      )
+      .filter(({ run: id }) => id === result.runId)
+      .map(({ tools, modules }) => ({
+        tools: JSON.parse(tools).map(({ name }) => name),
+        modules: Object.keys(JSON.parse(modules)),
+      }));
+    // The `script` tool's description as that run recorded it: a stored
+    // blob, compressed.
+    const described = project
+      .readStore('SELECT value FROM blob')
+      .map(({ value }) => zstdDecompressSync(value).toString('utf8'))
+      .filter(
+        (text) =>
+          text.includes('The programs `program(name, opts)` starts:') &&
+          text.includes('`review-kit:first-line`: Quote the first line'),
+      ).length;
+    const broken = cli([
+      ...runArgs('review-kit:broken', 'never'),
+      '--input',
+      'notes.txt',
+    ]);
+    const artifactPath = writeArtifact('plugin-program.json', {
+      review: reviewText,
+      listing: listing.stdout,
+      response,
+      offered,
+      described,
+      broken: { status: broken.status, stderr: broken.stderr },
+    });
+    assert(
+      reviewText.includes(
+        'review-kit:first-line: Quote the first line of each input file. (tools: read_file, github_subscription, agent)',
+      ) &&
+        reviewText.includes(
+          'Program programs/broken.js of plugin review-kit is not loaded: `description` must be one quoted string',
+        ),
+      `the trust review should name the program, its tools and the malformed file (artifact: ${artifactPath})\n${reviewText}`,
+    );
+    assert(
+      listing.stdout.includes('programs (review-kit:first-line)'),
+      `texra plugin list should name the plugin's program (artifact: ${artifactPath})\n${listing.stdout}`,
+    );
+    assert(
+      described > 0,
+      `a run offered \`program\` should be told of the installed plugin's program (artifact: ${artifactPath})`,
+    );
+    assert(
+      response.includes('first-line ran in the sandbox.') &&
+        response.includes('notes.txt holds the marker: true'),
+      `the program should run in the sandbox, read its input through read_file and answer (artifact: ${artifactPath})\nresponse: ${response}\nstderr: ${started.stderr}`,
+    );
+    assert(
+      offered.length > 0 &&
+        offered.every(
+          ({ tools, modules }) =>
+            tools.includes('read_file') &&
+            // Its delegations stand approved, so `agent` is offered where
+            // no prompt can show.
+            tools.includes('agent') &&
+            !tools.includes('github_subscription') &&
+            modules.includes('review-kit:first-line') &&
+            !modules.includes('review-kit:broken'),
+        ) &&
+        /Offered: (?!.*github_subscription).*read_file/.test(response) &&
+        !started.stderr.includes('github_subscription'),
+      `the program's run should be offered read_file, and not the tool of a switched-off plugin, and load only the well-formed module (artifact: ${artifactPath})\n${JSON.stringify(offered)}`,
+    );
+    assert(
+      broken.status !== 0 &&
+        broken.stderr.includes('programs/broken.js') &&
+        broken.stderr.includes('is not loaded'),
+      `starting the malformed program should be refused naming its file (artifact: ${artifactPath})\nstderr: ${broken.stderr}`,
     );
   } finally {
     removeScratch(cwd);
@@ -3525,6 +3721,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
   validateStopHookBlock();
+  validatePluginProgram();
   validateSdkInlinePersona();
   await validateSdkResumeApproval();
   await validateFork();

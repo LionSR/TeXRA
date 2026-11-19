@@ -4,7 +4,7 @@
 // connect mode; everything else about the state lives here.
 
 import { signal } from '@lit-labs/signals';
-import { Effect, Latch, Result } from 'effect';
+import { Effect, Latch } from 'effect';
 
 import { type RunModelDecisionReason } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -110,22 +110,21 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   // The waiting messages go once the model is resolved, or once resolving it
   // failed or stopped: a failure is said in the transcript, and a run
   // resolves the chat's model again when it starts.
-  yield* Effect.gen(function* () {
+  yield* Effect.suspend(() =>
+    selectChatModel(stores, {
+      model: sessionMeta.get().model,
+      reason: modelSource,
+    }),
+  ).pipe(
     // A typed failure is said here; a defect goes to the reporting below, and
     // an interruption (the chat closing) goes on unreported.
-    const selection = yield* Effect.result(
-      selectChatModel(stores, {
-        model: sessionMeta.get().model,
-        reason: modelSource,
-      }),
-    );
-    if (Result.isFailure(selection)) {
-      appendLocalErrorTranscript(toErrorMessage(selection.failure));
-    } else {
-      patchSessionMeta({ model: selection.success.model });
-      appendLocalNotice(`Model connected: ${selection.success.model}.`);
-    }
-  }).pipe(
+    Effect.match({
+      onFailure: (error) => appendLocalErrorTranscript(toErrorMessage(error)),
+      onSuccess: ({ model }) => {
+        patchSessionMeta({ model });
+        appendLocalNotice(`Model connected: ${model}.`);
+      },
+    }),
     Effect.onInterrupt(() => connection.open),
     reportInTranscript,
     Effect.andThen(connection.open),
