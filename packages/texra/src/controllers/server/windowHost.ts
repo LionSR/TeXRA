@@ -22,7 +22,7 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { serveOverMessages } from '@texra/shared/rpcOverMessages';
-import { WINDOW_OUTDATED, linkOutage, type ServiceLink } from './client';
+import { linkRefusals, type ServiceLink } from './client';
 
 import {
   HostCallFailed,
@@ -158,13 +158,13 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
   // which.
   const attached = yield* Deferred.make<void>();
   const attachment = yield* FiberHandle.make<void, never>();
-  // A newer TeXRA's service that refused this window finishes the wait (no
-  // attachment comes) and is said once per refusal and link, in the first
+  // A link away for good (a newer TeXRA's service refused this window, or
+  // the service keeps failing to start) finishes the wait (no attachment
+  // comes) and is said once per refusal and link, in the first
   // window that hears it (a reconnect resets `refusalTold`, so a later
   // refusal is said again): every call it makes says it too.
   yield* Effect.forkScoped(
-    linkOutage(link).pipe(
-      Stream.filter((reason) => reason === WINDOW_OUTDATED),
+    linkRefusals(link).pipe(
       Stream.runForEach((message) =>
         Deferred.succeed(attached, undefined).pipe(
           Effect.andThen(Ref.getAndSet(link.refusalTold, true)),
