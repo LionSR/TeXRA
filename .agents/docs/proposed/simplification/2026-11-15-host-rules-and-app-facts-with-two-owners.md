@@ -179,9 +179,9 @@ In order of size. Each needs the decision named.
 - **App fact 5** (tool names): `probeLatexTools` in
   `packages/texra/src/latex/latexToolchain.ts` is the one toolchain probe
   for the doctor, the setup assistant, the LaTeX tab and the dependency
-  banner, so no tool is located twice. Still open: the LaTeX status still
-  carries seven `*Path` fields rather than one record keyed by tool (a
-  change to the settings view's message schema and its tab), and the
+  banner, so no tool is located twice. The LaTeX status carries one
+  `paths` record keyed by probed tool since 2026-11-19 (the seven `*Path`
+  fields are gone; the tab shows what it showed). Still open: the
   banner's check (`packages/extension/src/progressView/checkCoreDependencies.ts`)
   is VS Code-free code living in the extension, which belongs in the app
   once its one importer, the progress view provider, can be edited.
