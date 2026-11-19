@@ -5,13 +5,16 @@
  * the copy of a plugin row, which the settings view's Plugins page prints
  * too, is the app's (`@ui/copy/plugins`).
  */
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
+
 export const PLUGINS_TUI = Object.freeze({
   description:
     'Switch plugins on or off. Add one: /plugins add <URL or folder>',
   compactTitle: '/plugins · Switch plugins on or off',
   switchAction: 'switch on/off',
   chooseAction: 'choose',
-  trustTitle: (name: string) => `/plugins · Trust ${name}?`,
+  trustTitle: (name: string, version: string | null) =>
+    `/plugins · ${PLUGINS_PAGE.trustQuestion(name, version)}`,
   trust: 'Trust and switch on',
   decline: 'Keep it off',
   addUsage:
