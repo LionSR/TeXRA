@@ -313,17 +313,17 @@ function staleDiffFileLocation(
 
 /**
  * Remove stale diff companions after accepting workspace outputs, keeping
- * successful paths. `workspaceRoot` is the accepting session's folder, carried
- * as data; the deletions go through that session's own confined view.
+ * successful paths. The companions are located in, and deleted through, the
+ * accepting session's own confined workspace view.
  */
 export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   'acceptedFileTarget.cleanupDiffFiles',
 )(function* (
-  workspaceRoot: string | undefined,
   entries: readonly { outputPath: string; originalPath: string }[],
 ): Effect.fn.Return<string[], never, WorkspaceFs> {
+  const workspaceFs = yield* WorkspaceFs;
   const stale = entries.flatMap(({ outputPath, originalPath }) => {
-    const original = pathToLocationIn(workspaceRoot, originalPath);
+    const original = pathToLocationIn(workspaceFs.root, originalPath);
     if (original.kind === 'external') return [];
     const diffLocation = staleDiffFileLocation(original, outputPath);
     if (!diffLocation || diffLocation.kind === 'external') return [];
@@ -334,11 +334,9 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // sweep keeps every deletion that worked and names the ones that did not
   // rather than dropping them silently. `force` keeps an already-absent
   // companion a success: there is nothing left to remove.
-  return yield* removeBestEffort(
-    yield* WorkspaceFs,
-    stale,
-    'stale diff file',
-  ).pipe(withLogChannel(CHANNEL));
+  return yield* removeBestEffort(workspaceFs, stale, 'stale diff file').pipe(
+    withLogChannel(CHANNEL),
+  );
 });
 
 /** Where accepted content goes: over the base when the extensions match,

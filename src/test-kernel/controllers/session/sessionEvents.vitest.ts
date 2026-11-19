@@ -95,21 +95,8 @@ import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { REPO_ROOT } from '@test/support/repoRoot';
-import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { type FactKind, ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-
-vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
-  const { Layer } = await import('effect');
-  const { LeanLanguageServices } =
-    await import('@texra/tools/lean/leanLanguageServices');
-  return {
-    directLeanLanguageServices: Layer.succeed(LeanLanguageServices)(
-      // cast: no case in this suite reaches the Lean language services.
-      {} as LeanLanguageServices['Service'],
-    ),
-  };
-});
 
 /** A second OS process's writer: this build's `Database` over the store at
  *  `storage`, creating `run`. */

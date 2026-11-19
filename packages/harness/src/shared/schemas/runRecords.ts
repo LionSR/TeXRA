@@ -82,18 +82,35 @@ export function serializeFilteredConfig(
   return JSON.stringify(filtered, null, 2);
 }
 
-/** The name of the registered program the run opened on (`script.name`),
- *  or null for any other run. A program's run is a script that ends: its
+/** Whether the run is a script's (`config.script`, a background script or a
+ *  program): its one response is its script call. It renders no prompt and
+ *  activates no skill, ends when that call does (no later turn, and its
+ *  `Stop` hook runs as already active), and is no conversation to fork or
+ *  start a goal from. */
+export const runsScript = (config: Pick<AgentConfig, 'script'>): boolean =>
+  config.script != null;
+
+/** A script a parent sent to the background, the one script its run is,
+ *  or null for any other run. Its end is delivered to the conversation that
+ *  launched it as a script's delivery, not a subagent's report, and its
+ *  `self()` is that conversation as the script found it. */
+export const backgroundScriptOf = (
+  config: Pick<AgentConfig, 'script'>,
+): Extract<AgentConfig['script'], { kind: 'background' }> | null =>
+  config.script?.kind === 'background' ? config.script : null;
+
+/** The registered program the run opened on (its `name` and `args`), or
+ *  null for any other run. A program's run is a script that ends: its
  *  value and its children's spend are its output, its end its record, and
  *  it takes no later message. A plugin wrote the program, not a model, so
  *  the launch that chose it granted it: tools fixed past any switch, its
  *  delegations under the launch's approval, its prompts and files passed
  *  as written, and no skill activated by its instruction. */
 export const programOf = (
-  config: typeof RunRecordFieldsSchema.Encoded,
-): string | null =>
+  config: Pick<AgentConfig, 'script'> | typeof RunRecordFieldsSchema.Encoded,
+): Extract<AgentConfig['script'], { kind: 'program' }> | null =>
   'script' in config && config.script?.kind === 'program'
-    ? config.script.name
+    ? config.script
     : null;
 
 /**

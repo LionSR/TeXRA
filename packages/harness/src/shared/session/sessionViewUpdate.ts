@@ -718,7 +718,7 @@ function applyRunEvent(
           ('delegationAgentScope' in config
             ? config.delegationAgentScope
             : undefined) ?? null,
-        program: programOf(config),
+        program: programOf(config)?.name ?? null,
       };
     }
     case 'context.state':

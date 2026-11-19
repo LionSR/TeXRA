@@ -223,8 +223,12 @@ What remains is that 27 sites in 21 files ask about it in four spellings
 questions: is it trusted, does it end with its script, does it have a
 conversation to fork or follow up. `forkRun` and `PlanTool` test the raw
 field. `.agents/docs/proposed/architecture/2026-11-06-programs-not-agents.md`
-already plans the three named facts; it changes `run.config`, so it rides
-with phase 5.
+plans the three named facts. They landed without a `run.config` change:
+`runsScript`, `backgroundScriptOf` and `programOf` in
+`packages/harness/src/shared/schemas/runRecords.ts`, which every site now
+reads. What rides with phase 5 is the run shape's two program-only reads
+(children's spend in `runOwnership.ts`, no resume after an end in
+`continuesFromRows`).
 
 ## 7. One project named twice
 

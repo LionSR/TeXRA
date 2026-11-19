@@ -4,7 +4,11 @@ import { Effect, FileSystem } from 'effect';
 
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryLayout';
-import type { AgentConfig, AttachedMemoryMiss } from '@shared/schemas';
+import {
+  runsScript,
+  type AgentConfig,
+  type AttachedMemoryMiss,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
@@ -97,7 +101,7 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
     // What the launch activates (`/skills`): each step resolves the names
     // against its own catalog; a script's run, which renders no prompt,
     // none.
-    activated: agentConfig.script != null ? [] : (agentConfig.skills ?? []),
+    activated: runsScript(agentConfig) ? [] : (agentConfig.skills ?? []),
     attachedMemories: attachedMemories.xml,
     attachedMemoryMisses: attachedMemories.misses,
   };
