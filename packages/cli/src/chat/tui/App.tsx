@@ -85,7 +85,7 @@ import { useSignal } from './state/useSignal';
 import type { Session } from '@texra-ai/harness';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
-import { EMPTY_DRAFT, type Draft } from './input/draftAttachments';
+import { EMPTY_DRAFT, type InputDraft } from './input/draftAttachments';
 import { useChatProcess } from './chatProcess';
 
 // Jump-to-waiting: surface the newly focused run's pending approval right
@@ -101,8 +101,8 @@ interface AppProps {
    *  threaded from the chat surface that opened it. */
   readonly session: Session;
   /** The chat's draft, which the input bar edits. */
-  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
-  readonly onSubmit: (draft: Draft, holdUntil?: 'turn') => void;
+  readonly draft: SubscriptionRef.SubscriptionRef<InputDraft>;
+  readonly onSubmit: (draft: InputDraft, holdUntil?: 'turn') => void;
   readonly commandName?: string;
   /** The chat's scrollback record and its repaint. */
   readonly scrollback: ChatScrollback;

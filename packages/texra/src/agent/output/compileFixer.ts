@@ -145,7 +145,7 @@ function buildCompileFixerQuestion(
   targets: CompileFixerTarget[],
   runId: RunId,
 ): string {
-  const runHint = `Run: ${runId}`;
+  const runHint = `Run ID: ${runId}`;
   const editableFiles = targets.map((target) => target.path);
   const editableHint = `Editable workspace ${pluralize(editableFiles.length, 'target')}: ${editableFiles.join(', ')}`;
   const latexdiffLines = targets.flatMap((target) => {
