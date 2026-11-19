@@ -1,13 +1,14 @@
 import { AgentCatalog } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
-import { defineCommand } from 'citty';
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
+import { Command, Flag } from 'effect/cli';
 
 import { agentKeyOf } from '@texra-ai/harness/schemas';
 
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   CliUsageError,
+  type CliContext,
   failUsage,
   readCliAmbientState,
 } from '../runtime/platform/cliContext';
@@ -24,8 +25,7 @@ import { writeErrorStderr } from '../runtime/platform/logSinks';
 
 import { setWorkspaceCliChatAgent } from '../runtime/platform/cliConfig';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { optString } from './_helpers/globalArgs';
+import { cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
 function parseAgentKeys(value: string): string[] {
@@ -135,50 +135,46 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
   },
 );
 
-const configAgentsCommand = defineCliCommand({
-  meta: {
-    name: 'agents',
-    description: 'Show or change the workspace agents',
-  },
-  args: {
-    agents: {
-      type: 'string',
-      valueHint: 'all|agent,...',
-      description:
+const configAgentsCommand = cliCommand('agents', {
+  description: 'Show or change the workspace agents',
+  config: {
+    agents: Flag.String('agents').pipe(
+      Flag.withMetavar('all|agent,...'),
+      Flag.withDescription(
         'The workspace agents: every agent (all), or an exact comma-separated agent list',
-    },
-    'default-agent': {
-      type: 'string',
-      valueHint: 'agent|none',
-      description:
+      ),
+      Flag.optional,
+    ),
+    defaultAgent: Flag.String('default-agent').pipe(
+      Flag.withMetavar('agent|none'),
+      Flag.withDescription(
         'The root agent new chats in this workspace start with, or none for the automatic default',
-    },
+      ),
+      Flag.optional,
+    ),
   },
-  run: Effect.fn('config.run')(function* (context, ctx) {
+  run: Effect.fn('config.run')(function* (_context, input) {
     const services = yield* cliPlatform;
     return yield* configureWorkspaceAgents(services, {
-      agents: optString(ctx.args.agents),
-      defaultAgent: optString(ctx.args['default-agent']),
+      agents: Option.getOrUndefined(input.agents),
+      defaultAgent: Option.getOrUndefined(input.defaultAgent),
     });
   }),
 });
 
-const configShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show effective CLI configuration' },
+const configShow = {
+  config: {},
   run: Effect.fn('config.run')(function* () {
     const services = yield* cliPlatform;
     return yield* showConfig(services);
   }),
-});
+};
 
-const configEditCommand = defineCliCommand({
-  meta: {
-    name: 'edit',
-    description: 'Open the interactive configuration view',
-  },
+const configEdit = {
+  config: {},
   // The terminal check is the builder's, above the program: it refuses
-  // before `defineCliCommand` installs anything.
-  run: (context) => {
+  // before the command's runtime is built.
+  run: (context: CliContext) => {
     const ambient = readCliAmbientState();
     if (!ambient.stdinIsTty || !context.stdoutIsTty || context.termIsDumb) {
       throw new CliUsageError({
@@ -204,20 +200,26 @@ const configEditCommand = defineCliCommand({
       });
     });
   },
-});
+};
 
-export const configCommand = defineCommand({
-  meta: {
-    name: 'config',
-    description: 'Inspect and change TeXRA configuration',
-  },
-  subCommands: {
-    edit: configEditCommand,
-    show: configShowCommand,
-    agents: configAgentsCommand,
-  },
-  default: () => {
+const configShowDescription = 'Show effective CLI configuration';
+const configEditDescription = 'Open the interactive configuration view';
+
+// `texra config` on its own opens the view on a terminal and shows the
+// configuration otherwise.
+export const configCommand = cliCommand('config', {
+  description: 'Inspect and change TeXRA configuration',
+  config: {},
+  run: (context: CliContext) => {
     const ambient = readCliAmbientState();
-    return ambient.stdinIsTty && ambient.stdoutIsTty ? 'edit' : 'show';
+    return ambient.stdinIsTty && ambient.stdoutIsTty
+      ? configEdit.run(context)
+      : configShow.run();
   },
-});
+}).pipe(
+  Command.withSubcommands([
+    cliCommand('edit', { description: configEditDescription, ...configEdit }),
+    cliCommand('show', { description: configShowDescription, ...configShow }),
+    configAgentsCommand,
+  ]),
+);

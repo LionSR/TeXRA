@@ -41,7 +41,7 @@ For deeper analysis, ask to download the LaTeX source of a paper:
 Download the source files for arxiv:2401.12345 so I can see how they made their figures.
 ```
 
-This uses the `download_arxiv_source` tool and places the files in your workspace.
+This uses the `download_arxiv_source` tool and places the files in your workspace. Because it writes to your workspace, TeXRA asks for your approval before the download runs, as it does for any tool that changes your workspace.
 
 ### <wa-icon library="texra" name="globe"></wa-icon> Search the web
 
@@ -55,7 +55,7 @@ The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model pr
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Adding an item changes your library, so TeXRA asks for your approval before `zotero_add` runs. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ```
 Search my Zotero library for papers on attention mechanisms.

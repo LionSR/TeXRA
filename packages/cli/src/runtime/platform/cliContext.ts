@@ -97,7 +97,7 @@ export interface CliContext {
 /**
  * The invocation a command's program runs for: its context, decided once
  * from argv, and the one prompt lane over this process's stdin.
- * `defineCliCommand` provides it, so the helpers that print a result or ask
+ * `cliCommand` provides it, so the helpers that print a result or ask
  * the operator read it here instead of taking the context as a parameter.
  */
 export class CliInvocation extends Context.Service<
@@ -438,7 +438,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
     const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
     const noInput = init.globalArgs.noInput === true;
-    // The flag is validated by citty (`type: 'enum'`) and the config tiers by
+    // The flag is validated by its parse (`Flag.Literals`) and the config tiers by
     // the catalog row's own schema, which also supplies the value when no tier
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers

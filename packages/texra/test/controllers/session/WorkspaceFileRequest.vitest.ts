@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -9,6 +10,7 @@ import { join } from 'node:path';
 
 import { layer } from '@effect/vitest';
 import { Effect, Exit, Ref, SubscriptionRef } from 'effect';
+import { RpcClientError } from 'effect/rpc';
 import { beforeEach, expect } from 'vitest';
 
 import { sessionFsLayer } from '@texra-ai/harness/host';
@@ -17,8 +19,12 @@ import {
   SERVICE_OFFLINE,
   type Linked,
   type ServiceClient,
-  type ServiceLink,
 } from '@texra/controllers/server/client';
+import { serviceFileWrite } from '@texra/controllers/server/serviceSession';
+import {
+  writeFileIfUnchanged,
+  type WriteProjectFile,
+} from '@texra/common/files/projectFileWrite';
 import { answerWorkspaceFile } from '@texra/controllers/session/workspaceFileRequest';
 import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -33,9 +39,9 @@ let missingExternalPath = '';
  *  its session's rooted filesystems. */
 const file = (
   action: Parameters<typeof answerWorkspaceFile>[0],
-  service?: ServiceLink,
+  write: WriteProjectFile = writeFileIfUnchanged,
 ) =>
-  answerWorkspaceFile(action, service).pipe(
+  answerWorkspaceFile(action, write).pipe(
     Effect.provide(
       sessionFsLayer({ workspace: workspaceRoot, storage: fixtureRoot }),
     ),
@@ -134,30 +140,31 @@ layer(SessionGraph.hosted)('workspaceFile request', (it) => {
           const asked: unknown[] = [];
           // cast: the one procedure a save calls stands for the client.
           const client = {
-            'file.save': (input: unknown) => {
+            'file.write': (input: unknown) => {
               asked.push(input);
-              return Effect.succeed({ kind: 'changedOnDisk' });
+              return Effect.succeed(false);
             },
           } as unknown as ServiceClient;
           const state = yield* SubscriptionRef.make<Linked<ServiceClient>>({
             client,
           });
-          const link = linkOver(state, yield* Ref.make(false));
+          const write = serviceFileWrite(
+            linkOver(state, yield* Ref.make(false)),
+          );
           const onDisk = () =>
             readFileSync(join(workspaceRoot, 'paper.tex'), 'utf8');
           const save = file(
             { kind: 'write', path: 'paper.tex', contents: 'mine', base: null },
-            link,
+            write,
           );
 
           // The service's answer is the save's, and nothing is written here.
           expect(yield* save).toEqual({ kind: 'changedOnDisk' });
           expect(asked).toEqual([
             {
-              workspace: workspaceRoot,
-              path: 'paper.tex',
+              path: realpathSync(join(workspaceRoot, 'paper.tex')),
               contents: 'mine',
-              base: null,
+              expected: { kind: 'anything' },
             },
           ]);
           expect(onDisk()).toBe('inside');
@@ -170,6 +177,41 @@ layer(SessionGraph.hosted)('workspaceFile request', (it) => {
           expect(yield* save).toEqual({ kind: 'done' });
           expect(onDisk()).toBe('mine');
           expect(asked).toHaveLength(1);
+
+          // The service wrote the save and the connection went before its
+          // answer did: the write this window then makes finds the file
+          // already holding the save, which is the save done, not someone
+          // else's change.
+          writeFileSync(join(workspaceRoot, 'paper.tex'), 'inside');
+          const cutOff = {
+            'file.write': () =>
+              Effect.sync(() =>
+                writeFileSync(join(workspaceRoot, 'paper.tex'), 'mine, again'),
+              ).pipe(
+                Effect.andThen(
+                  Effect.fail(
+                    new RpcClientError.RpcClientError({
+                      reason: new RpcClientError.RpcClientDefect({
+                        message: 'the connection closed',
+                        cause: undefined,
+                      }),
+                    }),
+                  ),
+                ),
+              ),
+          } as unknown as ServiceClient; // cast: as above
+          yield* SubscriptionRef.set(state, { client: cutOff });
+          expect(
+            yield* file(
+              {
+                kind: 'write',
+                path: 'paper.tex',
+                contents: 'mine, again',
+                base: 'inside',
+              },
+              write,
+            ),
+          ).toEqual({ kind: 'done' });
         }),
     );
   });
