@@ -2044,14 +2044,16 @@ this type: reporting a disk error as a refused run is the silent-
 degradation defect in a different costume, so `open` and `load` keep
 them in their error channel beside it.
 
-Which arms are reachable, and from where:
-- `not-owner`: from `RunCell.append`, where the session's log refuses a
-  closed target as `DatabaseAggregateClosed`, nothing written. It is never
+`reason` says why the run's stored rows cannot be used, the one thing a
+reader asks of a refusal ({@link runReadRefusal}); a refused write that
+says nothing about the stored rows has none, and its `detail` words it.
+From where each comes:
+- no reason: from `RunCell.append`. Either the session's log refused a
+  closed target as `DatabaseAggregateClosed`, nothing written (never
   synthesised from any other write failure: a disk error stays a
-  `DatabaseWriteFailed`. A loop that meets it mid-turn stops with it,
-  no retry and no second write.
-- `unsafe-endpoint`: a pre-publish assertion over every durable origin,
-  the loud restatement of the package's endpoint constraint.
+  `DatabaseWriteFailed`; a loop that meets it mid-turn stops with it, no
+  retry and no second write), or a durable origin in the batch is not a
+  scheme, host and path alone, checked before anything is published.
 - `unprepared-history`: `PreparedHistorySchema` over the history the batch
   assembles, at the write boundary of every batch that appends to or
   rewrites it, and on cold load.
@@ -2063,19 +2065,19 @@ Which arms are reachable, and from where:
   the history replays was recorded on another protocol than the run's
   binding speaks now, so no request could replay it.
 A violated `RunCell.append` precondition is a caller defect
-(`Effect.die`), not an arm: the loop must not handle it.
+(`Effect.die`), not a refusal: the loop must not handle it.
 
 ```ts
 class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
   'RunHistoryRefused',
   {
-    reason: Schema.Literals([
-      'not-owner',
-      'unsafe-endpoint',
-      'unprepared-history',
-      'inconsistent',
-      'foreign-protocol',
-    ]),
+    reason: Schema.optional(
+      Schema.Literals([
+        'unprepared-history',
+        'inconsistent',
+        'foreign-protocol',
+      ]),
+    ),
     runId: RunIdSchema,
     detail: Schema.String,
     cause: Schema.optional(RunHistoryInconsistent),

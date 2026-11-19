@@ -79,7 +79,7 @@ import {
   resolveImages,
   restoreDraft,
   withSkill,
-  type Draft,
+  type InputDraft,
 } from './tui/input/draftAttachments';
 import type { ModelConnection } from './tui/modelConnection';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
@@ -141,7 +141,7 @@ export interface ChatSessionController {
    * the user stopped it.
    */
   submit(
-    draft: Draft,
+    draft: InputDraft,
     holdUntil?: 'turn',
   ): Effect.Effect<void, Error, ProcessServices>;
   /** Succeeds once every message submitted so far has been sent, or has
@@ -197,7 +197,7 @@ interface ChatSessionControllerInit {
   readonly approvalPolicy: () => ApprovalPolicy | undefined;
   /** The composer's draft: the skills a message takes, and where a message
    *  the session does not take goes back to. */
-  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
+  readonly draft: SubscriptionRef.SubscriptionRef<InputDraft>;
   /** Chat messages wait here until a model is connected. */
   readonly modelConnection: ModelConnection;
 }
@@ -768,7 +768,7 @@ export function createChatSessionController(
 
   /** A message back in the input, below whatever was typed since. */
   const returnToInput = (
-    message: Draft,
+    message: InputDraft,
     reason?: string,
   ): Effect.Effect<void> =>
     SubscriptionRef.update(draft, (current) =>
@@ -787,7 +787,7 @@ export function createChatSessionController(
     );
 
   const submitChatMessage = Effect.fn('submitChatMessage')(function* (
-    submitted: Draft,
+    submitted: InputDraft,
     line: string,
     holdUntil: 'turn' | undefined,
   ) {
@@ -796,7 +796,7 @@ export function createChatSessionController(
       current.skills,
       { ...current, skills: [] },
     ]);
-    const message: Draft = { ...submitted, skills };
+    const message: InputDraft = { ...submitted, skills };
     const mediaFiles = resolveImages(message).map((image) => image.path);
     const send = (target: RunId, continuing: boolean) =>
       FiberSet.run(
@@ -869,7 +869,7 @@ export function createChatSessionController(
   });
 
   const submit = Effect.fn('chatSubmit')(function* (
-    submitted: Draft,
+    submitted: InputDraft,
     holdUntil?: 'turn',
   ) {
     const line = expandText(submitted).trim();

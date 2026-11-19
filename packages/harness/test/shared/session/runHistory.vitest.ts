@@ -181,7 +181,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             ])
             .pipe(Effect.flip);
           expect(unsafe).toBeInstanceOf(RunHistoryRefused);
-          expect(refusalOf(unsafe)?.reason).toBe('unsafe-endpoint');
           expect(refusalOf(unsafe)?.detail).not.toContain(SECRET);
           expect(refusalOf(unsafe)?.detail).toContain(
             'https://api.example.test/v1',
