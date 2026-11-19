@@ -31,11 +31,6 @@ export const fileSelectLayoutStyles = css`
     min-height: var(--height-control-compact);
   }
 
-  .file-select-header > wa-button {
-    opacity: var(--opacity-full);
-    flex-shrink: 0;
-  }
-
   .file-select label,
   .file-select-label {
     display: block;
@@ -51,16 +46,6 @@ export const fileSelectLayoutStyles = css`
     flex: 1;
     min-width: 0;
     min-height: var(--height-control-compact);
-  }
-
-  .file-select-label-group wa-button {
-    opacity: var(--opacity-full);
-  }
-
-  .file-select-label-group wa-input {
-    flex: 1;
-    min-width: 0;
-    margin: 0;
   }
 
   .file-select-icon {
@@ -88,11 +73,9 @@ export const fileSelectLayoutStyles = css`
   }
 
   .file-select-actions wa-button {
-    opacity: var(--opacity-full);
     flex-shrink: 0;
   }
 
-  .file-select select,
   .file-select wa-select {
     width: 100%;
   }
