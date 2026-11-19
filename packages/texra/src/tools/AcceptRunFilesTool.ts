@@ -20,7 +20,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
@@ -228,22 +228,21 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       const sourceLocation = yield* resolveSourceFile(
         runFiles,
         mapping.path,
-        call,
+        call.env.roots.storage,
       );
 
       const destPath = mapping.original ?? mapping.path;
-      // The call's own workspace root, as data: the source may resolve
-      // under any root, but the destination is this session's.
-      const workspaceRoot = call.env.roots.workspace;
-      const dest = workspaceRoot
-        ? pathToLocationIn(workspaceRoot, destPath)
+      // The source may resolve under any root, but the destination is this
+      // session's workspace.
+      const workspaceFs = yield* WorkspaceFs;
+      const dest = workspaceFs.root
+        ? pathToLocationIn(workspaceFs.root, destPath)
         : undefined;
       if (dest?.kind !== 'workspace') {
         return yield* new ToolError(
           `original must be inside the workspace: ${destPath}`,
         );
       }
-      const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
       const hostFs = yield* FileSystem.FileSystem;
 
       const rawContent = yield* readNormalizedFile(
@@ -395,10 +394,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   }
 
   // Phase 3: Clean up diff files from workspace for accepted files
-  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
-    call.env.roots.workspace,
-    acceptedEntries,
-  );
+  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(acceptedEntries);
   for (const f of cleaned) {
     results.push(`cleaned: ${f}`);
   }
@@ -439,18 +435,16 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
   function* (
     runFiles: RunWorkspace,
     runPath: string,
-    call: ToolContextShape,
+    storage: string,
   ): Effect.fn.Return<
     FileLocation,
     Error,
     FileSystem.FileSystem | WorkspaceFs
   > {
     const { runId } = runFiles;
-    const entry = yield* runEntryUnder(
-      call.env.roots.storage,
-      runId,
-      runPath,
-    ).pipe(Effect.mapError(ensureError));
+    const entry = yield* runEntryUnder(storage, runId, runPath).pipe(
+      Effect.mapError(ensureError),
+    );
     switch (entry.kind) {
       case 'file':
         return entry.location;
@@ -474,7 +468,7 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
     // Fall back to workspace
     const workspaceFs = yield* WorkspaceFs;
     // `runPath` is non-empty here: run storage refused an empty one above.
-    const wsLoc = pathToLocationIn(call.env.roots.workspace, runPath);
+    const wsLoc = pathToLocationIn(workspaceFs.root, runPath);
     if (
       wsLoc.kind === 'workspace' &&
       (yield* entryTypeIn(workspaceFs, wsLoc.relativePath).pipe(

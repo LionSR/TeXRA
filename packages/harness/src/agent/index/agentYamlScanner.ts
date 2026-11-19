@@ -22,13 +22,14 @@ import type { AgentEntry } from './agentEntry';
 const CHANNEL = 'agentRegistry';
 
 /**
- * One file- or directory-level scan failure. Scanning is a best-effort
- * projection: a bad YAML file becomes an issue entry and an unreadable
- * root becomes one issue that contributes no files, so the error never escapes
- * `scanDirectory`'s channel — it exists to be recovered from, and the channel
- * is `never` at the export. Defects (programming errors) stay defects.
+ * One file- or directory-level scan failure, of an agent YAML file or a
+ * plugin's subagent file. Scanning is a best-effort projection: a bad file
+ * becomes an issue entry and an unreadable root becomes one issue that
+ * contributes no files, so the error never escapes a scan's channel — it
+ * exists to be recovered from, and the channel is `never` at the export.
+ * Defects (programming errors) stay defects.
  */
-class AgentScanError extends Schema.TaggedError<AgentScanError>()(
+export class AgentScanError extends Schema.TaggedError<AgentScanError>()(
   'AgentScanError',
   {
     path: Schema.String,

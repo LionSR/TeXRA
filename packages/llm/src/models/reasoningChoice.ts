@@ -17,6 +17,7 @@ import {
   type ReasoningMode,
 } from 'llm-zoo';
 
+import type { PlanRoute } from '../errors.js';
 import type { ModelRoute } from './modelRoute.js';
 
 /** The effort used when neither the caller nor the user names one. */
@@ -33,6 +34,15 @@ const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
   ReasoningEffort.LOW,
   ReasoningEffort.MEDIUM,
 ];
+
+/** The efforts each plan's backend serves; `undefined` for every effort
+ *  the model has. */
+const PLAN_EFFORTS = Object.freeze({
+  'chatgpt-subscription': CODEX_ROUTE_EFFORTS,
+  'xai-subscription': undefined,
+  'kimi-code-subscription': undefined,
+  'glm-coding-plan-subscription': undefined,
+} satisfies Record<PlanRoute, readonly ReasoningEffort[] | undefined>);
 
 /**
  * The reasoning controls `config` has on `route`; without a route, the
@@ -57,15 +67,20 @@ function routeControls(
       return { ...reasoning, off: undefined };
     case ModelProvider.MINIMAX:
       return { ...reasoning, efforts: [ReasoningEffort.HIGH] };
-    default:
-      return route.kind === 'session' && route.plan === 'chatgpt-subscription'
-        ? {
+    default: {
+      const served =
+        'plan' in route && route.plan !== null
+          ? PLAN_EFFORTS[route.plan]
+          : undefined;
+      return served === undefined
+        ? reasoning
+        : {
             ...reasoning,
             efforts: reasoning.efforts.filter((effort) =>
-              CODEX_ROUTE_EFFORTS.includes(effort),
+              served.includes(effort),
             ),
-          }
-        : reasoning;
+          };
+    }
   }
 }
 

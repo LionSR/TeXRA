@@ -43,10 +43,8 @@ import {
   type AgentConfig,
   SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
-import type {
-  RegisterRunOptions,
-  Registration,
-} from '@shared/session/runFacts';
+import type { Registration } from '@agent/storage/runLifecycle';
+import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { RunHistory } from '@shared/session/runHistory';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { buildTerminalTool } from '@tools/structuredOutput';

@@ -24,7 +24,7 @@ import {
   withPastedImage,
   withPastedText,
   withText,
-  type Draft,
+  type InputDraft,
 } from '../input/draftAttachments';
 import { useImagePastes } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
@@ -57,10 +57,10 @@ const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 interface InputBarProps {
   /** The chat's draft: what the input shows, its chips' content and the
    *  activated skills. A message the session does not take comes back here. */
-  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
+  readonly draft: SubscriptionRef.SubscriptionRef<InputDraft>;
   /** Called with the submitted draft only on real (non-paste) Enter, or on
    *  Shift-Tab with `holdUntil: 'turn'`. */
-  readonly onSubmit: (draft: Draft, holdUntil?: 'turn') => void;
+  readonly onSubmit: (draft: InputDraft, holdUntil?: 'turn') => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
   /** Inline reason shown when the disabled input remains visible. */
@@ -127,7 +127,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     [draftRef],
   );
   const writeDraft = useCallback(
-    (next: Draft) => mount.sync(SubscriptionRef.set(draftRef, next)),
+    (next: InputDraft) => mount.sync(SubscriptionRef.set(draftRef, next)),
     [draftRef, mount],
   );
   // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,

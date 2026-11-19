@@ -296,7 +296,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
-        ? Settings.getConfig(roots.config, AGENT_SKILLS_ENABLED_SETTING)
+        ? yield* Settings.get(roots, AGENT_SKILLS_ENABLED_SETTING)
         : recordedSkills.length > 0;
     const catalog =
       listing || names.length > 0

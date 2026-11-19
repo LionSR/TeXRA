@@ -43,8 +43,6 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
-  decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
   [`FactKind`](#factkind), and [`Program`](#program) (how its run
   reads: [`ProgramResult`](#programresult)).
 
@@ -482,20 +480,6 @@ interface CallRequests {
     },
     DatabaseAggregateClosed | CellError
   >;
-  /**
-   * Open a plugin's request the call does not wait on, under its
-   * `data.requestId`: its `request.opened` commits on the run's history
-   * through the one door every request opens at, with `data` stored as
-   * the JSON it writes, and the plugin's decision hook takes each answer
-   * when it lands (`Plugin.decision`). A person answers it. A failed
-   * commit is not proof that nothing landed: the run's rows decide.
-   */
-  readonly post: (
-    request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
-      readonly blocksCaller: false;
-      readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
-    },
-  ) => Effect.Effect<void, CellError>;
   /** Show the person something on the session's host (a file opened
    *  beside what they are looking at, a notice), answered by nothing. */
   readonly present: <K extends RuntimePresentationEvent>(
@@ -606,11 +590,20 @@ interface ConfigProvider {
    * (`catalog.configDefault`); a key no row owns reads as `undefined` when
    * absent.
    *
-   * It is synchronous, and it casts: the value it returns is whatever the
-   * store holds. A reader that needs the value checked reads through
-   * `Settings.get`, which safe-parses the stored value against the row's
-   * schema; a hand-edited `"false"` in a
-   * boolean row is a truthy string here and silently means the opposite.
+   * It is synchronous because some readers cannot wait for an Effect: the
+   * replacement engine's rule sets, a tool's `prompt` callback, the
+   * approval `policy` callback, the VS Code status bar's paint, the host
+   * snapshot's projection and the CLI's startup rows, read before its
+   * runtime exists. A read is cheap: each scope's JSON store it consults
+   * (workspace, global, and local for a local row) stats its file (inode,
+   * mtime, size) and re-reads it only when that changed, so another
+   * process's edit is seen without a watcher.
+   *
+   * It casts: the value it returns is whatever the store holds. A reader
+   * that needs the value checked reads through `Settings.get`, which
+   * safe-parses the stored value against the row's schema; a hand-edited
+   * `"false"` in a boolean row is a truthy string here and silently means
+   * the opposite.
    * Nothing may cache what either read returns: a setting the user changes
    * mid-process is read on the next call.
    *
@@ -711,19 +704,11 @@ interface CurrentValues {
 ## DecisionOf
 
 The decisions a request of kind `K` takes: its own actions and the three
-refusals. A plugin's request declares its actions on its row, so its
-type accepts any decision.
+refusals.
 
 ```ts
-type DecisionOf<K extends RequestPayload['kind']> =
-  | Extract<
-      RequestDecision,
-      {
-        action: (typeof OWN_ANSWERS & {
-          readonly plugin: PluginRequest['answers'];
-        })[K][number];
-      }
-    >
+type DecisionOf<K extends RequestKind> =
+  | Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>
   | RefusalDecision;
 ```
 
@@ -1143,7 +1128,7 @@ interface ITool<E = Error, R = never> {
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, a plugin's request), which answers what the call's hooks
+   * question), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */
@@ -1507,8 +1492,6 @@ interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request it opened, on or off. */
-  readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
   /** Script module sources by name, imported as `builtIn:<name>`. */
@@ -1777,8 +1760,8 @@ interface ProgramResult<R = unknown> {
 
 ## PromptRenderFailed
 
-A prompt that did not render: the template's own error, or `nunjucks`
-failing to load.
+A prompt that did not render: the template's own error, `nunjucks`
+failing to load, or an `AGENTS.md` that is there and could not be read.
 
 ```ts
 class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
@@ -1830,44 +1813,6 @@ Render a prompt string using nunjucks templating.
 
 ```ts
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
-```
-
-## RequestDecisionHook
-
-A plugin's side of a decision on a pending request it opened (a
-`PluginRequest` naming it), run before the decision commits: what the
-plugin records outside the session's store, and what commits with the
-decision in its one checked transaction ({@link RequestDecisionRecord}).
-The outside record must be idempotent: an answer tried again after a
-failure, or raced by another, records nothing twice, and the second
-reads the first's. A process that exits before the transaction leaves
-the request pending and answerable.
-
-```ts
-interface RequestDecisionHook {
-  readonly record: (request: {
-    readonly payload: PluginRequest;
-    readonly decision: RequestDecision;
-  }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>;
-}
-```
-
-## RequestDecisionRecord
-
-What commits with a plugin request's decision, in its transaction
-({@link RequestDecisionHook}).
-
-```ts
-interface RequestDecisionRecord {
-  /** Facts about the plugin's own aggregates, hung under the request's run
-   *  and checked in the transaction: one its kind refuses is logged and
-   *  left out. */
-  readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, accepted in the
-   *  transaction (one the run's closed input refuses is logged), the run
-   *  woken for it once that commits. */
-  readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
-}
 ```
 
 ## requestToolEditApproval
@@ -2046,14 +1991,16 @@ this type: reporting a disk error as a refused run is the silent-
 degradation defect in a different costume, so `open` and `load` keep
 them in their error channel beside it.
 
-Which arms are reachable, and from where:
-- `not-owner`: from `RunCell.append`, where the session's log refuses a
-  closed target as `DatabaseAggregateClosed`, nothing written. It is never
+`reason` says why the run's stored rows cannot be used, the one thing a
+reader asks of a refusal ({@link runReadRefusal}); a refused write that
+says nothing about the stored rows has none, and its `detail` words it.
+From where each comes:
+- no reason: from `RunCell.append`. Either the session's log refused a
+  closed target as `DatabaseAggregateClosed`, nothing written (never
   synthesised from any other write failure: a disk error stays a
-  `DatabaseWriteFailed`. A loop that meets it mid-turn stops with it,
-  no retry and no second write.
-- `unsafe-endpoint`: a pre-publish assertion over every durable origin,
-  the loud restatement of the package's endpoint constraint.
+  `DatabaseWriteFailed`; a loop that meets it mid-turn stops with it, no
+  retry and no second write), or a durable origin in the batch is not a
+  scheme, host and path alone, checked before anything is published.
 - `unprepared-history`: `PreparedHistorySchema` over the history the batch
   assembles, at the write boundary of every batch that appends to or
   rewrites it, and on cold load.
@@ -2065,19 +2012,19 @@ Which arms are reachable, and from where:
   the history replays was recorded on another protocol than the run's
   binding speaks now, so no request could replay it.
 A violated `RunCell.append` precondition is a caller defect
-(`Effect.die`), not an arm: the loop must not handle it.
+(`Effect.die`), not a refusal: the loop must not handle it.
 
 ```ts
 class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
   'RunHistoryRefused',
   {
-    reason: Schema.Literals([
-      'not-owner',
-      'unsafe-endpoint',
-      'unprepared-history',
-      'inconsistent',
-      'foreign-protocol',
-    ]),
+    reason: Schema.optional(
+      Schema.Literals([
+        'unprepared-history',
+        'inconsistent',
+        'foreign-protocol',
+      ]),
+    ),
     runId: RunIdSchema,
     detail: Schema.String,
     cause: Schema.optional(RunHistoryInconsistent),

@@ -54,8 +54,8 @@ const categories = [
   {
     icon: 'comment-discussion',
     name: 'Delegation',
-    desc: 'Delegate to Codex or Claude Code, consult an external model',
-    tools: ['codex', 'claude_code', 'inquiry'],
+    desc: 'Delegate to Codex or Claude Code',
+    tools: ['codex', 'claude_code'],
   },
   {
     icon: 'beaker',

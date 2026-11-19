@@ -295,7 +295,9 @@ function runStreamedTurn(
         Effect.map((): AgentCliTurn => ({
           response: responseParts.join('\n\n'),
           usage: codexTurnUsage(usage),
-          attributes: [{ name: 'thread-id', value: thread.id || null }],
+          attributes: thread.id
+            ? [{ name: 'thread-id', value: thread.id }]
+            : [],
         })),
         Effect.ensuring(Effect.sync(() => finalizeTurnCard('failed'))),
       );

@@ -180,11 +180,46 @@ are gone; a run's error is `classifyAgentError`'s `{ kind: 'model',
 failure }` or a plain kind (`shared/schemas/runRecords.ts:116-120`), and
 `agentErrorPresentation` has two branches, the missing key read from the
 route failure's `missingApiKey`. `TaskRecordsFailed` carries no `reason`.
-Still open: `RunHistoryRefused.reason 'unsafe-endpoint'` (produced at
-`agent/runtime/makeRunHistory.ts:245`, no reader), no `HostCallFailed`
+Still open: no `HostCallFailed`
 (`hostCallFailure.ts` is still the shape), and the pairs
 `DeviceCodeExpired`/`DeviceCodeTimedOut` and
 `CliResourcesNotFound`/`DesktopResourcesNotFound`._
+
+_Done 2026-11-19: `RunHistoryRefused.reason` is optional and has the three
+values `runReadRefusal` reads (`unprepared-history`, `inconsistent`,
+`foreign-protocol`: the stored rows cannot be used). `unsafe-endpoint` and
+`not-owner` were produced and read by nothing; each is the refusal's
+`detail` now, on a refusal with no reason._
+
+_Also 2026-11-19: the two pairs were already one each: a device code
+that runs out is one `SubscriptionOAuthError` of kind `expired`
+(`packages/llm/src/oauth/deviceAuthorization.ts`), and a host's missing
+resources one `ResourcesNotFound`
+(`packages/texra/src/controllers/texraProcessLayer.ts`), which both hosts
+raise. A second tag no production code reads is gone where its
+subsystem already had one: `PluginAgentUnread` is `AgentScanError`,
+`AgentsMdUnread` is `PromptRenderFailed`, `ParentRunClosed` is
+`RunOpenRejected` (now in
+`packages/harness/src/agent/storage/runLifecycle.ts`),
+`MediaInputFailed` is `MediaConversionFailed`; and two host capabilities
+raise `HostFailed` with the member's name: the setup command adapter
+(`SetupCommandFailed` is gone) and the export's format pick, whose 1:1
+re-wrap into `TranscriptExportFailed` is gone with
+`transcriptExportFailure.ts`. Checked and kept, each read by a branch:
+`TerminalRunFailed.reason`, `DiagnosticsReadFailed.reason`,
+`VscodeCommandRefused.reason` (`not-registered` in `compareFiles.ts`), the
+Lean tags (read in `catchTag` arrays), the GitHub client's four, and the
+six "unavailable" (each caught by its tag). Kept as each subsystem's one
+error, with no sibling to fold into: `AudioRecorderError`,
+`CliPromptFailed`, `JsonFileFailed`, `EditorPaneError`,
+`ChatExportInputUnreadable` (the tag over a port declared `Error`), and
+the `Effect.try` wrappers logged where they are raised
+(`ChildNotKilled`, `HomeDirectoryUnresolved`,
+`SkillDirectoryUnverified`, `CredentialFileUnchecked`). Still open,
+because open PRs hold their files: `HostCallFailed` and `WindowCallFailed`
+(`packages/texra/src/controllers/server/`), and `SettingsRequestFailed`
+and `ApiKeyPromptFailed`, raised from the CLI chat's forms and
+`openGuiWindow.ts`._
 
 **Give up.** Catching a failure by a name nobody catches it by.
 

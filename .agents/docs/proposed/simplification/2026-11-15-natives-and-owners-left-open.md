@@ -20,15 +20,13 @@ another open PR to merge first.
 4. **`replyDocuments.ts` reads three files with `readFileString` and a CRLF
    replace**, the body of `readNormalizedFile`. Left for the same reason: the
    open #14941 edits that file.
-5. **`import.meta.dirname`.** Eight scripts under `packages/harness/scripts`,
-   `packages/llm/scripts` and `scripts/` build their directory with
-   `fileURLToPath(new URL('..', import.meta.url))`, and the bundle banner
-   (`scripts/esm-cjs-globals-banner.mjs`) rebuilds `__filename` and
-   `__dirname` from `import.meta.url`. Node 22 gives both directly. The banner
-   runs inside the packaged desktop and CLI bundles, so the change wants a
-   packaged smoke run. The open #14951 already converts
-   `scripts/verify-desktop.mjs` and drops `nanoid` for `node:crypto`, so this
-   run left both to it.
+5. **`import.meta.dirname`.** Every script now reads its directory from
+   `import.meta.dirname`; the last one, `packages/harness/scripts/publish-npm.mjs`,
+   followed on 2026-11-19 (checked with its `--dry-run`). What is left is the
+   bundle banner (`scripts/esm-cjs-globals-banner.mjs`), which rebuilds
+   `__filename` and `__dirname` from `import.meta.url`. It runs inside the
+   packaged desktop and CLI bundles, so that change wants a packaged smoke
+   run.
 
 ## Landed in the 2026-11-16 sweep
 

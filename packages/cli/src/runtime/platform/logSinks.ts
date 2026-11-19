@@ -10,6 +10,7 @@ import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   entryChannel,
   entryMessage,
+  setLogSink,
   type LogEntry,
   type LogSink as HostLogSink,
 } from '@texra-ai/harness/node';
@@ -17,6 +18,8 @@ import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
 } from '@cli/schemas/cliOutput';
+
+import { CliExitCode } from './exitCodes';
 
 const closed = { stdout: false, stderr: false };
 
@@ -137,12 +140,6 @@ export function flush(stream: StreamKey): Effect.Effect<void> {
   return writeRawAndWait(stream, '');
 }
 
-/** A CLI entry's one run threw: `cause` is what it threw, reported as is. */
-export class CliEntryCrashed extends Schema.TaggedError<CliEntryCrashed>()(
-  'CliEntryCrashed',
-  { cause: Schema.Defect() },
-) {}
-
 /** The user-facing text of a caught error: the CLI's one wording of a
  *  failure, which every command prints through. */
 export function cliErrorMessage(error: unknown): string {
@@ -152,6 +149,50 @@ export function cliErrorMessage(error: unknown): string {
 /** Write a caught error's human-readable message to stderr. */
 export function writeErrorStderr(error: unknown): void {
   writeTextStderr(cliErrorMessage(error));
+}
+
+/** A CLI entry's one run threw: `cause` is what it threw, reported as is. */
+class CliEntryCrashed extends Schema.TaggedError<CliEntryCrashed>()(
+  'CliEntryCrashed',
+  { cause: Schema.Defect() },
+) {}
+
+/**
+ * A process entry's one run: `body` answers the exit code. Whatever it throws
+ * is an unexpected crash, since usage errors and classified run failures end
+ * in an exit code inside it: the crash is worded on stderr under `label`,
+ * followed by `reportLine`'s line when it has one, and the process exits with
+ * the agent-error code.
+ *
+ * The process owns its diagnostic sink from here: the harness's console
+ * fallback sends DEBUG and INFO to stdout, where under `--output-format
+ * ndjson` a line would break the stream. Until citty has parsed the argv,
+ * diagnostics go to stderr at the default level; `defineCliCommand` then
+ * installs the sink at the level the context decides (`--quiet`,
+ * `--verbose`) for the command's whole life.
+ */
+export function runCliEntry(
+  label: string,
+  body: () => Promise<number>,
+  reportLine?: (error: unknown) => string | undefined,
+): Effect.Effect<void> {
+  return Effect.tryPromise({
+    try: async () => {
+      setLogSink(stderrDiagnosticSink('Warn'), { trusted: true });
+      installCliPipeErrorHandlers();
+      process.exitCode = await body();
+    },
+    catch: (cause) => new CliEntryCrashed({ cause }),
+  }).pipe(
+    Effect.catch(({ cause: error }) =>
+      Effect.sync(() => {
+        writeTextStderr(`${label} failed: ${cliErrorMessage(error)}`);
+        const line = reportLine?.(error);
+        if (line) writeTextStderr(line);
+        process.exitCode = CliExitCode.AgentError;
+      }),
+    ),
+  );
 }
 
 /**

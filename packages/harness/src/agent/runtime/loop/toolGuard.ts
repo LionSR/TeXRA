@@ -25,7 +25,6 @@ import {
   type HookOutcomePayload,
   type RefusalDecision,
   type RequestPayload,
-  RequestPayloadSchema,
   type RunId,
   toJsonValue,
   ToolError,
@@ -380,15 +379,6 @@ export const callRequests = (call: {
           })),
         );
       }),
-    post: (request) =>
-      Effect.suspend(() =>
-        openRequest(
-          asker,
-          // A plugin's data as the JSON its row stores; one that is not
-          // JSON is a defect of the plugin.
-          Schema.decodeUnknownSync(RequestPayloadSchema)(toJsonValue(request)),
-        ),
-      ).pipe(Effect.provide(session), Effect.asVoid),
     present: interactions.emit,
   };
 };

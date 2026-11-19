@@ -1,6 +1,5 @@
 import type { Dialogs, DiffViewHost, HostFailed } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
-import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 import type { windowNotices } from '@texra/controllers/session/windowNotices';
 import type { Effect } from 'effect';
@@ -16,7 +15,7 @@ export interface DesktopAgentRunHost {
    *  promise, lifted once there; a cancelled dialog answers `undefined`. */
   pickTranscriptExportFormat(): Effect.Effect<
     TranscriptExportFormat | undefined,
-    TranscriptExportFailed
+    HostFailed
   >;
   /** `line` is carried for the hosts that can reveal one; the desktop hands
    *  the path to the OS. */

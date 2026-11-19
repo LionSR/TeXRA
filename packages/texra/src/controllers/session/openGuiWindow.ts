@@ -120,17 +120,19 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
- *  or in the background service), and the link the window attaches
- *  through (this process's windows, or the service's). */
-export interface GuiSession {
-  readonly session: Session;
-  readonly link: ServiceLink<WindowClient>;
-  /** Where the runs run, decided once at open: in the service, or in this
-   *  process with why when the window has a folder the service would hold
-   *  (it was out of reach); null for a window with no folder, which the
-   *  service never holds. */
-  readonly where: 'service' | { readonly local: string | null };
-}
+ *  or in the background service, decided once at open as `where`), and the
+ *  link the window attaches through (this process's windows, or the
+ *  service's). */
+export type GuiSession = { readonly session: Session } & (
+  | { readonly where: 'service'; readonly link: ServiceLink }
+  /** In this process, with why when the window has a folder the service
+   *  would hold (it was out of reach); null for a window with no folder,
+   *  which the service never holds. */
+  | {
+      readonly where: { readonly local: string | null };
+      readonly link: ServiceLink<WindowClient>;
+    }
+);
 
 /** The kinds a host answers its own way, and what the refusal of one a
  *  host lacks names; the shared body answers every other kind. */
@@ -381,6 +383,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // service, why (reaching it again, or refused by a newer TeXRA), so the
   // view never sits frozen without saying so.
   const { where } = runs;
+  // The service's link, when the service holds the project: where this
+  // window's writes of the project's files run.
+  const service = runs.where === 'service' ? runs.link : undefined;
   if (where === 'service')
     yield* Effect.forkScoped(
       Stream.runForEach(linkOutage(runs.link), (reason) =>
@@ -466,6 +471,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       },
       runs: runActions,
       latexdiff: latexdiff.file,
+      service,
     },
   );
 
@@ -518,7 +524,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* bindings.openPath(request.path, request.line);
           return done;
         case 'workspaceFile':
-          return yield* answerWorkspaceFile(request.action);
+          return yield* answerWorkspaceFile(request.action, service);
         case 'openLabel': {
           // The search is the body's; the host only opens the match.
           const opened = yield* findLabelInWorkspace(

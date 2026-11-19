@@ -29,7 +29,7 @@ import {
   canSendFollowUp,
   EMPTY_DRAFT,
   runSurface,
-  type Draft,
+  type FollowUpDraft,
   type Surface,
 } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
@@ -261,7 +261,7 @@ export class SessionComposer extends LitElement {
     return this.run !== null;
   }
 
-  private get draft(): Draft {
+  private get draft(): FollowUpDraft {
     const run = this.run;
     if (!run) return EMPTY_DRAFT;
     return this.surface ? runSurface(this.surface, run.id).draft : EMPTY_DRAFT;
@@ -286,7 +286,7 @@ export class SessionComposer extends LitElement {
     );
   }
 
-  private setText(text: string, patch: Partial<Draft> = {}): void {
+  private setText(text: string, patch: Partial<FollowUpDraft> = {}): void {
     const run = this.run;
     if (run) {
       // A draft's images are the `[name]` chips its text still carries: a

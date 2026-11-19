@@ -1,7 +1,6 @@
 /**
  * A run's questions to a person, as rows of the run. Every asker (a tool
- * call's request, a plugin's request no call waits on, the invoker's
- * retry) opens through the run's cell at the one door
+ * call's request, the invoker's retry) opens through the run's cell at the one door
  * ({@link openRequest}): its `request.opened` and, when the session's
  * policy answers it (a `yolo` or `never` policy, a grant that covers it,
  * nobody to ask), the `request.decided` beside it in the same batch, so no
@@ -65,7 +64,6 @@ import {
   type RequestPayload,
   type RequestDecision,
   type RunId,
-  type SessionRowDraft,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
@@ -161,8 +159,8 @@ const KIND_OPERATIONS: Partial<
 > = { toolEdit: 'toolEdit', planApproval: 'plan', proposal: 'proposal' };
 
 /** Who answers a request about `operation`, given what the call's hooks
- *  said: a person when a hook asked or there is no operation (a question, a
- *  retry, a plugin's request), else the operation's grant. */
+ *  said: a person when a hook asked or there is no operation (a question or
+ *  a retry), else the operation's grant. */
 const answererOf = (
   operation: ApprovalOperation | undefined,
   hook: HookAnswer,
@@ -206,7 +204,7 @@ export const sessionPermission =
 /** The policy's answer for one request, or undefined when a person
  *  answers: a plan, a command, an edit or a proposal is an operation a
  *  grant may answer; a question or a retry is denied under `yolo` rather
- *  than answered on a person's behalf; a plugin's request is a person's. */
+ *  than answered on a person's behalf. */
 function answerFor(
   owners: PolicyOwners,
   runId: RunId,
@@ -214,7 +212,7 @@ function answerFor(
   answeredBy: AnsweredBy,
   hook: HookAnswer,
 ): RequestDecision | undefined {
-  const ask = ((): ApprovalAsk | undefined => {
+  const ask = ((): ApprovalAsk => {
     switch (payload.kind) {
       case 'planApproval':
       case 'proposal':
@@ -228,11 +226,8 @@ function answerFor(
           kind: 'retry',
           credentialFailure: payload.data.credentialSwitch !== null,
         };
-      case 'plugin':
-        return undefined;
     }
   })();
-  if (ask === undefined) return undefined;
   const answer = policyAnswer(owners, runId, ask);
   if (answer === 'present') return undefined;
   return answer === 'allow' ? { action: 'approve' } : answer;
@@ -321,17 +316,13 @@ export const recordedDecision = <P extends Parameters<typeof decisionFits>[0]>(
  * transaction, so two writers answering at once record exactly one;
  * `false` is that lost race, or an id never opened. It reads the run's
  * request rows alone (the `requests` read, through the type index), so a
- * decision costs the same however long the run's history grows. `beside`
- * decides, in the same job once the request is found open, the rows that
- * commit after the decision and only with it: a plugin's facts and the
- * input it sends, so none of them lands without the decision.
+ * decision costs the same however long the run's history grows.
  */
-export const decideRequest = <E = never>(
+export const decideRequest = (
   runId: RunId,
   requestId: string,
   decision: RequestDecision,
-  beside?: Effect.Effect<readonly SessionRowDraft[], E>,
-): Effect.Effect<boolean, DatabaseReadFailed | LogWriteError | E, SessionLog> =>
+): Effect.Effect<boolean, DatabaseReadFailed | LogWriteError, SessionLog> =>
   SessionLog.use((log) =>
     log.transact((tx) =>
       Effect.gen(function* () {
@@ -340,7 +331,6 @@ export const decideRequest = <E = never>(
         if (requests[requestId]?.decision !== null) return false;
         yield* runStateAppend(tx.append)([
           { type: 'request.decided', aggregateId, requestId, decision },
-          ...(beside === undefined ? [] : yield* beside),
         ]);
         return true;
       }),

@@ -113,7 +113,63 @@ function buildAcceptSuccessMessage(
  */
 interface CommitAcceptedFilePorts<E = never> {
   showInfo: (message: string) => Effect.Effect<void, E>;
+  /** {@link replaceIfUnchanged}, run in the process that holds the
+   *  project's session, where its tasks write. */
+  replace: (
+    ...write: Parameters<typeof replaceIfUnchanged>
+  ) => Effect.Effect<
+    boolean,
+    E | PlatformError.PlatformError,
+    FileSystem.FileSystem
+  >;
 }
+
+/**
+ * Replace the file at `targetPath` with `contents` while it still holds
+ * `confirmedAgainst` (`undefined` for no file); answers whether it did.
+ * The confirmation was given to the target as it was when the dialog
+ * opened, and the dialog can stay open for minutes: a save to the target
+ * meanwhile (the user's editor, a run) is not replaced on that answer. The
+ * check and the write hold the file's write lane, shared with every other
+ * writer in this process that reads, decides and writes it (an approved
+ * edit, the editor's save). The new content is staged beside the file and
+ * renamed over it, so a write that fails partway leaves the user's file as
+ * it was. An existing target is replaced where a symlink points, with the
+ * mode it had.
+ */
+export const replaceIfUnchanged = Effect.fn('replaceIfUnchanged')(function* (
+  targetPath: string,
+  contents: string,
+  confirmedAgainst: string | undefined,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* Effect.gen(function* () {
+    const current = yield* contentOrMissing(fs, targetPath);
+    if (current !== confirmedAgainst) return false;
+    const real =
+      current === undefined ? targetPath : yield* fs.realPath(targetPath);
+    const mode =
+      current === undefined ? undefined : (yield* fs.stat(real)).mode & 0o7777;
+    const staged = path.join(
+      path.dirname(real),
+      `.${path.basename(real)}.${randomUUID()}.tmp`,
+    );
+    yield* fs.writeFileString(staged, contents).pipe(
+      Effect.andThen(mode === undefined ? Effect.void : fs.chmod(staged, mode)),
+      Effect.andThen(fs.rename(staged, real)),
+      Effect.onError(() =>
+        fs.remove(staged, { force: true }).pipe(
+          Effect.ignore({
+            log: 'Warn',
+            message: `A staged accept file stays behind: ${staged}`,
+          }),
+        ),
+      ),
+      Effect.uninterruptible,
+    );
+    return true;
+  }).pipe(withFileWriteLane(targetPath));
+});
 
 /**
  * Host capabilities the accept-edited replace flow reaches through, so the
@@ -162,41 +218,11 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   const editedPath = editedLocation.absolutePath;
 
   const editedContent = yield* readNormalizedFile(fs, editedPath);
-  // The confirmation was given to the target as it was when the dialog
-  // opened; the dialog can stay open for minutes. A save to the target
-  // meanwhile (the user's editor, a run) is not replaced on that answer.
-  // The check and the write hold the file's write lane, shared with every
-  // other writer that reads, decides and writes it (an approved edit, the
-  // desktop editor's save). The new content is staged beside the file and
-  // renamed over it, so a write that fails partway leaves the user's file as
-  // it was. An existing target is replaced where a symlink points, with the
-  // mode it had.
-  const written = yield* Effect.gen(function* () {
-    const current = yield* contentOrMissing(fs, targetPath);
-    if (current !== confirmedAgainst) return false;
-    const real =
-      current === undefined ? targetPath : yield* fs.realPath(targetPath);
-    const mode =
-      current === undefined ? undefined : (yield* fs.stat(real)).mode & 0o7777;
-    const staged = path.join(
-      path.dirname(real),
-      `.${path.basename(real)}.${randomUUID()}.tmp`,
-    );
-    yield* fs.writeFileString(staged, editedContent).pipe(
-      Effect.andThen(mode === undefined ? Effect.void : fs.chmod(staged, mode)),
-      Effect.andThen(fs.rename(staged, real)),
-      Effect.onError(() =>
-        fs.remove(staged, { force: true }).pipe(
-          Effect.ignore({
-            log: 'Warn',
-            message: `A staged accept file stays behind: ${staged}`,
-          }),
-        ),
-      ),
-      Effect.uninterruptible,
-    );
-    return true;
-  }).pipe(withFileWriteLane(targetPath));
+  const written = yield* ports.replace(
+    targetPath,
+    editedContent,
+    confirmedAgainst,
+  );
   if (!written) {
     yield* ports.showInfo(
       `${targetFileName} changed while the confirmation was open; nothing was written. Accept again to replace the current content.`,
@@ -313,17 +339,17 @@ function staleDiffFileLocation(
 
 /**
  * Remove stale diff companions after accepting workspace outputs, keeping
- * successful paths. `workspaceRoot` is the accepting session's folder, carried
- * as data; the deletions go through that session's own confined view.
+ * successful paths. The companions are located in, and deleted through, the
+ * accepting session's own confined workspace view.
  */
 export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   'acceptedFileTarget.cleanupDiffFiles',
 )(function* (
-  workspaceRoot: string | undefined,
   entries: readonly { outputPath: string; originalPath: string }[],
 ): Effect.fn.Return<string[], never, WorkspaceFs> {
+  const workspaceFs = yield* WorkspaceFs;
   const stale = entries.flatMap(({ outputPath, originalPath }) => {
-    const original = pathToLocationIn(workspaceRoot, originalPath);
+    const original = pathToLocationIn(workspaceFs.root, originalPath);
     if (original.kind === 'external') return [];
     const diffLocation = staleDiffFileLocation(original, outputPath);
     if (!diffLocation || diffLocation.kind === 'external') return [];
@@ -334,11 +360,9 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // sweep keeps every deletion that worked and names the ones that did not
   // rather than dropping them silently. `force` keeps an already-absent
   // companion a success: there is nothing left to remove.
-  return yield* removeBestEffort(
-    yield* WorkspaceFs,
-    stale,
-    'stale diff file',
-  ).pipe(withLogChannel(CHANNEL));
+  return yield* removeBestEffort(workspaceFs, stale, 'stale diff file').pipe(
+    withLogChannel(CHANNEL),
+  );
 });
 
 /** Where accepted content goes: over the base when the extensions match,

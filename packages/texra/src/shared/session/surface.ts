@@ -30,7 +30,6 @@ import { modelRefOf } from '@texra-ai/llm';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 
 import type { BridgeError } from './bridgeErrors';
-import { InquiryDraftSchema } from '@texra/shared/plugins/externalInquiry';
 import { markShownRunSeen } from './unseenRuns';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from './hostSnapshot';
@@ -133,19 +132,19 @@ interface DraftImage {
 }
 
 /** A follow-up in progress for one stream. Only `text` persists. */
-export interface Draft {
+export interface FollowUpDraft {
   readonly text: string;
   readonly images: readonly DraftImage[];
 }
 
-export const EMPTY_DRAFT: Draft = Object.freeze({
+export const EMPTY_DRAFT: FollowUpDraft = Object.freeze({
   text: '',
   images: Object.freeze([]),
 });
 
 /** What this surface keeps for one run. */
 export interface RunSurface {
-  readonly draft: Draft;
+  readonly draft: FollowUpDraft;
   /** The user's expansion choice in the tree, absent until they make one;
    *  a run that needs the user (`needsUser`) outranks it. */
   readonly expanded: boolean | undefined;
@@ -236,8 +235,7 @@ export interface Surface {
   /** Runs whose delete is in flight. Never persisted. */
   readonly deleting: ReadonlySet<RunId>;
   readonly launch: LaunchSurface;
-  /** Each request card's unsent answer, under the key the card names (its
-   *  request id; an inquiry's turn). */
+  /** Each request card's unsent answer, under its request id. */
   readonly requestDrafts: ReadonlyMap<string, RequestDraft>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
@@ -255,7 +253,7 @@ function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
 /**
  * What a person has entered on a request card and not sent: the decline
  * note (open while present), the model picked on a proposal, each
- * question's picks and typed answer, an inquiry's answer. It outlives the
+ * question's picks and typed answer. It outlives the
  * card element, so switching runs and back keeps it; sending the card's
  * decision clears it.
  */
@@ -270,7 +268,6 @@ const RequestDraftSchema = Schema.Struct({
       }),
     ),
   ),
-  inquiry: Schema.optionalKey(InquiryDraftSchema),
 });
 /** A request card's unsent answer. */
 export type RequestDraft = typeof RequestDraftSchema.Type;
@@ -487,7 +484,7 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
  * whether its composer shows), the draft must not be empty, and every pasted
  * image must already be stored by the host.
  */
-export function canSendFollowUp(run: RunView, draft: Draft): boolean {
+export function canSendFollowUp(run: RunView, draft: FollowUpDraft): boolean {
   if (!acceptsFollowUp(run)) return false;
   if (draft.images.some((image) => image.media === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
@@ -519,7 +516,7 @@ export type SurfaceAction =
   | {
       readonly kind: 'draft';
       readonly runId: RunId;
-      readonly patch: Partial<Draft>;
+      readonly patch: Partial<FollowUpDraft>;
     }
   | { readonly kind: 'launch'; readonly patch: LaunchPatch }
   /** A proposal card's Edit: the launch form opens on the proposal, filled

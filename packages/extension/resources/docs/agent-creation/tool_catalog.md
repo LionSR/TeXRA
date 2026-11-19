@@ -109,9 +109,6 @@ whenever it is offered the tool, so an agent's prompt does not restate it.
 - `ask_user_question` — ask the user one to three short clarification
   questions and wait for their answers, when continuing without their
   preference would be guesswork.
-- `inquiry` — dispatch a question to an external AI model via the user as a
-  human-in-the-loop bridge; the run continues (even after a restart, even
-  hours later) once the user pastes the answer back.
 
 ## Recommended tool groups by use case
 

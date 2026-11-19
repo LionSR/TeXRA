@@ -1,7 +1,7 @@
 import { Cause, Context, Effect, Exit } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
-import { checkpointRefusal } from '@agent/storage/resumability';
+import { checkpointRefusal } from '@agent/storage/continuation';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { LaunchKeys, RunRegistry } from '@agent/runtime/runRegistry';
 import { logFailure, withLogChannel } from '@logger/effectLog';

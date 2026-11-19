@@ -15,7 +15,7 @@
  * detached it (`RunRegistry.stop`), in which case it runs on as a root and
  * only the wait ends.
  */
-import { Cause, Effect, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   prepareAgentDefinition,
@@ -43,25 +43,12 @@ import {
   type AgentConfigPayload,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /** What a child's end answers its awaiting call. */
 interface ChildRunEnd {
   readonly runId: RunId;
   readonly result: RunEnd;
 }
-
-/** A defect as a failed `Error`; an interruption stays one. */
-const defectsAsErrors = <A, R>(
-  self: Effect.Effect<A, Error, R>,
-): Effect.Effect<A, Error, R> =>
-  self.pipe(
-    Effect.catchCause((cause) =>
-      Cause.hasInterruptsOnly(cause)
-        ? Effect.failCause(cause)
-        : Effect.fail(ensureError(cause)),
-    ),
-  );
 
 /**
  * Start a fresh native child on the session's registry, forked under its
@@ -132,7 +119,7 @@ const awaitChildRun = Effect.fn('awaitChildRun')(function* (
 ): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices | RunCall> {
   const call = yield* RunCall;
   return yield* call.run.awaitedCalls.withPermits(1)(childRunEnd(runId, start));
-}, defectsAsErrors);
+});
 
 /** {@link awaitChildRun}'s wait, under its permit. */
 const childRunEnd = Effect.fn('childRunEnd')(function* (

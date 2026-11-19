@@ -6,6 +6,35 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The external inquiry is removed.** The `inquiry` tool, which had an
+  agent draft a question for you to paste into an outside chat
+  subscription (ChatGPT, Claude, Gemini, Grok) and paste the answer back,
+  is gone with its **External Inquiry** plugin (Settings → Plugins), its
+  card in the progress view and its threads in **Background tasks**. The
+  `assistant`, `orchestrator` and `progressCheck` agents no longer carry
+  it; `ask_user_question` still asks you directly. A custom agent file that
+  lists `inquiry` still loads, with the warning that it names a tool this
+  build does not have. Stored thread records are kept and no longer read.
+  The premium-pricing hint on Pro models no longer points to the tool.
+  A stored run that holds any request, an inquiry or an approval, a
+  question or a retry, now reads as written by an earlier build: it opens
+  read-only (export, copy, delete) and does not resume. SDK: a plugin opens
+  no request of its own. The `plugin` request kind (`PluginRequest`),
+  `CallRequests.post`, `Plugin.decision` (`RequestDecisionHook`,
+  `RequestDecisionRecord`) and the `answer` decision are removed; every
+  request blocks the call that opened it.
+
+- **The run listing says a run continues, not that it is resumable.** The
+  listing entry's `resumable` and `resumeBlocked` are now `continues` and
+  `continueBlocked`, and `records(id).readResumable` is `readContinues`: the
+  field is true for any run whose stored rows can be continued here, a
+  finished conversation included. `texra history` (text, JSON and NDJSON)
+  and `/resume` follow: the NDJSON field is `continues`, and the status
+  column reads `(can continue)` for a finished conversation and
+  `(can resume)` for an interrupted, failed or cancelled run, where both previously
+  read `(resumable)`. The view's `resume` action, `session.resume(runId)`,
+  `texra resume` and `--resume` keep their names.
+
 - **The `model.useGoogleBackgroundResponses` setting is removed.** It
   changed nothing: no request read it. A value left in `config.json` is
   reported as an unknown key. SDK: `GOOGLE_BACKGROUND_RESPONSES_SETTING` is
@@ -77,7 +106,8 @@ All notable changes to this project will be documented in this file.
   `@texra-ai/harness/host`) builds the config that starts one.
   `AgentConfig.script` of kind `program` holds `{ name, args }` where kind
   `recipe` held source, a block and options; `isTaskConfig` and
-  `recipeBlockOf` are `programOf`, and `RunView.recipe` is
+  `recipeBlockOf` are `programOf`, which returns that program
+  (`{ kind, name, args }`) or null, and `RunView.recipe` is
   `RunView.program`. `AgentBlock`, `agentBlockOf`, `boundFile`,
   `AgentEntry.blocks`, `ITool.launchesTasks`, `ChildRuns.launch`,
   `CALL_FIELDS` and `fileList` are removed.

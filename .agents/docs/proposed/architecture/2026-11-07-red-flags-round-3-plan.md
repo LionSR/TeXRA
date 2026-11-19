@@ -168,7 +168,8 @@ design today. By owner:
   listing's `actions`. R14, one `HostFailed`. R22, the headless denial
   notice. Drop "one view tag" from R8's second half: the refusal
   `SESSION-one-view-service` still holds.
-- **B:** R15, the diff title as one string; R16, the desktop window as one
+- **B:** R15, the diff title as one string (landed, #14799:
+  `toolEditDiffLabel` in `packages/texra/src/ui/copy/toolEditPreview.ts`); R16, the desktop window as one
   state value; R17, one preview host; R18, N8 then J3, J4 and J2; R19, G7's
   request mask. All are in the window and bridge files 3.3 opens.
 - **C:** R6, the user's edit recorded on the task's own revision record;
@@ -336,15 +337,16 @@ counter, kept as a policy decision). TC7's last half landed after it:
 (`absentReason` has no references; the reading is `meansAbsent`) and (l)
 (`copyOrRemoveRunDir` has none) have landed; (a) is one exported
 `ScriptCallStatus` beside `scriptRun.ts`'s own four-value
-`ScriptCallOutcome`, and (g) `Draft` still names two interfaces
-(`packages/cli/src/chat/tui/input/draftAttachments.ts`,
-`packages/texra/src/shared/session/surface.ts`). Of IC6, `ModelInvoker`'s
+`ScriptCallOutcome`; (g) landed on 2026-11-19: the CLI input's draft is
+`InputDraft` (`packages/cli/src/chat/tui/input/draftAttachments.ts`) and
+the progress view's is `FollowUpDraft`
+(`packages/texra/src/shared/session/surface.ts`). Of IC6, `ModelInvoker`'s
 header and `ITool.describe` are gone; `withPerKeyLane`'s doc (16 lines,
 from 29), `fetchAllCheckRuns`'s pagination explanations
-(`packages/texra/src/tools/github/checkRunsClient.ts`) and the API
-reference's internal file names (`storageLayout.ts` in
-`packages/harness/docs/api/host.md`) stay. So 4 are open with no owner:
-IC6's rest, NM10 (a) and (g), and NM1 and NM9 as a rule ("settle" is down
+(`packages/texra/src/tools/github/checkRunsClient.ts`) stay; the API
+reference's internal file name (`storageLayout.ts` in
+`packages/harness/docs/api/host.md`) went on 2026-11-19. So 4 are open
+with no owner: IC6's rest, NM10 (a), and NM1 and NM9 as a rule ("settle" is down
 from 491 to 28 occurrences in `packages/*/src`). GS7 b,
 `StartOptions.continues`, stays the owner's call. The held ids (H9, M4
 and M9 with #14773; S9, W7 and W9's rule; I-C1, I-C4, I-C5 and I-C16;
@@ -544,7 +546,8 @@ designs and chooses one, and ends in a ranked plan of two PRs.
   R6-S8, R6-S7, R6-S10).
 - **E, the T session**, after #14843: PR 1 (R6-T2, R6-T1 with F13, R6-T4,
   R6-T7a, R6-T7c), about −450 lines; PR 2 (R6-T3 with C for
-  `externalInquiry.ts`, R6-T5, R6-T6), about −120.
+  `externalInquiry.ts`, moot since the inquiry's removal on 2026-11-19,
+  R6-T5, R6-T6), about −120.
 - **The owner's call:** whether R6-T6 rides the next format batch instead
   of PR 2; R6-T7b's spec wording.
 
@@ -559,7 +562,11 @@ stamped store and a stamp of 103 would need the pre-1.0 detection reworked.
 **Landed (main `b5e28fb`):** S PR 2 (#14856: R6-S4, R6-S6, R6-S7, R6-S8,
 R6-S10) and T PR 2 (#14854: R6-T3, R6-T5; R6-T6 refused as
 `STORE-context-blob-as-brought-blob`, because `context.blob` is the run
-state's content table, read every step). Round 6 is closed except R6-T7 b.
+state's content table, read every step). Round 6 is closed. R6-T7 b was
+settled on 2026-11-19 by correcting the store review: the ratchet suite is
+gone, and SQL does read a payload field (`PRICED_USAGE` in
+`packages/harness/src/controllers/session/rowReader.ts` reads a priced row's
+usage out of `event.data`), so the review no longer lists the rule as kept.
 The two PRs shared `toolUseDispatch.ts` and the golden store; T landed
 second and reconciled.
 

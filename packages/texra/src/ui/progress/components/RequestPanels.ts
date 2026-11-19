@@ -1,9 +1,8 @@
 /**
  * The run's pending requests, one card each, oldest first.
  *
- * A run usually has one pending request, but an external inquiry does not
- * block the run, so an inquiry (or several) can wait beside a later
- * approval. Every card answers its own keys: single-character shortcuts
+ * A run usually has one pending request, but several can wait at once.
+ * Every card answers its own keys: single-character shortcuts
  * (y, a, n, d, …) fire only while focus is inside a card (WCAG 2.1.4), and
  * act on that card. So the shortcuts are reachable, a newly appeared request
  * moves focus to its primary action unless the user is typing elsewhere.
@@ -20,7 +19,6 @@ import {
   type PendingRequest,
   type RequestPayload,
 } from '@texra-ai/harness/schemas';
-import { INQUIRY_REQUEST } from '@texra/shared/plugins/externalInquiry';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { RunView } from '@texra-ai/harness/schemas';
@@ -34,13 +32,12 @@ import './BashRequestPanel';
 import './RetryRequestPanel';
 import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
-import './ExternalInquiryPanel';
 import './UserQuestionPanel';
 
 type CardTag = ReturnType<typeof literal>;
 
-/** The card element for each of the harness's request kinds. */
-const CARD_TAG: Record<Exclude<RequestPayload['kind'], 'plugin'>, CardTag> = {
+/** The card element for each request kind. */
+const CARD_TAG: Record<RequestPayload['kind'], CardTag> = {
   toolEdit: literal`tool-edit-request-panel`,
   bash: literal`bash-request-panel`,
   retry: literal`retry-request-panel`,
@@ -48,17 +45,6 @@ const CARD_TAG: Record<Exclude<RequestPayload['kind'], 'plugin'>, CardTag> = {
   planApproval: literal`plan-approval-request-panel`,
   userQuestion: literal`user-question-panel`,
 };
-
-/** The card element for a plugin's request, by plugin id: the external
- *  inquiry is the one TeXRA plugin that opens requests. */
-const PLUGIN_CARD_TAG: Readonly<Record<string, CardTag>> = {
-  [INQUIRY_REQUEST.plugin]: literal`external-inquiry-panel`,
-};
-
-const cardTag = (permission: RequestPayload): CardTag | undefined =>
-  permission.kind === 'plugin'
-    ? PLUGIN_CARD_TAG[permission.plugin]
-    : CARD_TAG[permission.kind];
 
 /** Marks every rendered card so keyboard routing can find it. */
 const CARD_MARKER = 'data-request-panel';
@@ -118,15 +104,7 @@ export class RequestPanels extends LitElement {
     if (this.requests.length === 0) return nothing;
     return html`${repeat(this.requests, requestKey, (request) => {
       const permission = request.payload;
-      const tag = cardTag(permission);
-      // A plugin request with no card in `PLUGIN_CARD_TAG` is a defect of
-      // that table: said, not dropped silently.
-      if (tag === undefined) {
-        console.warn(
-          `No request card is listed for request ${request.requestId}.`,
-        );
-        return nothing;
-      }
+      const tag = CARD_TAG[permission.kind];
       return staticHtml`<${tag}
         data-request-panel
         .permission=${permission}

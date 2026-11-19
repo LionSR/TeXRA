@@ -129,10 +129,10 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records the model name, the provider API it
-was called through, the agent name, token counts, the cost at list prices,
-response time, the billing route (API key or subscription), the task
-identifier, version, and host. Only a bundled agent's id is sent; a custom or plugin
+When telemetry is enabled, TeXRA records the agent name, the model name, the
+provider API it was called through, the billing route (API key or
+subscription), token counts, the cost at list prices, response time, the time
+of the call, the task identifier, version, and host. Only a bundled agent's id is sent; a custom or plugin
 agent is reported as `custom`. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does

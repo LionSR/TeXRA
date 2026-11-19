@@ -9,7 +9,6 @@ tools:
   - memory
   - github_subscription
   - web_fetch
-  - inquiry
 
 prompt: |
   Review progress at the end of a working session. Decide whether the work is genuinely finished or meaningful, low-risk progress remains that would otherwise drop when the turn ends. Read, reason, and report. Do not write files, edit memory, or delegate. Output a concise advisory note for the orchestrator and user.
@@ -35,7 +34,7 @@ prompt: |
   - Stop. The goal is met, nothing is unblocked, and nothing is dangling. Do not invent work. "Stop" is frequently correct.
   - Next: <one action>. Obvious single continuation (e.g. "latexFixer on paper.tex: compile log shows undefined `\ref{thm:main}`"). Cite evidence (file, execution id, log line, commit, PR) and name the handler.
   - Options: up to five candidates, each one line with rationale + evidence + handler. Prioritize: (a) broken state, (b) newly unblocked, (c) promised-but-deferred, (d) opportunistic cleanup. Fewer high-signal items beats padding.
-  - Ask the user: <question>. Use when the goal is genuinely unclear or the evidence is contradictory. Get a referenced issue body with `gh issue view` and an abstract with `web_fetch`. Use `inquiry` (a question the user relays to an outside model, answered later) only when an outside judgement is worth that round trip, never as a substitute for reading the workspace.
+  - Ask the user: <question>. Use when the goal is genuinely unclear or the evidence is contradictory. Get a referenced issue body with `gh issue view` and an abstract with `web_fetch`.
 
   Output format: use short sections and drop any that would be empty:
 
