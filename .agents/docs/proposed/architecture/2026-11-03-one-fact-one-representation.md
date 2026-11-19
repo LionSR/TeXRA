@@ -353,7 +353,12 @@ the CLI decides in `packages/cli/src/runtime/platform/initPlatform.ts`
 (linking through `cliService.ts`, opening through the same module's
 `openLocalSession`), and `serviceProjectState` keeps its eight
 attempts (`STATE_CHANGE_ATTEMPTS`, `serviceSession.ts`), so the first row
-below is open for those two.
+below is open for those two. Checked on 2026-11-19, the CLI cannot take
+`openProjectRoots` / `openProjectSession` as they are: its config stores are
+open before its runtime exists, and it needs the local and the service
+session both, each opened lazily. The reasons are item 1 of
+`.agents/docs/proposed/simplification/2026-11-15-host-rules-and-app-facts-with-two-owners.md`.
+The CLI's copy of the decision ends when the dual does.
 
 | Fact                          | Keep                                                              | Delete                                                                                                                                                                                                                                          | Files |
 | ----------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
