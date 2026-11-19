@@ -19,7 +19,12 @@ await Effect.runPromise(
     async () =>
       (
         await runCliCommandLine(
-          serveCommand.pipe(Command.withGlobalFlags(CLI_GLOBAL_FLAGS)),
+          // Hosts start this bundle as they start the full CLI, with
+          // `serve` first, so it parses that one subcommand of `texra`.
+          Command.make('texra').pipe(
+            Command.withSubcommands([serveCommand]),
+            Command.withGlobalFlags(CLI_GLOBAL_FLAGS),
+          ),
           readCliArgv(),
         )
       ).exitCode,
