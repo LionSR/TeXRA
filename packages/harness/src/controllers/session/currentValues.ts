@@ -75,6 +75,19 @@ function decodeValue<T>(
       );
 }
 
+/** A next value as the JSON text its row stores. This is the one check of
+ *  a written value: one its family's schema does not encode fails the
+ *  write naming itself, and nothing of the write is stored. */
+const encodeValue = <T>(family: ValueFamily<T>, key: string, value: T) =>
+  Schema.encodeEffect(Schema.fromJsonString(family.schema))(value).pipe(
+    Effect.mapError(
+      (issue) =>
+        new StoreCheckFailed({
+          message: `The ${family.name} value ${key} does not match its schema: ${issue.message}`,
+        }),
+    ),
+  );
+
 export function currentValues(
   { exec, execOne, transact, query, afterCommit }: StoreConnection,
   /** Moved once per committed value write. */
@@ -136,9 +149,7 @@ export function currentValues(
               deleted = true;
               continue;
             }
-            const value = yield* Schema.encodeEffect(
-              Schema.fromJsonString(family.schema),
-            )(nextValue);
+            const value = yield* encodeValue(family, key, nextValue);
             if (row?.value === value) continue;
             yield* exec(UPSERT_VALUE, [
               family.name,
