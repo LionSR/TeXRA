@@ -949,6 +949,25 @@
           "signature": "export function readTraceFacts(document: TraceDocument, appFactKinds: readonly TraceFactKind[]): TraceDocument {…}"
         }
       ]
+    },
+    {
+      "id": "GUARD-arxiv-download-zotero-add",
+      "candidate": "an approval guard on download_arxiv_source and zotero_add, so the loop asks before the download writes into the workspace and before an item is added to the Zotero library",
+      "why": "The repo owner ruled on 2026-11-19 that these two tools do not need approval (comments on #15107: \"no approval\", \"They don't need approval\"). Both act only on what the person asked the agent to fetch or file: the download writes a paper's source under References/ (or the workspace root when asked) and skips one already present, and zotero_add adds items to the person's own library. #15107 added the guards and was merged before the ruling was read; they were removed again in the next PR. The other half of #15107 (lean_loogle offered with the Lean plugin) stands.",
+      "ruling": "https://github.com/LionSR/TeXRA/pull/15107",
+      "reopenWhen": "the owner asks for an approval on either tool, or a tool of this kind starts writing outside the workspace or deleting anything",
+      "symbols": [
+        {
+          "file": "packages/texra/src/tools/arxiv/ArxivDownloadTool.ts",
+          "symbol": "ArxivDownloadTool",
+          "signature": "export const ArxivDownloadTool = defineTool({…})"
+        },
+        {
+          "file": "packages/texra/src/tools/zotero/ZoteroAddTool.ts",
+          "symbol": "ZoteroAddTool",
+          "signature": "export const ZoteroAddTool = defineTool({…})"
+        }
+      ]
     }
   ]
 }
