@@ -75,7 +75,8 @@ const diagnose = async (file) => {
   }
 };
 
-/** The names of after beyond those of before, each occurrence counted. */
+/** The axioms of after beyond those of before, each occurrence counted:
+ *  one whose statement changed is a new one. */
 const added = (before, after) => {
   const left = [...before];
   return after.filter((name) => {
@@ -106,7 +107,7 @@ const checker = (stated) => async (files) => {
           ? ['<diagnostics file="' + file + '" summary="' + result.summary + '">\n' + result.output + '\n</diagnostics>']
           : []),
         ...(axioms.length > 0
-          ? [file + ' declares ' + axioms.join(', ') + ' as an axiom, which it did not before: an axiom is not a proof. Prove the statement, or remove the axiom and say what you could not prove.']
+          ? [file + ' declares an axiom it did not before (' + axioms.join('; ') + '): an axiom is not a proof. Prove the statement, or restore the file\'s axioms and say what you could not prove.']
           : []),
       ])
       .join('\n'),

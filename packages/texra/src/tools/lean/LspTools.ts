@@ -111,8 +111,10 @@ const leanUnavailableResult = (
 const SORRY = "declaration uses 'sorry'";
 
 /**
- * The names `source` declares with the `axiom` command, as written, in
- * order: a scan of the text outside comments and string literals, since
+ * The axioms `source` declares with the `axiom` command, each as its name
+ * and statement on one line (the declaration up to the next line that
+ * starts a command), in order, so an axiom whose statement changed reads as
+ * a different one: a scan of the text outside comments and string literals, since
  * Lean's server reports nothing about axioms on its own (only a
  * `#print axioms <name>` command in the file does, one declaration at a
  * time). So it sees neither an axiom a macro expands to, nor one declared
@@ -168,8 +170,10 @@ function declaredAxioms(source: string): string[] {
     }
   }
   return [
-    ...code.matchAll(/(?<![\p{L}\p{N}_.«'!?])axiom\s+([^\s:({[⦃]+)/gu),
-  ].flatMap(([, name]) => name ?? []);
+    ...code.matchAll(
+      /(?<![\p{L}\p{N}_.«'!?])axiom\s+(\S[^\n]*(?:\n[ \t]+[^\n]*)*)/gu,
+    ),
+  ].flatMap(([, declared]) => declared?.replaceAll(/\s+/g, ' ').trim() ?? []);
 }
 
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
@@ -286,7 +290,7 @@ Returns diagnostics from the Lean 4 language server including:
 
 Tips:
 - If diagnostics seem stale, use lean_file on the file to refresh the Lean server
-- Lean reports nothing about axioms here. In a script, \`axioms\` lists the names the file's text declares with \`axiom\`; \`#print axioms <name>\` in the file is what makes Lean list what a declaration depends on
+- Lean reports nothing about axioms here. In a script, \`axioms\` lists what the file's text declares with \`axiom\`, each as its name and statement; \`#print axioms <name>\` in the file is what makes Lean list what a declaration depends on
 - Import/dependency errors may not surface as diagnostics: check imports manually`,
   schema: LeanDiagnosticsInputSchema,
   execute: executeLeanDiagnosticsTool,
