@@ -3051,11 +3051,15 @@ async function validateServiceSharedTask() {
       [binaryPath, 'tasks', 'attach', runId, '--cwd', project.work],
       { cwd: project.work, env: { ...process.env, CI: '1', ...env } },
     );
+    liveChildren.add(child);
     const state = { stdout: '', stderr: '', exit: null };
     child.stdout.on('data', (chunk) => (state.stdout += chunk));
     child.stderr.on('data', (chunk) => (state.stderr += chunk));
     state.exited = new Promise((resolve) =>
-      child.on('close', (code) => resolve((state.exit = code))),
+      child.on('close', (code) => {
+        liveChildren.delete(child);
+        resolve((state.exit = code));
+      }),
     );
     return state;
   };
@@ -3132,6 +3136,44 @@ async function validateServiceSharedTask() {
     assert(
       a.stdout === b.stdout && count(a.stdout, 'Second message') >= 2,
       `both attached terminals should print the same two-turn transcript (artifact: ${artifactA})\nA:\n${a.stdout}\nB:\n${b.stdout}`,
+    );
+    // A task whose service was killed under it has no outcome and nobody
+    // running it: an attach says so and exits, never waits in silence.
+    const orphan = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Orphan message',
+      ],
+      'texra tasks start (orphan)',
+    );
+    const watching = attach(orphan);
+    await waitFor('the attach to print the orphan reply', () =>
+      watching.stdout.includes('Orphan message'),
+    );
+    const { pid } = parseJson(
+      texra(
+        ['service', 'status', '--output-format', 'json'],
+        'texra service status',
+      ),
+      'service status',
+    );
+    process.kill(pid, 'SIGKILL');
+    await watching.exited;
+    const orphaned = attach(orphan);
+    await waitFor(
+      'an attach to a task no service runs to exit',
+      () => orphaned.exit !== null,
+      60_000,
+    );
+    assert(
+      orphaned.exit === 1 &&
+        orphaned.stderr.includes('no TeXRA service is running it'),
+      `an attach to a task no service runs should say so and exit 1 (exit ${orphaned.exit})\n${orphaned.stderr}`,
     );
   } finally {
     run(process.execPath, [binaryPath, 'service', 'stop'], {

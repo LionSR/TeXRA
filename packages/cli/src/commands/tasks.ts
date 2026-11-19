@@ -157,9 +157,11 @@ const attachCommand = defineCliCommand({
           : PIPED_COLUMNS,
         color: context.stdoutColorEnabled,
       });
-      return outcome === null
-        ? CliExitCode.Success
-        : runOutcomeExitCode(outcome);
+      if (outcome !== null) return runOutcomeExitCode(outcome);
+      writeTextStderr(
+        `Task ${task.runId} has not ended, and no TeXRA service is running it: the service that ran it stopped. Nothing more will come from it until it is resumed. \`texra tasks send ${task.runId} "<text>"\` continues it.`,
+      );
+      return CliExitCode.AgentError;
     }).pipe(Effect.scoped);
   },
 });

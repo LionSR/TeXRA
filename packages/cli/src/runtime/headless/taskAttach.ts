@@ -8,7 +8,8 @@
  * the shape `texra run --output-format ndjson` writes.
  *
  * Attaching never steers the task: it ends when the task reaches a terminal
- * outcome, and an interrupt only detaches this client.
+ * outcome or when no service runs it any more, and an interrupt only
+ * detaches this client.
  */
 import { stripVTControlCharacters } from 'node:util';
 
@@ -54,7 +55,9 @@ function writeProgress(
 
 /**
  * Follow `task` until it ends, printing it as `output` asks. Returns the
- * task's durable outcome, null when it ended without one.
+ * task's durable outcome, or null when it has none and no service runs it
+ * (the service that ran it stopped under it): nothing more can come, so the
+ * watch stops there with what the task had printed.
  */
 export const attachTask = Effect.fn('attachTask')(function* (
   client: ServiceClient,
@@ -84,7 +87,7 @@ export const attachTask = Effect.fn('attachTask')(function* (
   }).pipe(
     Stream.map((view) => view.runs.get(task.runId)),
     Stream.filter(Predicate.isNotUndefined),
-    Stream.takeUntil((run) => run.outcome !== null),
+    Stream.takeUntil((run) => run.outcome !== null || run.holder === 'none'),
     Stream.tap((run) => Effect.sync(() => printFinal(run))),
     Stream.runLast,
   );
