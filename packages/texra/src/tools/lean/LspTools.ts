@@ -122,6 +122,8 @@ const SORRY = "declaration uses 'sorry'";
 function declaredAxioms(source: string): string[] {
   let code = '';
   for (let at = 0; at < source.length;) {
+    const raw =
+      source[at] === 'r' ? /^r(#*)"/.exec(source.slice(at, at + 16)) : null;
     if (source.startsWith('--', at)) {
       const end = source.indexOf('\n', at);
       at = end === -1 ? source.length : end;
@@ -137,6 +139,16 @@ function declaredAxioms(source: string): string[] {
         at += opens || closes ? 2 : 1;
       }
       code += ' ';
+    } else if (
+      raw !== null &&
+      !/[\p{L}\p{N}_.'!?]/u.test(source[at - 1] ?? '')
+    ) {
+      // A raw string ends at its quote and as many `#` as opened it, and
+      // has no escapes.
+      const close = `"${raw[1]}`;
+      const end = source.indexOf(close, at + raw[0].length);
+      at = end === -1 ? source.length : end + close.length;
+      code += ' ';
     } else if (source[at] === '"') {
       at += 1;
       while (at < source.length && source[at] !== '"')
@@ -146,6 +158,10 @@ function declaredAxioms(source: string): string[] {
     } else if (source.startsWith(`'"'`, at)) {
       // The character literal of a double quote opens no string.
       at += 3;
+    } else if (source.startsWith(`'\\`, at)) {
+      // Nor does an escaped one (`'\"'`): skip to the literal's end.
+      const end = source.indexOf("'", at + 3);
+      at = end === -1 ? source.length : end + 1;
     } else {
       code += source[at];
       at += 1;
