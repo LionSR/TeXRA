@@ -33,7 +33,7 @@ import {
   definedHandler,
   dispatchCommandFromRegistry,
   type CommandHandler,
-} from '@texra/shared/commands/registry';
+} from '@commands/registry';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
