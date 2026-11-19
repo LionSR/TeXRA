@@ -13,7 +13,7 @@ import {
   setPolicy,
   writeRejection,
 } from '@agent/runtime/runApprovalQueue';
-import { forkRun, runNoun } from '@agent/runtime/forkRun';
+import { forkRun } from '@agent/runtime/forkRun';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
 import { decideRequest } from '@agent/runtime/requests';
 import { RunRegistry } from '@agent/runtime/runRegistry';
@@ -27,6 +27,7 @@ import {
   readToolEditContent,
   type RunAction,
   type RunId,
+  runNoun,
 } from '@shared/schemas';
 import type { AggregateState, Database } from '@shared/session/database';
 import {
@@ -122,7 +123,7 @@ const storedState = (
 const noLongerOpen = (deps: SessionRequestsInit, runId: RunId) =>
   new Unavailable({
     runId,
-    reason: `The ${runNoun(deps.view, runId)} is no longer open.`,
+    reason: `The ${runNoun(deps.view.run(runId))} is no longer open.`,
   });
 
 /** Accept on current sequence rows: the run exists and is open. */
@@ -189,7 +190,7 @@ const decideSurfaceRequest = (
     if (!heldHere && blocksCaller(pending.payload)) {
       return yield* new Unavailable({
         runId: req.runId,
-        reason: `The ${runNoun(deps.view, req.runId)} that asked is no longer running: resume it to answer this request.`,
+        reason: `The ${runNoun(deps.view.run(req.runId))} that asked is no longer running: resume it to answer this request.`,
       });
     }
     const { payload } = pending;
@@ -272,8 +273,8 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
   if (controls === undefined)
     return yield* unavailable(
       req.kind === 'run.compact'
-        ? `This ${runNoun(deps.view, runId)} has no conversation to compact.`
-        : `Resume the ${runNoun(deps.view, runId)} to switch its model.`,
+        ? `This ${runNoun(deps.view.run(runId))} has no conversation to compact.`
+        : `Resume the ${runNoun(deps.view.run(runId))} to switch its model.`,
     );
   const failed = Effect.mapError((error: Error) => unavailable(error.message));
   if (req.kind === 'run.model')
@@ -420,7 +421,7 @@ export function sessionRequests(
           (error): RequestError =>
             new Unavailable({
               runId: req.runId,
-              reason: `The ${runNoun(deps.view, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
+              reason: `The ${runNoun(deps.view.run(req.runId))} could not be stopped: ${toErrorMessage(error)}`,
             }),
         ),
         Effect.as(done),

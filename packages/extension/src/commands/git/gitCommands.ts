@@ -84,7 +84,7 @@ const promptGitMissing = Effect.fnUntraced(function* () {
     hasPackageManager(advice.command.packageManager, (yield* CommandDirs)())
       ? advice.command.command
       : null;
-  const message = `Git not found in PATH.\n\n${advice.guide}`;
+  const message = CLONE_COPY.gitMissing(platform);
 
   const actions = [
     ...(command ? (['Copy Command', 'Run in Terminal'] as const) : []),
@@ -148,12 +148,15 @@ function buildOverleafClonePorts(
 const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
   function* (
     remote: OverleafRemote,
-    label: string,
+    workspaceRoot: string,
     outcome: OverleafCloneOutcome,
   ) {
     switch (outcome._tag) {
       case 'Cloned':
-        return yield* vscodeUi.notify('info', `${label} project cloned.`);
+        return yield* vscodeUi.notify(
+          'info',
+          CLONE_COPY.cloned(remote, outcome.destination),
+        );
       case 'Cancelled':
         return;
       case 'InvalidToken': {
@@ -172,22 +175,25 @@ const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
       case 'GitMissing':
         return yield* promptGitMissing();
       case 'WorkspaceUnreadable':
-        yield* Effect.logError(`readDir failed: ${outcome.message}`);
-        return yield* vscodeUi.notify('error', 'Cannot read workspace folder.');
+        yield* showLoggedMessage(CLONE_COPY.unreadable(outcome.message));
+        return;
       case 'WorkspaceNotEmpty':
-        yield* showLoggedMessage('Workspace folder must be empty.');
+        yield* showLoggedMessage(
+          `${CLONE_COPY.notEmpty(workspaceRoot)} Open an empty folder, then clone again.`,
+        );
         return;
       case 'AuthFailure': {
         yield* Effect.logError(`Clone failed: ${outcome.error}`);
-        const detail = remote.isOverleaf
-          ? 'Your git token may be invalid or expired.'
-          : 'Check your credentials.';
         const selected = yield* announce(
-          vscodeUi.ask('error', `${CLONE_COPY.authFailed} ${detail}`, {
-            items: remote.isOverleaf
-              ? ['Get New Token', 'How to get a token']
-              : ['Retry'],
-          }),
+          vscodeUi.ask(
+            'error',
+            `${CLONE_COPY.authFailed} ${CLONE_COPY.authDetail(remote)}`,
+            {
+              items: remote.isOverleaf
+                ? ['Get New Token', 'How to get a token']
+                : ['Retry'],
+            },
+          ),
           undefined,
         );
         if (selected === 'Get New Token') {
@@ -232,7 +238,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
       workspaceRoot,
       buildOverleafClonePorts(yield* Secrets, label),
     );
-    yield* presentCloneOutcome(remote, label, outcome);
+    yield* presentCloneOutcome(remote, workspaceRoot, outcome);
   },
   withLogChannel(CHANNEL),
 );

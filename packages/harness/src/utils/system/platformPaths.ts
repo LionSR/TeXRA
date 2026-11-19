@@ -80,7 +80,7 @@ export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
 /**
  * Extend PATH with the `appDirs` (`CommandDirs`) that are missing, checked
  * on every call: a directory the user creates mid-session (installing git on
- * the advice of our own "Git not found in PATH" message) is on the next
+ * the advice of our own "Git is not installed" message) is on the next
  * command's PATH. The check is a few `stat`s, microseconds beside the spawn
  * it precedes.
  */

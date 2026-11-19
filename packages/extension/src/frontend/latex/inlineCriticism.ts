@@ -25,11 +25,10 @@ import * as vscode from 'vscode';
 import {
   AppState,
   type PerKeyLane,
-  hasExtension,
   withPerKeyLane,
 } from '@texra-ai/harness/host';
 import { readNormalizedFile } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';

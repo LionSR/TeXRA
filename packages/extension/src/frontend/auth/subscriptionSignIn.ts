@@ -19,6 +19,7 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 import type { AppSignals, SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
@@ -47,7 +48,7 @@ function vscodePresenter(
         const openLabel = `Open ${displayName}`;
         const choice = yield* vscodeUi.ask(
           'info',
-          `Enter ${displayName} code ${prompt.userCode} at ${prompt.verificationUrl}.${copied ? ' The code was copied to the clipboard.' : ''}`,
+          SIGN_IN_PROMPT.deviceCodeSteps(displayName, prompt, copied),
           { items: [openLabel] },
         );
         if (choice === openLabel) {
@@ -58,7 +59,7 @@ function vscodePresenter(
       },
       Effect.catch((error) =>
         showLoggedErrorMessage(
-          `${displayName} sign-in code could not be shown`,
+          SIGN_IN_PROMPT.presentFailed(displayName),
           error,
         ),
       ),
@@ -74,7 +75,7 @@ function vscodePresenter(
         // link they can paste there instead.
         const choice = yield* vscodeUi.ask(
           'info',
-          `Sign in with ${displayName}. If your ${sessionName} session is in a different browser than your OS default, copy the link and open it there instead.`,
+          `Sign in with ${displayName}. ${SIGN_IN_PROMPT.otherBrowser(sessionName)}`,
           { modal: true, items: [OPEN_DEFAULT_BROWSER, COPY_SIGN_IN_LINK] },
         );
         if (choice === COPY_SIGN_IN_LINK) {

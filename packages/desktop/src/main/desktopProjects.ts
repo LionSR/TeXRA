@@ -49,11 +49,11 @@ interface DesktopProjectFacts {
   /** The session key: the storage root the session view's `SessionView.key`
    *  carries, and the project's name on every renderer message. */
   readonly key: string;
-  /** Canonical folder path, or undefined for the no-workspace session. */
-  readonly root: string | undefined;
   /** What the rail, the snapshot, notifications, and the window title print
-   *  for it, derived once from `key` and `root`. */
+   *  for it, derived once from its storage and workspace roots. */
   readonly display: ProjectDisplay;
+  /** Its roots; `roots.workspace` is the canonical folder path, undefined
+   *  for the no-workspace session. */
   readonly roots: WorkspaceRoots;
   /** Release the session from its owner; finishes once its entry has unwound. */
   dispose(): Effect.Effect<void>;
@@ -62,8 +62,6 @@ interface DesktopProjectFacts {
 /** An open project: its session opened here, or the service's, which
  *  this process holds no store, run or claim of. */
 export type DesktopProject = DesktopProjectFacts & {
-  /** The folder; absent for the no-workspace session. */
-  readonly root: string | undefined;
   readonly session: Session;
   /** What the window attaches through: this process's windows, or the
    *  service. */
@@ -232,7 +230,6 @@ export const readRememberedDesktopProjects = Effect.fn(
  * session would read.
  */
 const openDesktopProject = Effect.fn('openDesktopProject')(function* (
-  root: string | undefined,
   roots: WorkspaceRoots,
   scope: Scope.Closeable,
   service: Result.Result<ServiceLink, Error>,
@@ -246,10 +243,9 @@ const openDesktopProject = Effect.fn('openDesktopProject')(function* (
   const opened = yield* openProjectSession(roots, service, warn);
   return {
     key: roots.storage,
-    display: projectDisplayOf(roots.storage, root),
+    display: projectDisplayOf(roots.storage, roots.workspace),
     roots,
     dispose: () => Scope.close(scope, Exit.void),
-    root,
     ...opened,
   };
 });
@@ -274,12 +270,11 @@ export const openDesktopProjectRegistry: (
   const notice = noticeIn(options.processScope);
   const warn = (message: string) => notice('warning', message);
   const openProject = (
-    root: string | undefined,
     roots: WorkspaceRoots,
     scope: Scope.Closeable,
     service: Result.Result<ServiceLink, Error>,
   ) =>
-    openDesktopProject(root, roots, scope, service, warn).pipe(
+    openDesktopProject(roots, scope, service, warn).pipe(
       Effect.provideService(Sessions, sessions),
       Effect.provideService(HostWindows, hosts),
     );
@@ -293,7 +288,6 @@ export const openDesktopProjectRegistry: (
   const selectionLane = yield* Semaphore.make(1);
   const fallback = yield* Effect.uninterruptible(
     openProject(
-      undefined,
       options.processRoots,
       options.processScope,
       options.service,
@@ -309,13 +303,14 @@ export const openDesktopProjectRegistry: (
   });
   const current = () => SubscriptionRef.getUnsafe(state);
   const byRoot = (root: string) =>
-    current().projects.find((project) => project.root === root);
+    current().projects.find((project) => project.roots.workspace === root);
   const active = (): DesktopProject =>
     current().projects.find((project) => project.key === current().activeKey) ??
     fallback;
   const activate = Effect.fn('activate')(function* (root: string | undefined) {
     const next = root === undefined ? undefined : byRoot(root);
-    if (next?.root !== undefined) yield* records.activate(next.root);
+    const folder = next?.roots.workspace;
+    if (folder !== undefined) yield* records.activate(folder);
     const activeKey = (next ?? fallback).key;
     if (activeKey === current().activeKey) return;
     yield* SubscriptionRef.update(state, (s) => ({ ...s, activeKey }));
@@ -348,7 +343,7 @@ export const openDesktopProjectRegistry: (
           // install its registry owner before interruption can leave this
           // operation; a failed write closes the session again.
           return yield* Effect.uninterruptible(
-            openProject(root, roots, projectScope, options.service).pipe(
+            openProject(roots, projectScope, options.service).pipe(
               Effect.tap(
                 Effect.fnUntraced(function* (project) {
                   const { recent } = yield* records.remember(root);
@@ -389,8 +384,8 @@ export const openDesktopProjectRegistry: (
                 (candidate) => candidate !== root && byRoot(candidate),
               ) ??
               current().projects.findLast(
-                (candidate) => candidate.root !== root,
-              )?.root;
+                (candidate) => candidate.roots.workspace !== root,
+              )?.roots.workspace;
             const { recent } = yield* records.forget(
               root,
               wasActive ? next : undefined,

@@ -163,6 +163,10 @@ export function local(state: Partial<LocalRuntimeState>): SessionViewInput {
   return { _tag: 'local', local: { runsHere: [], ...state } };
 }
 
+/** Session `key`'s view before any input. */
+export const emptyView = (key: string): SessionView =>
+  makeSessionViewUpdater(key).current();
+
 /** `updater`'s view (by default a fresh one of session `paper`) after
  *  `inputs`, each applied in its own call, as frames of one. */
 export function viewOf(
