@@ -151,10 +151,10 @@ export type InquiryTurnOutcome =
 /** The thread records, in the global database's current values and keyed by
  *  thread id, so a follow-up from another project still reaches its thread.
  *  Named as the plugin's own row kind is (`external-inquiry/thread`). */
-export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = {
+export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = Object.freeze({
   name: 'external-inquiry/thread',
   schema: InquiryThreadRecordSchema,
-};
+});
 
 /** The row's value: the summary less its asking run, which is the row's
  *  `parent` edge and has no second copy. */
