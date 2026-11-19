@@ -82,6 +82,20 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
       :host {
         display: block;
       }
+
+      /* Quiet limitation note under a keyless (subscription-backed) source. */
+      .keyless-source__limit {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--wa-space-xs);
+        margin: 0 0 var(--wa-space-xs);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+      }
+      .keyless-source__limit wa-icon {
+        flex: 0 0 auto;
+        margin-top: var(--wa-space-3xs);
+      }
     `,
   ];
 

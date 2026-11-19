@@ -291,7 +291,7 @@ export class RunTab extends LitElement {
               ${
                 this.unseen
                   ? html`<span
-                      class="tab-unseen"
+                      class="status-indicator tab-unseen"
                       role="img"
                       aria-label="Finished since you last looked"
                     ></span>`

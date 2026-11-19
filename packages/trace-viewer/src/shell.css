@@ -17,20 +17,10 @@ progress-app.trace-viewer-shell {
   min-height: 0;
 }
 
-/* Load/parse failure surface rendered by main.ts (kept token-based so it
-   tracks the host bridge like the rest of the shell). */
+/* The load failure main.ts renders in the shell's place: the shared empty
+   state, centered in the page. */
 body .trace-viewer-error {
   margin: auto;
-  max-width: 40rem;
-  padding: var(--wa-space-xl);
-  color: var(--wa-color-text-normal);
-  font-family: var(--wa-font-family-body);
-  font-size: var(--wa-font-size-m);
-}
-
-body .trace-viewer-error h1 {
-  margin-block: 0 var(--wa-space-m);
-  font-size: var(--wa-type-heading);
 }
 
 /* The scrubber over the run's run.position rows (main.ts): a footer under the
@@ -40,11 +30,16 @@ body .trace-scrubber {
   align-items: center;
   gap: var(--wa-space-m);
   padding: var(--wa-space-xs) var(--wa-space-m);
-  border-top: 1px solid var(--wa-color-surface-border);
+  border-top: var(--border-thin) solid var(--color-border);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
-  font-family: var(--wa-font-family-body);
-  font-size: var(--wa-font-size-s);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+}
+
+/* The display above outranks the user agent's [hidden] rule. */
+body .trace-scrubber[hidden] {
+  display: none;
 }
 
 body .trace-scrubber label {
@@ -61,5 +56,5 @@ body .trace-scrubber input[type='range'] {
 
 body .trace-scrubber output {
   white-space: nowrap;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
 }

@@ -56,7 +56,7 @@
   box-sizing: border-box;
 }
 .shell-dock .dv-tab {
-  max-width: min(260px, 100%);
+  max-width: min(260px, var(--dock-tab-room, 100%));
   min-width: 0;
 }
 .shell-dock-tab {

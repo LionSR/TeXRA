@@ -31,7 +31,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   position: absolute;
   right: 0;
   top: 0;
-  --dot-size: 6px;
   --dot-color: var(--color-warning);
   pointer-events: none;
 }
@@ -163,11 +162,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .shell-project-status {
   grid-column: 2;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
   justify-self: center;
-  background: var(--tone-color);
+  --dot-color: var(--tone-color);
 }
 .shell-project-status.tone-unseen {
   --tone-color: var(--wa-color-brand-fill-loud);

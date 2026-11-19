@@ -316,17 +316,14 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
     const isOpen = this.expandedDeprecated.has(group.provider);
 
     return html`
-      <wa-button
-        class="deprecated-toggle"
-        appearance="plain"
-        size="s"
-        aria-expanded=${String(isOpen)}
-        @click=${() => this.toggleDeprecated(group.provider)}
-      >
-        ${waIcon('chevron-right', { className: 'disclosure-chevron' })}
-        ${group.deprecated.length}
-        ${pluralize(group.deprecated.length, 'deprecated model', 'deprecated models')}
-      </wa-button>
+      <div class="deprecated-toggle settings-disclosure-summary">
+        ${renderDisclosureToggle({
+          expanded: isOpen,
+          onToggle: () => this.toggleDeprecated(group.provider),
+          content: html`${group.deprecated.length}
+          ${pluralize(group.deprecated.length, 'deprecated model', 'deprecated models')}`,
+        })}
+      </div>
       ${
         isOpen
           ? html`<ul class="model-list deprecated-models">

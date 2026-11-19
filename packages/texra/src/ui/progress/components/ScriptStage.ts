@@ -28,6 +28,7 @@ import {
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { buttonStyles, formControlStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { isActivationKey } from '@ui/wa/keyActivation';
@@ -89,7 +90,7 @@ const scriptStageStyles = css`
   }
 
   .row.is-linked:hover {
-    background: var(--color-bg-secondary);
+    background: var(--surface-hover);
   }
 
   .row-icon {
@@ -103,18 +104,14 @@ const scriptStageStyles = css`
     flex: 0 0 auto;
     max-width: 40%;
     font-weight: var(--font-weight-semibold);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
   }
 
   .row-last,
   .row-meta,
   .row-rejected {
     min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
     color: var(--color-text-secondary);
   }
 

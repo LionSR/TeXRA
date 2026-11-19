@@ -180,7 +180,11 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
           ].reduce((width, control) => width + control.offsetWidth, 0);
           // Measure the available header, not the current tab's shrink-wrapped
           // strip, or repeated layouts gradually truncate even short titles.
-          tabElement.style.maxWidth = `${Math.max(56, Math.min(260, header.clientWidth - controlsWidth))}px`;
+          // dockStyles.css caps the tab at its widest.
+          tabElement.style.setProperty(
+            '--dock-tab-room',
+            `${Math.max(56, header.clientWidth - controlsWidth)}px`,
+          );
           const left = tabElement.offsetLeft;
           const right = left + tabElement.offsetWidth;
           if (right > strip.scrollLeft + strip.clientWidth)

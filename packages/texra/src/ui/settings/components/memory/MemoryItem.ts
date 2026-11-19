@@ -53,7 +53,7 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-path {
-        font-family: var(--wa-font-family-mono), monospace;
+        font-family: var(--wa-font-family-mono);
         font-size: var(--font-size);
         font-weight: var(--font-weight-medium);
         color: var(--color-text-link);
