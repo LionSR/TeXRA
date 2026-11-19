@@ -306,12 +306,14 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
   // goes to the process log only, never into tool results.
   yield* Effect.forkScoped(
     Effect.gen(function* () {
-      const exit = yield* Effect.result(handle.exitCode);
+      const code = yield* Effect.orElseSucceed(
+        handle.exitCode,
+        () => 'unknown' as const,
+      );
       yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
         concurrency: 'unbounded',
       }).pipe(Effect.timeoutOption(STOP_TIMEOUT));
       const tail = stderrTail.trim();
-      const code = exit._tag === 'Success' ? exit.success : 'unknown';
       if (tail)
         yield* Effect.logWarning(
           `MCP server "${config.name}" exited (code ${code}); its stderr:\n${tail}`,

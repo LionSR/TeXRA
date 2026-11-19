@@ -6,7 +6,13 @@
  * `items`). The tool catalog builds the package's uniform tool definitions
  * from it; the structured-output tool builder shares it.
  */
-import { type JsonSchema, Predicate, Schema, SchemaAST } from 'effect';
+import {
+  type JsonSchema,
+  Predicate,
+  Record as EffectRecord,
+  Schema,
+  SchemaAST,
+} from 'effect';
 
 import type { ToolDefinition } from '@shared/schemas';
 
@@ -281,31 +287,19 @@ export function mapSubschemas(
   node: Readonly<Record<string, unknown>>,
   f: (schema: unknown, keyword: string, name?: string) => unknown,
 ): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(node).map(([keyword, value]) => {
-      if (SUBSCHEMA_KEYWORDS.map.has(keyword))
-        return [
-          keyword,
-          Predicate.isObject(value)
-            ? Object.fromEntries(
-                Object.entries(value).map(([name, schema]) => [
-                  name,
-                  f(schema, keyword, name),
-                ]),
-              )
-            : value,
-        ];
-      if (
-        Array.isArray(value) &&
-        (SUBSCHEMA_KEYWORDS.list.has(keyword) ||
-          SUBSCHEMA_KEYWORDS.one.has(keyword))
-      )
-        return [keyword, value.map((schema) => f(schema, keyword))];
-      if (SUBSCHEMA_KEYWORDS.one.has(keyword))
-        return [keyword, f(value, keyword)];
-      return [keyword, value];
-    }),
-  );
+  return EffectRecord.map(node, (value, keyword) => {
+    if (SUBSCHEMA_KEYWORDS.map.has(keyword))
+      return Predicate.isObject(value)
+        ? EffectRecord.map(value, (schema, name) => f(schema, keyword, name))
+        : value;
+    if (
+      Array.isArray(value) &&
+      (SUBSCHEMA_KEYWORDS.list.has(keyword) ||
+        SUBSCHEMA_KEYWORDS.one.has(keyword))
+    )
+      return value.map((schema) => f(schema, keyword));
+    return SUBSCHEMA_KEYWORDS.one.has(keyword) ? f(value, keyword) : value;
+  });
 }
 
 /**

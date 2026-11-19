@@ -34,7 +34,6 @@ import {
   blocksCaller,
   type RequestDecision,
 } from '@shared/schemas';
-import { Unavailable } from '@shared/session/runtimeRequest';
 import type { PendingRequest, SessionView } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -161,12 +160,10 @@ const answerRequests = (
               Effect.as(true),
               // The session took no decision: decided meanwhile, a run no
               // fiber here drives, or a write it refused.
-              Effect.catchIf(
-                (error) => error instanceof Unavailable,
-                (error) =>
-                  Effect.logInfo(
-                    `The decision on request ${pending.requestId} was not recorded: ${error.reason}`,
-                  ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+              Effect.catchTag('Unavailable', (error) =>
+                Effect.logInfo(
+                  `The decision on request ${pending.requestId} was not recorded: ${error.reason}`,
+                ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
               ),
             ),
         ),

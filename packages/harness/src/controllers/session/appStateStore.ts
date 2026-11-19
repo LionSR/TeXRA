@@ -153,11 +153,11 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
           ] as const),
         )
         .pipe(
-          Effect.catch((error) =>
+          Effect.catch(
             logFailure(
               'sessionDatabase',
               `Could not record that ${storage} serves ${workspaceRoot}; a storage prune will not know that store's project, so it will not offer to delete the store once that folder is gone.`,
-            )(error),
+            ),
           ),
         );
     }
