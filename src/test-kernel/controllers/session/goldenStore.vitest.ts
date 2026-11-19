@@ -215,7 +215,7 @@ describe('the golden 1.0 store', () => {
       );
       return Effect.gen(function* () {
         // The fixture's own connection runs the reader's earlier-build scan.
-        const exec = (statement: string, params: readonly unknown[]) =>
+        const exec = (statement: string, params: readonly unknown[] = []) =>
           Effect.sync(() =>
             raw(storage, (db) =>
               db
@@ -228,9 +228,8 @@ describe('the golden 1.0 store', () => {
             ),
           );
         const events = yield* rowReader(
-          storage,
+          { path: storage, exec },
           toolTable(texraPlugins({ name: 'vscode' })).factKinds,
-          exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
         const types = new Set<string>(events.map((event) => event.type));

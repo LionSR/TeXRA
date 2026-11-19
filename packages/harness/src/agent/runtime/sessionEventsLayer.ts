@@ -51,6 +51,12 @@ const CHANNEL = 'sessionEvents';
  *  together, so they finish under one deadline for the process, not one each. */
 export const SESSION_CLOSE_DEADLINE_MS = 5_000;
 
+/** The batches the publisher keeps for a subscriber that is behind. The
+ *  publisher runs inside a transaction's turn and cannot wait for a reader,
+ *  so past this the oldest batch is dropped; the reader sees the gap in the
+ *  next batch's `from` and reads the commits between from the store. */
+const KEPT_BATCHES = 1024;
+
 /** What the publisher keeps per aggregate: its open streams, so closing
  *  them at a park, an end or a host exit reads no rows. They close at a
  *  phase move that rests or ends the run. An earlier process's streams are
@@ -119,7 +125,8 @@ export const sessionEventsLayer = Layer.effect(
   Effect.gen(function* () {
     const log = yield* Database;
     const { track, openWork } = openWorkTracker();
-    const committed = yield* PubSub.unbounded<Take.Take<CommittedBatch>>();
+    const committed =
+      yield* PubSub.sliding<Take.Take<CommittedBatch>>(KEPT_BATCHES);
     let head = yield* log.currentCommit;
     let closed = false;
     /** What a committed job wrote, tracked and published in commit order:
@@ -130,9 +137,10 @@ export const sessionEventsLayer = Layer.effect(
         const last = rows.at(-1);
         if (last === undefined) return Effect.void;
         track(rows);
+        const from = head;
         head = last.commit;
         return PubSub.publish(committed, [
-          { rows: log.displayRows(rows), through: last.commit },
+          { rows: log.displayRows(rows), from, through: last.commit },
         ]);
       });
     /** One job: its transaction, then the publication of what it wrote, in
@@ -237,6 +245,39 @@ export const sessionEventsLayer = Layer.effect(
           'A detached session publication did not finish in its call; its row may land out of order',
         );
     };
+    const batches: SessionEventsShape['batches'] = (fromCommit) =>
+      Stream.unwrap(
+        Effect.map(PubSub.subscribe(committed), (subscription) => {
+          // Read after subscribing: every batch past it reaches the
+          // subscription, or shows as a gap.
+          const published = head;
+          let at = Math.max(fromCommit, published);
+          return Stream.concat(
+            fromCommit < published
+              ? readThrough(log.readDisplay, fromCommit, published)
+              : Stream.empty,
+            Stream.flattenTake(Stream.fromSubscription(subscription)).pipe(
+              Stream.flatMap((batch) => {
+                // Published before `head` was read: the store read has it.
+                if (batch.through <= at) return Stream.empty;
+                const missed =
+                  batch.from > at
+                    ? Stream.unwrap(
+                        Effect.as(
+                          Effect.logWarning(
+                            `A reader of the session's events fell more than ${KEPT_BATCHES} batches behind; reading commits ${at + 1} to ${batch.from} from the store.`,
+                          ).pipe(withLogChannel(CHANNEL)),
+                          readThrough(log.readDisplay, at, batch.from),
+                        ),
+                      )
+                    : Stream.empty;
+                at = batch.through;
+                return Stream.concat(missed, Stream.succeed(batch));
+              }),
+            ),
+          );
+        }),
+      );
     return {
       transact,
       detach,
@@ -247,24 +288,9 @@ export const sessionEventsLayer = Layer.effect(
       openWork,
       head: () => head,
       subscribe: PubSub.subscribe(committed),
+      batches,
       all: (fromCommit, drained) =>
-        Stream.unwrap(
-          Effect.map(PubSub.subscribe(committed), (subscription) => {
-            // Read after subscribing: every batch past it reaches the
-            // subscription.
-            const published = head;
-            return released(
-              Stream.concat(
-                fromCommit < published
-                  ? readThrough(log.readDisplay, fromCommit, published)
-                  : Stream.empty,
-                Stream.flattenTake(Stream.fromSubscription(subscription)),
-              ),
-              fromCommit,
-              drained,
-            );
-          }),
-        ),
+        released(batches(fromCommit), fromCommit, drained),
     };
   }),
 );
@@ -287,6 +313,11 @@ const readThrough = (
       ]),
     ),
     Stream.succeed({ rows: [], through: Math.max(fromCommit, upTo) }),
+  ).pipe(
+    Stream.mapAccum(
+      () => fromCommit,
+      (from, batch) => [batch.through, [{ ...batch, from }]] as const,
+    ),
   );
 
 /** The rows of `batches` above `fromCommit`, each once. `drained`, when

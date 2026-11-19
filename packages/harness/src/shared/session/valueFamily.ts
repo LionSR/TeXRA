@@ -20,15 +20,17 @@ export interface ValueFamily<T> {
   readonly schema: Schema.Codec<T, unknown>;
 }
 
-/** The process's settings store, keyed by the setting key. */
-export const APP_STATE: ValueFamily<Schema.Json> = Object.freeze({
+/** The process's settings store, keyed by the setting key. A settings
+ *  store hands its callers' values on as they come (`unknown`): the write
+ *  encodes each with this schema, which fails one that is not JSON. */
+export const APP_STATE: ValueFamily<unknown> = Object.freeze({
   name: 'app-state',
   schema: Schema.Json,
 });
 
 /** The settings every checkout of one repository shares, keyed by the
  *  repository root and the setting key. */
-export const REPO_STATE: ValueFamily<Schema.Json> = Object.freeze({
+export const REPO_STATE: ValueFamily<unknown> = Object.freeze({
   name: 'repo-state',
   schema: Schema.Json,
 });
