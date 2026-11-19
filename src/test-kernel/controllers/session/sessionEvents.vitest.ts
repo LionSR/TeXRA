@@ -102,6 +102,7 @@ import { databaseLayer } from '@controllers/session/databaseLayer';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { Database } from '@shared/session/database';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 const [storage, run] = process.argv.slice(2);
 const append = Effect.flatMap(Database, (db) =>
