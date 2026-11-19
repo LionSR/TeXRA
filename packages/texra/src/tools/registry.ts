@@ -219,11 +219,7 @@ const core = (
 ): TexraPlugin => ({
   ...definePlugin<EditorHost>({
     id: 'core',
-    tools: [
-      InlineCommentTool,
-      OpenPdfTool,
-      AskUserQuestionTool,
-    ],
+    tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
     // The section finds sources with bash and writes math for a rendered
     // reply: a run that writes a document, with no tool offered, gets none
     // of it (`$$\\begin{align}` inside a .tex file does not compile).

@@ -45,9 +45,9 @@ describe('tools that change things outside the run', () => {
       .find((t) => t.definition.name === name);
   // Typed through `never`: `ITool` erases a guard's input type.
   const asked = (name: string, input: unknown) =>
-    (tool(name)?.guard?.command?.text as ((i: unknown) => string) | undefined)?.(
-      input,
-    );
+    (
+      tool(name)?.guard?.command?.text as ((i: unknown) => string) | undefined
+    )?.(input);
 
   it('asks before download_arxiv_source writes into the workspace', () => {
     expect(asked('download_arxiv_source', { id: '2401.00001 ' })).toContain(
