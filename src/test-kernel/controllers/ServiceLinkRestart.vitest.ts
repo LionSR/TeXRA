@@ -6,7 +6,7 @@ import { RpcSerialization, RpcServer } from 'effect/rpc';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
-import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
+import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { globalValuesOver } from '@test/support/fsTestUtils';
 import { linkService } from '@texra/controllers/server/client';
