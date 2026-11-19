@@ -36,13 +36,11 @@ import {
   edgesOf,
   isDisplayRow,
   RunIdSchema,
-  aggregateTarget,
-  type AggregateId,
+  type RunId,
   type DisplayRow,
   type RunParent,
   type SessionRow,
   type SessionRowDraft,
-  factName,
   NonNegativeIntSchema,
 } from '@shared/schemas';
 import {
@@ -72,7 +70,6 @@ import {
   EVENT_JOINS,
   aggregateColumns,
   aggregateList,
-  aggregateOf,
   encodeDraft,
   pluginKind,
   prepareEventDraft,
@@ -128,14 +125,14 @@ const INSERT_REFS = `INSERT INTO event_blob ("commit", digest, inline)
 const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
   CROSS JOIN event_sequence s
     ON s.kind = l.value ->> 0 AND s.logical_id = l.value ->> 1`;
-/** Aggregates' existence, for the ids a `WHERE` on `s.id` selects. */
-const STATE_COLUMNS = `
-SELECT s.kind, s.logical_id AS logicalId, s.uid,
-  s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
-  p.logical_id AS parentLogicalId, s.start_commit AS startCommit
-FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id`;
-/** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
-const READ_STATE = `${STATE_COLUMNS} WHERE s.id IN (${AGGREGATE_LIST})`;
+/** Runs' existence, the list bound as `AGGREGATE_LIST` binds: a run's
+ *  parent is a run. */
+const READ_STATE = `
+SELECT s.logical_id AS aggregateId, s.uid,
+  s.closed_by IS NOT NULL AS closed, p.logical_id AS parentId,
+  s.start_commit AS startCommit
+FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
+WHERE s.id IN (${AGGREGATE_LIST})`;
 
 /** The stored rows one display page covers. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -346,25 +343,16 @@ export const databaseLayer = (
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      const states = (statement: string, params: readonly unknown[]) =>
-        Effect.map(exec(statement, params), (rows) =>
+      const readState = (ids: readonly RunId[]) =>
+        Effect.map(exec(READ_STATE, [aggregateList(ids)]), (rows) =>
           rows.map((row) =>
-            Schema.decodeUnknownSync(AggregateStateSchema)({
-              ...row,
-              aggregateId: aggregateOf(row.kind, row.logicalId),
-              parentId:
-                row.parentKind === null
-                  ? null
-                  : aggregateOf(row.parentKind, row.parentLogicalId),
-            }),
+            Schema.decodeUnknownSync(AggregateStateSchema)(row),
           ),
         );
-      const readState = (ids: readonly AggregateId[]) =>
-        states(READ_STATE, [aggregateList(ids)]);
       /** A row whose aggregate is closed rejects this writer; one whose
        *  aggregate was never created is the caller's defect. */
       const refuseWriter = Effect.fn('refuseWriter')(function* (
-        id: AggregateId,
+        id: RunId,
         absent: string,
       ) {
         const held = (yield* readState([id]))[0];
@@ -397,20 +385,7 @@ export const databaseLayer = (
         at: number,
       ) {
         const edges = edgesOf(draft);
-        const target = aggregateTarget(draft.aggregateId);
         const columns = aggregateColumns(draft.aggregateId);
-        if (edges.reparent != null) {
-          // A new parent run must be open: the plugin's writer checks it in
-          // its job (`ownFactsChecked`), so one that is not is a defect.
-          const current = (yield* readState([draft.aggregateId]))[0];
-          if (current?.parentId !== edges.reparent) {
-            const parent = (yield* readState([edges.reparent]))[0];
-            if (!parent || parent.closed)
-              return yield* invariant(
-                `A plugin aggregate's new parent must be open: ${edges.reparent}`,
-              );
-          }
-        }
         const next = yield* execOne(NEXT_SEQ, [...columns, randomUUID()]);
         const seq = next?.seq;
         const aggregate = next?.id;
@@ -420,30 +395,11 @@ export const databaseLayer = (
             'Sequence refused for an absent aggregate',
           );
         }
-        if (
-          draft.type === 'plugin.fact' &&
-          target.kind === 'run' &&
-          draft.parent !== null
-        )
-          return yield* invariant(
-            `A run's own plugin fact names no parent: ${factName(draft)}`,
-          );
         // The seq-1 rule: a run aggregate begins with exactly
         // one `run.start`, and nothing else ever lands at seq 1.
-        if (
-          target.kind === 'run' &&
-          (seq === 1) !== (draft.type === 'run.start')
-        ) {
+        if ((seq === 1) !== (draft.type === 'run.start')) {
           return yield* invariant(
             `A run must begin with exactly one run.start: ${draft.aggregateId}`,
-          );
-        }
-        if (
-          (draft.type === 'run.start' || draft.type === 'run.removed') &&
-          target.kind !== 'run'
-        ) {
-          return yield* invariant(
-            `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
           );
         }
         // Stamp the declared parent's incarnation in this transaction: a
@@ -461,7 +417,7 @@ export const databaseLayer = (
             );
           }
           parent = {
-            id: runIdOf(aggregateTarget(edges.parent).id),
+            id: edges.parent,
             uid: parentState.uid,
             call:
               draft.type === 'run.start' ? (draft.parent?.call ?? null) : null,
@@ -510,16 +466,10 @@ export const databaseLayer = (
             [commit, aggregate],
           );
         }
-        // A child run hangs under its parent run, and a plugin's aggregate
-        // under its `parent` run or none, so the parent's deletion closes
-        // and collects it.
-        const hangsUnder =
-          edges.reparent === undefined ? edges.parent : edges.reparent;
-        if (edges.reparent !== undefined || hangsUnder !== null) {
-          const parentColumns =
-            hangsUnder === null ? [null, null] : aggregateColumns(hangsUnder);
-          yield* exec(reparent, [...parentColumns, aggregate]);
-        }
+        // A child run hangs under its parent run, so the parent's deletion
+        // closes and collects it.
+        if (edges.parent !== null)
+          yield* exec(reparent, [...aggregateColumns(edges.parent), aggregate]);
         if (edges.closes) {
           yield* exec(detachClosed, columns);
           yield* exec(closeDependents, [...columns, commit]);
@@ -591,7 +541,7 @@ export const databaseLayer = (
                 [...aggregateColumns(id), RECORD_TYPES],
                 true,
               ),
-              // Only a run has a start: a plugin's own aggregate has no record.
+              // A run whose start has not committed has no record.
               (rows) => {
                 const record = rows.reduce(recordAfter, NO_RUN_ROWS);
                 return record.start === null ? null : record;

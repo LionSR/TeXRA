@@ -92,6 +92,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
         skillCount: plugin.skillCount,
         commandCount: plugin.commandCount,
         agentCount: plugin.agentCount,
+        programs: [...plugin.programs],
         mcpServers: [...plugin.mcpServers],
         problem: plugin.problem,
       },

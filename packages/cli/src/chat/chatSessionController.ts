@@ -10,6 +10,7 @@ import {
   Exit,
   Fiber,
   FiberSet,
+  Option,
   Scope,
   Semaphore,
   Stream,
@@ -600,11 +601,12 @@ export function createChatSessionController(
   // chat takes one up when its root is not live here, or when it is the
   // root itself continuing after an end (not the first activation of the
   // chat's own launch).
-  let previous: SessionView | undefined;
-  const observeResumedRoots = (view: SessionView): Effect.Effect<void> =>
+  const observeResumedRoots = ([previous, view]: readonly [
+    Option.Option<SessionView>,
+    SessionView,
+  ]): Effect.Effect<void> =>
     Effect.sync(() => {
-      const before = previous;
-      previous = view;
+      const before = Option.getOrUndefined(previous);
       for (const run of view.runs.values()) {
         if (run.holder !== 'here' || run.parentId !== null) continue;
         const was = before?.runs.get(run.id);
@@ -621,7 +623,12 @@ export function createChatSessionController(
   // A chat of the service adopts only the runs it launches or resumes: the
   // service's view also holds other terminals' conversations.
   if (!served) {
-    chat.fork(Stream.runForEach(viewChanges, observeResumedRoots));
+    chat.fork(
+      Stream.runForEach(
+        Stream.zipWithPrevious(viewChanges),
+        observeResumedRoots,
+      ),
+    );
   }
 
   // -----------------------------------------------------------------------

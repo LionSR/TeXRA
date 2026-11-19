@@ -38,12 +38,10 @@ import type { FormatResult } from './baseLogFormatter';
 /** Each row kind's row: indexing it by a kind parameter keeps the pairing. */
 type RowMap = { [K in TranscriptRowKind]: TranscriptRow & { kind: K } };
 
-/** `interrupted`: the row's run is interrupted (its process died), so an
- *  open call is not running. `tools`: how the host paints tool calls. */
+/** `tools`: how the host paints tool calls. */
 type RowFormatters = {
   [K in TranscriptRowKind]: (
     row: RowMap[K],
-    interrupted: boolean,
     tools: HostSnapshot['tools'],
   ) => FormatResult;
 };
@@ -79,13 +77,12 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
 /** Format a transcript row as a TemplateResult for direct Lit rendering. */
 export function formatLogEntry(
   row: TranscriptRow,
-  interrupted: boolean,
   tools: HostSnapshot['tools'],
 ): TemplateResult | typeof nothing {
   try {
     // Generic over the kind, so the painter and its row share one `K`.
     const paint = <K extends TranscriptRowKind>(kind: K, of: RowMap[K]) =>
-      ROW_FORMATTERS[kind](of, interrupted, tools);
+      ROW_FORMATTERS[kind](of, tools);
     return paint(row.kind, row) ?? nothing;
   } catch (e) {
     const label = renderLabel(row);

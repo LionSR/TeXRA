@@ -1,4 +1,4 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Record } from 'effect';
 
 // Local imports - shared constants
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -7,6 +7,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { probeLatexTools } from '@latex/latexToolchain';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
+  probedToolPaths,
   type LatexSettingsStatus,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
@@ -17,7 +18,6 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   PROBED_LATEX_TOOLS,
   SCOOP_INSTALL_COMMAND,
-  type LatexDependency,
 } from '@texra/shared/constants/latexToolchain';
 import { detectPackageManager } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -57,27 +57,16 @@ export function detectLatexSettingsStatus(
     };
     const { tools, installed: installedTools } =
       yield* probeLatexTools(PROBED_LATEX_TOOLS);
-    // Perl backs latexindent but is never shown with a path of its own.
-    const pathOf = (name: (typeof PROBED_LATEX_TOOLS)[number]) =>
-      tools.find((tool) => tool.name === name)?.path ?? null;
-    // cast: the entries are keyed by every dependency, one each.
-    const installed = Object.fromEntries(
-      Object.entries(LATEX_DEPENDENCIES).map(([id, { needs }]) => [
-        id,
-        needs.every((group) => group.some((tool) => installedTools.has(tool))),
-      ]),
-    ) as Record<LatexDependency, boolean>;
+    const installed = Record.map(LATEX_DEPENDENCIES, ({ needs }) =>
+      needs.every((group) => group.some((tool) => installedTools.has(tool))),
+    );
     return {
       editor: editor ?? null,
       installed,
       platform,
-      pdflatexPath: pathOf('pdflatex'),
-      latexmkPath: pathOf('latexmk'),
-      latexdiffPath: pathOf('latexdiff'),
-      latexindentPath: pathOf('latexindent'),
-      texcountPath: pathOf('texcount'),
-      ghostscriptPath: pathOf('gs'),
-      graphicsmagickPath: pathOf('gm') ?? pathOf('magick'),
+      paths: probedToolPaths(
+        (name) => tools.find((tool) => tool.name === name)?.path ?? null,
+      ),
       packageManager: detectPackageManager((yield* CommandDirs)()),
     } satisfies LatexSettingsStatus;
   }).pipe(
