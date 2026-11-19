@@ -13,7 +13,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { scopedClient, Secrets } from '@texra-ai/harness/plugins';
 
 import { getGitHubToken } from './githubAuth';
-import type { SecretsFailed } from '@texra-ai/llm';
+import { isAuthFailureStatus, type SecretsFailed } from '@texra-ai/llm';
 import { HttpClientResponse } from 'effect/http';
 import type { Headers, HttpClient } from 'effect/http';
 
@@ -117,7 +117,7 @@ function classifyFailure(
   nowMs: number,
 ): GitHubRequestError {
   const message = extractApiMessage(responseData, `HTTP ${status}`);
-  if (status === StatusCodes.UNAUTHORIZED || status === StatusCodes.FORBIDDEN) {
+  if (isAuthFailureStatus(status)) {
     // Primary rate limit: x-ratelimit-remaining hits 0 with an
     // epoch-seconds reset timestamp. Only applies when credentials were
     // otherwise valid.

@@ -446,6 +446,16 @@ Runtime-checked narrowing for provider strings.
 function isApiProvider(provider: string): provider is ApiKeyProviderId
 ```
 
+## isAuthFailureStatus
+
+Whether an HTTP status rejects the credential the request carried: 401 or
+403. The one reading of that status fact, for a model provider, an OAuth
+token endpoint and any other HTTP API a TeXRA package calls.
+
+```ts
+const isAuthFailureStatus: (status: number | undefined) => boolean
+```
+
 ## isKimiCodeExclusiveModel
 
 Whether the coding endpoint ALONE serves `model`: llm-zoo pins its `baseUrl`
