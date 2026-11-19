@@ -280,7 +280,7 @@ lanes table below keep it as the refused option.
 
 | What goes                                         | Count                                                                   |
 | ------------------------------------------------- | ----------------------------------------------------------------------- |
-| Root exports                                      | 246 → 59 (what public signatures need)                                  |
+| Root exports                                      | 246 → 47 (what public signatures need)                                  |
 | `export *` in `shared/schemas/index.ts`           | kept (re-check below)                                                   |
 | `harness-deep-import-baseline.json` and its suite | gone at `c78e9f9` with every ratchet baseline; the rule is a convention |
 | `architecture-edges` rows                         | 67 → ~45, harness only; at `c78e9f9` no edge baseline exists            |
@@ -299,7 +299,7 @@ format batch (decided 2026-10-30): a `remind` tool adds it as
 
 | #   | Lane                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Effort | Files moved |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
-| 1   | Doors: done. The root holds what public signatures need (59 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done; alias scoping is the `HARNESS_INTERNALS` import zone in `oxlint.config.mts`, over every other package's sources, suites, scripts and tooling, with the two CLI validator harnesses as its named exemption (re-check below). `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)                                                                                                                                                                                                                                    | L      | 8           |
+| 1   | Doors: done. The root holds what public signatures need (47 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done: no signature on the root, `./node`, `./schemas` or `./transcript` names a type only `./host` exports, and on `./plugins` only the requirement unions `RunServices` and `PlatformServices` do (second re-check below); alias scoping is the `HARNESS_INTERNALS` import zone in `oxlint.config.mts`, over every other package's sources, suites, scripts and tooling, with the two CLI validator harnesses as its named exemption (re-check below). `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)              | L      | 8           |
 | 2   | Foundation order, done another way: `logger/` and `types/` stay layer 1 of the harness AGENTS.md layer order, there is no `eventBus/`, and the run-storage leaves went to `common/storage/` (#14550); the `@common/webview` alias removed (done, #14682)                                                                                                                                                                                                                                                                                                                                                                                                                                 | M      | 11          |
 | 2b  | Session merge, with the history lint zone: not for 1.0 (the release PRD's layout comparison: a `session/` directory removes no layer edge)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | M      | ~55         |
 | 3   | Vocabulary as data: done (#14364, #14369); the llm branding is one `ClientIdentity` (`@texra-ai/llm/node`) the app supplies at composition (`Secrets.layer`, `Secrets.announcing`, `Composition.client`), with no default in llm: the xAI referrer, the ChatGPT agent name and the Responses tool namespace (`toolNamespace`, from `BindSpec.client`). TeXRA's is `TEXRA_CLIENT` (`packages/texra/src/controllers/texraProcessLayer.ts`)                                                                                                                                                                                                                                                 | M      | 9           |
@@ -427,6 +427,55 @@ tool grows the surface the 1.0 PRD shrinks, and moving the TUI harness into
 `src/test-kernel/` (the suites that compose several packages) and
 `scripts/fixtures/sessionDatabase.ts` (the desktop e2e fixture bundle) reach
 internals and stay outside the zone.
+
+### Re-check (2026-11-19): signatures and the host door
+
+`./host` says an embedder needs none of it, and 37 names contradicted that:
+a signature on another entry named a type that only `./host` exported. The
+package's own examples imported `ExportNode` from `./host` to type what
+`records(runId).readConversation` answers, and TeXRA's plugins imported
+`StateReadFailed`, `ConfigProvider` and `GlobalValues` from it. Each moved
+to the entry whose signatures name it, with no rename:
+
+- `./schemas` (4): `ExportNode`, `ExportNodeSchema`, `TraceRow`,
+  `AggregateId`.
+- the root (12): `HostInteractions` and `Notices` with the presentation
+  events, payloads and options they name, `AgentDirectoriesPort` and
+  `AgentDirectoriesFailed`, `HostSkillOptions` and `SkillSourceOptions`,
+  `SessionCloseReport`, `DatabaseWriteFailed`. The root is 35 → 47 names.
+- `./plugins` (21): the config and state store ports with their failures,
+  `RootedFileSystem` and `GlobalStorageFs`, the app-signal types, `AppState`,
+  `GlobalValues`, `StateStores`, `ToolCatalog` and what they name.
+  `./host` is 164 → 127 names.
+
+Left on `./host` by design: `RunServices` and `PlatformServices`, the
+requirement unions on `PluginToolServices` and `ProcessTurn`. They list the
+services a host process serves (`AgentCatalog`, `ToolAvailability`,
+`UsageLog`, …); a plugin passes them through and names no member.
+
+No type a public signature names is missing from every entry: the three the
+check reported (`JsonRecord`, `RunToolCall`, `RegionSettingRow`) appear only
+inside a body or a `satisfies`. Of the 168 exports with no importer outside
+the harness, none is free to delete: each is named by another export's
+signature, or is the result, the failure or a field type of one (the ten
+the check could not link by name, such as `MachineGitResult` and
+`AttachedMemoryMiss`, were read by hand).
+
+Open, for the owner:
+
+- TeXRA's plugins (`packages/texra/src/tools`) still import twelve helpers
+  from `./host` in 24 places: the `FileLocation` builders, `withPerKeyLane`,
+  `withFileWriteLane`, the path predicates, `buildDiffHunks`,
+  `readModelOptions`, `AgentDirectories`, `isModuleNotFoundError`. Either
+  they are authoring surface and move to `./plugins`, or the plugins stop
+  using them.
+- The MCP client tells every server its name is `texra`
+  (`tools/mcp/mcpServer.ts`, `clientInfo`). The app's `ClientIdentity`
+  reaches only the model providers; sending it here adds
+  `SubscriptionAccounts` to what the tool catalog's layer requires.
+- Names an embedder's users see that carry the app's word: the store file
+  `texra.db`, the `TEXRA_APPROVAL_POLICY` and `TEXRA_SKILL_DIR` variables,
+  and "Another TeXRA process holds this project".
 
 ### Sequencing with work in flight
 

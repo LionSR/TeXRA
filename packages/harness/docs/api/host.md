@@ -7,10 +7,15 @@ the root entry. TeXRA's editor extension, desktop app and terminal app
 read it; an embedder that runs agents from a program needs none of it.
 
 It holds the process layer a host builds once (`processLayer`), the
-services a host serves its views from (agent catalog, settings, stores,
-skills, installed plugins, model options, tool availability), the
-presentation surface a host implements (`HostInteractions`), and the
-helpers the hosts share for files, errors and logs.
+services a host serves its views from (agent catalog, skills, installed
+plugins, model options, tool availability, storage maintenance), the
+presenters of the root's `HostInteractions`, and the helpers the hosts
+share for files, errors and logs.
+
+No signature on another entry names a type that only this one exports,
+with one exception: the requirement unions `RunServices` and
+`PlatformServices`, which list the services a host process serves and
+which a plugin passes through without naming a member.
 
 No stability promise: names move here when they leave the root entry and
 leave when the hosts stop needing them.

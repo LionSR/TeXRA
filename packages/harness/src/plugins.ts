@@ -26,6 +26,16 @@
  * - **Runtime callbacks inside a tool**: the call's run and requests on
  *   [`ToolContext`](#toolcontext), [`ChildRuns`](#childruns), and
  *   [`RunInbox`](#runinbox).
+ * - **Settings, stores & signals**: [`Settings`](#settings) over a
+ *   [`ConfigProvider`](#configprovider) and a [`StateStore`](#statestore)
+ *   (failing with [`StateReadFailed`](#statereadfailed),
+ *   [`StateWriteFailed`](#statewritefailed) or
+ *   [`ConfigWriteFailed`](#configwritefailed)), the rooted file systems
+ *   ([`WorkspaceFs`](#workspacefs), [`StorageFs`](#storagefs),
+ *   [`GlobalStorageFs`](#globalstoragefs)), and the process services a
+ *   plugin layer may read ([`AppState`](#appstate),
+ *   [`GlobalValues`](#globalvalues), [`ToolCatalog`](#toolcatalog),
+ *   [`AppSignals`](#appsignals)).
  * - **Lifetimes, prompt sections & durable rows**:
  *   [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
