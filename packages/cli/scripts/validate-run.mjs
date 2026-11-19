@@ -389,12 +389,13 @@ function validateFileFlagMissingValues() {
   assertUsageError(
     run(process.execPath, [binaryPath, 'run', 'edit', '--input', '--print']),
     'texra run missing --input value',
-    'Missing value for --input',
+    'Missing value for flag --input.',
   );
   assertUsageError(
     run(process.execPath, [binaryPath, 'run', 'edit', '-i', '-p']),
     'texra run missing -i value',
-    'Missing value for -i',
+    // effect/cli names a flag by its long name, whichever spelling was typed.
+    'Missing value for flag --input.',
   );
   assertUsageError(
     run(process.execPath, [
@@ -407,7 +408,7 @@ function validateFileFlagMissingValues() {
       '--print',
     ]),
     'texra run missing --output value',
-    'Missing value for --output',
+    'Missing value for flag --output.',
   );
   assertUsageError(
     run(process.execPath, [
@@ -418,7 +419,7 @@ function validateFileFlagMissingValues() {
       '--print',
     ]),
     'texra run missing --instruction-file value',
-    'Missing value for --instruction-file',
+    'Missing value for flag --instruction-file.',
   );
 }
 
