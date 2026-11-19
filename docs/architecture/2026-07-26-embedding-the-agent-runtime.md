@@ -223,7 +223,15 @@ const program = Effect.gen(function* () {
   Effect.scoped,
   // The process and its sessions live for this layer's scope; releasing it
   // closes every session, then the process under them.
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  // `client` names the embedder's app to the model providers (a ChatGPT
+  // sign-in shows its name); the harness names none of its own.
+  Effect.provide(
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: { name: 'My App', id: 'my-app' },
+    }),
+  ),
 );
 
 const result = await Effect.runPromise(program);
