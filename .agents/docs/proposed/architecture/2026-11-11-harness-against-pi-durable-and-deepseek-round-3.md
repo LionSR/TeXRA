@@ -157,7 +157,7 @@ the code does now and where it departs from the design.
   the inbox's observers. `owesResume` is `needsWake` over one read; whether
   a fiber drives the run is the registry's answer (`wakeIfOwed`).
 - **Finding 2 B: landed.** The reader hands a loop step one reading
-  (`RunInput`); `runLoop.ts` reads the input once per turn step, once at an
+  (`InputReading`); `runLoop.ts` reads the input once per turn step, once at an
   idle wait (which then waits from that reading) and once at a turn's end.
 
 ## What picks the targets

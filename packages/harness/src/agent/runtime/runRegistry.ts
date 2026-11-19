@@ -126,7 +126,7 @@ type AnyFiber = Fiber.Fiber<unknown, unknown>;
 /** A person's answer to a request of a run no fiber here drives: the
  *  decision, and the rows that commit only with it (a plugin's facts and
  *  the input it sends), decided in the job that commits them. */
-export interface HeldAnswer {
+interface HeldAnswer {
   readonly decision: RequestDecision;
   readonly beside?: Effect.Effect<readonly SessionRowDraft[], Error>;
 }

@@ -6,7 +6,7 @@
  * of them and nothing here takes a row: a batch is consumed by the
  * `followup.consumed` rows its reader commits with the message it became.
  * A reader hands a step of the loop one reading of the input
- * ({@link RunInput}); with nothing to read it waits on the session log for
+ * ({@link InputReading}); with nothing to read it waits on the session log for
  * the next message queued for its run, or for the inbox to end it.
  */
 import { Effect, Latch, Option, Stream } from 'effect';
@@ -120,7 +120,7 @@ export type FollowUpBatch =
  * A run's input as one read of its rows found it: what a step of the loop
  * decides from, so a step reads the input once.
  */
-export interface RunInput {
+interface InputReading {
   /** The run's own pending requests (`/compact`, a model switch). */
   readonly controls: readonly QueuedFollowUp[];
   /** The messages readable at `at`, when there are any; nothing is taken. */
@@ -137,8 +137,8 @@ export interface RunInput {
 const inputOf = (
   rows: readonly QueuedFollowUp[],
   from: CommitOrdinal,
-): RunInput => {
-  const batch: RunInput['batch'] = (at) => {
+): InputReading => {
+  const batch: InputReading['batch'] = (at) => {
     const followUps = readableMessages(rows, at);
     return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
   };
@@ -178,7 +178,7 @@ export class FollowUpReader {
   }
 
   /** The run's input now, in one read of its committed rows. */
-  readonly read: Effect.Effect<RunInput> = Effect.suspend(() => {
+  readonly read: Effect.Effect<InputReading> = Effect.suspend(() => {
     const from = this.log.now();
     return this.log.runRows(this.runId, 'input').pipe(
       Effect.map(({ followUps }) => inputOf(followUps, from)),
@@ -190,7 +190,7 @@ export class FollowUpReader {
    *  found; null once the run takes no more input ({@link end}). */
   readonly next = (
     at: InputPoint,
-    seen: RunInput,
+    seen: InputReading,
   ): Effect.Effect<FollowUpBatch | null> =>
     Effect.gen({ self: this }, function* () {
       for (let input = seen; ; input = yield* this.read) {
