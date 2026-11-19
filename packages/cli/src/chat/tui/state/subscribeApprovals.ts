@@ -13,11 +13,7 @@
 
 import { Cause, Effect } from 'effect';
 
-import type {
-  HostInteractions,
-  PresentationEventHandlers,
-  RuntimePresentationEventPayloads,
-} from '@texra-ai/harness/host';
+import type { PresentationEventHandlers } from '@texra-ai/harness/host';
 import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
@@ -53,7 +49,11 @@ import {
   appendLocalNotice,
   reportRequestDefect,
 } from './transcript';
-import type { Session } from '@texra-ai/harness';
+import type {
+  Session,
+  HostInteractions,
+  RuntimePresentationEventPayloads,
+} from '@texra-ai/harness';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 import type { ScopeRunner } from '../../scopeRunner';
 

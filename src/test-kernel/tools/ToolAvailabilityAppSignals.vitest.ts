@@ -21,12 +21,10 @@ import {
   type PlatformSecrets,
   Secrets,
   type ITool,
-} from '@texra-ai/harness/plugins';
-import {
   type ConfigProvider,
-  ToolAvailability,
   ToolCatalog,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
+import { ToolAvailability } from '@texra-ai/harness/host';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';

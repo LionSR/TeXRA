@@ -3,12 +3,12 @@ import { Effect, Predicate, Result, Schema, type Types } from 'effect';
 
 // Local imports - platform
 import { modelConfig, MODELS } from '@texra-ai/llm';
+import { mcpConfigPathOf, readMcpConfig } from '@texra-ai/harness/host';
 import {
-  mcpConfigPathOf,
-  readMcpConfig,
+  Settings,
+  type SettingsStores,
   type ConfigProvider,
-} from '@texra-ai/harness/host';
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import type { SettingRow } from '@texra-ai/harness/schemas';
 import {
   JsonConfigProvider,

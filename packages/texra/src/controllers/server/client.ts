@@ -17,7 +17,9 @@ import { join } from 'node:path';
 
 import * as NodeSocket from '@effect/platform-node/NodeSocket';
 import {
+  Clock,
   Deferred,
+  Duration,
   Effect,
   Exit,
   Layer,
@@ -58,7 +60,7 @@ import {
   type ServiceInfo,
   type TaskSummary,
 } from './protocol';
-import type { GlobalValues } from '@texra-ai/harness/host';
+import type { GlobalValues } from '@texra-ai/harness/plugins';
 import type { SocketError } from 'effect/socket/Socket';
 
 /** The procedures as a client calls them. */
@@ -156,9 +158,12 @@ const ServiceFailureSchema = Schema.Union([
   /** The running service accepted the connection and did not answer the
    *  hello within its deadline. */
   Schema.Struct({ kind: Schema.Literal('unanswered') }),
-  /** A started service that does not answer this protocol yet: no record,
-   *  or one naming a service still coming up or draining. */
-  Schema.Struct({ kind: Schema.Literal('notYetUp') }),
+  /** A start that left no service: it could not be spawned, it exited
+   *  abnormally, nothing answered this protocol within the start window
+   *  (no record, or one naming a service still coming up or draining), or
+   *  one answered and went away again within that window. What the link's
+   *  restarts are limited by ({@link RESTARTS}). */
+  Schema.Struct({ kind: Schema.Literal('startFailed') }),
 ]);
 
 /** No service could be reached or started; the message says why. */
@@ -332,8 +337,11 @@ const startFailed = (cause: unknown) =>
 interface ServiceStart {
   readonly storageRoot: string;
   /** Spawns the service detached and returns; the caller waits for its
-   *  hello. */
-  readonly start: Effect.Effect<void, Error>;
+   *  hello. Answers the started process's abnormal end: an effect that
+   *  finishes, with how it ended, only if the process exits with an error
+   *  or on a signal (one that exits clean lost a start race to another
+   *  service, which the record names). */
+  readonly start: Effect.Effect<Effect.Effect<string>, Error>;
 }
 
 /**
@@ -359,33 +367,47 @@ export function spawnService(
     });
     // Finish on the child's own report: an `error` event (no such binary,
     // EACCES, no processes left) fails the start with its cause.
-    yield* Effect.callback<void, ServiceStartFailed>((resume) => {
-      const child = spawn(command, [...args], {
-        cwd: paths.runDirectory,
-        detached: true,
-        stdio: ['ignore', log, log],
-        // Only the home directory and TeXRA's own settings: the service
-        // reads the rest from the user's login shell, so it never depends
-        // on the window that happened to start it.
-        env: {
-          ...Object.fromEntries(
-            Object.entries(process.env).filter(
-              ([name]) => name === 'HOME' || name.startsWith('TEXRA_'),
+    return yield* Effect.callback<Effect.Effect<string>, ServiceStartFailed>(
+      (resume) => {
+        const child = spawn(command, [...args], {
+          cwd: paths.runDirectory,
+          detached: true,
+          stdio: ['ignore', log, log],
+          // Only the home directory and TeXRA's own settings: the service
+          // reads the rest from the user's login shell, so it never depends
+          // on the window that happened to start it.
+          env: {
+            ...Object.fromEntries(
+              Object.entries(process.env).filter(
+                ([name]) => name === 'HOME' || name.startsWith('TEXRA_'),
+              ),
             ),
-          ),
-          // Node's on-disk compile cache, in the private run directory: a
-          // start after the first skips most of compiling the 12 MB bundle
-          // (~250 ms). A runtime without the cache ignores the variable.
-          NODE_COMPILE_CACHE: join(paths.runDirectory, 'compile-cache'),
-          ...env,
-        },
-      });
-      child.once('error', (error) => resume(Effect.fail(startFailed(error))));
-      child.once('spawn', () => {
-        child.unref();
-        resume(Effect.void);
-      });
-    }).pipe(Effect.ensuring(Effect.sync(() => closeSync(log))));
+            // Node's on-disk compile cache, in the private run directory: a
+            // start after the first skips most of compiling the 12 MB bundle
+            // (~250 ms). A runtime without the cache ignores the variable.
+            NODE_COMPILE_CACHE: join(paths.runDirectory, 'compile-cache'),
+            ...env,
+          },
+        });
+        child.once('error', (error) => resume(Effect.fail(startFailed(error))));
+        const crashed = Deferred.makeUnsafe<string>();
+        child.once('exit', (code, signal) => {
+          if (code !== 0)
+            Deferred.doneUnsafe(
+              crashed,
+              Effect.succeed(
+                signal === null
+                  ? `exited with code ${code}`
+                  : `was ended by ${signal}`,
+              ),
+            );
+        });
+        child.once('spawn', () => {
+          child.unref();
+          resume(Effect.succeed(Deferred.await(crashed)));
+        });
+      },
+    ).pipe(Effect.ensuring(Effect.sync(() => closeSync(log))));
   }).pipe(
     Effect.catchTag('PlatformError', (error) =>
       Effect.fail(startFailed(error)),
@@ -595,11 +617,13 @@ const ensureService = Effect.fn('server.ensureService')(function* (
       failure: { kind: 'none' },
     });
   if (info === null) {
-    yield* start.pipe(
+    const { log } = servicePaths(storageRoot);
+    const crashed = yield* start.pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({
             reason: `The TeXRA service could not be started: ${error.message}`,
+            failure: { kind: 'startFailed' },
           }),
       ),
     );
@@ -609,10 +633,10 @@ const ensureService = Effect.fn('server.ensureService')(function* (
     // service still coming up under load) is asked again while the start
     // window lasts, and a newer build's service that came up meanwhile
     // refuses this one at once. Past the deadline, the last probe's reason
-    // stands; only "not yet up" reads as the service not answering.
+    // stands; only "not yet up" reads as the start having failed.
     const notYetUp = new ServiceUnavailable({
-      reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
-      failure: { kind: 'notYetUp' },
+      reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${log}).`,
+      failure: { kind: 'startFailed' },
     });
     const lastRefusal = yield* Ref.make(notYetUp);
     const probed = probeRecordedService.pipe(
@@ -644,6 +668,17 @@ const ensureService = Effect.fn('server.ensureService')(function* (
         duration: START_TIMEOUT,
         orElse: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),
       }),
+      // The started process ending abnormally fails the start at once.
+      Effect.raceFirst(
+        Effect.flatMap(crashed, (how) =>
+          Effect.fail(
+            new ServiceUnavailable({
+              reason: `The TeXRA service ${how} before it answered (its log: ${log}).`,
+              failure: { kind: 'startFailed' },
+            }),
+          ),
+        ),
+      ),
     );
   }
   const { socket } = info;
@@ -683,11 +718,19 @@ export const followed = <A>(
 });
 
 /** What a link holds: the client it is connected through, or none and
- *  why, as a window says it: reconnecting ({@link SERVICE_OFFLINE}), or
- *  refused by a newer service ({@link WINDOW_OUTDATED}). */
+ *  why, as a window says it: reconnecting ({@link SERVICE_OFFLINE}),
+ *  refused by a newer service ({@link WINDOW_OUTDATED}), or given up on a
+ *  service that keeps failing to start. `lasting`: waiting on the link
+ *  does not bring the service back, so whoever waits is told `away`
+ *  instead (a newer service stays until it exits; a link that gave up
+ *  starts no more). */
 export type Linked<Client> =
   | { readonly client: Client }
-  | { readonly client: null; readonly away: string };
+  | {
+      readonly client: null;
+      readonly away: string;
+      readonly lasting: boolean;
+    };
 
 /** A window's lasting hold on the service: one value, set by the link's
  *  holder alone, which goes away while the service is and comes back as
@@ -742,12 +785,33 @@ export const linkOutage = (
     Stream.changes,
   );
 
+/** Each reason `link` is away for good ({@link Linked}'s `lasting`): what
+ *  ends a wait on the link, and what a window says once as an error. */
+export const linkRefusals = (
+  link: ServiceLink<unknown>,
+): Stream.Stream<string> =>
+  link.state.changes.pipe(
+    Stream.map((state) =>
+      'away' in state && state.lasting ? state.away : null,
+    ),
+    Stream.changes,
+    Stream.filter(Predicate.isNotNull),
+  );
+
 /** Between attempts to reach a service that went away: from half a second,
  *  growing, never more than ten seconds apart. */
 const RECONNECT = Schedule.min([
   Schedule.exponential('500 millis'),
   Schedule.spaced('10 seconds'),
 ]);
+
+/** How many starts in a row may fail before the link gives up. */
+const FAILED_STARTS = 3;
+
+/** The link's restarts of a service whose start failed: spaced as
+ *  {@link RECONNECT}, and over once {@link FAILED_STARTS} failed in a row.
+ *  A service that stays up past its start window begins the count again. */
+const RESTARTS = RECONNECT.pipe(Schedule.upTo({ times: FAILED_STARTS - 1 }));
 
 /**
  * The one door to this storage root's service, for every host: held for
@@ -757,7 +821,13 @@ const RECONNECT = Schedule.min([
  * starts none, it fails `none`: the caller works in process and has nothing
  * to report. When the service goes away (a newer build retired it, or it
  * died), the link goes null, which a window shows as offline, and reaches
- * the service again the same way until it is back. A first reach that must
+ * the service again the same way until it is back. A service that fails
+ * to start {@link FAILED_STARTS} times in a row (it cannot be spawned, it
+ * exits or stays silent through its start window, or it answers and is
+ * gone again within that window) is not started again: the link stays
+ * away for good, saying what failed, where the service's log is and what
+ * to do. One that ran longer than its start window and then went away is
+ * restarted as ever. A first reach that must
  * wait for an older service to finish its tasks says so through `waiting`,
  * the host's way to tell its user; a later one says it as the link's
  * `away`.
@@ -797,11 +867,13 @@ export const linkService = Effect.fn('server.linkService')(function* (
     return { connection, lost, scope };
   });
   let current = yield* connect(start, policy);
+  // The connection the link has reached and not yet held: the first one.
+  let reached: typeof current | null = current;
   const state = yield* SubscriptionRef.make<Linked<ServiceClient>>({
     client: current.connection.client,
   });
-  const awayFor = (away: string) =>
-    SubscriptionRef.set(state, { client: null, away });
+  const awayFor = (away: string, lasting = false) =>
+    SubscriptionRef.set(state, { client: null, away, lasting });
   // While the link is down, a wait on an older service is what the
   // window's banner says.
   const awayWaiting = (message: string) =>
@@ -810,59 +882,83 @@ export const linkService = Effect.fn('server.linkService')(function* (
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => Scope.close(current.scope, Exit.void)),
   );
+  // Reach the service again. A newer build that retired it is starting its
+  // own: the link waits the whole startup window for one to answer, so an
+  // older window never races it with one of its build, and starts one
+  // itself only when none came, as at startup.
+  const reconnect = Effect.suspend(() => {
+    let told = '';
+    return connect(
+      { storageRoot: start.storageRoot, start: Effect.succeed(Effect.never) },
+      { startsService: true, waiting: awayWaiting },
+    ).pipe(
+      Effect.catch(() => connect(start, { ...policy, waiting: awayWaiting })),
+      // Said once per reason: a newer protocol's service stays until it
+      // exits, and the link keeps trying meanwhile.
+      Effect.tapError((error) =>
+        Effect.suspend(() => {
+          if (error.message === told) return Effect.void;
+          told = error.message;
+          return (
+            error.failure.kind === 'newer'
+              ? awayFor(WINDOW_OUTDATED, true)
+              : awayFor(SERVICE_OFFLINE)
+          ).pipe(
+            Effect.andThen(
+              Effect.logWarning(
+                `The TeXRA service is not back yet: ${error.message}`,
+              ),
+            ),
+          );
+        }),
+      ),
+      // Only a failed start is counted ({@link RESTARTS}): anything else
+      // waits on another process (a newer or a wedged service, a caller
+      // that starts none), which no restart of this link's can loop on.
+      Effect.retry({
+        schedule: RECONNECT,
+        while: (error) => error.failure.kind !== 'startFailed',
+      }),
+      Effect.tap((held) =>
+        Effect.logInfo(
+          `Reconnected to the TeXRA service ${held.connection.info.version} (pid ${held.connection.info.pid}).`,
+        ),
+      ),
+    );
+  });
+  // One service, from reaching it until it goes away. It fails as a failed
+  // start when the service went within its start window (by its own start
+  // time, the hello's), and finishes when it had run longer: a service
+  // that ran for a while and died is restarted with nothing counted.
+  const hold = Effect.gen(function* () {
+    const next = reached ?? (yield* reconnect);
+    reached = null;
+    current = next;
+    // Reached: whatever kept it away no longer holds, so a host that
+    // attaches later is not told it, and a later refusal is told.
+    yield* Ref.set(refusalTold, false);
+    yield* SubscriptionRef.set(state, { client: next.connection.client });
+    yield* Deferred.await(next.lost);
+    yield* awayFor(SERVICE_OFFLINE);
+    yield* Scope.close(next.scope, Exit.void);
+    const { pid, startedAt } = next.connection.info;
+    const upFor = (yield* Clock.currentTimeMillis) - startedAt;
+    yield* Effect.logWarning(
+      `The TeXRA service (pid ${pid}) went away; reconnecting.`,
+    );
+    if (upFor < Duration.toMillis(START_TIMEOUT))
+      return yield* new ServiceUnavailable({
+        reason: `The TeXRA service (pid ${pid}) went away ${Math.max(0, Math.round(upFor / 1000))} seconds after it started.`,
+        failure: { kind: 'startFailed' },
+      });
+  });
   yield* Effect.forkScoped(
-    Effect.forever(
-      Effect.gen(function* () {
-        yield* Deferred.await(current.lost);
-        yield* awayFor(SERVICE_OFFLINE);
-        yield* Scope.close(current.scope, Exit.void);
-        yield* Effect.logWarning(
-          `The TeXRA service (pid ${current.connection.info.pid}) went away; reconnecting.`,
+    Effect.forever(Effect.retry(hold, RESTARTS)).pipe(
+      Effect.catch((last) => {
+        const gaveUp = `The TeXRA service failed to start ${FAILED_STARTS} times in a row, so TeXRA stopped restarting it. The last failure: ${last.reason.replace(/\.$/, '')}. Its log is ${servicePaths(start.storageRoot).log}. Fix what the log names, then restart TeXRA (in VS Code, reload the window); with ${NO_SERVICE}=1 set, TeXRA runs tasks without the service.`;
+        return awayFor(gaveUp, true).pipe(
+          Effect.andThen(Effect.logError(gaveUp)),
         );
-        // A newer build that retired the service is starting its own: the
-        // link waits the whole startup window for one to answer, so an
-        // older window never races it with one of its build, and starts
-        // one itself only when none came, as at startup.
-        let told = '';
-        current = yield* connect(
-          { storageRoot: start.storageRoot, start: Effect.void },
-          { startsService: true, waiting: awayWaiting },
-        ).pipe(
-          Effect.catch(() =>
-            connect(start, { ...policy, waiting: awayWaiting }),
-          ),
-          // Said once per reason: a newer protocol's service stays until it
-          // exits, and the link keeps trying meanwhile.
-          Effect.tapError((error) =>
-            Effect.suspend(() => {
-              if (error.message === told) return Effect.void;
-              told = error.message;
-              return awayFor(
-                error.failure.kind === 'newer'
-                  ? WINDOW_OUTDATED
-                  : SERVICE_OFFLINE,
-              ).pipe(
-                Effect.andThen(
-                  Effect.logWarning(
-                    `The TeXRA service is not back yet: ${error.message}`,
-                  ),
-                ),
-              );
-            }),
-          ),
-          // RECONNECT never ends, so the retry never fails.
-          Effect.retry(RECONNECT),
-          Effect.orDie,
-        );
-        yield* Effect.logInfo(
-          `Reconnected to the TeXRA service ${current.connection.info.version} (pid ${current.connection.info.pid}).`,
-        );
-        // Reached again: whatever kept it away no longer holds, so a host
-        // that attaches later is not told it, and a later refusal is told.
-        yield* Ref.set(refusalTold, false);
-        yield* SubscriptionRef.set(state, {
-          client: current.connection.client,
-        });
       }),
     ),
   );

@@ -549,9 +549,12 @@ jobs:
       - packed-example
       - docs-check
     if: always()
+    outputs:
+      problems: ${{ steps.require.outputs.problems }}
 
     steps:
       - name: Require validation jobs success
+        id: require
         env:
           NEEDS: ${{ toJSON(needs) }}
           CODE: ${{ needs.changes.outputs.code }}
@@ -563,9 +566,17 @@ jobs:
         # - a code change: the Linux jobs, of which the nightly schedule runs
         #   only the kernel shards (with runtime validation and Windows);
         # - a docs-only PR: the docs build, which gates in their place.
+        #
+        # What fails this step is also the job's `problems` output, which the
+        # nightly issue quotes.
         run: |
+          report() {
+            echo "$1"
+            { echo 'problems<<END_OF_PROBLEMS'; echo "$1"; echo 'END_OF_PROBLEMS'; } >> "$GITHUB_OUTPUT"
+            exit 1
+          }
           failed="$(jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key) result: \(.value.result)"' <<<"$NEEDS")"
-          if [ -n "$failed" ]; then echo "$failed"; exit 1; fi
+          if [ -n "$failed" ]; then report "$failed"; fi
           required='changes guidance-refs'
           if [ "$CODE" = true ]; then
             if [ "$EVENT" = schedule ]; then required="$required test"
@@ -574,4 +585,66 @@ jobs:
             required="$required docs-check"
           fi
           missing="$(jq -r --arg required "$required" '. as $needs | $required | split(" ")[] | select($needs[.].result != "success") | "\(.) did not run: \($needs[.].result)"' <<<"$NEEDS")"
-          if [ -n "$missing" ]; then echo "$missing"; exit 1; fi
+          if [ -n "$missing" ]; then report "$missing"; fi
+
+  # Nobody watches a schedule, and the nightly run carries jobs no pull request
+  # runs (the Windows kernel shards, runtime validation): it failed three
+  # nights running before anyone looked. So a failing night opens one issue,
+  # each further failing night comments on it, and the first passing night
+  # closes it. The issue is found by its label, which nothing else uses.
+  #
+  # Only the scheduled run on `main` reports: a pull request or a dispatch
+  # shows its own result to whoever started it.
+  nightly-issue:
+    name: nightly issue
+    needs: validate-status
+    # A cancelled run says nothing about the tree, so it neither opens nor
+    # closes the issue. `!cancelled()` is what says so: `validate-status`
+    # still runs in a cancelled run and fails on the cancelled jobs.
+    if: >-
+      !cancelled() && github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
+      (needs.validate-status.result == 'success' || needs.validate-status.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Declaring permissions on a job drops every one not listed, so this job's
+    # token can read, open, comment on, label and close issues and do nothing
+    # else: no repository contents (it checks nothing out), no pull requests,
+    # no Actions API. The failed jobs come from `validate-status`, not from
+    # the API, for that reason.
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open, update or close the nightly issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.validate-status.result }}
+          PROBLEMS: ${{ needs.validate-status.outputs.problems }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          label='nightly-ci'
+          issue="$(gh issue list --state open --label "$label" --limit 1 --json number --jq '.[0].number // empty')"
+
+          if [ "$RESULT" = success ]; then
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --reason completed \
+                --comment "The nightly \`CI\` run passed at \`${COMMIT:0:7}\`: $RUN_URL"
+            fi
+            exit 0
+          fi
+
+          # Job ids as `.github/workflows/ci.yml` names them; the run page
+          # has each matrix shard.
+          night="$(printf 'The nightly `CI` run on `main` failed at `%s`: %s\n\n```\n%s\n```' \
+            "${COMMIT:0:7}" "$RUN_URL" "${PROBLEMS:-validate failed without naming a job; see the run}")"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$night"
+          else
+            gh label create "$label" --force --color B60205 \
+              --description 'The scheduled CI run on main is failing'
+            gh issue create --label "$label" --title 'Nightly CI is failing on main' \
+              --body "$(printf '%s\n\nThis issue is kept by the `nightly issue` job of `.github/workflows/ci.yml`: each further failing night adds a comment, and the first passing night closes it.' "$night")"
+          fi

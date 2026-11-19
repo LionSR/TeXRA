@@ -26,6 +26,16 @@
  * - **Runtime callbacks inside a tool**: the call's run and requests on
  *   [`ToolContext`](#toolcontext), [`ChildRuns`](#childruns), and
  *   [`RunInbox`](#runinbox).
+ * - **Settings, stores & signals**: [`Settings`](#settings) over a
+ *   [`ConfigProvider`](#configprovider) and a [`StateStore`](#statestore)
+ *   (failing with [`StateReadFailed`](#statereadfailed),
+ *   [`StateWriteFailed`](#statewritefailed) or
+ *   [`ConfigWriteFailed`](#configwritefailed)), the rooted file systems
+ *   ([`WorkspaceFs`](#workspacefs), [`StorageFs`](#storagefs),
+ *   [`GlobalStorageFs`](#globalstoragefs)), and the process services a
+ *   plugin layer may read ([`AppState`](#appstate),
+ *   [`GlobalValues`](#globalvalues), [`ToolCatalog`](#toolcatalog),
+ *   [`AppSignals`](#appsignals)).
  * - **Lifetimes, prompt sections & durable rows**:
  *   [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
@@ -160,10 +170,42 @@ export {
 // file systems, catalog settings against the caller's stores, the
 // process's secrets and app signals, the log channel its entries name, and
 // the budget a session close gives a plugin's drain.
-export { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-export { Settings, type SettingsStores } from '@shared/config/settings';
+export { GlobalStorageFs, StorageFs, WorkspaceFs } from '@platform/rootedFs';
+export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+// Settings, the config and state store ports they are read and written
+// through (a `WorkspaceRoots` carries them), and those ports' failures.
+export {
+  ConfigWriteFailed,
+  Settings,
+  StateReadFailed,
+  StateWriteFailed,
+  type ConfigProvider,
+  type SettingsStores,
+  type StateStore,
+  type StoredSetting,
+} from '@shared/config/settings';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
-export { AppSignals, emitAppSignal } from '@platform/appSignals';
+export {
+  AppSignals,
+  emitAppSignal,
+  type AppSignal,
+  type AppSignalEvent,
+  type AppSignalPayloads,
+} from '@platform/appSignals';
+// The process services a plugin's layer may read: the app's state store,
+// the per-project settings stores, the global root's current values with
+// each family a host or plugin declares (`ValueFamily`), and the tool
+// catalog (enabled built-ins, plugin services and switches) with the
+// context it hands a plugin.
+export { AppState, type AppStateStore } from '@platform/interfaces';
+export {
+  GlobalValues,
+  StateStores,
+  type PluginContext,
+} from '@platform/processRuntime';
+export type { ValueFamily } from '@shared/session/valueFamily';
+export type { CurrentValues } from '@shared/session/database';
+export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 export { logFailure, withLogChannel } from '@logger/effectLog';
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 // What `ChildRuns` launches: an external process's child, with the one
@@ -181,6 +223,9 @@ export type {
   SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 export type { InboxItem } from '@agent/followUp/Inbox';
+// A blob a draft stores or links by digest, as a call's request and an
+// inbox item carry it.
+export type { DraftBlob } from '@shared/session/historyTurns';
 export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
 export type { RunHistoryInconsistent } from '@shared/session/runState';
 export type { StepRoot } from '@utils/files/externalRoots';

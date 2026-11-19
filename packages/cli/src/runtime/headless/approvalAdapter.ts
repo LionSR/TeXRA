@@ -49,8 +49,7 @@ import { CliInvocation } from '../platform/cliContext';
 import { formatLineChanges } from '@ui/copy/format';
 import { REQUEST_ASK } from '@ui/copy/requestCards';
 import { CliPromptFailed, writeTextStderr } from '../platform/logSinks';
-import type { Session, SessionHost } from '@texra-ai/harness';
-import type { HostInteractions } from '@texra-ai/harness/host';
+import type { Session, SessionHost, HostInteractions } from '@texra-ai/harness';
 
 const CHANNEL = 'cli.approval';
 

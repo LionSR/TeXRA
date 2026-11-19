@@ -5,8 +5,11 @@ import {
   type StateKey,
 } from '@texra-ai/harness/schemas';
 
-import { AppState, type ConfigProvider } from '@texra-ai/harness/host';
-import { Settings } from '@texra-ai/harness/plugins';
+import {
+  Settings,
+  AppState,
+  type ConfigProvider,
+} from '@texra-ai/harness/plugins';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
 
 import { usageLoggingOptOut } from './UsageLogService';

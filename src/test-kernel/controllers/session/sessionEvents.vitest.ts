@@ -690,6 +690,9 @@ describe('the session event table and its one publisher', () => {
         });
         if (opened.movedAside == null) throw new Error('nothing moved aside');
         expect(readFileSync(opened.movedAside.aside)).toEqual(truncated);
+        // Each open above released its store, so nothing holds the files:
+        // Windows refuses to remove a file that a connection still holds.
+        rmSync(storage, { recursive: true });
       });
     }),
   );

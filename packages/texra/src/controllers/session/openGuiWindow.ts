@@ -26,17 +26,20 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  Session,
+  WorkspaceRoots,
+  HostPresentation,
+  RuntimePresentationEventPayloads,
+} from '@texra-ai/harness';
 import {
   AgentCatalog,
   AgentDirectories,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
-  type HostPresentation,
   type PresentationEventHandlers,
   type ProcessServices,
-  type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import {
   AppSignals,

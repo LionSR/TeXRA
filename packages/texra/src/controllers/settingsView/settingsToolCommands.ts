@@ -6,8 +6,8 @@
  */
 import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
 
-import { ToolAvailability, ToolCatalog } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { ToolAvailability } from '@texra-ai/harness/host';
+import { withLogChannel, ToolCatalog } from '@texra-ai/harness/plugins';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,

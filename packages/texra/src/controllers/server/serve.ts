@@ -45,14 +45,14 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
 import { type LocalSession, Sessions } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
+import { canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
 import {
+  withLogChannel,
   AppState,
   GlobalValues,
-  type ProcessServices,
   StateStores,
-} from '@texra-ai/harness/host';
-import { canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   openLocalSession,

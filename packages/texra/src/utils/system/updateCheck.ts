@@ -5,8 +5,11 @@ import {
   HttpIncomingMessage,
 } from 'effect/http';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { GlobalValues, type ValueFamily } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  GlobalValues,
+  type ValueFamily,
+} from '@texra-ai/harness/plugins';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';

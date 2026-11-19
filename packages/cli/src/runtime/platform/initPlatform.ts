@@ -18,12 +18,12 @@ import {
   type Session,
   type SessionOpenError,
 } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import {
+  type SettingsStores,
   AppState,
-  type ProcessServices,
   StateStores,
-} from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import { openNodeWorkspaceRoots } from '@texra-ai/harness/node';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openLocalSession } from '@texra/controllers/session/openProjectSession';

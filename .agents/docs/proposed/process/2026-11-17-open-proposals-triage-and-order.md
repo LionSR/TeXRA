@@ -97,6 +97,11 @@ deletes. They go first.
 4. Deleting a run does not delete its children (nothing held across a
    wait, "The view").
 5. No limit on a service that crashes at every start (PRD, row 6).
+   Ended 2026-11-19: the service link gives up after three failed starts
+   in a row and says so (`linkService`,
+   `packages/texra/src/controllers/server/client.ts`; the design is in
+   `.agents/docs/proposed/architecture/2026-11-06-cli-service-root-causes.md`,
+   the 2026-11-19 section).
 
 ## Areas a later step deletes
 
@@ -173,11 +178,12 @@ Started from this note on 2026-11-17, one pull request each:
   input with UX roadmap items 3, 5 and 6 (defect 2); §3 and §4 of the
   storage-errors note; the llm cassettes (tech-debt M6 to M8).
 
-Not started because each needs a word from the owner first: the global
-store split and the row-version changes (what happens to the old file);
+Not started because each needs a word from the owner first: the schema
+half of the global store split (its code half is in: the global store has
+its own layer) and the row-version changes (what happens to the old file);
 §5 and §6 of the storage-errors note (after §3 and §4 merge, same files);
-a limit on a service that crashes at every start (no design); programs
-phases 4 and 5 (question 1).
+programs phases 4 and 5 (question 1). The limit on a service that crashes
+at every start (defect 5) was designed and implemented on 2026-11-19.
 
 ## Who decides
 

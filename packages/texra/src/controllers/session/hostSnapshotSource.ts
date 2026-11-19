@@ -32,7 +32,6 @@ import {
 } from 'effect';
 import {
   AgentDirectories,
-  AppState,
   getEnabledModels,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
@@ -44,6 +43,7 @@ import {
   type AppSignals,
   type Secrets,
   type SettingsStores,
+  AppState,
 } from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,

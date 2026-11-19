@@ -14,12 +14,15 @@ import {
   Sessions,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { AppState, StateStores } from '@texra-ai/harness/host';
 import {
   type ConfigStore,
   openNodeWorkspaceRoots,
 } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import {
+  withLogChannel,
+  AppState,
+  StateStores,
+} from '@texra-ai/harness/plugins';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import {
