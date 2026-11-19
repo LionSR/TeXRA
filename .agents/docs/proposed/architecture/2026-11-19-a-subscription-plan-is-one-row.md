@@ -3,7 +3,9 @@
 Date: 2026-11-19
 Status: proposed
 
-Origin: section 2 of the refused-candidates review (PR #15090). The PR that
+Origin: section 2 of
+`.agents/docs/proposed/architecture/2026-11-19-what-the-refused-candidates-share.md`.
+The PR that
 adds this note takes the first step that review named: every site that
 decides something per plan is now exhaustive over `PlanRoute`
 (`packages/llm/src/errors.ts`), and the sign-in ids and stored route lists
