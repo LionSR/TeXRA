@@ -465,15 +465,11 @@ export const stepFor = Effect.fn('Step.for')(function* (
     run.config.delegationAgentScope ?? undefined,
   );
   const context = {
-    ...stepInstructions(
-      step.contributing,
-      step.listed,
-      {
-        offered: tools.definitions.map(({ name }) => name),
-        isChild: run.entry.parent !== null,
-        config: roots.config,
-      },
-    ),
+    ...stepInstructions(step.contributing, step.listed, {
+      offered: tools.definitions.map(({ name }) => name),
+      isChild: run.entry.parent !== null,
+      config: roots.config,
+    }),
     ...(delegation && { delegation }),
   };
   const base =

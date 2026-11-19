@@ -53,9 +53,7 @@ export function stepInstructions(
   const sections = Object.fromEntries([
     // A step that offers no tool (a document reviser, the critic) has no
     // calls to make.
-    ...(ctx.offered.length > 0
-      ? [['tool-call', TOOL_CALLS]]
-      : []),
+    ...(ctx.offered.length > 0 ? [['tool-call', TOOL_CALLS]] : []),
     ...(skills.length > 0
       ? [
           [
