@@ -1824,7 +1824,8 @@ function readTraceFacts(
 
 ## referencedAggregates
 
-Aggregate identities introduced by a fact and its declared lifecycle edges.
+Aggregate identities introduced by a fact and its declared lifecycle
+edges ({@link edgesOf}): its own and the parent it names.
 
 ```ts
 function referencedAggregates(event: SessionRow): AggregateId[]

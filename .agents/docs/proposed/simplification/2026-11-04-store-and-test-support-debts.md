@@ -83,3 +83,15 @@ left (A1, A2, A4, A5, A7 and B1 to B4 are done). C2 to C5 are one
 test-support PR. A6, A8, A9, B5, B6 and what is left of C6 to C8 need a
 word from the owner first (a boundary or a diagnostic contract may be
 intended).
+
+Checked on 2026-11-19 (C4, C5). C4: the clean copy in `crashConformance.ts`
+goes through `readStoreSnapshot`, and its local `waitingAfter` is renamed
+`waitingPastLastEdit`, since it is not the exported one (it also requires
+that no `context.edit` follows the last `run.position`). Its `until` is no
+longer a copy of `untilStored`: it reads the held store on the session's
+connection, only the commits since its last read. The dead owner is no
+longer spelled as code in any of the three files. C5 is not a duplicate to
+merge: `killedHost` differs from `validationHost` in more than the agent set
+(no echo scenario, which changes the validation model's reported input
+tokens; it does not blank the shell's API keys; it stores no fake `openai`
+key), so one parameter would not carry it.

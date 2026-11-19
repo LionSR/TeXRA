@@ -898,6 +898,20 @@
           "signature": "const foreignProtocol = ( runId: RunId, state: RunState, bound: Pick<BoundModel, 'backend' | 'origin'>, ): RunHistoryRefused | null => {…};"
         }
       ]
+    },
+    {
+      "id": "LLM-codex-backend-model-id-export",
+      "candidate": "withdrawing codexBackendModelId from the public exports of @texra-ai/llm (the app asking llm a higher-level question, or reading a decided route, for the Codex backend's model id)",
+      "why": "Its consumer outside llm, the app's Codex launch configuration, starts a Codex binary that signs in by itself: llm decides no route for that launch, so there is no decided route to read. routeConfig's ChatGPT case keeps config.id and only responsesConfiguration strips the date pin, so making routeConfig answer would change every reader of config.id, and the app would have to build a ChatGPT route it never uses. Withdrawing the export would copy the date-pin pattern into the app, a second owner for it.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-18-model-access-one-owner-per-question.md#kept-as-llm-exports-and-why",
+      "reopenWhen": "The app's Codex launch goes through a route llm decides.",
+      "symbols": [
+        {
+          "file": "packages/llm/src/models/modelRoute.ts",
+          "symbol": "codexBackendModelId",
+          "signature": "export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {…}"
+        }
+      ]
     }
   ]
 }
