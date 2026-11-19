@@ -66,6 +66,13 @@ two halves:
     Its `.is-row-content` modifier lets the enclosing navigation row own the
     background, avoiding two overlapping hover fills.
   - `.is-link` is prose weight, underlined.
+- **One icon per action.** The same action shows the same icon on every
+  host: refresh or check again `arrows-rotate`; retry, restart or update
+  `rotate-right`; reset to a default `arrow-rotate-left`; export
+  `file-export`; open outside TeXRA `arrow-up-right-from-square`; dismiss
+  or remove `xmark`; delete `trash`; stop `circle-stop`. A log level's icon
+  and word come from `copy/logLevels.ts`, a run status's from
+  `copy/runStatus.ts`.
 - **Icons and menus.** `waIcon()` uses a square canvas. Dropdown items reserve
   one icon width and share their padding and type in `controlStyles.ts`.
   Style the `wa-dropdown-item` host: it does not expose a `base` part.
