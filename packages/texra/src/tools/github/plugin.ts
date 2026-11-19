@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 // Local imports
 import { definePlugin, Secrets } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import { isGitRepository } from '@texra-ai/harness/node';
 import { getGitHubToken, GITHUB_TOKEN_STORAGE_KEY } from './githubAuth';
 import { GitHubSubscriptionTool } from './githubSubscriptionTool';
@@ -17,7 +18,7 @@ import {
 import { GitHubSubscriptions } from './subscriptionBindings';
 import { gitHubSubscriptionsLayer } from './subscriptionsLayer';
 
-export const githubActivity: TexraPlugin = {
+export const githubActivity: TexraPlugin = texraPlugin({
   ...definePlugin<GitHubSubscriptions>({
     // ID kept as `github-pr-subscription` for back-compat with persisted
     // disabled-tool preferences. The user-facing name has expanded to
@@ -89,4 +90,4 @@ export const githubActivity: TexraPlugin = {
       authNote: 'Uses personal access token',
     },
   },
-};
+});
