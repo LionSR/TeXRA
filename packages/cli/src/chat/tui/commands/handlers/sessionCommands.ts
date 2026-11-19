@@ -226,9 +226,7 @@ const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
     const source = runViewOf(currentView(), runId);
     // Cut before this chat lets go of the source, so the fork reads it as
     // it stands now.
-    const forked = yield* Effect.result(
-      forkRun(context.runSession, runId, null),
-    );
+    const forked = yield* Effect.result(forkRun(context.runSession, runId));
     if (Result.isFailure(forked)) {
       appendLocalRequestRefusal(forked.failure, runId);
       return;

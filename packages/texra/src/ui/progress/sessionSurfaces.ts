@@ -553,7 +553,7 @@ export function createSessionSurfaces(options: {
         kind: 'followUp.send',
         runId,
         text: text === '' ? '(image)' : text,
-        media: media.length > 0 ? media : null,
+        ...(media.length > 0 && { media }),
       });
       return;
     }

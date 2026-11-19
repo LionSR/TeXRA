@@ -129,7 +129,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       );
       return CliExitCode.Usage;
     }
-    const forked = yield* Effect.result(forkRun(runSession, id, null));
+    const forked = yield* Effect.result(forkRun(runSession, id));
     if (Result.isFailure(forked)) {
       writeTextStderr(requestErrorText(forked.failure));
       return CliExitCode.Usage;

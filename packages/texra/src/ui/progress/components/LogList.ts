@@ -113,7 +113,7 @@ export class LogList extends LitElement {
         SessionUiEvents.host({
           kind: 'openFile',
           path: fileLink.dataset.file,
-          line: Number.isInteger(line) && line > 0 ? line : null,
+          ...(Number.isInteger(line) && line > 0 && { line }),
         }),
       );
       return;

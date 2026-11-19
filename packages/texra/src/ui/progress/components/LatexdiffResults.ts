@@ -98,7 +98,7 @@ export class LatexdiffResults extends LitElement {
 
   private handleFileClick(filePath: string): void {
     this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'openFile', path: filePath, line: null }),
+      SessionUiEvents.host({ kind: 'openFile', path: filePath }),
     );
   }
 

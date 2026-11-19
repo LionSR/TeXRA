@@ -506,7 +506,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return { kind: 'files', paths } satisfies HostOutcome;
         }
         case 'openFile':
-          yield* bindings.openPath(request.path, request.line ?? undefined);
+          yield* bindings.openPath(request.path, request.line);
           return done;
         case 'workspaceFile':
           return yield* answerWorkspaceFile(request.action);
@@ -585,12 +585,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         }
         case 'fork': {
-          const forked = yield* runActions.fork(
-            request.runId,
-            request.at ?? null,
-          );
+          const forked = yield* runActions.fork(request.runId, request.at);
           const { draft } = request;
-          if (draft != null) {
+          if (draft !== undefined) {
             // The composer keeps an image while its text holds the image's
             // `[name]` chip, the attached file's name. A send from the CLI
             // names it `[Image #N]` instead, so a missing chip is added.
@@ -662,7 +659,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           );
           return done;
         case 'openSettings':
-          yield* bindings.openSettings(request.target ?? undefined);
+          yield* bindings.openSettings(request.target);
           return done;
         case 'apiKeyBanner':
           yield* request.action === 'set'

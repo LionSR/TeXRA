@@ -479,7 +479,6 @@ const userSteps = (
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.fork',
         runId: root,
-        at: null,
       });
     }
     if (bashBypassOf(yield* liveRows(storage), root) !== 'off') {
