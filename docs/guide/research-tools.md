@@ -104,12 +104,12 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which agent to use
 
-Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
+Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="robot"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
 
 <DropdownMenu
   label="Agent"
   value="search"
-  valueIcon="sparkle"
+  valueIcon="robot"
   maxWidth="320px"
   :groups="[{ label: 'Research & Verification', items: [
     { name: 'search', icon: 'mortar-board', badge: 'chat', badgeVariant: 'info', active: true },
@@ -141,7 +141,7 @@ Specialist research agents are tuned for different stages of the work. Pick one 
   ]"
 />
 
-<p class="hero-caption">Each research agent and the tools it has enabled. Check <code>Settings → Agents</code> (<wa-icon library="texra" name="sparkle"></wa-icon>) for the exact set.</p>
+<p class="hero-caption">Each research agent and the tools it has enabled. Check <code>Settings → Agents</code> (<wa-icon library="texra" name="robot"></wa-icon>) for the exact set.</p>
 
 ## Next steps
 

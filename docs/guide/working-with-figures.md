@@ -17,7 +17,7 @@ and `.bib` sources, not images.)
 
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick task: add a figure caption
 
-1. Keep the default agent, or pick `assistant`, from the agent dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>).
+1. Keep the default agent, or pick `assistant`, from the agent dropdown (<wa-icon library="texra" name="robot"></wa-icon>).
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-4-argon`.
 3. Select **Attach** (<wa-icon library="texra" name="file-media"></wa-icon>) in the instruction box and pick your figure, or paste it.
 4. Type the instruction: "Write a detailed caption for this figure."

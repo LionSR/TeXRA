@@ -57,7 +57,7 @@ All the Lean agents ship with TeXRA and need no sign-in. The `lean` agent handle
 If you're formalizing a paper that is also part LaTeX, `orchestrator` can delegate the proofs to `lean` alongside the LaTeX and research agents.
 
 ::: tip
-Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check **Settings → Agents** (<wa-icon library="texra" name="sparkle"></wa-icon>) to see which tools each one has enabled.
+Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="robot"></wa-icon>). Check **Settings → Agents** (<wa-icon library="texra" name="robot"></wa-icon>) to see which tools each one has enabled.
 :::
 
 ## Lean programs
