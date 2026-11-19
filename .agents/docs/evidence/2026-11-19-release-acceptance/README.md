@@ -11,7 +11,7 @@ separate and did not run here; its status is in
 stale validator was found.** What was found is about the acceptance table
 itself:
 
-- Three rows describe a feature `main` no longer has. #14943 (2026-11-14)
+- Two rows, and a clause of two more, describe a feature `main` no longer has. #14943 (2026-11-14)
   deleted follow-up receipts and caller ids on the owner's deletion list, so
   R20 and R21 have nothing to run against, and the receipt clauses of R13 and
   R18 likewise. The PRD still said the R18, R20 and R21 cases were in
@@ -130,7 +130,7 @@ Run for completeness; none of them maps to an R row.
   above native content and close controls inside tab bounds": the browser
   tab's close button is not what a hit test at its centre finds. It repeats
   when the file runs alone. The macOS job passed this suite on #15060 the same
-  day, five commits earlier, and nothing since touches the desktop, so this
+  day, four commits earlier, and nothing since touches the desktop, so this
   is read as a Linux or xvfb difference in a job that has never run on Linux,
   not as a regression. It is not fixed here: desktop work belongs to other
   sessions (#14961, #15062, #14765).
