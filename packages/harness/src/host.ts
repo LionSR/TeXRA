@@ -161,13 +161,6 @@ export {
 // The layers of the rooted file systems plugins read (`./plugins`), for a
 // host that reads them outside a run.
 export { sessionFsLayer, withSessionFs } from '@platform/rootedFs';
-// A `FileLocation` by its root: workspace, run storage, external, or relative.
-export {
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-  pathToLocationIn,
-} from '@common/storage/fileLocation';
 // The user's MCP servers: their config file, and a namespaced tool's server.
 export { readMcpConfig } from '@tools/mcp/mcpConfig';
 export { mcpConfigPathOf } from '@common/plugins/mcpServers';

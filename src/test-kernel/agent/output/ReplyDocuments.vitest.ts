@@ -3,7 +3,7 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { createExternalLocation } from '@texra-ai/harness/host';
+import { createExternalLocation } from '@texra-ai/harness/plugins';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';

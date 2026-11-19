@@ -22,6 +22,7 @@ import {
   type ToolRun,
   ToolError,
   sourceLocationUnder,
+  pathToLocationIn,
 } from '@texra-ai/harness/plugins';
 import {
   programOf,
@@ -30,7 +31,7 @@ import {
   type FileListEntry,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import { AgentDirectories, pathToLocationIn } from '@texra-ai/harness/host';
+import { AgentDirectories } from '@texra-ai/harness/host';
 import { processInputFiles, type InputMediaOptions } from '@latex/latexMedia';
 import { getTeXCountStats } from '@latex/texcount';
 import {

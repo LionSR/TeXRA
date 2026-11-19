@@ -20,8 +20,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness/plugins';
-import { pathToLocationIn } from '@texra-ai/harness/host';
+import { ToolContext, pathToLocationIn } from '@texra-ai/harness/plugins';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
   ChildRuns,

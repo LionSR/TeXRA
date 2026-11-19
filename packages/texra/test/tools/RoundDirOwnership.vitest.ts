@@ -5,8 +5,10 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import { runDirUnder } from '@texra-ai/harness/plugins';
-import { createWorkspaceLocation } from '@texra-ai/harness/host';
+import {
+  runDirUnder,
+  createWorkspaceLocation,
+} from '@texra-ai/harness/plugins';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/fakeHost';

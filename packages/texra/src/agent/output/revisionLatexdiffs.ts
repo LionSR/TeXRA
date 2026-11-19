@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -40,6 +39,7 @@ import {
   Settings,
   withLogChannel,
   type WorkspaceFs,
+  createRunStorageLocation,
 } from '@texra-ai/harness/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {

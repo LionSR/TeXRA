@@ -12,7 +12,7 @@ import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 
 import { Effect, FileSystem } from 'effect';
 
-import { createExternalLocation } from '@texra-ai/harness/host';
+import { createExternalLocation } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   fileLocationDisplayPath,

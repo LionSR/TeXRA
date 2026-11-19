@@ -10,10 +10,9 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import {
   buildDiffHunks,
   countLineChanges,
-  pathToLocationIn,
   reportDiffTimeout,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
 import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
 import {
   toErrorMessage,

@@ -14,8 +14,12 @@ import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { type ProcessServices, pathToLocationIn } from '@texra-ai/harness/host';
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
+import { type ProcessServices } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  WorkspaceFs,
+  pathToLocationIn,
+} from '@texra-ai/harness/plugins';
 import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';

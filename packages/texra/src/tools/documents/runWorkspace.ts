@@ -19,15 +19,13 @@ import {
 } from 'effect';
 
 // Local imports
-import {
-  createRunStorageLocation,
-  withFileWriteLane,
-} from '@texra-ai/harness/host';
+import { withFileWriteLane } from '@texra-ai/harness/host';
 import { meansAbsent, createSymlink } from '@texra-ai/harness/node';
 import {
   runDirUnder,
   sourceLocationUnder,
   withLogChannel,
+  createRunStorageLocation,
 } from '@texra-ai/harness/plugins';
 import {
   type FileLocation,

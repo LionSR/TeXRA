@@ -1,13 +1,12 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
 
 const CHINESE_PACKAGES = [
   'xeCJK',

@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -19,6 +18,7 @@ import {
   type StorageFs,
   type WorkspaceFs,
   withLogChannel,
+  pathToLocationIn,
 } from '@texra-ai/harness/plugins';
 import { pluralize } from '@texra-ai/harness/schemas';
 

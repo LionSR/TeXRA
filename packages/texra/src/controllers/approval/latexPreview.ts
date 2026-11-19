@@ -20,13 +20,12 @@ import {
   type Semaphore,
 } from 'effect';
 
+import { isStrictlyWithin, withSessionFs } from '@texra-ai/harness/host';
 import {
-  isStrictlyWithin,
+  withLogChannel,
   createExternalLocation,
   createWorkspaceLocation,
-  withSessionFs,
-} from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
