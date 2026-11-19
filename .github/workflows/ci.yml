@@ -599,9 +599,10 @@ jobs:
     name: nightly issue
     needs: validate-status
     # A cancelled run says nothing about the tree, so it neither opens nor
-    # closes the issue.
+    # closes the issue. `!cancelled()` is what says so: `validate-status`
+    # still runs in a cancelled run and fails on the cancelled jobs.
     if: >-
-      always() && github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
+      !cancelled() && github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
       (needs.validate-status.result == 'success' || needs.validate-status.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
