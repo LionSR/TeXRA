@@ -14,6 +14,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { setTimeout } from 'node:timers/promises';
 
 import { render, useInput } from 'ink';
@@ -303,20 +304,41 @@ const HARNESS_CLI_CONTEXT: CliContext = {
 // it on screen, and knows how much of its input that screen answers.
 const frameReport = {
   commit: 0,
-  keys: 0,
+  /** Key events Ink has dispatched, and how many of them are rendered. */
+  keysDispatched: 0,
+  keysRendered: 0,
   outputPending: false,
   renderPending: false,
+  renderAgain: false,
 };
 // Set where the session is opened and where Ink renders, below.
 let sessionSettled = (): boolean => false;
 let renderFlushed = (): Promise<void> => Promise.resolve();
-// A report after the frame now being rendered is written, for a change
-// that may write nothing.
+// A report once what was just started has run and its frame is written,
+// for a change that may write nothing. A key's handlers update React at
+// once, but some hand the work to a fiber or a signal that runs a turn of
+// the event loop later. All of that has run when the loop next blocks
+// waiting for I/O or a timer, which its idle counter shows; the one
+// millisecond timer only gives the loop something to block on. Work that
+// waits on I/O or a timer of its own is not covered: the validator names
+// the text such a key waits for.
 function reportAfterRender(): void {
-  if (frameReport.renderPending) return;
+  if (frameReport.renderPending) {
+    frameReport.renderAgain = true;
+    return;
+  }
   frameReport.renderPending = true;
   void (async () => {
-    await renderFlushed();
+    do {
+      frameReport.renderAgain = false;
+      const idleBefore = performance.eventLoopUtilization().idle;
+      while (performance.eventLoopUtilization().idle === idleBefore) {
+        await setTimeout(1);
+      }
+      const dispatched = frameReport.keysDispatched;
+      await renderFlushed();
+      frameReport.keysRendered = dispatched;
+    } while (frameReport.renderAgain);
     frameReport.renderPending = false;
     writeFrameReport();
   })();
@@ -327,9 +349,10 @@ function writeFrameReport(): void {
   const fields = {
     // Reports written so far: a later one means a later frame.
     commit: frameReport.commit,
-    // Input bytes Ink has taken off stdin, and key events it has dispatched.
+    // Input bytes Ink has taken off stdin, and the key events it made of
+    // them whose frame is written.
     read: process.stdin.bytesRead - process.stdin.readableLength,
-    keys: frameReport.keys,
+    keys: frameReport.keysRendered,
     cols: process.stdout.columns,
     rows: process.stdout.rows,
     // Before raw mode the terminal, not the TUI, answers a key.
@@ -1686,18 +1709,14 @@ if (SHOW_BASH_APPROVAL) {
   };
 
   if (SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS) {
-    let pollCount = 0;
-    const timer = setInterval(() => {
-      pollCount += 1;
+    // Asked once, when the selection first leaves the root.
+    const stopWatching = subscribeToSignalChanges([selectedRunId], () => {
       const activeRunId = selectedRunId.get();
-      if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) {
-        if (pollCount >= 200) clearInterval(timer);
-        return;
-      }
-      clearInterval(timer);
+      if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) return;
+      stopWatching();
       startApprovals();
-    }, 25);
-    timer.unref?.();
+    });
+    HARNESS_DISPOSERS.push(stopWatching);
   } else {
     startApprovals();
   }
@@ -2007,7 +2026,7 @@ function handleHarnessCtrlC(): void {
 // dispatched.
 function KeyReport(): null {
   useInput(() => {
-    frameReport.keys += 1;
+    frameReport.keysDispatched += 1;
     reportAfterRender();
   });
   return null;
@@ -2119,7 +2138,8 @@ renderFlushed = () => ink.waitUntilRenderFlush();
 if (SHOW_STREAMING_TOOL_OUTPUT) {
   const fiber = harnessRuntime.runFork(
     Effect.gen(function* () {
-      yield* Effect.sleep('1 second');
+      // The stream starts over the first painted frame.
+      yield* Effect.promise(() => ink.waitUntilRenderFlush());
       seedStanding(HARNESS_RUN_ID, 'running');
       session().log.publish(HARNESS_RUN_ID, {
         type: 'stream.start',
@@ -2143,6 +2163,8 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
           id: 'streaming-tool',
           text: `output-${index}: ${'long result '.repeat(30)}\n`,
         });
+        // The fixture's own pacing: a stream that arrives over time, one
+        // chunk to a frame.
         yield* Effect.sleep('80 millis');
       }
     }),

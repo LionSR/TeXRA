@@ -35,6 +35,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
@@ -87,6 +88,11 @@ const STATE_TIMEOUT_MS = 15000;
 // The harness's state report (`writeFrameReport` in tui-harness.tsx).
 const FRAME_REPORT_START = `${ESC}]7747;`;
 const FRAME_REPORT_END = String.fromCharCode(7);
+// The one wait on the clock: longer than the App's Esc chord window
+// (ESC_META_CHORD_INTERRUPT_DELAY_MS, 500 ms of real time), for the scenario
+// that asserts what a bare Esc does once that window has passed without a
+// second key.
+const ESC_CHORD_WINDOW_MS = 700;
 // What a width change's repaint starts with: Ink clears the scrollback and
 // redraws from the top.
 const CLEAR_SCROLLBACK = `${ESC}[3J`;
@@ -1624,13 +1630,7 @@ const SCENARIOS = [
       HARNESS_REPEATED_BASH_APPROVAL: '1',
     },
     bootExpect: ' Ctrl-C ',
-    // The first answer hides its card at once; the second request, which
-    // reads the same, opens when the harness has the first decision.
-    keys: [
-      { input: 'y', untilGone: 'Run a command' },
-      { input: '', until: 'Run a command' },
-      'y',
-    ],
+    keys: ['y', 'y'],
     frame: 'viewport',
     expect: ['SECOND-BASH-APPROVED', '/ commands'],
     unexpect: ['Run a command', '1 approval'],
@@ -2651,7 +2651,15 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab agents',
-    keys: [{ input: ESC, delayMs: 700 }],
+    // On macOS a bare Esc on the root has nowhere to go and nothing to
+    // paint: the App holds it for its chord window and then drops it, and
+    // the scenario asserts what that leaves alone. Elsewhere the App answers
+    // the key at once.
+    keys: [
+      process.platform === 'darwin'
+        ? { input: ESC, outlastMs: ESC_CHORD_WINDOW_MS }
+        : ESC,
+    ],
     frame: 'viewport',
     expect: ['Tab agents', '3 agents'],
     unexpect: [
@@ -2675,7 +2683,7 @@ const SCENARIOS = [
       DOWN,
       DOWN,
       '\r',
-      { input: ESC, delayMs: 700 },
+      { input: ESC, untilGone: 'parent: main' },
       '\t',
     ],
     frame: 'viewport',
@@ -2710,7 +2718,7 @@ const SCENARIOS = [
       DOWN,
       DOWN,
       '\r',
-      { input: ESC, delayMs: 700 },
+      { input: ESC, untilGone: 'parent: main' },
       'root draft after child back',
     ],
     frame: 'viewport',
@@ -2732,7 +2740,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
     },
     bootExpect: 'Run a command',
-    keys: [{ input: ESC, delayMs: 700 }],
+    keys: [ESC],
     frame: 'viewport',
     expect: ['3 agents', 'Tab agents', 'Ctrl-C stop'],
     unexpect: [
@@ -3680,9 +3688,11 @@ async function runScenario(scenario, index) {
   };
   const press = async (key) => {
     if (exited) return;
-    const { input, ...awaited } =
+    const { input, outlastMs, ...awaited } =
       typeof key === 'string' ? { input: key } : key;
-    if ((await send(input, awaited)) || exited) return;
+    const answered = await send(input, awaited);
+    if (answered && outlastMs !== undefined) await sleep(outlastMs);
+    if (answered || exited) return;
     const missing =
       awaited.until !== undefined
         ? `showed ${JSON.stringify(awaited.until)}`
