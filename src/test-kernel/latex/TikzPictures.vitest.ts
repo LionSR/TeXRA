@@ -70,4 +70,40 @@ describe('extractTikzPictures', () => {
       expect(result).toEqual([]);
     }),
   );
+
+  // TeX drops a comment together with the line break after it and the next
+  // line's indentation, so the picture handed to the compiler must too.
+  it.live('joins the lines a comment ends as TeX does', () =>
+    Effect.gen(function* () {
+      const result = yield* extractFromPaper(String.raw`
+\begin{figure}
+  \begin{tikzpicture}
+    \node {micro% joined to the next line
+      scope};
+    \draw (0,0) % a comment inside a path
+      -- (1,1);
+    \node {first};% a blank line after a comment still ends the paragraph
+
+    \node {last};
+  \end{tikzpicture}
+  \label{fig:joined}
+\end{figure}
+`);
+
+      expect(result).toEqual([
+        [
+          'fig:joined',
+          [
+            String.raw`\begin{tikzpicture}
+    \node {microscope};
+    \draw (0,0) -- (1,1);
+    \node {first};
+
+    \node {last};
+  \end{tikzpicture}`,
+          ],
+        ],
+      ]);
+    }),
+  );
 });
