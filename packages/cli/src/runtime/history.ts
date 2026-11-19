@@ -53,13 +53,13 @@ export interface CliHistoryEntry {
   /** The run's durable outcome (its `run.end`); null while none has
    *  landed, as for a run its process left interrupted. */
   readonly outcome: RunOutcome | null;
-  /** `records(id).readResumable()`'s answer, the one `texra resume` acts on.
+  /** `records(id).readContinues()`'s answer, the one `texra resume` acts on.
    *  Ownership and loadability are decided when the run is opened.
-   *  Independent of `outcome`: a failed run can be resumable. */
-  readonly resumable: boolean;
+   *  Independent of `outcome`: a failed run can continue. */
+  readonly continues: boolean;
   /** The listing's cause when the run cannot resume in this build (its rows
    *  are unreadable, or an earlier build's); resume surfaces show it. */
-  readonly resumeBlocked?: string;
+  readonly continueBlocked?: string;
   readonly inputBasename: string;
   /** A document task's run, or a chat. */
   readonly kind?: 'task' | 'chat';
@@ -69,7 +69,7 @@ export interface CliHistoryEntry {
 interface CliHistoryDetails {
   readonly id: RunId;
   readonly outcome: RunOutcome | null;
-  readonly resumable: boolean;
+  readonly continues: boolean;
   /** The run's launch facts as the session view holds them, and how its
    *  status reads (`@ui/copy/runStatus`). */
   readonly run:
@@ -111,18 +111,18 @@ const RESUME_LIST_LIMIT = 50;
 const BLOCKED_LIST_LIMIT = 10;
 
 export function listResumableCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'resumable' | 'resumeBlocked'>,
+  T extends Pick<CliHistoryEntry, 'continues' | 'continueBlocked'>,
 >(entries: readonly T[]): T[] {
   const listed: T[] = [];
-  let resumable = 0;
+  let continuable = 0;
   let blocked = 0;
   for (const entry of entries) {
-    if (resumable === RESUME_LIST_LIMIT) break;
-    if (entry.resumable) {
+    if (continuable === RESUME_LIST_LIMIT) break;
+    if (entry.continues) {
       listed.push(entry);
-      resumable += 1;
+      continuable += 1;
     } else if (
-      entry.resumeBlocked !== undefined &&
+      entry.continueBlocked !== undefined &&
       blocked < BLOCKED_LIST_LIMIT
     ) {
       listed.push(entry);
@@ -177,7 +177,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       report,
       conversation,
       workspaceFiles,
-      continues,
+      rowsContinue,
       generatedFiles,
     ] = yield* Effect.all(
       [
@@ -187,20 +187,20 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         records.readReport,
         records.readConversation,
         records.readWorkspaceFiles,
-        records.readResumable,
+        records.readContinues,
         listRunGeneratedFiles(id, storage),
       ],
       { concurrency: 8 },
     );
     const run = view.runs.get(id);
-    if (!run && !config && conversation.length === 0 && !continues) {
+    if (!run && !config && conversation.length === 0 && !rowsContinue) {
       return null;
     }
     // The model the run is on, as the view derives it for the listing too.
     const currentModel = config ? (run?.model ?? undefined) : undefined;
     // Whether `texra resume` takes it: its rows hold a point it continues
     // from, and its config to continue under (a run with none is corrupt).
-    const resumable = config !== null && continues;
+    const continues = config !== null && rowsContinue;
     const shownConversation = options.includeFullConversation
       ? createConversationTranscript(conversation)
       : createConversationPreview(conversation);
@@ -216,7 +216,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     return {
       id,
       outcome: run?.outcome ?? null,
-      resumable,
+      continues,
       run: run
         ? {
             launchedAt: run.launchedAt,
@@ -345,10 +345,10 @@ export function formatInvalidExportFormatText(raw: string): string {
 /** How a listed run stands in `texra history`'s text: its outcome, else
  *  none, and whether `texra resume` continues it. */
 export function historyStanding(
-  entry: Pick<CliHistoryEntry, 'outcome' | 'resumable'>,
+  entry: Pick<CliHistoryEntry, 'outcome' | 'continues'>,
 ): string {
   const outcome = entry.outcome ?? 'no outcome';
-  return entry.resumable ? `${outcome} (resumable)` : outcome;
+  return entry.continues ? `${outcome} (resumable)` : outcome;
 }
 
 export function formatCliHistoryDetailsText(
@@ -361,7 +361,7 @@ export function formatCliHistoryDetailsText(
     : undefined;
   // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
-    details.resumable ? ' (resumable)' : ''
+    details.continues ? ' (resumable)' : ''
   }`;
   const lines = [
     `Run: ${details.id}`,
@@ -421,9 +421,9 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,
     outcome: entry.outcome,
-    resumable: entry.resumable,
-    ...(entry.resumeBlocked !== undefined && {
-      resumeBlocked: entry.resumeBlocked,
+    continues: entry.continues,
+    ...(entry.continueBlocked !== undefined && {
+      continueBlocked: entry.continueBlocked,
     }),
     inputBasename,
     kind: runKindOf(config),

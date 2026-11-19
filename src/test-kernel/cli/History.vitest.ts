@@ -134,7 +134,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               expect(
                 outcomes.map(([id]) => [
                   byId(id)?.outcome,
-                  byId(id)?.resumable,
+                  byId(id)?.continues,
                 ]),
               ).toEqual([
                 ['cancelled', false],

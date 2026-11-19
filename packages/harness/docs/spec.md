@@ -267,7 +267,7 @@ unavailable and passes the gate
 cannot be opened or resumed: a resume of it, and a message to it, is refused as
 `earlierBuild` for an earlier build's row and as `unusableCheckpoint` for a
 corrupt one, never as a read to retry (`shared/session/runHistory.ts#runReadRefusal`,
-`agent/storage/resumability.ts#deriveResumability`,
+`agent/storage/continuation.ts#deriveContinuation`,
 `agent/runtime/resumeRun.ts#refusalFor`).
 
 ## 3. Row kinds
@@ -932,7 +932,7 @@ What survives at each commit point follows from sections 2 to 8:
   if unbound (section 7.2).
 - `run.end`: The lifecycle is over. A program's run stays finished, and a
   resume answers `finished`
-  (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
+  (`agent/storage/continuation.ts#deriveContinuation`); a loop-driven
   conversation continues on a resume in a new lifecycle
   (`shared/session/runActions.ts#continuesFromRows`), from where its
   rows left the loop (`shared/session/runState.ts#LoopAt`).
