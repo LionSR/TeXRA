@@ -60,7 +60,6 @@
   --desktop-color-button-secondary-hover: light-dark(#dee5ef, #303949);
   --desktop-color-toolbar-active: light-dark(#e7edfc, #29354d);
   --desktop-color-toolbar-hover: light-dark(#e3e9f2, #252b34);
-  --desktop-color-list-hover: light-dark(#e3e9f2, #252b34);
   --desktop-color-menu-background: light-dark(#ffffff, #252b34);
   --desktop-color-menu-border: light-dark(#dfe4ec, #434c5b);
 
@@ -304,7 +303,6 @@
   );
 
   /* Lists — no native WA equivalent yet (#3690). */
-  --wa-color-list-hover-bg: var(--desktop-color-list-hover);
   --wa-color-list-warning-fg: var(--desktop-color-warning);
 
   /* Menus. */
@@ -473,7 +471,6 @@ body.vscode-high-contrast-light {
   --desktop-color-button-secondary-hover: ButtonFace;
   --desktop-color-toolbar-active: Highlight;
   --desktop-color-toolbar-hover: ButtonFace;
-  --desktop-color-list-hover: ButtonFace;
   --desktop-color-menu-background: Canvas;
   --desktop-color-menu-border: CanvasText;
   --desktop-color-shadow: transparent;
