@@ -9,6 +9,7 @@ import { Duration, Effect, type Cause } from 'effect';
 // Local imports
 import { scopedClient, Settings } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import { zoteroUrl } from './bbtClient';
 import { ZoteroAddTool } from './ZoteroAddTool';
 import { ZoteroCollectionsTool } from './ZoteroCollectionsTool';
@@ -48,7 +49,7 @@ function probeUnreachable(
   }).pipe(Effect.as(false));
 }
 
-export const zotero: TexraPlugin = {
+export const zotero: TexraPlugin = texraPlugin({
   id: 'zotero',
   tools: [
     ZoteroCollectionsTool,
@@ -107,4 +108,4 @@ export const zotero: TexraPlugin = {
         'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
     },
   },
-};
+});

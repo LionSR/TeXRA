@@ -47,7 +47,7 @@ TeXRA panel offers the two main access choices; other subscriptions connect from
 3. **Another provider subscription** (from Settings, not the card): Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.
 
-The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
+The full per-provider key reference (the **API keys** list, its Set / Get / Remove actions, and per-provider settings) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
 ::: tip No TeXRA account
 There is no TeXRA sign-in. Every agent and program ships
@@ -59,8 +59,8 @@ Once a credential is in place, the setup assistant takes it from here: one conve
 ::: tip CLI credentials
 The terminal uses the same paths: provider env vars for your own keys,
 `texra auth chatgpt login` for a ChatGPT subscription, `texra auth grok login`
-for a Grok (xAI) subscription, or `/login` in a chat to pick among connected
-subscriptions. Running `texra` without any of these opens the chat with a
+for a Grok (xAI) subscription, or `/login` in a chat to manage the ChatGPT and
+Grok sign-ins. Running `texra` without any of these opens the chat with a
 **Connect a model** panel instead of an error. `texra setup` is the terminal counterpart of the setup
 assistant: it walks you through a ChatGPT sign-in or an API key, then your
 environment, agents, and first task. Read the
@@ -75,10 +75,10 @@ Open the TeXRA panel from the TeXRA icon in the Secondary Side Bar, or run **TeX
 ### Choose agent, model, and instruction
 
 The dropdown menus at the bottom of the instruction box pick the agent and the
-model (e.g. `anthropic/claude-sonnet-5-5`). The agent menu lists each agent
-once, then your teams, the default first. Every agent chats; the default,
-`assistant`, can be asked for a document edit, and `orchestrator` splits a
-larger job across other agents.
+model (e.g. **Sonnet 5.5**, whose id is `anthropic/claude-sonnet-5-5`). The
+agent menu lists each agent once, the default first. Every agent chats; the
+default, `assistant`, can be asked for a document edit, and `orchestrator`
+splits a larger job across other agents.
 
 Then say what you want, and on which file, in the text area:
 
@@ -128,13 +128,13 @@ Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The
 
 ### Review results
 
-1. When the program's run completes, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, keeping your input filename).
+1. When the program's run completes, VS Code opens the final revision from the run folder (for `edit`, `r1/draft.tex`, keeping your input filename).
 2. Inspect the proposed edits; the scientific judgment stays yours. Compare the original and modified versions with either tool:
    - **ProgressBoard Diff**: Under **Generated files**, select a file's <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** button to compare the original file against the generated run-storage output.
 
      <CompareHero />
 
-     <p class="hero-caption">VS Code's diff editor opens with your original on the left and the first revision (<code>r0/draft.tex</code>) on the right: removed text in red, improved text in green.</p>
+     <p class="hero-caption">VS Code's diff editor opens with the first revision (<code>r0/draft.tex</code>) on the left and your original on the right: improved text in green, removed text in red.</p>
 
      You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
@@ -190,13 +190,13 @@ you own.
 <CliRunHero
   command='texra run edit --input draft.tex --instruction "Improve clarity; preserve math and citations."'
   :rounds="[
-    { label: 'r0: draft revision', state: 'done' },
-    { label: 'r1: review and correct', state: 'done' },
+    { label: 'Revision 1: draft', state: 'done' },
+    { label: 'Revision 2: review and correct', state: 'done' },
   ]"
-  :outputs="['executions/9f3a6c81d24e/r1/draft.tex']"
+  :outputs="['…/executions/9f3a6c81d24e/r1/draft.tex']"
 />
 
-<p class="hero-caption">What a one-shot run looks like: revisions stream as progress, then the path to the revised document prints on stdout.</p>
+<p class="hero-caption">What a one-shot run looks like: revisions stream as progress, then the full path to the revised document prints on stdout.</p>
 
 Run history is shared with VS Code, so a run started in the CLI shows up in the
 extension's ProgressBoard (and vice versa). Read the [TeXRA CLI guide](./texra-cli.md) for
@@ -311,7 +311,7 @@ logs under `compile/`:
 <p class="hero-caption">One folder per revision: the revised document at <code>r{revision}/&lt;input-filename&gt;</code> with the model's reply; latexdiff PDFs under <code>diff/</code> and compile logs under <code>compile/</code> sit beside the revision folders. Each further revision repeats the layout in <code>r1/</code>, <code>r2/</code>, …</p>
 
 The CLI writes the same per-revision tree under `executions/<run-id>/` in the
-workspace store. Read [First run](./first-run.md) for the terminal walkthrough.
+project's storage folder under `~/.texra`, which VS Code shares. Read [First run](./first-run.md) for the terminal walkthrough.
 
 ## Next steps
 

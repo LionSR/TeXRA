@@ -1,44 +1,34 @@
 <script setup>
-// Frameless "Round 1 — critique pass" card. After Round 0 writes a revision,
-// polish re-prompts itself to scan for the failure modes enumerated in
-// guide/workflows/polish-a-draft.md ("How the critique pass works"). This card
-// renders that checklist as six icon + label rows so the reader sees the
-// review at a glance instead of parsing a prose bullet list.
+// Frameless "Revision 2: review and correct" card. After the first revision,
+// the edit program asks for a second one that checks the first against the
+// original and the instruction (guide/workflows/polish-a-draft.md, "How the
+// second revision works"). This card renders the four things that request
+// names as icon + label rows so the reader sees the review at a glance.
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
 // (defined in theme/mockup.css on `.mockup`) resolve here and the card flips
 // cleanly between the docs light / dark themes. Static strings only.
 const checks = [
   {
-    icon: 'shield',
-    label: 'Weakened edits',
-    note: 'reverts changes that dulled the original argument',
+    icon: 'target',
+    label: 'Out-of-scope changes',
+    note: 'reverts any change the instruction did not ask for',
   },
   {
     icon: 'symbol-operator',
-    label: 'Missing math',
-    note: 'restores equations or symbols dropped in Round 0',
+    label: 'Missing math or reasoning',
+    note: 'restores equations or steps dropped in the first revision',
   },
   {
     icon: 'symbol-variable',
     label: 'Notation before definition',
-    note: 'flags a symbol used before it is introduced',
+    note: 'fixes a symbol used before it is defined',
   },
   {
     icon: 'eye',
     label: 'Generic filler',
-    note: 'cuts empty phrasing',
+    note: 'removes sentences that say nothing specific',
     strike: 'provides crucial insights into…',
-  },
-  {
-    icon: 'pencil',
-    label: 'Plain technical English',
-    note: 'rewrites added sentences that are not concrete, plain, and said once',
-  },
-  {
-    icon: 'target',
-    label: 'Out-of-scope changes',
-    note: 'keeps edits inside your instruction',
   },
 ];
 </script>
@@ -47,13 +37,15 @@ const checks = [
   <div
     class="mockup mk-card crit"
     role="group"
-    aria-label="Round 1 critique pass"
+    aria-label="Revision 2: review and correct"
   >
     <div class="mk-card-head crit-head">
       <wa-icon class="mk-card-head-ic" library="texra" name="search"></wa-icon>
-      <span class="mk-card-title crit-head-name">Round 1 — critique pass</span>
+      <span class="mk-card-title crit-head-name"
+        >Revision 2: review and correct</span
+      >
       <span class="mk-card-sub crit-head-sub"
-        >rereads r0/intro.tex, then revises</span
+        >rereads r0/intro.tex, then corrects it</span
       >
     </div>
     <ul class="crit-list">

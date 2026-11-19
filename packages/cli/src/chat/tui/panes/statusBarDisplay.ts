@@ -39,7 +39,13 @@ import { usageRouteBadge } from '@ui/copy/modelAccess';
 import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
 import { runStatus, type RunTone } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
-import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import {
+  AGENT_LIST,
+  NESTED_AGENT,
+  nestedCountsCompact,
+  nestedCountsLabel,
+  TASK_ACTIONS,
+} from '@ui/copy/nestedRuns';
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { taskCostStatus } from '../sessionStatus';
@@ -701,9 +707,10 @@ export function buildStatusBarDisplay(
     }
   }
 
-  // Every direct and nested subagent the displayed run owns, and how many of
-  // them are live: the view's rollup, the count every surface reads.
-  const subagents = run?.rollup.total ?? 0;
+  // Everything the displayed run started, directly or below, by kind, and
+  // how many of them are live: the view's rollup, the count every surface
+  // reads.
+  const started = run?.rollup;
   const running = run?.rollup.running ?? 0;
   left.push(
     ...(
@@ -745,10 +752,10 @@ export function buildStatusBarDisplay(
               policy: 'drop',
             }
           : undefined,
-        subagents > 0
+        started !== undefined && started.total > 0
           ? {
-              text: formatResultCount(subagents, 'agent'),
-              compactText: `${subagents} ${NESTED_AGENT.compactCountSuffix}`,
+              text: nestedCountsLabel(started.kinds),
+              compactText: nestedCountsCompact(started.kinds),
               dim: true,
               priority: STATUS_BAR_PRIORITY.activeSubagent,
               policy: 'drop',

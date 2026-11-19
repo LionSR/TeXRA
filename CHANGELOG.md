@@ -323,9 +323,8 @@ All notable changes to this project will be documented in this file.
   `OpenOptions.host` carries no `interruptedTasks`; a session recovers
   nothing at open.
 - **One flag per choice in `texra config agents`.** `--agents` takes the
-  workspace agents as one value (`inherit`, `all`, `team:<team>` by id,
-  name or slug, or a comma-separated agent list), `--default-team` takes a
-  team or `none`, and `--default-agent` an agent or `none`; `--inherit`,
+  workspace agents as one value (`all`, or a comma-separated agent list)
+  and `--default-agent` takes an agent or `none`; `--inherit`,
   `--all`, `--team`, `--clear-default` and `--clear-default-agent` are
   gone, with the three "not both" errors. `texra clone` takes its
   destination as the second argument, resolved against `--cwd` (the
@@ -349,19 +348,6 @@ All notable changes to this project will be documented in this file.
   while a child call resolves its files or picks a model now stops the
   call, where it was reported as the call's error. No stored row or
   service message changes.
-- **A document task's switches have one name on every surface.** The
-  `document_task` tool's `extractFigures` and `extractTikz` inputs are
-  `autoExtractFigure` and `autoExtractTikzFigure`, the names a run stores
-  and its approval shows, and the tool also takes `attachTeXCount` and
-  `autoCompileInputPdf`. `texra run` takes `--attachTeXCount`,
-  `--autoExtractFigure`, `--autoExtractTikzFigure` and
-  `--autoCompileInputPdf` beside `--reflect`. The launch form's Input menu
-  offers Critic review, and a proposal card badges every switch the task
-  was launched with. `task.rewrite` is gone from agent YAML: a task that
-  declares `outputs` writes new documents and gets no diff lineage, one
-  that declares none rewrites its inputs; an agent file that still sets
-  `rewrite:` is refused at load as an unrecognized key, so delete the line.
-  No stored row changes.
 - **Launch options that travel together are one shape.** SDK: a
   `ProcessChildStrategy` is a one-turn command (`interruptedTurn`, the result
   a killed process still has) or a coding agent's CLI session, whose
@@ -392,8 +378,8 @@ All notable changes to this project will be documented in this file.
   and `claudeAgentPermissionMode` settings with their rows in Settings and
   `/config`, and the tools' `sandbox_mode` and `permission_mode` inputs (a
   read-only `plan` Claude child can no longer be requested). A stop of a
-  task cascades to its agents on shutdown and otherwise follows "Keep agents
-  running"; `run.stop.detachActiveChildren` is gone from the service
+  task always stops its agents: the "Keep agents running" setting is
+  removed, and `run.stop.detachActiveChildren` is gone from the service
   protocol (52). SDK: `ChildRuns.autoApproved` says whether the launching
   run does its work unasked; `RunStopOptions` is gone, so a stop is
   `Runs.stop(runId, reason)`; `decideApproval` takes no `promptRequired`.
@@ -467,8 +453,9 @@ All notable changes to this project will be documented in this file.
   gains `chatgpt` (the plan's namespaced function tools); a reasoning
   request's `summary` is `'auto'` or null.
 - **A cancelled run says who stopped it.** The `run.end` row carries
-  `reason`: `user` for a person's stop, `shutdown` for the process's exit,
-  neither for a holder's release. A run the process closed mid-request
+  `reason`: `user` for a person's stop, `released` when the call that
+  awaited a child ended. A process that exits records nothing: its runs read
+  as interrupted at the next open. A run the process closed mid-request
   resumes without spending a retry, as before, and a child's delivery wakes
   it, as after a crash; only a person's stop holds that delivery back. SDK:
   `RunEnd.reason` and `RunStopReason` (from `@texra-ai/harness`); the halt
@@ -504,8 +491,8 @@ All notable changes to this project will be documented in this file.
   the app words them.** `SUBSCRIPTION_AUTH_NAMES` (`./schemas`) and
   `quotaFallbackRouteFor`, `QuotaFallbackRoute` and
   `QuotaFallbackExhaustionReason` are gone: the harness words these failures
-  plainly, naming a plan by the provider it bills ("Usage limit reached on
-  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA words the facts
+  plainly, naming a plan by the provider it bills ("OpenAI subscription
+  usage limit reached (Plus plan). Resets in 2h 5m."), and TeXRA words the facts
   wherever it shows them, as before. A used-up plan's classification
   carries its tier and reset (`planType`, `resetsInMs`), and the GLM Coding
   Plan's is named by its route, `glm-coding-plan-subscription`; a
@@ -516,7 +503,7 @@ All notable changes to this project will be documented in this file.
   recording the route (`ProgressStatusRow.quotaFallback`), and a status row
   has no `detail`. `RetryPermission` carries the failure once and whole as
   `errorDetails` (no `errorMessage`). A `requestShowError` notice carries
-  the failure's classification beside its message
+  the model failure (`failure`) beside its message
   (`RequestShowErrorPayloadSchema`), an error row the classified failure it
   records (`ErrorRow.failure`, and no `detailText`: a host joins `details`),
   and a classified failure's run end names its cause without "Error
@@ -731,7 +718,7 @@ All notable changes to this project will be documented in this file.
 - **SDK: the workflow phase stage is gone.** No producer has opened one
   since the workflow engine left: `openStage` takes no `'phase'` kind and
   no `index`/`total`, a task group carries neither, and the transcript has
-  no `phase` row. A script's `phase()` titles still group its calls. Runs
+  no `phase` row. A script's `section()` titles group its calls. Runs
   written by an earlier build are listed as such and are not resumed.
 - **A prompt's `{% include %}` reads no file.** Prompts render from their
   own text alone, so an include fails as "template not found" instead of
@@ -976,29 +963,17 @@ All notable changes to this project will be documented in this file.
   release are not carried over: add them again from Settings › Models,
   `TeXRA: Set API Key` or `texra auth`.
 - **Agent files are flat.** An agent YAML is now `name`, `description`,
-  `tools`, `temperature` and `prompt` at the top level, plus an optional
-  `task` block for an agent that revises documents: `task.prefix` lays out
-  the documents, `task.requests` holds one request per revision (their
-  number is the revision count, so `rounds` is gone), and `task.rewrite`,
-  `task.outputs` and `task.files` replace `isRewrite`, `defaultOutputFiles`
-  and `requiredFilesInternal`. A chat agent has no request template: your
-  message is its task, so the `{{ INSTRUCTION }}` boilerplate is gone. The
+  `tools`, `temperature` and `prompt` at the top level. Your message is the
+  agent's task, so the `{{ INSTRUCTION }}` boilerplate is gone. The
   `settings:`/`prompts:` nesting and `agentCategory` are no longer read; a
   custom agent in the old format is reported as unloadable, naming the
-  unrecognized keys. Every bundled and Lean agent and both creation
-  templates use the new format.
+  unrecognized keys. Every bundled and Lean agent and the creation
+  template use the new format.
 - **Workflow and tool-use agents are now one kind of agent.** Every agent
-  can chat with its tools, and one that defines a document task can also
-  revise your files: each revision asks the agent once, then extracts,
-  compiles and diffs its documents, and at the end you accept the revised
-  files as before. The agent menu has **Chat** and **Document task**
-  sections, and Settings → Agents is one list with **New chat agent** and
-  **New document task**. A lead agent now runs another agent's document
-  task with a separate tool from the one it chats with. In the CLI,
-  `texra agents list --tasks` replaces `--category`,
-  `texra config agents --agents` replaces `--workflow` and `--tool-use`, and
-  bundled agents are named `builtIn:<name>`. An interrupted document task
-  resumes where it stopped.
+  chats with its tools, and document work is done by programs (see "Document
+  tasks are programs, not agents" above). In the CLI, `texra agents list` no
+  longer takes `--category`, and `texra config agents --agents` replaces
+  `--workflow` and `--tool-use`.
 - **Outdated tools are removed: the todo list, Crossref search, DOI lookup,
   `texcount`, `arxiv_metadata` and `wolfram`.** Agents no longer keep a
   todo list: the `todo_write` tool is gone, and with it the Todos panel in
@@ -1063,7 +1038,7 @@ All notable changes to this project will be documented in this file.
   without a credential opens the card (or brings it back after "Skip for
   now"), and the banner now shows only when a credential that worked stops
   working. The desktop app's startup team dialog and its Help › Choose Agent
-  Team command are gone: the setup assistant picks the team, and Settings ›
+  Team command are gone. The task header's Auto switches are now read-only chips
   Agents changes it. The task header's Auto switches are now read-only chips
   (**Auto: edits**, **Auto: commands**, **Auto: agent work**) whose × turns a
   grant off; grants are given on the approval card's ▾. In the CLI,
@@ -1096,7 +1071,7 @@ All notable changes to this project will be documented in this file.
   Context shared by several runs is stored once per workspace, and another
   TeXRA process holding the history no longer freezes the window while it
   waits. Repository settings (the git commit identity, subagent worktrees,
-  the Codex and Claude Code controls, and the enabled agents and teams) are
+  the Codex and Claude Code controls, and the enabled agents) are
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
@@ -1116,12 +1091,9 @@ All notable changes to this project will be documented in this file.
   (or VS Code's telemetry setting); the ID is one row in
   `~/.texra/v1/global-storage/texra.db`, and the guide gives the `DELETE` that
   resets it. A custom agent is reported only as "custom". `texra doctor` shows the usage-logging row.
-- **Every agent ships bundled; hosted agents are gone.** The Physicist,
-  Mathematician, and Computer Scientist teams now work fully offline with no
-  TeXRA sign-in: their `generic`, `devise`, `apply`, and `criticize` workflow
-  agents are bundled, along with `enhance`, `firstread`, `logic`, and
-  `notation`. Each is a YAML file you can read and copy into a custom agent to
-  change. TeXRA no longer fetches agents from an account catalog, so signing in
+- **Every agent ships bundled; hosted agents are gone.** Every built-in
+  agent and program works fully offline with no TeXRA sign-in. TeXRA no
+  longer fetches agents from an account catalog, so signing in
   adds no agents, the sign-in prompt for "unavailable TeXRA-hosted members" is
   gone, and `texra agents`, the settings Agents page and the launcher no longer
   show a "Remote" badge. The researcher-only hosted agents `elevate`,
@@ -1134,12 +1106,8 @@ All notable changes to this project will be documented in this file.
   in every tool-use request instead, and follows the setting when it changes.
   A mid-conversation model switch now updates the tool-call guidance the
   model gets, and switching off an installed plugin withdraws its skills
-  from the next request. Session history from earlier builds is cleared the
-  first time this build opens a workspace.
-- **Session history starts over again with this build.** The first time it
-  opens a workspace, the history an earlier build wrote is moved aside into
-  a backup copy and TeXRA says so; runs from those builds cannot be
-  resumed. Project documents and research files are unchanged.
+  from the next request. Session history from earlier builds is not carried
+  over.
 - **Scripts reading `--output-format ndjson` progress see each model call's
   spend on its own.** A `usage` event now reports one model call rather than
   the run's total so far, so a run's cost is the sum of its `usage` events.
@@ -1163,13 +1131,13 @@ All notable changes to this project will be documented in this file.
   earlier builds is cleared the first time this build opens a workspace.
 - TeXRA 1.0 starts with new session history. Earlier conversations and saved
   runs remain on disk but are not imported or available to resume. Project
-  documents and research files are unchanged. History an older build wrote
-  is moved aside into a backup copy rather than read, and TeXRA says so
-  when it happens; a store written by a newer TeXRA is never opened or
-  deleted by an older one.
-- **Session history from earlier preview builds starts over** — the first
-  time this build opens a workspace, the session history an earlier preview
-  wrote is moved aside, as above, and TeXRA says so. Conversations and
+  documents and research files are unchanged. A session store written by
+  a different build of TeXRA 1.0 is never opened or deleted: TeXRA stops
+  with a message naming the file, and moving it away creates a fresh one.
+- **Session history from earlier preview builds starts over** — this build
+  does not open the session store an earlier preview wrote. It stops with a
+  message naming the file; move the file away and TeXRA creates a fresh
+  store. Conversations and
   workflow runs from those builds, finished or interrupted, cannot be
   resumed; start them again. Project documents and research files are
   unchanged.
@@ -1184,9 +1152,8 @@ All notable changes to this project will be documented in this file.
   `{{ WORKFLOW_AGENTS }}`, `{{ TOOL_USE_AGENTS }}`, `{% if IS_OPENAI_MODEL %}`
   and `{% if IS_GOOGLE_MODEL %}` are no longer filled in when an agent's
   prompts are rendered. A prompt that still uses one renders it as empty, so
-  remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
-  and the delegation agents an agent can see is still listed in the
-  descriptions of its delegation tools.
+  remove it from your agent YAML. The delegation agents an agent can see are
+  still listed in the descriptions of its delegation tools.
 - **Goal mode is a Tools plugin, and its switch replaces the
   `texra.goal.enabled` setting** — turn Goal Mode on or off on the Tools
   dashboard, or with `texra tools disable goal` / `texra tools enable goal`.
@@ -1328,18 +1295,40 @@ All notable changes to this project will be documented in this file.
   which response and attempt the call belongs to are no longer copied onto
   every call; the harness's built-in tools read them from its internal
   `RunCall` service.
+- **Stopping a task always stops its agents.** The "Keep agents running if I
+  stop the orchestrator" setting is removed: a stop reaches every agent the
+  task started.
+- **A custom agent's prompt reads four variables.** A prompt is rendered
+  with `CWD`, `BUILTIN_AGENTS_DIR`, `CUSTOM_AGENTS_DIR` and `AGENT_DOCS_DIR`
+  only. The file and instruction variables (`INSTRUCTION`, `INPUT_FILE`,
+  `CONTEXT_FILE`, `LIST_OF_ALL_INPUTS`, `LIST_OF_ALL_CONTEXTS`, `MEDIA_FILE`,
+  `OUTPUT_FILES` and the others of that family) are gone, and a prompt that
+  still uses one renders it empty: your message and attached files reach
+  the agent as the conversation, not through its prompt.
+- **`texra models enabled` prints `enabled` or `disabled`** in its first
+  column, where it printed `on` or `off`. The JSON output is unchanged.
+- **`texra history show --json` always carries `conversation`.** The
+  `conversationPreview` field is gone; `conversation.scope` says whether it
+  holds the whole `transcript` or a `preview`.
+- **The chat's exit line spells out its token counts.** `texra chat` ends
+  with a line such as `Token usage: 1,204 input tokens, 318 output tokens`
+  where it printed `Token usage: total=…`. Input and output are always
+  listed; cache and reasoning counts appear only when they are not zero. A
+  script that reads the line needs updating.
 
 ### Features
 
 - **Lean programs: `prove` and `blueprint`.** The Lean plugin registers two
   programs. `prove` completes the proofs in the `.lean` files you pass and
-  checks each round with Lean's diagnostics (no error, no `sorry`), giving
+  checks each round with Lean's diagnostics (no error, no `sorry`) and for an
+  `axiom` the files did not declare before, giving
   its agent up to three rounds; `blueprint` writes or updates a
   LeanBlueprint document and checks each round with `leanblueprint web` and
   `leanblueprint checkdecls`, so it needs the `leanblueprint` CLI. Start one with `texra run prove --input Basic.lean` or
-  ask an agent. The Lean agents and skills are unchanged. In a script,
+  ask an agent, which is told of them only where `lake` is found, as it is
+  offered the Lean tools only there. The Lean agents and skills are unchanged. In a script,
   `lean_diagnostics` now resolves to `{ output, summary, complete, errors,
-  sorries }`.
+  sorries, axioms }`.
 - **Long Claude runs start answering sooner.** On Anthropic's own API,
   each request after the first now sends only the new messages and the id
   of the previous response (message threads, beta), instead of the whole
@@ -1473,7 +1462,8 @@ All notable changes to this project will be documented in this file.
   there, so a task keeps running when the app quits and a terminal or a
   VS Code window can follow it. The app still presents the task's notices
   and its proposed edits, and its approval policy applies there. If the
-  service cannot start, the app runs its tasks itself.
+  service cannot be reached, the app runs its tasks itself and a banner in
+  the progress view says so, with the reason.
 
 - **Windows reconnect to the background service, and it reads settings
   fresh.** When a newer TeXRA build retires the service, or it stops, the
@@ -1490,13 +1480,13 @@ All notable changes to this project will be documented in this file.
   (diagnostics, inline criticism, opening a PDF, the editable diff of a
   proposed edit) and its notifications, and the approval policy set in the
   window applies there. A newer extension retires an older service. If the
-  service cannot start, the window runs its tasks itself and says so once.
-
-- **Document tasks can reflect with a critic.** Opt in with
-  `texra run <agent> --reflect` or `reflect: true` on `document_task`: after
-  each revision but the last, the bundled `critic` agent reads the diff and
-  compile result and returns grounded corrections plus one optional
-  improvement, which the next revision's prompt carries. The revision count
+  service cannot be reached, the window runs its tasks itself and a banner in
+  the progress view says so, with the reason.
+- **Document programs can reflect with a critic.** Opt in by passing
+  `reflect: true` in a program's `args`: after each revision but the last, a
+  critic reads the diff and compile result and returns grounded corrections
+  plus one optional improvement, which the next revision's prompt carries.
+  The revision count is unchanged.
   is unchanged.
 - **A chat shows its project's background-task notices (CLI).** A task the
   TeXRA service runs now tells a window of its own project what it would
@@ -1605,7 +1595,7 @@ All notable changes to this project will be documented in this file.
 - **`script` tool (code mode, first stage).** An agent whose configuration
   lists `script` can run one JavaScript program that calls its other tools as
   `await tools.read_file({ path })`, with `Promise.all`, try/catch,
-  `phase(title)` and `console.log`. The program runs in a QuickJS sandbox on
+  `section(title)` and `console.log`. The program runs in a QuickJS sandbox on
   a worker thread. Every call it makes is an ordinary tool call, with the
   same hooks, approvals and card, nested under the script's stage. If the
   run is interrupted, the script runs again from the top on resume: calls
@@ -1661,7 +1651,7 @@ All notable changes to this project will be documented in this file.
 - **A script's result carries the files its calls attached**, so an image a
   nested `read_file` returned reaches the model with the script's answer.
 - **Every host shows a script's calls.** In VS Code and the desktop app, a
-  script's stage lists its calls by `phase()`, with the calls that need a
+  script's stage lists its calls by `section()`, with the calls that need a
   decision, the failed ones and the running ones first; each call says
   whether it is queued, running, interrupted, finished, reused, skipped, cancelled, failed
   or not run, with its agent, model, attempt, files, time and cost. An
@@ -1855,10 +1845,10 @@ All notable changes to this project will be documented in this file.
   `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project
   agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`,
   `leanOrchestrator`) are now built in, in the VS Code extension, the desktop
-  app and the CLI. They no longer need a TeXRA sign-in, so every team's lead
+  app and the CLI. They no longer need a TeXRA sign-in, so every lead agent
   works on a fresh install. `presenter` is now the interactive deck builder
   that compiles your slides and checks every page visually; to turn a
-  finished paper into a deck in one pass, use the `paper2slide` workflow
+  finished paper into a deck in one pass, use the `slides` program.
   agent. A built-in agent now takes precedence over a hosted agent with
   the same name, so signed-in users run the built-in copies too.
 - **A subagent works with the same tool plugins as the run that launched
@@ -1874,6 +1864,18 @@ All notable changes to this project will be documented in this file.
   only while a run that uses it is open, does not inherit your API-key
   environment variables, and a server that fails to start is named in the
   run's transcript. See the Agent integrations guide.
+- **Desktop: Switch Project in the command palette.** It lists the other
+  open projects and shows the one you choose.
+- **Filters match every word, in any order.** In the settings lists, the
+  task list and the review pane, "paper review" finds "Review a paper"; the
+  task filter has a clear button.
+- **More Unicode math converts to LaTeX.** Inside math, ± ∀ ∃ ∴ ⊕ ⊗ ⇐ ⇑ ⇓
+  become `\pm`, `\forall`, `\exists`, `\therefore`, `\oplus`, `\otimes`,
+  `\Leftarrow`, `\Uparrow` and `\Downarrow`, and the conversion now also
+  runs inside `gather`, `multline`, `alignat`, `flalign` and `eqnarray`
+  (starred or not), as it did in `equation` and `align`.
+- **LaTeX commands in VS Code accept `.ltx` and `.latex` files.** Fix
+  Compilation, Indent, TeX Count and Compile TikZ took only `.tex`.
 
 ### Bug Fixes
 
@@ -2164,18 +2166,6 @@ All notable changes to this project will be documented in this file.
   parent counted a child it had launched as still owned. The script's door
   now settles every such call as skipped, naming the reason, and withdraws
   the approval it was waiting on, before the script's own result commits.
-- **A script's `document_task` calls each get their own child run.** Every
-  `document_task` a script issued, in parallel or one after another, derived
-  the same child run id, so only the first could start and the rest failed
-  with "already running" or "already exists; resume it". The child-launch
-  door a plugin tool calls is now built for each call from that call's own
-  facts.
-- **A document task launched from a conversation runs its recipe.** The
-  recipe's tools (`document_context`, `document_extract`, …) were silently
-  withheld because the launching conversation had not been offered them, and
-  the recipe failed on its first line with "not a function". A script run now
-  offers exactly the tools its launch names, and any declared tool a host
-  gate withholds is reported in the run's log instead of vanishing.
 - **A child conversation resumed after a restart keeps its tools.** It
   used to be treated as a top-level run once its parent's step was gone,
   gaining every installed plugin's tools from its second step on; it now
@@ -2198,13 +2188,10 @@ All notable changes to this project will be documented in this file.
   live in VS Code's encrypted secret store and never on disk; it now says
   they stay on this machine in an owner-only folder (`~/.texra/secrets`),
   which every TeXRA app shares.
-- **The panel's agent menu lists each agent once, and a document agent
-  opens on files.** Picking an agent such as `criticize` starts its
-  document task and shows the file panel; a file icon marks those agents.
-  The New task form runs only an agent the menu lists: one you hide in
-  Settings → Agents after picking it (or one Run again… brings back)
-  reads **Choose agent** until you pick another, rather than starting
-  with files the form no longer shows.
+- **The panel's agent menu lists each agent once.** The New task form runs
+  only an agent the menu lists: one you hide in Settings → Agents after
+  picking it (or one Run again… brings back) reads **Choose agent** until you
+  pick another.
 - **`texra`'s `/key` picker shows which providers already have a key.** Each
   provider row reads "Key set", "Env" or "Not set", as the API-keys page of
   `/config` already did. If the key store cannot be read, the rows read
@@ -2292,8 +2279,8 @@ All notable changes to this project will be documented in this file.
   no longer resets the sidebar's read marker. Later activity still makes the
   conversation unread until it is viewed.
 - **A window shows the files a background task accepts.** When a task in the
-  TeXRA service (`texra serve`) accepted files into the project, or the setup
-  agent applied an agent team there, the desktop file tree and the editor's
+  TeXRA service (`texra serve`) accepted files into the project, the desktop
+  file tree and the editor's
   file badges and agent lists did not update until you refreshed them. The
   change is now recorded on the task, and every window that shows the
   project picks it up.
@@ -2459,7 +2446,7 @@ All notable changes to this project will be documented in this file.
 - **The CLI's progress line no longer goes blank for a task with an empty
   description.** It shows the run's status instead.
 - **A task with an empty description no longer shows a blank title in
-  desktop notifications.** The desktop app's "is waiting for you" and
+  desktop notifications.** The desktop app's "Waiting on you" and
   finished notices now name the task by its agent, as every other surface
   already did.
 - **One warning per media file a model can't read.** Attaching an image
@@ -2515,12 +2502,6 @@ All notable changes to this project will be documented in this file.
   with the step that finishes it, and the task that started it picks it up
   when it resumes. Before, a crash just after the agent finished could drop
   the result, or leave a background command's result waiting forever.
-- **Document tasks run on a VS Code editor model (Copilot) again.** Since
-  document tasks became a recipe, a task launched with an editor model
-  failed at its first step; its revisions now run on that model as before.
-  A script can also run in the background on an editor model. The terminal's
-  progress line names the agent as the progress cards do (`polish`, not
-  `builtIn:polish`).
 - **Gemini calls work again.** After a change on Google's side, every
   Gemini request failed with a validation error before any output arrived.
 - **Gemini agents can call tools again, and background Gemini runs
@@ -2808,8 +2789,9 @@ All notable changes to this project will be documented in this file.
 
 - **Your own agents show up in the agent selector without an extra step** —
   a new agent in your custom agents folder is shown even when the workspace
-  uses a team or a hand-picked list of agents. An agent you turn off in the
-  Agents settings stays off, under any team. Choosing "All agents" turns every
+  a new agent in your custom agents folder is shown even when the workspace
+  uses a hand-picked list of agents. An agent you turn off in the Agents
+  settings stays off. Choosing "All agents" turns every
   one back on.
 
 - **A skill you activate with `/skills` stays readable only while it is
@@ -2900,8 +2882,9 @@ All notable changes to this project will be documented in this file.
   the account panel now print the sign-in link before opening a browser, and
   keep it on screen while waiting. If the browser that opens is signed in to a
   different account, or no browser opens, copy the link into another browser.
-  A failed browser launch no longer ends the sign-in, and under WSL the CLI
-  opens the Windows browser.
+  If no browser can be opened, Grok sign-in continues with a one-time code;
+  ChatGPT has no code flow, so use `--no-browser` to print the link and
+  wait. Under WSL the CLI opens the Windows browser.
 
 - **Beamer slides are no longer cut short** — when a model left its last
   output document unclosed, a frame overlay such as `\begin{frame}<beamer>`
@@ -2934,10 +2917,9 @@ All notable changes to this project will be documented in this file.
   credential or setting changed just as a tool-availability check started,
   the follow-up check could be skipped, leaving a tool shown as missing or
   available when it no longer was.
-- **The VS Code dashboard shows your agents, teams and saved settings
-  again.** The Agents page listed no tool-use or workflow agents and no
-  teams, and several pages showed defaults instead of your saved values
-  (compaction, retries, team coordination, approval, skills, memory, telemetry,
+- **The VS Code dashboard shows your agents and saved settings again.** The
+  Agents page listed no agents, and several pages showed defaults instead of
+  your saved values (compaction, retries, approval, skills, memory, telemetry,
   LaTeX and commit attribution), because the extension sent those updates
   in a form the dashboard discarded.
 - **Usage recorded just before quitting is no longer lost** — on the desktop
@@ -3092,10 +3074,8 @@ All notable changes to this project will be documented in this file.
   copies the source document's own files (its PDF) into `History/` and sweeps
   its build files, as the VS Code extension already did, instead of packing
   only the run's outputs.
-- **Deleting a team that no longer exists says so.** In the VS Code settings,
-  deleting a team preset that is already gone now reports "Unknown custom
-  team" instead of doing nothing, as the desktop app does. Double-clicking
-  Delete on a custom agent in the desktop app no longer asks twice.
+- **Double-clicking Delete on a custom agent in the desktop app no longer
+  asks twice.**
 - One failed read of a workspace's session history (for example while another
   TeXRA window holds it busy) no longer stops that window from seeing runs
   the other windows write; it recovers and logs a warning. A workspace whose
@@ -3127,6 +3107,16 @@ All notable changes to this project will be documented in this file.
   during an MCP tool call, or the call hit its 60-second limit, the server
   was never told and kept working on it. TeXRA now sends the protocol's
   cancellation notice, so the server can stop.
+- **A LaTeX reply that contains a code listing is no longer cut short.** A
+  fenced reply with an inner line such as ` ```python ` (inside
+  `lstlisting`, say) was kept only up to that line, dropping the rest of the
+  document.
+- **A `%` inside a link no longer hides the rest of the line.** When TeXRA
+  reads a document's citations and included files, a `%` in `\url`, `\path`,
+  `\nolinkurl` or `\href` is not taken for a comment, and a comment that
+  follows `\\` is.
+- **A TeXRA view that fails to load says why.** The panel showed "Error
+  loading content"; it now shows the cause and offers Retry.
 
 ### Extension (VS Code)
 
@@ -3190,27 +3180,27 @@ All notable changes to this project will be documented in this file.
   Models, Agents, Tools, LaTeX, Memory and General, in one row. Connecting a
   model happens on Models, which now holds ChatGPT, Grok and Copilot sign-in
   next to the API keys; Kimi Code and GLM Coding Plan usage shows on their
-  key rows. Teams and Skills are sections of Agents, with compaction, retries
-  and team coordination under Advanced. Integrations are a section of Tools.
+  key rows. Skills are a section of Agents, with compaction and retries
+  under Advanced. Integrations are a section of Tools.
   Account sign-in, telemetry and Git are on General. The Goals page is gone;
   a run's goal shows in its header. OpenAI background responses, parallel
   tool calls, the GPT-5 reasoning summary and Google background responses
   keep their defaults and are set in `.texra/config.json`.
 - **Settings pages show one section at a time** (extension and desktop): a
   page with several sections gets a second row of sub-tabs (Models: API keys,
-  Subscriptions, Models; Agents: Library, Teams, Skills, Advanced; Tools:
+  Subscriptions, Models; Agents: Library, Skills, Advanced; Tools:
   Approval, Tools, Integrations; LaTeX: Dependencies, Compile & diff,
   Formatting, and VS Code settings in VS Code; General: Account, Git), so a
   long page like Agents no longer scrolls through everything. Each page
   remembers its sub-tab while Settings stays open, and commands such as
-  **Agent Team Settings** or **Git Settings** open the matching sub-tab.
+  **Git Settings** open the matching sub-tab.
 
 #### Changes
 
 - **Settings has a gear in the TeXRA panel header**, next to New task, in
   every state and in the editor tab; the hover-only gear in the view's title
   bar is gone. Editor tabs read "TeXRA Sessions" and "TeXRA Settings", a
-  session row says "2 background tasks · 1 running" and "Needs approval" instead of
+  session row says "2 agents · 1 running" and "Waiting on you" instead of
   bare number badges, and the run header's chip reads "3 tool calls"
   rather than "t1, 3 tool calls".
 - **The TeXRA panel is calmer.** A run shows one header row with one Stop
@@ -3259,22 +3249,14 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
-- **One word for saved teams.** The CLI, settings, setup assistant and guide
-  say "team" for a saved set of agents with an optional lead, and "agents" for
-  the set a workspace shows; "roster" and "multi-agent preset" are gone from
-  `texra config agents`, the `/config` form and the docs. The names under the
-  words changed to match: `texra multi-agent list|show|run` is now
-  `texra team list|show|run` (no alias). Machine-readable NDJSON kinds are
-  renamed: `agent-roster` (field `roster`) is `workspace-agents` (field
-  `agents`), `multi-agent-result` is `team-result`, `multi-agent-preset` is
-  `team`, and `multi-agent-preset-inspection` is `team-inspection`; update any
-  script that reads them. A `texra history` JSON/NDJSON entry names its team
-  in `teamId` (was `teamPresetId`), and `texra team show|run` help calls the
-  argument `<TEAM>`. The VS Code command `texra.showMultiAgent` is now
-  `texra.showTeamSettings`, so a custom keybinding on the old id stops
-  working. The saved agent selection and saved custom teams moved to the state
-  keys `texra.workspaceAgents` and `texra.customTeams`; a selection or custom
-  team saved under the old keys is not read, so choose or save it again.
+- **"Roster" and "multi-agent preset" are gone.** The CLI, settings and guide
+  say "agents" for the set a workspace shows. The command
+  `texra multi-agent list|show|run` is removed with agent teams (see "Agent
+  teams are removed" above). The machine-readable NDJSON kind `agent-roster` (field `roster`)
+  is `workspace-agents` (field `agents`); update any script that reads it.
+  The VS Code command `texra.showMultiAgent` is removed, so a custom
+  keybinding on it stops working. A saved agent selection from an earlier
+  build is not read, so choose it again.
 - **Fewer chat slash commands** — `/api`, `/auth` and `/logout` fold into
   `/login`, whose form already signed you in and out and set subscription
   preferences; `/login status` prints what `/auth` did. The typed
@@ -3288,11 +3270,10 @@ All notable changes to this project will be documented in this file.
   press `r` on a plan's approval card to run the plan as a goal, or `a` to
   have the goal approve edits and agent work too. `/tools` lives under
   `/config` → Tools.
-- **`texra history show` names the saved checkpoint `checkpointPresent`** —
-  the `--json` / `--ndjson` field was `hasFlowRecord`, and the text output
-  prints `Checkpoint: present` instead of `Flow record: present`. The
-  session's stored rows are renamed with it (`run.snapshot`, `run.position`),
-  so session history from earlier builds starts over once.
+- **`texra history show` reports whether a task can be continued once** —
+  the `--json` / `--ndjson` field `hasFlowRecord` and the text line
+  `Flow record: present` are gone; `resumable` says whether the task can be
+  continued. Session history from earlier builds starts over once.
 - **Esc no longer stops the running agent** — it closes panels and returns to
   the parent session. Stop a run with Ctrl-C, or with `k` in the session list.
 - **A quieter status bar** — the key row names keys only (`Tab`, `Ctrl-T`,
@@ -3332,12 +3313,10 @@ All notable changes to this project will be documented in this file.
   Bare `texra` starts a chat session when stdin and stdout are both terminals,
   and prints help when either is not. What the launcher offered lives in that
   session: `/agent` for the root agent, `/model` for its model, `/resume` for
-  history, `/login` for sign-in and keys, `/config` for settings. Start a
-  **team** with `texra team run <team>`; a resumed team
-  session still carries its scoped agents. The launcher's team step was the one
-  way to start a preset-scoped team in the interactive TUI, and that path is
-  removed rather than replaced — use `texra team run`, or `/agent` in a
-  chat for an unscoped session with the team's lead.
+  history, `/login` for sign-in and keys, `/config` for settings. For
+  multi-agent work, start a lead agent:
+  `texra run orchestrator --instruction …`, or pick it with `/agent` in a
+  chat.
 - **`texra history show --export html` no longer takes `--assets-dir`** — the
   shared-assets export mode, which staged the trace viewer into a directory and
   wrote only the trace JSON to stdout, is gone. The default single-file HTML
@@ -3378,15 +3357,11 @@ All notable changes to this project will be documented in this file.
   registry (`holdSignals`): the platform, a foreground pager or installer,
   `texra serve` and the chat each hold their policy and the newest answers,
   so a second Ctrl-C during a graceful exit still leaves at once.
-- **`/agent` shows workflows again.** Once teams joined the picker its list
-  overflowed at every terminal height, and the Workflows section with its
-  `texra run <name>` hint was dropped. The picker now scrolls its agents and
-  teams inside the rows left after the Workflows section, which folds to one
-  summary row on short terminals instead of disappearing. The status bar
-  names a Block policy "Block", as `/approval` does, and `/config` names its
-  two agent categories "Subagents" and "Codex and Claude Code". `/approval`
-  shows its auto-approve toggles as unavailable until the chat's run can
-  take the grant, instead of offering toggles that were then refused.
+- **`/approval` and `/config` name things as the rest of the CLI does.** The
+  status bar names a Block policy "Block", as `/approval` does, and `/config`
+  names its two agent categories "Subagents" and "Codex and Claude Code".
+  `/approval` shows its auto-approve toggles as unavailable until the chat's
+  run can take the grant, instead of offering toggles that were then refused.
 
 - **Slash-command results no longer read as the model speaking.** In the
   terminal chat, what a command reports (`/model`, `/approval`, `/login`, …)

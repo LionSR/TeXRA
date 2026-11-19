@@ -24,9 +24,13 @@ import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
+import { Inbox } from '@agent/followUp/Inbox';
 import { SessionLog } from '@shared/session/runHistory';
 import { startAwaited } from '@test/support/runHandleFixtures';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  publishTestRows,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import {
   SessionGraph,
   sessionHandleOf,
@@ -142,6 +146,49 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         yield* Fiber.await(running);
         expect(yield* runEnds(session, runId)).toMatchObject([
           { outcome: RUN_OUTCOME.COMPLETED },
+        ]);
+      }),
+  );
+
+  it.effect(
+    'reports a root run that dies to the run whose message it took as work',
+    () =>
+      Effect.gen(function* () {
+        const { runId, ctx, session } = yield* lifecycleFixture();
+        const asker = yield* publishTestRunStart(session);
+        // The root took another run's message as a turn's work.
+        yield* publishTestRows(session, [
+          {
+            type: 'followup.queued' as const,
+            aggregateId: runId,
+            followUpId: 'asked',
+            content: {
+              text: 'check the boundary case',
+              from: { kind: 'run' as const, runId: asker },
+            },
+          },
+          {
+            type: 'followup.consumed' as const,
+            aggregateId: runId,
+            followUpId: 'asked',
+            disposition: { kind: 'turn' as const, turn: 1 },
+          },
+        ]);
+
+        yield* Effect.exit(
+          startAwaited(
+            Context.get(session, RunRegistry),
+            runId,
+            endRun(ctx, Exit.die(new Error('the loop died'))),
+          ),
+        );
+
+        expect(yield* runEnds(session, runId)).toMatchObject([
+          { outcome: RUN_OUTCOME.FAILED },
+        ]);
+        const waiting = yield* Context.get(session, Inbox).read(asker);
+        expect(waiting.followUps.map((item) => item.content)).toMatchObject([
+          { from: { kind: 'run', runId }, delivery: { runId } },
         ]);
       }),
   );

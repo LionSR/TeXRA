@@ -57,11 +57,11 @@ project/
 
 ### Staged approach
 
-A typical project moves through five stages, each owned by one or more agents:
+A typical project moves through five stages, each owned by one or more agents or programs:
 
 <StagedWorkflowHero />
 
-<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent best suited for it.</p>
+<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent or program best suited for it.</p>
 
 ### Quality assurance
 

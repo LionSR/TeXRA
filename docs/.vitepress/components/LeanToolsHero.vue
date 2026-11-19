@@ -82,7 +82,7 @@ const tools = [
               ><span class="tc-v">line 42</span>
             </div>
             <div class="tc-row">
-              <span class="tc-k">kind</span><code class="tc-code">goal</code>
+              <span class="tc-k">type</span><code class="tc-code">goal</code>
             </div>
             <div class="tc-row tc-goal">
               <span class="tc-k">result</span

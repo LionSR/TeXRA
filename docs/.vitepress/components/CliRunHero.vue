@@ -6,12 +6,10 @@
 // and, in text mode, end by printing a filesystem path on stdout (the copied
 // --output / --output-dir path, else the generated file in run storage) — so
 // the card shows: prompt line, per-round progress rows, printed result lines,
-// and an optional dim annotation. The round rows are a stylized view of the
-// real progress signal — a single throttled live status line on stderr whose
-// `[rN]` segment tracks the current round
-// (packages/cli/src/runtime/headless/runProgressRenderer.ts) — chosen so the r0/r1
-// concept reads at a glance; captions should say rounds "stream as progress",
-// not claim literal screen output.
+// and an optional dim annotation. The revision rows are a stylized view of
+// the real progress signal: a program's "Revision N" section lines on stderr
+// (packages/cli/src/runtime/headless/scriptPlainOutput.ts). Captions should
+// say revisions "stream as progress", not claim literal screen output.
 //
 // Built on the <TermWindow> primitive; .mockup-scoped, so the shared --mk-*
 // tokens resolve here and the card flips with the docs light / dark theme.
@@ -30,8 +28,8 @@ const props = defineProps({
   rounds: {
     type: Array,
     default: () => [
-      { label: 'r0 — draft revision', state: 'done' },
-      { label: 'r1 — critique and revise', state: 'active' },
+      { label: 'Revision 1: draft', state: 'done' },
+      { label: 'Revision 2: review and correct', state: 'active' },
     ],
   },
   outputs: { type: Array, default: () => [] },

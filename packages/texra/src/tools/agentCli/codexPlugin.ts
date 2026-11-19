@@ -17,6 +17,7 @@ import {
 import { CodexTool } from './codex';
 import { findCodexBinaryPath, importCodexClass } from './codexImport';
 import type { TexraPlugin } from '../registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 
 /** Codex supports Windows through WSL2, so Windows gets the WSL2 setup and
  *  installs the CLI inside WSL, never the npm package on the Windows side. */
@@ -26,7 +27,7 @@ const CODEX_INSTALL: InstallCommands = {
   default: 'npm install -g @openai/codex',
 };
 
-export const codex: TexraPlugin = {
+export const codex: TexraPlugin = texraPlugin({
   ...definePlugin<CodexThreads>({
     id: 'codex',
     tools: [CodexTool],
@@ -91,4 +92,4 @@ export const codex: TexraPlugin = {
       authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
     },
   },
-};
+});
