@@ -62,6 +62,7 @@ import {
   applyLiveText,
   clearLiveText,
   finishOpenCompactions,
+  repaintOpenCards,
   transcriptActivity,
 } from './transcriptReads';
 import {
@@ -302,9 +303,12 @@ function runWork(u: Update, runId: RunId): RunWork {
   return work;
 }
 
-/** The run's transcript working state, with the arrays this call owns. */
+/** The run's transcript working state, with the arrays this call owns. A
+ *  card can be open only while the run's rows say it is running, so a turn
+ *  that is over with one open is a run nobody holds: interrupted. */
 function transcriptWork(u: Update, runId: RunId): TranscriptWork {
-  return { ix: runWork(u, runId).transcript, owned: u.owned };
+  const work = runWork(u, runId);
+  return { ix: work.transcript, owned: u.owned, interrupted: work.turnOver };
 }
 
 // ---------------------------------------------------------------------------
@@ -493,15 +497,14 @@ function withAggregates(u: Update, run: RunView): RunView {
   const turnOver = turnIsOver(next);
   if (turnOver === work.turnOver) return next;
   work.turnOver = turnOver;
-  // A turn its rows ended finished its compactions at the transcript's
-  // boundary; one whose holder went away has written no such row.
+  // A turn its rows ended closed its cards and finished its compactions at
+  // the transcript's boundary; one whose holder went away has written no
+  // such row, so its open cards read as interrupted until a holder returns.
+  const tWork = transcriptWork(u, next.id);
+  const cards = repaintOpenCards(next.transcript, tWork, u.view.runs);
   const transcript = turnOver
-    ? finishOpenCompactions(
-        next.transcript,
-        transcriptWork(u, next.id),
-        next.lastTimestamp,
-      )
-    : next.transcript;
+    ? finishOpenCompactions(cards, tWork, next.lastTimestamp)
+    : cards;
   return withTranscriptFacts(
     u,
     transcript === next.transcript ? next : { ...next, transcript },

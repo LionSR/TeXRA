@@ -352,6 +352,15 @@ function buildStyledLines(
     output.kind === 'shown' ? cornerRows(elidedLines(output.text, elide)) : [];
   const exitCode = failed ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(toolRow, elide), COLOR_ERROR);
+  // An open call of an interrupted run says so in words: the dot's colour
+  // alone does not survive a copy out of scrollback.
+  const interruptedRows =
+    model.status === 'interrupted'
+      ? cornerRows(
+          [TOOL_STATUS.interrupted.word],
+          TONE_PAINT[TOOL_STATUS.interrupted.tone].color,
+        )
+      : [];
   const feedbackRows = model.userInstruction
     ? cornerRows(
         labeledLines(TOOL_USER_FEEDBACK_LABEL, model.userInstruction, elide),
@@ -418,6 +427,7 @@ function buildStyledLines(
         ]
       : []),
     ...errorRows,
+    ...interruptedRows,
     ...feedbackRows,
     ...(model.showsNoOutputMarker
       ? [row([CORNER_PREFIX_SPAN, { text: '(no output)', dim: true }])]

@@ -9,9 +9,11 @@ import {
   type RunOutcome,
   type RunView,
   type Stage,
-  type ToolCallStatus,
 } from '@texra-ai/harness/schemas';
-import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
+import type {
+  CompactionActivityStatus,
+  ToolRowStatus,
+} from '@texra-ai/harness/transcript';
 import {
   runSection,
   runStatusKey,
@@ -122,12 +124,15 @@ export function fileLoadTone(ok: boolean): RunTone {
   return ok ? 'success' : 'danger';
 }
 
-/** How a tool card's status section reads. */
-export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
+/** How a tool call's status reads: in a card's status section, and as the
+ *  card's own state, where an open call of an interrupted run reads as its
+ *  run does. */
+export const TOOL_STATUS: Readonly<Record<ToolRowStatus, StatusWord>> =
   Object.freeze({
     in_progress: Object.freeze({ word: 'Running', tone: 'running' }),
     completed: Object.freeze({ word: 'Completed', tone: 'success' }),
     failed: Object.freeze({ word: 'Failed', tone: 'danger' }),
+    interrupted: Object.freeze(RUN_STATUS.interrupted),
   });
 
 /** The label of what the user told the model when deciding a tool call. */
