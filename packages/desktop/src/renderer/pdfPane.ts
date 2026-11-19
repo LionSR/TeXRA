@@ -71,10 +71,11 @@ export function createPdfPane(options: {
     frame.setAttribute('title', tab.title);
     // No `sandbox` attribute: Chromium does not start its PDF viewer in a
     // sandboxed frame, whatever tokens the attribute carries, and fails the
-    // load with ERR_BLOCKED_BY_CLIENT. The frame's own document is the page
-    // Chromium wraps around a PDF. The viewer and the PDF's content run in
-    // two other processes, and the preload's API exists in the window's main
-    // frame only, so nothing a PDF carries runs beside the app's code.
+    // load with ERR_BLOCKED_BY_CLIENT. The viewer and the PDF's content run
+    // in two other processes, and the preload's API exists in the window's
+    // main frame only. The frame's own document is the page Chromium wraps
+    // around a PDF, which shares the app page's origin and process: that it
+    // runs no script is Chromium's behavior, which nothing here enforces.
     const view: PdfView = { element, frame, notice };
     const footer = document.createElement('footer');
     footer.className = 'shell-editor-toolbar';

@@ -57,8 +57,9 @@ const DEVELOPMENT_CSP = [
  * server. Every other response keeps the headers it came with. Chromium's
  * PDF viewer in a PDF tab is one: its pages (`chrome-extension:`, loading
  * `chrome://resources`) carry their own policy, and under this one their
- * scripts are blocked and the tab stays blank. A PDF's own `file:` response
- * does get the policy, which the viewer does not mind.
+ * scripts are blocked and the tab stays blank. The response of a PDF on a
+ * local disk does get the policy, which the viewer does not mind; one on a
+ * network share (`file://server/...`) is outside the pattern and does not.
  */
 function installContentSecurityPolicy(): void {
   const policy = app.isPackaged ? PRODUCTION_CSP : DEVELOPMENT_CSP;
