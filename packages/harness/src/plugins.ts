@@ -164,7 +164,7 @@ export { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 export { Settings, type SettingsStores } from '@shared/config/settings';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
 export { AppSignals, emitAppSignal } from '@platform/appSignals';
-export { withLogChannel } from '@logger/effectLog';
+export { logFailure, withLogChannel } from '@logger/effectLog';
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 // What `ChildRuns` launches: an external process's child, with the one
 // turn it runs.

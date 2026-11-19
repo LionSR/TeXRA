@@ -902,6 +902,15 @@ class JsonRpcRequestError extends Schema.TaggedError<JsonRpcRequestError>()(
 )
 ```
 
+## logFailure
+
+Log `message` as a warning on `channel`, with the failure it is given
+attached as the entry's `data`.
+
+```ts
+const logFailure: (channel: string, message: string) => (data: unknown) => Effect<void, never, never>
+```
+
 ## LogOptions
 
 What a trace's log methods take: a row's category (subscribers pick a
