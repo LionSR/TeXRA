@@ -190,7 +190,7 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     ...commonOf(plan),
     ...bound,
     route,
-    ...(credential.route === 'chatgpt-subscription' && credential.plan
+    ...('plan' in credential && credential.plan
       ? { plan: credential.plan }
       : {}),
     routes: routePolicies(
