@@ -28,7 +28,7 @@ import {
   TraceUnavailable,
   TraceViewerMissing,
 } from '@texra/agent/export/standaloneTraceHtml';
-import { TranscriptExportFailed } from './transcriptExportFailure';
+import { TranscriptExportFailed } from './exportTranscript';
 import type { Session } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
