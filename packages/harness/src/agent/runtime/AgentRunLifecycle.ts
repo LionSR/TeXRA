@@ -11,7 +11,6 @@ import { endRunRows, type RunEnding } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { logFailure, withLogChannel } from '@logger/effectLog';
-import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
 import {
@@ -211,9 +210,7 @@ export const endRun = Effect.fn('endRun')(function* (
     { runId, outcome: verdict.outcome, error, output: carried?.output },
     // What the run tells the runs it worked for, from its report as the end
     // resolves it: the outcome the end commits, and the end's error where
-    // the run reported no failure of its own (rows the store refused). A
-    // report that cannot be built is the end's error, delivered as such
-    // rather than lost.
+    // the run reported no failure of its own (rows the store refused).
     Effect.fnUntraced(function* ({ outcome, error: ended }) {
       const record = yield* log.facts(runId);
       const wallTimeMs = (yield* Clock.currentTimeMillis) - ctx.startedAt;
@@ -223,23 +220,6 @@ export const endRun = Effect.fn('endRun')(function* (
         { ...result, outcome, ...(failure !== undefined && { failure }) },
         record,
         wallTimeMs,
-      ).pipe(
-        Effect.catch((unbuilt) =>
-          Effect.as(
-            logFailure(
-              CHANNEL,
-              `Run ${runId}: its report could not be built`,
-            )({ runId, error: unbuilt }),
-            {
-              family:
-                ctx.config.script?.kind === 'background'
-                  ? DELIVERY_FAMILY.script
-                  : DELIVERY_FAMILY.subagent,
-              runId,
-              message: `The run ${runId} ended ${outcome}, but its report could not be built: ${unbuilt.message}`,
-            },
-          ),
-        ),
       );
     }),
   );
