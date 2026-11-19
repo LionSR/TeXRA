@@ -4,7 +4,7 @@
     {
       "id": "EFF-ADOPT-config-provider",
       "candidate": "the platform config providers onto an Effect ConfigProvider",
-      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the Zod catalog row that owns it is a dual schema system with a ConfigError where Settings.get's validation already stands. Settings stay synchronous by ruling; Effect Config is for process.env reads, a separate lane.",
+      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the catalog row whose Effect Schema owns it is a dual schema system with a ConfigError where Settings.get's validation already stands. Settings stay synchronous: six readers cannot wait (named on ConfigProvider.get), and a read is a stat of each scope's config file it consults. Effect Config is for process.env reads, a separate lane.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
@@ -101,13 +101,13 @@
     {
       "id": "SCOPE-external-roots-standalone-service",
       "candidate": "ExternalRoots as a standalone service",
-      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today; recorded as a hazard on #12071.",
+      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today. The hazard of module state is a test that leaves a registration behind; a registration returns its own removal, which such a test runs.",
       "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-externalroots-stays-a-module-ruled-2026-09-20",
       "symbols": [
         {
           "file": "packages/harness/src/utils/files/externalRoots.ts",
           "symbol": "registerExternalRoot",
-          "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): void {…}"
+          "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): () => void {…}"
         }
       ]
     },
