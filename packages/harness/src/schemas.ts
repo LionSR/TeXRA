@@ -291,6 +291,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatWallTime,
   joinFacts,
   pluralize,
   previewLabel,

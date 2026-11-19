@@ -936,7 +936,7 @@ function seedSubagentFollowupTranscript(): void {
         { name: 'agent', value: 'leanSolver' },
         { name: 'status', value: 'completed' },
       ],
-      wallTime: '2min, 3sec',
+      wallTimeMs: 123_000,
       response: 'Proved </response> is escaped & visible.',
     },
     {

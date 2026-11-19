@@ -214,7 +214,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v10: a delivery with no usage leaves `usage` out, never `null`, and a
     // message's `displayText` is never `null` (an earlier build's agent-CLI
     // delivery without usage would fail as damaged).
-    'followup.queued': Object.freeze({ version: 10, listing: 'followup' }),
+    // v11: a delivery's wall time is a number (`wallTimeMs`), worded where
+    // it is rendered; a prompt it echoes is an attribute its builder cut;
+    // an attribute's value is a string, never `null` (an earlier build's
+    // `wallTime` and `prompt` would be silently dropped).
+    'followup.queued': Object.freeze({ version: 11, listing: 'followup' }),
     // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
     // it and fails to decode.
     // v3: no `stale` reason: nothing drops a notice of an ended child (a v2

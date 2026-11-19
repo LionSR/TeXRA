@@ -18,6 +18,7 @@ import {
   formatCompactDuration,
   formatCostUsd,
   formatResultCount,
+  formatWallTime,
   stripControlCharacters,
 } from '@utils/text/stringUtils';
 
@@ -87,13 +88,11 @@ function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
 function deliverySummary(delivery: ChildRunDelivery): string {
   if (delivery.summary !== undefined)
     return formatScriptDeliverySummary(delivery.summary);
-  const attribute = (name: string): string | undefined => {
-    const value = delivery.attributes?.find(
-      (attr) => attr.name === name,
-    )?.value;
-    return value == null ? undefined : String(value);
-  };
-  const { exit, message, wallTime } = delivery;
+  const attribute = (name: string): string | undefined =>
+    delivery.attributes?.find((attr) => attr.name === name)?.value;
+  const { exit, message, wallTimeMs } = delivery;
+  const wallTime =
+    wallTimeMs === undefined ? undefined : formatWallTime(wallTimeMs);
 
   // A background shell command (bashDelivery.ts) is named by the model's
   // description, else its command, and judged by its exit: it carries

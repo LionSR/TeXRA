@@ -9,21 +9,22 @@ import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 // agent-CLI tools (codex.ts, claudeAgent.ts).
 
 describe('formatDelivery', () => {
-  it('truncates the echoed prompt to 200 chars and escapes attrs/text', () => {
-    const longPrompt = 'x'.repeat(250);
+  it('escapes attrs and text and words the wall time', () => {
     const xml = formatDelivery({
       family: 'codex',
       runId: 'a&b"<c',
-      prompt: `${longPrompt}<&"`,
-      attributes: [{ name: 'thread-id', value: '<id&"' }],
-      wallTime: '0.1s',
+      attributes: [
+        { name: 'prompt', value: 'fix <&">' },
+        { name: 'thread-id', value: '<id&"' },
+      ],
+      wallTimeMs: 100,
       response: 'a < b & c "q"',
     });
-    // id/prompt/thread-id are attribute-escaped (&, ", < — not >); the prompt is
-    // sliced to 200 chars BEFORE escaping, so the trailing <&" never appears.
+    // id and attributes are attribute-escaped (&, ", < — not >).
     expect(xml).toContain(
-      `<codex-result id="a&amp;b&quot;&lt;c" prompt="${'x'.repeat(200)}" thread-id="&lt;id&amp;&quot;">`,
+      '<codex-result id="a&amp;b&quot;&lt;c" prompt="fix &lt;&amp;&quot;>" thread-id="&lt;id&amp;&quot;">',
     );
+    expect(xml).toContain('<wall-time>0.1s</wall-time>');
     // response is text-escaped (&, < — quotes left intact)
     expect(xml).toContain('<response>a &lt; b &amp; c "q"</response>');
   });
