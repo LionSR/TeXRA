@@ -26,9 +26,11 @@ import {
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import {
+  serviceFileWrite,
   serviceProjectState,
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
+import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -91,6 +93,7 @@ export const openProjectSession = Effect.fn('openProjectSession')(function* (
       where: 'service',
       link: reached.success,
       session: yield* serviceSession(reached.success, roots.workspace, roots),
+      writeFile: serviceFileWrite(reached.success),
     };
   // A folder the service would hold runs here because it is out of reach;
   // a window with no folder always runs here.
@@ -108,6 +111,7 @@ export const openProjectSession = Effect.fn('openProjectSession')(function* (
     where: { local },
     session,
     link: yield* (yield* HostWindows).localLink(session),
+    writeFile: writeFileIfUnchanged,
   };
 });
 
