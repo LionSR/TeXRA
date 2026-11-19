@@ -249,11 +249,11 @@ export function createLogsPane(): LogsPaneController {
             <p>${state.meta}</p>
           </div>
           <div class="desktop-log-viewer-actions">
-            ${action('rotate-right', 'Refresh', requestSnapshot)}
+            ${action('arrows-rotate', 'Refresh', requestSnapshot)}
             ${action('copy', 'Copy', () =>
               postToMain({ command: DESKTOP_LOG_COMMANDS.COPY_LOG }),
             )}
-            ${action('download', 'Export', () =>
+            ${action('file-export', 'Export', () =>
               postToMain({ command: DESKTOP_LOG_COMMANDS.EXPORT_LOG }),
             )}
             ${action('folder-open', 'Open Folder', () =>
