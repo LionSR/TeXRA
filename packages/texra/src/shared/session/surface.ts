@@ -30,7 +30,6 @@ import { modelRefOf } from '@texra-ai/llm';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 
 import type { BridgeError } from './bridgeErrors';
-import { InquiryDraftSchema } from '@texra/shared/plugins/externalInquiry';
 import { markShownRunSeen } from './unseenRuns';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from './hostSnapshot';
@@ -236,8 +235,7 @@ export interface Surface {
   /** Runs whose delete is in flight. Never persisted. */
   readonly deleting: ReadonlySet<RunId>;
   readonly launch: LaunchSurface;
-  /** Each request card's unsent answer, under the key the card names (its
-   *  request id; an inquiry's turn). */
+  /** Each request card's unsent answer, under its request id. */
   readonly requestDrafts: ReadonlyMap<string, RequestDraft>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
@@ -255,7 +253,7 @@ function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
 /**
  * What a person has entered on a request card and not sent: the decline
  * note (open while present), the model picked on a proposal, each
- * question's picks and typed answer, an inquiry's answer. It outlives the
+ * question's picks and typed answer. It outlives the
  * card element, so switching runs and back keeps it; sending the card's
  * decision clears it.
  */
@@ -270,7 +268,6 @@ const RequestDraftSchema = Schema.Struct({
       }),
     ),
   ),
-  inquiry: Schema.optionalKey(InquiryDraftSchema),
 });
 /** A request card's unsent answer. */
 export type RequestDraft = typeof RequestDraftSchema.Type;

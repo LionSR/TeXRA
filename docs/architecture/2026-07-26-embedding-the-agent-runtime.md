@@ -367,8 +367,7 @@ request, `plugin` (`PermissionPayloadSchema`,
 `packages/harness/src/shared/schemas/request.ts`). Every kind of the
 harness's own blocks the tool or turn that opened it; a plugin's request
 declares whether it does (`blocksCaller`) and which answers it takes
-(`answers`). TeXRA's external inquiry is a plugin request that blocks
-nothing and is answered later.
+(`answers`).
 
 ### Removing the requests: `approvalPromptsUnavailable`
 

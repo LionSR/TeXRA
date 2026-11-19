@@ -187,14 +187,13 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   };
 
-  // A plugin's request (the external inquiry's) is answered from its
-  // thread and never blocks its run, so it is named apart and never stands
-  // in front of a request this view can answer.
+  // A plugin's request has no modal here, so it is named apart and never
+  // stands in front of a request this view can answer.
   const pending = level.requests.find(
     (request): request is PendingApprovalFact =>
       request.payload.kind !== 'plugin' && !decided.has(request.requestId),
   );
-  const inquiries = level.requests.filter(
+  const pluginRequests = level.requests.filter(
     (request) => request.payload.kind === 'plugin',
   ).length;
   // Previews of decided requests go: each holds two whole documents.
@@ -364,9 +363,11 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           onDecide={decide}
         />
       )}
-      {inquiries > 0 && (
+      {pluginRequests > 0 && (
         <Text dimColor>
-          {`${inquiries === 1 ? 'An external inquiry waits' : `${inquiries} external inquiries wait`}; answer from its thread.`}
+          {pluginRequests === 1
+            ? "A plugin's request waits; this view cannot answer it."
+            : `${pluginRequests} plugin requests wait; this view cannot answer them.`}
         </Text>
       )}
     </Box>

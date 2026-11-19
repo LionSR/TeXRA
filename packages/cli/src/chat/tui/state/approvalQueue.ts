@@ -46,10 +46,9 @@ interface TuiApprovalAdornments {
 
 /**
  * The kinds this surface presents: the harness's own, without a plugin's
- * request. The CLI does not offer the async inquiry flow (it shows no
- * inquiry panel, `texraPlugins`), and an inquiry another host opened
- * in a shared session is answered from its thread rather than from a modal
- * here, so {@link attentionRequests} leaves plugin requests out of this queue.
+ * request. No plugin TeXRA loads opens one and this surface has no modal
+ * for one, so {@link attentionRequests} leaves plugin requests out of this
+ * queue.
  */
 export type PendingRequestKind = Exclude<RequestKind, 'plugin'>;
 
@@ -162,10 +161,9 @@ export const attentionRequests = computed(
   (): readonly PendingApprovalFact[] => {
     const included = sessionRunIds.get();
     const view = sessionView().get();
-    // The session view lists every kind, including a plugin's request (an
-    // inquiry) a persisted session carries from another host; this surface
-    // renders none of those, so the narrowing is a filter rather than an
-    // assertion. It renders only
+    // The session view lists every kind, including a plugin's request a
+    // persisted session can carry; this surface renders none of those, so
+    // the narrowing is a filter rather than an assertion. It renders only
     // what this window can answer (`attentionOf`, the rule every host reads):
     // not a stopped run's leftover (its modal would trap the keys `/resume`
     // needs), nor a request on a run another process holds.
