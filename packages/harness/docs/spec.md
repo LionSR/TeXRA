@@ -777,7 +777,7 @@ does not block its caller stays open.
 
 ### 7.3 Refusals
 
-A write to a closed aggregate gets `RunHistoryRefused` `not-owner` from the
+A write to a closed aggregate gets a `RunHistoryRefused` from the
 run's next append, with nothing written
 (`agent/runtime/makeRunHistory.ts#notOwner`,
 `shared/session/runHistory.ts#runRefusal`). A tool call that meets a storage

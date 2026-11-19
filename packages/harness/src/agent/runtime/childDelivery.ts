@@ -10,6 +10,7 @@
  */
 import { Effect } from 'effect';
 
+import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
@@ -57,81 +58,104 @@ function contextLines(
  * The delivery a run's end makes, or null when it delivers nothing
  * (a stopped agent run, a script its awaiting call released).
  * `report` is the run's own, its outcome resolved by its end; `record` is
- * what its rows say before the end (its stop, an earlier report).
+ * what its rows say before the end (its stop, an earlier report). A
+ * report that cannot be built is delivered as that failure, in the run's
+ * family, rather than lost.
  */
-export const childEndReport = Effect.fn('childEndReport')(function* (
-  ctx: RunLaunch,
-  report: RunReport,
-  record: RunRows | null,
-  wallTimeMs: number,
-): Effect.fn.Return<
-  ChildRunDelivery | null,
-  Error,
-  SessionRoots | SessionLog | SessionViewAccess | ToolRegistry
-> {
-  const { runId, config } = ctx;
-  const { script } = config;
-  if (script?.kind === 'background') {
-    if (report.outcome === RUN_OUTCOME.CANCELLED)
-      return record?.stop?.reason === 'user'
-        ? yield* scriptStopNotice(runId, script.title, ctx.startedAt)
-        : null;
-    return yield* scriptEndDelivery(
-      runId,
-      script.title,
-      report.outcome,
-      report.failure === undefined ? null : runEndErrorMessage(report.failure),
-      ctx.startedAt,
-    );
-  }
-  const delivery = {
-    family: DELIVERY_FAMILY.subagent,
-    runId,
-    wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
-    lines: contextLines(ctx.workingDirectory, report.memoryMisses ?? []),
-  };
-  const agent = { name: 'agent', value: config.agent };
-  switch (report.outcome) {
-    case RUN_OUTCOME.CANCELLED:
-      return null;
-    case RUN_OUTCOME.FAILED:
-      return {
-        ...delivery,
-        attributes: [agent],
-        message:
-          report.failure === undefined
-            ? `The agent run ${runId} ended failed.`
-            : runEndErrorMessage(report.failure),
-      };
-    case RUN_OUTCOME.COMPLETED: {
-      // A completed program's value reads as its registration says
-      // (`Program.result`); any other run's is its reply and the files
-      // its tool calls touched.
-      const program = yield* readProgramResult(
-        config,
+export const childEndReport = Effect.fn('childEndReport')(
+  function* (
+    ctx: RunLaunch,
+    report: RunReport,
+    record: RunRows | null,
+    wallTimeMs: number,
+  ): Effect.fn.Return<
+    ChildRunDelivery | null,
+    Error,
+    SessionRoots | SessionLog | SessionViewAccess | ToolRegistry
+  > {
+    const { runId, config } = ctx;
+    const { script } = config;
+    if (script?.kind === 'background') {
+      if (report.outcome === RUN_OUTCOME.CANCELLED)
+        return record?.stop?.reason === 'user'
+          ? yield* scriptStopNotice(runId, script.title, ctx.startedAt)
+          : null;
+      return yield* scriptEndDelivery(
         runId,
-        yield* SessionRoots,
+        script.title,
+        report.outcome,
+        report.failure === undefined
+          ? null
+          : runEndErrorMessage(report.failure),
+        ctx.startedAt,
       );
-      const { output } = report;
-      return {
-        ...delivery,
-        attributes: [
-          agent,
-          ...(program === undefined
-            ? []
-            : [{ name: 'kind', value: program.name }]),
-          { name: 'status', value: report.outcome },
-          // A run that reported before (resumed for a message after its
-          // end) reports again: said on the envelope, so its parent tells
-          // the two reports apart.
-          ...(record?.report == null
-            ? []
-            : [{ name: 'continued', value: true }]),
-        ],
-        ...(program !== undefined && program.delivery.length > 0
-          ? { lines: [...delivery.lines, ...program.delivery] }
-          : { output: { response: output.response, files: output.files } }),
-      };
     }
-  }
-});
+    const delivery = {
+      family: DELIVERY_FAMILY.subagent,
+      runId,
+      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      lines: contextLines(ctx.workingDirectory, report.memoryMisses ?? []),
+    };
+    const agent = { name: 'agent', value: config.agent };
+    switch (report.outcome) {
+      case RUN_OUTCOME.CANCELLED:
+        return null;
+      case RUN_OUTCOME.FAILED:
+        return {
+          ...delivery,
+          attributes: [agent],
+          message:
+            report.failure === undefined
+              ? `The agent run ${runId} ended failed.`
+              : runEndErrorMessage(report.failure),
+        };
+      case RUN_OUTCOME.COMPLETED: {
+        // A completed program's value reads as its registration says
+        // (`Program.result`); any other run's is its reply and the files
+        // its tool calls touched.
+        const program = yield* readProgramResult(
+          config,
+          runId,
+          yield* SessionRoots,
+        );
+        const { output } = report;
+        return {
+          ...delivery,
+          attributes: [
+            agent,
+            ...(program === undefined
+              ? []
+              : [{ name: 'kind', value: program.name }]),
+            { name: 'status', value: report.outcome },
+            // A run that reported before (resumed for a message after its
+            // end) reports again: said on the envelope, so its parent tells
+            // the two reports apart.
+            ...(record?.report == null
+              ? []
+              : [{ name: 'continued', value: true }]),
+          ],
+          ...(program !== undefined && program.delivery.length > 0
+            ? { lines: [...delivery.lines, ...program.delivery] }
+            : { output: { response: output.response, files: output.files } }),
+        };
+      }
+    }
+  },
+  (built, { runId, config }, report) =>
+    Effect.catch(built, (unbuilt) =>
+      Effect.as(
+        logFailure(
+          'agentRunLifecycle',
+          `Run ${runId}: its report could not be built`,
+        )({ runId, error: unbuilt }),
+        {
+          family:
+            config.script?.kind === 'background'
+              ? DELIVERY_FAMILY.script
+              : DELIVERY_FAMILY.subagent,
+          runId,
+          message: `The run ${runId} ended ${report.outcome}, but its report could not be built: ${unbuilt.message}`,
+        } satisfies ChildRunDelivery,
+      ),
+    ),
+);

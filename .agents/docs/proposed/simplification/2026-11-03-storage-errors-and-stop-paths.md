@@ -184,11 +184,16 @@ are gone; a run's error is `classifyAgentError`'s `{ kind: 'model',
 failure }` or a plain kind (`shared/schemas/runRecords.ts:116-120`), and
 `agentErrorPresentation` has two branches, the missing key read from the
 route failure's `missingApiKey`. `TaskRecordsFailed` carries no `reason`.
-Still open: `RunHistoryRefused.reason 'unsafe-endpoint'` (produced at
-`agent/runtime/makeRunHistory.ts:245`, no reader), no `HostCallFailed`
+Still open: no `HostCallFailed`
 (`hostCallFailure.ts` is still the shape), and the pairs
 `DeviceCodeExpired`/`DeviceCodeTimedOut` and
 `CliResourcesNotFound`/`DesktopResourcesNotFound`._
+
+_Done 2026-11-19: `RunHistoryRefused.reason` is optional and has the three
+values `runReadRefusal` reads (`unprepared-history`, `inconsistent`,
+`foreign-protocol`: the stored rows cannot be used). `unsafe-endpoint` and
+`not-owner` were produced and read by nothing; each is the refusal's
+`detail` now, on a refusal with no reason._
 
 **Give up.** Catching a failure by a name nobody catches it by.
 

@@ -859,6 +859,19 @@
       ]
     },
     {
+      "id": "RUNEND-child-report-from-launch",
+      "candidate": "a child's end report supplied by its launch (a report builder the launch hands its run), so `childEndReport` has no switch on `config.script.kind`",
+      "why": "A launch knows the kind, but a run is launched more than once: a resume (`resumeRun`, `resumeOwnedChild`) is the same `executeAgent` over the run's stored configuration, with no launcher's closure behind it, and a background script stopped by a person is resumed exactly that way. The only durable carrier of the kind is `config.script`, so a supplied builder would be chosen from `config.script.kind` again where the launch is built (`executeAgent`), and would add a `RunLaunch` field plus an option threaded through `startChildRun` and `ExecuteAgentOptions` to carry the answer: the same decision, in a new place, with two more elements. The two reports also share nothing to factor (a script's reads its calls from the view, a subagent's its output and program result). What landed instead (2026-11-19): the fallback for a report that cannot be built, which read the kind a second time in `endRun`, is inside `childEndReport`, so one function owns the decision. Found in PR 1's record (§3) and carried as lane 9's last open item.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-06-root-designs-pr1-compromises.md#3-red-flags-that-stand",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/childDelivery.ts",
+          "symbol": "childEndReport",
+          "signature": "export const childEndReport = Effect.fn('childEndReport')( function* ( ctx: RunLaunch, report: RunReport, record: RunRows | null, wallTimeMs: number, ): Effect.fn.Return< ChildRunDelivery | null, Error, SessionRoots | SessionLog | SessionViewAccess | ToolRegistry > {…}, (built, { runId, config }, report) => Effect.catch(built, (unbuilt) => {…}), );"
+        }
+      ]
+    },
+    {
       "id": "STORE-fact-version-one-reader",
       "candidate": "One shared reader of a plugin fact's version for factKindOf (the store's row codec) and readTraceFacts (the trace import), which each write the retired, unknown, newer and earlier branches",
       "why": "The two readers agree on the four cases and on nothing they do with them. The store fails a newer fact as DatabaseStoreNewer and an earlier or retired one as DatabaseRowEarlier, each carrying the commit; the trace import has no commit, throws one message for any other version and a different one for a retired kind. A shared classifier returns a four-literal standing that each caller switches over again, so both keep four branches and the classifier and its union are added: tried twice (an earlier attempt, and again on 2026-11-19), the diff came out no shorter, and routing the trace import through the store's errors changed its wording. Until a third reader appears, or the two outcomes converge, the eight short branches are the smaller design.",
