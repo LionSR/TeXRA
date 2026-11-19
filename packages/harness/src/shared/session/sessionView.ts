@@ -94,7 +94,7 @@ const RunViewSchema = Schema.Struct({
   inputFiles: Schema.Array(Schema.String),
   /** Its `delegationAgentScope` (the agents its launch pinned); null: any
    *  visible one. */
-  agentScope: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  agentScope: Schema.NullOr(Schema.Array(Schema.String)),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
   facts: Schema.Record(FactNameSchema, Schema.Json),

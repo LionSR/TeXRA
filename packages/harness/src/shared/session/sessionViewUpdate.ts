@@ -717,8 +717,10 @@ function applyRunEvent(
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
-        agentScope: { delegationAgentScope: null, ...config }
-          .delegationAgentScope,
+        agentScope:
+          ('delegationAgentScope' in config
+            ? config.delegationAgentScope
+            : undefined) ?? null,
         program: programOf(config),
       };
     }
