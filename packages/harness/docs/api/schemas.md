@@ -1009,7 +1009,7 @@ const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; reado
 ## GLM_CODING_PLAN_SETTING
 
 ```ts
-const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits."; }
+const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; TeXRA shows the plan's quota and reports its limits as plan limits. Ignored while a custom GLM endpoint is set."; }
 ```
 
 ## GLM_ENDPOINT_SETTING
