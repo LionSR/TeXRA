@@ -166,7 +166,7 @@ Using your own provider API key? TeXRA stores keys in `~/.texra/secrets/`, a fol
 
 1.  **Open Settings**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel header, or run **TeXRA: Open Settings** from the Command Palette.
 2.  **Go to the Models page**: The **API keys** list shows every provider with its current key status (`Key set`, `Env`, or `Not set`).
-3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get API key from provider** button to open the provider's API key page.
+3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> button that opens the provider's API key page (for example **Open DeepSeek API key page**; its tooltip reads "Get API key from provider").
 
 The Status column shows `Key set` once the key is stored. To replace a key, set it again; to remove one, select the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
 
