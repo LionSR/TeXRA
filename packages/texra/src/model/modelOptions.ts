@@ -7,8 +7,7 @@
 
 import {
   hint,
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
+  kimiCodeServing,
   type ModelConfig,
   providerDisplayName,
 } from '@texra-ai/llm';
@@ -85,7 +84,7 @@ function optionRow(verdict: ModelVerdict): ModelOptionData {
   const reasoning = reasoningLevelLabel(verdict);
   // The row's identity stays the base model; the badge names the route.
   const routeLabel =
-    isKimiSubscriptionEligible(config) && !isKimiCodeExclusiveModel(config)
+    kimiCodeServing(config) === 'with-plan'
       ? `Via ${providerDisplayName(source)}`
       : undefined;
   // The row ships the verdict (its kind, and the subscription that pays);
