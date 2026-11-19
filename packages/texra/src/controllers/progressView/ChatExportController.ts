@@ -11,12 +11,12 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - export data and storage
-import { AgentDirectories } from '@texra-ai/harness/host';
 import {
   type SettingsStores,
   StorageFs,
   WorkspaceFs,
   pathToLocationIn,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';

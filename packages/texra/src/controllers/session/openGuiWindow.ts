@@ -34,7 +34,6 @@ import type {
 } from '@texra-ai/harness';
 import {
   AgentCatalog,
-  AgentDirectories,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
@@ -46,6 +45,7 @@ import {
   ToolRegistry,
   type StorageFs,
   type WorkspaceFs,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';

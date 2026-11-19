@@ -31,7 +31,6 @@ import {
   SubscriptionRef,
 } from 'effect';
 import {
-  AgentDirectories,
   getEnabledModels,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
@@ -44,6 +43,7 @@ import {
   type Secrets,
   type SettingsStores,
   AppState,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,

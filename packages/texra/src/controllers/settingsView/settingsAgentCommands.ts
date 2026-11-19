@@ -11,14 +11,13 @@ import { Effect, FileSystem, Result, Schema } from 'effect';
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentCatalog,
-  AgentDirectories,
   agentToolNames,
   readCustomAgentDir,
   registerCustomAgentRoot,
   CUSTOM_AGENT_DIR_KEY,
 } from '@texra-ai/harness/host';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
-import { emitAppSignal } from '@texra-ai/harness/plugins';
+import { emitAppSignal, AgentDirectories } from '@texra-ai/harness/plugins';
 import {
   DETAIL_SEPARATOR,
   AGENT_FILE_EXTENSION,

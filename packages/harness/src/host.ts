@@ -103,8 +103,6 @@ export {
 // One program per pending request a host follows, while the view lists it.
 export { followPendingRequests } from './effect/requestAnswerer.js';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-// The agent-directories service (its port is the root entry's).
-export { AgentDirectories } from '@platform/interfaces';
 // App-lifecycle signals as hosts and the app follow them (the hub and its
 // signals are on `./plugins`).
 export {
