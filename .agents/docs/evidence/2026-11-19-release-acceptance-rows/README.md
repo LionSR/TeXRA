@@ -20,9 +20,11 @@ This note records what was done about it and the rerun:
 - Every deterministic check was run again on that tree. **All passed; no
   product defect was found.**
 
-Tree: `main` @ `66874b1af9` (#15064) plus this PR's three test commits
-(`9c79fd4`), in a Linux container (Node 22.23.5, 4 cores). The real-model half
-did not run here; its status is in
+Tree: this PR's branch with `main` @ `fb12553` (#15080) merged into it, in a
+Linux container (Node 22.23.5, 4 cores). The two CLI validators ran on the
+branch before that merge (`main` @ `66874b1af9`, #15064, plus the same test
+commits); this PR changes nothing they run. The real-model half did not run
+here; its status is in
 [`2026-11-03-harness-real-model/`](../2026-11-03-harness-real-model/README.md).
 
 ## Commands
@@ -32,7 +34,7 @@ each as `.github/workflows/ci.yml` invokes it.
 
 | Check                                           | Command                                                                                 | Result                                                                |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Kernel tests (CI step 1, unsharded)             | `pnpm run test --project pure --project kernel --sequence.shuffle.files --maxWorkers=2` | 232 files, 563 passed, 1 skipped; seed `1795105120402`                |
+| Kernel tests (CI step 1, unsharded)             | `pnpm run test --project pure --project kernel --sequence.shuffle.files --maxWorkers=2` | 233 files, 564 passed, 1 skipped; seed `1795106423218`                |
 | Isolated and crash tests (CI step 2, unsharded) | `pnpm run test --project isolated --project crash --maxWorkers=2`                       | 25 files, 58 passed                                                   |
 | CLI real-runtime validation (nightly job)       | `pnpm --filter @texra-ai/cli validate:run`                                              | "CLI run validation passed"                                           |
 | TUI frames, every scenario (CI runs `--smoke`)  | `pnpm --filter @texra-ai/cli validate:tui -- --snapshot-dir <dir>`                      | all 143 scenarios passed                                              |
