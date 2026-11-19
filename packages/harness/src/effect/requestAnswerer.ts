@@ -8,6 +8,7 @@
 import {
   Cause,
   Context,
+  Duration,
   Effect,
   Fiber,
   FiberMap,
@@ -34,7 +35,6 @@ import {
   blocksCaller,
   type RequestDecision,
 } from '@shared/schemas';
-import { Unavailable } from '@shared/session/runtimeRequest';
 import type { PendingRequest, SessionView } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -49,9 +49,16 @@ class DecisionMismatch extends Schema.TaggedError<DecisionMismatch>()(
   { message: Schema.String },
 ) {}
 
-/** How a decision the session refused to record is tried again, briefly,
- *  before the next view offers its request again. */
-const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
+/** How a decision the session did not record is recorded again: after
+ *  100 ms, doubling and jittered, each wait at most 30 s. With
+ *  {@link DECIDE_RETRIES} it ends after about two minutes. */
+const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(
+  Schedule.jittered,
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+  ),
+);
+const DECIDE_RETRIES = 12;
 
 /** The handler's decision on `pending`, or a denial naming why it gave
  *  none it can use: a failure, a throw, or a decision the request's kind
@@ -87,11 +94,12 @@ const decisionOf = (
 
 /**
  * Run `program` once for each request `select` picks from the session's
- * view, for as long as the view lists it. A program that returns runs again
- * on the next view that still lists its request; one that holds something
- * for its request (a decision on record, a preview, a staged card) ends with
- * `Effect.never` and releases it in a finalizer, which runs once the view
- * drops the request, however it was decided.
+ * view, for as long as the view lists it. A program holds its request (a
+ * decision, a preview, a staged card) by ending with `Effect.never`, and
+ * releases it in a finalizer, which runs once the view drops the request,
+ * however it was decided. One that returns runs again on the next view that
+ * still lists its request, an event that may not come: a program that must
+ * try again does so on its own schedule.
  */
 export const followPendingRequests = Effect.fn('followPendingRequests')(
   function* <P extends PendingRequest, R>(
@@ -129,11 +137,14 @@ export const followPendingRequests = Effect.fn('followPendingRequests')(
 /**
  * Answer the runs' requests of `session` with the host's `approve`, until
  * interrupted: every request a waiting run waits on here (the attention rule
- * every host reads), once, through the session's one `request.decide`. A
- * decision the session refuses to record is tried again briefly, then said
- * and its request offered again on the next view that still lists it (one
- * decided meanwhile, by a grant or another surface, has left the view); a
- * handler still deciding a request that left the view is interrupted.
+ * every host reads), once, through the session's one `request.decide`. The
+ * handler is asked once for a request. A decision the session does not
+ * record is recorded again on {@link DECIDE_RETRY}, for as long as the view
+ * lists the request (one decided meanwhile, by a grant or another surface,
+ * leaves the view, which ends the retries); when the retries end it is
+ * logged as an error and the request stays open, to be decided by another
+ * surface or ended with its run. A handler still deciding a request that
+ * left the view is interrupted.
  */
 const answerRequests = (
   session: Context.Context<SessionServices>,
@@ -157,32 +168,31 @@ const answerRequests = (
             })
             .pipe(
               Effect.provide(session),
-              Effect.retry({ schedule: DECIDE_RETRY, times: 3 }),
-              Effect.as(true),
               // The session took no decision: decided meanwhile, a run no
               // fiber here drives, or a write it refused.
-              Effect.catchIf(
-                (error) => error instanceof Unavailable,
-                (error) =>
-                  Effect.logInfo(
-                    `The decision on request ${pending.requestId} was not recorded: ${error.reason}`,
-                  ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+              Effect.tapError((error) =>
+                Effect.logInfo(
+                  `The decision on request ${pending.requestId} was not recorded; recording it again: ${toErrorMessage(error)}`,
+                ).pipe(withLogChannel(CHANNEL)),
               ),
+              Effect.retry({ schedule: DECIDE_RETRY, times: DECIDE_RETRIES }),
             ),
         ),
-        // A recorded decision stays held until the view drops its request,
-        // so the fold catching up cannot re-ask it; one not recorded ends
-        // here, asked again on the next view that still lists it.
-        Effect.flatMap((recorded) => (recorded ? Effect.never : Effect.void)),
-        // An interrupt is a withdrawal; anything else is logged.
+        // An interrupt is a withdrawal; a decision the retries did not
+        // record is said, once.
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
-            ? Effect.void
+            ? Effect.interrupt
             : logFailure(
                 CHANNEL,
-                `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
+                `The decision on request ${pending.requestId} was not recorded after ${DECIDE_RETRIES} retries; the request stays open`,
               )(cause),
         ),
+        // The request is held until the view drops it, so the handler is
+        // never asked twice: a recorded decision while the view catches
+        // up, an unrecorded one until another surface decides it or its
+        // run ends.
+        Effect.andThen(Effect.never),
       ),
   );
 
