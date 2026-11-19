@@ -1105,8 +1105,9 @@ interface Plugin {
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /**
    * Present when the plugin has an external dependency: it is probed, and
-   * its tools are withheld while the dependency is missing. Without it the
-   * plugin is built in and always available.
+   * while the dependency is missing a run is offered none of its tools, is
+   * told of none of its programs and reads no prompt section of its.
+   * Without it the plugin is built in and always available.
    */
   readonly availability?: ToolAvailabilityChecks;
   /** The plugin has a user switch, which a fresh install sets to this

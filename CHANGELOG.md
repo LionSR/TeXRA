@@ -1337,7 +1337,8 @@ All notable changes to this project will be documented in this file.
   its agent up to three rounds; `blueprint` writes or updates a
   LeanBlueprint document and checks each round with `leanblueprint web` and
   `leanblueprint checkdecls`, so it needs the `leanblueprint` CLI. Start one with `texra run prove --input Basic.lean` or
-  ask an agent. The Lean agents and skills are unchanged. In a script,
+  ask an agent, which is told of them only where `lake` is found, as it is
+  offered the Lean tools only there. The Lean agents and skills are unchanged. In a script,
   `lean_diagnostics` now resolves to `{ output, summary, complete, errors,
   sorries }`.
 - **Long Claude runs start answering sooner.** On Anthropic's own API,
