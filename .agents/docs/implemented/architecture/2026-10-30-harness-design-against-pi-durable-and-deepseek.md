@@ -445,7 +445,7 @@ evidence. Reopening one needs the trigger its ruling names.
   "Considered and dropped").
 - Effect's `McpClient`, `CircuitBreaker` for the retry gate, `Semaphore` for
   `withPerKeyLane`, `ConfigProvider` for settings
-  (`config/ratchets/refuted-candidates.json`, the `EFF-ADOPT-*` entries).
+  (`.agents/docs/refuted-candidates.json`, the `EFF-ADOPT-*` entries).
 - Typed RPC, `History.writer` and an open schema registry wait for a named
   plugin that cannot be MCP plus hooks plus data (rulings ledger, 2026-09-30;
   D11).
