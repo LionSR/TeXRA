@@ -57,6 +57,7 @@ import {
   offeredGrant,
   type AnsweredBy,
   type RequestPayload,
+  type RunView,
   type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 import {
@@ -107,6 +108,9 @@ export abstract class BaseRequestPanel<
   /** Who answers the request, as it opened (`PendingRequest.answeredBy`):
    *  the grant the primary's ▾ menu offers, none for a person's. */
   @property({ attribute: false }) answeredBy: AnsweredBy = 'person';
+
+  /** The asking run, as the view holds it. */
+  @property({ attribute: false }) run: RunView | null = null;
 
   /** The surface whose `requestDrafts` keeps what is entered on this card
    *  and not yet sent, so a run switch does not lose it. */
@@ -163,12 +167,14 @@ export abstract class BaseRequestPanel<
   }
 
   /** The run-scoped grant on the primary's ▾ menu: the one that answers the
-   *  request (`offeredGrant`), none when a person answers it. The
-   *  delegated-work grant's scope names the edits and commands it also
-   *  turns on. */
+   *  request (`offeredGrant`), none when a person answers it or the run
+   *  takes no grant now (`RunView.actions`: a run no process holds, which
+   *  the answer resumes). The delegated-work grant's scope names the edits
+   *  and commands it also turns on. */
   protected get grant(): RunGrant | null {
     const kind = offeredGrant(this);
-    if (kind === null) return null;
+    if (kind === null || this.run?.actions.includes('grant') !== true)
+      return null;
     return {
       label: runGrantLabel(kind),
       ...(kind === 'superYolo' && {

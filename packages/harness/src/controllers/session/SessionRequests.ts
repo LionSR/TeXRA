@@ -198,11 +198,14 @@ const decideSurfaceRequest = (
       return done;
     }
     // Nobody waits on the request: its run resumes for the answer, itself
-    // or through the parent whose open call owns it.
+    // or through the parent whose open call owns it. The grant lands now
+    // and answers the run's other open requests it covers, but not this
+    // one, whose decision is the person's and commits after the activation.
     if (req.grant != null)
       yield* setPolicy(
         { field: 'bypass', runId, bypass: req.grant, enabled: true },
         Effect.void,
+        requestId,
       );
     runs.holdAnswer(runId, requestId, decision);
     const resumed = yield* resumeOwner(runId).pipe(
