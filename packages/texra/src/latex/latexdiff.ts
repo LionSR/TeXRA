@@ -28,7 +28,6 @@ import { repositoryRoot } from '@texra-ai/harness/node';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
-import { LATEX_CITATION_COMMANDS } from './latexParsingUtils';
 import {
   generateDiffFileName,
   versionControlDiffStem,
@@ -83,6 +82,40 @@ const BIBLIOGRAPHY_ERROR_PATTERNS = [
   'latex -draftmode',
   'Running bibtex to generate',
 ] as const;
+
+/**
+ * Every citation macro latexdiff is told about, natbib and biblatex alike, in
+ * both lowercase and sentence-case (`\Citep`) spellings: a macro missing here
+ * gets its keys marked up as prose.
+ *
+ * Sentence-case forms are generated, not listed: the ones no package defines
+ * (`\Nocite`) are unknown `--exclude-textcmd` entries, which latexdiff
+ * ignores.
+ */
+const CITATION_COMMAND_STEMS = [
+  'cite',
+  'citet',
+  'citep',
+  'citealp',
+  'citealt',
+  'citeauthor',
+  'citeyear',
+  'citeyearpar',
+  'textcite',
+  'parencite',
+  'footcite',
+  'autocite',
+  'supercite',
+  'smartcite',
+  'nocite',
+] as const;
+
+const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
+  ...CITATION_COMMAND_STEMS,
+  ...CITATION_COMMAND_STEMS.map(
+    (name) => `${name[0].toUpperCase()}${name.slice(1)}`,
+  ),
+]);
 
 /**
  * `--exclude-textcmd` argument: every citation macro, starred forms included,
