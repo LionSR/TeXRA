@@ -18,7 +18,6 @@ const read = (factKinds: FactKinds, version: number, value: number) =>
           kind: 'count',
           version,
           value,
-          parent: null,
         },
         [],
       ),
