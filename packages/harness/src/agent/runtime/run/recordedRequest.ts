@@ -318,10 +318,10 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
 }
 
 /**
- * Development, CI and the test suites (`TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT`,
- * which the Vitest config sets): read the run back from the store and die,
- * before the prepared turn `sent` goes to the provider, unless its rows
- * rebuild it exactly.
+ * When `TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT` is on (the CLI validation
+ * scripts set it, and the Vitest config sets it for the test suites): read
+ * the run back from the store and die, before the prepared turn `sent` goes
+ * to the provider, unless its rows rebuild it exactly.
  */
 export const checkRecordedRequest = Effect.fn('recordedRequest.check')(
   function* (run: Pick<AgentRunShape, 'runId'>, sent: ResolvedTurn) {
