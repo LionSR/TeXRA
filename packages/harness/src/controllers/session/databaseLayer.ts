@@ -120,7 +120,6 @@ const INSERT_REFS = `INSERT INTO event_blob ("commit", digest, inline)
 const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
   CROSS JOIN event_sequence s
     ON s.kind = l.value ->> 0 AND s.logical_id = l.value ->> 1`;
-/** Aggregates' existence, for the ids a `WHERE` on `s.id` selects. */
 /** Runs' existence, the list bound as `AGGREGATE_LIST` binds: a run's
  *  parent is a run. */
 const READ_STATE = `

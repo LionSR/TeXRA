@@ -79,8 +79,8 @@ export interface SessionLogShape {
     types?: readonly SessionRow['type'][],
   ): Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
   /** What one read (`RUN_ROW_READS`) makes of the rows of its kinds, read
-   *  through the type index of a run's aggregate or a plugin's own; with
-   *  `through`, of its rows up to that seq alone (a fork's cut). */
+   *  through the type index of a run's aggregate; with `through`, of its
+   *  rows up to that seq alone (a fork's cut). */
   runRows<R extends RunRowRead>(
     id: RunId,
     read: R,
