@@ -376,6 +376,13 @@ export const pluginKind = (plugin: string, kind: string): string =>
 /** The `stored_kind` entry every current value is recorded under. */
 export const CURRENT_VALUE_KIND = 'current_value';
 
+/** Record the kinds written, bound as one `json_each(?)` array of
+ *  `[type, version]` pairs; a kind keeps the highest version written. */
+export const UPSERT_KINDS = `INSERT INTO stored_kind (type, version)
+  SELECT value ->> 0, value ->> 1 FROM json_each(?) WHERE true
+  ON CONFLICT(type) DO UPDATE
+  SET version = max(stored_kind.version, excluded.version)`;
+
 /** The highest `stored_kind` version this build reads: `Infinity` for a
  *  plugin kind it lacks (`factKindOf` reads its rows), 0 for a core one. */
 function readableVersion(type: string, factKinds: FactKinds): number {

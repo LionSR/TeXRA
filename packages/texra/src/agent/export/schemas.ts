@@ -6,8 +6,7 @@
  * uses `assembleTrace` instead.
  */
 
-import type { ExportNode } from '@texra-ai/harness/host';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { AgentConfig, ExportNode } from '@texra-ai/harness/schemas';
 
 /** The fields of the run's config an export's header shows. */
 export type ExportConfig = Pick<

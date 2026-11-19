@@ -8,12 +8,12 @@ import { layer } from '@effect/vitest';
 import { afterAll, expect } from 'vitest';
 
 // Local imports
+import { AppState } from '@texra-ai/harness/plugins';
 import {
   AgentCatalog,
   type AgentCatalogShape,
   AgentDirectories,
   type AgentEntry,
-  AppState,
 } from '@texra-ai/harness/host';
 import { findAgentByIdentifier } from '@agent/index/agentCatalog';
 import { FakeStateStore } from '@test/support/FakePlatform';

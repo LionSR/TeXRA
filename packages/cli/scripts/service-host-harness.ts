@@ -16,7 +16,7 @@ import path from 'node:path';
 
 import { Effect, Layer, Option, Predicate, Schema, Stream } from 'effect';
 
-import { GlobalValues } from '@texra-ai/harness/host';
+import { GlobalValues } from '@texra-ai/harness/plugins';
 import {
   GlobalDatabase,
   nodePlatformServices,
@@ -26,7 +26,7 @@ import { RunIdSchema } from '@texra-ai/harness/schemas';
 // No public entry opens the global store outside a process runtime, which
 // this window stands without (this file is an exemption in
 // oxlint.config.mts).
-import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
+import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import {
   linkService,
   requestOnService,

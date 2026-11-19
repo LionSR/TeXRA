@@ -39,6 +39,9 @@ it.live(
         `CREATE TABLE current_value (family TEXT, key TEXT, value TEXT,
        at INTEGER, PRIMARY KEY (family, key))`,
       );
+      yield* sql.unsafe(
+        'CREATE TABLE stored_kind (type TEXT PRIMARY KEY, version INTEGER)',
+      );
       const committed = yield* Deferred.make<void>();
       const releaseCommit = yield* Deferred.make<void>();
       let holdCommit = true;
@@ -103,9 +106,8 @@ it.live(
           ),
         afterCommit: sql.afterCommit,
         written,
-        valueWritten: Effect.void,
       };
-      const { values } = currentValues(store);
+      const values = currentValues(store);
       const family = { name: 'settings', schema: Schema.Boolean };
       const ready = yield* Deferred.make<void>();
       const changed = yield* Deferred.make<boolean>();

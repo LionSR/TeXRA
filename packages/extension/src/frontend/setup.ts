@@ -1,14 +1,13 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, type StateStore } from '@texra-ai/harness/plugins';
 import { withCommandDirs } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
-import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'extension';
 

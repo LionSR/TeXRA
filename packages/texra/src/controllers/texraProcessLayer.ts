@@ -18,13 +18,11 @@ import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 import {
   AgentDirectories,
   AgentDirectoryService,
-  AppState,
   BUNDLED_AGENTS_DIRECTORY,
   processLayer,
   type ProcessServices,
-  type SkillSourceOptions,
 } from '@texra-ai/harness/host';
-import { emitAppSignal, Secrets } from '@texra-ai/harness/plugins';
+import { emitAppSignal, Secrets, AppState } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
   FileSecrets,
@@ -45,7 +43,7 @@ import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 import { texraPlugins } from '@texra/tools/registry';
-import type { Sessions } from '@texra-ai/harness';
+import type { Sessions, SkillSourceOptions } from '@texra-ai/harness';
 import type { ClientIdentity } from '@texra-ai/llm/node';
 
 /**

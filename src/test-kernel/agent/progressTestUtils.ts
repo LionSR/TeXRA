@@ -22,7 +22,7 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import type { HostInteractions } from '@texra-ai/harness/host';
+import type { HostInteractions } from '@texra-ai/harness';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens the

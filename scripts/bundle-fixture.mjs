@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
+import { harnessBundleOptions } from './code-sandbox-worker.mjs';
 import { esmCjsGlobalsBanner } from './esm-cjs-globals-banner.mjs';
 
 const root = join(import.meta.dirname, '..');
@@ -19,9 +20,11 @@ const root = join(import.meta.dirname, '..');
  */
 export async function bundleFixture(name, outfile) {
   await build({
+    // A fixture bundles the harness's sources, so it is built as every
+    // other bundle of them is.
+    ...harnessBundleOptions(),
     entryPoints: [join(root, 'scripts', 'fixtures', `${name}.ts`)],
     outfile,
-    bundle: true,
     platform: 'node',
     format: 'esm',
     target: 'node22.16',

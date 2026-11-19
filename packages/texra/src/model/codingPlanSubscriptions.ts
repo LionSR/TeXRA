@@ -3,16 +3,14 @@ import {
   Settings,
   type AppSignals,
   type SettingsStores,
+  type ConfigWriteFailed,
+  type StateReadFailed,
 } from '@texra-ai/harness/plugins';
 import { providerRegionSetting } from '@texra-ai/harness/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
 } from '@texra/shared/model/codingPlans';
-import type {
-  ConfigWriteFailed,
-  StateReadFailed,
-} from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
 export interface CodingPlanSubscriptionRuntime {

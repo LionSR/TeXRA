@@ -34,11 +34,13 @@ import {
   buildDiffHunks,
   countLineChanges,
   MODEL_SELECTION_KEY,
-  ToolCatalog,
-  type DraftBlob,
 } from '@texra-ai/harness/host';
 import { nodeFileServices } from '@texra-ai/harness/node';
-import { Secrets } from '@texra-ai/harness/plugins';
+import {
+  Secrets,
+  ToolCatalog,
+  type DraftBlob,
+} from '@texra-ai/harness/plugins';
 import {
   acceptsFollowUp,
   AgentConfigSchema,

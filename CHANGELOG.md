@@ -1912,6 +1912,15 @@ All notable changes to this project will be documented in this file.
   names them. The GLM Coding Plan switch no longer claims a coding-specific
   endpoint. The LaTeXDiffs **Edited** tooltip covers Diff, Compare and
   Accept as well as Merge.
+- **A background service that cannot start is no longer restarted
+  forever.** When the service died and then failed every start, an open
+  window started it again every couple of minutes without end, said only
+  that it was reconnecting, and kept adding to the service's log. After
+  three failed starts in a row TeXRA now stops, and the window says what
+  failed, where the service's log is and what to do. A service that exits
+  as it starts is also reported at once, with its exit code, instead of
+  after a minute of waiting. A service that ran normally and then stopped
+  is restarted as before.
 - **Closing one project no longer stops GitHub updates for the others.** A
   project's close ran the shutdown step of every plugin, which ended the
   GitHub pollers of the whole process: the desktop app and the background

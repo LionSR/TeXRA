@@ -38,23 +38,21 @@ import {
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import type { ITool } from '@texra-ai/harness/plugins';
 import {
-  activationView,
+  type ITool,
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
-  replayTrace,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
+import { activationView, replayTrace } from '@texra-ai/harness/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { attachWindowHost } from './windowHost';
 import {
   SERVICE_OFFLINE,
-  WINDOW_OUTDATED,
   environmentApiKeys,
-  linkOutage,
+  linkRefusals,
   linkedClient,
   requestOnService,
   ServiceUnavailable,
@@ -249,29 +247,22 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   roots: WorkspaceRoots,
 ): Effect.fn.Return<Session, never, Scope.Scope> {
   const key = roots.storage;
-  /** The client, once the link has one; or the refusal, once a newer
-   *  TeXRA's service refused this window, which no reconnect undoes. */
+  /** The client, once the link has one; or why it is away for good (a
+   *  newer TeXRA's service refused this window, or the service keeps
+   *  failing to start), which no wait undoes. */
   const connected = Stream.merge(
     link.client.changes.pipe(
       Stream.filter(Predicate.isNotNull),
       Stream.map((client) => ({ client })),
     ),
-    linkOutage(link).pipe(
-      Stream.filter((reason) => reason === WINDOW_OUTDATED),
-      Stream.map((refused) => ({ refused })),
-    ),
+    linkRefusals(link).pipe(Stream.map((refused) => ({ refused }))),
   ).pipe(
     Stream.runHead,
     Effect.map(Option.getOrThrow),
     Effect.flatMap((reached) =>
       'client' in reached
         ? Effect.succeed(reached.client)
-        : Effect.fail(
-            new ServiceUnavailable({
-              reason: reached.refused,
-              failure: { kind: 'newer' },
-            }),
-          ),
+        : Effect.fail(new ServiceUnavailable({ reason: reached.refused })),
     ),
   );
   // The window's own view: the listing, plus the transcripts its readers

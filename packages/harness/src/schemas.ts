@@ -194,6 +194,13 @@ export {
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
+// One node of a stored conversation, as `records(runId).readConversation`
+// answers it and an export's format reads it.
+export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
+// A trace event by its row type: the members of the root's `AgentEvent`.
+export type { TraceRow } from '@shared/session/agentEvent';
+// The owner of a session row: a run, the session, or a plugin's key.
+export type { AggregateId } from '@shared/schemas';
 // An exported run, as a static viewer parses it back.
 export {
   AssembleTraceResultSchema,
@@ -254,7 +261,7 @@ export {
   type SettingStore,
   type StateKey,
 } from '@shared/state/stateSettings';
-// What a `ConfigProvider` (root) writes to and reads back per scope.
+// What a `ConfigProvider` (`./plugins`) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
 // The providers' custom-endpoint and China-region rows, and a provider's
 // own, if it has them.

@@ -75,7 +75,7 @@ let fixture;
 /**
  * The production modules the fixtures drive, bundled once per process:
  * Playwright's ESM loader cannot directly import the root's CommonJS-shaped
- * TS modules. Every caller shares the one bundle, which is about 10 MB.
+ * TS modules. Every caller shares the one bundle, which is about 15 MB.
  */
 export function loadDatabaseFixture() {
   fixture ??= bundleDatabaseFixture();

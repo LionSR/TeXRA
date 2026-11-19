@@ -8,9 +8,9 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Layer, Result, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AppState } from '@texra-ai/harness/host';
+import { AppState } from '@texra-ai/harness/plugins';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
-import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
+import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

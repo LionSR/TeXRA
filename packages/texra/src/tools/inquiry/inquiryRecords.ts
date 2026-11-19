@@ -3,8 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { Context, DateTime, Effect, Layer, Result, Schema } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
-import { GlobalValues } from '@texra-ai/harness/host';
-import { ToolError } from '@texra-ai/harness/plugins';
+import { ToolError, GlobalValues } from '@texra-ai/harness/plugins';
 import {
   INQUIRY_THREADS,
   InquiryRecords,

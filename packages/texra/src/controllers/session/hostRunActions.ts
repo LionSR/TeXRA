@@ -2,26 +2,25 @@
 
 import * as path from 'node:path';
 
-import {
-  type LaunchError,
-  type Run,
-  type RunFailure,
-  type Session,
-  type StartInput,
-  type WorkspaceRoots,
+import type {
+  LaunchError,
+  Run,
+  RunFailure,
+  Session,
+  StartInput,
+  WorkspaceRoots,
+  Notices,
 } from '@texra-ai/harness';
 import {
   getHelperModelName,
   type ProcessServices,
   type readModelOptions,
-  StateReadFailed,
   presentFollowUpResult,
   presentRunFailure,
-  type Notices,
   workspaceEnvironmentLayer,
   programLaunch,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, StateReadFailed } from '@texra-ai/harness/plugins';
 import { Effect, Scope } from 'effect';
 
 import {

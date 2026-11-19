@@ -13,7 +13,6 @@ import {
   getEnabledModels,
   getHelperModelName,
   readModelOptions,
-  StateWriteFailed,
   type ModelVerdict,
   REASONING_LEVELS_KEY,
 } from '@texra-ai/harness/host';
@@ -27,7 +26,11 @@ import {
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
-import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  type Secrets,
+  type SettingsStores,
+  StateWriteFailed,
+} from '@texra-ai/harness/plugins';
 
 import { SettingsRequestFailed } from './settingsHostBindings';
 

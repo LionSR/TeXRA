@@ -49,7 +49,7 @@ import {
 import { vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, type HostInteractions } from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   attachInteractions,
   Interactions,
@@ -85,7 +85,7 @@ import type { TestApp } from './FakePlatform';
 import { REPO_ROOT } from './repoRoot';
 import { createTempDirPlatform } from './tempDirPlatform';
 import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
-import type { Sessions } from '@texra-ai/harness';
+import type { Sessions, HostInteractions } from '@texra-ai/harness';
 
 const WRITES = ['appendAll', 'job'] as const;
 const READS = [
