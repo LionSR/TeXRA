@@ -33,7 +33,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * where it is the way to continue: on any loop-driven run that was
  * interrupted, and on a background script that did not complete. A finished
  * conversation continues through its composer. Whether a resume can
- * proceed is `deriveResumability`'s.
+ * proceed is `deriveContinuation`'s.
  */
 export function runActions(
   run: Pick<
@@ -84,7 +84,7 @@ export function runActions(
  * Whether a run continues from its own rows: a loop-driven run (born with
  * its opening) does, whatever its outcome, unless it is a program's run
  * that ended (its result is final, so it runs again). The one standing
- * `deriveResumability` reads from a run's records and `runActions` from its
+ * `deriveContinuation` reads from a run's records and `runActions` from its
  * view, so the two never decide apart.
  */
 export const continuesFromRows = (

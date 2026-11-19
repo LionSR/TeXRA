@@ -119,7 +119,8 @@ literal spelling beyond the three switch sites (grep over `packages/*/src`,
   repeated in `../2026-11-07-design-red-flags-lenses/interface-comments.md:514`),
   which put `OpenOptions.host` "in the same PR" as R8's `Interactions`
   half (B7/E8, landed by #14802); that PR left it. (a) is the "smaller item"
-  of `.agents/docs/proposed/architecture/2026-11-09-decisions-read-the-log-not-the-view.md:146-153`,
+  of the 2026-11-09 decisions-read-the-log note (its "Smaller items"; the
+  note is finished and deleted, git history keeps it),
   not acted on.
 - open PR: none
 
