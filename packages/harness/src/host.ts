@@ -200,13 +200,6 @@ export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 export type { ProviderError } from '@shared/schemas';
-// Platform path containment, segments, POSIX form.
-export {
-  getPathSegments,
-  isPathWithin,
-  isStrictlyWithin,
-  toPosixPath,
-} from '@utils/core/pathCore';
 // The office formats the Read tool converts to text.
 export { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
 // Which external tools this machine has, as plugins' `availability` probes

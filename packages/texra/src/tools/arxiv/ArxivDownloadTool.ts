@@ -5,7 +5,7 @@ import { Effect, FileSystem, Path, Schema } from 'effect';
 
 // Local imports
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { toPosixPath } from '@texra-ai/harness/host';
+import { toPosixPath } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   nullishWithDefault,

@@ -8,8 +8,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
 } from '@texra-ai/harness/plugins';
-import { isPathWithin } from '@texra-ai/harness/host';
-import { meansAbsent } from '@texra-ai/harness/node';
+import { meansAbsent, isPathWithin } from '@texra-ai/harness/node';
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
