@@ -42,11 +42,12 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      * plugins' tools as a top-level run is, still narrowed to what its
      * caller's step offered.
      */
-    asCaller: Schema.optional(Schema.NullOr(Schema.Boolean)),
+    asCaller: Schema.optional(Schema.Boolean),
     model: Schema.String,
     instruction: decodingDefault(Schema.String, ''),
-    /** Original user instruction preserved across nested tool-use delegation. */
-    rootUserInstruction: Schema.optional(Schema.NullOr(Schema.String)),
+    /** Original user instruction preserved across nested tool-use delegation.
+     *  Set or absent, never null: no producer writes one. */
+    rootUserInstruction: Schema.optional(Schema.String),
     /** Optional user-facing text for logs when instruction contains hidden context. */
     displayInstruction: Schema.optional(Schema.NullOr(Schema.String)),
     /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */

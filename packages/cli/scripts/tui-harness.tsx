@@ -582,7 +582,7 @@ function seedRun(
         : { id: options.parentId, call: null },
     provenance: null,
     worktree: null,
-    approvalPolicy: NO_APPROVAL_GRANTS,
+    grants: NO_APPROVAL_GRANTS,
   });
   if (identity.kind === 'agent') {
     publish({
@@ -1941,7 +1941,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       parent: parentId === null ? null : log.parent(parentId),
       provenance: null,
       worktree: null,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(id, 10_000_000, { type: 'run.activate' });
   }

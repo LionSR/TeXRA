@@ -257,7 +257,7 @@ export function recordAfter(record: RunRows, row: SessionRow): RunRows {
   if (!isRecordRow(row)) return record;
   switch (row.type) {
     case 'run.start':
-      return { ...record, start: row, grants: row.approvalPolicy };
+      return { ...record, start: row, grants: row.grants };
     case 'approval.policy':
       return { ...record, grants: row.snapshot };
     // A resumed run never carries the previous lifecycle's end or stop, and
