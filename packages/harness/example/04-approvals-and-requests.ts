@@ -23,7 +23,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import type { PendingRequest } from '@texra-ai/harness/schemas';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 const publishPreprintTool = defineTool({
   name: 'publish_preprint',
@@ -145,6 +145,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, preprintPlugin],
+      client: EXAMPLE_CLIENT,
     }).pipe(Layer.provideMerge(route.transport)),
   ),
 );

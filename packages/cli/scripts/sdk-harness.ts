@@ -140,9 +140,12 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provide(validationModelLayer),
-    ),
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      // An embedder names its own app: the harness and llm name none.
+      client: { name: 'SDK harness', id: 'sdk-harness' },
+    }).pipe(Layer.provide(validationModelLayer)),
   ),
 );
 

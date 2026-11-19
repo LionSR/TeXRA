@@ -17,14 +17,16 @@ import {
   type ReasoningRequest,
   selectModel,
 } from '@texra-ai/llm';
-import { bindModel as bindWireModel } from '@texra-ai/llm/node';
+import {
+  bindModel as bindWireModel,
+  SubscriptionAccounts,
+} from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { decideReasoning } from '@model/reasoningLevel';
 import type { ModelSettings } from '@model/modelSettings';
 import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
-import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import { routeCredential } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
@@ -186,6 +188,8 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     model: requested,
     route,
     bearer: credential.bearer,
+    // The app the process's accounts sign in as.
+    client: (yield* SubscriptionAccounts).client,
     options: {
       maxOutputTokens: request.textOnly
         ? requested.maxOutputTokens

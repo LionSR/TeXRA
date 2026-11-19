@@ -20,7 +20,10 @@ import {
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import type { HostWindows } from '@texra/controllers/server/hostWindows';
-import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
+import {
+  TEXRA_CLIENT,
+  texraProcessLayer,
+} from '@texra/controllers/texraProcessLayer';
 
 import { readCliVersion, type CliContext } from './cliContext';
 import { CliPlatform, type CliPlatformOptions } from './initPlatform';
@@ -105,6 +108,7 @@ export const cliSecretsLayer = (
     nodePlatformServices,
     Secrets.layer(
       new FileSecrets(secretsDirectory(context.storageRoot), () => {}),
+      TEXRA_CLIENT,
     ),
     effectDiagnosticsLayer(context.minimumLogLevel),
   );

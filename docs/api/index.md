@@ -39,7 +39,7 @@ Service tags hold capabilities fixed for their scope; per-run values (`runId`, a
 
 Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemode-script-and-tool-discovery) provides the `script` tool—a QuickJS worker that calls the run's tools (`await tools.read_file(...)`, `await agent(...)`, `await self(...)`) with deterministic replay across crashes—and [`Plugin`](./harness/plugins#plugin)s contribute tools, prompt sections, Effect layers, versioned durable rows (`FactKind`), and programs started by name (`Program`).
 
-The harness's own tools are six plugins of that same type ([`harnessBuiltins`](./plugins-and-codemode#built-in-plugins-harnessbuiltins)). The TeXRA app passes the same six (with `file-ops` given TeXRA's write filter) plus thirteen of its own, among them LaTeX, arXiv, Zotero, Lean and document tasks. An embedder passes its own list to `Sessions.layer({ platform, plugins })`, and a built-in left out of the list offers no tools. Switching a plugin off withdraws its tools, prompt section and layers at the run's next step; the rows it wrote stay in the store.
+The harness's own tools are six plugins of that same type ([`harnessBuiltins`](./plugins-and-codemode#built-in-plugins-harnessbuiltins)). The TeXRA app passes the same six (with `file-ops` given TeXRA's write filter) plus thirteen of its own, among them LaTeX, arXiv, Zotero, Lean and document tasks. An embedder passes its own list to `Sessions.layer({ platform, plugins, client })`, and a built-in left out of the list offers no tools. Switching a plugin off withdraws its tools, prompt section and layers at the run's next step; the rows it wrote stay in the store.
 
 Third-party plugins load as data, not code. The harness reads the Claude Code and Codex plugin layouts (`skills/`, `commands/`, `agents/`, `.mcp.json`), connects to MCP servers, and runs hooks as separate processes, and each installed plugin needs a trust decision before it loads.
 
@@ -49,7 +49,7 @@ The loop, the store and its single writer, requests, retries and model access ar
 
 | Handle                                                                          | Scope                  | Operations                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------------------------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`Sessions`](./harness/#sessions)**                                           | Process                | `open(roots, options?)`, `close(roots)`, `closeAll`, `list`, `projects`. Provided by `Sessions.layer({ platform, plugins })`.                                                                                                                                                                                                                                                           |
+| **[`Sessions`](./harness/#sessions)**                                           | Process                | `open(roots, options?)`, `close(roots)`, `closeAll`, `list`, `projects`. Provided by `Sessions.layer({ platform, plugins, client })`.                                                                                                                                                                                                                                                   |
 | **[`Session`](./harness/#session) / [`LocalSession`](./harness/#localsession)** | Project storage root   | `start(input)`, `resume(runId, input?)`, `request(runtimeCommand)`, `attach({ approve })`, `view.current()`, `view.changes`, `view.watch(set, from)`, `view.read(runIds)`, `listRuns`, `records(runId)`, `deleteRuns(target)`; a `LocalSession` adds `run(runId, activation)`, `held`, `view.subscribe(set)`, `view.head()`, `view.events(from)`, `storeMovedAside`, `emit`, `settled`. |
 | **[`Run`](./harness/#run)**                                                     | Single agent execution | `runId`, `activation`, `events` (`Stream<AgentEvent, RunFailure>`, readable any number of times), `view` (`Stream<SessionView>`), `result` (`Effect<RunEnd, RunFailure>`), `redirectedFrom`. Stop a run with the `run.stop` request.                                                                                                                                                    |
 
@@ -109,7 +109,13 @@ const program = Effect.gen(function* () {
   return yield* run.result;
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: { name: 'Example App', id: 'example-app' },
+    }),
+  ),
 );
 
 const end = await Effect.runPromise(program);

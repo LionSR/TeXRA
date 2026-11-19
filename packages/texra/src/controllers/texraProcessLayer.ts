@@ -46,6 +46,17 @@ import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 import { texraPlugins } from '@texra/tools/registry';
 import type { Sessions } from '@texra-ai/harness';
+import type { ClientIdentity } from '@texra-ai/llm/node';
+
+/**
+ * TeXRA as the model providers name it: the client a ChatGPT sign-in
+ * registers, the referrer on a Grok sign-in, and the namespace a ChatGPT
+ * plan's tools sit in.
+ */
+export const TEXRA_CLIENT: ClientIdentity = Object.freeze({
+  name: 'TeXRA',
+  id: 'texra',
+});
 
 /** A host's resources directory holds no bundled agents: a bundle copied
  *  without its `resources/`, or a broken checkout. */
@@ -127,6 +138,7 @@ export const texraProcessLayer = ({
     // One credential store every host shares, announcing each key it writes.
     secrets: Secrets.announcing(
       (announce) => new FileSecrets(secretsDirectory(storageRoot), announce),
+      TEXRA_CLIENT,
     ),
     // Built-in agents are read straight out of the host's own bundle; the
     // custom directory is the one the shared application state names.

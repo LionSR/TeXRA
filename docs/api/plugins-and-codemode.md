@@ -4,7 +4,7 @@ File operations, shell execution, web search, memory, goal loops, multi-agent de
 
 ## Built-in plugins (`harnessBuiltins`)
 
-Pass [`harnessBuiltins`](./harness/plugins#harnessbuiltins) (or a subset) plus your own plugins to `Sessions.layer({ platform, plugins })`:
+Pass [`harnessBuiltins`](./harness/plugins#harnessbuiltins) (or a subset) plus your own plugins to `Sessions.layer({ platform, plugins, client })`:
 
 | Export                                               | Plugin ID           | Contributions                                                                                                                           |
 | ---------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |

@@ -25,7 +25,11 @@ import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
 import { acmeNotes, agentsDir as packageAgents, NoteSchema } from 'acme-notes';
 
-import { makeExampleWorkspace, scriptReturnsOf } from './_support.ts';
+import {
+  EXAMPLE_CLIENT,
+  makeExampleWorkspace,
+  scriptReturnsOf,
+} from './_support.ts';
 
 const CODE = `
 const { add } = await import('builtIn:notes');
@@ -107,6 +111,7 @@ const runId = await Effect.runPromise(
       Sessions.layer({
         platform: withPlugin.platform,
         plugins: [...harnessBuiltins, acmeNotes],
+        client: EXAMPLE_CLIENT,
       }).pipe(Layer.provideMerge(route.transport)),
     ),
   ),
@@ -148,6 +153,7 @@ await Effect.runPromise(
       Sessions.layer({
         platform: withoutPlugin.platform,
         plugins: harnessBuiltins,
+        client: EXAMPLE_CLIENT,
       }).pipe(Layer.provideMerge(route.transport)),
     ),
   ),
@@ -192,6 +198,7 @@ await Effect.runPromise(
       Sessions.layer({
         platform: withPlugin.platform,
         plugins: [...harnessBuiltins, acmeNotes],
+        client: EXAMPLE_CLIENT,
       }).pipe(Layer.provideMerge(route.transport)),
     ),
   ),

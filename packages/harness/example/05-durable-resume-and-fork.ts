@@ -16,7 +16,7 @@ import { Effect, Layer, Option, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 const { platform, route } = await makeExampleWorkspace([
   { text: 'Drafted section 1 with an informal proof sketch.' },
@@ -124,9 +124,11 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provideMerge(route.transport),
-    ),
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: EXAMPLE_CLIENT,
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 
