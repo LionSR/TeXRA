@@ -245,7 +245,6 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
       if (unsafe !== null)
         return yield* new RunHistoryRefused({
-          reason: 'unsafe-endpoint',
           runId: run,
           detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
         });
@@ -297,7 +296,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     yield* append(beside);
     return written;
   }, Effect.scoped);
-  // A target no longer held open is `not-owner`, nothing written.
+  // A target no longer held open refuses the write, nothing written.
   const committed = yield* (
     within === undefined
       ? sessionLog.transact((tx) => job(tx.append))
@@ -343,7 +342,9 @@ export function makeRunHistory(
    */
   const activate = <E>(
     run: RunId,
-    activation: NonNullable<RunOpening<E>['activation']>,
+    activation: (
+      state: RunState | null,
+    ) => Effect.Effect<readonly SessionRowDraft[], E>,
   ) =>
     sessionLog
       .transact((tx) =>
@@ -371,15 +372,20 @@ export function makeRunHistory(
 
   const open = Effect.fn('RunHistory.open')(function* <E>(
     run: RunId,
-    opening: RunOpening<E> = {},
+    opening?: RunOpening<E>,
   ) {
-    const { within, activation } = opening;
+    const within =
+      opening !== undefined && 'within' in opening ? opening.within : undefined;
     const seeded =
-      (activation === undefined
-        ? yield* read(run, Infinity, within === undefined)
-        : yield* activate(run, activation)) ?? freshRunState(0);
+      (opening !== undefined && 'activation' in opening
+        ? yield* activate(run, opening.activation)
+        : yield* read(run, Infinity, within === undefined)) ?? freshRunState(0);
     const ref = yield* SynchronizedRef.make(seeded);
-    let registration = opening.registration ?? none; // the first append's
+    // The first append's.
+    let registration =
+      opening !== undefined && 'registration' in opening
+        ? opening.registration
+        : none;
     const cell: RunCell = {
       runId: run,
       current: SynchronizedRef.get(ref),

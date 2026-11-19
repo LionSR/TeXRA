@@ -65,8 +65,10 @@ that records its findings. The
 [2026-11-15 catalogue](../../evidence/2026-11-15-design-red-flags/catalogue.md)
 records what those landings left as rows of its own (each names the earlier
 id under "earlier:" in its report); every one cited below has landed. What
-is still open: M4, H9 and M9 (step 5.5) and `childEndReport`'s switch on
-kind (lane 9).
+is still open: M4, H9 and M9 (step 5.5). `childEndReport`'s switch on
+kind (lane 9) was refused on 2026-11-19
+(`RUNEND-child-report-from-launch` in
+`.agents/docs/refuted-candidates.json`).
 
 Open pull requests the order waits on:
 
@@ -546,9 +548,16 @@ ended, as that record's §3 says
 `USER_FOLLOW_UP_SUPPORT` and `NOT_ROWS` have 0 references. E3, E6, E9, B9
 and C10 landed in PR 14788, E4 in PR 14880, and E10 was refused
 (`DISPATCH-script-lanes-semaphore`) (rows E3, E4, E6, E9, E10, B9, C10).
-Still open: `childEndReport`
+`childEndReport`
 (`packages/harness/src/agent/runtime/childDelivery.ts`) still switches on
-the child's kind, a background script's notice or a subagent's envelope.
+the child's kind, a background script's notice or a subagent's envelope,
+and stays that way: a launch cannot supply the report, because a resume
+is the same run program over the stored configuration with no launcher
+behind it, so the kind would be read from that configuration again where
+the launch is built, with a field added to carry the answer
+(`RUNEND-child-report-from-launch`). What landed on 2026-11-19 is the
+one owner: the report that could not be built is worded there too, and
+the run's terminal (`endRun`) no longer reads the kind.
 
 ## Who takes what
 
