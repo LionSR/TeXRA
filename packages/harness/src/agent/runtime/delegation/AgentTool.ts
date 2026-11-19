@@ -34,11 +34,7 @@ import {
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
-import {
-  RunHistory,
-  SessionLog,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
@@ -157,8 +153,9 @@ type ChildLaunch = {
  * One request shared by a script's `agent` calls and all its attempts
  * (attempt 0), read from the run's rows: the script's calls wait together
  * on the one that is open (`decisionOf`) and take the answer a person gave
- * it; a stop or a resume cancels it, and the next request takes the next
- * ordinal through the call's requests.
+ * it, one given while no process held the run included (the resume's
+ * activation commits it); a stop or a resume cancels an open one, and the
+ * next request takes the next ordinal through the call's requests.
  */
 const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
@@ -171,9 +168,11 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
     callId: script.callId,
     attempt: 0,
   };
-  const from = (yield* SessionLog).now();
-  const state = yield* (yield* RunHistory).load(runId);
-  const { raised, last } = attemptRequests(state?.requests ?? {}, shared);
+  const log = yield* SessionLog;
+  const from = log.now();
+  // The run's request rows alone, as a decision reads them.
+  const { requests } = yield* log.runRows(runId, 'requests');
+  const { raised, last } = attemptRequests(requests, shared);
   if (last !== null) {
     const { decision } = last.request;
     if (decision === null)
