@@ -165,7 +165,8 @@ The earlier version's list of work "safe at any time", read again on
   review F14): a pull request that commits no dump fails the suite that
   reads it until the job runs, so the design has a gap.
 - The script delivery's `stopped` literal: one note renames it, the delivery
-  note keeps it. It rides with the delivery union.
+  note keeps it. The delivery union it rode with was kept as one struct
+  (2026-11-19), so it stays as it is.
 - `definition.ts` ending a run through `readCause`; the TUI's local rows
   through `LocalSession.emit`; a slot-agnostic `rowDefault` export: none has
   a recommendation, and none blocks other work.
@@ -256,11 +257,17 @@ first, as its phase 7).
    each green broke `main` together on 2026-11-19.
 2. **The work this note's rulings unblock**, grouped by the files it shares:
    stop and resume (one stop-or-failure decider, one rejection decider per
-   resume, the model switch as a queued row); the store's small rulings; the
-   delivery shape with its one row bump; the app's entries (`./host`
-   helpers, the MCP client name, the `./plugins` split); the dispatcher
-   split (tech debt T1, PRD row 10), which waits for the requests work to
-   leave the run loop.
+   resume, the model switch as a queued row); the store's small rulings;
+   the app's entries (`./host` helpers, the MCP client name, the
+   `./plugins` split); the dispatcher split (tech debt T1, PRD row 10),
+   which waits for the requests work to leave the run loop. The row-version
+   pass is done (2026-11-19): `finishEvidence` and `refusalEvidence` were
+   already gone (`model.message` v21, #15017); the delivery stores
+   `wallTimeMs` and its prompt as a cut attribute (`followup.queued` v11);
+   the delivery union was compared and kept as one struct
+   (`refuted-candidates.json`, `DELIVERY-union-on-family-and-outcome`); and
+   the recorded request is held under the `context.blob` version (store
+   debts B5).
 3. **Programs.** Phase 4 is in flight. Phase 5 follows on the owner's answer
    to question 1; its slices that do not depend on the answer can be
    prepared.
