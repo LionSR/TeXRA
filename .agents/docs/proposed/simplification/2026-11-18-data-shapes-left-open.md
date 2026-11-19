@@ -23,9 +23,11 @@ Proposed: drop `outcome` and its filter; make `turn` required.
 
 `turn` is required now (the `claude/sweep-2026-11-18-stored-shapes-once`
 branch). It needed no row version bump: every `run.position` at v6 was
-written with its turn. Still open: `outcome`. Dropping it changes the one
-`positionRow` caller in `runLoop.ts` (`turn.end`), and bumps `run.position`,
-since an earlier build's filter requires it on every `turn.end`.
+written with its turn.
+
+Landed: `outcome` and its filter are gone, `positionRow` is one signature,
+and `run.position` is v7 (an earlier build's `turn.end` carries `outcome` and
+its check requires it, so it reads as `DatabaseRowEarlier`).
 
 ## 2. `run.start.approvalPolicy` and `worktree` are optional and nullable
 
@@ -39,10 +41,13 @@ Proposed: required `grants`, and `worktree: NullOr(...)` required.
 
 Both fields are required now, `worktree` as `NullOr`, and the
 `?? NO_APPROVAL_GRANTS` restatements are gone (`run.start` v5, same
-branch). Still open: the stored key is `approvalPolicy`, not `grants`;
-`packages/cli/scripts/validate-run.mjs` reads `$.approvalPolicy.limit`
-from the row, so the rename lands with that script's edit and another
-`run.start` bump.
+branch).
+
+Landed: the stored key is `grants`, the fact it holds (the project's
+`approvalPolicy` setting is a separate owner), at `run.start` v6;
+`packages/cli/scripts/validate-run.mjs` now reads `$.grants.limit`. Every
+producer (`runFacts.registrationDrafts`, `rowReader`, the fixtures and the
+design/CLI harnesses) and both readers name it `grants`.
 
 ## 3. `ToolFileAttachment`'s payload is three optional fields
 
@@ -94,8 +99,21 @@ no stored row at the current versions holds `null` there:
 a `model.message` append's `input` and `reason`, and a `context.edit`'s
 `input` (plain optional).
 
-Still open: `rootUserInstruction` and the nullable optionals of
-`AgentConfigSchema` (`packages/harness/src/shared/schemas/agentConfig.ts`),
-which `BaseProposalFieldsSchema` and `AgentProposalSchema` restate on
-`request.opened` (`proposalFields.ts`, `requestPayloads.ts`): check each
-producer, then bump `run.config` and `request.opened` once.
+Checking each producer of the `AgentConfigSchema`
+(`packages/harness/src/shared/schemas/agentConfig.ts`) nullable optionals
+corrected the finding: it is not a blanket drop.
+
+- Landed, no bump: `asCaller` (only ever written `true`) and
+  `rootUserInstruction` (only the conditional spread
+  `{ rootUserInstruction: call.instruction }` in `AgentTool`) are now plain
+  `optional`. `AgentProposalSchema`'s own restatement of `rootUserInstruction`
+  on `request.opened` dropped its `NullOr` with it. No producer, past or
+  present, ever wrote `null` for either, so no stored row holds one and
+  neither `run.config` nor `request.opened` needed a bump.
+- Kept nullable, with a producer that writes `null`: `displayInstruction`
+  (`backgroundScript.ts` writes `displayInstruction: null`) and
+  `workingDirectory` (`AgentTool.ts` and `backgroundScript.ts` write
+  `... ?? null`). These are a value or `null`, never absent as the third
+  state, but `null` is live, so they stay `NullOr`.
+- Not yet checked: `agentSource`, `launch`, `delegationAgentScope`,
+  `outputSchema`, `script` — each needs its own producer sweep before a drop.
