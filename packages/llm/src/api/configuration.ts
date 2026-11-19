@@ -230,15 +230,12 @@ export function configurationFor(spec: BindSpec): Result.Result<
 }
 
 /** Whether the configuration takes a tool choice naming one function. */
-export function forcedToolChoice(
-  configuration: ModelConfiguration,
-  config: ModelConfig,
-): boolean {
+export function forcedToolChoice(configuration: ModelConfiguration): boolean {
   switch (configuration.protocol) {
     case 'openai-responses':
       return configuration.supportsForcedToolChoice;
     case 'google-interactions':
-      return config.capabilities.supportsFunctionCalling;
+      return true;
     case 'anthropic-messages':
       return false;
   }
