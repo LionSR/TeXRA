@@ -1,4 +1,5 @@
 import {
+  absurd,
   Cache,
   Cause,
   Clock,
@@ -211,7 +212,9 @@ export class SubscriptionUsageService {
     const request: PlanUsageRequest =
       key[0] === 'glmCodingPlan'
         ? { plan: 'glm', region: key[1] }
-        : { plan: 'kimiCode' };
+        : key[0] === 'kimiCode'
+          ? { plan: 'kimiCode' }
+          : absurd(key);
     return Effect.flatMap(Secrets, (secrets) =>
       apiKey(secrets, request.plan),
     ).pipe(
