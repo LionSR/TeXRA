@@ -558,12 +558,12 @@ export function countSkills(root: string) {
   return FileSystem.FileSystem.use((fs) => fs.readDirectory(root)).pipe(
     Effect.mapError(ioError),
     Effect.flatMap((names) =>
-      Effect.forEach(
+      Effect.filter(
         names,
         (name) => exists(path.join(root, name, SKILL_FILE_NAME)),
         { concurrency: 8 },
       ),
     ),
-    Effect.map((found) => found.filter(Boolean).length),
+    Effect.map((found) => found.length),
   );
 }

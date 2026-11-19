@@ -209,7 +209,7 @@ function downloadFile(
   return downloadFileOnce(url, destBasePath).pipe(
     // Retry the whole ordinary failure, never a mixed cleanup cause. Effect's
     // typed-error retry otherwise selects one failure and drops its siblings.
-    Effect.catchCause((cause) => Effect.fail(cause)),
+    Effect.sandbox,
     Effect.tapError(
       Effect.fnUntraced(function* (cause) {
         // A permanent failure ends the retry unobserved, since it never had

@@ -101,22 +101,19 @@ export function createDesktopWorkspaceIpc(
     }).pipe(
       // The handler's parameter is the whole error type this expression can
       // carry, so a second failure added here fails to compile rather than
-      // being absorbed as a terminal that would not start.
+      // being reported as a terminal that would not start.
       // Surface in the terminal itself: a silent no-op looks like a shell
-      // that never printed a prompt. Then fail with the cause, so the
-      // window's router reports it and the request never ends in silence.
-      Effect.catch((error: HostFailed) =>
-        Effect.andThen(
-          Effect.sync(() =>
-            post({
-              command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
-              sessionId,
-              // The pty host's `HostFailed` is already its cause in its own
-              // words.
-              message: `Could not start a terminal: ${error.message}`,
-            }),
-          ),
-          Effect.fail(error),
+      // that never printed a prompt. The failure goes on with its cause, so
+      // the window's router reports it and the request never ends in silence.
+      Effect.tapError((error: HostFailed) =>
+        Effect.sync(() =>
+          post({
+            command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
+            sessionId,
+            // The pty host's `HostFailed` is already its cause in its own
+            // words.
+            message: `Could not start a terminal: ${error.message}`,
+          }),
         ),
       ),
     );
