@@ -57,7 +57,7 @@ TeXRA recognizes these media types by default:
     {
       icon: 'file-pdf',
       title: 'Documents',
-      desc: 'Native PDF input on models that support it (Claude 4.5+, Gemini, GPT-5.x, Muse Spark, GLM-5V-Turbo), otherwise rasterized pages.',
+      desc: 'Native PDF input on models that support it (Claude, Gemini, GPT-5.x, Muse, GLM-5V-Turbo), otherwise rasterized pages.',
       chips: [{ text: '.pdf', variant: 'info' }],
     },
     {
@@ -87,7 +87,7 @@ PDFs use native multimodal support when the provider offers it; otherwise TeXRA 
 
 ## <wa-icon library="texra" name="clippy"></wa-icon> Clipboard images
 
-Paste any copied image directly into the instruction box with `Ctrl+V` / `Cmd+V`. TeXRA saves it as `[pasted_timestamp_hash.ext]`, attaches it, and cleans up temporary pasted files after 3 days.
+Paste any copied image directly into the instruction box with `Ctrl+V` / `Cmd+V`. TeXRA saves it as `pasted_<timestamp>_<random>.<ext>`, attaches it, and cleans up temporary pasted files after 3 days.
 
 ## <wa-icon library="texra" name="wand"></wa-icon> Automatic figure extraction
 
@@ -99,7 +99,7 @@ A program can attach the figures of its input files itself. An agent switches th
 
 ## <wa-icon library="texra" name="tools"></wa-icon> Figure extraction tools
 
-Agents can extract figures programmatically. These tools are part of the **LaTeX Extraction** plugin, which is on by default (switch it under **Settings → Plugins**). In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
+Agents can extract figures programmatically. These tools are part of the **LaTeX Extraction** plugin, which is always on (it is listed under **Settings → Plugins** and has no switch). In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
 
 <ToolCallPanel
   title="research"
