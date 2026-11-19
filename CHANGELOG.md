@@ -1893,6 +1893,12 @@ All notable changes to this project will be documented in this file.
   `requestAnswerability` and `RequestAnswerability` are gone from
   `@texra-ai/harness/schemas`; every pending request can be answered.
 
+- **A run's message to a run you stopped is refused, not silently queued.**
+  `executions send` to a run its user stopped used to answer "Queued" while
+  nothing would read the message until you continued that run yourself. The
+  sender is now told the run was stopped by its user. A child's report to a
+  stopped parent is still kept for when you continue the parent.
+
 - **Codex on Windows installs where TeXRA looks for it.** **Install in
   terminal** ran `wsl --install`, but TeXRA looks for a native `codex.exe`,
   so a native Windows window never found the result. Windows now gets
