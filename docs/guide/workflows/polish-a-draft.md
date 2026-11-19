@@ -74,7 +74,7 @@ texra run edit --input intro.tex --instruction "Tighten prose." --output intro.p
 3. Keep the default agent (`assistant`) and pick a model.
 4. Type what you want in plain words, for example "Polish intro.tex: tighten the prose, preserve all math and citations." Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>; Enter also sends it).
 5. The agent proposes an `edit` run. The proposal card shows the instruction and the files; edit them if needed, then approve.
-6. When the run completes, open the diff from the **ProgressBoard**.
+6. When the run completes, open the diff from the **Tasks view**.
 
 Same program, same output files, whichever surface you used.
 
@@ -89,12 +89,12 @@ diff -u intro.tex <run-folder>/r0/intro.tex
 diff -u <run-folder>/r0/intro.tex <run-folder>/r1/intro.tex
 ```
 
-VS Code: the ProgressBoard shows side-by-side diffs and lets you accept
+VS Code: the Tasks view shows side-by-side diffs and lets you accept
 the output back into the workspace.
 
 <CompareHero />
 
-<p class="hero-caption">The ProgressBoard opens the polished revision as a diff. Accept each change back into your draft.</p>
+<p class="hero-caption">The Tasks view opens the polished revision as a diff. Accept each change back into your draft.</p>
 
 For a **compiled PDF comparison** (additions in blue, deletions in red),
 use the LaTeXdiff feature in the TeXRA panel. Read the

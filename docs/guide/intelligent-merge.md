@@ -27,20 +27,20 @@ Open the merge action from the "LaTeXDiffs" sheet in the main TeXRA interface (h
 2.  **Select the edited file**: Choose the document containing the suggested changes from the **Edited** dropdown.
 3.  **Select Merge**: Select the **Merge** button (<wa-icon library="texra" name="merge"></wa-icon>) under the **Edited** dropdown. The merge runs on TeXRA's **helper model**, set from **Helper model** on Settings → Models → Models. Models with strong reasoning (such as Claude Opus 5, GPT-6 / GPT-5.6, or Gemini 3.1 Pro) are recommended for complex merges.
 
-There is a second entry point. In the [ProgressBoard](./progress-board.md), each generated output file has a **Merge edits** action ("Merge edits into the workspace file") that runs the same `merge` program against the corresponding workspace file, with no dropdowns to fill in.
+There is a second entry point. In the [Tasks view](./progress-board.md), each generated output file has a **Merge edits** action ("Merge edits into the workspace file") that runs the same `merge` program against the corresponding workspace file, with no dropdowns to fill in.
 
 ::: info Extension and desktop feature
 The Intelligent Merge action pairs a base file with a separate **Edited
 File**. The VS Code extension supplies the pair through the LaTeXDiffs sheet
-and the ProgressBoard; the desktop app has no LaTeXDiffs sheet and offers the
-ProgressBoard's **Merge edits** action. The `texra run` CLI command takes only
+and the Tasks view; the desktop app has no LaTeXDiffs sheet and offers the
+Tasks view's **Merge edits** action. The `texra run` CLI command takes only
 `--input`/`--context` files and has no edited-file slot, so this merge
 workflow is not available from the CLI.
 :::
 
 ## Output
 
-The `merge` program writes the combined document to run storage under the base file's name (`r0/<base filename>`) and streams its progress in the [ProgressBoard](./progress-board.md). Once the run completes, compare `r0/<base filename>` against your original file with `latexdiff` (or accept the merged file back into the workspace).
+The `merge` program writes the combined document to run storage under the base file's name (`r0/<base filename>`) and streams its progress in the [Tasks view](./progress-board.md). Once the run completes, compare `r0/<base filename>` against your original file with `latexdiff` (or accept the merged file back into the workspace).
 
 ## Next steps
 

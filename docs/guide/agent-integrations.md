@@ -20,7 +20,7 @@ TeXRA agents can delegate programming tasks—such as running numerical checks o
   for an Anthropic API key, which TeXRA's own Anthropic models can use.
 
 Each one is set up from its own row on **Settings → Plugins**. When a
-TeXRA agent uses the tool, the work runs in a side panel on the ProgressBoard
+TeXRA agent uses the tool, the work runs in a side panel on the Tasks view
 that you can watch live. TeXRA carries on while the side agent
 works.
 
@@ -110,7 +110,7 @@ one of them:
 
 When the tool fires:
 
-1. A new stream tab opens on the ProgressBoard labelled `codex` or `claude_code`.
+1. A new stream tab opens on the Tasks view labelled `codex` or `claude_code`.
 2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>), all live.
 3. When the turn ends, the run shows **Completed**. Each call is one turn: to send a follow-up, the agent calls the tool again with the `thread_id` or `session_id` the result carried. Select <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop** to end a turn early.
 4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
@@ -118,7 +118,7 @@ When the tool fires:
 Both tools deliver their result as a follow-up message, so they are not available in a one-shot run such as `texra run`; there the agent delegates with `agent` instead.
 
 <DelegatedStreamHero />
-<p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, and web searches), then shows <strong>Completed</strong> and hands its result back to the calling agent.</p>
+<p class="hero-caption">The delegated session streams live in its own Tasks view tab (reasoning, commands, file changes, and web searches), then shows <strong>Completed</strong> and hands its result back to the calling agent.</p>
 
 ## MCP servers
 

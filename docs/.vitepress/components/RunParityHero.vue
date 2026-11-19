@@ -17,7 +17,7 @@ const RUN_ID = '9f3a6c81d24e';
   <div
     class="mockup rph"
     role="group"
-    aria-label="One run visible from both the CLI and the extension's Progress Board"
+    aria-label="One run visible from both the CLI and the extension's Tasks view"
   >
     <!-- Terminal half: the run as the CLI shows it -->
     <section class="mk-term-card rph-term">
