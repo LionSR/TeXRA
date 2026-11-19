@@ -56,6 +56,22 @@ export const isBusy = (error: unknown): boolean =>
 export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
 
+/** Interruption stays; a failure, or SQLite's error raised as a defect (a
+ *  ROLLBACK or RELEASE that failed in a transaction's cleanup), becomes
+ *  `failed`'s. Any other defect dies: a store's own protocol rejections are
+ *  a caller's defect, never a disk failure. */
+export function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
+  return <A, EOp, R>(
+    operation: Effect.Effect<A, EOp, R>,
+  ): Effect.Effect<A, E, R> =>
+    operation.pipe(
+      Effect.catchDefect((defect) =>
+        isSqlError(defect) ? Effect.fail(defect) : Effect.die(defect),
+      ),
+      Effect.mapError(failed),
+    );
+}
+
 /** The suffix of a damaged store an open renamed aside (`openStore`), and
  *  of its WAL or shared-memory file. */
 const ASIDE = /^\.corrupt-\d+(?:-wal|-shm)?$/;

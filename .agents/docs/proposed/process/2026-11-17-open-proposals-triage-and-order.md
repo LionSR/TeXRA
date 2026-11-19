@@ -178,8 +178,9 @@ Started from this note on 2026-11-17, one pull request each:
   input with UX roadmap items 3, 5 and 6 (defect 2); §3 and §4 of the
   storage-errors note; the llm cassettes (tech-debt M6 to M8).
 
-Not started because each needs a word from the owner first: the global
-store split and the row-version changes (what happens to the old file);
+Not started because each needs a word from the owner first: the schema
+half of the global store split (its code half is in: the global store has
+its own layer) and the row-version changes (what happens to the old file);
 §5 and §6 of the storage-errors note (after §3 and §4 merge, same files);
 programs phases 4 and 5 (question 1). The limit on a service that crashes
 at every start (defect 5) was designed and implemented on 2026-11-19.
