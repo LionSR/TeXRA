@@ -1,16 +1,20 @@
 /**
- * One run's reader for one generation: a wake signal over the follow-ups
- * the run's rows still queue, and the rules for which of them it reads at
- * each point of its loop (and which wake it when it rests). The rows are the
- * authority; this holds no copy of them, and nothing here takes a row: a
- * batch is consumed by the `followup.consumed` rows its reader commits with
- * the message it became.
+ * One run's reader, and the rules of a run's input: whether a message is
+ * queued for it ({@link sendVerdict}), whether what is queued obliges a
+ * resume ({@link needsWake}), and which queued messages a run reads at each
+ * point of its loop. The rows are the authority; the reader holds no copy
+ * of them and nothing here takes a row: a batch is consumed by the
+ * `followup.consumed` rows its reader commits with the message it became.
+ * A reader with nothing to read waits on the session log for the next
+ * message queued for its run, or for the inbox to say the run takes no more.
  */
-import { Effect, Latch } from 'effect';
+import { Effect, Latch, Option, Stream } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
+import type { RunId } from '@shared/schemas';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 
 /** Where in its loop a run reads its input: before a model request inside
  *  a turn, at the turn's end, or while it waits for input. */
@@ -30,28 +34,73 @@ function readableMessages(
 }
 
 /**
- * Whether a run's pending input obliges a resume of it when no generation
- * holds it, from its input rows (`followup.queued`, `followup.consumed`,
- * `run.activate`, `run.end`), over the messages readable at idle. While the
- * run's current lifecycle has not ended (it waits on a child, or its
- * generation left without an end), any run's message wakes it, as the
- * user's does, and so it does once the run ended, except after a user's
- * Stop (that lifecycle's `run.stop` says `user`): then only the user's
- * message committed after that stop wakes it, so no run undoes a person's
- * stop. A host's notification wakes nothing: it is read by a generation
- * already running.
+ * Whether a message from `from`, committed at `commit`, obliges a resume of
+ * a run no fiber drives. While the run's current lifecycle has not ended
+ * (it waits on a child, or its fiber left without an end), any run's
+ * message wakes it, as the user's does, and so it does once the run ended,
+ * except after a user's Stop (that lifecycle's `run.stop` says `user`):
+ * then only the user's message committed after that stop wakes it, so no
+ * run undoes a person's stop. A resumed run that crashed carries no end, so
+ * no earlier Stop of it holds a message back. A host's notification wakes
+ * nothing: it is read by a run already running.
+ */
+const wakes = (
+  { end, stop }: RunRowsRead<'input'>,
+  from: QueuedFollowUp['content']['from'],
+  commit: number,
+): boolean => {
+  if (from.kind === 'notification') return false;
+  const stopped = end !== null && stop?.reason === 'user';
+  return !stopped || (from.kind === 'user' && commit > stop.commit);
+};
+
+/**
+ * Whether a run's pending input obliges a resume of it when no fiber here
+ * drives it, from its input rows (`followup.queued`, `followup.consumed`,
+ * `run.activate`, `run.end`), over the messages readable at idle
+ * ({@link wakes}). A closed input obliges none.
  */
 export function needsWake(input: RunRowsRead<'input'>): boolean {
-  // A resumed run that crashed carries no end, so no earlier Stop of it
-  // holds a message back.
-  const { end, stop } = input;
-  const stopped = end !== null && stop?.reason === 'user';
-  return readableMessages(input.followUps, 'idle').some(
-    ({ commit, content: { from } }) => {
-      if (from.kind === 'notification') return false;
-      return !stopped || (from.kind === 'user' && commit > stop.commit);
-    },
+  return (
+    !input.inputClosed &&
+    readableMessages(input.followUps, 'idle').some(({ commit, content }) =>
+      wakes(input, content.from, commit),
+    )
   );
+}
+
+/**
+ * What a run's input rows say of one send: the row is queued; it repeats a
+ * row already sent under its id (`queued`: still unread); or it is refused,
+ * writing nothing. `closed`: the run was deleted or its input closed.
+ * `stopped`: a run's message to a run its user stopped, which would wait
+ * unread until the user continues that run; a child's report is not such a
+ * message and stays queued for that resume.
+ */
+export type SendVerdict =
+  | { readonly kind: 'queue' }
+  | { readonly kind: 'replay'; readonly queued: boolean }
+  | { readonly kind: 'refused'; readonly reason: 'closed' | 'stopped' };
+
+/** The verdict on sending `row` to the run whose input rows are `input`:
+ *  the one rule every send, a plugin's and a child's report included, is
+ *  decided by, in the job that commits it. */
+export function sendVerdict(
+  input: RunRowsRead<'input'>,
+  row: Pick<QueuedFollowUp, 'followUpId' | 'content'>,
+): SendVerdict {
+  if (input.inputClosed) return { kind: 'refused', reason: 'closed' };
+  const queued = input.followUps.some((f) => f.followUpId === row.followUpId);
+  if (queued || input.taken.has(row.followUpId))
+    return { kind: 'replay', queued };
+  const { from } = row.content;
+  if (
+    from.kind === 'run' &&
+    !('delivery' in row.content) &&
+    !wakes(input, from, Infinity)
+  )
+    return { kind: 'refused', reason: 'stopped' };
+  return { kind: 'queue' };
 }
 
 /**
@@ -70,79 +119,103 @@ export type FollowUpBatch =
 const compacting = (rows: readonly QueuedFollowUp[]): boolean =>
   rows.some((f) => f.control?.kind === 'compact');
 
+/** The messages in `rows` readable at `at`, when there are any. */
+const batch = (
+  rows: readonly QueuedFollowUp[],
+  at: InputPoint,
+): Extract<FollowUpBatch, { kind: 'followUps' }> | null => {
+  const followUps = readableMessages(rows, at);
+  return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
+};
+
+/** What a reader reads of the session's log. */
+type ReaderLog = Pick<SessionLogShape, 'runRows' | 'tail' | 'now'>;
+
 /**
- * One generation's reader over the run's pending rows: a row an earlier
- * process left queued and one sent while this generation runs arrive the
- * same way, in commit order. The inbox signals the reader when a row lands
- * for it.
+ * One run's reader over its pending rows: a row an earlier process left
+ * queued and one sent while this run runs arrive the same way, in commit
+ * order.
  */
 export class FollowUpReader {
-  private readonly signal = Latch.makeUnsafe(false);
-  private ended = false;
+  private readonly runId: RunId;
+  private readonly log: ReaderLog;
+  private readonly onClosed: (heard: () => void) => () => void;
 
-  /** The run's pending follow-ups, read from its committed rows. */
-  private readonly queued: Effect.Effect<readonly QueuedFollowUp[]>;
-
-  constructor(queued: Effect.Effect<readonly QueuedFollowUp[]>) {
-    this.queued = queued;
+  /** `onClosed` hears the run take no more input (it was deleted, its
+   *  input closed, or its session closes) and returns the detach. */
+  constructor(
+    runId: RunId,
+    log: ReaderLog,
+    onClosed: (heard: () => void) => () => void,
+  ) {
+    this.runId = runId;
+    this.log = log;
+    this.onClosed = onClosed;
   }
 
-  /** The run's own pending requests (`/compact`, a model switch). */
-  readonly controls: Effect.Effect<readonly QueuedFollowUp[]> = Effect.suspend(
-    () =>
-      Effect.map(this.queued, (rows) =>
-        rows.filter((f) => f.control !== undefined),
-      ),
+  /** The run's input, read from its committed rows. */
+  private readonly input: Effect.Effect<RunRowsRead<'input'>> = Effect.suspend(
+    () => Effect.orDie(this.log.runRows(this.runId, 'input')),
   );
 
-  /** Wake the reader: a follow-up row landed for it. */
-  notify(): void {
-    Latch.openUnsafe(this.signal);
-  }
+  /** The run's pending follow-ups. */
+  private readonly queued: Effect.Effect<readonly QueuedFollowUp[]> =
+    Effect.map(this.input, ({ followUps }) => followUps);
 
-  /** The messages in `rows` readable at `at`, when there are any. */
-  private batch(
-    rows: readonly QueuedFollowUp[],
-    at: InputPoint,
-  ): Extract<FollowUpBatch, { kind: 'followUps' }> | null {
-    const followUps = readableMessages(rows, at);
-    return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
-  }
+  /** The run's own pending requests (`/compact`, a model switch). */
+  readonly controls: Effect.Effect<readonly QueuedFollowUp[]> = Effect.map(
+    this.queued,
+    (rows) => rows.filter((f) => f.control !== undefined),
+  );
 
   /** The messages readable at `at`, when there are any; nothing is taken. */
   readonly read = (
     at: InputPoint,
   ): Effect.Effect<Extract<FollowUpBatch, { kind: 'followUps' }> | null> =>
-    Effect.map(this.queued, (rows) => this.batch(rows, at));
+    Effect.map(this.queued, (rows) => batch(rows, at));
 
   /** Whether `next` would return now: a message readable at `at`, or a
    *  `/compact`. */
   readonly hasPending = (at: InputPoint): Effect.Effect<boolean> =>
     Effect.map(
       this.queued,
-      (rows) => compacting(rows) || this.batch(rows, at) !== null,
+      (rows) => compacting(rows) || batch(rows, at) !== null,
     );
 
-  /** End the generation: what is pending stays queued on the run's rows. */
-  end(): void {
-    this.ended = true;
-    Latch.openUnsafe(this.signal);
-  }
-
-  /** Block for the next batch readable at `at`; null once the generation
-   *  ended. */
+  /** Block for the next batch readable at `at`; null once the run takes no
+   *  more input or its session closed. */
   readonly next = (at: InputPoint): Effect.Effect<FollowUpBatch | null> =>
-    Effect.gen({ self: this }, function* () {
-      for (;;) {
-        if (this.ended) return null;
-        // Closed before the read: a signal landing after it reopens the wait.
-        Latch.closeUnsafe(this.signal);
-        const rows = yield* this.queued;
-        const batch = this.batch(rows, at);
-        if (batch !== null) return batch;
-        if (compacting(rows))
-          return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
-        yield* this.signal.await;
-      }
+    Effect.suspend(() => {
+      // Heard from before the first read, so no close falls between a read
+      // and the wait after it.
+      const closed = Latch.makeUnsafe(false);
+      const detach = this.onClosed(() => Latch.openUnsafe(closed));
+      return Effect.gen({ self: this }, function* () {
+        for (;;) {
+          // A row landing after this read is above `from`.
+          const from = this.log.now();
+          const { followUps: rows, inputClosed } = yield* this.input;
+          // Closed before this call began to listen.
+          if (inputClosed) return null;
+          const readable = batch(rows, at);
+          if (readable !== null) return readable;
+          if (compacting(rows))
+            return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
+          const arrived = yield* Effect.raceFirst(
+            this.log.tail(from).pipe(
+              Stream.filter(
+                (event) =>
+                  event.type === 'followup.queued' &&
+                  event.aggregateId === this.runId,
+              ),
+              Stream.runHead,
+              Effect.map(Option.isSome),
+              Effect.orDie,
+            ),
+            Effect.as(closed.await, false),
+          );
+          if (!arrived) return null;
+        }
+      }).pipe(Effect.ensuring(Effect.sync(detach)));
     });
 }

@@ -106,6 +106,11 @@ export interface RunRegistryInit {
     runId: RunId,
     effect: Effect.Effect<A, E, CapturedServices>,
   ) => Fiber.Fiber<A, E>;
+  /** Run `effect` on the session's own fibers, which its close interrupts:
+   *  work nobody waits for (a wake). */
+  readonly background: (
+    effect: Effect.Effect<void, never, CapturedServices>,
+  ) => void;
   /** No fiber here drives the run any more: wake it, and the parent its
    *  last batch delivered to, for the input each holds (`wakeIfOwed`). */
   readonly wake: (runId: RunId) => void;
@@ -228,6 +233,12 @@ export class SessionRunRegistry implements RunsShape {
     effect: Effect.Effect<A, E, AgentRunServices>,
   ): Effect.Effect<A, E> {
     return this.init.inSession(this.provided(effect));
+  }
+
+  /** Run `effect` on the session's own fibers, on its context: nobody
+   *  waits for it, and the session's close interrupts it. */
+  background(effect: Effect.Effect<void, never, AgentRunServices>): void {
+    this.init.background(this.provided(effect));
   }
 
   /** `effect` with this registry as its session's runs. */

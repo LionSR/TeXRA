@@ -154,7 +154,7 @@ describe(
               yield* config.reached;
 
               expect(yield* send(session, runId, 'raced')).toEqual({
-                kind: 'queued',
+                kind: 'queue',
               });
               yield* config.release;
               expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);

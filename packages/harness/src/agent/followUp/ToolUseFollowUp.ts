@@ -4,7 +4,6 @@ import { Cause, Context, Effect, Exit } from 'effect';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { LaunchKeys, RunRegistry } from '@agent/runtime/runRegistry';
-import { Interactions } from '@agent/runtime/HostInteractions';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   describeRefusal,
@@ -13,15 +12,11 @@ import {
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
+import type { SendVerdict } from './FollowUpReader';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's acceptance and its wake read of the session. */
-type FollowUpServices =
-  | Inbox
-  | RunRegistry
-  | SessionLog
-  | SessionViewAccess
-  | Interactions;
+type FollowUpServices = Inbox | RunRegistry | SessionLog | SessionViewAccess;
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
@@ -115,37 +110,46 @@ const wakeRun = Effect.fn('wakeRun')(function* (
     ).pipe(withLogChannel(CHANNEL));
 });
 
-/** Resume the run if its input obliges one and no reader here takes it
- *  (`SessionInbox.owesResume`), on its own fiber: the sender hears the
- *  resume start, and a resume asked meanwhile joins it. False only if the
- *  input could not be read. */
+/** What a run's input rows refused a send for, as its sender is told. */
+const REFUSED_SEND = {
+  closed: describeRefusal({ kind: 'notResumable' }),
+  stopped:
+    "Its user stopped this run, and only the user's own message continues it.",
+} as const satisfies Record<
+  Extract<SendVerdict, { kind: 'refused' }>['reason'],
+  string
+>;
+
+/** Resume the run if its input obliges one (`SessionInbox.owesResume`) and
+ *  no fiber here drives it (one that does reads its input itself, and is
+ *  woken as it leaves), on the session's own fibers: the sender hears
+ *  nothing of the resume, and a resume asked meanwhile joins it. */
 export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
   apiKeys: Readonly<Record<string, string>> = {},
-): Effect.fn.Return<boolean, never, Inbox | RunRegistry | SessionLog> {
+): Effect.fn.Return<void, never, Inbox | RunRegistry> {
+  const runs = yield* RunRegistry;
   const owed = yield* (yield* Inbox).owesResume(runId);
-  if (owed === undefined) return false;
+  if (owed !== true || runs.get(runId) !== undefined) return;
   // The wake's own keys, never the fiber's: the sender may be another
   // client's run, whose keys this run must never take.
-  if (owed)
-    yield* Effect.forkDetach(
-      wakeRun(runId).pipe(Effect.provideService(LaunchKeys, apiKeys)),
-    );
-  return true;
+  runs.background(
+    wakeRun(runId).pipe(Effect.provideService(LaunchKeys, apiKeys)),
+  );
 });
 
 /**
  * The one acceptance of a message to a run: every host and tool sends
- * through here, and only here is a message refused. The send is durable
- * before anything is acknowledged or woken; when no reader here takes the
- * row, this asks the inbox whether the run owes a resume (`wakeIfOwed`,
- * over `SessionInbox.owesResume`) and relays its answer.
+ * through here. The run's input rows decide the send in the job that
+ * commits it (`sendVerdict`), so the row is durable before anything is
+ * acknowledged or woken; then the run is woken if the row obliges it and
+ * no fiber here drives it (`wakeIfOwed`).
  *
- * A run a launch here holds reads the row itself, at its next request or
+ * A run a fiber here drives reads the row itself, at its next request or
  * turn boundary; a child that ends with it queued is resumed for it. With
- * no launch here, the persisted facts decide: the run's records whether
- * it can continue (a state that cannot be read cannot), and its input
- * rows, in the send's job, whether this message wakes it (`needsWake`).
+ * none here, the persisted facts decide: the run's records whether it can
+ * continue (a state that cannot be read cannot), and its input rows
+ * whether this message is queued and wakes it.
  */
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
@@ -157,6 +161,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const runs = yield* RunRegistry;
   const log = yield* SessionLog;
   const view = yield* SessionViewAccess;
+  const failed = (message: string) => ({ status: 'failed', message }) as const;
   // From the checks to the row's commit, one send to a run at a time, so a
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
@@ -169,16 +174,15 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // it (`example/10-external-plugin.ts`).
     const target = view.run(runId);
     if (target?.takesFollowUps === false)
-      return {
-        status: 'failed',
-        // A fork is offered only to a run that has one (`RunView.actions`):
-        // a background command or an agent CLI's turn cannot be forked.
-        message: `This run ran once and takes no messages. ${
+      // A fork is offered only to a run that has one (`RunView.actions`):
+      // a background command or an agent CLI's turn cannot be forked.
+      return failed(
+        `This run ran once and takes no messages. ${
           target.actions.includes('fork')
             ? 'Continue it as a fork, or start'
             : 'Start'
         } a new agent task.`,
-      } as const;
+      );
     const live = runs.get(runId);
     if (live === undefined) {
       const rejection = yield* checkpointRefusal(runId).pipe(
@@ -189,11 +193,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
           )(error).pipe(Effect.as({ kind: 'readFailed' } as const)),
         ),
       );
-      if (rejection !== null)
-        return {
-          status: 'failed',
-          message: describeRefusal(rejection),
-        } as const;
+      if (rejection !== null) return failed(describeRefusal(rejection));
     }
     // A user's message to a run that is stopping continues it after the
     // stop: its row lands after the run's end, which the wake reads.
@@ -202,30 +202,21 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
     const prepared = prepare === undefined ? {} : yield* prepare;
-    const landed = yield* inbox.send(
+    const verdict = yield* inbox.send(
       runId,
       { ...item, ...prepared },
       { hold, skills },
     );
-    return { status: 'landed', landed, live: live !== undefined } as const;
+    if (verdict.kind === 'refused') return failed(REFUSED_SEND[verdict.reason]);
+    // A replay was accepted before; a new row reached a running loop, or
+    // waits for the run's resume.
+    const reaches = verdict.kind === 'replay' || live !== undefined;
+    return { status: reaches ? 'sent' : 'queued' } as const;
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
-  if (sent.status !== 'landed') return sent;
-  const { landed, live } = sent;
-  // Its input is closed (deleted, or torn down with nothing queued), or the
-  // session is disposed.
-  if (landed.kind === 'refused')
-    return {
-      status: 'failed',
-      message: describeRefusal({ kind: 'notResumable' }),
-    };
-  if (landed.kind === 'duplicate') return { status: 'sent' };
-  // Whether the row wakes the run is the inbox's one reading
-  // (`owesResume`), after the commit: a run live a moment ago may have
-  // exited meanwhile, and one with a reader here owes nothing. The sender
-  // hears the resume start, not the resumed turn end; a wake that could
-  // not read the run leaves the row for an explicit resume.
-  yield* wakeIfOwed(runId, apiKeys);
-  return { status: live ? 'sent' : 'queued' };
+  // After the commit: a run a fiber drove a moment ago may have left
+  // meanwhile.
+  if (sent.status !== 'failed') yield* wakeIfOwed(runId, apiKeys);
+  return sent;
 });
 
 /**
