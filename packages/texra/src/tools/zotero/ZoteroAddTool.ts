@@ -18,7 +18,7 @@
 
 // Third-party imports
 import { parseAuthorName } from 'bibtex';
-import { Effect, Result, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
@@ -198,21 +198,22 @@ const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
   const hasMetadata = Object.values(metadata).some((value) =>
     Array.isArray(value) ? value.length > 0 : Boolean(value),
   );
-  const saved = yield* Effect.result(
+  return yield* Effect.match(
     url && !hasMetadata
       ? callZoteroConnector('saveSnapshot', { url, ...collectionBody })
       : callZoteroConnector('saveItems', {
           items: [toZoteroItem(item)],
           ...collectionBody,
         }),
-  );
-  return Result.isSuccess(saved)
-    ? { item: itemLabel, status: 'success' as const }
-    : {
+    {
+      onSuccess: () => ({ item: itemLabel, status: 'success' as const }),
+      onFailure: (error) => ({
         item: itemLabel,
         status: 'error' as const,
-        message: saved.failure.message,
-      };
+        message: error.message,
+      }),
+    },
+  );
 });
 
 const addItems = Effect.fn('ZoteroAddTool.execute')(function* ({
@@ -256,5 +257,16 @@ export const ZoteroAddTool = defineTool({
   description:
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by URL or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
+  // The call changes the person's Zotero library, outside the run and the
+  // workspace, so the loop asks before it runs, as it does for an MCP tool.
+  guard: {
+    command: {
+      text: (input: ZoteroAddInput) =>
+        `zotero_add: ${input.items
+          .map((item) => item.title || item.url || 'Unknown item')
+          .join('; ')}`,
+      cwd: 'unknown',
+    },
+  },
   execute: addItems,
 });

@@ -11,7 +11,7 @@
  */
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Effect, Record as EffectRecord, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -242,10 +242,9 @@ const GIT_UNSAFE_ENV_KEYS = new Set([
  * because it replaces the child's environment (`extendEnv: false`).
  */
 const machineGitEnv: Effect.Effect<NodeJS.ProcessEnv> = Effect.suspend(() => {
-  const env: NodeJS.ProcessEnv = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([key]) => !GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase()),
-    ),
+  const env: NodeJS.ProcessEnv = EffectRecord.filter(
+    process.env,
+    (_, key) => !GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase()),
   );
   env.GIT_TERMINAL_PROMPT = '0';
   return withCommandDirs(env);

@@ -87,6 +87,7 @@ import {
   formatToolResultAsText,
 } from '@shared/toolResultText';
 import { checkOwnFacts, factRows } from '@tools/plugins';
+import type { Alongside } from '@shared/session/sessionEvents';
 import { ToolRegistry } from '@tools/toolTable';
 import { getBasename } from '@utils/core/pathBasics';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -238,7 +239,7 @@ function resultContent(
 const commit = (
   { dispatch, fact }: Call,
   rows: readonly RunHistoryDraft[],
-  alongside?: ReturnType<typeof factRows>,
+  alongside?: Alongside,
 ) =>
   dispatch.cell.append((state) => {
     const script = scriptOf(fact);
@@ -547,11 +548,11 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
         },
       ];
   // An executed call's PostToolUse rows, the follow-ups its result answers
-  // and its facts (the run's, and its plugin's own aggregates') commit too.
+  // and its facts about the run commit too.
   const post = pre ? yield* pre.after(sanitized) : [];
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
-  const facts = factRows(extracted.facts, runId, plugin, log);
+  const facts = Effect.succeed(factRows(extracted.facts, runId));
   yield* commit(
     call,
     [

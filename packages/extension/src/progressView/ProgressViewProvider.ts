@@ -3,7 +3,15 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Deferred, Effect, Exit, FileSystem, Scope, Stream } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  FileSystem,
+  Option,
+  Scope,
+  Stream,
+} from 'effect';
 
 import { scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -13,7 +21,6 @@ import {
   type AgentConfig,
   type FileLocation,
   type RunId,
-  type SessionView,
 } from '@texra-ai/harness/schemas';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
@@ -566,21 +573,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private followAttention(): Effect.Effect<void> {
     // Unseeded: the first view is what was already pending when the window
     // subscribed, which the badge shows and nothing reveals.
-    let previous: SessionView | undefined;
-    return Stream.runForEach(this.runSession.view.changes, (view) => {
-      const { requests, arrived, finished } = attentionOf(view, previous);
-      previous = view;
-      this.setBadge(requests.length);
-      // A failed or stopped task is no chime.
-      if (
-        finished.some(
-          (run) => isDocumentTaskRun(run) && run.outcome === 'completed',
+    return Stream.runForEach(
+      Stream.zipWithPrevious(this.runSession.view.changes),
+      ([previous, view]) => {
+        const { requests, arrived, finished } = attentionOf(
+          view,
+          Option.getOrUndefined(previous),
+        );
+        this.setBadge(requests.length);
+        // A failed or stopped task is no chime.
+        if (
+          finished.some(
+            (run) => isDocumentTaskRun(run) && run.outcome === 'completed',
+          )
         )
-      )
-        this.chime();
-      const [first] = arrived;
-      return first ? this.bringForward(first.runId) : Effect.void;
-    });
+          this.chime();
+        const [first] = arrived;
+        return first ? this.bringForward(first.runId) : Effect.void;
+      },
+    );
   }
 
   private setBadge(count: number): void {

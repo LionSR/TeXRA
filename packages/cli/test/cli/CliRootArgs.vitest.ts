@@ -12,10 +12,9 @@ import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'runCli usage output stream routing',
   (it) => {
-    // Capture every byte the CLI writes. Usage on an ERROR flows through
-    // writeRawStderr -> process.stderr.write; citty's showUsage (the explicit
-    // --help path) flows through console.log -> process.stdout.write. We stub
-    // both stream writers AND console.* so nothing leaks to the real terminal.
+    // Capture every byte the CLI writes: the CLI's presenter writes help to
+    // process.stdout and a usage error to process.stderr. We stub both stream
+    // writers AND console.* so nothing leaks to the real terminal.
     let stdout = '';
     let stderr = '';
     let stdoutSpy: ReturnType<typeof vi.spyOn>;
@@ -35,7 +34,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       stderrSpy = spyOnStreamWrite(process.stderr, (chunk) => {
         stderr += chunk;
       });
-      // citty's showUsage writes via console.log; its errors via console.error.
       consoleLogSpy = vi
         .spyOn(console, 'log')
         .mockImplementation((...args: unknown[]) => {
@@ -81,10 +79,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               );
               expect(result.exitCode).toBe(2);
               expect(stdout).toBe('');
-              // The error leads, followed by a pointer to the usage rather
-              // than the full help screen that used to bury it.
+              // The help of the command named, then the error, both on stderr.
+              expect(stderr).toContain('texra run [flags] <target>');
               expect(stderr).toMatch(
-                /^Missing required positional argument: TARGET\nRun `texra run --help` for usage\.\n$/,
+                /ERROR\n {2}Missing required argument: target\n$/,
               );
             }),
         );

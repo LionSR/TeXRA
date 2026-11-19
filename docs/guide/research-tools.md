@@ -41,7 +41,7 @@ For deeper analysis, ask to download the LaTeX source of a paper:
 Download the source files for arxiv:2401.12345 so I can see how they made their figures.
 ```
 
-This uses the `download_arxiv_source` tool and places the files in your workspace.
+This uses the `download_arxiv_source` tool and places the files in your workspace. Because it writes to your workspace, TeXRA asks for your approval before the download runs, as it does for any tool that changes your workspace.
 
 ### <wa-icon library="texra" name="globe"></wa-icon> Search the web
 
@@ -55,7 +55,7 @@ The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model pr
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Adding an item changes your library, so TeXRA asks for your approval before `zotero_add` runs. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ```
 Search my Zotero library for papers on attention mechanisms.
@@ -82,7 +82,7 @@ Add this arXiv paper to my Zotero library.
 <p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
 
 ::: tip Default bibliography path
-Name your project's main `.bib` file once so agents know where to look up citations: they are told its path, and `extract_bib_entries` also reads it unless the agent names another `.bib` file. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
+Name your project's main `.bib` file once so agents know where to look up citations: they are told its path and search it with `grep` or `read_file`. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
 :::
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram
@@ -118,10 +118,10 @@ Specialist research agents are tuned for different stages of the work. Pick one 
       { text: 'web_fetch', variant: 'neutral' },
       { text: 'zotero_search', variant: 'neutral' },
     ] },
-    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification with wolframscript in the shell, plus file edits and figure extraction.', chips: [
+    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification with wolframscript in the shell, plus file edits and reading figures.', chips: [
       { text: 'bash', variant: 'info' },
       { text: 'edit_file', variant: 'neutral' },
-      { text: 'extract_figures', variant: 'neutral' },
+      { text: 'read_file', variant: 'neutral' },
     ] },
     { icon: 'beaker', title: 'lean', desc: 'Formal proof engineering in Lean 4 and Mathlib with live diagnostic verification.', chips: [
       { text: 'lean_diagnostics', variant: 'info' },

@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
 import { Effect } from 'effect';
+import { Command } from 'effect/cli';
 
 import { Skills } from '@texra-ai/harness/host';
 
@@ -12,11 +12,7 @@ import {
   readCliSkillsOffNotice,
 } from '../runtime/skills';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import {
-  SKILL_SOURCE_ARGS,
-  collectStringFlagValues,
-} from './_helpers/globalArgs';
+import { SKILL_SOURCES_CONFIG, cliCommand } from './_helpers/cliCommand';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/platform/cliContext';
 
@@ -69,18 +65,14 @@ const listSkills = Effect.fn('listSkills')(function* (
   return exitCode;
 });
 
-const skillsListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List available skills' },
-  args: {
-    ...SKILL_SOURCE_ARGS,
-  },
-  run: (context, ctx) =>
-    listSkills(context, {
-      additionalPaths: collectStringFlagValues(ctx.rawArgs, 'source', 's'),
-    }),
+const skillsListCommand = cliCommand('list', {
+  description: 'List available skills',
+  config: { ...SKILL_SOURCES_CONFIG },
+  run: (context, input) =>
+    listSkills(context, { additionalPaths: input.skillSources }),
 });
 
-export const skillsCommand = defineCommand({
-  meta: { name: 'skills', description: 'Inspect TeXRA skills' },
-  subCommands: { list: skillsListCommand },
-});
+export const skillsCommand = Command.make('skills').pipe(
+  Command.withDescription('Inspect TeXRA skills'),
+  Command.withSubcommands([skillsListCommand]),
+);

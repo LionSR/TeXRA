@@ -166,8 +166,8 @@ class CliEntryCrashed extends Schema.TaggedError<CliEntryCrashed>()(
  *
  * The process owns its diagnostic sink from here: the harness's console
  * fallback sends DEBUG and INFO to stdout, where under `--output-format
- * ndjson` a line would break the stream. Until citty has parsed the argv,
- * diagnostics go to stderr at the default level; `defineCliCommand` then
+ * ndjson` a line would break the stream. Until the argv is parsed,
+ * diagnostics go to stderr at the default level; `cliCommand`'s launch then
  * installs the sink at the level the context decides (`--quiet`,
  * `--verbose`) for the command's whole life.
  */

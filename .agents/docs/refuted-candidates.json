@@ -88,11 +88,11 @@
     {
       "id": "RT-install-cli-process-runtime",
       "candidate": "installCliProcessRuntime as an Effect program",
-      "why": "It is the bootstrap edge itself, so there is no runtime to run it on; an Effect face forces a bare Effect.run* at every citty action and grows BARE_EFFECT_RUN_SITES from 7 to about 20. What changed (wave 3): its one await was the package manifest read, which is now synchronous, so the install is a plain function returning the runtime and its Promise face is gone; nothing to lift into Effect. What changed (K4): the install is per command, `makeCliProcessRuntime` at the one citty edge (`defineCliCommand`), with no process memo; it is still a plain function returning the runtime.",
+      "why": "Still refused, for the platform's reasons, not the framework's. A command's runtime is a ManagedRuntime built at the Promise edge (`launchCliCommand` in cliCommand.ts) because the platform hands that same runtime to the modules that run programs at a Promise edge (`CliPlatformServices.runtime`, `makeCliProcessRuntime`'s `() => runtime`), `runChat` mounts the TUI on it after the command's program has finished, and a headless run started from inside a default-runtime fiber never finished its Ctrl-C shutdown drain. What changed (effect/cli, 2026-11-19): the old reason, a bare Effect.run* at every citty action, is gone: a command's handler is an Effect that builds its context in the parse fiber, and the binary runs one Effect.runPromise for the parse before the launch.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
       "symbols": [
         {
-          "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
+          "file": "packages/cli/src/runtime/platform/cliProcessRuntime.ts",
           "symbol": "makeCliProcessRuntime",
           "signature": "export function makeCliProcessRuntime( context: CliRuntimeContext, platform: CliPlatformOptions = {}, ): CliProcessRuntime {…}"
         }
@@ -273,14 +273,14 @@
     },
     {
       "id": "RT-cli-exit-code-one-function",
-      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting setExitCode, settleExitCode, CliConfigExecuteResult.exitCode and ChatExit.signal's code",
-      "why": "citty 0.2.2's runCommand discards a nested subcommand's run() result and passes no data down, and every command, root's direct subcommands included, runs nested, so no return value reaches texra.ts. The other names are not edge decisions: defineCliCommand already turns every command's result into the code (only doctor, which cannot use it, and help, which re-enters runCli as the non-interactive default, set it themselves); settleExitCode is the chat's run-claim code returned through runChat; CliConfigExecuteResult.exitCode is a headless run's program result; and a signal exit with a waiting run calls process.exit because that run holds the event loop open. runOutcomeExitCode is already the one outcome-to-code mapping. What landed instead: runCli and texraServe share runCommandForExitCode.",
+      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting CliConfigExecuteResult.exitCode and ChatExit.signal's code",
+      "why": "The names left are not edge decisions: CliConfigExecuteResult.exitCode is a headless run's program result; a signal exit with a waiting run calls process.exit because that run holds the event loop open; runOutcomeExitCode is already the one outcome-to-code mapping. What changed (effect/cli, 2026-11-19): the command line already ends in one code. The parse answers a launch or a code through `CliSelection`, `runCliCommandLine` runs the launch and answers the code for both binaries, and setExitCode with its module slot is deleted, so the citty half of this candidate is done and only the names above remain refused.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
       "symbols": [
         {
-          "file": "packages/cli/src/commands/_helpers/exitCode.ts",
-          "symbol": "setExitCode",
-          "signature": "export function setExitCode(code: number): void {…}"
+          "file": "packages/cli/src/commands/_helpers/cliCommand.ts",
+          "symbol": "runCliCommandLine",
+          "signature": "export async function runCliCommandLine<Name extends string, I, CI, E>( command: Command.Command<Name, I, CI, E, CliSelection | Command.Environment>, argv: readonly string[], ): Promise<{ exitCode: number }> {…}"
         }
       ]
     },
@@ -900,6 +900,20 @@
       ]
     },
     {
+      "id": "LLM-codex-backend-model-id-export",
+      "candidate": "withdrawing codexBackendModelId from the public exports of @texra-ai/llm (the app asking llm a higher-level question, or reading a decided route, for the Codex backend's model id)",
+      "why": "Its consumer outside llm, the app's Codex launch configuration, starts a Codex binary that signs in by itself: llm decides no route for that launch, so there is no decided route to read. routeConfig's ChatGPT case keeps config.id and only responsesConfiguration strips the date pin, so making routeConfig answer would change every reader of config.id, and the app would have to build a ChatGPT route it never uses. Withdrawing the export would copy the date-pin pattern into the app, a second owner for it.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-18-model-access-one-owner-per-question.md#kept-as-llm-exports-and-why",
+      "reopenWhen": "The app's Codex launch goes through a route llm decides.",
+      "symbols": [
+        {
+          "file": "packages/llm/src/models/modelRoute.ts",
+          "symbol": "codexBackendModelId",
+          "signature": "export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {…}"
+        }
+      ]
+    },
+    {
       "id": "DELIVERY-union-on-family-and-outcome",
       "candidate": "ChildRunDelivery as a union on family and outcome: typed background, script and subagent cases with an outcome discriminant in place of the optional `message`, beside one generic case for a plugin's family (tool card note, section 3)",
       "why": "A plugin's case must stay generic: its family is open (DELIVERY_FAMILY_PATTERN) and the agent-CLI tools set prompt, ids, wall time, response, usage, lines and message, which is the union of the harness's facts, so the three typed cases would be a second spelling of the generic one. An `outcome` field beside `message` removes no state: `message` present already decides the envelope tag in formatDelivery and the summary in deliverySummary, and endProcessChild turns a returned report into an error by adding `message` while keeping its response, so a failed case would carry every completed field. What landed instead (2026-11-19, followup.queued v11): the wall time stored as `wallTimeMs`, the prompt as an attribute its builder cuts, and attribute values that are strings, never null.",
@@ -915,6 +929,24 @@
           "file": "packages/harness/src/agent/runtime/processRun.ts",
           "symbol": "endProcessChild",
           "signature": "const endProcessChild = ( runId: RunId, { logger, turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.Effect<void, Error, AgentRunServices> => {…};"
+        }
+      ]
+    },
+    {
+      "id": "STORE-fact-version-one-reader",
+      "candidate": "One shared reader of a plugin fact's version for factKindOf (the store's row codec) and readTraceFacts (the trace import), which each write the retired, unknown, newer and earlier branches",
+      "why": "The two readers agree on the four cases and on nothing they do with them. The store fails a newer fact as DatabaseStoreNewer and an earlier or retired one as DatabaseRowEarlier, each carrying the commit; the trace import has no commit, throws one message for any other version and a different one for a retired kind. A shared classifier returns a four-literal standing that each caller switches over again, so both keep four branches and the classifier and its union are added: tried twice (an earlier attempt, and again on 2026-11-19), the diff came out no shorter, and routing the trace import through the store's errors changed its wording. Until a third reader appears, or the two outcomes converge, the eight short branches are the smaller design.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md#2-storage-one-classifier-for-a-run-that-cannot-be-read",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/rowCodec.ts",
+          "symbol": "factKindOf",
+          "signature": "export function factKindOf(fact: { readonly plugin: string; readonly kind: string; readonly version: number; }, commit: number, factKinds: FactKinds): Result.Result<FactKinds[FactName] | undefined, DatabaseStoreNewer | DatabaseRowEarlier> {…}"
+        },
+        {
+          "file": "packages/harness/src/shared/schemas/traceDocument.ts",
+          "symbol": "readTraceFacts",
+          "signature": "export function readTraceFacts(document: TraceDocument, appFactKinds: readonly TraceFactKind[]): TraceDocument {…}"
         }
       ]
     }

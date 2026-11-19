@@ -25,6 +25,7 @@ import {
   Layer,
   Option,
   Predicate,
+  Record,
   Ref,
   Result,
   Schedule,
@@ -377,10 +378,9 @@ export function spawnService(
           // reads the rest from the user's login shell, so it never depends
           // on the window that happened to start it.
           env: {
-            ...Object.fromEntries(
-              Object.entries(process.env).filter(
-                ([name]) => name === 'HOME' || name.startsWith('TEXRA_'),
-              ),
+            ...Record.filter(
+              process.env,
+              (_, name) => name === 'HOME' || name.startsWith('TEXRA_'),
             ),
             // Node's on-disk compile cache, in the private run directory: a
             // start after the first skips most of compiling the 12 MB bundle

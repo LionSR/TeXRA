@@ -71,6 +71,7 @@ const ROWS: PluginRow[] = [
       skillCount: 2,
       commandCount: 0,
       agentCount: 0,
+      programs: [],
       mcpServers: ['mathlib-search'],
     },
     usedBy: ['lean-prover'],

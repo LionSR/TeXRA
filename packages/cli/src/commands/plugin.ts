@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
-import { Effect, type FileSystem, Result } from 'effect';
+import { Effect, type FileSystem, Option, Result } from 'effect';
+import { Argument, Command, Flag } from 'effect/cli';
 
 import {
   InstalledPlugins,
@@ -27,9 +27,7 @@ import {
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { withUsageSections } from './_helpers/dispatch';
-import { collectStringFlagValues } from './_helpers/globalArgs';
+import { cliCommand } from './_helpers/cliCommand';
 import { cliResult, commandResult, emitCliResult } from './_helpers/output';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -89,7 +87,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
       const unloaded = [...plugin.code, ...plugin.ignored];
       return [
         ...lines,
-        `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')}), hooks (${plugin.hooks.length})`,
+        `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), programs (${plugin.programs.length === 0 ? 'none' : plugin.programs.join(', ')}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')}), hooks (${plugin.hooks.length})`,
         `  not loaded: ${unloaded.length === 0 ? 'none' : unloaded.join(', ')}`,
       ].join('\n');
     })
@@ -127,48 +125,43 @@ const askTrust = (review: PluginReview) => {
   );
 };
 
-const NAME_ARG = {
-  type: 'positional',
-  required: true,
-  description: 'Plugin name from `texra plugin list`',
-} as const;
+const NAME_ARG = Argument.String('name').pipe(
+  Argument.withDescription('Plugin name from `texra plugin list`'),
+);
 
-const pluginInstallCommand = defineCliCommand({
-  meta: {
-    name: 'install',
-    description:
-      'Install a Claude Code or Codex plugin, disabled until you enable it',
-  },
-  args: {
-    source: {
-      type: 'positional',
-      required: true,
-      description:
+const pluginInstallCommand = cliCommand('install', {
+  description:
+    'Install a Claude Code or Codex plugin, disabled until you enable it',
+  config: {
+    source: Argument.String('source').pipe(
+      Argument.withDescription(
         'github.com/<owner>/<repo>[@ref], a git URL, or a local plugin directory',
-    },
-    ref: {
-      type: 'string',
-      valueHint: 'ref',
-      description: 'Branch, tag or commit to install from a git URL',
-    },
-    plugin: {
-      type: 'string',
-      valueHint: 'name',
-      description:
+      ),
+    ),
+    ref: Flag.String('ref').pipe(
+      Flag.withMetavar('ref'),
+      Flag.withDescription('Branch, tag or commit to install from a git URL'),
+      Flag.optional,
+    ),
+    plugin: Flag.String('plugin').pipe(
+      Flag.withMetavar('name'),
+      Flag.withDescription(
         'Plugin to install from a marketplace; may be repeated. Needed when the marketplace lists more than one',
-    },
+      ),
+      Flag.atLeast(0),
+    ),
   },
   catchExitCode: pluginExitCode,
-  run: (context, ctx) => {
+  run: (context, input) => {
     // Parsed while building, so a bad source refuses before anything opens.
     const origin = InstalledPlugins.origin(
-      ctx.args.source,
+      input.source,
       context.cwd,
-      typeof ctx.args.ref === 'string' ? ctx.args.ref : undefined,
+      Option.getOrUndefined(input.ref),
     );
     if (Result.isFailure(origin))
       throw new CliUsageError({ message: origin.failure.message });
-    const only = collectStringFlagValues(ctx.rawArgs, 'plugin');
+    const only = input.plugin;
     return withPluginEnv((env) =>
       InstalledPlugins.install(origin.success, only, env).pipe(
         Effect.flatMap((added) =>
@@ -194,8 +187,9 @@ const pluginInstallCommand = defineCliCommand({
   },
 });
 
-const pluginListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List installed plugins' },
+const pluginListCommand = cliCommand('list', {
+  description: 'List installed plugins',
+  config: {},
   catchExitCode: pluginExitCode,
   run: () =>
     withPluginEnv((env) =>
@@ -233,23 +227,20 @@ const formatPluginShow = Effect.fn('formatPluginShow')(function* (
   ].join('\n');
 });
 
-const pluginShowCommand = defineCliCommand({
-  meta: {
-    name: 'show',
-    description:
-      'Show one installed plugin: what it contains, its hooks, and what TeXRA does not run',
-  },
-  args: { name: NAME_ARG },
+const pluginShowCommand = cliCommand('show', {
+  description:
+    'Show one installed plugin: what it contains, its hooks, and what TeXRA does not run',
+  config: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (_, ctx) =>
+  run: (_, input) =>
     withPluginEnv((env) =>
       InstalledPlugins.list(env).pipe(
         Effect.flatMap((plugins) => {
-          const plugin = plugins.find(({ name }) => name === ctx.args.name);
+          const plugin = plugins.find(({ name }) => name === input.name);
           if (plugin === undefined)
             return Effect.fail(
               new PluginRequestError({
-                message: `No plugin named ${ctx.args.name} is installed.`,
+                message: `No plugin named ${input.name} is installed.`,
               }),
             );
           return Effect.flatMap(formatPluginShow(plugin), (text) =>
@@ -260,17 +251,14 @@ const pluginShowCommand = defineCliCommand({
     ),
 });
 
-const pluginRemoveCommand = defineCliCommand({
-  meta: {
-    name: 'remove',
-    description:
-      'Remove an installed plugin; what it wrote to history is kept, unread',
-  },
-  args: { name: NAME_ARG },
+const pluginRemoveCommand = cliCommand('remove', {
+  description:
+    'Remove an installed plugin; what it wrote to history is kept, unread',
+  config: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (_, ctx) =>
+  run: (_, input) =>
     withPluginEnv((env) =>
-      InstalledPlugins.remove(ctx.args.name, env).pipe(
+      InstalledPlugins.remove(input.name, env).pipe(
         Effect.flatMap((removed) => {
           const result = { removed: removed.name, path: removed.path };
           let text = `Removed ${removed.name}.`;
@@ -284,20 +272,17 @@ const pluginRemoveCommand = defineCliCommand({
     ),
 });
 
-const pluginEnableCommand = defineCliCommand({
-  meta: {
-    name: 'enable',
-    description:
-      'Enable an installed plugin, asking to trust the version it is at',
-  },
-  args: { name: NAME_ARG },
+const pluginEnableCommand = cliCommand('enable', {
+  description:
+    'Enable an installed plugin, asking to trust the version it is at',
+  config: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (_, ctx) =>
+  run: (_, input) =>
     withPluginEnv((env) =>
-      InstalledPlugins.enable(ctx.args.name, env, askTrust).pipe(
+      InstalledPlugins.enable(input.name, env, askTrust).pipe(
         Effect.flatMap((outcome) => {
           const result = {
-            name: ctx.args.name,
+            name: input.name,
             enabled: outcome === 'enabled',
           };
           return emitCliResult(
@@ -305,8 +290,8 @@ const pluginEnableCommand = defineCliCommand({
               'plugin enable',
               result,
               outcome === 'enabled'
-                ? `Enabled ${ctx.args.name}. Open runs load it at their next step.`
-                : PLUGINS_PAGE.declined(ctx.args.name),
+                ? `Enabled ${input.name}. Open runs load it at their next step.`
+                : PLUGINS_PAGE.declined(input.name),
             ),
           ).pipe(
             Effect.as(
@@ -320,51 +305,37 @@ const pluginEnableCommand = defineCliCommand({
     ),
 });
 
-const pluginDisableCommand = defineCliCommand({
-  meta: {
-    name: 'disable',
-    description:
-      'Disable an installed plugin without removing it: it contributes nothing from the next step',
-  },
-  args: { name: NAME_ARG },
+const pluginDisableCommand = cliCommand('disable', {
+  description:
+    'Disable an installed plugin without removing it: it contributes nothing from the next step',
+  config: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (_, ctx) =>
+  run: (_, input) =>
     withPluginEnv((env) =>
-      InstalledPlugins.disable(ctx.args.name, env).pipe(
+      InstalledPlugins.disable(input.name, env).pipe(
         Effect.flatMap(() => {
-          const result = { name: ctx.args.name, enabled: false };
+          const result = { name: input.name, enabled: false };
           return emitCliResult(
-            commandResult(
-              'plugin disable',
-              result,
-              `Disabled ${ctx.args.name}.`,
-            ),
+            commandResult('plugin disable', result, `Disabled ${input.name}.`),
           );
         }),
       ),
     ),
 });
 
-const pluginUpdateCommand = defineCliCommand({
-  meta: {
-    name: 'update',
-    description:
-      'Fetch the latest commit of installed plugins and reread their manifests',
-  },
-  args: {
-    name: {
-      ...NAME_ARG,
-      required: false,
-      description: 'Plugin to update (default: all)',
-    },
+const pluginUpdateCommand = cliCommand('update', {
+  description:
+    'Fetch the latest commit of installed plugins and reread their manifests',
+  config: {
+    name: Argument.String('name').pipe(
+      Argument.withDescription('Plugin to update (default: all)'),
+      Argument.optional,
+    ),
   },
   catchExitCode: pluginExitCode,
-  run: (_, ctx) =>
+  run: (_, input) =>
     withPluginEnv((env) =>
-      InstalledPlugins.update(
-        typeof ctx.args.name === 'string' ? [ctx.args.name] : [],
-        env,
-      ).pipe(
+      InstalledPlugins.update(Option.toArray(input.name), env).pipe(
         Effect.flatMap((updates) =>
           emitCliResult({
             json: updates,
@@ -382,54 +353,45 @@ const pluginUpdateCommand = defineCliCommand({
     ),
 });
 
-export const pluginCommand = withUsageSections(
-  defineCommand({
-    meta: {
-      name: 'plugin',
-      description:
-        'Install Claude Code and Codex plugins: their skills, commands, agents, MCP servers and hooks',
-    },
-    subCommands: {
-      install: pluginInstallCommand,
-      list: pluginListCommand,
-      show: pluginShowCommand,
-      remove: pluginRemoveCommand,
-      update: pluginUpdateCommand,
-      enable: pluginEnableCommand,
-      disable: pluginDisableCommand,
-    },
-  }),
+const EXAMPLES: readonly (readonly [string, string])[] = [
   [
-    {
-      title: 'EXAMPLES',
-      rows: [
-        [
-          'texra plugin install github.com/LionSR/AgenticPublicationProtocol',
-          'install from GitHub, pinned to the fetched commit',
-        ],
-        ['texra plugin install ./my-plugin', 'use a local plugin in place'],
-        [
-          'texra plugin install github.com/o/market --plugin paper',
-          'install one plugin a marketplace lists',
-        ],
-        [
-          'texra plugin show paper-protocol',
-          'list its hooks, and what TeXRA does not run',
-        ],
-        [
-          'texra plugin enable paper-protocol',
-          'review what it declares, trust it, and load it',
-        ],
-        ['texra plugin update', 'refetch every installed plugin'],
-        [
-          'texra plugin disable paper-protocol',
-          'unload a plugin without removing it',
-        ],
-      ],
-    },
-    {
-      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers and command hooks, each in its own process. It does not load its ${InstalledPlugins.unloadedComponents.join(', ')}; a plugin with LSP servers cannot be enabled yet.`,
-      rows: [],
-    },
+    'texra plugin install github.com/LionSR/AgenticPublicationProtocol',
+    'install from GitHub, pinned to the fetched commit',
   ],
+  ['texra plugin install ./my-plugin', 'use a local plugin in place'],
+  [
+    'texra plugin install github.com/o/market --plugin paper',
+    'install one plugin a marketplace lists',
+  ],
+  [
+    'texra plugin show paper-protocol',
+    'list its hooks, and what TeXRA does not run',
+  ],
+  [
+    'texra plugin enable paper-protocol',
+    'review what it declares, trust it, and load it',
+  ],
+  ['texra plugin update', 'refetch every installed plugin'],
+  [
+    'texra plugin disable paper-protocol',
+    'unload a plugin without removing it',
+  ],
+];
+
+export const pluginCommand = Command.make('plugin').pipe(
+  Command.withDescription(
+    'Install Claude Code and Codex plugins: their skills, commands, agents, MCP servers and hooks',
+  ),
+  Command.withSubcommands([
+    pluginInstallCommand,
+    pluginListCommand,
+    pluginShowCommand,
+    pluginRemoveCommand,
+    pluginUpdateCommand,
+    pluginEnableCommand,
+    pluginDisableCommand,
+  ]),
+  Command.withExamples(
+    EXAMPLES.map(([command, description]) => ({ command, description })),
+  ),
 );

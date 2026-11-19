@@ -267,33 +267,35 @@ export function chooseReasoning(
 }
 
 /**
- * The effort values `route` may send for a model: the levels it accepts
- * while thinking, plus `none` where `none` is how thinking is turned off.
- * Without a route, the model's own.
+ * What `route` carries of a model's reasoning, over its controls there
+ * (without a route, the model's own):
+ *
+ * - `acceptedEfforts`: the effort values it may send, the levels it accepts
+ *   while thinking plus `none` where `none` is how thinking is turned off;
+ * - `wireEffort`: the effort it sends for a {@link chooseReasoning} choice,
+ *   the chosen level, or `none` when thinking is off and `none` is how the
+ *   route says so.
  */
-export function acceptedEfforts(
+export function reasoningOnRoute(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
   route?: ModelRoute,
-): ReasoningEffort[] {
+): {
+  readonly acceptedEfforts: readonly ReasoningEffort[];
+  readonly wireEffort: (choice: ReasoningChoice) => ReasoningEffort | null;
+} {
   const reasoning = routeControls(config, route);
-  if (reasoning === undefined) return [];
-  return [
-    ...(reasoning.off === undefined ? [] : [ReasoningEffort.NONE]),
-    ...reasoning.efforts,
-  ];
-}
-
-/**
- * The effort `route` sends for `config`: the chosen level, or `none` when
- * thinking is off and `none` is how the route says so.
- */
-export function wireEffort(
-  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: ModelRoute | undefined,
-  reasoning: ReasoningChoice,
-): ReasoningEffort | null {
-  if (reasoning.thinking || routeControls(config, route)?.off === undefined) {
-    return reasoning.effort;
-  }
-  return reasoning.effort ?? ReasoningEffort.NONE;
+  const offSendsNone = reasoning?.off !== undefined;
+  return {
+    acceptedEfforts:
+      reasoning === undefined
+        ? []
+        : [
+            ...(offSendsNone ? [ReasoningEffort.NONE] : []),
+            ...reasoning.efforts,
+          ],
+    wireEffort: (choice) =>
+      choice.thinking || !offSendsNone
+        ? choice.effort
+        : (choice.effort ?? ReasoningEffort.NONE),
+  };
 }

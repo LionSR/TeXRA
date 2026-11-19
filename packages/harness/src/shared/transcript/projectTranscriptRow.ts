@@ -173,14 +173,22 @@ export type ToolCallFacts = Pick<
   'section' | 'attempt' | 'cutByRunEnd'
 >;
 
+/** What a row reads of its run and session, which its own events do not
+ *  carry: the session's runs by id, and whether anybody drives its run. */
+export type RowRunFacts = Pick<
+  ToolRowModelContext,
+  'runLabels' | 'interrupted'
+>;
+
 /** A tool card from its decoded payload; `output` is the live text a running
- *  card printed, which paints in place of the durable output, and `call` is
- *  what its slot holds beyond the payload, which every repaint carries. */
+ *  card printed, which paints in place of the durable output, `run` is what
+ *  the card reads of its run, and `call` is what its slot holds beyond the
+ *  payload, which every repaint carries. */
 export function toolRow(
   base: TranscriptRowBase,
   log: ToolCallLog,
   output: string | undefined,
-  runLabels: ToolRowModelContext['runLabels'],
+  run: RowRunFacts,
   call: ToolCallFacts,
 ): ToolRow {
   const { result: _result, ...stated } = log;
@@ -190,7 +198,7 @@ export function toolRow(
     ...call,
     kind: 'tool',
     model: toolRowModel(normalizeToolUse(shown), {
-      ...(runLabels ? { runLabels } : {}),
+      ...run,
       parsedOutput:
         shown.result === undefined ? shown.output : resultFields(shown.result),
     }),

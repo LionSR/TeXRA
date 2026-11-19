@@ -29,6 +29,8 @@ export const PluginListItemSchema = Schema.Struct({
   skillCount: Schema.Number,
   commandCount: Schema.Number,
   agentCount: Schema.Number,
+  /** The programs it carries, by the name each is started by. */
+  programs: Schema.Array(Schema.String),
   mcpServers: Schema.Array(Schema.String),
   /** Why it cannot be read now, when it cannot. */
   problem: Schema.optional(Schema.String),

@@ -1,4 +1,5 @@
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Option } from 'effect';
+import { Flag } from 'effect/cli';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
@@ -26,7 +27,7 @@ import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
 interface InitAgentOption {
@@ -194,33 +195,33 @@ const runInit = Effect.fn('runInit')(function* (
   yield* emitInitSummary(filePath, answers, config, models, gitignoreOutcome);
 });
 
-export const initCommand = defineCliCommand({
-  meta: {
-    name: 'init',
-    description: 'Bootstrap a .texra/config.json with sensible defaults',
+export const initCommand = cliCommand('init', {
+  description: 'Bootstrap a .texra/config.json with sensible defaults',
+  config: {
+    yes: Flag.Boolean('yes').pipe(
+      Flag.withAlias('y'),
+      Flag.withoutNegation,
+      Flag.withDefault(false),
+      Flag.withDescription('Accept defaults non-interactively'),
+    ),
+    force: Flag.Boolean('force').pipe(
+      Flag.withoutNegation,
+      Flag.withDefault(false),
+      Flag.withDescription('Overwrite an existing config file'),
+    ),
+    // Absent leaves the choice to the wizard (or `false` without one);
+    // `--no-gitignore` refuses it.
+    gitignore: Flag.Boolean('gitignore').pipe(
+      Flag.withDescription(
+        'Add .texra/ to .gitignore (non-interactive default: false)',
+      ),
+      Flag.optional,
+    ),
   },
-  args: {
-    yes: {
-      type: 'boolean',
-      alias: 'y',
-      description: 'Accept defaults non-interactively',
-    },
-    force: {
-      type: 'boolean',
-      description: 'Overwrite an existing config file',
-    },
-    gitignore: {
-      type: 'boolean',
-      description: 'Add .texra/ to .gitignore (non-interactive default: false)',
-    },
-  },
-  run: (context, ctx) =>
+  run: (context, input) =>
     runInit(context, {
-      yes: ctx.args.yes === true,
-      force: ctx.args.force === true,
-      gitignore:
-        typeof ctx.args.gitignore === 'boolean'
-          ? ctx.args.gitignore
-          : undefined,
+      yes: input.yes,
+      force: input.force,
+      gitignore: Option.getOrUndefined(input.gitignore),
     }),
 });

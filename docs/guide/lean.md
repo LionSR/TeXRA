@@ -112,7 +112,7 @@ The `lean_inspect` tool reads the **tactic proof state** (`goal`), the **expecte
 Find a Mathlib lemma that says the sum of two continuous functions is continuous.
 ```
 
-The `lean_loogle` tool queries [Loogle](https://loogle.lean-lang.org/) to find lemmas by name, type signature, or the constants they mention, so the agent cites real Mathlib lemmas instead of inventing them.
+The `lean_loogle` tool queries [Loogle](https://loogle.lean-lang.org/) to find lemmas by name, type signature, or the constants they mention, so the agent cites real Mathlib lemmas instead of inventing them. Like the other Lean tools, it is offered only when Lean support is available (`lake` on your `PATH`).
 
 ### <wa-icon library="texra" name="sync"></wa-icon> Refresh a stuck file
 

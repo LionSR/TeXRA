@@ -72,7 +72,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           },
         ]);
         yield* Context.get(session, SessionLog).transact([
-          { type: 'plugin.fact', aggregateId, parent: null, ...planFact },
+          { type: 'plugin.fact', aggregateId, ...planFact },
         ]);
 
         const result = yield* assembleTrace(runId).pipe(
