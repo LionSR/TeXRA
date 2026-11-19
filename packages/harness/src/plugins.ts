@@ -122,6 +122,17 @@ export {
   approvedWriteConflict,
   type ApprovedEditConflictError,
 } from '@tools/approval/approvedWrite';
+// The diff engine behind every edit card's counts and diff body: a change's
+// unified-diff hunks, their line counts and text, and the warning a diff
+// that ran past its bound logs.
+export {
+  buildDiffHunks,
+  countLineChanges,
+  reportDiffTimeout,
+  unifiedDiffText,
+  type DiffHunks,
+  type Hunk,
+} from '@tools/unifiedDiff';
 // JSON-RPC 2.0 over a child process's stdio (a language server's framing,
 // or one message per line).
 export {

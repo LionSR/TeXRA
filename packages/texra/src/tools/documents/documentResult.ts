@@ -10,7 +10,6 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { buildDiffHunks } from '@texra-ai/harness/host';
 import {
   readNormalizedFile,
   workspaceRelativePath,
@@ -42,6 +41,7 @@ import {
   type ProgramChange,
   withLogChannel,
   runDirUnder,
+  buildDiffHunks,
 } from '@texra-ai/harness/plugins';
 
 /**

@@ -102,14 +102,6 @@ export {
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
 export { followPendingRequests } from './effect/requestAnswerer.js';
-export {
-  buildDiffHunks,
-  countLineChanges,
-  reportDiffTimeout,
-  unifiedDiffText,
-  type DiffHunks,
-  type Hunk,
-} from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 // The agent-directories service (its port is the root entry's).
 export { AgentDirectories } from '@platform/interfaces';

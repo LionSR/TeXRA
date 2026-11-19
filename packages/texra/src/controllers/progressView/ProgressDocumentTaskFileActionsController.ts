@@ -5,7 +5,6 @@ import path from 'node:path';
 import { Effect, FileSystem, Option } from 'effect';
 
 // Local imports
-import { reportDiffTimeout, unifiedDiffText } from '@texra-ai/harness/host';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import {
   runDirUnder,
@@ -14,6 +13,8 @@ import {
   type StorageFs,
   type WorkspaceFs,
   pathToLocationIn,
+  reportDiffTimeout,
+  unifiedDiffText,
 } from '@texra-ai/harness/plugins';
 import {
   meansAbsent,
