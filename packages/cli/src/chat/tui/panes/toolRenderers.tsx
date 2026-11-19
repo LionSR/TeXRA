@@ -33,7 +33,11 @@ import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
-import { TOOL_STATUS, TOOL_USER_FEEDBACK_LABEL } from '@ui/copy/runStatus';
+import {
+  TOOL_STATUS,
+  TOOL_USER_FEEDBACK_LABEL,
+  toolRowLook,
+} from '@ui/copy/runStatus';
 import { formatLineChanges } from '@ui/copy/format';
 
 // Local imports - CLI TUI rendering
@@ -161,7 +165,7 @@ function toolErrorLines(
 ): string[] {
   if (cutByRunEnd === true) return [CUT_BY_RUN_END_NOTE];
   if (model.errorPreview) return elidedLines(model.errorPreview, elide);
-  return model.status === 'failed' && !model.isUserFeedback ? ['(error)'] : [];
+  return toolRowLook(model)?.tone === 'danger' ? ['(error)'] : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -331,9 +335,9 @@ function buildStyledLines(
     budget > 0 && headerPreview
       ? truncateSummaryToWidth(safeTerminalText(headerPreview), budget)
       : '';
-  // A call whose status was never recorded has no tone: a dim dot.
-  const statusTone = model.status && TOOL_STATUS[model.status].tone;
-  const statusColor = statusTone && TONE_PAINT[statusTone].color;
+  // A call whose status was never recorded has no look: a dim dot.
+  const look = toolRowLook(model);
+  const statusColor = look && TONE_PAINT[look.tone].color;
 
   const patchGroups = patchGroupsFromSections(model.sections, failed);
   const sectionRows = model.sections.flatMap((section) =>

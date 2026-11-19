@@ -24,6 +24,7 @@ import {
   statusGlyph,
   TOOL_STATUS,
   TOOL_USER_FEEDBACK_LABEL,
+  toolRowLook,
 } from '@ui/copy/runStatus';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
@@ -66,13 +67,14 @@ export function formatToolUseTemplate(
   const toolName = row.log.toolName.trim();
   const normalizedToolName = normalizeToolName(toolName);
   const displayKind = toolDisplayKind(toolName);
-  const showAsError = model.status === 'failed' && !model.isUserFeedback;
+  const look = toolRowLook(model);
+  const showAsError = look?.tone === 'danger';
 
+  // A card wears its tool's icon unless its state has something to say:
+  // the user's feedback, an interruption or a failure.
   let iconName: IconName;
-  if (model.isUserFeedback) {
-    iconName = 'comment';
-  } else if (stopped || showAsError) {
-    iconName = statusGlyph({ tone: stopped ? 'warning' : 'danger' });
+  if (look !== undefined && (model.isUserFeedback || stopped || showAsError)) {
+    iconName = statusGlyph(look);
   } else {
     const icon = tools.icons[normalizedToolName];
     iconName =
