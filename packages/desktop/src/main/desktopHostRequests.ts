@@ -88,9 +88,6 @@ export const createDesktopHostRequests = (
           postDesktopSettingsView(options.postToRenderer, 'models/keys'),
         ),
       openExternal: (url) => options.openExternalUrl(url),
-      openInstallGuide: Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'plugins'),
-      ),
       onboarding: {
         signInChatGpt: Effect.suspend(() => {
           const settings = options.settings();

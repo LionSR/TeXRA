@@ -23,10 +23,7 @@ import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import {
-  openGuidePage,
-  vscodeOpener,
-} from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -295,10 +292,6 @@ export const createExtensionHostRequests = Effect.fn(
     setApiKey: (provider) =>
       runHandler('setApiKey', setApiKey(roots, provider)),
     openExternal: (url) => vscodeOpener.openExternal(url),
-    // The banner refresh probes the dependencies again; the banner shows
-    // what is missing.
-    // Every dependency the banner lists installs from the one guide page.
-    openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
       signInChatGpt: runHandler(
         'signInChatGpt',

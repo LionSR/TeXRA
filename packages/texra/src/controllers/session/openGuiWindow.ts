@@ -185,7 +185,6 @@ export interface SharedHostCommandBindings {
   /** Open a web address in the browser. A failed open is answered, in the
    *  body below, as a rejection naming the address. */
   readonly openExternal: ExternalOpener['openExternal'];
-  readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
    *  takes, the two skips write the funnel's flags and Run Setup launches
@@ -710,7 +709,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* snapshot.refreshHostBanners;
           return done;
         case 'openInstallGuide':
-          yield* bindings.openInstallGuide;
+          // Every dependency the banner lists installs from the one guide
+          // page.
+          yield* openLink(texraGuideUrl('installation'));
           return done;
         case 'onboarding':
           switch (request.action) {
