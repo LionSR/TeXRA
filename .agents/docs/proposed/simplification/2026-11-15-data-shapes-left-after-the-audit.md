@@ -53,11 +53,13 @@ Landed 2026-11-16 with finding 1: `RunWork.turnStartedAt`, written where
 
 `LatexSettingsStatusSchema`
 (`packages/texra/src/shared/settingsView/settingsViewMessages.ts`) keys
-`installed` by dependency and the seven paths by tool. Which tool belongs to
-which dependency is `LATEX_DEPENDENCIES[dep].needs`
+`installed` by dependency and `paths` by probed tool (one record since
+2026-11-19; it was seven `*Path` fields). Which tool belongs to which
+dependency is `LATEX_DEPENDENCIES[dep].needs`
 (`packages/texra/src/shared/constants/latexToolchain.ts`), and the LaTeX tab
-restates it as a `pathKeys` column
-(`packages/texra/src/ui/settings/tabs/LaTeXTab.ts`).
+restates it as a `pathLines` column
+(`packages/texra/src/ui/settings/tabs/LaTeXTab.ts`), which is where the
+three display rules below now live.
 
 Proposed: `dependencies: Record<LatexDependency, { installed; paths }>`, built
 by mapping over `LATEX_DEPENDENCIES`.

@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The LaTeX Extraction plugin is removed**, with its three tools:
+  `extract_figures`, `extract_tikz_figures` and `extract_bib_entries`. An
+  agent reads a document's figures and bibliography with the file tools it
+  already has: `grep` for `\includegraphics` or a citation key, `read_file`
+  on an image or PDF (returned as an attachment), and `bash` to compile a
+  TikZ picture. The document programs still attach figures themselves
+  (`autoExtractFigure`, `autoExtractTikzFigure`, `autoCompileInputPdf`), and
+  **TeXRA: Compile TikZ Figures from Current File** is unchanged. A custom
+  agent whose `tools:` names one of the three still loads, without that tool;
+  remove the name. A stored run that called them opens as before: each call
+  keeps its card, input and result, drawn with the generic tool icon.
+
 - **The external inquiry is removed.** The `inquiry` tool, which had an
   agent draft a question for you to paste into an outside chat
   subscription (ChatGPT, Claude, Gemini, Grok) and paste the answer back,

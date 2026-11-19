@@ -28,6 +28,7 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   type LatexDependency,
   type LatexRecommendedSettingField,
+  type ProbedLatexTool,
   SCOOP_INSTALL_COMMAND,
   type InstallAdvice,
 } from '@texra/shared/constants/latexToolchain';
@@ -65,9 +66,6 @@ import {
   DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
 } from '@texra/shared/settings/documentsSettings';
 
-/** Path keys in LatexSettingsStatus for tool paths. */
-type ToolPathKey = Extract<keyof LatexSettingsStatus, `${string}Path`>;
-
 /** What the Dependencies section says of one dependency: the toolchain's
  *  dependencies, and LaTeX Workshop, which installs through a VS Code
  *  command instead. */
@@ -75,8 +73,10 @@ interface DependencyInfo {
   readonly key: LatexDependency | 'latexWorkshop';
   readonly installedDesc: string;
   readonly missingDesc: string;
-  /** Keys to check for detected tool paths (shown when installed). */
-  readonly pathKeys?: ToolPathKey[];
+  /** The paths shown when installed, one line each: of the tools a line
+   *  names, the first one found. Perl backs latexindent but is never shown
+   *  with a path of its own. */
+  readonly pathLines?: readonly (readonly ProbedLatexTool[])[];
 }
 
 const DEPENDENCIES: DependencyInfo[] = [
@@ -85,7 +85,7 @@ const DEPENDENCIES: DependencyInfo[] = [
     installedDesc: 'pdflatex/latexmk detected on PATH.',
     missingDesc:
       'A TeX distribution (TeX Live, MacTeX, or MiKTeX) is required to compile LaTeX documents.',
-    pathKeys: ['pdflatexPath', 'latexmkPath'],
+    pathLines: [['pdflatex'], ['latexmk']],
   },
   {
     key: 'latexWorkshop',
@@ -98,7 +98,7 @@ const DEPENDENCIES: DependencyInfo[] = [
     installedDesc: 'Enables visual comparison of LaTeX document revisions.',
     missingDesc:
       'Install via your TeX distribution to enable diff comparisons.',
-    pathKeys: ['latexdiffPath'],
+    pathLines: [['latexdiff']],
   },
   {
     key: 'latexindent',
@@ -107,7 +107,7 @@ const DEPENDENCIES: DependencyInfo[] = [
     missingDesc:
       'Without it, agents may produce inconsistent indentation ' +
       'when editing .tex files. Requires Perl.',
-    pathKeys: ['latexindentPath'],
+    pathLines: [['latexindent']],
   },
   {
     key: 'texcount',
@@ -116,7 +116,7 @@ const DEPENDENCIES: DependencyInfo[] = [
     missingDesc:
       'Without it, agents cannot count words or structural elements in your .tex files. ' +
       'Part of most TeX Live distributions.',
-    pathKeys: ['texcountPath'],
+    pathLines: [['texcount']],
   },
   {
     key: 'image',
@@ -125,7 +125,7 @@ const DEPENDENCIES: DependencyInfo[] = [
     missingDesc:
       'Needed to generate PNG previews of compiled PDF pages. ' +
       'Requires Ghostscript and either GraphicsMagick or ImageMagick.',
-    pathKeys: ['ghostscriptPath', 'graphicsmagickPath'],
+    pathLines: [['gs'], ['gm', 'magick']],
   },
 ];
 
@@ -172,10 +172,12 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
 
   /** Collect detected tool paths for a dependency. */
   private getDetectedPaths(dep: DependencyInfo): string[] {
-    if (!dep.pathKeys) return [];
-    return dep.pathKeys
-      .map((k) => this.settings[k])
-      .filter(Predicate.isNotNullish);
+    const { paths } = this.settings;
+    return (dep.pathLines ?? [])
+      .map((tools) =>
+        tools.map((tool) => paths[tool]).find(Predicate.isNotNull),
+      )
+      .filter(Predicate.isNotUndefined);
   }
 
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {

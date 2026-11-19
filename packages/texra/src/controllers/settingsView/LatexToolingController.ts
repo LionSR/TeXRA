@@ -7,6 +7,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { probeLatexTools } from '@latex/latexToolchain';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
+  probedToolPaths,
   type LatexSettingsStatus,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
@@ -56,9 +57,6 @@ export function detectLatexSettingsStatus(
     };
     const { tools, installed: installedTools } =
       yield* probeLatexTools(PROBED_LATEX_TOOLS);
-    // Perl backs latexindent but is never shown with a path of its own.
-    const pathOf = (name: (typeof PROBED_LATEX_TOOLS)[number]) =>
-      tools.find((tool) => tool.name === name)?.path ?? null;
     const installed = Record.map(LATEX_DEPENDENCIES, ({ needs }) =>
       needs.every((group) => group.some((tool) => installedTools.has(tool))),
     );
@@ -66,13 +64,9 @@ export function detectLatexSettingsStatus(
       editor: editor ?? null,
       installed,
       platform,
-      pdflatexPath: pathOf('pdflatex'),
-      latexmkPath: pathOf('latexmk'),
-      latexdiffPath: pathOf('latexdiff'),
-      latexindentPath: pathOf('latexindent'),
-      texcountPath: pathOf('texcount'),
-      ghostscriptPath: pathOf('gs'),
-      graphicsmagickPath: pathOf('gm') ?? pathOf('magick'),
+      paths: probedToolPaths(
+        (name) => tools.find((tool) => tool.name === name)?.path ?? null,
+      ),
       packageManager: detectPackageManager((yield* CommandDirs)()),
     } satisfies LatexSettingsStatus;
   }).pipe(
