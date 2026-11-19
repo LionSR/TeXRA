@@ -153,11 +153,10 @@ export type {
   RouteFacts,
 } from './models/modelRoute.js';
 export {
-  acceptedEfforts,
   chooseReasoning,
   DEFAULT_EFFORT,
   ReasoningChoiceError,
-  wireEffort,
+  reasoningOnRoute,
 } from './models/reasoningChoice.js';
 export type {
   ChooseReasoningOptions,
