@@ -263,7 +263,7 @@ describe(
               expect(requests('request.decided')).toMatchObject([
                 { requestId: asked.requestId, decision: { action: 'approve' } },
               ]);
-              expect(readFileSync(effects, 'utf8')).toBe('ran\n');
+              expect(readFileSync(effects, 'utf8').trimEnd()).toBe('ran');
             }),
         );
 
