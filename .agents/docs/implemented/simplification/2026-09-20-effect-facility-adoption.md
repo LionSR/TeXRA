@@ -63,7 +63,7 @@ replace any; they belong to the observability plane, not here.
 `ModelRetryGate` onto `Schedule` (a cross-fiber circuit breaker; `Schedule`
 is per-fiber) and `packages/harness/src/tools/timeouts.ts` (already
 `Effect.timeoutOrElse` and `Schedule`). These are the first things an autonomous agent will suggest;
-`config/ratchets/refuted-candidates.json` makes them machine-refused.
+`.agents/docs/refuted-candidates.json` records them as refused.
 
 The platform config providers onto an Effect `ConfigProvider` (design panel,
 2026-09-21): refused. Wrapping the platform port's own `get` in an Effect

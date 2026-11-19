@@ -59,11 +59,10 @@ The items below each need a decision or were judged not worth a change.
    output-document tag for `agent/output/` and nothing else, apart from
    `extractTextFromTag`. Move it under `agent/output/extraction/` with the
    change in item 4.
-6. **`formatCliHistoryDeletionSummary` sits in app copy**
-   (`packages/texra/src/ui/copy/runHistory.ts`). Its one consumer is
-   `packages/cli/src/commands/history.ts`. It belongs beside the terminal's
-   history labels (`packages/cli/src/runtime/historyLabels.ts`) unless a GUI
-   gains a bulk delete.
+
+Landed since: `formatCliHistoryDeletionSummary` moved from app copy to the
+terminal's history labels (`packages/cli/src/runtime/historyLabels.ts`),
+beside its one consumer, and `ui/copy/runHistory.ts` is gone.
 
 ## Checked and declined
 

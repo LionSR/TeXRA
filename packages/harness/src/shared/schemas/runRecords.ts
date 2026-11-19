@@ -251,14 +251,16 @@ export const AgentRunListingEntrySchema = Schema.Struct({
   /** The model the run is on, as the view folds it: its newest
    *  `run.config`'s. */
   model: Schema.optional(Schema.String),
-  /** `deriveResumability` finds a point to continue from. Ownership and
-   *  loadability are finished when the run is opened. */
-  resumable: Schema.Boolean,
-  /** Why the run cannot resume in this build although it may have rows to
+  /** The stored rows hold a point to continue from in this process
+   *  (`deriveContinuation`), whatever the outcome: true for a finished
+   *  conversation, which takes another message, as for an interrupted run.
+   *  Ownership and loadability are finished when the run is opened. */
+  continues: Schema.Boolean,
+  /** Why the run cannot continue in this build although it may have rows to
    *  continue from: they could not be read, an earlier build wrote them, or
    *  they hold a fact of a plugin this process does not load. Absent when
-   *  it resumes or simply has nothing to continue from. */
-  resumeBlocked: Schema.optional(Schema.String),
+   *  it continues or simply has nothing to continue from. */
+  continueBlocked: Schema.optional(Schema.String),
   /** What the run is: the durable authority, stamped at registration. */
   identity: RunIdentitySchema.members[0],
   record: AgentConfigSchema,
