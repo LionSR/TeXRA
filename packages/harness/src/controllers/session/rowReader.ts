@@ -34,6 +34,7 @@ import { sha256Hex } from '@utils/core/idHash';
 
 import {
   decodeRow,
+  EARLIER_AGGREGATE_PARENTS,
   EARLIER_RUNS,
   factKindOf,
   EVENT_COLUMNS,
@@ -141,7 +142,7 @@ const INLINE_BLOBS = `SELECT DISTINCT b.digest AS digest, b.value AS value
   FROM event_blob l JOIN blob b ON b.digest = l.digest
   WHERE l.inline = 1 AND l."commit" IN (SELECT value FROM json_each(?))`;
 const decodeCommit = Schema.decodeUnknownSync(Schema.Int);
-
+/** An earlier-build run row, as `EARLIER_RUNS` and `EARLIER_AGGREGATE_PARENTS` select it. */
 /** An earlier-build run row, as `EARLIER_RUNS` selects it. */
 const EarlierRowSchema = Schema.Struct({
   logicalId: Schema.String,
@@ -241,7 +242,10 @@ export function rowReader<E>(
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
-    for (const row of yield* exec(...EARLIER_RUNS)) {
+    for (const row of [
+      ...(yield* exec(...EARLIER_RUNS)),
+      ...(yield* exec(EARLIER_AGGREGATE_PARENTS, [])),
+    ]) {
       const { logicalId, commit, type } =
         Schema.decodeUnknownSync(EarlierRowSchema)(row);
       markEarlier(

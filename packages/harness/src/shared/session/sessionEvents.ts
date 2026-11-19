@@ -15,9 +15,8 @@ import {
 } from 'effect';
 
 import type {
-  AggregateId,
-  CommitOrdinal,
   RunId,
+  CommitOrdinal,
   SessionRow,
   DisplayRow,
   SessionRowDraft,
@@ -63,9 +62,9 @@ export type UnfoldedDraft = WithBlobs<
 
 /** Rows another owner decides inside a job, appended with the job's own
  *  batch so both commit or neither. */
-export type Alongside<E = never> = Effect.Effect<
+export type Alongside = Effect.Effect<
   readonly UnfoldedDraft[],
-  E,
+  never,
   Scope.Scope
 >;
 
@@ -144,7 +143,7 @@ export class SessionEvents extends Context.Service<
      *  and nothing has closed since, in first-appearance order: each until
      *  its `stream.end` or a phase move that pauses or ends its run. What a
      *  run's wait or end closes. It counts every job that has returned. */
-    readonly openWork: (aggregateId: AggregateId) => readonly string[];
+    readonly openWork: (aggregateId: RunId) => readonly string[];
     /** The last commit this publisher published; the store's commit when
      *  it opened, before any. Where a reader that starts now begins. */
     readonly head: () => CommitOrdinal;

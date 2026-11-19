@@ -872,22 +872,9 @@ interface FactKind {
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
   /** What a fork of a run (a conversation's, or a script's `self()` child)
-   *  starts with of the run's own row of the kind: `copy` the row the run
-   *  held at the cut, `drop` none. A row about the plugin's own aggregate
-   *  belongs to that aggregate and stays with it. */
+   *  starts with of the run's row of the kind: `copy` the row the run held
+   *  at the cut, `drop` none. */
   readonly fork: 'copy' | 'drop';
-  /** The kind's own transition rule, checked by its writer in the job that
-   *  appends the row (`ownFactsChecked`) against the aggregate's latest row
-   *  of the kind (none before the first): the rejection's reason, or null
-   *  to accept. */
-  readonly accepts?: (
-    previous: PluginFactRow | undefined,
-    next: PluginFactRow,
-  ) => string | null;
-  /** Whether the aggregate's `latest` row already says more than `next`
-   *  (a call's fact that lagged behind a later writer): the call's batch
-   *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
@@ -1536,18 +1523,6 @@ interface PluginDefinition<ROut> extends Omit<
    *  require only the process's probe services. Its own process services
    *  are offered while its layer is up, read with `Effect.serviceOption`. */
   readonly availability?: ToolAvailabilityChecks;
-}
-```
-
-## PluginFactRow
-
-One stored row of a plugin's kind, as its fact kind's transition rule reads
-it: the row's decoded value and the run it is parented to, if any.
-
-```ts
-interface PluginFactRow {
-  readonly value: Schema.Json;
-  readonly parent: RunId | null;
 }
 ```
 

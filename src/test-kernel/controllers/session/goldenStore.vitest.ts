@@ -732,6 +732,21 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
           refusedAs({ kind: 'earlierBuild', cause: expect.any(String) }),
         ],
         [
+          "an earlier build's plugin aggregate hung under it",
+          // An external inquiry's thread, as the build that had one stored it.
+          `INSERT INTO event_sequence (kind, logical_id, uid, seq, parent_id)
+             SELECT 'plugin', 'inquiry:t1', '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+               1, id FROM event_sequence WHERE logical_id = '${CHAT}';
+           INSERT INTO event (aggregate, seq, type, version, at, data)
+             SELECT id, 1, 'plugin.fact', ${ROW_KINDS['plugin.fact'].version},
+               1767312000000, json_object('plugin', 'inquiry', 'kind', 'thread',
+                 'version', 1, 'value', json_object(), 'parent', '${CHAT}')
+             FROM event_sequence WHERE logical_id = 'inquiry:t1';
+           INSERT OR IGNORE INTO stored_kind (type, version)
+             VALUES ('plugin.fact/inquiry/thread', 1);`,
+          refusedAs({ kind: 'earlierBuild', cause: expect.any(String) }),
+        ],
+        [
           'a row that does not decode',
           `UPDATE event SET data = '{}' WHERE "commit" = ${RESPONSE}`,
           refusedAs({ kind: 'unusableCheckpoint' }),

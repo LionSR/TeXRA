@@ -20,11 +20,7 @@
 import { Schema, Struct, Tuple } from 'effect';
 
 import { ApprovalGrantsSchema } from '@shared/approvalBypassKind';
-import {
-  AggregateIdSchema,
-  aggregateTarget,
-  type AggregateId,
-} from './identifiers';
+import { RunIdSchema, type RunId } from './identifiers';
 import { listingTypeOf } from './rowVersions';
 import {
   RunEndRowSchema,
@@ -32,7 +28,6 @@ import {
   ProcessExitSchema,
   RunStopReasonSchema,
 } from './runRecords';
-import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
 import {
   AnsweredBySchema,
@@ -68,9 +63,8 @@ export const CommitOrdinalSchema = Schema.Int.check(
 export type CommitOrdinal = typeof CommitOrdinalSchema.Type;
 
 /**
- * The envelope every durable arm rides, in the event table's own columns. A
- * run-scoped fact's aggregate is its run; a plugin's own aggregate is the
- * plugin's key (no sentinel run id exists). `at` is the publish clock,
+ * The envelope every durable arm rides, in the event table's own columns.
+ * Every row's aggregate is its run. `at` is the publish clock,
  * informational only; ordering is `seq` within an aggregate and `commit`
  * across them.
  */
@@ -207,19 +201,17 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.mapFields(
   Struct.omit(['runIds']),
 );
 
-/** A row of a plugin's own kind (`Plugin.factKinds`): core folds `value`
- *  latest per (plugin, kind) and never reads it; the plugin decodes it. A
- *  run's is `RunView.facts`; a plugin aggregate's is `SessionView.pluginFacts`,
- *  under its `parent` run (whose deletion collects it) or none. */
-export const PluginFactDraftSchema = durable('plugin.fact', {
+/** A row of a plugin's own kind (`Plugin.factKinds`) about its run: core
+ *  folds `value` latest per (plugin, kind) into `RunView.facts` and never
+ *  reads it; the plugin decodes it. */
+const PluginFactDraftSchema = durable('plugin.fact', {
   plugin: Schema.NonEmptyString,
   kind: Schema.NonEmptyString,
   /** The arm's version `value` was written at: a plugin evolves its
    *  kinds without a core row version. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: Schema.Json,
-  parent: Schema.NullOr(RunIdSchema),
-}).mapFields(Struct.assign({ aggregateId: AggregateIdSchema }));
+});
 
 /**
  * The durable arms every renderer folds. This is the one declaration of the
@@ -373,28 +365,23 @@ export type SessionRow = typeof SessionRowSchema.Type;
 export type SessionRowDraft = typeof SessionRowDraftSchema.Type;
 
 /** Aggregate identities introduced by a fact and its declared lifecycle edges. */
-export function referencedAggregates(event: SessionRow): AggregateId[] {
+export function referencedAggregates(event: SessionRow): RunId[] {
   const ids = [event.aggregateId];
   if (event.type === 'run.start' && event.parent !== null)
     ids.push(event.parent.id);
-  if (event.type === 'plugin.fact' && event.parent !== null)
-    ids.push(event.parent);
   return ids;
 }
 
 /**
  * The aggregate-graph edges one draft declares, applied by the store in the
- * transaction that appends it: the parent a `run.start` stamps, the
- * aggregate a row hangs its target under (a plugin's aggregate under its
- * `parent` run, or none), and the closure a deletion marker makes.
+ * transaction that appends it: the parent a `run.start` stamps and the
+ * closure a deletion marker makes.
  * {@link referencedAggregates} reads the same edges off committed rows.
  * Every kind has a case, so a new kind does not compile until its edges are
  * decided here.
  */
 interface AggregateEdges {
-  readonly parent: AggregateId | null;
-  /** Absent: the target keeps its parent. */
-  readonly reparent?: AggregateId | null;
+  readonly parent: RunId | null;
   readonly closes: boolean;
 }
 
@@ -405,12 +392,6 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
         parent: draft.parent && draft.parent.id,
         closes: false,
       };
-    case 'plugin.fact': {
-      if (aggregateTarget(draft.aggregateId).kind === 'run')
-        return { parent: null, closes: false };
-      const reparent = draft.parent === null ? null : draft.parent;
-      return { parent: null, reparent, closes: false };
-    }
     case 'run.removed':
       return { parent: null, closes: true };
     case 'run.activate':
@@ -446,6 +427,7 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
     case 'tools.offered':
     case 'context.blob':
     case 'hook.outcome':
+    case 'plugin.fact':
       return { parent: null, closes: false };
   }
 }

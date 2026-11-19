@@ -23,7 +23,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
-  type AggregateId,
+  type RunId,
   type CommitOrdinal,
   type DisplayRow,
   type SessionRow,
@@ -57,7 +57,7 @@ export const SESSION_CLOSE_DEADLINE_MS = 5_000;
  *  not here: they close at that same move. A stage is no work of the
  *  publisher's: one left open closes on the run's outcome when the view's
  *  transcript applies its `run.end`. */
-type OpenWorkByAggregate = Map<AggregateId, Set<string>>;
+type OpenWorkByAggregate = Map<RunId, Set<string>>;
 
 /** What the publisher keeps open per aggregate, from the rows it commits:
  *  `track` folds a committed batch in, `openWork` reads one aggregate's. */

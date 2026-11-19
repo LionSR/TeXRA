@@ -64,7 +64,7 @@ import {
   type SessionRowDraft,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { LocalRuntimeStateSchema, pluginAggregateId } from '@shared/schemas';
+import { LocalRuntimeStateSchema } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
@@ -83,8 +83,6 @@ import {
 import { runStateAppend } from '@shared/session/runHistory';
 import { SessionRowSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
-import type { SessionLogShape } from '@shared/session/sessionLog';
 import { SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -95,15 +93,12 @@ import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { REPO_ROOT } from '@test/support/repoRoot';
-import { type FactKind, ownFactsChecked } from '@tools/plugins';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 /** A second OS process's writer: this build's `Database` over the store at
  *  `storage`, creating `run`. */
 const STORE_WRITER = `
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/databaseLayer';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { Database } from '@shared/session/database';
@@ -149,6 +144,7 @@ async function bundleStoreWriter(dir: string): Promise<string> {
 const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 const OLDER = Schema.decodeUnknownSync(RunIdSchema)('ab12ce');
 const NEWER = Schema.decodeUnknownSync(RunIdSchema)('ef56ab');
+const CHILD = Schema.decodeUnknownSync(RunIdSchema)('ab12cf');
 
 /** Wait on the fold's level until it holds a view `ready` accepts: the ref
  *  replays its current value on subscribe, so a view already there ends the
@@ -514,40 +510,15 @@ describe('the session event table and its one publisher', () => {
     for (const root of roots) rmSync(root, { recursive: true, force: true });
   });
 
-  const substrate = (storage: string, plugins = storePluginsLayer) =>
+  const substrate = (storage: string) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
-      Layer.provide(plugins),
+      Layer.provide(storePluginsLayer),
       Layer.provide(nodePlatformLayer),
       Layer.fresh,
     );
 
   const olderStart = runStart(OLDER);
-
-  /** A plugin's own aggregate, hung under the run that last asked: one
-   *  thread's state. A row that lags behind the thread's latest (an earlier
-   *  turn, or an open turn the latest already closed) is superseded. */
-  const ThreadRowSchema = Schema.Struct({
-    status: Schema.Literals(['open', 'answered']),
-    turnCount: Schema.Int,
-  });
-  const THREAD_KIND = {
-    plugin: 'threads',
-    kind: 'thread',
-    version: 1,
-    schema: ThreadRowSchema,
-    fork: 'drop',
-    supersedes: (latest, next) => {
-      const was = Schema.decodeUnknownSync(ThreadRowSchema)(latest.value);
-      const now = Schema.decodeUnknownSync(ThreadRowSchema)(next.value);
-      return (
-        was.turnCount > now.turnCount ||
-        (was.turnCount === now.turnCount &&
-          was.status !== 'open' &&
-          now.status === 'open')
-      );
-    },
-  } satisfies FactKind;
 
   /** A connection of the kind another host process would open, on the file
    *  name a session root gives its database. */
@@ -963,129 +934,40 @@ describe('the session event table and its one publisher', () => {
     return Effect.gen(function* () {
       const first = yield* Database;
       const root = runStartRow.aggregateId;
-      const threadAggregate = pluginAggregateId(`${THREAD_KIND.plugin}:t1`);
-      // The thread's row as a decision commits it, under the run that asked.
-      const thread = ({
-        threadId = 't1',
-        parentRunId = RUN,
-        status = 'open',
-        turnCount = 1,
-      }: {
-        readonly threadId?: string;
-        readonly parentRunId?: RunId;
-        readonly status?: 'open' | 'answered';
-        readonly turnCount?: number;
-      } = {}): Extract<SessionRowDraft, { type: 'plugin.fact' }> => ({
-        type: 'plugin.fact',
-        aggregateId: pluginAggregateId(`${THREAD_KIND.plugin}:${threadId}`),
-        plugin: THREAD_KIND.plugin,
-        kind: THREAD_KIND.kind,
-        version: THREAD_KIND.version,
-        value: { status, turnCount },
-        parent: parentRunId,
-      });
-      const threadPlugin = {
-        id: THREAD_KIND.plugin,
-        factKinds: [THREAD_KIND],
-      };
-      // The reads the writer's check makes, over the store.
-      const checkedLog: Pick<SessionLogShape, 'runRows' | 'facts'> = {
-        runRows: (id, read) =>
-          first
-            .readAggregate(id, 1, RUN_ROW_READS[read].kinds)
-            .pipe(Effect.map((rows) => foldRunRows(read, rows))),
-        facts: (runId) => first.readRunRecord(runId),
-      };
+      // A child run hangs under the run that launched it.
+      const child = runStart(CHILD, { parent: { id: RUN, call: null } });
       // Every aggregate this case writes, the unrelated run's among them.
-      const stored = rowsOf(
-        first,
-        root,
-        olderStart.aggregateId,
-        threadAggregate,
-        NEWER,
-      );
-      const initial = yield* first.appendAll([
-        runStartRow,
-        olderStart,
-        thread({ status: 'answered' }),
-        thread({ parentRunId: OLDER, turnCount: 2 }),
-        thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 }),
-        thread({ turnCount: 3 }),
-      ]);
+      const stored = rowsOf(first, root, olderStart.aggregateId, CHILD, NEWER);
+      const initial = yield* first.appendAll([runStartRow, olderStart, child]);
       const initialCommit = initial[0]?.commit;
       assert(initialCommit !== undefined, 'nothing appended');
-      expect(
-        (yield* first.aggregateState([threadAggregate]))[0]?.parentId,
-      ).toBe(root);
-      // The thread's writer checks its rows in its job (`ownFactsChecked`):
-      // a row under a run that is not open is its rejection, and one the
-      // store meets anyway is a defect.
-      const unknownParent = thread({
-        parentRunId: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
-        status: 'answered',
-        turnCount: 3,
-      });
-      expect(
-        (yield* ownFactsChecked([unknownParent], threadPlugin, checkedLog))
-          .rejected,
-      ).toHaveLength(1);
-      const orphan = yield* Effect.exit(first.appendAll([unknownParent]));
-      expect(Exit.isFailure(orphan) && Cause.hasDies(orphan.cause)).toBe(true);
-      // Visiting the first asker again must not let its delayed turn-1
-      // answer regress state and then admit the former asker's turn-2 open.
-      const staleBatches = [
-        [
-          thread({ status: 'answered' }),
-          thread({ parentRunId: OLDER, turnCount: 2 }),
-        ],
-        [thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 })],
-        [thread({ parentRunId: OLDER, turnCount: 2 })],
-      ];
-      for (const stale of staleBatches) {
-        expect(
-          (yield* ownFactsChecked(stale, threadPlugin, checkedLog)).kept,
-        ).toEqual([]);
-      }
+      expect((yield* first.aggregateState([CHILD]))[0]?.parentId).toBe(root);
       expect(yield* stored).toEqual(initial);
-      expect(
-        (yield* first.aggregateState([threadAggregate]))[0]?.parentId,
-      ).toBe(root);
       const committed = [
         ...(yield* first.appendAll([waiting])),
         ...(yield* first.runRemoval(root, initialCommit)),
       ];
       expect(committed.at(-1)).toMatchObject({
         type: 'run.removed',
-        runIds: [RUN],
+        runIds: [RUN, CHILD],
       });
       expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
         committed.at(-1),
       );
       expect(committed.map((row) => [row.seq, row.commit])).toEqual([
-        [2, 7],
-        [3, 8],
+        [2, 4],
+        [3, 5],
       ]);
       expect(
-        (yield* first.aggregateState([root, threadAggregate])).every(
-          (row) => row.closed,
-        ),
+        (yield* first.aggregateState([root, CHILD])).every((row) => row.closed),
       ).toBe(true);
-      // Neither a late update nor a new thread can attach to the tombstoned
-      // asker: the closed thread refuses its writer, and the new one's writer
-      // rejects it under a closed parent.
-      for (const draft of [thread(), thread({ parentRunId: OLDER })]) {
-        expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
-          'DatabaseAggregateClosed',
-        );
-      }
+      // A late row of the closed child refuses its writer.
       expect(
-        (yield* ownFactsChecked(
-          [thread({ threadId: 't2' })],
-          threadPlugin,
-          checkedLog,
-        )).rejected,
-      ).toHaveLength(1);
-      expect(yield* first.currentCommit).toBe(8);
+        (yield* Effect.flip(
+          first.appendAll([{ type: 'run.activate', aggregateId: CHILD }]),
+        ))._tag,
+      ).toBe('DatabaseAggregateClosed');
+      expect(yield* first.currentCommit).toBe(5);
       const tombstone = committed.at(-1);
       assert(tombstone?.type === 'run.removed', 'no tombstone');
       // What removing a run directory raises when the directory refuses it.
@@ -1107,13 +989,13 @@ describe('the session event table and its one publisher', () => {
       const unrelated = runStart(NEWER);
       yield* first.deletions.collect(tombstone, (ids) =>
         Effect.gen(function* () {
-          expect(ids).toEqual([RUN]);
+          expect(ids).toEqual([RUN, CHILD]);
           // Cleanup runs outside the database write permit: unrelated
           // runs remain writable while generated files are removed.
           yield* first.appendAll([unrelated]);
         }),
       );
-      expect(yield* first.aggregateState([root, threadAggregate])).toEqual([]);
+      expect(yield* first.aggregateState([root, CHILD])).toEqual([]);
       // Collecting it again, as the open's pass would, is a no-op.
       const again = vi.fn(() => Effect.void);
       yield* first.deletions.collect(tombstone, again);
@@ -1165,19 +1047,7 @@ describe('the session event table and its one publisher', () => {
       expect(existsSync(sibling)).toBe(true);
       expect(existsSync(accepted)).toBe(true);
       expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual([]);
-    }).pipe(
-      Effect.provide(
-        Layer.merge(
-          substrate(
-            storage,
-            Layer.succeed(ToolRegistry)(
-              toolTable([{ id: THREAD_KIND.plugin, factKinds: [THREAD_KIND] }]),
-            ),
-          ),
-          nodePlatformLayer,
-        ),
-      ),
-    );
+    }).pipe(Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)));
   });
 
   it.effect(

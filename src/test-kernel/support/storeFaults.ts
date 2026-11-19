@@ -277,12 +277,6 @@ export function crashAt(clean: string, storage: string, n: number): void {
       UPDATE event_sequence SET
         seq = (SELECT max(seq) FROM event WHERE aggregate = event_sequence.id),
         closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END;
-      UPDATE event_sequence SET parent_id = (
-        SELECT p.id FROM event e JOIN event_sequence p
-          ON p.kind = 'run' AND p.logical_id = json_extract(e.data, '$.parent')
-        WHERE e.aggregate = event_sequence.id AND e.type = 'plugin.fact'
-        ORDER BY e.seq DESC LIMIT 1)
-      WHERE kind <> 'run';
       DELETE FROM current_value WHERE at > ${Number(at ?? 0)};
       DELETE FROM input_history WHERE at > ${Number(at ?? 0)};
       UPDATE sqlite_sequence SET seq = ${n} WHERE name = 'event';

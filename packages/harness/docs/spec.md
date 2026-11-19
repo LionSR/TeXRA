@@ -36,10 +36,12 @@ its kind is its `type` column.
 - **Storage root**: One directory holding one store file.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
-- **Aggregate**: A keyed sequence of rows. Kinds are `run` (keyed by run id) and
-  `plugin` (keyed `<plugin>:<key>`); in memory a run's key is its run id and
-  a plugin's is its key behind `plugin:`
-  (`shared/schemas/identifiers.ts#AggregateIdSchema`).
+- **Aggregate**: A keyed sequence of rows. Every aggregate this build writes is
+  a run's, stored as kind `run` and its run id; in memory its key is the run
+  id (`controllers/session/rowCodec.ts#aggregateColumns`). A row under any
+  other kind (a plugin's own aggregate, which an earlier build wrote) is an
+  earlier build's, and the run it hangs under reads as one
+  (`controllers/session/rowCodec.ts#EARLIER_AGGREGATE_PARENTS`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
   no `run.removed` has closed it
   (`controllers/session/databaseLayer.ts#A run must begin with exactly one run.start`,
@@ -251,8 +253,9 @@ not (`controllers/session/rowReader.ts#RowReader`). A listing or a tail leaves
 an earlier build's or a corrupt row out with one warning; when the row is on a
 `run` aggregate it also marks that run unreadable and replaces a damaged
 `run.start` with a bare one of `unknown` identity, so the run still lists
-(`controllers/session/rowReader.ts#warnOnce`, `#bareStart`), and a bad row on a
-`plugin` aggregate marks no run (`controllers/session/rowReader.ts#mark`); a
+(`controllers/session/rowReader.ts#warnOnce`, `#bareStart`), and a row under
+another aggregate kind marks the run it hangs under as an earlier build's
+(`controllers/session/rowReader.ts#EARLIER_AGGREGATE_PARENTS`); a
 row of a known kind at a version above this build's fails any read that selects
 it, listing and tail included, because it means a newer build now writes this
 store; a read whose query does not select that row (a display tail of display
@@ -373,7 +376,7 @@ also read by `applyRunRows`.
   changes nothing: nothing continues from either until the next open.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
-- `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
+- `plugin.fact` (folded: no): A plugin's own kind about its run; core never reads `value`.
 - `followup.queued` (folded: no): Input not taken yet, whole: a message's
   text, or a child's delivery with its facts typed, rendered as its envelope
   where it becomes the run's message.

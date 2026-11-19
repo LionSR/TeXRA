@@ -6,11 +6,10 @@
  */
 
 import type {
-  AggregateId,
+  RunId,
   CommitOrdinal,
   DisplayRow,
   RunEnd,
-  RunId,
   SessionRow,
 } from '@shared/schemas';
 import type { Effect, Stream, SubscriptionRef } from 'effect';
@@ -75,7 +74,7 @@ export interface SessionLogShape {
    *  `fromSeq`, only those from that seq on; with `types`, those kinds
    *  instead. */
   history(
-    id: AggregateId,
+    id: RunId,
     fromSeq?: number,
     types?: readonly SessionRow['type'][],
   ): Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
@@ -83,7 +82,7 @@ export interface SessionLogShape {
    *  through the type index of a run's aggregate or a plugin's own; with
    *  `through`, of its rows up to that seq alone (a fork's cut). */
   runRows<R extends RunRowRead>(
-    id: AggregateId,
+    id: RunId,
     read: R,
     through?: number,
   ): Effect.Effect<RunRowsRead<R>, DatabaseReadFailed>;
