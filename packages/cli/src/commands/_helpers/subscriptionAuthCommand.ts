@@ -172,7 +172,10 @@ export function defineSubscriptionAuthCommand(
     Command.withSubcommands([
       loginCommand,
       logoutCommand,
-      cliCommand('status', { description: options.statusDescription, ...status }),
+      cliCommand('status', {
+        description: options.statusDescription,
+        ...status,
+      }),
     ]),
   );
 }

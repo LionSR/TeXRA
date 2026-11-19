@@ -6,7 +6,7 @@ import { CliUsageError } from '../runtime/platform/cliContext';
 import { parseCliHistoryId } from '../runtime/history';
 import { runResumeCommand } from './resumeRun';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { cliCommand, SKILL_SOURCES_CONFIG } from './_helpers/cliCommand';
 
 /** The task id `texra resume` was given, refused as a usage error when it
  *  does not parse, before the run opens anything. */
@@ -24,6 +24,7 @@ function resumeRunId(raw: string): RunId {
 export const resumeCommand = cliCommand('resume', {
   description: 'Continue a stored task where it stopped',
   config: {
+    ...SKILL_SOURCES_CONFIG,
     id: Argument.String('id').pipe(
       Argument.withDescription('Task id from `texra history list`'),
     ),

@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
 import { Effect } from 'effect';
+import { Command, Flag } from 'effect/cli';
 
 import { withProcessServices } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -20,9 +20,11 @@ import { pruneStorage } from '../runtime/pruneStorage';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { setExitCode } from './_helpers/exitCode';
-import { GLOBAL_ARGS, pickGlobalArgs } from './_helpers/globalArgs';
+import {
+  readCliGlobalArgs,
+  selectCliCommand,
+  selectExitCode,
+} from './_helpers/cliCommand';
 import type { CliContext } from '../runtime/platform/cliContext';
 
 /** The healthy report, on the command's runtime once its platform is up. */
@@ -75,50 +77,42 @@ const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
     ),
   );
 
-const DOCTOR_ARGS = {
-  ...GLOBAL_ARGS,
-  'prune-storage': {
-    type: 'boolean',
-    description:
+const DOCTOR_CONFIG = {
+  pruneStorage: Flag.Boolean('prune-storage').pipe(
+    Flag.withoutNegation,
+    Flag.withDefault(false),
+    Flag.withDescription(
       'List the workspace stores whose project is gone and the aside copies of session stores, and delete them once confirmed',
-  },
-  yes: {
-    type: 'boolean',
-    alias: 'y',
-    description: 'Delete what --prune-storage lists without asking',
-  },
-} as const;
+    ),
+  ),
+  yes: Flag.Boolean('yes').pipe(
+    Flag.withoutNegation,
+    Flag.withDefault(false),
+    Flag.withAlias('y'),
+    Flag.withDescription('Delete what --prune-storage lists without asking'),
+  ),
+};
 
 /** `--prune-storage` is a program on the process runtime, which reads the
- *  global root's store records: the one case of this command that can take
- *  `defineCliCommand`. */
-const pruneStorageCommand = defineCliCommand({
-  meta: { name: 'doctor' },
-  args: DOCTOR_ARGS,
-  run: (context, ctx) => pruneStorage(context, ctx.args.yes === true),
+ *  global root's store records. */
+const pruneStorageCommand = selectCliCommand('doctor', {
+  description: 'Delete the stores whose project is gone',
+  config: DOCTOR_CONFIG,
+  run: (context, input) => pruneStorage(context, input.yes),
   catchExitCode: CliExitCode.ModelOrNetworkError,
 });
 
-export const doctorCommand = defineCommand({
-  meta: { name: 'doctor', description: 'Check CLI runtime dependencies' },
-  args: DOCTOR_ARGS,
-  // The one command that cannot take `defineCliCommand`: that helper reports
-  // a runtime that fails to build as a failure, where this command reports it
-  // as a row of its report.
-  async run(ctx) {
-    if (ctx.args['prune-storage'] === true)
-      return pruneStorageCommand.run?.(ctx);
-    setExitCode(
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const context = yield* loadConfigAndWarn(pickGlobalArgs(ctx.args, ctx.rawArgs), {
-            printConfigWarnings: false,
-          });
-          const report = yield* doctorReport(context);
-          writeDoctorReport(context, report);
-          return doctorExitCode(report);
-        }),
-      ),
-    );
-  },
-});
+// The report is not a command program: a runtime that fails to build is a
+// row of it, so it builds and disposes that runtime itself, in the parse.
+export const doctorCommand = Command.make('doctor', DOCTOR_CONFIG, (input) =>
+  input.pruneStorage
+    ? pruneStorageCommand(input)
+    : Effect.gen(function* () {
+        const context = yield* loadConfigAndWarn(yield* readCliGlobalArgs(), {
+          printConfigWarnings: false,
+        });
+        const report = yield* doctorReport(context);
+        writeDoctorReport(context, report);
+        yield* selectExitCode(doctorExitCode(report));
+      }),
+).pipe(Command.withDescription('Check CLI runtime dependencies'));

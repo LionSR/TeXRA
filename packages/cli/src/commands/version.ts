@@ -14,7 +14,7 @@ import { emitCliResult } from './_helpers/output';
 // context's, so it prints from the parse itself.
 export const versionCommand = Command.make('version', {}, () =>
   Effect.gen(function* () {
-    const context = yield* loadConfigAndWarn(yield* readCliGlobalArgs);
+    const context = yield* loadConfigAndWarn(yield* readCliGlobalArgs());
     const version = readCliVersion();
     yield* emitCliResult({
       json: { version },

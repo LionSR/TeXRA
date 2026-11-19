@@ -14,8 +14,8 @@ import { writeTextStderr } from '@cli/runtime/platform/logSinks';
  * it needs the filesystem and the process environment (as a ConfigProvider),
  * which it provides itself: the Node file services (the `--cwd` check) and the
  * same env ConfigProvider the process runtime serves, so the context's env
- * tier reads the live process environment. A citty action runs it once
- * (`defineCliCommand`, and `texra doctor` inside its own program).
+ * tier reads the live process environment. A command's handler runs it
+ * once, in the parse (`selectCliCommand`, and `texra doctor` for its report).
  */
 export const loadConfigAndWarn = Effect.fn('loadConfigAndWarn')(function* (
   globalArgs: CliGlobalArgs,

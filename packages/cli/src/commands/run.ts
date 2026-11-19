@@ -32,7 +32,7 @@ import {
   type CliPlatformServices,
 } from '../runtime/platform/initPlatform';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { cliCommand, SKILL_SOURCES_CONFIG } from './_helpers/cliCommand';
 import { emitCliResult } from './_helpers/output';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
@@ -431,6 +431,7 @@ const fileFlag = (name: string, description: string) =>
 export const headlessRunCommand = cliCommand('run', {
   description: 'Run a program or an agent headlessly',
   config: {
+    ...SKILL_SOURCES_CONFIG,
     target: Argument.String('target').pipe(
       Argument.withDescription(RUN_TARGET_NAME_DESCRIPTION),
     ),

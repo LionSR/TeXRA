@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The `texra` command line has new help and stricter flags.** Help at
+  every level has a new layout: a subcommand's help lists its own flags and
+  points to `texra --help` for the global ones. `texra help <command>` is
+  removed; use `texra <command> --help`. A usage error now prints the
+  command's help and the error, both on stderr. `texra auth` or another
+  group named with no subcommand prints its help and exits 0, where it
+  exited 2. `texra --version` prints `texra v<version>`; `texra version`
+  and `-v` still print the bare version (and JSON with `--output-format
+  json`). A flag that takes one value, given twice (`--output a --output
+  b`), is a usage error, where the last one won. `--source` is accepted
+  only by `chat`, `run`, `resume`, `skills list` and bare `texra`, after
+  the command name. A mistyped flag now gets a "Did you mean" suggestion,
+  `texra history -n 5` works like `texra history list -n 5`, and a global
+  flag between two command names (`texra auth --output-format json chatgpt
+  status`) is no longer dropped.
+
 - **The external inquiry is removed.** The `inquiry` tool, which had an
   agent draft a question for you to paste into an outside chat
   subscription (ChatGPT, Claude, Gemini, Grok) and paste the answer back,

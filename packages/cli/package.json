@@ -64,7 +64,6 @@
     "@typescript/native": "npm:typescript@^7.0.2",
     "@xterm/headless": "^6.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
-    "citty": "^0.2.2",
     "cli-highlight": "^2.1.11",
     "cli-table3": "^0.6.5",
     "cli-truncate": "^6.2.0",

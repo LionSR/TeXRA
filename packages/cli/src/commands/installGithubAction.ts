@@ -1,6 +1,7 @@
 import path from 'node:path';
 
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, Option, PlatformError } from 'effect';
+import { Flag } from 'effect/cli';
 
 import {
   parseGitHubSlug,
@@ -27,8 +28,7 @@ import {
 } from '../runtime/platform/logSinks';
 import { gh, ghAvailable, git } from '../runtime/gitOps';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { optString } from './_helpers/globalArgs';
+import { cliCommand } from './_helpers/cliCommand';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from '../runtime/platform/cliContext';
 
@@ -392,40 +392,44 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
   printSecretChecklist(slug);
 });
 
-export const installGithubActionCommand = defineCliCommand({
-  meta: {
-    name: 'install-github-action',
-    description: 'Install the TeXRA GitHub App and scaffold code review',
-  },
+export const installGithubActionCommand = cliCommand('install-github-action', {
+  description: 'Install the TeXRA GitHub App and scaffold code review',
   // The command brings no platform up: it only scaffolds a workflow file in a
   // git repository.
   layer: cliSecretsLayer,
-  args: {
-    branch: {
-      type: 'string',
-      description: `Branch to create for the PR (default: ${DEFAULT_BRANCH_NAME})`,
-    },
-    base: {
-      type: 'string',
-      description: 'Base branch for the PR (default: the repo default branch)',
-    },
-    force: {
-      type: 'boolean',
-      description: 'Overwrite an existing workflow file / reuse the branch',
-    },
-    pr: {
-      type: 'boolean',
-      default: true,
-      negativeDescription: 'Only scaffold and commit; do not push or open a PR',
-      description: 'Push the branch and open a pull request',
-    },
+  config: {
+    branch: Flag.String('branch').pipe(
+      Flag.withDescription(
+        `Branch to create for the PR (default: ${DEFAULT_BRANCH_NAME})`,
+      ),
+      Flag.optional,
+    ),
+    base: Flag.String('base').pipe(
+      Flag.withDescription(
+        'Base branch for the PR (default: the repo default branch)',
+      ),
+      Flag.optional,
+    ),
+    force: Flag.Boolean('force').pipe(
+      Flag.withoutNegation,
+      Flag.withDefault(false),
+      Flag.withDescription(
+        'Overwrite an existing workflow file / reuse the branch',
+      ),
+    ),
+    pr: Flag.Boolean('pr').pipe(
+      Flag.withDefault(true),
+      Flag.withDescription(
+        'Push the branch and open a pull request; --no-pr: only scaffold and commit; do not push or open a PR',
+      ),
+    ),
   },
-  run: (context, ctx) =>
+  run: (context, input) =>
     runInstallGithubAction(context, {
-      branch: optString(ctx.args.branch),
-      base: optString(ctx.args.base),
-      force: ctx.args.force === true,
-      openPr: ctx.args.pr !== false,
+      branch: Option.getOrUndefined(input.branch),
+      base: Option.getOrUndefined(input.base),
+      force: input.force,
+      openPr: input.pr,
     }),
   catchExitCode: CliExitCode.AgentError,
 });

@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
-import { Deferred, Effect, Exit, References } from 'effect';
+import { Deferred, Effect, Exit, Option, References } from 'effect';
+import { Command, Flag } from 'effect/cli';
 
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
@@ -28,18 +28,18 @@ import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
 /** How long a service with no project open stays up. */
 const DEFAULT_IDLE_SECONDS = 600;
 
-function parseIdleSeconds(value: unknown): number {
+function parseIdleSeconds(value: string | undefined): number {
   if (value === undefined) return DEFAULT_IDLE_SECONDS;
   const seconds = Number(value);
-  if (typeof value !== 'string' || !Number.isInteger(seconds) || seconds < 1)
+  if (!Number.isInteger(seconds) || seconds < 1)
     throw new CliUsageError({
-      message: `--idle-timeout expects a whole number of seconds, got ${String(value)}.`,
+      message: `--idle-timeout expects a whole number of seconds, got ${value}.`,
     });
   return seconds;
 }
@@ -119,23 +119,25 @@ const runServe = Effect.fn('runServe')(function* (
   );
 });
 
-export const serveCommand = defineCliCommand({
-  meta: {
-    name: SERVICE_SUBCOMMAND,
-    description:
-      'Run the TeXRA service in the foreground (windows start it on their own)',
-  },
-  args: {
-    'idle-timeout': {
-      type: 'string',
-      valueHint: 'seconds',
-      description: `Exit after this long with no project open and no task starting, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
-    },
+export const serveCommand = cliCommand(SERVICE_SUBCOMMAND, {
+  description:
+    'Run the TeXRA service in the foreground (windows start it on their own)',
+  config: {
+    idleTimeout: Flag.String('idle-timeout').pipe(
+      Flag.withMetavar('seconds'),
+      Flag.withDescription(
+        `Exit after this long with no project open and no task starting, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
+      ),
+      Flag.optional,
+    ),
   },
   catchExitCode: CliExitCode.AgentError,
   layer: cliProcessLayer,
-  run: (context, ctx) =>
-    runServe(context, parseIdleSeconds(ctx.args['idle-timeout'])).pipe(
+  run: (context, input) =>
+    runServe(
+      context,
+      parseIdleSeconds(Option.getOrUndefined(input.idleTimeout)),
+    ).pipe(
       // The service's log is read after the fact, so by default it keeps the
       // info lines a one-shot command's default level drops.
       Effect.provideService(
@@ -167,8 +169,9 @@ const emitStatus = (info: ServiceInfo | null) =>
     );
   });
 
-const statusCommand = defineCliCommand({
-  meta: { name: 'status', description: 'Show whether the TeXRA service runs' },
+const statusCommand = cliCommand('status', {
+  description: 'Show whether the TeXRA service runs',
+  config: {},
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
@@ -178,12 +181,10 @@ const statusCommand = defineCliCommand({
     ),
 });
 
-const stopCommand = defineCliCommand({
-  meta: {
-    name: 'stop',
-    description:
-      'Stop the TeXRA service; its running tasks stop and can be resumed',
-  },
+const stopCommand = cliCommand('stop', {
+  description:
+    'Stop the TeXRA service; its running tasks stop and can be resumed',
+  config: {},
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
@@ -200,8 +201,9 @@ const stopCommand = defineCliCommand({
     ),
 });
 
-const restartCommand = defineCliCommand({
-  meta: { name: 'restart', description: 'Stop the TeXRA service and start it' },
+const restartCommand = cliCommand('restart', {
+  description: 'Stop the TeXRA service and start it',
+  config: {},
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('service.run')(function* (context) {
@@ -218,14 +220,9 @@ const restartCommand = defineCliCommand({
   }),
 });
 
-export const serviceCommand = defineCommand({
-  meta: {
-    name: 'service',
-    description: 'Manage the TeXRA service that runs tasks for every window',
-  },
-  subCommands: {
-    status: statusCommand,
-    stop: stopCommand,
-    restart: restartCommand,
-  },
-});
+export const serviceCommand = Command.make('service').pipe(
+  Command.withDescription(
+    'Manage the TeXRA service that runs tasks for every window',
+  ),
+  Command.withSubcommands([statusCommand, stopCommand, restartCommand]),
+);

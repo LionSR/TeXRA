@@ -1,28 +1,22 @@
 import { Effect, Option } from 'effect';
-import { Command, Flag } from 'effect/cli';
+import { Flag } from 'effect/cli';
 
 import { CliUsageError } from '../runtime/platform/cliContext';
 import { assertExplicitModelKnown } from '../runtime/models/runModel';
-import {
-  defaultShortcutModifierLabel,
-  focusChordLabel,
-} from '../runtime/terminal/shortcutLabels';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
 } from '../runtime/terminal/terminalRequirements';
 import { notifyCliUpdate } from '../runtime/platform/updateChecker';
 
-import { cliCommand, type CliCommandOptions } from './_helpers/cliCommand';
-import { UsageSections } from './_helpers/cliHelp';
-
-const shortcutModifierLabel = defaultShortcutModifierLabel();
-const alternateShortcutModifierLabel =
-  shortcutModifierLabel === 'Esc' ? 'Alt' : 'Esc';
-const focusShortcut = focusChordLabel(shortcutModifierLabel);
-const alternateFocusShortcut = focusChordLabel(alternateShortcutModifierLabel);
+import {
+  cliCommand,
+  SKILL_SOURCES_CONFIG,
+  type CliCommandOptions,
+} from './_helpers/cliCommand';
 
 const chatConfig = {
+  ...SKILL_SOURCES_CONFIG,
   agent: Flag.String('agent').pipe(
     Flag.withDescription('Agent for the session'),
     Flag.optional,
@@ -80,28 +74,4 @@ export const chatOptions: CliCommandOptions<typeof chatConfig, Error> = {
   },
 };
 
-export const chatCommand = cliCommand('chat', chatOptions).pipe(
-  Command.annotate(UsageSections, [
-    {
-      title: 'INTERACTIVE CONTROLS',
-      rows: [
-        ['/help', 'show slash commands inside chat'],
-        ['/status', 'show session state'],
-        ['/approval', 'set approval policy and session auto-approvals'],
-        ['/login', 'manage ChatGPT and Grok sign-ins'],
-        [
-          'Ctrl-T',
-          "open the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
-        ],
-        ['Ctrl-O', "list the calls of the focused run's script"],
-        ['Tab', 'select a visible child session or process'],
-        [
-          focusShortcut,
-          `focus a visible run by number (${alternateFocusShortcut} when configured)`,
-        ],
-        ['approvals', 'answer tool prompts when --approval-policy=ask'],
-        ['Ctrl-C', 'stop the running task or exit from the TUI'],
-      ],
-    },
-  ]),
-);
+export const chatCommand = cliCommand('chat', chatOptions);
