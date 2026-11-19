@@ -1,3 +1,4 @@
+import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
 import { layer } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
@@ -21,6 +22,7 @@ function createDeps(
   overrides: Partial<ProgressDocumentTaskFileActionsControllerDeps['host']>,
 ): ProgressDocumentTaskFileActionsControllerDeps {
   return {
+    writeFile: writeFileIfUnchanged,
     rounds: () => [
       {
         round: 0,

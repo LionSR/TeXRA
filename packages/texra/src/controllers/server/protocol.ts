@@ -33,10 +33,9 @@
  *   attachment's stream and the window answers (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
  *   reads and writes here rather than opening the project's store itself.
- * - `file.save` / `file.replace`: a window's write of a project file (the
- *   editor's save, the accept of a task's output), each a write only while
- *   the file is as the window read it. The service runs them so they take
- *   the write lane its tasks' edits take, which is one per process.
+ * - `file.write`: a window's write of a project file on a person's word
+ *   (the editor's save, the accept of a task's output), which the service
+ *   runs so it takes the write lane its tasks' edits take.
  */
 import { hash } from 'node:crypto';
 
@@ -75,6 +74,7 @@ import {
   SubscribeSchema,
 } from '@texra/shared/session/sessionFrames';
 import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
+import { ExpectedFileSchema } from '@texra/common/files/projectFileWrite';
 import {
   HostCapabilitySchema,
   HostAttachFrameSchema,
@@ -355,30 +355,15 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Boolean,
     error: ProjectStateFailed,
   }),
-  /** The editor's save of `path` in the project (the `workspaceFile` write,
-   *  `writeWorkspaceFile`): written only while the file still holds `base`,
-   *  what the editor last read; null overwrites whatever is there. */
-  Rpc.make('file.save', {
+  /** `writeFileIfUnchanged` in the service: write the file at the absolute
+   *  `path` while it is as `expected`. Answers whether it was written. Which
+   *  path a window's surface may name is the window's rule, as which path a
+   *  task may write is its tools'. */
+  Rpc.make('file.write', {
     payload: {
-      workspace,
       path: Schema.String,
       contents: Schema.String,
-      base: Schema.NullOr(Schema.String),
-    },
-    success: Schema.Struct({
-      kind: Schema.Literals(['done', 'changedOnDisk']),
-    }),
-    error: Rejected,
-  }),
-  /** The accept of a task's output into the file at `target`, an absolute
-   *  path (`replaceIfUnchanged`): replaced only while the file still holds
-   *  `confirmedAgainst`, what the person confirmed against; null is no
-   *  file. Answers whether it was written. */
-  Rpc.make('file.replace', {
-    payload: {
-      target: Schema.String,
-      contents: Schema.String,
-      confirmedAgainst: Schema.NullOr(Schema.String),
+      expected: ExpectedFileSchema,
     },
     success: Schema.Boolean,
     error: Rejected,
