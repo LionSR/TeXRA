@@ -132,7 +132,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
         threadId,
         turnIndex,
         answer: decision.answer,
-        sessionLinks: decision.sessionLinks ?? undefined,
+        sessionLinks: decision.sessionLinks,
       });
       event = 'answered';
     } else {

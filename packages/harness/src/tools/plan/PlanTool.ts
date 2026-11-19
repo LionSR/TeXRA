@@ -255,7 +255,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
 
   switch (result.action) {
     case 'cancel':
-      return yield* denialResult('cancelled', result.cause ?? undefined);
+      return yield* denialResult('cancelled', result.cause);
     case 'deny':
       return yield* denialResult('denied', result.reason);
     case 'reject': {

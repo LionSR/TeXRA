@@ -128,8 +128,8 @@ export function proposalApproval(
 ): Extract<RequestDecision, { action: 'approve' }> {
   return {
     action: 'approve',
-    agent: isProposedAgent(launch.agent, data) ? null : launch.agent,
-    model: launch.model === data.model ? null : launch.model,
+    ...(!isProposedAgent(launch.agent, data) && { agent: launch.agent }),
+    ...(launch.model !== data.model && { model: launch.model }),
     instruction: launch.instruction,
     inputFiles: [...launch.inputFiles],
     contextFiles: [...launch.contextFiles],

@@ -40,17 +40,17 @@ export const RequestDecisionSchema = Schema.Union([
    *  user left it in the host's diff view. */
   Schema.Struct({
     action: Schema.Literal('approve'),
-    model: Schema.optional(Schema.NullOr(Schema.String)),
-    agent: Schema.optional(Schema.NullOr(Schema.String)),
-    instruction: Schema.optional(Schema.NullOr(Schema.String)),
-    inputFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    contextFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    content: Schema.optional(Schema.NullOr(Schema.String)),
+    model: Schema.optional(Schema.String),
+    agent: Schema.optional(Schema.String),
+    instruction: Schema.optional(Schema.String),
+    inputFiles: Schema.optional(Schema.Array(Schema.String)),
+    contextFiles: Schema.optional(Schema.Array(Schema.String)),
+    mediaFiles: Schema.optional(Schema.Array(Schema.String)),
+    content: Schema.optional(Schema.String),
   }),
   Schema.Struct({
     action: Schema.Literal('approve_and_goal'),
-    autoApproveAll: Schema.optional(Schema.NullOr(Schema.Literal(true))),
+    autoApproveAll: Schema.optional(Schema.Literal(true)),
   }),
   /** A user question's answers, keyed by question text. */
   Schema.Struct({
@@ -61,29 +61,27 @@ export const RequestDecisionSchema = Schema.Union([
   Schema.Struct({
     action: Schema.Literal('answer'),
     answer: Schema.String,
-    sessionLinks: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    sessionLinks: Schema.optional(Schema.Array(Schema.String)),
   }),
   Schema.Struct({
     action: Schema.Literal('skip'),
-    feedback: Schema.optional(Schema.NullOr(Schema.String)),
+    feedback: Schema.optional(Schema.String),
   }),
   /** A retry, on the configured credentials or on the user's own key once
    *  the host has stored one (`credentials: 'personal'`). */
   Schema.Struct({
     action: Schema.Literal('retry'),
-    feedback: Schema.optional(Schema.NullOr(Schema.String)),
-    credentials: Schema.optional(
-      Schema.NullOr(Schema.Literals(['configured', 'personal'])),
-    ),
+    feedback: Schema.optional(Schema.String),
+    credentials: Schema.optional(Schema.Literals(['configured', 'personal'])),
   }),
   Schema.Struct({
     action: Schema.Literal('reject'),
-    feedback: Schema.optional(Schema.NullOr(Schema.String)),
+    feedback: Schema.optional(Schema.String),
   }),
   Schema.Struct({ action: Schema.Literal('deny'), reason: Schema.String }),
   Schema.Struct({
     action: Schema.Literal('cancel'),
-    cause: Schema.optional(Schema.NullOr(Schema.String)),
+    cause: Schema.optional(Schema.String),
   }),
 ]);
 export type RequestDecision = typeof RequestDecisionSchema.Type;

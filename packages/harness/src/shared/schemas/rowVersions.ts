@@ -254,7 +254,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'request.opened': Object.freeze({ version: 16, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
-    'request.decided': Object.freeze({ version: 2, listing: 'request' }),
+    // v3: a decision's optional fields are absent when unset, never `null`
+    // (an earlier build's `null` feedback would fail as damaged).
+    'request.decided': Object.freeze({ version: 3, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
     // its check).

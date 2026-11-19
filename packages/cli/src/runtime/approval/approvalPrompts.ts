@@ -165,7 +165,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
 
       const decision: RequestDecision = parsed.accepted
         ? { action: 'approve' }
-        : { action: 'reject', feedback: feedback ?? null };
+        : { action: 'reject', ...(feedback !== undefined && { feedback }) };
       return decision;
     }),
   ).pipe(
