@@ -41,6 +41,12 @@ export interface ScriptedTurn {
   /** Text the request answered by this turn must contain: a request out of
    *  the planned order is refused with a 400, which no retry resends. */
   readonly expect?: string;
+  /** Answered only once this resolves: what the example does meanwhile
+   *  happens while the run waits on the model. */
+  readonly after?: Promise<unknown>;
+  /** The provider refuses the request with this HTTP status instead of
+   *  answering it. */
+  readonly refuse?: number;
 }
 
 function formatAnthropicSse(step: ScriptedTurn, turnIndex: number): string {
@@ -156,6 +162,14 @@ function scriptedFetch(
       const message = `Scripted turn ${turnIndex + 1} expected a request containing ${JSON.stringify(step.expect)}.`;
       console.error(message);
       return error(400, 'invalid_request_error', message);
+    }
+    await step.after;
+    if (step.refuse !== undefined) {
+      return error(
+        step.refuse,
+        'invalid_request_error',
+        `Scripted turn ${turnIndex + 1} refuses its request.`,
+      );
     }
     return stream(step, turnIndex);
   };
