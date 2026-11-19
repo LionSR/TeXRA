@@ -25,6 +25,7 @@ import {
   Effect,
   type FileSystem,
   Result,
+  type Scope,
   ScopedRef,
 } from 'effect';
 
@@ -83,10 +84,7 @@ interface ConsumeOptions {
 
 export interface FollowUps {
   /** The run's reader: what is pending, read from its rows. */
-  readonly reader: Pick<
-    FollowUpReader,
-    'hasPending' | 'controls' | 'read' | 'next'
-  >;
+  readonly reader: Pick<FollowUpReader, 'read' | 'next'>;
   /** The run's loop ended: it stays recoverable, or takes no more input
    *  (which the inbox's observers hear). */
   readonly release: (next: 'recoverable' | 'terminal') => void;
@@ -107,14 +105,15 @@ export interface FollowUps {
   >;
 }
 
-/** `run`'s own reader and the one way its batches leave the queue. */
+/** `run`'s own reader, for the enclosing scope, and the one way its
+ *  batches leave the queue. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
-): Effect.fn.Return<FollowUps, never, Inbox | SessionLog> {
+): Effect.fn.Return<FollowUps, never, Scope.Scope | Inbox | SessionLog> {
   const { runId, logger } = run;
   const inbox = yield* Inbox;
   const log = yield* SessionLog;
-  const reader = inbox.reader(runId);
+  const reader = yield* inbox.reader(runId);
 
   /** The canonical user message of one batch: every item's text as its
    *  own part, media parts after it; `kinds[i]` is item i's badges. A

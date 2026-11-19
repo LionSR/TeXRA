@@ -6,7 +6,7 @@
  * from those rows (`FollowUpReader`). The inbox keeps no record of who
  * reads: the run its session's registry holds reads its own rows.
  */
-import { Context, Effect, Result } from 'effect';
+import { Context, Effect, Result, type Scope } from 'effect';
 
 import { logFailure } from '@logger/effectLog';
 import {
@@ -119,12 +119,23 @@ export class SessionInbox {
     );
   }
 
-  /** The run's reader over the session's log. */
-  reader(runId: RunId): FollowUpReader {
-    return new FollowUpReader(runId, this.port.log, (heard) =>
-      this.onClosed((closed) => {
-        if (closed.kind === 'session' || closed.runId === runId) heard();
-      }),
+  /** The run's reader over the session's log, for the caller's scope:
+   *  ended when the run takes no more input ({@link forget},
+   *  {@link dispose}). */
+  reader(runId: RunId): Effect.Effect<FollowUpReader, never, Scope.Scope> {
+    return Effect.map(
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          const reader = new FollowUpReader(runId, this.port.log);
+          const detach = this.onClosed((closed) => {
+            if (closed.kind === 'session' || closed.runId === runId)
+              reader.end();
+          });
+          return { reader, detach };
+        }),
+        ({ detach }) => Effect.sync(detach),
+      ),
+      ({ reader }) => reader,
     );
   }
 

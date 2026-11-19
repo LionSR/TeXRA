@@ -5,13 +5,14 @@
  * point of its loop. The rows are the authority; the reader holds no copy
  * of them and nothing here takes a row: a batch is consumed by the
  * `followup.consumed` rows its reader commits with the message it became.
- * A reader with nothing to read waits on the session log for the next
- * message queued for its run, or for the inbox to say the run takes no more.
+ * A reader hands a step of the loop one reading of the input
+ * ({@link RunInput}); with nothing to read it waits on the session log for
+ * the next message queued for its run, or for the inbox to end it.
  */
 import { Effect, Latch, Option, Stream } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
-import type { RunId } from '@shared/schemas';
+import type { CommitOrdinal, RunId } from '@shared/schemas';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
@@ -115,17 +116,39 @@ export type FollowUpBatch =
     }
   | { readonly kind: 'synthetic'; readonly text: string };
 
-/** A `/compact` is pending: it wakes an idle run. */
-const compacting = (rows: readonly QueuedFollowUp[]): boolean =>
-  rows.some((f) => f.control?.kind === 'compact');
+/**
+ * A run's input as one read of its rows found it: what a step of the loop
+ * decides from, so a step reads the input once.
+ */
+export interface RunInput {
+  /** The run's own pending requests (`/compact`, a model switch). */
+  readonly controls: readonly QueuedFollowUp[];
+  /** The messages readable at `at`, when there are any; nothing is taken. */
+  readonly batch: (
+    at: InputPoint,
+  ) => Extract<FollowUpBatch, { kind: 'followUps' }> | null;
+  /** Whether a wait at `at` would return at once: a message readable
+   *  there, or a `/compact`. */
+  readonly pending: (at: InputPoint) => boolean;
+  /** Where the log stood before the read: a later row is above it. */
+  readonly from: CommitOrdinal;
+}
 
-/** The messages in `rows` readable at `at`, when there are any. */
-const batch = (
+const inputOf = (
   rows: readonly QueuedFollowUp[],
-  at: InputPoint,
-): Extract<FollowUpBatch, { kind: 'followUps' }> | null => {
-  const followUps = readableMessages(rows, at);
-  return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
+  from: CommitOrdinal,
+): RunInput => {
+  const batch: RunInput['batch'] = (at) => {
+    const followUps = readableMessages(rows, at);
+    return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
+  };
+  const compacting = rows.some((f) => f.control?.kind === 'compact');
+  return {
+    controls: rows.filter((f) => f.control !== undefined),
+    batch,
+    pending: (at) => compacting || batch(at) !== null,
+    from,
+  };
 };
 
 /** What a reader reads of the session's log. */
@@ -139,83 +162,57 @@ type ReaderLog = Pick<SessionLogShape, 'runRows' | 'tail' | 'now'>;
 export class FollowUpReader {
   private readonly runId: RunId;
   private readonly log: ReaderLog;
-  private readonly onClosed: (heard: () => void) => () => void;
+  private readonly closed = Latch.makeUnsafe(false);
+  private ended = false;
 
-  /** `onClosed` hears the run take no more input (it was deleted, its
-   *  input closed, or its session closes) and returns the detach. */
-  constructor(
-    runId: RunId,
-    log: ReaderLog,
-    onClosed: (heard: () => void) => () => void,
-  ) {
+  constructor(runId: RunId, log: ReaderLog) {
     this.runId = runId;
     this.log = log;
-    this.onClosed = onClosed;
   }
 
-  /** The run's input, read from its committed rows. */
-  private readonly input: Effect.Effect<RunRowsRead<'input'>> = Effect.suspend(
-    () => Effect.orDie(this.log.runRows(this.runId, 'input')),
-  );
+  /** The run takes no more input (it was deleted, its input closed, or its
+   *  session closes): a wait ends, now or when it starts. */
+  end(): void {
+    this.ended = true;
+    Latch.openUnsafe(this.closed);
+  }
 
-  /** The run's pending follow-ups. */
-  private readonly queued: Effect.Effect<readonly QueuedFollowUp[]> =
-    Effect.map(this.input, ({ followUps }) => followUps);
-
-  /** The run's own pending requests (`/compact`, a model switch). */
-  readonly controls: Effect.Effect<readonly QueuedFollowUp[]> = Effect.map(
-    this.queued,
-    (rows) => rows.filter((f) => f.control !== undefined),
-  );
-
-  /** The messages readable at `at`, when there are any; nothing is taken. */
-  readonly read = (
-    at: InputPoint,
-  ): Effect.Effect<Extract<FollowUpBatch, { kind: 'followUps' }> | null> =>
-    Effect.map(this.queued, (rows) => batch(rows, at));
-
-  /** Whether `next` would return now: a message readable at `at`, or a
-   *  `/compact`. */
-  readonly hasPending = (at: InputPoint): Effect.Effect<boolean> =>
-    Effect.map(
-      this.queued,
-      (rows) => compacting(rows) || batch(rows, at) !== null,
+  /** The run's input now, in one read of its committed rows. */
+  readonly read: Effect.Effect<RunInput> = Effect.suspend(() => {
+    const from = this.log.now();
+    return this.log.runRows(this.runId, 'input').pipe(
+      Effect.map(({ followUps }) => inputOf(followUps, from)),
+      Effect.orDie,
     );
+  });
 
-  /** Block for the next batch readable at `at`; null once the run takes no
-   *  more input or its session closed. */
-  readonly next = (at: InputPoint): Effect.Effect<FollowUpBatch | null> =>
-    Effect.suspend(() => {
-      // Heard from before the first read, so no close falls between a read
-      // and the wait after it.
-      const closed = Latch.makeUnsafe(false);
-      const detach = this.onClosed(() => Latch.openUnsafe(closed));
-      return Effect.gen({ self: this }, function* () {
-        for (;;) {
-          // A row landing after this read is above `from`.
-          const from = this.log.now();
-          const { followUps: rows, inputClosed } = yield* this.input;
-          // Closed before this call began to listen.
-          if (inputClosed) return null;
-          const readable = batch(rows, at);
-          if (readable !== null) return readable;
-          if (compacting(rows))
-            return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
-          const arrived = yield* Effect.raceFirst(
-            this.log.tail(from).pipe(
-              Stream.filter(
-                (event) =>
-                  event.type === 'followup.queued' &&
-                  event.aggregateId === this.runId,
-              ),
-              Stream.runHead,
-              Effect.map(Option.isSome),
-              Effect.orDie,
+  /** Block for the next batch readable at `at`, starting from what `seen`
+   *  found; null once the run takes no more input ({@link end}). */
+  readonly next = (
+    at: InputPoint,
+    seen: RunInput,
+  ): Effect.Effect<FollowUpBatch | null> =>
+    Effect.gen({ self: this }, function* () {
+      for (let input = seen; ; input = yield* this.read) {
+        if (this.ended) return null;
+        const readable = input.batch(at);
+        if (readable !== null) return readable;
+        if (input.pending(at))
+          return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
+        const arrived = yield* Effect.raceFirst(
+          this.log.tail(input.from).pipe(
+            Stream.filter(
+              (event) =>
+                event.type === 'followup.queued' &&
+                event.aggregateId === this.runId,
             ),
-            Effect.as(closed.await, false),
-          );
-          if (!arrived) return null;
-        }
-      }).pipe(Effect.ensuring(Effect.sync(detach)));
+            Stream.runHead,
+            Effect.map(Option.isSome),
+            Effect.orDie,
+          ),
+          Effect.as(this.closed.await, false),
+        );
+        if (!arrived) return null;
+      }
     });
 }

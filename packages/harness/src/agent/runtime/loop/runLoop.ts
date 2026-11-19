@@ -483,10 +483,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ]);
     }
     for (;;) {
-      state = yield* applyPendingModelSwitch(
-        cell,
-        yield* followUps.reader.controls,
-      );
+      // The step's one reading of the run's input: a row queued after it is
+      // the next step's.
+      const input = yield* followUps.reader.read;
+      state = yield* applyPendingModelSwitch(cell, input.controls);
       if (state.pendingResponse !== null) {
         // Input queued meanwhile is delivered at the request that follows.
         state = yield* dispatchPendingResponse(
@@ -519,7 +519,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // the boundary's compaction, whose summary then covers it.
       const tail = state.messages.findLast((m) => m.role !== 'system');
       if (state.invocation === null && tail?.role === 'tool') {
-        const queued = yield* followUps.reader.read('request');
+        const queued = input.batch('request');
         if (queued !== null)
           state = yield* followUps.consume(cell, queued, {
             position: false,
@@ -534,8 +534,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (state.invocation === null) {
         // A `/compact`: the edit answering it applies it, else it is a no-op.
         const compacts = consumedRows(runId, 'compact');
-        const controls = yield* followUps.reader.controls;
-        const requests = compacts(controls, { kind: 'applied' });
+        const requests = compacts(input.controls, { kind: 'applied' });
+        const before = state.commit;
         state = yield* compactAtBoundary({ ...compaction, bound }, requests);
         // A compaction dropped the context updates: a new step renders them.
         if (state.offeredContext === null) {
@@ -543,14 +543,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           state = yield* cell.append(step.rows);
           tools = sentDefinitions(step.tools);
         }
-        const unanswered = (yield* followUps.reader.controls).filter((f) =>
-          requests.some(({ followUpId }) => followUpId === f.followUpId),
-        );
-        const noops = compacts(unanswered, {
-          kind: 'dropped',
-          reason: 'noop',
-        });
-        if (noops.length > 0) state = yield* cell.append(noops);
+        // No edit landed (a history too short to summarize, a summary that
+        // failed): the `/compact`s it would have answered are no-ops.
+        if (requests.length > 0 && state.commit === before)
+          state = yield* cell.append(
+            compacts(input.controls, { kind: 'dropped', reason: 'noop' }),
+          );
       }
       const toolChoice =
         state.finalTool?.owed === true &&
@@ -588,7 +586,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (state.handedDown !== null) return completeTurn(state);
         // A native child waits in this same run scope, just like its root:
         // its loop has already delivered the turn offered at the boundary.
-        const queued = yield* followUps.reader.hasPending('idle');
+        const input = yield* followUps.reader.read;
+        const queued = input.pending('idle');
         if (isChild() && afterError && !queued)
           return { state, outcome: RUN_OUTCOME.FAILED };
         // An activation clears the step the view shows: a park it found
@@ -610,7 +609,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           };
         }
         // The host port stays attached: `/model`, `/compact` land here.
-        const batch = yield* followUps.reader.next('idle');
+        const batch = yield* followUps.reader.next('idle', input);
         if (batch === null) {
           // The input ended under the waiting loop: a cancellation.
           return {
@@ -641,7 +640,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         positionRow(runId, state, 'waiting'),
       ];
       const next =
-        block ?? (goesOn ? yield* followUps.reader.read('turn') : null);
+        block ?? (goesOn ? (yield* followUps.reader.read).batch('turn') : null);
       const pin =
         next !== null && !isChild() ? yield* stepFor(run, state, true) : null;
       state =
