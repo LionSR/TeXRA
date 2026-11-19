@@ -37,6 +37,11 @@ body .trace-scrubber {
   font-size: var(--font-size-sm);
 }
 
+/* The display above outranks the user agent's [hidden] rule. */
+body .trace-scrubber[hidden] {
+  display: none;
+}
+
 body .trace-scrubber label {
   display: flex;
   flex: 1;
