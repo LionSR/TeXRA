@@ -431,7 +431,7 @@ export const headlessRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a program or an agent headlessly' },
   args: {
     ...SKILL_SOURCE_ARGS,
-    agent: {
+    target: {
       type: 'positional',
       required: true,
       description: RUN_TARGET_NAME_DESCRIPTION,
@@ -481,7 +481,7 @@ export const headlessRunCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     runHeadlessAgent(context, {
-      agent: ctx.args.agent,
+      agent: ctx.args.target,
       ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
