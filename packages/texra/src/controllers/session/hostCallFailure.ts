@@ -1,8 +1,8 @@
 /**
  * The one failure tag a GUI host's capability names (`hostFailure`), and
- * `fromHost`, which lifts a capability that still answers with a promise (a
- * VS Code command, an editor API, a Promise-faced controller port) at the
- * host edge rather than at the depth that calls it. A refusal the callee
+ * `fromHost`, which lifts a host API that still answers with a promise (a
+ * VS Code command, an editor API, an Electron dialog) at the host edge
+ * rather than at the depth that calls it. A refusal the callee
  * already worded travels as itself; every other rejection is tagged with the
  * member it came from, so the bridge can tell a refusal from a defect.
  */
@@ -57,13 +57,14 @@ export function hostFailure(
 }
 
 /** A host capability that still answers with a promise, lifted once and
- *  named through {@link hostFailure}. */
+ *  named through {@link hostFailed}: a host API raises no refusal, so its
+ *  every rejection is the member's failure. */
 export function fromHost<A>(
   member: string,
   call: () => PromiseLike<A>,
-): Effect.Effect<A, HostFailed | RequestRefusal> {
+): Effect.Effect<A, HostFailed> {
   return Effect.tryPromise({
     try: call,
-    catch: (cause) => hostFailure(member, cause),
+    catch: (cause) => hostFailed(member, cause),
   });
 }
