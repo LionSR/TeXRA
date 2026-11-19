@@ -15,7 +15,11 @@ import {
 } from '@texra-ai/harness/plugins';
 import { HttpClientError } from 'effect/http';
 
-import { apiKey, providerDisplayName } from '@texra-ai/llm';
+import {
+  apiKey,
+  isAuthFailureStatus,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import {
   fetchPlanUsage,
   type PlanUsage,
@@ -252,7 +256,7 @@ export class SubscriptionUsageService {
             }),
             withLogChannel(CHANNEL),
           );
-          if (status === 401 || status === 403) {
+          if (isAuthFailureStatus(status)) {
             return yield* this.unavailable(provider, 'invalid_credentials');
           }
           if (
