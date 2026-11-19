@@ -6,11 +6,11 @@ import {
   disclosureChevronStyles,
   truncateDeclarations,
 } from '@ui/styles/commonViewStyles';
-import { toneStyles } from '@ui/styles/toneStyles';
+import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 
 /** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
-  ${toneStyles}
+  ${statusIndicatorStyles}
   ${disclosureChevronStyles}
 
   :host {
@@ -91,11 +91,7 @@ export const runTabStyles = css`
   /* Finished while the user was elsewhere: a quiet cue that clears once the
      run is on screen, the way an unread mark does. */
   .tab-unseen {
-    flex-shrink: 0;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--wa-color-brand-fill-loud);
+    background-color: var(--wa-color-brand-fill-loud);
   }
 
   .tab-container.is-unseen .tab-title {

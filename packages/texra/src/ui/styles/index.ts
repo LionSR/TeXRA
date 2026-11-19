@@ -23,8 +23,8 @@ export { designTokens } from './litStyles';
 // Three modules are deliberately NOT re-exported from this barrel:
 // - './markdownStyles' — renderer-specific sheet; only components that mount
 //   rendered markdown compose it, so it stays a direct import.
-// - './statusIndicatorStyles' — single-purpose 8px status dot with one
-//   consumer (the progress-view stream header).
+// - './statusIndicatorStyles' — single-purpose 7px status dot (the run
+//   header and the run-list row).
 // - './overlaySurfaceStyles' — shared chrome for the two wa-drawer overlay
 //   surfaces (ToolsSheet, SessionDrawer); a direct import names its callers
 //   plainly enough that the barrel would add nothing.

@@ -139,9 +139,6 @@ export class RunHeader extends LitElement {
       }
 
       .status-indicator {
-        flex: 0 0 auto;
-        width: 7px;
-        height: 7px;
         margin: 0 var(--wa-space-3xs);
       }
 
