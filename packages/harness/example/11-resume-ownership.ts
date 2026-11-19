@@ -14,14 +14,15 @@
  *    is answered by one model request, and both handles are the same
  *    activation's.
  * 3. A reader that gives up waiting on `run.result` leaves the run running.
- * 4. Closes and reopens again, then interrupts a `session.resume` before it
- *    answers. The run is resumed all the same and the session holds it: a
+ * 4. Closes and reopens again, then interrupts a `session.resume` while it
+ *    waits for its answer (its fiber exits interrupted, with no handle).
+ *    The run is resumed all the same and the session holds it: a
  *    second resume gets the running activation, a message is answered once,
  *    and closing the session releases the run and its store.
  * 5. Reopens a last time: the run is still resumable, and a stop ends it
  *    `cancelled` with nothing left held.
  */
-import { Effect, Fiber, Layer, Option, Stream } from 'effect';
+import { Effect, Exit, Fiber, Layer, Option, Stream } from 'effect';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -171,13 +172,22 @@ await inSession((session) =>
 // 4. A resume whose caller leaves before the handle comes back.
 await inSession((session) =>
   Effect.gen(function* () {
+    // Started at once, the resume runs up to its wait for the launch's
+    // answer before this fiber goes on, and is interrupted there.
     const launcher = yield* Effect.forkChild(
       session.resume(runId, { interactive: true }),
+      { startImmediately: true },
     );
-    yield* Effect.yieldNow;
-    yield* Fiber.interrupt(launcher);
+    const left = yield* Fiber.interrupt(launcher).pipe(
+      Effect.andThen(Fiber.await(launcher)),
+    );
+    check(
+      Exit.hasInterrupts(left),
+      'the resume answered before its caller left',
+      left,
+    );
     // The launch had reached the session: the run is held here, though
-    // nobody holds a handle of it.
+    // nobody was handed a handle of it.
     check(
       session.held(runId) !== undefined,
       'the run of a resume whose caller left is not held',
