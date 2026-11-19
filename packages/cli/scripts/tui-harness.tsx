@@ -310,6 +310,8 @@ const frameReport = {
   outputPending: false,
   renderPending: false,
   renderAgain: false,
+  /** Set as the harness exits: the state a report reads is being closed. */
+  closed: false,
 };
 // Set where the session is opened and where Ink renders, below.
 let sessionSettled = (): boolean => false;
@@ -345,6 +347,7 @@ function reportAfterRender(): void {
 }
 const writeTerminal = process.stdout.write.bind(process.stdout);
 function writeFrameReport(): void {
+  if (frameReport.closed) return;
   frameReport.commit += 1;
   const fields = {
     // Reports written so far: a later one means a later frame.
@@ -2198,6 +2201,7 @@ let harnessExiting = false;
 async function exitHarness(exitCode: number): Promise<void> {
   if (harnessExiting) return;
   harnessExiting = true;
+  frameReport.closed = true;
   for (const dispose of HARNESS_DISPOSERS.splice(0).toReversed()) {
     dispose();
   }
