@@ -59,7 +59,8 @@ import type { ToolTable } from '@tools/toolTable';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { databaseLayer, globalDatabaseLayer } from './databaseLayer';
+import { databaseLayer } from './databaseLayer';
+import { globalDatabaseLayer } from './globalDatabaseLayer';
 import { processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
 import {

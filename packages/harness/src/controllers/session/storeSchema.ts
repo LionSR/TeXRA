@@ -16,7 +16,6 @@ import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   isDamaged,
   pragmaValue,
-  retryBusy,
   run,
   STORE_FILE_SUFFIXES,
   StoreCheckFailed,
@@ -181,9 +180,9 @@ export const IN_MEMORY_STORE = ':memory:';
  * The driver sets `busy_timeout` before enabling WAL, and that order is
  * load-bearing: `journal_mode = WAL` takes an exclusive lock, and at zero a
  * second process opening the same file lost appends to `SQLITE_BUSY`. Once the
- * store is ready the timeout drops to a 25 ms slice, and `Database` retries a
- * busy transaction on its own fiber schedule instead of freezing the host
- * thread in SQLite. `synchronous = NORMAL` is the WAL-safe setting: `FULL` cost
+ * store is ready the timeout drops to a 25 ms slice, and the global store,
+ * the one store other processes write, retries a busy transaction on its own
+ * fiber schedule instead of freezing the host thread in SQLite. `synchronous = NORMAL` is the WAL-safe setting: `FULL` cost
  * 1.4x to 1.8x, and `kill -9` mid-transaction lost nothing at `NORMAL`.
  *
  * A new file gets the schema under the write lock, which a second process
@@ -221,8 +220,9 @@ const RECLAIM_PAGES = 256;
 
 /**
  * Give the pages a collection freed back to the filesystem, once it
- * commits, in autocommit steps of `incremental_vacuum(N)`, so
- * another writer waits on one step, never the whole reclaim. A driver that
+ * commits, in autocommit steps of `incremental_vacuum(N)`, so another
+ * fiber's write on this connection waits on one step, never the whole
+ * reclaim (only a project store collects, and its holder is its one writer). A driver that
  * steps a statement to its end frees N pages a step, one that steps it once
  * frees one; either way the steps run until the freelist is empty or stops
  * shrinking. It is not interrupted, as the collection is not: a session that
@@ -234,7 +234,7 @@ export const reclaimFreePages = (sql: Sql, path: string) =>
     const free = () =>
       pragmaValue(sql, 'freelist_count').pipe(Effect.map(Number));
     for (let left = yield* free(); left > 0;) {
-      yield* retryBusy(run(sql, `PRAGMA incremental_vacuum(${RECLAIM_PAGES})`));
+      yield* run(sql, `PRAGMA incremental_vacuum(${RECLAIM_PAGES})`);
       const now = yield* free();
       if (now >= left) return;
       left = now;

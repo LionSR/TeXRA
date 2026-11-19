@@ -204,7 +204,7 @@ Each row kind carries its own version
 (`shared/schemas/rowVersions.ts#ROW_KINDS`). A row MUST be written at its kind's
 current version (`controllers/session/rowCodec.ts#prepareEventDraft`). The
 `stored_kind` table records the highest version each kind was written at
-(`controllers/session/databaseLayer.ts#UPSERT_KINDS`).
+(`controllers/session/rowCodec.ts#UPSERT_KINDS`).
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
@@ -708,13 +708,18 @@ There is no daemon and no claim. A project store is held by the one process
 that opened it, for its connection's life: the open takes
 `locking_mode = EXCLUSIVE` and the first write lock, and a second opener is
 refused at once with `STORE_HELD_MESSAGE`, never waited for
-(`controllers/session/databaseLayer.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
+(`controllers/session/databaseLayer.ts#STORE_HELD_MESSAGE`,
+`#'PRAGMA locking_mode = EXCLUSIVE'`). The
 holder is the store's one writer and one reader; a cold listing of a held
 project fails the same way (`controllers/session/readSessionView.ts`). The
-global store is shared across processes and holds values alone; a change
+global store is shared across processes and holds values alone, served by
+its own layer with no event machinery
+(`controllers/session/globalDatabaseLayer.ts#globalDatabaseLayer`); a change
 another process makes to it is seen through a 250 ms poll of SQLite's
-`data_version` (`controllers/session/databaseLayer.ts#'PRAGMA data_version'`). A
-project store runs no poll: its holder learns what it committed from its own
+`data_version`
+(`controllers/session/globalDatabaseLayer.ts#'PRAGMA data_version'`), and
+since that process can be a newer build, the store gate runs again in each
+of its writes (`#Effect.andThen(gate, body)`). A project store runs no poll: its holder learns what it committed from its own
 publisher.
 
 ### 7.1 Aggregates
