@@ -71,8 +71,26 @@ programs 提案把三个函数写成一个 `start` 的三个糖。今天它们�
 - 之后 `self()` 也收 `working_directory`，多份尝试各在自己的工作副本里
   做。这一步等 worktree 开关的归属定了再做。
 
-状态：`model` 和 `maxCostUsd` 在分支 `claude/codemode-harness-roadmap-0gcb88`
-上做。
+状态：`model` 和 `maxCostUsd` 已在分支
+`claude/codemode-harness-roadmap-0gcb88` 上实现，未合并。实际做法：
+
+- 三个函数的 `model`、`label`、`timeoutMs`、`maxCostUsd` 出自一处
+  （`CHILD_FIELDS`，`inputFields.ts`）。
+- 上限由等子运行的那次调用执行（`withinLimits`，
+  `packages/harness/src/agent/runtime/delegation/agentChild.ts`）：它跟着
+  session 视图里这棵树的花费走，到了就用已有的 `released` 停掉子运行和它
+  下面的 run。没有加定时器、存储字段、行版本或设置。
+- 没选的做法是让子运行自己知道上限、在每次计费请求前查。那样能早停一次
+  请求，代价是 `run.config` 上多一个存下来的字段、沿父链找祖先的上限、
+  以及改 run loop。
+- 所以上限是在每次有价的回复之后读的，花费会超出当时在途的那几次回复。
+  工具说明里写了这一点。
+- 一处行为变了：不被等的子运行（直接调用，或 `background: true`）以前收
+  下 `timeoutMs` 但从不执行，现在带 `timeoutMs` 或 `maxCostUsd` 会被拒绝
+  并说明原因。
+- fork 出来的 `self()` 换模型时沿用种子的绑定，和宿主切换一个对话的模型
+  走同一条规则；对话格式不同的模型在绑定时被拒，要用 `fork: false`。这
+  条路径只读过代码，没有跑过。
 
 ### 2. 上下文和判定
 
@@ -141,7 +159,7 @@ programs 提案第 1 期剩下的一项，等 #15091（安装式插件带程序�
 
 ## 顺序
 
-1. 启动限制（第 1 节）。在做。
+1. 启动限制（第 1 节）。在分支上，等合并。
 2. 判定和上下文（第 2 节）。另一个会话在做。
 3. 模型现写的程序能被等（第 3 节）。等 #15091。
 4. 触发（第 4 节）。新增一种行，所以要排在行版本归零和冻结之前。
