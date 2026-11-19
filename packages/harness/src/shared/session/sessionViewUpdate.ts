@@ -27,7 +27,6 @@ import {
   programOf,
   listingKeyOf,
   isTranscriptEvent,
-  blocksCaller,
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
@@ -458,11 +457,8 @@ function withAggregates(u: Update, run: RunView): RunView {
     run.outcome === null && u.state.local.runsHere.includes(run.id)
       ? 'here'
       : 'none';
-  // Only a request that blocks its tool is a wait: one that does not left
-  // its run working, listed for the panel but still Running.
   const waiting =
-    holder === 'here' &&
-    view.requests.some((r) => r.runId === run.id && blocksCaller(r.payload));
+    holder === 'here' && view.requests.some((r) => r.runId === run.id);
   const unreadable = u.state.unreadable.get(run.id);
   const children = run.childIds.map((id) => requireRun(view, id));
   const treeUsage = sumUsageStats([
@@ -722,7 +718,7 @@ function applyRunEvent(
           ('delegationAgentScope' in config
             ? config.delegationAgentScope
             : undefined) ?? null,
-        program: programOf(config),
+        program: programOf(config)?.name ?? null,
       };
     }
     case 'context.state':

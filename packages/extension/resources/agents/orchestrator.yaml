@@ -15,7 +15,6 @@ tools:
   - grep
   - extract_figures
   - extract_bib_entries
-  - inquiry
   - codex
   - claude_code
   - github_subscription

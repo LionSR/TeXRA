@@ -67,7 +67,8 @@ export const deriveContinuation = Effect.fn('deriveContinuation')(function* (
     facts?.start == null ||
     !continuesFromRows({
       ended: facts.end !== null,
-      program: facts.config === null ? null : programOf(facts.config),
+      program:
+        facts.config === null ? null : (programOf(facts.config)?.name ?? null),
       identity: facts.start.identity,
     })
   )

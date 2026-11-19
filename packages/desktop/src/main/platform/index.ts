@@ -61,7 +61,6 @@ export const initializeElectronPlatform = Effect.fn(
     ManagedRuntime.make(
       texraProcessLayer({
         name: 'desktop',
-        inquiryPanel: true,
         storageRoot: dataRoot,
         resourcesPath,
         usageLog: {

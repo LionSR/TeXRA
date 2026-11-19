@@ -3,7 +3,7 @@ import { Effect, absurd } from 'effect';
 import { formatToolResultAsText } from '@shared/toolResultText';
 import { stringifyConversationValue } from '@shared/transcript/conversationFormat';
 
-import { Settings, type ConfigProvider } from '@shared/config/settings';
+import { Settings, type SettingsStores } from '@shared/config/settings';
 import type { RunId, ToolCallLog, ExportNode } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { TranscriptView } from '@shared/session/sessionView';
@@ -112,14 +112,14 @@ export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
   runId: RunId,
-  config: ConfigProvider,
+  stores: SettingsStores,
 ): Effect.fn.Return<ExportNode[], Error, SessionLog> {
   // The transcript is built cold from the run's committed rows by the same
   // reducer the session view runs, at the verbosity the session's config
   // reads now; empty when the run never existed or was removed.
   const transcript = buildRunTranscript(
     yield* (yield* SessionLog).display(runId),
-    Settings.getConfig(config, DEBUG_MODE_SETTING),
+    yield* Settings.get(stores, DEBUG_MODE_SETTING),
   );
   return transcript.rows.flatMap(conversationNodesForRow);
 });

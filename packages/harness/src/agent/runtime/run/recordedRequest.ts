@@ -50,9 +50,11 @@ import type { AgentRunShape } from './AgentRun';
  * which is what the provider receives (the adapter owns normalization, such
  * as a Responses route trimming its instructions or filling required blank
  * ones), less its history and continuation, which the rows below its
- * attempt hold.
+ * attempt hold. Its shape, the controls of each protocol's prepared turn
+ * included, is the `context.blob` kind's: a change to it is that kind's
+ * new version.
  */
-const RecordedRequestSchema = Schema.Struct({
+export const RecordedRequestSchema = Schema.Struct({
   mode: Schema.Literals(['foreground', 'background']),
   system: Schema.NullOr(Sha256Schema),
   tools: Schema.Array(Sha256Schema),
@@ -318,16 +320,14 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
 }
 
 /**
- * Development and CI (`TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT`, or under
- * Vitest): read the run back from the store and die, before the prepared
- * turn `sent` goes to the provider, unless its rows rebuild it exactly.
+ * When `TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT` is on (the CLI validation
+ * scripts set it, and the Vitest config sets it for the test suites): read
+ * the run back from the store and die, before the prepared turn `sent` goes
+ * to the provider, unless its rows rebuild it exactly.
  */
 export const checkRecordedRequest = Effect.fn('recordedRequest.check')(
   function* (run: Pick<AgentRunShape, 'runId'>, sent: ResolvedTurn) {
-    const on =
-      (yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT')) ||
-      (yield* envFlag('VITEST'));
-    if (!on) return;
+    if (!(yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT'))) return;
     const runHistory = yield* RunHistory;
     const state = yield* Effect.orDie(runHistory.load(run.runId));
     const problem = Result.merge(

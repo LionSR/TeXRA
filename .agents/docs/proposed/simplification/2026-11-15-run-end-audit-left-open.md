@@ -25,6 +25,14 @@ two below need a decision first.
      store. It is cheapest before that row's current version is released,
      and it should be decided together with the delivery union in
      [tool card result and delivery shapes](./2026-11-14-tool-card-result-and-delivery-shapes.md).
+   - Landed 2026-11-19 (`followup.queued` v11): the delivery stores
+     `wallTimeMs`, which `formatWallTime` (`utils/text/stringUtils.ts`)
+     words in the envelope, the summary and the agent-CLI run log; the
+     prompt is an attribute `agentCliShared.ts` cuts to 200 characters as it
+     builds the delivery, and the harness has no `prompt` field. The
+     generator's `wallTime` scrub is gone; the crash normalizer still
+     scrubs the envelope's `<wall-time>` text, which is rendered. The union
+     was compared and kept as one struct (see that note's section 3).
 2. **The desktop terminal drops what is typed before its shell starts.**
    The renderer forwards keystrokes as soon as the terminal exists
    (`packages/desktop/src/renderer/terminalPane.ts`), and asks for a shell

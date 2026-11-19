@@ -291,6 +291,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatWallTime,
   joinFacts,
   pluralize,
   previewLabel,
@@ -373,7 +374,6 @@ export {
   type PlanApprovalRequest,
   planOf,
   planSummaryLine,
-  type PluginRequest,
   type RequestKind,
   // Who answers a request: a person, or the run grant that answers it.
   type AnsweredBy,

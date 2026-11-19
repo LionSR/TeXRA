@@ -216,7 +216,7 @@ export function sessionReads(
         readConversation: read(
           readCompletedRunConversation(
             runId,
-            Context.get(session, SessionRoots).config,
+            Context.get(session, SessionRoots),
           ),
         ),
         readTrace: read(assembleTrace(runId)),
