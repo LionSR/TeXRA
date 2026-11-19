@@ -14,7 +14,7 @@ five defects are all fixed (#15018, #15024, #15026, #15071), every entry of
 its "In flight" list has merged, and its table was wrong for every note it
 covered, so it is replaced, not patched.
 
-How it was made: four read-only passes, one per area, read each of the 50
+How it was made: four read-only passes, one per area, read each of the 49
 other notes in full and checked every item it lists as open against the tree
 by name, trusting neither the note's line numbers nor its own "done" and
 "open" labels. A second pass read, for each item waiting on a decision, what
@@ -31,7 +31,7 @@ behaviour.
 | Storage and row shapes                     | 12    | 16     | 18                  | 4              | 3       |
 | Run runtime and architecture               | 11    | 17     | 17                  | 7              | 8       |
 | App, hosts, UI, LaTeX, programs, features  | 16    | 21     | 37                  | 6              | 7       |
-| Model layer, SDK surface, release, process | 11    | 8      | 20                  | 8              | 14      |
+| Model layer, SDK surface, release, process | 10    | 8      | 20                  | 8              | 14      |
 
 About 60 items of work after overlaps, about 90 decisions before this note's
 rulings below, about 25 items that need a measurement, a spike or a live
