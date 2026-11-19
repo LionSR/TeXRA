@@ -37,7 +37,7 @@ export function renderNewerBuiltInNotice(
           }),
       }),
       renderLabeledActionButton({
-        icon: 'rotate-right',
+        icon: 'arrow-rotate-left',
         text: 'Reset to built-in',
         title: 'Delete your copy so the new built-in version is used',
         kind: 'ghost',

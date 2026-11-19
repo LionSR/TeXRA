@@ -6,11 +6,11 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
   toErrorMessage,
+  hasExtension,
 } from '@texra-ai/harness/schemas';
 import { runDirUnder } from '@texra-ai/harness/plugins';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
-  hasExtension,
   createRunStorageLocation,
   pathToLocationIn,
 } from '@texra-ai/harness/host';

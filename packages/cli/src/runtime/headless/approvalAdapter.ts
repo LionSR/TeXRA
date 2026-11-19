@@ -157,7 +157,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
         return yield* ask(yield* toolEditContent(runId, payload));
       case 'planApproval':
         return yield* ask({
-          summary: `${REQUEST_ASK.plan}:\n${JSON.stringify(payload.data.plan, null, 2)}`,
+          summary: `${REQUEST_ASK.plan}:\n${payload.data.plan.objective}`,
         });
       case 'proposal':
         return yield* ask(buildAgentProposalApprovalContent(payload.data));

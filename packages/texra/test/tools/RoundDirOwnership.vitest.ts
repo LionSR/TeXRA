@@ -8,7 +8,6 @@ import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { runDirUnder } from '@texra-ai/harness/plugins';
 import { createWorkspaceLocation } from '@texra-ai/harness/host';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -31,16 +30,10 @@ describe('round-dir ownership', () => {
     const storageRoot = path.join(tempDir, 'storage');
     await mkdir(workspaceDir, { recursive: true });
     // The run workspace takes the roots it works under as a value.
-    const { roots } = createFakeHost(
-      {
-        workspaceRoot: workspaceDir,
-        storageRoot,
-      },
-      {
-        globalState: new MemoryStateStore(),
-        workspaceState: new MemoryStateStore(),
-      },
-    );
+    const { roots } = createFakeHost({
+      workspaceRoot: workspaceDir,
+      storageRoot,
+    });
     const stylePath = path.join(workspaceDir, 'macros.sty');
     await writeFile(stylePath, 'workspace\n');
 

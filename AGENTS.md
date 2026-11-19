@@ -116,12 +116,16 @@ aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
 `packages/harness/src` (an ESM package) a relative import names its `.js` file.
 
 **The harness boundary is frozen, not open.** The app and hosts reach the
-harness only through `@texra-ai/harness` and its subpaths (`/node`, `/plugins`,
-`/schemas`, `/transcript`); a host holds the `LocalSession` that
+harness only through `@texra-ai/harness` and its subpaths (`/host`, `/node`,
+`/plugins`, `/schemas`, `/transcript`); a host holds the `LocalSession` that
 `Sessions.open` returns. The harness imports nothing from the app,
 and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
 `npm run lint`) also fails:
 
+- a harness alias or a path into `packages/harness/src` anywhere in another
+  package, its suites, scripts and tooling included (the two validator
+  harnesses in `packages/cli/scripts/` excepted); repo-root `src/test-kernel/`,
+  the suites that compose several packages, may reach internals;
 - an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
   the runtime entries it names; the SDK's entry files run nothing;
 - `new AbortController()` outside its one permanent resident;
@@ -133,14 +137,13 @@ and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
 Each import or property ban in `oxlint.config.mts` is a named set, listed once
 in a zone table with the directories and files where it holds (`except` for
 an exemption). The config writes the overrides from those tables, so a new
-zone, ban or exemption is one entry. The host-layer, app and llm alias bans
-are read from the `tsconfig.json` `paths`, so a new alias needs no lint edit.
+zone, ban or exemption is one entry. The host-layer, app, harness-internal
+and llm alias bans are read from the `tsconfig.json` `paths`, so a new alias needs no lint edit.
 
 `npm run docgen` keeps the core's public-surface reports current
 (`packages/harness/AGENTS.md` "Core quality"). oxlint holds the VS Code-free zones, the host-layer, harness-no-app,
-browser-bundle and llm import rules, and the core syntax bans. The other boundaries (no deep import
-of harness internals from the app or a host, no `@shared/schemas/<leaf>`
-import, one owner per fact) are conventions with no mechanical check; there
+harness-internal, browser-bundle and llm import rules, and the core syntax bans. The other boundaries (no
+`@shared/schemas/<leaf>` import, one owner per fact) are conventions with no mechanical check; there
 are no baseline files and no architecture tests. `.agents/docs/refuted-candidates.json` records refactors
 investigated and refused; landing one on new evidence rewrites its entry in
 the same PR. The open work is the public surface in

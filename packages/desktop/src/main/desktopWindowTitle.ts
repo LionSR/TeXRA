@@ -11,8 +11,9 @@ type DesktopTitleProject = {
   readonly session: {
     readonly view: Pick<Session['view'], 'current' | 'changes'>;
   };
-  /** Absent for the no-workspace session, whose title names no project. */
-  readonly root: string | undefined;
+  /** No workspace for the no-workspace session, whose title names no
+   *  project. */
+  readonly roots: { readonly workspace: string | undefined };
   readonly display: { readonly name: string };
 };
 
@@ -24,7 +25,7 @@ type DesktopTitleWindow = Pick<
 /** Compute the current title synchronously, including before a window opens. */
 export function getDesktopWindowTitle(project: DesktopTitleProject): string {
   return formatSessionTitle(
-    project.root === undefined ? undefined : project.display.name,
+    project.roots.workspace === undefined ? undefined : project.display.name,
     sessionActivity(project.session.view.current()),
     { style: NATIVE_WINDOW_TITLE },
   );

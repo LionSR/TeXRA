@@ -40,3 +40,23 @@ export function getFileStem(filePath: string | undefined | null): string {
   // basename alone, never the full path.
   return pathBasename(base, pathExtname(base));
 }
+
+/**
+ * A path's extension in lowercase (`'.tex'` for `'Paper.TEX'`), read from its
+ * base name so a dotfile (`'/home/user/.bashrc'`) has none.
+ */
+export function getExtensionLowercase(filePath: string): string {
+  return pathExtname(getBasename(filePath)).toLowerCase();
+}
+
+/**
+ * Whether a path has the given extension, ignoring case.
+ *
+ * @example
+ * hasExtension('notes.md', '.md') // true
+ * hasExtension('Notes.MD', '.md') // true
+ * hasExtension('notes.pdf', '.md') // false
+ */
+export function hasExtension(filePath: string, extension: string): boolean {
+  return getExtensionLowercase(filePath) === extension.toLowerCase();
+}
