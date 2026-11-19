@@ -26,7 +26,7 @@ const files = [
     <div class="mk-term-prompt">
       <span class="mk-term-sigil">$</span>
       <span class="mk-term-cmd"
-        >texra run polish
+        >texra run edit
         <span class="mk-term-flag">--input</span> paper.tex</span
       >
     </div>
@@ -37,11 +37,11 @@ const files = [
     <div class="mk-term-prompt csh-beat">
       <span class="mk-term-sigil">$</span>
       <span class="mk-term-cmd"
-        >texra run polish <span class="mk-term-flag">--input</span> paper.tex
-        <span class="mk-term-flag">--output</span> paper.polished.tex</span
+        >texra run edit <span class="mk-term-flag">--input</span> paper.tex
+        <span class="mk-term-flag">--output</span> paper.edited.tex</span
       >
     </div>
-    <div class="csh-out">paper.polished.tex</div>
+    <div class="csh-out">paper.edited.tex</div>
     <div class="csh-note">
       --output copies the final artifact next to your input
     </div>
@@ -52,9 +52,7 @@ const files = [
       <span class="mk-term-cmd">texra history show 9f3a6c81d24e</span>
     </div>
     <div class="csh-files">
-      <div class="csh-elide">
-        … Execution / Status / Agent / Model details …
-      </div>
+      <div class="csh-elide">… Run / Status / Agent / Model details …</div>
       <div class="csh-files-head">Files (2):</div>
       <div v-for="f in files" :key="f.path" class="csh-file">
         <span class="csh-size">{{ f.size }}</span>
