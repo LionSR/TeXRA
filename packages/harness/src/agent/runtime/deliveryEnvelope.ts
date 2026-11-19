@@ -19,25 +19,21 @@
 // Local imports
 import type { ChildRunDelivery } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-
-/** Maximum prompt length echoed back in a delivery/error XML attribute. */
-const DELIVERY_PROMPT_MAX = 200;
+import { formatWallTime } from '@utils/text/stringUtils';
 
 /**
- * The `<family>-result` / `<family>-error` XML of a delivery: its id and
- * prompt, its attributes, then the facts present, in the fixed order its
- * schema declares, so two drivers reporting the same fact always render it
- * the same way and in the same place.
+ * The `<family>-result` / `<family>-error` XML of a delivery: its id, its
+ * attributes, then the facts present, in the fixed order its schema
+ * declares, so two drivers reporting the same fact always render it the same
+ * way and in the same place.
  */
 export function formatDelivery(delivery: ChildRunDelivery): string {
   const tag = `${delivery.family}-${delivery.message === undefined ? 'result' : 'error'}`;
   const attrs = [
     { name: 'id', value: delivery.runId },
-    { name: 'prompt', value: delivery.prompt?.slice(0, DELIVERY_PROMPT_MAX) },
     ...(delivery.attributes ?? []),
   ]
-    .filter((attr) => attr.value != null)
-    .map((attr) => `${attr.name}="${escapeAttr(String(attr.value))}"`)
+    .map((attr) => `${attr.name}="${escapeAttr(attr.value)}"`)
     .join(' ');
 
   const { exit, output } = delivery;
@@ -47,8 +43,8 @@ export function formatDelivery(delivery: ChildRunDelivery): string {
     body.push(`<exit-code>${exit.code ?? 'none'}</exit-code>`);
     if (exit.timedOut) body.push('<timed-out>true</timed-out>');
   }
-  if (delivery.wallTime !== undefined) {
-    body.push(`<wall-time>${delivery.wallTime}</wall-time>`);
+  if (delivery.wallTimeMs !== undefined) {
+    body.push(`<wall-time>${formatWallTime(delivery.wallTimeMs)}</wall-time>`);
   }
   if (delivery.response !== undefined) {
     body.push(

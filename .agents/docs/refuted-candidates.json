@@ -898,6 +898,57 @@
           "signature": "const foreignProtocol = ( runId: RunId, state: RunState, bound: Pick<BoundModel, 'backend' | 'origin'>, ): RunHistoryRefused | null => {…};"
         }
       ]
+    },
+    {
+      "id": "LLM-codex-backend-model-id-export",
+      "candidate": "withdrawing codexBackendModelId from the public exports of @texra-ai/llm (the app asking llm a higher-level question, or reading a decided route, for the Codex backend's model id)",
+      "why": "Its consumer outside llm, the app's Codex launch configuration, starts a Codex binary that signs in by itself: llm decides no route for that launch, so there is no decided route to read. routeConfig's ChatGPT case keeps config.id and only responsesConfiguration strips the date pin, so making routeConfig answer would change every reader of config.id, and the app would have to build a ChatGPT route it never uses. Withdrawing the export would copy the date-pin pattern into the app, a second owner for it.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-18-model-access-one-owner-per-question.md#kept-as-llm-exports-and-why",
+      "reopenWhen": "The app's Codex launch goes through a route llm decides.",
+      "symbols": [
+        {
+          "file": "packages/llm/src/models/modelRoute.ts",
+          "symbol": "codexBackendModelId",
+          "signature": "export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {…}"
+        }
+      ]
+    },
+    {
+      "id": "DELIVERY-union-on-family-and-outcome",
+      "candidate": "ChildRunDelivery as a union on family and outcome: typed background, script and subagent cases with an outcome discriminant in place of the optional `message`, beside one generic case for a plugin's family (tool card note, section 3)",
+      "why": "A plugin's case must stay generic: its family is open (DELIVERY_FAMILY_PATTERN) and the agent-CLI tools set prompt, ids, wall time, response, usage, lines and message, which is the union of the harness's facts, so the three typed cases would be a second spelling of the generic one. An `outcome` field beside `message` removes no state: `message` present already decides the envelope tag in formatDelivery and the summary in deliverySummary, and endProcessChild turns a returned report into an error by adding `message` while keeping its response, so a failed case would carry every completed field. What landed instead (2026-11-19, followup.queued v11): the wall time stored as `wallTimeMs`, the prompt as an attribute its builder cuts, and attribute values that are strings, never null.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-14-tool-card-result-and-delivery-shapes.md#3-childrundelivery-a-union-on-family-and-outcome",
+      "reopenWhen": "When a plugin's delivery no longer needs a generic case, or a reader branches on a fact the struct cannot state.",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/deliveryEnvelope.ts",
+          "symbol": "formatDelivery",
+          "signature": "export function formatDelivery(delivery: ChildRunDelivery): string {…}"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/processRun.ts",
+          "symbol": "endProcessChild",
+          "signature": "const endProcessChild = ( runId: RunId, { logger, turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.Effect<void, Error, AgentRunServices> => {…};"
+        }
+      ]
+    },
+    {
+      "id": "STORE-fact-version-one-reader",
+      "candidate": "One shared reader of a plugin fact's version for factKindOf (the store's row codec) and readTraceFacts (the trace import), which each write the retired, unknown, newer and earlier branches",
+      "why": "The two readers agree on the four cases and on nothing they do with them. The store fails a newer fact as DatabaseStoreNewer and an earlier or retired one as DatabaseRowEarlier, each carrying the commit; the trace import has no commit, throws one message for any other version and a different one for a retired kind. A shared classifier returns a four-literal standing that each caller switches over again, so both keep four branches and the classifier and its union are added: tried twice (an earlier attempt, and again on 2026-11-19), the diff came out no shorter, and routing the trace import through the store's errors changed its wording. Until a third reader appears, or the two outcomes converge, the eight short branches are the smaller design.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md#2-storage-one-classifier-for-a-run-that-cannot-be-read",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/rowCodec.ts",
+          "symbol": "factKindOf",
+          "signature": "export function factKindOf(fact: { readonly plugin: string; readonly kind: string; readonly version: number; }, commit: number, factKinds: FactKinds): Result.Result<FactKinds[FactName] | undefined, DatabaseStoreNewer | DatabaseRowEarlier> {…}"
+        },
+        {
+          "file": "packages/harness/src/shared/schemas/traceDocument.ts",
+          "symbol": "readTraceFacts",
+          "signature": "export function readTraceFacts(document: TraceDocument, appFactKinds: readonly TraceFactKind[]): TraceDocument {…}"
+        }
+      ]
     }
   ]
 }

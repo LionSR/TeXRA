@@ -202,7 +202,7 @@ export interface RunCell {
    * appended after the batch's in its one append: a child turn's delivery
    * to its parent. Failure of any member commits none.
    *
-   * Preconditions, checked before anything is written; a violation is a
+   * Preconditions, checked before anything commits; a violation is a
    * defect:
    * - a batch on an unopened run carries the `run.position` that opens it,
    *   unless it is empty (a registration alone) or carries the run's end;
@@ -216,12 +216,12 @@ export interface RunCell {
    *   tool message binds results to calls positionally, the run history
    *   keys them by `callId`.
    */
-  readonly append: <E = never>(
+  readonly append: (
     rows:
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
-    alongside?: Alongside<E>,
-  ) => Effect.Effect<RunState, CellError | E>;
+    alongside?: Alongside,
+  ) => Effect.Effect<RunState, CellError>;
   /**
    * Re-read the run under the cell's lock: the state with every row another
    * writer committed (a `request.decided` a surface landed), in commit

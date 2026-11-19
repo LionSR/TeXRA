@@ -9,40 +9,30 @@
  */
 
 // Third-party imports
-import { Context, Effect, Schema } from 'effect';
+import { Context, Effect } from 'effect';
 
 // Local imports
 import type {
+  HostFailed,
   TerminalRunFailed,
   TerminalRunRequest,
   TerminalRunResult,
 } from '@texra/hosts/uiHosts';
 
 /**
- * A host command that was dispatched and rejected (the VS Code host's own
- * `executeCommand`). A host with no command surface leaves `commands`
- * undefined instead of raising, and the tool reports that absence itself.
- */
-export class SetupCommandFailed extends Schema.TaggedError<SetupCommandFailed>()(
-  'SetupCommandFailed',
-  {
-    message: Schema.String,
-    commandId: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
-/**
- * Per-command surface. The member is an `Effect`: a host fault reaches the
- * setup tool as {@link SetupCommandFailed} rather than as `unknown`, and
- * interrupting the fiber abandons the wait instead of holding an
- * uninterruptible region open.
+ * Per-command surface. The member is an `Effect`: a command the host
+ * dispatched and rejected (the VS Code host's own `executeCommand`) reaches
+ * the setup tool as the host's {@link HostFailed} rather than as `unknown`,
+ * and interrupting the fiber abandons the wait instead of holding an
+ * uninterruptible region open. A host with no command surface leaves
+ * `commands` undefined instead of raising, and the tool reports that
+ * absence itself.
  */
 interface SetupCommandAdapter {
   invoke(
     commandId: string,
     ...args: unknown[]
-  ): Effect.Effect<unknown, SetupCommandFailed>;
+  ): Effect.Effect<unknown, HostFailed>;
 }
 
 /** Host-varying setup capabilities. */

@@ -164,6 +164,49 @@ describe('session view update', () => {
     expect(lost.transcript.rows).toHaveLength(1);
     expect(lost.transcript.finalRows).toBe(1);
   });
+
+  // The row carries the fact, so no host has to join a run's holder to its
+  // rows to know an open call is not running.
+  it('reads an open call of a run nobody holds as interrupted', () => {
+    const log = new Log();
+    log.emit(ROOT, T.root, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'custom:search' },
+      parent: null,
+      provenance: null,
+      takesFollowUps: true,
+      worktree: null,
+      grants: NO_APPROVAL_GRANTS,
+    });
+    log.emit(ROOT, T.root, { type: 'run.activate' });
+    log.emit(ROOT, T.root + 1, {
+      type: 'tool.start',
+      logId: 'call-1',
+      toolName: 'bash',
+      input: { command: 'sleep 60' },
+    });
+    const statusOf = (view: SessionView) => {
+      const [row] = runView(view, ROOT).transcript.rows;
+      return row?.kind === 'tool' ? row.model.status : undefined;
+    };
+    const updater = makeSessionViewUpdater('paper');
+    const inputs = [subscribe(ROOT), ...log.events.map(tail), log.drained()];
+    expect(statusOf(viewOf([...inputs, alive], updater))).toBe('in_progress');
+    expect(statusOf(viewOf([nobody], updater))).toBe('interrupted');
+    // A resume takes the run up again, and its open call with it.
+    expect(statusOf(viewOf([alive], updater))).toBe('in_progress');
+    // A transcript opened after the holder went reads the same.
+    expect(
+      statusOf(
+        viewOf([
+          log.drained(),
+          nobody,
+          subscribe(ROOT),
+          ...log.events.map(tail),
+        ]),
+      ),
+    ).toBe('interrupted');
+  });
 });
 
 // ---------------------------------------------------------------------------

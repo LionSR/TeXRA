@@ -87,7 +87,11 @@ call it; `unloadable`, `earlierBuildRefusal` and `runRecords.ts` are gone.
 (`:259,351`). The raw end write is documented on `RunCell` as the one
 exception (`runHistory.ts:179-184`). Still open: `factKindOf`
 (`rowCodec.ts:344-365`) and `readTraceFacts` (`traceDocument.ts:60-93`)
-still write the version branches twice (`pluginFactFloor` is gone), and
+still write the version branches twice (`pluginFactFloor` is gone; refused
+on 2026-11-19 as `STORE-fact-version-one-reader` in
+`.agents/docs/refuted-candidates.json`: the two readers share the four cases
+and none of the outcomes, so a shared classifier adds a helper and a
+four-literal union and removes no branch), and
 "the store is missing" is still decided in `readSessionView.ts:43-57` and
 by `storeOpenElsewhere`, whose callers each read one value
 (`projectDatabase.ts:130,181`); `probeStore` is not built. The callers'
@@ -191,6 +195,36 @@ values `runReadRefusal` reads (`unprepared-history`, `inconsistent`,
 `not-owner` were produced and read by nothing; each is the refusal's
 `detail` now, on a refusal with no reason._
 
+_Also 2026-11-19: the two pairs were already one each: a device code
+that runs out is one `SubscriptionOAuthError` of kind `expired`
+(`packages/llm/src/oauth/deviceAuthorization.ts`), and a host's missing
+resources one `ResourcesNotFound`
+(`packages/texra/src/controllers/texraProcessLayer.ts`), which both hosts
+raise. A second tag no production code reads is gone where its
+subsystem already had one: `PluginAgentUnread` is `AgentScanError`,
+`AgentsMdUnread` is `PromptRenderFailed`, `ParentRunClosed` is
+`RunOpenRejected` (now in
+`packages/harness/src/agent/storage/runLifecycle.ts`),
+`MediaInputFailed` is `MediaConversionFailed`; and two host capabilities
+raise `HostFailed` with the member's name: the setup command adapter
+(`SetupCommandFailed` is gone) and the export's format pick, whose 1:1
+re-wrap into `TranscriptExportFailed` is gone with
+`transcriptExportFailure.ts`. Checked and kept, each read by a branch:
+`TerminalRunFailed.reason`, `DiagnosticsReadFailed.reason`,
+`VscodeCommandRefused.reason` (`not-registered` in `compareFiles.ts`), the
+Lean tags (read in `catchTag` arrays), the GitHub client's four, and the
+six "unavailable" (each caught by its tag). Kept as each subsystem's one
+error, with no sibling to fold into: `AudioRecorderError`,
+`CliPromptFailed`, `JsonFileFailed`, `EditorPaneError`,
+`ChatExportInputUnreadable` (the tag over a port declared `Error`), and
+the `Effect.try` wrappers logged where they are raised
+(`ChildNotKilled`, `HomeDirectoryUnresolved`,
+`SkillDirectoryUnverified`, `CredentialFileUnchecked`). Still open,
+because open PRs hold their files: `HostCallFailed` and `WindowCallFailed`
+(`packages/texra/src/controllers/server/`), and `SettingsRequestFailed`
+and `ApiKeyPromptFailed`, raised from the CLI chat's forms and
+`openGuiWindow.ts`._
+
 **Give up.** Catching a failure by a name nobody catches it by.
 
 ## 4. Errors: one classifier per question
@@ -238,6 +272,13 @@ the app with `modelFailureText` (`packages/texra/src/ui/copy/modelAccess.ts:108`
 Still open: the 401/403 question has five deciders (`packages/llm/src/errors.ts:229`,
 `packages/llm/src/oauth/oauthRequest.ts:58`, `githubClient.ts:113`,
 `SubscriptionUsageService.ts:316`, `overleafClone.ts:212`)._
+
+_Done 2026-11-19: `isAuthFailureStatus` (`packages/llm/src/errors.ts`,
+public in `@texra-ai/llm`) owns the 401/403 fact; `authOrRejectionKind`,
+`oauthTokenErrorKind` (a rejected grant: 400 or that), the GitHub client's
+`classifyFailure` and the subscription usage service read it. Kept:
+`isCloneAuthError` in `overleafClone.ts`, which reads git's own wording on
+exit 128, not a status._
 
 **Give up.** Nothing observable.
 

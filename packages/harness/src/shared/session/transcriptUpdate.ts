@@ -423,6 +423,7 @@ export function buildRunTranscript(
   const work: TranscriptWork = {
     ix: emptyTranscriptIndexes(),
     owned: new WeakSet(),
+    interrupted: false,
   };
   let transcript = emptyTranscript();
   const start = events[0];

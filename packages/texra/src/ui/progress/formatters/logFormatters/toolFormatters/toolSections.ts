@@ -24,6 +24,7 @@ import {
   buildStatusBadge,
   buildLineChangeStats,
 } from '@ui/progress/formatters/htmlBuilders';
+import { formatLineRange } from '@ui/copy/format';
 import { statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -156,13 +157,7 @@ function renderFilePath(section: ToolFileSection): TemplateResult {
       return html`<span class="memory-path">${waIcon('clock-rotate-left')} <bdi dir="auto">${section.path}</bdi></span>`;
     case 'workspace': {
       const { startLine, endLine } = section;
-      let range = '';
-      if (startLine) {
-        range =
-          endLine && endLine !== startLine
-            ? `:${startLine}-${endLine}`
-            : `:${startLine}`;
-      }
+      const range = formatLineRange(startLine, endLine);
       const name = getBasename(section.path) || section.path;
       return buildFileLinkSpan(
         section.path,

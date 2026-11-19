@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Effect, Result } from 'effect';
+import { Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
@@ -15,21 +15,19 @@ const CHANNEL = 'FinalOutputOpener';
  * hint, so it is loud, not a debug note.
  */
 export const previewFinalOutput = (absolutePath: string) =>
-  Effect.gen(function* () {
-    const previewed = yield* Effect.result(
-      fromHost('showTextDocument', async () => {
-        await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
-          preview: true,
-          preserveFocus: false,
-        });
-        vscode.window.setStatusBarMessage(
-          'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
-          8000,
-        );
-      }),
+  fromHost('showTextDocument', async () => {
+    await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
+      preview: true,
+      preserveFocus: false,
+    });
+    vscode.window.setStatusBarMessage(
+      'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
+      8000,
     );
-    if (Result.isFailure(previewed))
-      yield* Effect.logWarning(
-        `Unable to auto-open final output ${absolutePath}: ${String(previewed.failure.cause)}`,
-      ).pipe(withLogChannel(CHANNEL));
-  });
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Unable to auto-open final output ${absolutePath}: ${String(error.cause)}`,
+      ).pipe(withLogChannel(CHANNEL)),
+    ),
+  );

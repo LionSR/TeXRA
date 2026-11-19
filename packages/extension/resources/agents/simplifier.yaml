@@ -8,8 +8,6 @@ tools:
   - glob
   - grep
   - diagnostics
-  - extract_figures
-  - extract_tikz_figures
   - memory
 
 prompt: |

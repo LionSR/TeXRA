@@ -168,6 +168,14 @@ export type ToolRowOutput =
       readonly text: TranscriptText;
     };
 
+/**
+ * How a tool row's call stands: its call's own status, or `interrupted` for
+ * a call still open on a run nobody drives (its process died). Nothing works
+ * on such a call until the run resumes and issues it again, so no host
+ * shows it as running.
+ */
+export type ToolRowStatus = ToolCallStatus | 'interrupted';
+
 export interface ToolRowModel {
   /** Tool name as a user reads it (`MCP fs/read`, `Multi-agent workflow`). */
   readonly headerLabel: string;
@@ -183,10 +191,11 @@ export interface ToolRowModel {
   /** A completed shell or MCP call that printed nothing: "it ran and printed
    *  nothing" is a result for a call whose output is the point. */
   readonly showsNoOutputMarker: boolean;
-  readonly status?: ToolCallStatus;
+  readonly status?: ToolRowStatus;
   readonly isUserFeedback: boolean;
   /** The limit a running call is stopped at, the one its tool enforces;
-   *  absent once it finished, and on a call with no limit. */
+   *  absent once it finished or was interrupted, and on a call with no
+   *  limit. */
   readonly timeoutMs?: number;
   readonly exitCode?: number;
 }
@@ -194,6 +203,8 @@ export interface ToolRowModel {
 export interface ToolRowModelContext {
   /** The session's runs by id, for the `executions` header summary. */
   readonly runLabels?: RunLabels;
+  /** Nobody drives the call's run: an open call reads as `interrupted`. */
+  readonly interrupted?: boolean;
   /** The raw `data.output` of the tool-use payload. Structured sections read
    *  it directly (MCP content blocks, edit start lines, per-file line
    *  changes); `NormalizedToolUse.outputText` is its flattened text. */
@@ -404,10 +415,15 @@ export function toolRowModel(
   const userInstruction = normalized.userInstructionText
     ? transcriptText(normalized.userInstructionText)
     : undefined;
-  const isInProgress = normalized.status === TOOL_CALL_STATUS.IN_PROGRESS;
-  const timeoutMs = isInProgress
-    ? toolTimeoutMs(normalized.toolName, normalized.input)
-    : undefined;
+  const status: ToolRowStatus | undefined =
+    normalized.status === TOOL_CALL_STATUS.IN_PROGRESS &&
+    ctx.interrupted === true
+      ? 'interrupted'
+      : normalized.status;
+  const timeoutMs =
+    status === TOOL_CALL_STATUS.IN_PROGRESS
+      ? toolTimeoutMs(normalized.toolName, normalized.input)
+      : undefined;
 
   return {
     headerLabel: card?.title ?? displayToolName(normalized.toolName),
@@ -421,7 +437,7 @@ export function toolRowModel(
       normalized.status === TOOL_CALL_STATUS.COMPLETED &&
       (toolDisplayKind(normalized.toolName) === 'bash' ||
         isMcpToolName(normalized.toolName)),
-    ...(normalized.status ? { status: normalized.status } : {}),
+    ...(status ? { status } : {}),
     isUserFeedback: normalized.isUserFeedback,
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(normalized.exitCode !== undefined
