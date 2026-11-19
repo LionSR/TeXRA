@@ -36,8 +36,6 @@ import {
   rollupOf,
   type RunId,
   formatCompactDuration,
-  formatResultCount,
-  NESTED_NOUNS,
 } from '@texra-ai/harness/schemas';
 import { dispatchedChildren } from '@texra-ai/harness/transcript';
 import type { Surface } from '@texra/shared/session/surface';
@@ -55,7 +53,7 @@ import {
   truncateDeclarations,
 } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { dispatchSummary } from '@ui/copy/nestedRuns';
+import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchDisclosureToggle } from './disclosureToggle';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
@@ -267,13 +265,7 @@ export class BackgroundTasksPanel extends LitElement {
       (descendant) => descendant.runStartedAt ?? [],
     );
     const since = starts.length > 0 ? Math.min(...starts) : null;
-    // Each kind by its own noun: a command is not counted as an agent.
-    const counts = Object.entries(NESTED_NOUNS)
-      .flatMap(([kind, noun]) => {
-        const count = listed.filter((r) => r.identity.kind === kind).length;
-        return count > 0 ? [formatResultCount(count, noun)] : [];
-      })
-      .join(', ');
+    const counts = nestedCountsLabel(rollup.kinds);
     // With no child to count, the card is its inquiry threads alone.
     const summary =
       children.length === 0

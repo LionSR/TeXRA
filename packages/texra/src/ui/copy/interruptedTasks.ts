@@ -8,8 +8,9 @@ import {
   type RunView,
   type SessionView,
   type RunId,
-  formatResultCount,
 } from '@texra-ai/harness/schemas';
+
+import { nestedCountsLabel } from './nestedRuns';
 
 /** One interrupted task, as `/resume all` names it. */
 interface InterruptedTask {
@@ -17,7 +18,7 @@ interface InterruptedTask {
   readonly title: string;
   /** When it last did anything: the host words it ("3 h ago"). */
   readonly stoppedAt: number | null;
-  /** "2 of 4 agents done", or null for a task that started none. */
+  /** "3 agents, 1 command, 2 done", or null for a task that started none. */
   readonly agents: string | null;
 }
 
@@ -43,7 +44,7 @@ export function interruptedTasks(
 }
 
 function agentProgress(run: Pick<RunView, 'rollup'>): string | null {
-  const { total, finished } = run.rollup;
+  const { total, finished, kinds } = run.rollup;
   if (total === 0) return null;
-  return `${finished} of ${formatResultCount(total, 'agent')} done`;
+  return `${nestedCountsLabel(kinds)}, ${finished} done`;
 }

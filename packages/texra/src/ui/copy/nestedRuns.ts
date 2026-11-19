@@ -17,30 +17,59 @@
  * "Copy diagnostics" output, which is for bug reports.
  */
 
+// Third-party imports
+import { Record } from 'effect';
+
 // Local imports
 import type { RunView } from '@texra-ai/harness/schemas';
 import {
   formatResultCount,
   joinFacts,
+  NESTED_NOUNS,
   runNoun,
 } from '@texra-ai/harness/schemas';
 
 /** The agents a task started. */
 export const NESTED_AGENT = Object.freeze({
-  /** Count noun (singular; pair with a formatter): "3 agents". */
-  countNoun: 'agent',
-  /** The CLI status bar's narrow count suffix: "3 agt". */
-  compactCountSuffix: 'agt',
   /** The CLI status bar's narrow suffix for agents still working: "2 live". */
   compactLiveSuffix: 'live',
   /** Expand-toggle aria when the tree is open. */
   collapseAction: 'Collapse agents',
 } as const);
 
-/** A collapsed parent's descendants in words: "2 agents · 1 running". */
+type NestedKinds = RunView['rollup']['kinds'];
+
+/** The CLI status bar's narrow count suffix for each kind: "3 agt". */
+const COMPACT_COUNT_SUFFIX = {
+  agent: 'agt',
+  process: 'cmd',
+  script: 'scr',
+} as const satisfies Record<keyof NestedKinds, string>;
+
+/** What a task started, each kind counted by its own noun and none called
+ *  an agent that is not one: "2 agents, 1 command". */
+export const nestedCountsLabel = (kinds: NestedKinds): string =>
+  Record.toEntries(NESTED_NOUNS)
+    .flatMap(([kind, noun]) =>
+      kinds[kind] > 0 ? [formatResultCount(kinds[kind], noun)] : [],
+    )
+    .join(', ');
+
+/** The same counts for the CLI status bar's narrow form: "2 agt 1 cmd". */
+export const nestedCountsCompact = (kinds: NestedKinds): string =>
+  Record.toEntries(COMPACT_COUNT_SUFFIX)
+    .flatMap(([kind, suffix]) =>
+      kinds[kind] > 0 ? [`${kinds[kind]} ${suffix}`] : [],
+    )
+    .join(' ');
+
+/** A collapsed parent's descendants in words: "2 agents, 1 command ·
+ *  1 running". */
 export function nestedRollupLabel(rollup: RunView['rollup']): string {
-  const agents = formatResultCount(rollup.total, NESTED_AGENT.countNoun);
-  return joinFacts([agents, rollup.running > 0 && `${rollup.running} running`]);
+  return joinFacts([
+    nestedCountsLabel(rollup.kinds),
+    rollup.running > 0 && `${rollup.running} running`,
+  ]);
 }
 
 /** The dispatch card's heading over the counts of what it lists ("3 agents,
