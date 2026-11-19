@@ -262,7 +262,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v6: no `response.ready` or `results.ready`: the run state reads them off
     // the `response` row and the delivering `append` (an earlier build's row
     // would fail as damaged).
-    'run.position': Object.freeze({ version: 6, listing: 'own' }),
+    // v7: a `turn.end` carries no `outcome`: nothing read it, and the run's
+    // own end is its `run.end` (an earlier build's check requires it).
+    'run.position': Object.freeze({ version: 7, listing: 'own' }),
     // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
     // holds both.
     // v3: a user message names its attached media by blob address (`media`),

@@ -18,7 +18,6 @@ import { Schema } from 'effect';
 
 import { ModelFailureSchema } from './errors';
 import { Sha256Schema } from './identifiers';
-import { RunOutcomeSchema } from './run';
 import { RunInputSchema } from './runInput';
 import { DeclinableUsageRouteSchema, NormalizedUsageSchema } from './usage';
 import {
@@ -94,15 +93,7 @@ export type PositionAt = typeof PositionAtSchema.Type;
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
   turn: NonNegativeIntSchema,
-  /** A `turn.end`'s: how the turn ended, `completed` with its answer or
-   *  `failed` without one. The run's own end is its `run.end` row. */
-  outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
-}).check(
-  Schema.makeFilter((p) => (p.at === 'turn.end') === (p.outcome != null), {
-    message:
-      'Only a turn.end position carries an outcome, and it always carries one.',
-  }),
-);
+});
 
 /* ---------------------------------------------------------- model.message */
 
