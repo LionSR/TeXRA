@@ -17,14 +17,14 @@ export const FORM_FOREGROUND_MAX_ROWS = 18;
 export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
   PendingRequestKind,
   number | undefined
-> = {
+> = Object.freeze({
   bash: FORM_FOREGROUND_MAX_ROWS,
   toolEdit: FORM_FOREGROUND_MAX_ROWS,
   proposal: FORM_FOREGROUND_MAX_ROWS,
   planApproval: undefined,
   retry: undefined,
   userQuestion: undefined,
-};
+});
 
 // A bare Esc and the second key of an `Esc 1..9` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS
