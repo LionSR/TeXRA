@@ -309,7 +309,7 @@ type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 ## ApprovalGrants
 
 ```ts
-type ApprovalGrants = typeof ApprovalPolicySnapshotSchema.Type;
+type ApprovalGrants = typeof ApprovalGrantsSchema.Type;
 ```
 
 ## ApprovalGrantSource

@@ -258,7 +258,7 @@ export const liveToolGates = Effect.fn('liveToolGates')(function* ({
   const source =
     start === null
       ? view
-      : withUnborn(view, runId, parent, start.approvalPolicy);
+      : withUnborn(view, runId, parent, start.grants);
   const policy = runPolicy(owners.approvals.policy(), source, runId);
   const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
   return {

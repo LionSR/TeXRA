@@ -28,7 +28,7 @@ export const runStart = (
   provenance: null,
   ...over,
   worktree: null,
-  approvalPolicy: NO_APPROVAL_GRANTS,
+  grants: NO_APPROVAL_GRANTS,
 });
 
 /**

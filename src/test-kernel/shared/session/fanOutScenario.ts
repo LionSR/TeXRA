@@ -187,7 +187,7 @@ export function buildScenario({ proposal = false } = {}) {
     parent: null,
     provenance: null,
     takesFollowUps: false,
-    approvalPolicy: ROOT_POLICY,
+    grants: ROOT_POLICY,
   });
   log.emit(ROOT, T.root, {
     type: 'run.activate',
@@ -228,7 +228,7 @@ export function buildScenario({ proposal = false } = {}) {
     provenance: null,
     takesFollowUps: true,
     worktree: null,
-    approvalPolicy: NO_APPROVAL_GRANTS,
+    grants: NO_APPROVAL_GRANTS,
   });
   log.emit(CHILD, T.child, {
     type: 'run.config',
@@ -281,7 +281,7 @@ export function buildScenario({ proposal = false } = {}) {
     parent: log.parent(CHILD),
     provenance: null,
     worktree: null,
-    approvalPolicy: NO_APPROVAL_GRANTS,
+    grants: NO_APPROVAL_GRANTS,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.activate',
@@ -338,7 +338,7 @@ export function buildScenario({ proposal = false } = {}) {
     provenance: null,
     takesFollowUps: false,
     worktree: null,
-    approvalPolicy: NO_APPROVAL_GRANTS,
+    grants: NO_APPROVAL_GRANTS,
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',

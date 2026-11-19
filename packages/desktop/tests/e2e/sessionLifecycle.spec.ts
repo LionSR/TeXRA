@@ -96,7 +96,7 @@ async function writeCanonicalRunFixtures(
             parent: null,
             provenance: null,
             worktree: null,
-            approvalPolicy: { own: {}, goal: [] },
+            grants: { own: {}, goal: [] },
           },
           { type: 'run.activate', aggregateId: id },
           {

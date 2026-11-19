@@ -99,7 +99,7 @@ describe('session view update', () => {
       provenance: null,
       takesFollowUps: true,
       worktree: null,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });
     log.emit(ROOT, T.root + 1, {
@@ -129,7 +129,7 @@ describe('session view update', () => {
       provenance: null,
       takesFollowUps: true,
       worktree: null,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });
     log.emit(ROOT, T.root + 1, {

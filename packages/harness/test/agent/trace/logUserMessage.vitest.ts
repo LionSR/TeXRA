@@ -61,7 +61,7 @@ describe('logUserMessage', () => {
             worktree: null,
             parent: null,
             provenance: null,
-            approvalPolicy: NO_APPROVAL_GRANTS,
+            grants: NO_APPROVAL_GRANTS,
             seq: 1,
             commit: 1,
             at: 0,

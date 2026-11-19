@@ -10,7 +10,7 @@
  */
 import { Schema } from 'effect';
 
-import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
+import { ApprovalGrantsSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
   AnsweredBySchema,
@@ -137,7 +137,7 @@ const RunViewSchema = Schema.Struct({
   queuedFollowUps: QueuedFollowUpsSchema,
   /** Its own approval grants (`RunRows.grants`): what it decided, never
    *  what it inherits (`resolveBypass` reads the ancestry). */
-  grants: ApprovalPolicySnapshotSchema,
+  grants: ApprovalGrantsSchema,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
   /** The run it is listed under: its launcher, while the view lists

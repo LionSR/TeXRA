@@ -53,7 +53,7 @@ function runStart(): Record<string, unknown> {
     worktree: null,
     parent: null,
     provenance: null,
-    approvalPolicy: { own: {}, goal: [] },
+    grants: { own: {}, goal: [] },
   };
 }
 
