@@ -52,17 +52,35 @@ const DEVELOPMENT_CSP = [
   "connect-src 'self' data: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*",
 ].join('; ');
 
+/**
+ * Sets the policy on the app's own responses: its page and assets, which a
+ * build reads from disk and a development run takes from the renderer's dev
+ * server. Every other response keeps the headers it came with. Chromium's
+ * PDF viewer in a PDF tab is one: its pages (`chrome-extension:`, loading
+ * `chrome://resources`) carry their own policy, and under this one their
+ * scripts are blocked and the tab stays blank. The response of a PDF on a
+ * local disk does get the policy, which the viewer does not mind; one on a
+ * network share (`file://server/...`) is outside the pattern and does not.
+ */
 function installContentSecurityPolicy(): void {
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          app.isPackaged ? PRODUCTION_CSP : DEVELOPMENT_CSP,
-        ],
-      },
-    });
-  });
+  const policy = app.isPackaged ? PRODUCTION_CSP : DEVELOPMENT_CSP;
+  const devServer = process.env.ELECTRON_RENDERER_URL;
+  session.defaultSession.webRequest.onHeadersReceived(
+    {
+      urls: [
+        'file:///*',
+        ...(devServer ? [`${new URL(devServer).origin}/*`] : []),
+      ],
+    },
+    (details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [policy],
+        },
+      });
+    },
+  );
 }
 
 /**

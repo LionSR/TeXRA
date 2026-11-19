@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   box,
@@ -301,31 +302,60 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   ).toHaveCount(0);
 });
 
+/** A PDF of `pages` blank pages, generated so no real document is a fixture. */
+function blankPdf(pages: number): string {
+  const kids = Array.from({ length: pages }, (_, page) => `${page + 3} 0 R`);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages} >>`,
+    ...kids.map(
+      () => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
+    ),
+  ];
+  let body = '%PDF-1.4\n';
+  const entries = objects.map((object, index) => {
+    const entry = `${String(body.length).padStart(10, '0')} 00000 n `;
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    return entry;
+  });
+  const size = objects.length + 1;
+  return [
+    `${body}xref\n0 ${size}`,
+    '0000000000 65535 f ',
+    ...entries,
+    `trailer\n<< /Size ${size} /Root 1 0 R >>\nstartxref\n${body.length}\n%%EOF\n`,
+  ].join('\n');
+}
+
 /** The host opens compiled PDFs in the originating project's workbench. */
 test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const { page } = launched;
-  const pdfUrl = 'file:///tmp/texra-trajectory/output.pdf';
+  const pdfPath = join(profile.workspaceRoot, 'output.pdf');
+  const pdfUrl = pathToFileURL(pdfPath).href;
+  writeFileSync(pdfPath, blankPdf(2));
   const session = await page
     .locator('.shell-project-workbench:not([hidden])')
     .getAttribute('data-session');
   const pdfTab = page.locator('.shell-dock-tab[data-kind="pdf"]');
   const frame = page.locator('iframe.shell-workbench-pdf-frame');
+  const showPdf = (build: number) =>
+    page.evaluate(
+      ({ session, pdfUrl, build }) => {
+        window.postMessage(
+          {
+            command: 'desktop:showPdf',
+            session,
+            title: 'output.pdf',
+            pdfUrl,
+            build,
+          },
+          '*',
+        );
+      },
+      { session, pdfUrl, build },
+    );
 
-  await page.evaluate(
-    ({ session, pdfUrl }) => {
-      window.postMessage(
-        {
-          command: 'desktop:showPdf',
-          session,
-          title: 'output.pdf',
-          pdfUrl,
-          build: 1,
-        },
-        '*',
-      );
-    },
-    { session, pdfUrl },
-  );
+  await showPdf(1);
   await expect(pdfTab).toBeVisible();
   await expect(pdfTab.locator('xpath=..')).toHaveAttribute(
     'aria-selected',
@@ -333,11 +363,27 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   );
   await expect(pdfTab).toContainText('output.pdf');
   await expect(frame).toHaveAttribute('src', pdfUrl);
-  await expect(frame).toHaveAttribute('sandbox', 'allow-same-origin');
   await expect(frame).toHaveAttribute('title', 'output.pdf');
-  // No file is at that URL: the pane says so in place of the viewer, and
-  // still offers the PDF to another application.
+  // Chromium's viewer is a page of its own inside the pane's frame, and it
+  // lists one thumbnail per page of the PDF it read.
+  await expect
+    .poll(
+      async () =>
+        (await page
+          .frame({ url: /^chrome-extension:/ })
+          ?.getByRole('tab')
+          .count()) ?? 0,
+    )
+    .toBe(2);
   const pane = page.locator('.shell-workbench-pdf');
+  await expect(frame).toBeVisible();
+  await expect(pane.getByRole('alert')).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('pdf-rendered.png') });
+
+  // The file is deleted and the tab reloads: the pane says so in place of the
+  // viewer, and still offers the PDF to another application.
+  rmSync(pdfPath);
+  await showPdf(2);
   await expect(pane.getByRole('alert')).toContainText(
     "Couldn't load output.pdf. The file is no longer on disk.",
   );
