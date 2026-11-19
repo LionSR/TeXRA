@@ -73,6 +73,7 @@ describe('extractTikzPictures', () => {
 
   // TeX drops a comment together with the line break after it and the next
   // line's indentation, so the picture handed to the compiler must too.
+  // Joining after a control word would rename it (`\beta` + `x`).
   it.live('joins the lines a comment ends as TeX does', () =>
     Effect.gen(function* () {
       const result = yield* extractFromPaper(String.raw`
@@ -82,6 +83,8 @@ describe('extractTikzPictures', () => {
       scope};
     \draw (0,0) % a comment inside a path
       -- (1,1);
+    \node {$\beta% a control word keeps its line end, which ends its name
+      x$};
     \node {first};% a blank line after a comment still ends the paragraph
 
     \node {last};
@@ -97,6 +100,8 @@ describe('extractTikzPictures', () => {
             String.raw`\begin{tikzpicture}
     \node {microscope};
     \draw (0,0) -- (1,1);
+    \node {$\beta
+      x$};
     \node {first};
 
     \node {last};

@@ -84,10 +84,11 @@ export const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
  * A comment runs through its line break and the indentation of the next
  * line, as TeX reads it: `micro%` above `scope` is `microscope`. Before a
  * blank line it stops at the line break, which is the blank line's paragraph
- * break to keep.
+ * break to keep, and so it does right after a control word, whose name the
+ * line break ends: joining `\alpha%` to `x` would make `\alphax`.
  */
 const COMMENT_PATTERN =
-  /(?<=(?<!\\)(?:\\\\)*)(?:(\\(?:url|nolinkurl|path|href)\s*\{[^{}\n]*\})|%.*(?:\n[ \t]*(?=\S))?)/g;
+  /(?<=(?<!\\)(?:\\\\)*)(?:(\\(?:url|nolinkurl|path|href)\s*\{[^{}\n]*\})|(?<=(?<!\\)(?:\\\\)*\\[A-Za-z@]+)%.*|%.*(?:\n[ \t]*(?=\S))?)/g;
 
 /** The reads of a LaTeX file's references probe the filesystem, so each
  *  bounds its fan-out to this many at once. */
