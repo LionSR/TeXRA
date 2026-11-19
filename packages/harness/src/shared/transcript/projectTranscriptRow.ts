@@ -155,15 +155,6 @@ function listedFiles(files: readonly FileListEntry[]): FileListEntry[] {
 // Context management
 // ---------------------------------------------------------------------------
 
-const CONTEXT_MANAGEMENT_LABEL: Readonly<Record<string, string>> = {
-  clear_tool_uses: 'Cleared tool uses',
-  clear_thinking: 'Cleared thinking',
-  truncation: 'Truncated',
-  max_tokens_reduced: 'Max tokens reduced',
-};
-
-const TOKENS_FREED_ACTIONS = new Set(['clear_tool_uses', 'clear_thinking']);
-
 /**
  * A `max_tokens_reduced` event whose adjusted ceiling is still this high is a
  * minor housekeeping detail, not something to interrupt a reader with.
@@ -269,38 +260,21 @@ export function logPayloadRow(
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
       const data = payload.data;
-      const reduced = data.action === 'max_tokens_reduced';
-      if (
-        reduced &&
-        data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
-      ) {
+      if (data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD) {
         return undefined;
       }
-      const items: StatItem[] = [];
-      if (reduced) {
-        items.push({
+      const items: StatItem[] = [
+        {
           key: 'maxTokens',
           label: 'Max tokens reduced',
           value: `${formatCompactTokenCount(data.originalMaxTokens)} → ${formatCompactTokenCount(data.reducedMaxTokens)}`,
-        });
-      } else if (TOKENS_FREED_ACTIONS.has(data.action)) {
-        const freed = data.tokensBefore - data.tokensAfter;
-        if (freed > 0) {
-          items.push({
-            key: 'tokensFreed',
-            label: 'Tokens freed',
-            value: formatCompactTokenCount(freed),
-          });
-        }
-      }
-      const before = `${data.utilizationBefore.toFixed(1)}%`;
-      items.push({
-        key: 'utilization',
-        label: 'Context utilization',
-        value: reduced
-          ? before
-          : `${before} → ${data.utilizationAfter.toFixed(1)}%`,
-      });
+        },
+        {
+          key: 'utilization',
+          label: 'Context utilization',
+          value: `${data.utilizationBefore.toFixed(1)}%`,
+        },
+      ];
       items.push({
         key: 'contextWindow',
         label: 'Context window',
@@ -313,7 +287,7 @@ export function logPayloadRow(
         ...base,
         kind: 'contextManagement',
         data,
-        label: CONTEXT_MANAGEMENT_LABEL[data.action] ?? 'Context management',
+        label: 'Max tokens reduced',
         items,
       };
     }
