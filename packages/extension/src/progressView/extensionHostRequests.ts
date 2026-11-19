@@ -294,14 +294,7 @@ export const createExtensionHostRequests = Effect.fn(
     // launcher's credential check and catalogs follow.
     setApiKey: (provider) =>
       runHandler('setApiKey', setApiKey(roots, provider)),
-    // A link VS Code declines or cannot open is answered as a rejection, so
-    // the view shows which URL did not open.
-    openExternal: (url) =>
-      vscodeOpener
-        .openExternal(url)
-        .pipe(
-          Effect.mapError((failed) => new Rejected({ reason: failed.message })),
-        ),
+    openExternal: (url) => vscodeOpener.openExternal(url),
     // The banner refresh probes the dependencies again; the banner shows
     // what is missing.
     // Every dependency the banner lists installs from the one guide page.

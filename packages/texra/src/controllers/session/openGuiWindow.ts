@@ -50,7 +50,7 @@ import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import type { Dialogs } from '@texra/hosts/uiHosts';
+import type { Dialogs, ExternalOpener } from '@texra/hosts/uiHosts';
 import type { TexraPlugin } from '@texra/tools/registry';
 import {
   ToolEditApprovalController,
@@ -182,8 +182,9 @@ export interface SharedHostCommandBindings {
    *  prompt on one host, the Models tab on the other. The caller re-reads
    *  the secret store after this returns. */
   setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
-  /** Open a web address in the browser. */
-  openExternal(url: string): HostVerb<void>;
+  /** Open a web address in the browser. A failed open is answered, in the
+   *  body below, as a rejection naming the address. */
+  readonly openExternal: ExternalOpener['openExternal'];
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
@@ -480,6 +481,14 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       ),
     session,
   });
+  /** A page in the browser; one the host would not open is a rejection in
+   *  the host's words, so the view shows which address did not open. */
+  const openLink = (url: string) =>
+    bindings
+      .openExternal(url)
+      .pipe(
+        Effect.mapError((failed) => new Rejected({ reason: failed.message })),
+      );
   const exportTranscript = (runId: RunId) =>
     exportRunTranscript(runId, {
       pickFormat: host.export.pickFormat,
@@ -670,9 +679,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'apiKeyBanner':
           yield* request.action === 'set'
             ? bindings.setApiKey()
-            : bindings.openExternal(
-                texraGuideUrl('installation', 'setting-up-api-keys'),
-              );
+            : openLink(texraGuideUrl('installation', 'setting-up-api-keys'));
           return done;
         case 'agentConfigBanner':
           switch (request.action) {
@@ -695,7 +702,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               return done;
             }
             case 'docs':
-              yield* bindings.openExternal(texraGuideUrl('custom-agents'));
+              yield* openLink(texraGuideUrl('custom-agents'));
               return done;
           }
           return done;
