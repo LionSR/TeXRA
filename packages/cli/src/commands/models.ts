@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 import { MODELS } from '@texra-ai/llm';
 
-import { getEnabledModels } from '@texra-ai/harness/host';
+import { getEnabledModels, readModelOptions } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { enabledLabel } from '@ui/copy/format';
 
@@ -80,6 +80,18 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
 
   if (!entry) {
     writeTextStderr(`Model not found: ${id}`);
+    return CliExitCode.Usage;
+  }
+
+  // A reference with `@effort` or `+mode` is valid when a run's bind takes
+  // it: the model's verdict carries that decision, so ask it.
+  const [verdict] = yield* readModelOptions(services, [entry.value]);
+  const sent =
+    verdict !== undefined && 'config' in verdict
+      ? verdict.reasoning?.sent
+      : undefined;
+  if (sent !== undefined && 'refused' in sent) {
+    writeTextStderr(`A run cannot use ${id}: ${sent.refused}`);
     return CliExitCode.Usage;
   }
 

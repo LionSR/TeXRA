@@ -299,6 +299,18 @@ function validateBinarySmoke() {
     ),
     'agents list NDJSON records should have kind=agent',
   );
+
+  // A reference a run's bind refuses is refused here too, in its words.
+  assertUsageError(
+    run(process.execPath, [
+      binaryPath,
+      'models',
+      'show',
+      'anthropic/claude-opus-5-5@none',
+    ]),
+    'texra models show <model that always thinks>@none',
+    'cannot turn thinking off',
+  );
 }
 
 function validateBundledLeanAgents() {
