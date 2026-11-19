@@ -3,6 +3,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -34,9 +35,7 @@ export class WorktreeChip extends LitElement {
       }
 
       .branch-name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         max-width: 16ch;
       }
     `,

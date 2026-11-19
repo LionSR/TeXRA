@@ -4,7 +4,10 @@ import { css } from 'lit';
 // Shared styles
 import { visuallyHiddenStyles } from '@ui/styles';
 import { buttonStyles } from '@ui/styles/controlStyles';
-import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  overlineDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { noticeStyles, readingColumnStyles } from '@ui/styles/surfaceStyles';
 
 import { heroStyles } from './components/NewTaskHero';
@@ -123,9 +126,7 @@ export const progressAppStyles = css`
   .shell-title {
     min-width: 0;
     padding-inline-start: var(--wa-space-3xs);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
     font-weight: var(--font-weight-semibold);
   }
 
@@ -231,9 +232,7 @@ export const progressAppStyles = css`
 
   .context-files {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
     color: var(--color-text-secondary);
   }
 

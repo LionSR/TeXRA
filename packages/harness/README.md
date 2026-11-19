@@ -51,7 +51,7 @@ you own.
 
 ## Usage
 
-The package's surface is Effect: `Sessions.layer({ platform, plugins })`
+The package's surface is Effect: `Sessions.layer({ platform, plugins, client })`
 composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
@@ -88,7 +88,13 @@ const program = Effect.gen(function* () {
   return yield* run.result;
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: { name: 'Example App', id: 'example-app' },
+    }),
+  ),
 );
 
 const result = await Effect.runPromise(program);
@@ -206,7 +212,7 @@ const program = Effect.gen(function* () {
 
 | Service    | What it is                                                                                                                                                                                                                                                                                                        |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.                                          |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins, client })` composes that process for the layer's lifetime. Build it once per process.                                  |
 | `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
 | `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`, the user's `run.stop`. `start` returns once the run exists, before its first model call.                                 |
 
@@ -486,9 +492,11 @@ const scripted: typeof fetch = async () =>
 
 program.pipe(
   Effect.provide(
-    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provideMerge(Layer.succeed(ModelFetch)(scripted)),
-    ),
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: { name: 'Example App', id: 'example-app' },
+    }).pipe(Layer.provideMerge(Layer.succeed(ModelFetch)(scripted))),
   ),
 );
 ```

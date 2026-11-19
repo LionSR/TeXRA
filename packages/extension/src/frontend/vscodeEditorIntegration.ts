@@ -8,7 +8,7 @@ import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import {
   LATEX_RECOMMENDED_SETTINGS,
@@ -91,17 +91,15 @@ export const vscodeEditorIntegration: EditorIntegrationShape = {
         ? [LATEX_RECOMMENDED_SETTINGS[field]]
         : Object.values(LATEX_RECOMMENDED_SETTINGS),
       (setting) =>
-        Effect.tryPromise({
-          try: () =>
-            vscode.workspace
-              .getConfiguration()
-              .update(
-                setting.key,
-                resolveUpdateValue(setting, reset),
-                vscode.ConfigurationTarget.Global,
-              ),
-          catch: (cause) => hostFailed('configuration.update', cause),
-        }),
+        fromHost('configuration.update', () =>
+          vscode.workspace
+            .getConfiguration()
+            .update(
+              setting.key,
+              resolveUpdateValue(setting, reset),
+              vscode.ConfigurationTarget.Global,
+            ),
+        ),
       { concurrency: 'unbounded', discard: true },
     ),
 };

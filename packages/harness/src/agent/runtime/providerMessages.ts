@@ -8,7 +8,14 @@
  * the package's own schemas parse them back here, so a turn another build of
  * the package can no longer read is a refusal of that run, never a default.
  */
-import { Effect, Predicate, Result, Schema, absurd } from 'effect';
+import {
+  Effect,
+  Predicate,
+  Record as EffectRecord,
+  Result,
+  Schema,
+  absurd,
+} from 'effect';
 
 import {
   AssistantMessageSchema,
@@ -89,13 +96,10 @@ const mapEvidence = (
 ): unknown => {
   if (Array.isArray(value)) return value.map((v) => mapEvidence(v, rewrite));
   if (!Predicate.isObject(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, v]) => [
-      key,
-      EVIDENCE.has(key) && Predicate.isObject(v)
-        ? rewrite(v, key)
-        : mapEvidence(v, rewrite),
-    ]),
+  return EffectRecord.map(value, (v, key) =>
+    EVIDENCE.has(key) && Predicate.isObject(v)
+      ? rewrite(v, key)
+      : mapEvidence(v, rewrite),
   );
 };
 

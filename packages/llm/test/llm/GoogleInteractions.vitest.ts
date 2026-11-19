@@ -430,6 +430,7 @@ describe('canonical Google Interactions protocol', () => {
         plan: null,
       },
       bearer: 'synthetic-key',
+      client: { name: 'Synthetic', id: 'synthetic' },
       options: {
         reasoning: {
           thinking: true,

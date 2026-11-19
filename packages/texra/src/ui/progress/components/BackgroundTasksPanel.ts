@@ -50,7 +50,10 @@ import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
-import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  overlineDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
@@ -138,11 +141,7 @@ export class BackgroundTasksPanel extends LitElement {
         cursor: pointer;
       }
       .task-row:hover {
-        background: var(--wa-color-neutral-fill-quiet);
-      }
-      .task-row:focus-visible {
-        outline: var(--focus-ring-width) solid var(--wa-color-focus);
-        outline-offset: calc(-1 * var(--focus-ring-offset));
+        background: var(--surface-hover);
       }
 
       .task-icon {
@@ -155,18 +154,14 @@ export class BackgroundTasksPanel extends LitElement {
         flex: 0 1 auto;
         min-width: 0;
         max-width: min(14rem, 45%);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         font-weight: var(--font-weight-medium);
       }
 
       .task-latest {
         flex: 1 1 8rem;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
       }
@@ -193,7 +188,7 @@ export class BackgroundTasksPanel extends LitElement {
 
       .inquiry-id {
         flex: 0 0 auto;
-        font-family: var(--wa-font-family-code);
+        font-family: var(--wa-font-family-mono);
         font-size: var(--font-size-xs);
         font-variant-numeric: tabular-nums;
         color: var(--color-text-secondary);
@@ -371,6 +366,7 @@ export class BackgroundTasksPanel extends LitElement {
         role="listitem"
         class=${classMap({
           'task-row': true,
+          'focus-ring-inset': true,
           [`tone-${status.tone}`]: true,
         })}
         style=${styleMap({ '--tree-depth': String(depth) })}

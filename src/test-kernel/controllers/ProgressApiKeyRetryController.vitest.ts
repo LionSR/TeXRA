@@ -9,6 +9,7 @@ import { RunIdSchema, type RuntimeCommand } from '@texra-ai/harness/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { SessionGraph } from '@test/support/testKernel';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 layer(SessionGraph.hosted)('ProgressApiKeyRetryController', (it) => {
   it.effect(
@@ -60,7 +61,7 @@ layer(SessionGraph.hosted)('ProgressApiKeyRetryController', (it) => {
         expect(sent).toStrictEqual([]);
         // The retry stays pending, and the user hears why.
         expect(error._tag).toBe('Rejected');
-      }).pipe(Effect.provide(Secrets.layer(secrets)));
+      }).pipe(Effect.provide(Secrets.layer(secrets, HARNESS_APP.client)));
     },
   );
 });

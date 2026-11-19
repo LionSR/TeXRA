@@ -95,7 +95,7 @@ export function createTerminalPane(
 
   function createSession(sessionId: string): TerminalSession {
     const host = document.createElement('div');
-    host.className = 'desktop-terminal-pane desktop-terminal-surface';
+    host.className = 'desktop-terminal-surface';
 
     const { theme, fontFamily } = resolveXtermTheme(
       document.body,

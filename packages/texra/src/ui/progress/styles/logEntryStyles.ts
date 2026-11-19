@@ -111,7 +111,6 @@ export const logEntryStyles = css`
   }
 
   .memory-path .file-source {
-    opacity: var(--opacity-subtle);
     font-size: var(--font-size-xs);
   }
 

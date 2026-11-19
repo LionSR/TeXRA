@@ -26,7 +26,7 @@ const GLM53 = MODEL_CONFIGS['glm/glm-5.3'];
  *  subscription accounts over them. */
 const withHostSecrets = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   FakeHost.use((host) =>
-    effect.pipe(Effect.provide(Secrets.layer(host.secrets))),
+    effect.pipe(Effect.provide(Secrets.layer(host.secrets, host.app.client))),
   );
 
 /** The endpoint and plan the decided route binds `config` to. */

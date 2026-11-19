@@ -16,7 +16,7 @@ import {
   defineTool,
 } from '@texra-ai/harness/plugins';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 const countEquationsTool = defineTool({
   name: 'count_equations',
@@ -98,6 +98,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, latexMetricsPlugin],
+      client: EXAMPLE_CLIENT,
     }).pipe(Layer.provideMerge(route.transport)),
   ),
 );

@@ -218,7 +218,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         defaultNodeStorageRoot(),
         workspaceRoot,
         global.store,
-        Result.isSuccess(reached) ? reached.success : undefined,
+        Result.getOrUndefined(reached),
       ).pipe(Scope.provide(projectScope));
       // Forked: a notification waits for the person, and activation does not.
       for (const message of [...global.warnings, ...warnings]) {

@@ -25,7 +25,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { elideText, rowHeadline } from '@texra-ai/harness/transcript';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 const { workspace, platform, route } = await makeExampleWorkspace([
   {
@@ -105,9 +105,11 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provideMerge(route.transport),
-    ),
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: EXAMPLE_CLIENT,
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 

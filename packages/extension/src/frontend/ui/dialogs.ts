@@ -3,7 +3,10 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import {
+  fromHost,
+  hostFailed,
+} from '@texra/controllers/session/hostCallFailure';
 import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
@@ -45,23 +48,18 @@ export function inputBox(
 /** VS Code's dialog that opens several files, behind the app's launcher
  *  picker (`pickLauncherFiles`). */
 export const openFilesDialog: OpenFilesDialog = (options) =>
-  Effect.tryPromise({
-    try: async () =>
-      vscode.window.showOpenDialog({
-        canSelectMany: true,
-        canSelectFiles: true,
-        canSelectFolders: false,
-        title: options.title,
-        defaultUri: vscode.Uri.file(options.defaultPath),
-        filters: Object.fromEntries(
-          options.filters.map(({ name, extensions }) => [
-            name,
-            [...extensions],
-          ]),
-        ),
-      }),
-    catch: (cause) => hostFailed('openFilesDialog', cause),
-  }).pipe(Effect.map((picked) => picked?.map((uri) => uri.fsPath)));
+  fromHost('openFilesDialog', async () =>
+    vscode.window.showOpenDialog({
+      canSelectMany: true,
+      canSelectFiles: true,
+      canSelectFolders: false,
+      title: options.title,
+      defaultUri: vscode.Uri.file(options.defaultPath),
+      filters: Object.fromEntries(
+        options.filters.map(({ name, extensions }) => [name, [...extensions]]),
+      ),
+    }),
+  ).pipe(Effect.map((picked) => picked?.map((uri) => uri.fsPath)));
 
 interface FolderDialogOptions {
   /** Label for the open button */
@@ -78,15 +76,13 @@ interface FolderDialogOptions {
 export function selectFolder(
   options: FolderDialogOptions,
 ): Effect.Effect<string | null, HostFailed> {
-  return Effect.tryPromise({
-    try: async () =>
-      vscode.window.showOpenDialog({
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: options.openLabel,
-        title: options.title,
-      }),
-    catch: (cause) => hostFailed('selectFolder', cause),
-  }).pipe(Effect.map((folders) => folders?.[0]?.fsPath ?? null));
+  return fromHost('selectFolder', async () =>
+    vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: options.openLabel,
+      title: options.title,
+    }),
+  ).pipe(Effect.map((folders) => folders?.[0]?.fsPath ?? null));
 }

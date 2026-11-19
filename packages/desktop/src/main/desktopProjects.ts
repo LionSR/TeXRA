@@ -6,6 +6,7 @@
 // the process; the window switches which project it shows.
 
 import {
+  Array as Arr,
   Effect,
   Exit,
   FileSystem,
@@ -214,9 +215,7 @@ export const readRememberedDesktopProjects = Effect.fn(
     { concurrency: 'unbounded' },
   );
   yield* records.replace(remembered.kept);
-  yield* records.replaceRecent(
-    recent.kept.filter((root) => !remembered.kept.includes(root)),
-  );
+  yield* records.replaceRecent(Arr.difference(recent.kept, remembered.kept));
   return {
     roots: remembered.roots,
     missing: remembered.missing,

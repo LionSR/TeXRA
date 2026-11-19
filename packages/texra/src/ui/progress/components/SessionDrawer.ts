@@ -21,6 +21,7 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -43,9 +44,7 @@ export class SessionDrawer extends LitElement {
 
       .overlay-title {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
 
       .drawer-body {

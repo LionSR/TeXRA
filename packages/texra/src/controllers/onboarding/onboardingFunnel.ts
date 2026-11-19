@@ -29,7 +29,7 @@ import {
   type StateKey,
 } from '@texra-ai/harness/schemas';
 
-import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
+import { Settings, logFailure } from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
@@ -100,11 +100,8 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
     const state = session.roots.globalState;
     const record = getFirstRunDone(state).pipe(
       Effect.flatMap((done) => (done ? Effect.void : setFirstRunDone(state))),
-      Effect.catch((error) =>
-        Effect.logWarning('Failed to record the first completed run').pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel('onboarding'),
-        ),
+      Effect.catch(
+        logFailure('onboarding', 'Failed to record the first completed run'),
       ),
     );
     yield* Effect.addFinalizer(() =>

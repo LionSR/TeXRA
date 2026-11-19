@@ -31,7 +31,7 @@
 .desktop-review-summary strong {
   overflow: hidden;
   font-size: var(--font-size-sm);
-  font-weight: var(--wa-font-weight-semibold);
+  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -85,7 +85,7 @@
   min-height: var(--height-control-compact);
   padding: 0;
   padding-inline-start: calc(var(--tree-depth, 0) * var(--wa-space-s));
-  border-radius: var(--wa-border-radius-s);
+  border-radius: var(--border-radius);
 }
 
 /* The built-in indicator carries the disclosure affordance: a start-placed

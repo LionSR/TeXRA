@@ -227,7 +227,9 @@ const SCENARIOS = [
     },
     bootExpect: 'Esc parent',
     keys: ['must not reach bash', '\r'],
-    expect: ['1 active', 'Esc parent'],
+    // A focused leaf counts no live agents of its own; the header names
+    // the run by its kind.
+    expect: ['command: bash · parent: main', 'Esc parent'],
     unexpect: [
       'must not reach bash',
       'Harness received: must not reach bash',
@@ -2344,7 +2346,7 @@ const SCENARIOS = [
       'y approve',
     ],
     unexpect: [
-      'subagent: strategy · parent: main',
+      'agent: strategy · parent: main',
       'signal read during notification phase',
       'ERROR',
     ],

@@ -9,6 +9,7 @@ import { createFakeUIHosts } from '@test/support/fakeUiPorts';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 describe('provider key actions', () => {
   // Regression pin: the placeholder guard used to live only in the CLI, so the
@@ -23,7 +24,7 @@ describe('provider key actions', () => {
           'openai',
           'sk-xxxxxx',
         ),
-      ).pipe(Effect.provide(Secrets.layer(secrets)));
+      ).pipe(Effect.provide(Secrets.layer(secrets, HARNESS_APP.client)));
 
       assert.equal(yield* secrets.get('apiKey.openai'), undefined);
       assert.match(String(failure.cause), /looks like a placeholder/);

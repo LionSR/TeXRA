@@ -143,7 +143,7 @@ export async function runChat(
       // platform could not link runs here, and says so once.
       const services = yield* cliPlatform;
       const { service } = services;
-      const link = Result.isSuccess(service) ? service.success : undefined;
+      const link = Result.getOrUndefined(service);
       const served = link !== undefined;
       // Where this chat's runs run: the service's session, or this one.
       const runSession = yield* services.runSession;

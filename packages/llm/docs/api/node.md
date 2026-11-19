@@ -76,6 +76,8 @@ interface BindSpec {
    * plan's request rules apply is the route's `plan`.
    */
   readonly bearer: string | SessionToken;
+  /** The app the requests are sent for (a ChatGPT plan's tools sit in its namespace). */
+  readonly client: ClientIdentity;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
     /** The output ceiling, before the model's own rules; the catalog's by default. */
@@ -104,6 +106,23 @@ A stored ChatGPT session.
 
 ```ts
 type ChatgptSession = typeof ChatgptSessionSchema.Type;
+```
+
+## ClientIdentity
+
+The app llm signs in and sends for, as the providers name it. llm has no
+default: the app supplies its own.
+
+```ts
+interface ClientIdentity {
+  /** What OpenAI shows the person for the client a ChatGPT sign-in registers. */
+  readonly name: string;
+  /**
+   * A lowercase token: xAI's sign-in referrer, and the namespace a ChatGPT
+   * plan's function tools sit in.
+   */
+  readonly id: string;
+}
 ```
 
 ## fetchPlanUsage
@@ -194,7 +213,8 @@ Each subscription's account (its stored session: status, refresh, sign-in
 and sign-out), named by the route that bills it. Built once over the store
 that holds the sessions, so every caller of one session shares its lock and
 a rotated refresh token is spent once; another store is another set of
-accounts, built with it.
+accounts, built with it. They sign in as `client`, the app they are built
+for, which the binding of a subscription route reads too.
 
 ```ts
 class SubscriptionAccounts extends Context.Service<
@@ -202,6 +222,8 @@ class SubscriptionAccounts extends Context.Service<
   {
     readonly 'chatgpt-subscription': SubscriptionCoordinator<ChatgptSession>;
     readonly 'xai-subscription': SubscriptionCoordinator<XaiSession>;
+    /** The app the accounts sign in as. */
+    readonly client: ClientIdentity;
   }
 >()('@texra-ai/llm/SubscriptionAccounts')
 ```

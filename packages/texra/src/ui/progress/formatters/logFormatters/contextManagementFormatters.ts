@@ -20,22 +20,16 @@ import type { ContextManagementRow } from '@texra-ai/harness/transcript';
 // Local imports - formatter helpers
 import type { FormatResult } from '../baseLogFormatter';
 
-/** Per-action icon and accent color. The label and the stat items are the
+/** The event's icon and accent color. The label and the stat items are the
  *  row's; only this presentation pair is the webview's. */
-const ACTION_PRESENTATION: Record<string, { icon: IconName; color: string }> = {
-  clear_tool_uses: { icon: 'trash', color: 'var(--wa-color-chart-green)' },
-  clear_thinking: { icon: 'lightbulb', color: 'var(--wa-color-chart-green)' },
-  truncation: { icon: 'ellipsis', color: 'var(--wa-color-chart-orange)' },
-  max_tokens_reduced: {
-    icon: 'caret-down',
-    color: 'var(--wa-color-chart-yellow)',
-  },
+const PRESENTATION: { icon: IconName; color: string } = {
+  icon: 'caret-down',
+  color: 'var(--wa-color-chart-yellow)',
 };
 
 /** Icon per context-management item key. */
 const ITEM_ICONS: Record<string, IconName> = {
   maxTokens: 'arrow-down',
-  tokensFreed: 'minus',
   utilization: 'chart-pie',
   contextWindow: 'window-maximize',
   details: 'circle-info',
@@ -48,12 +42,7 @@ const ITEM_ICONS: Record<string, IconName> = {
 export function formatContextManagementTemplate(
   row: ContextManagementRow,
 ): FormatResult {
-  const presentation = ACTION_PRESENTATION[row.data.action];
-  const config: ActionConfig = {
-    icon: presentation?.icon ?? 'clock-rotate-left',
-    label: row.label,
-    color: presentation?.color ?? 'var(--wa-color-text-normal)',
-  };
+  const config: ActionConfig = { ...PRESENTATION, label: row.label };
   const items = row.items.map((item) => ({
     icon: ITEM_ICONS[item.key] ?? 'circle-info',
     label: item.label,

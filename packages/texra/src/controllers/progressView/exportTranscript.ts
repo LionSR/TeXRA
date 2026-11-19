@@ -22,6 +22,12 @@ export type TranscriptExportFormat = Parameters<typeof writeTranscript>[1];
 
 export type TranscriptExportOpenKind = 'text' | 'pdf' | 'external';
 
+/** How every host's format pick is titled and what it asks. */
+export const TRANSCRIPT_EXPORT_PICK = Object.freeze({
+  title: 'Export transcript',
+  prompt: 'Choose a format',
+});
+
 export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = Object.freeze([
   Object.freeze({
     format: 'html',

@@ -43,6 +43,20 @@ export interface SessionToken {
 }
 
 /**
+ * The app llm signs in and sends for, as the providers name it. llm has no
+ * default: the app supplies its own.
+ */
+export interface ClientIdentity {
+  /** What OpenAI shows the person for the client a ChatGPT sign-in registers. */
+  readonly name: string;
+  /**
+   * A lowercase token: xAI's sign-in referrer, and the namespace a ChatGPT
+   * plan's function tools sit in.
+   */
+  readonly id: string;
+}
+
+/**
  * One model on one decided route, and what the caller asks of it. The
  * protocol is the model's provider's, and the route fixes the config it runs
  * (`routeConfig`), the endpoint it sends to, the credential scope stamped on
@@ -58,6 +72,8 @@ export interface BindSpec {
    * plan's request rules apply is the route's `plan`.
    */
   readonly bearer: string | SessionToken;
+  /** The app the requests are sent for (a ChatGPT plan's tools sit in its namespace). */
+  readonly client: ClientIdentity;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
     /** The output ceiling, before the model's own rules; the catalog's by default. */

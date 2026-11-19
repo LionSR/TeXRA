@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Effect, Result } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'FinalOutputOpener';
 
@@ -17,18 +17,15 @@ const CHANNEL = 'FinalOutputOpener';
 export const previewFinalOutput = (absolutePath: string) =>
   Effect.gen(function* () {
     const previewed = yield* Effect.result(
-      Effect.tryPromise({
-        try: async () => {
-          await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
-            preview: true,
-            preserveFocus: false,
-          });
-          vscode.window.setStatusBarMessage(
-            'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
-            8000,
-          );
-        },
-        catch: (cause) => hostFailed('showTextDocument', cause),
+      fromHost('showTextDocument', async () => {
+        await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
+          preview: true,
+          preserveFocus: false,
+        });
+        vscode.window.setStatusBarMessage(
+          'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
+          8000,
+        );
       }),
     );
     if (Result.isFailure(previewed))

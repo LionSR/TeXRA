@@ -33,7 +33,7 @@ import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
-import { TOOL_STATUS } from '@ui/copy/runStatus';
+import { TOOL_STATUS, TOOL_USER_FEEDBACK_LABEL } from '@ui/copy/runStatus';
 import { formatLineChanges } from '@ui/copy/format';
 
 // Local imports - CLI TUI rendering
@@ -353,7 +353,9 @@ function buildStyledLines(
   const exitCode = failed ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(toolRow, elide), COLOR_ERROR);
   const feedbackRows = model.userInstruction
-    ? cornerRows(labeledLines('Feedback:', model.userInstruction, elide))
+    ? cornerRows(
+        labeledLines(TOOL_USER_FEEDBACK_LABEL, model.userInstruction, elide),
+      )
     : [];
   const compactOutput: ToolDisplayLine[] = [];
   // The full transcript prints what the card withheld, unless the card

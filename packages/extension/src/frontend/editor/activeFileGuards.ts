@@ -12,7 +12,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
@@ -82,10 +82,9 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
 
     if (saveDocument && editor.document.isDirty) {
       // A rejected save is the same answer as a declined one: saveFailed.
-      const saved = yield* Effect.tryPromise({
-        try: () => editor.document.save(),
-        catch: (cause) => hostFailed('document.save', cause),
-      }).pipe(
+      const saved = yield* fromHost('document.save', () =>
+        editor.document.save(),
+      ).pipe(
         Effect.catch((error) =>
           Effect.logWarning(
             'Saving the active document failed',

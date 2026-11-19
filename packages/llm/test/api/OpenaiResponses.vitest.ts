@@ -34,6 +34,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
   continuationInheritsInstructions: false,
   supportsForcedToolChoice: true,
   requestDialect: 'openai',
+  toolNamespace: null,
   background: false,
   defaults: {
     temperature: 0.7,

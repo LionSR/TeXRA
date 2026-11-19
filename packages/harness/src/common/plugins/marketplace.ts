@@ -8,7 +8,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Array as Arr, Effect, Schema } from 'effect';
 
 // Local imports - this module's neighbours
 import {
@@ -129,7 +129,7 @@ export const readPluginCandidates = Effect.fn('readPluginCandidates')(
       );
       if (!marketplace) continue;
       const names = marketplace.plugins.map((entry) => entry.name);
-      const unknown = only.filter((name) => !names.includes(name));
+      const unknown = Arr.difference(only, names);
       if (unknown.length > 0) {
         return yield* failPlugin(
           `Marketplace ${marketplace.name} has no plugin named ${unknown.join(', ')}. It lists: ${names.join(', ')}.`,

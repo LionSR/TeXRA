@@ -53,7 +53,7 @@ function newAgentName(typed: string): string | undefined {
   const decoded = Schema.decodeUnknownResult(AgentNameSchema)(
     typed.trim().replace(/\.ya?ml$/u, ''),
   );
-  return Result.isSuccess(decoded) ? decoded.success : undefined;
+  return Result.getOrUndefined(decoded);
 }
 
 /**

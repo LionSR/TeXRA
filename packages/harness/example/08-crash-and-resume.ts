@@ -28,6 +28,7 @@ import {
 import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
 
 import {
+  EXAMPLE_CLIENT,
   makeExampleWorkspace,
   scriptReturnsOf,
   type ScriptedTurn,
@@ -88,9 +89,11 @@ const { platform, workspace, requests, route } = await makeExampleWorkspace(
       ],
   existing,
 );
-const layer = Sessions.layer({ platform, plugins }).pipe(
-  Layer.provideMerge(route.transport),
-);
+const layer = Sessions.layer({
+  platform,
+  plugins,
+  client: EXAMPLE_CLIENT,
+}).pipe(Layer.provideMerge(route.transport));
 
 const crashProgram = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots, {

@@ -189,7 +189,6 @@
   /* Lists — no native WA equivalent yet (#3690). */
   --wa-color-list-active-bg: var(--vscode-list-activeSelectionBackground);
   --wa-color-list-active-fg: var(--vscode-list-activeSelectionForeground);
-  --wa-color-list-hover-bg: var(--vscode-list-hoverBackground);
   --wa-color-list-warning-fg: var(--vscode-list-warningForeground);
 
   /* Menus. */

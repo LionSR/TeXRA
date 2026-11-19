@@ -142,8 +142,6 @@ interface StatusBarChrome {
   readonly turn?: StatusBarTurnInput;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
-  /** Visible agents still in flight. */
-  readonly runningSessions: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly modelAccess: UsageRoute | undefined;
@@ -703,8 +701,10 @@ export function buildStatusBarDisplay(
     }
   }
 
-  // Every direct and nested subagent the displayed run owns.
+  // Every direct and nested subagent the displayed run owns, and how many of
+  // them are live: the view's rollup, the count every surface reads.
   const subagents = run?.rollup.total ?? 0;
+  const running = run?.rollup.running ?? 0;
   left.push(
     ...(
       [
@@ -754,10 +754,10 @@ export function buildStatusBarDisplay(
               policy: 'drop',
             }
           : undefined,
-        input.runningSessions > 0
+        running > 0
           ? {
-              text: `${input.runningSessions} active`,
-              compactText: `${input.runningSessions} ${NESTED_AGENT.compactLiveSuffix}`,
+              text: `${running} active`,
+              compactText: `${running} ${NESTED_AGENT.compactLiveSuffix}`,
               dim: true,
               priority: STATUS_BAR_PRIORITY.activeSubagent,
               policy: 'drop',
