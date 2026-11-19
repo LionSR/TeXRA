@@ -30,6 +30,10 @@ import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
 import { scriptEndDelivery, scriptStopNotice } from './scriptRun';
 
+/** The run lifecycle's log channel (`AgentRunLifecycle.ts`, which imports
+ *  this module, names the same). */
+const CHANNEL = 'agentRunLifecycle';
+
 /** A subagent's context lines, after its wall time: its working directory,
  *  then the memories its launch named and could not attach. */
 function contextLines(
@@ -146,9 +150,12 @@ export const childEndReport = Effect.fn('childEndReport')(
     Effect.catch(built, (unbuilt) =>
       Effect.as(
         logFailure(
-          'agentRunLifecycle',
+          CHANNEL,
           `Run ${runId}: its report could not be built`,
-        )({ runId, error: unbuilt }),
+        )({
+          runId,
+          error: unbuilt,
+        }),
         {
           family:
             backgroundScriptOf(config) === null
