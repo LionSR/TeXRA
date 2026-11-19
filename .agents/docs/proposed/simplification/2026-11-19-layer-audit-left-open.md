@@ -15,7 +15,7 @@ The same PR implements the findings that fit a reviewable diff. It moves the
 live agents from the view's rollup, and a child scrollback header takes
 `runNoun`. One function now paints a script call that waits on the user, and
 a tool card's feedback has one label. The context-management row now carries
-only the event the run writes. Three host strings are read from the app. What
+only the event the run writes. Two host strings are read from the app (the clone copy is left to #15055). What
 follows is left open, in the order worth taking.
 
 ## 1. The Google background toggle reaches nothing (a defect)
