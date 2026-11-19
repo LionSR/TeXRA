@@ -20,7 +20,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
   **Subscriptions** (ChatGPT and Grok sign-in), and
   **Models** (which models appear, and the helper model).
 - **Agents**: the agent **Library**, **Skills**, and **Advanced**
-  (compaction, retries, script-only tools, and multi-agent coordination).
+  (compaction, retries, and multi-agent coordination).
 - **Memory**: the notes TeXRA keeps across tasks.
 - **Plugins**: everything that adds tools or agents: TeXRA's plugins (such as
   Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
@@ -219,7 +219,8 @@ Persistent agent visibility belongs in Settings instead.
 
 ## Debugging
 
-Enable **Save model I/O** only while diagnosing a run. Its current key is:
+Save model requests and responses only while diagnosing a run. The option has
+no row in Settings; set its key in a `config.json`:
 
 ```json
 {
