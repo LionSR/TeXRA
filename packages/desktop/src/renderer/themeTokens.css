@@ -442,6 +442,17 @@ body.vscode-dark {
 body.vscode-high-contrast,
 body.vscode-high-contrast-light {
   color-scheme: light dark;
+}
+
+/* High contrast swaps the palette on the root, the element the bridge above
+   is declared on. A custom property substitutes its var() where it is
+   declared, so the bridge, and the semantic aliases litStyles.ts declares on
+   :root, follow the system colors only when the palette changes on that
+   same element; inherited from <body> they would keep the ordinary palette.
+   Only the --wa-* names whose bridge formula does not reduce to the right
+   system color are re-pinned here. */
+:root:has(> body.vscode-high-contrast),
+:root:has(> body.vscode-high-contrast-light) {
   --desktop-color-background: Canvas;
   --desktop-color-foreground: CanvasText;
   --desktop-color-muted: GrayText;
@@ -475,45 +486,24 @@ body.vscode-high-contrast-light {
   --desktop-color-warning: CanvasText;
   --desktop-color-info: Highlight;
   --desktop-color-success: Highlight;
+  --desktop-color-warning-background: Canvas;
+  --desktop-color-error-background: Canvas;
+  --desktop-color-success-background: Canvas;
+
+  /* Per the WCAG 1.4.11 + W3C high-contrast guidance, the system color
+     keywords (Canvas/CanvasText/Highlight/Mark/ButtonFace) let the OS palette
+     dictate contrast. Accent fills carry their system text pair. */
   --wa-color-brand-on-loud: HighlightText;
   --wa-color-brand-border-loud: CanvasText;
-
-  /* Quiet variants for HC modes — without these, components fall back to
-     dark/light surface colors (low contrast against system Canvas).
-     Per the WCAG 1.4.11 + W3C high-contrast guidance, use the system
-     color keywords (Canvas/CanvasText/Highlight/Mark/ButtonFace) so the
-     OS palette dictates contrast. */
-  --wa-color-text-quiet: GrayText;
+  --wa-color-success-on-loud: HighlightText;
   --wa-color-text-link: LinkText;
   --wa-color-text-link-active: LinkText;
-
-  --wa-color-brand-fill-quiet: Canvas;
   --wa-color-brand-border-quiet: Highlight;
-  --wa-color-brand-on-quiet: Highlight;
-  --wa-color-brand-fill-normal: Canvas;
-  --wa-color-brand-border-normal: Highlight;
-  --wa-color-brand-on-normal: Highlight;
-
-  --wa-color-neutral-fill-quiet: ButtonFace;
-  --wa-color-neutral-border-quiet: CanvasText;
   --wa-color-neutral-on-quiet: ButtonText;
-  --wa-color-neutral-fill-normal: ButtonFace;
-  --wa-color-neutral-border-normal: CanvasText;
   --wa-color-neutral-on-normal: ButtonText;
-
-  --wa-color-warning-fill-quiet: Canvas;
   --wa-color-warning-border-quiet: Mark;
-  --wa-color-warning-on-quiet: CanvasText;
-  --wa-color-warning-fill-normal: Canvas;
-  --wa-color-warning-border-normal: Mark;
-  --wa-color-warning-on-normal: CanvasText;
-
-  --wa-color-danger-fill-quiet: Canvas;
   --wa-color-danger-border-quiet: Mark;
-  --wa-color-danger-on-quiet: CanvasText;
-  --wa-color-danger-fill-normal: Canvas;
-  --wa-color-danger-border-normal: Mark;
-  --wa-color-danger-on-normal: CanvasText;
+  --wa-color-success-border-quiet: Highlight;
 
   /* Loud fills keep the Mark chip: a Mark background with MarkText on it is
      the OS-guaranteed pairing, unlike Mark as a foreground on Canvas. */
@@ -521,26 +511,6 @@ body.vscode-high-contrast-light {
   --wa-color-warning-on-loud: MarkText;
   --wa-color-danger-fill-loud: Mark;
   --wa-color-danger-on-loud: MarkText;
-
-  --wa-color-success-fill-quiet: Canvas;
-  --wa-color-success-border-quiet: Highlight;
-  --wa-color-success-on-quiet: Highlight;
-  --wa-color-success-fill-normal: Canvas;
-  --wa-color-success-border-normal: Highlight;
-  --wa-color-success-on-normal: Highlight;
-
-  /* The --color-* aliases substitute their --wa-* source at the point of
-     declaration, not at the point of use. Declared on :root, they would keep
-     the ordinary palette even here, because this block sits on <body> — a
-     descendant — so overriding the --wa-* names alone never reaches them.
-     Re-declaring the aliases is what actually carries the system palette into
-     the light-DOM consumers. */
-  --color-success: Highlight;
-  --color-error: CanvasText;
-  --color-warning: CanvasText;
-  --color-text-link: LinkText;
-  --color-text-link-active: LinkText;
-  --color-text-muted: GrayText;
 }
 
 /* Honor the OS motion preference for both Web Awesome components and the
