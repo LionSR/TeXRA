@@ -22,7 +22,6 @@
 
 import { Equal, type Types } from 'effect';
 import {
-  aggregateTarget,
   MESSAGE_TYPES,
   programOf,
   listingKeyOf,
@@ -30,13 +29,12 @@ import {
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
-  type AggregateId,
+  type RunId,
   type SessionViewInput,
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type UnreadableRun,
   type DisplayRow,
-  type RunId,
   type TextChunk,
   type TranscriptSubscription,
   factName,
@@ -61,6 +59,7 @@ import {
   applyLiveText,
   clearLiveText,
   finishOpenCompactions,
+  repaintOpenCards,
   transcriptActivity,
 } from './transcriptReads';
 import {
@@ -189,13 +188,7 @@ function reconcileExistence(
     // before its `run.start` commits. So only a run the view holds goes; the
     // subscription's `transcriptSeq` entry stays, or the run's first rows
     // would be dropped.
-    const runId = runIdOf(id);
-    if (runId !== null) removeRun(u, runId);
-    if (u.view.pluginFacts.some((fact) => fact.aggregateId === id)) {
-      u.view.pluginFacts = u.view.pluginFacts.filter(
-        (fact) => fact.aggregateId !== id,
-      );
-    }
+    removeRun(u, id);
   }
 }
 
@@ -237,7 +230,7 @@ interface RunWork {
 /** What one session's updates keep beside its view, never on it. */
 interface SessionState {
   /** The aggregates the listing named since the last `replay.complete`. */
-  readonly listed: Set<AggregateId>;
+  readonly listed: Set<RunId>;
   /** Each run the view holds, from its `run.start` to its removal. */
   readonly runs: Map<RunId, RunWork>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the newest
@@ -301,20 +294,17 @@ function runWork(u: Update, runId: RunId): RunWork {
   return work;
 }
 
-/** The run's transcript working state, with the arrays this call owns. */
+/** The run's transcript working state, with the arrays this call owns. A
+ *  card can be open only while the run's rows say it is running, so a turn
+ *  that is over with one open is a run nobody holds: interrupted. */
 function transcriptWork(u: Update, runId: RunId): TranscriptWork {
-  return { ix: runWork(u, runId).transcript, owned: u.owned };
+  const work = runWork(u, runId);
+  return { ix: work.transcript, owned: u.owned, interrupted: work.turnOver };
 }
 
 // ---------------------------------------------------------------------------
 // Run construction
 // ---------------------------------------------------------------------------
-
-/** The run a run-aggregate event names; null for any other aggregate kind. */
-function runIdOf(aggregateId: AggregateId): RunId | null {
-  const target = aggregateTarget(aggregateId);
-  return target.kind === 'run' ? target.id : null;
-}
 
 /** A run in its initial shape, created by its `run.start` alone. Its owner
  *  comes from the existence marker that ends the same batch. */
@@ -489,15 +479,14 @@ function withAggregates(u: Update, run: RunView): RunView {
   const turnOver = turnIsOver(next);
   if (turnOver === work.turnOver) return next;
   work.turnOver = turnOver;
-  // A turn its rows ended finished its compactions at the transcript's
-  // boundary; one whose holder went away has written no such row.
+  // A turn its rows ended closed its cards and finished its compactions at
+  // the transcript's boundary; one whose holder went away has written no
+  // such row, so its open cards read as interrupted until a holder returns.
+  const tWork = transcriptWork(u, next.id);
+  const cards = repaintOpenCards(next.transcript, tWork, u.view.runs);
   const transcript = turnOver
-    ? finishOpenCompactions(
-        next.transcript,
-        transcriptWork(u, next.id),
-        next.lastTimestamp,
-      )
-    : next.transcript;
+    ? finishOpenCompactions(cards, tWork, next.lastTimestamp)
+    : cards;
   return withTranscriptFacts(
     u,
     transcript === next.transcript ? next : { ...next, transcript },
@@ -755,24 +744,6 @@ function applyRunEvent(
   }
 }
 
-/** A plugin's own aggregate's fact, the newest of its kind (a run's own
- *  facts go on the run, `applyRunEvent`). */
-function applyPluginFact(u: Update, event: DisplayRow): void {
-  if (event.type !== 'plugin.fact') return;
-  const { view } = u;
-  const { seq: _s, commit: _c, at: _a, ...fact } = event;
-  const held = view.pluginFacts.findIndex(
-    (old) =>
-      old.aggregateId === fact.aggregateId &&
-      old.plugin === fact.plugin &&
-      old.kind === fact.kind,
-  );
-  view.pluginFacts =
-    held === -1
-      ? [...view.pluginFacts, fact]
-      : view.pluginFacts.with(held, fact);
-}
-
 /** One shared row, applied by `runRows.ts` and projected onto the session's
  *  containers and the run. `unresolved` is the partial read, not a defect: a
  *  cold listing delivers only the requests still open, so the opening a
@@ -886,13 +857,7 @@ function applyEvent(
   const newest = latest.get(listingKey);
   if (newest !== undefined && event.commit <= newest) return transcriptChanged;
 
-  // The run the event names: its aggregate, unless that is a plugin's own.
-  const runId = runIdOf(event.aggregateId);
-  if (runId === null) {
-    latest.set(listingKey, event.commit);
-    applyPluginFact(u, event);
-    return true;
-  }
+  const runId = event.aggregateId;
   const known = u.view.runs.get(runId);
   // Only `run.start` creates a run, once. A fact for a run without one
   // changes nothing and leaves no entry (its publisher logs it).
@@ -965,8 +930,7 @@ function applyEvent(
 function applyTranscriptRow(u: Update, event: DisplayRow): boolean {
   const applied = u.view.transcriptSeq.get(event.aggregateId);
   if (applied === undefined || event.seq <= applied) return false;
-  const runId = runIdOf(event.aggregateId);
-  const run = runId === null ? undefined : u.view.runs.get(runId);
+  const run = u.view.runs.get(event.aggregateId);
   if (!run) return false;
   const transcript = applyTranscriptEvent(
     run.transcript,
@@ -1005,11 +969,6 @@ function removeRun(u: Update, runId: RunId): boolean {
   view.transcriptSeq = without(u, view.transcriptSeq, aggregateId);
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);
-  }
-  if (view.pluginFacts.some((fact) => fact.parent === run.id)) {
-    view.pluginFacts = view.pluginFacts.filter(
-      (fact) => fact.parent !== run.id,
-    );
   }
   view.order = withoutId(view.order, run.id);
   const parent =
@@ -1059,8 +1018,7 @@ function applySubscriptions(
   for (const id of [...view.transcriptSeq.keys()]) {
     if (subscribed.has(id)) continue;
     view.transcriptSeq = without(u, view.transcriptSeq, id);
-    const runId = runIdOf(id);
-    const run = runId === null ? undefined : view.runs.get(runId);
+    const run = view.runs.get(id);
     if (!run) continue;
     runWork(u, run.id).transcript = emptyTranscriptIndexes();
     setRun(

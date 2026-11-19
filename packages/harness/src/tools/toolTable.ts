@@ -22,7 +22,12 @@ import type { AppSignals } from '@platform/appSignals';
 import type { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigProvider } from '@shared/config/settings';
-import { factName, type FactName, type RunId } from '@shared/schemas';
+import {
+  factName,
+  isInstalledProgram,
+  type FactName,
+  type RunId,
+} from '@shared/schemas';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { FactKind, FactKinds, Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -183,7 +188,8 @@ const NEEDS_NOTHING: NonNullable<Plugin['availability']> = {
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
- * plugin id, a tool name or a script module's name, registers a program
+ * plugin id, a tool name or a script module's name, names a script module
+ * with a colon, registers a program
  * that is not one of its own script modules, contributes a row kind of
  * another plugin's id or one already contributed, or lacks a plugin another
  * `requires` is a defect of the list, rejected when it is built. A plugin
@@ -227,6 +233,11 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   );
   if (new Set(modules).size !== modules.length)
     refuse('two plugins ship a script module of one name.');
+  // `<plugin>:<name>` names an installed plugin's program, so a listed
+  // plugin's module can never be mistaken for one.
+  const qualified = modules.find(isInstalledProgram);
+  if (qualified !== undefined)
+    refuse(`script module ${qualified} has a colon in its name.`);
   // A program is started by its module's name, which the check above keeps
   // unique across the list.
   const programs = new Map<string, Program>();

@@ -16,7 +16,6 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { aggregateTarget } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
   publishTestRunStart,
@@ -151,11 +150,9 @@ export const autoDecideRequests = (
           opened.push(event);
           const decision = decide(event);
           if (decision === null) return;
-          const target = aggregateTarget(event.aggregateId);
-          if (target.kind !== 'run') return;
           yield* decideRequest(
             session,
-            { runId: target.id, requestId: event.requestId },
+            { runId: event.aggregateId, requestId: event.requestId },
             decision,
           );
         }),

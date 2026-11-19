@@ -37,6 +37,14 @@ All notable changes to this project will be documented in this file.
   request blocks the call that opened it, and `requestAnswerability` takes
   the run alone.
 
+- **A session row's aggregate is its run.** SDK: a plugin's fact is about
+  the run whose call states it; `ToolFact.aggregate`, `FactKind.accepts`,
+  `FactKind.supersedes`, `PluginFactRow`, `SessionView.pluginFacts` and the
+  `AggregateId` type (now `RunId`) are removed, and a `plugin.fact` row
+  carries no `parent`. A store an earlier build wrote still opens: a row of
+  a plugin's own aggregate (an external inquiry's thread) is an earlier
+  build's, and the run it hangs under opens read-only and does not resume.
+
 - **The run listing says a run continues, not that it is resumable.** The
   listing entry's `resumable` and `resumeBlocked` are now `continues` and
   `continueBlocked`, and `records(id).readResumable` is `readContinues`: the
@@ -1366,6 +1374,21 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A plugin you install can carry programs.** Put `programs/<name>.js` in
+  a Claude Code or Codex plugin folder and each file is a program started as
+  `<plugin>:<name>`: `texra run my-programs:todo-list --input paper.tex`,
+  or an agent starts it, told of it beside the built-in programs. The file
+  begins with `export const description = '...';` and
+  `export const uses = ['...'];` (the tools its run is offered), which TeXRA
+  reads from the text without running the file; its default export
+  `async (args, launch) => result` runs in the script sandbox with those
+  tools only. `texra plugin enable` lists each program with its description
+  and tools for the trust review, and `texra plugin list` and Settings →
+  Plugins name them. The tools a plugin's program lists are withheld while
+  their plugin is switched off. A file that does not begin with the two
+  declarations is refused by name and the plugin's other programs load. See
+  "Programs in a plugin" in the CLI guide. SDK: `programsNow` on
+  `@texra-ai/harness/host`; `ProgramNotRegistered` gains `withheld`.
 - **Lean programs: `prove` and `blueprint`.** The Lean plugin registers two
   programs. `prove` completes the proofs in the `.lean` files you pass and
   checks each round with Lean's diagnostics (no error, no `sorry`) and for an

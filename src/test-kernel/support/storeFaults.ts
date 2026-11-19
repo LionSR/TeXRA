@@ -250,8 +250,7 @@ const storeFile = (storage: string) => join(storage, 'texra.db');
  * Rebuild a copy of the clean store as a process killed after commit `n`
  * left it: every durable table at the cut,
  * not the later store with rows cut away. Rows, their blobs and sequences
- * go back to commit `n`; a plugin aggregate hangs where its last fact at
- * the cut put it; current values and input history written after the cut's
+ * go back to commit `n`; current values and input history written after the cut's
  * clock go (one the later run overwrote in place reads as never written).
  * `stored_kind` is append-only and kept: every version in it is this
  * build's, so the gate reads it as it would at the cut.
@@ -277,12 +276,6 @@ export function crashAt(clean: string, storage: string, n: number): void {
       UPDATE event_sequence SET
         seq = (SELECT max(seq) FROM event WHERE aggregate = event_sequence.id),
         closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END;
-      UPDATE event_sequence SET parent_id = (
-        SELECT p.id FROM event e JOIN event_sequence p
-          ON p.kind = 'run' AND p.logical_id = json_extract(e.data, '$.parent')
-        WHERE e.aggregate = event_sequence.id AND e.type = 'plugin.fact'
-        ORDER BY e.seq DESC LIMIT 1)
-      WHERE kind <> 'run';
       DELETE FROM current_value WHERE at > ${Number(at ?? 0)};
       DELETE FROM input_history WHERE at > ${Number(at ?? 0)};
       UPDATE sqlite_sequence SET seq = ${n} WHERE name = 'event';

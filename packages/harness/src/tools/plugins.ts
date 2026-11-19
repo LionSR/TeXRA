@@ -23,11 +23,9 @@ import { Cause, Effect, type Layer, Schema } from 'effect';
 // Local imports
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { logFailure, withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import {
-  aggregateTarget,
-  pluginAggregateId,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -35,9 +33,6 @@ import {
   factName,
   type FactName,
 } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
-import type { Alongside } from '@shared/session/sessionEvents';
-import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { SettingRow } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
@@ -47,13 +42,6 @@ import type {
   PromptSection,
   SessionPluginLayer,
 } from '@tools/toolTable';
-
-/** One stored row of a plugin's kind, as its fact kind's transition rule reads
- *  it: the row's decoded value and the run it is parented to, if any. */
-export interface PluginFactRow {
-  readonly value: Schema.Json;
-  readonly parent: RunId | null;
-}
 
 /**
  * One row kind a plugin owns (`plugin.fact`): the version it writes and
@@ -72,22 +60,9 @@ export interface FactKind {
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
   /** What a fork of a run (a conversation's, or a script's `self()` child)
-   *  starts with of the run's own row of the kind: `copy` the row the run
-   *  held at the cut, `drop` none. A row about the plugin's own aggregate
-   *  belongs to that aggregate and stays with it. */
+   *  starts with of the run's row of the kind: `copy` the row the run held
+   *  at the cut, `drop` none. */
   readonly fork: 'copy' | 'drop';
-  /** The kind's own transition rule, checked by its writer in the job that
-   *  appends the row (`ownFactsChecked`) against the aggregate's latest row
-   *  of the kind (none before the first): the rejection's reason, or null
-   *  to accept. */
-  readonly accepts?: (
-    previous: PluginFactRow | undefined,
-    next: PluginFactRow,
-  ) => string | null;
-  /** Whether the aggregate's `latest` row already says more than `next`
-   *  (a call's fact that lagged behind a later writer): the call's batch
-   *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
@@ -202,8 +177,7 @@ export const definePlugin = <ROut = never>(
  * announces it (`workspaceFilesWritten`), so a window hears a background
  * service task's change as it hears its own. Run over the session's applied
  * tail, so each row is announced once, in commit order, and the history a
- * reopened session replays never as news; a plugin's own aggregate
- * announces nothing.
+ * reopened session replays never as news.
  */
 export const announceWrites = (
   factKinds: FactKinds,
@@ -214,11 +188,7 @@ export const announceWrites = (
     ),
   );
   return (row) => {
-    if (
-      aggregateTarget(row.aggregateId).kind !== 'run' ||
-      row.type !== 'plugin.fact'
-    )
-      return Effect.void;
+    if (row.type !== 'plugin.fact') return Effect.void;
     const writes = writing.get(factName(row));
     if (writes === undefined) return Effect.void;
     // File notifications are advisory; a plugin callback must not stop the
@@ -264,7 +234,7 @@ export function checkOwnFacts(
   plugin: Plugin | undefined,
   facts: readonly ToolFact[],
 ): void {
-  for (const { kind, version, value, aggregate, ...fact } of facts) {
+  for (const { kind, version, value, ...fact } of facts) {
     if (plugin === undefined)
       throw new Error(
         `the tool ${toolName} states the fact ${fact.plugin}/${kind}, but no loaded plugin offers it`,
@@ -272,10 +242,6 @@ export function checkOwnFacts(
     const factKind = plugin.factKinds?.find((own) => own.kind === kind);
     if (factKind === undefined || fact.plugin !== plugin.id)
       throw new Error(`the fact ${fact.plugin}/${kind} is not its plugin's`);
-    if (aggregate !== undefined && !aggregate.startsWith(`${factKind.plugin}:`))
-      throw new Error(
-        `${factKind.plugin}/${kind} names another plugin's aggregate`,
-      );
     if (version !== factKind.version)
       throw new Error(
         `${factKind.plugin}/${kind} is at version ${factKind.version}`,
@@ -284,117 +250,13 @@ export function checkOwnFacts(
   }
 }
 
-type FactRow = Extract<SessionRowDraft, { type: 'plugin.fact' }>;
-
-/** A fact stated under run `runId` (a call's, a decision's or a fork's), as
- *  its row: one about the run on the run's aggregate, one about its plugin's
- *  own aggregate (`aggregate`) hung under the run. */
-export const factRow = (
-  { aggregate, ...fact }: ToolFact,
-  runId: RunId,
-): FactRow =>
-  aggregate === undefined
-    ? {
-        type: 'plugin.fact',
-        ...fact,
-        aggregateId: runId,
-        parent: null,
-      }
-    : {
-        type: 'plugin.fact',
-        ...fact,
-        aggregateId: pluginAggregateId(aggregate),
-        parent: runId,
-      };
-
-/** A plugin fact its writer refused in the job: its kind's rule
- *  (`FactKind.accepts`) rejected it against the aggregate's latest row, or
- *  it moves a plugin's aggregate under a run the store no longer holds
- *  open. Nothing was written. */
-class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()(
-  'PluginFactRejected',
-  { aggregateId: Schema.String, reason: Schema.String },
-) {
-  override readonly message = `${this.aggregateId}: ${this.reason}`;
-}
-
 /**
- * A plugin's facts (about a run, or about the plugin's own aggregate),
- * checked in the job that appends them: each against its aggregate's
- * latest row of the kind, read
- * in the job's transaction (an earlier draft of the same batch counts), so
- * the read and the append are one. A row the latest already supersedes
- * (`FactKind.supersedes`: a call that lagged behind a later writer) is
- * neither kept nor rejected; one its kind's rule refuses (`accepts`), or one
- * that moves the aggregate under a run that is not open, is rejected.
- */
-export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
-  drafts: readonly FactRow[],
-  plugin: Plugin | undefined,
-  log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-) {
-  const written = new Map<string, PluginFactRow>();
-  const kept: FactRow[] = [];
-  const rejected: PluginFactRejected[] = [];
-  for (const draft of drafts) {
-    const key = `${draft.aggregateId}/${factName(draft)}`;
-    const latest =
-      written.get(key) ??
-      (yield* log.runRows(draft.aggregateId, 'facts')).facts[factName(draft)];
-    const factKind = plugin?.factKinds?.find((one) => one.kind === draft.kind);
-    if (latest !== undefined && factKind?.supersedes?.(latest, draft)) {
-      yield* Effect.logDebug(
-        `${factName(draft)}: a later row of ${draft.aggregateId} supersedes the call's`,
-      );
-      continue;
-    }
-    const reason =
-      factKind?.accepts?.(latest, draft) ??
-      (draft.parent !== null &&
-      latest?.parent !== draft.parent &&
-      (yield* log.facts(draft.parent)) === null
-        ? `its new parent run is not open: ${draft.parent}`
-        : null);
-    if (reason !== null) {
-      rejected.push(
-        new PluginFactRejected({ aggregateId: draft.aggregateId, reason }),
-      );
-      continue;
-    }
-    written.set(key, draft);
-    kept.push(draft);
-  }
-  return { kept, rejected };
-});
-
-/**
- * The rows a plugin's facts under `runId` commit in the batch that records
- * what they are facts of (a call's `tool.result`), after `ownFactsChecked`, so each commits with that record or
- * not at all. The record is the run's and stands: a fact its plugin's rule
- * rejects is the plugin's row alone, left out and logged.
+ * The rows a call's facts commit under `runId`, in the batch that records
+ * what they are facts of (its `tool.result`), so each commits with that
+ * record or not at all.
  */
 export const factRows = (
   facts: readonly ToolFact[],
   runId: RunId,
-  plugin: Plugin | undefined,
-  log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-): Alongside<DatabaseWriteFailed> =>
-  ownFactsChecked(
-    facts.map((fact) => factRow(fact, runId)),
-    plugin,
-    log,
-  ).pipe(
-    Effect.tap(({ rejected }) =>
-      Effect.forEach(rejected, (error) =>
-        logFailure(
-          'plugins',
-          `A plugin fact under run ${runId} was not written`,
-        )(error.message),
-      ),
-    ),
-    Effect.map(({ kept }) => kept),
-    // A read in the writing transaction that fails fails the write.
-    Effect.mapError(
-      (error) => new DatabaseWriteFailed({ path: error.path, cause: error }),
-    ),
-  );
+): readonly Extract<SessionRowDraft, { type: 'plugin.fact' }>[] =>
+  facts.map((fact) => ({ type: 'plugin.fact', ...fact, aggregateId: runId }));

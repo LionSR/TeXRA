@@ -100,6 +100,7 @@ export function pluginRowSummary(row: PluginRow): string {
         [plugin.skillCount, 'skill'],
         [plugin.commandCount, 'command'],
         [plugin.agentCount, 'agent'],
+        [plugin.programs.length, 'program'],
         [plugin.mcpServers.length, 'MCP server'],
       ] as const;
       const parts = adds

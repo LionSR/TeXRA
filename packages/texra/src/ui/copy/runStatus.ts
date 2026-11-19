@@ -9,9 +9,12 @@ import {
   type RunOutcome,
   type RunView,
   type Stage,
-  type ToolCallStatus,
 } from '@texra-ai/harness/schemas';
-import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
+import type {
+  CompactionActivityStatus,
+  ToolRowModel,
+  ToolRowStatus,
+} from '@texra-ai/harness/transcript';
 import {
   runSection,
   runStatusKey,
@@ -122,16 +125,39 @@ export function fileLoadTone(ok: boolean): RunTone {
   return ok ? 'success' : 'danger';
 }
 
-/** How a tool card's status section reads. */
-export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
+/** How a tool call's status reads: in a card's status section, and as the
+ *  card's own state, where an open call of an interrupted run reads as its
+ *  run does. */
+export const TOOL_STATUS: Readonly<Record<ToolRowStatus, StatusWord>> =
   Object.freeze({
     in_progress: Object.freeze({ word: 'Running', tone: 'running' }),
     completed: Object.freeze({ word: 'Completed', tone: 'success' }),
     failed: Object.freeze({ word: 'Failed', tone: 'danger' }),
+    interrupted: Object.freeze(RUN_STATUS.interrupted),
   });
 
 /** The label of what the user told the model when deciding a tool call. */
 export const TOOL_USER_FEEDBACK_LABEL = 'Feedback:';
+
+/** The look of a call the user answered with an instruction: their word,
+ *  neither a success nor a failure of the tool. */
+const TOOL_USER_FEEDBACK_LOOK: StatusLook = Object.freeze({
+  tone: 'neutral',
+  glyph: 'comment',
+});
+
+/**
+ * How a tool card paints its state, in every host: the user's feedback
+ * outranks the call's status (a rejection is their decision, not an error),
+ * and a call whose status was never recorded has no look. A card reads as
+ * an error exactly when this tone is `danger`.
+ */
+export function toolRowLook(
+  model: Pick<ToolRowModel, 'status' | 'isUserFeedback'>,
+): StatusLook | undefined {
+  if (model.isUserFeedback) return TOOL_USER_FEEDBACK_LOOK;
+  return model.status && TOOL_STATUS[model.status];
+}
 
 /** The tone of a context compaction's activity row; its words are the
  *  row's label (`COMPACTION_ACTIVITY_LABEL`). */

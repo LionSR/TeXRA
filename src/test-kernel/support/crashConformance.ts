@@ -93,7 +93,6 @@ import { decideRequest, SessionRequests } from '@agent/runtime/requests';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   AgentConfigSchema,
-  aggregateTarget,
   SessionRowSchema,
   type RunId,
 } from '@shared/schemas';
@@ -330,9 +329,7 @@ const approveAll = (session: Context.Context<SessionServices>, after = 0) =>
       ),
     (event) => {
       if (event.type !== 'request.opened') return Effect.void;
-      const target = aggregateTarget(event.aggregateId);
-      if (target.kind !== 'run') return Effect.void;
-      return decideRequest(target.id, event.requestId, {
+      return decideRequest(event.aggregateId, event.requestId, {
         action: 'approve',
       }).pipe(Effect.provide(session), Effect.ignore);
     },
@@ -373,7 +370,7 @@ const liveRows = (
       }
       const ids = [
         ...new Set((yield* db.readListing()).map((row) => row.aggregateId)),
-      ].filter((id) => aggregateTarget(id).kind === 'run');
+      ];
       for (const id of ids) {
         const known = cache.get(id) ?? { rows: [], nextSeq: 1, parent: null };
         const fresh = yield* db.readAggregate(id, known.nextSeq, ALL_TYPES);
@@ -384,7 +381,7 @@ const liveRows = (
           const { type, aggregateId, commit, seq, at: _at, ...data } = event;
           known.rows.push({
             commit,
-            run: aggregateTarget(aggregateId).id,
+            run: aggregateId,
             parent: known.parent,
             type,
             data: JSON.stringify(data),

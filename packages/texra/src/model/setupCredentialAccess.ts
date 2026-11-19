@@ -2,7 +2,7 @@ import {
   readModelOptions,
   type RunModelCandidate,
 } from '@texra-ai/harness/host';
-import { Effect, Result } from 'effect';
+import { Array as Arr, Effect, Result } from 'effect';
 
 import { modelConfig } from '@texra-ai/llm';
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
@@ -105,9 +105,7 @@ export const chooseLaunchModel = Effect.fn('chooseLaunchModel')(function* (
     string,
     Effect.Error<ReturnType<typeof loadModelOptions>>
   >();
-  for (const [index, read] of reads.entries()) {
-    const id = unlisted[index];
-    if (id === undefined) continue;
+  for (const [id, read] of Arr.zip(unlisted, reads)) {
     if (Result.isFailure(read)) failed.set(id, read.failure);
     else rows.push(...read.success);
   }

@@ -24,7 +24,7 @@ import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   referencedAggregates,
   replayInputs,
-  type AggregateId,
+  type RunId,
   type DisplayRow,
   type ExistenceReconciliation,
   type LocalRuntimeState,
@@ -90,17 +90,13 @@ export const readReplay = Effect.fnUntraced(function* (
   },
 ) {
   const listing = yield* requiredRead(log.readListing());
-  const checked = new Set<AggregateId>(read.subscriptions.map(({ id }) => id));
+  const checked = new Set<RunId>(read.subscriptions.map(({ id }) => id));
   for (const event of listing)
     for (const id of referencedAggregates(event)) checked.add(id);
-  const aggregateRows: DisplayRow[] = [];
-  for (const aggregate of read.subscriptions) {
-    aggregateRows.push(
-      ...(yield* requiredRead(
-        log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
-      )),
-    );
-  }
+  const aggregateRows = (yield* Effect.forEach(
+    read.subscriptions,
+    ({ id, fromSeq }) => requiredRead(log.readDisplayAggregate(id, fromSeq)),
+  )).flat();
   const checkedIds = [...checked];
   const replayState = yield* requiredRead(
     log.readInputBatch([], read.at, read.at, checkedIds),
@@ -304,7 +300,7 @@ export const sessionInputsLayer = Layer.effect(
  *  `run.removed` row is still stored; the runs the read found this build
  *  cannot open (`damaged`) ride beside. */
 function reconcileExistence(
-  checkedAggregateIds: readonly AggregateId[],
+  checkedAggregateIds: readonly RunId[],
   read: {
     readonly state: readonly AggregateState[];
     readonly damaged: readonly UnreadableRun[];

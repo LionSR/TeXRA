@@ -12,7 +12,6 @@ import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { writeLogLine } from '@logger/logSink';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
-  aggregateTarget,
   TOOL_CALL_STATUS,
   type RunId,
   type CommitOrdinal,
@@ -160,8 +159,6 @@ export function makeRunTrace({
       }),
     closure,
     committed: (row) => {
-      const target = aggregateTarget(row.aggregateId);
-      if (target.kind !== 'run') return Effect.void;
       // The row whose text is done with (null: every row of the run), or
       // nothing to drop.
       let closes: { readonly row: string | null } | undefined;
@@ -176,16 +173,16 @@ export function makeRunTrace({
       const dropping = closes;
       if (dropping === undefined) return Effect.void;
       return updateText((held) => {
-        const rows = held.get(target.id);
+        const rows = held.get(row.aggregateId);
         const { row: dropped } = dropping;
         if (rows === undefined || (dropped !== null && !rows.has(dropped)))
           return held;
         const next = new Map(held);
-        if (dropped === null || rows.size === 1) next.delete(target.id);
+        if (dropped === null || rows.size === 1) next.delete(row.aggregateId);
         else {
           const remaining = new Map(rows);
           remaining.delete(dropped);
-          next.set(target.id, remaining);
+          next.set(row.aggregateId, remaining);
         }
         return next;
       });
