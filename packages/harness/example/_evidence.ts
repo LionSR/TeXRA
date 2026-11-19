@@ -9,8 +9,7 @@ import { join } from 'node:path';
 
 import { Effect } from 'effect';
 import type { LocalSession } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
-import type { ExportNode } from '@texra-ai/harness/host';
+import type { RunId, ExportNode } from '@texra-ai/harness/schemas';
 
 import { scriptReturnsOf } from './_support.ts';
 

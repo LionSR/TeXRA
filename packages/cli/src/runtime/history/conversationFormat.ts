@@ -1,7 +1,5 @@
-import {
-  formatConversationMessage,
-  type ExportNode,
-} from '@texra-ai/harness/host';
+import type { ExportNode } from '@texra-ai/harness/schemas';
+import { formatConversationMessage } from '@texra-ai/harness/host';
 
 import type {
   CliHistoryConversation,

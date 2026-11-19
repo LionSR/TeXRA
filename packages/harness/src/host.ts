@@ -26,7 +26,6 @@ export {
   activationView,
   type ActivationViewSource,
 } from './effect/runHandle.js';
-export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
 export {
   formatConversationMessage,
   type ConversationFormatOptions,
@@ -120,9 +119,7 @@ export {
   type Hunk,
 } from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-// Which side of a trace event a run wrote.
-export type { TraceRow } from '@shared/session/agentEvent';
-export type { AggregateId, SessionCloseReport } from '@shared/schemas';
+export type { SessionCloseReport } from '@shared/schemas';
 // The agent-directories port and the process services plugins read.
 export {
   AgentDirectories,

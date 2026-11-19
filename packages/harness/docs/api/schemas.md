@@ -243,6 +243,14 @@ Single source of truth for agent source identifiers.
 const AgentSourceSchema: Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>
 ```
 
+## AggregateId
+
+{@link AggregateIdSchema}'s value.
+
+```ts
+type AggregateId = typeof AggregateIdSchema.Type;
+```
+
 ## ALLOW_ORCHESTRATOR_KILL_SETTING
 
 ```ts
@@ -693,6 +701,20 @@ Escape XML/HTML text content (element bodies).
 
 ```ts
 function escapeText(s: string): string
+```
+
+## ExportNode
+
+```ts
+type ExportNode = typeof ExportNodeSchema.Type;
+```
+
+## ExportNodeSchema
+
+One node of a run's conversation as an export reads it.
+
+```ts
+const ExportNodeSchema: Union<readonly [Struct<{ readonly kind: Literal<"user-message">; readonly parts: $Array<Union<readonly [Struct<{ readonly type: Literal<"text">; readonly text: String; }>, Struct<{ readonly type: Literal<"attachment">; readonly attachmentType: Literals<readonly ["image", "document"]>; }>]>>; }>, Struct<{ readonly kind: Literal<"assistant-text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"thinking">; readonly text: String; }>, Struct<{ readonly kind: Literal<"tool-call">; readonly name: String; readonly input: Unknown; }>, Struct<{ readonly kind: Literal<"tool-result">; readonly text: String; readonly value: optional<Codec<Json, Json, never, never>>; }>, Struct<{ readonly kind: Literal<"web-search">; readonly query: String; }>]>
 ```
 
 ## ExternalFileLocation
@@ -2798,6 +2820,21 @@ Why a run has no trace to export: the store holds no record for it
 
 ```ts
 const TraceMissingSchema: Literals<readonly ["no_record", "no_rows"]>
+```
+
+## TraceRow
+
+One session arm as the trace carries it, distributive over `T`: an
+{@link AgentEvent} arm, or the `run.end` a {@link ResultEvent} names. A
+row the run's state is applied from is never one: the trace is the
+display door, and those rows commit through the run's cell
+(`runEventDraft`, typed to an unfolded draft, refuses any other).
+
+```ts
+type TraceRow<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
+  T extends unknown
+    ? Omit<Extract<SessionRowDraft, { type: T }>, 'aggregateId'>
+    : never;
 ```
 
 ## TranscriptView

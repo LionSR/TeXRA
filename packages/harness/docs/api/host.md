@@ -376,14 +376,6 @@ The names of the tools `entry`'s persona is offered.
 const agentToolNames: (entry: Pick<AgentEntry, "persona">) => readonly string[]
 ```
 
-## AggregateId
-
-{@link AggregateIdSchema}'s value.
-
-```ts
-type AggregateId = typeof AggregateIdSchema.Type;
-```
-
 ## AppSignal
 
 The name of one app signal.
@@ -901,20 +893,6 @@ interface DraftBlob {
   readonly digest: string;
   readonly text?: string;
 }
-```
-
-## ExportNode
-
-```ts
-type ExportNode = typeof ExportNodeSchema.Type;
-```
-
-## ExportNodeSchema
-
-One node of a run's conversation as an export reads it.
-
-```ts
-const ExportNodeSchema: Union<readonly [Struct<{ readonly kind: Literal<"user-message">; readonly parts: $Array<Union<readonly [Struct<{ readonly type: Literal<"text">; readonly text: String; }>, Struct<{ readonly type: Literal<"attachment">; readonly attachmentType: Literals<readonly ["image", "document"]>; }>]>>; }>, Struct<{ readonly kind: Literal<"assistant-text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"thinking">; readonly text: String; }>, Struct<{ readonly kind: Literal<"tool-call">; readonly name: String; readonly input: Unknown; }>, Struct<{ readonly kind: Literal<"tool-result">; readonly text: String; readonly value: optional<Codec<Json, Json, never, never>>; }>, Struct<{ readonly kind: Literal<"web-search">; readonly query: String; }>]>
 ```
 
 ## ExternalToolCheckResult
@@ -2468,21 +2446,6 @@ Convert a path to POSIX style (forward slashes, collapsed separators, resolved `
 
 ```ts
 function toPosixPath(relativePath: string): string
-```
-
-## TraceRow
-
-One session arm as the trace carries it, distributive over `T`: an
-{@link AgentEvent} arm, or the `run.end` a {@link ResultEvent} names. A
-row the run's state is applied from is never one: the trace is the
-display door, and those rows commit through the run's cell
-(`runEventDraft`, typed to an unfolded draft, refuses any other).
-
-```ts
-type TraceRow<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
-  T extends unknown
-    ? Omit<Extract<SessionRowDraft, { type: T }>, 'aggregateId'>
-    : never;
 ```
 
 ## unifiedDiffText

@@ -60,6 +60,7 @@ import {
   SessionViewSchema,
   StartRequestSchema,
   NonNegativeIntSchema,
+  ExportNodeSchema,
 } from '@texra-ai/harness/schemas';
 import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
 import { CommitOrdinalSchema } from '@texra-ai/harness/transcript';
@@ -74,7 +75,7 @@ import {
   HostAttachFrameSchema,
   WindowRpcs,
 } from './hostCalls';
-import { ExportNodeSchema, type ValueFamily } from '@texra-ai/harness/host';
+import type { ValueFamily } from '@texra-ai/harness/host';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by
