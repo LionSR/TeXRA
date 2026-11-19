@@ -69,8 +69,11 @@ import {
 } from '../runtime/headless/documentTaskOutput';
 import type { Sessions } from '@texra-ai/harness';
 import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
-import { programLaunch, type ProcessServices } from '@texra-ai/harness/host';
-import { ToolRegistry } from '@texra-ai/harness/plugins';
+import {
+  programLaunch,
+  programsNow,
+  type ProcessServices,
+} from '@texra-ai/harness/host';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
@@ -117,7 +120,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   }
 
   const services = yield* cliPlatform;
-  const { programs } = yield* ToolRegistry;
+  const { programs, withheld } = yield* programsNow();
   const program = programs.get(init.agent);
   if (program === undefined) {
     // Resolve once, before stdin is read or the runtime host starts; the
@@ -125,7 +128,11 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     const { source } = yield* resolveCliRunAgent(
       services,
       init.agent,
-      missingRunTargetMessage(init.agent, [...programs.keys()]),
+      // `<plugin>:<name>` may be a program its plugin does not load now.
+      [
+        missingRunTargetMessage(init.agent, [...programs.keys()]),
+        ...(init.agent.includes(':') ? withheld : []),
+      ].join(' '),
     );
     return yield* runToolUseAgent(
       context,

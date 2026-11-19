@@ -88,13 +88,25 @@ export function serializeFilteredConfig(
  *  it takes no later message. A plugin wrote the program, not a model, so
  *  the launch that chose it granted it: tools fixed past any switch, its
  *  delegations under the launch's approval, its prompts and files passed
- *  as written, and no skill activated by its instruction. */
+ *  as written, and no skill activated by its instruction. An installed
+ *  plugin's program gets less ({@link isInstalledProgram}). */
 export const programOf = (
   config: typeof RunRecordFieldsSchema.Encoded,
 ): string | null =>
   'script' in config && config.script?.kind === 'program'
     ? config.script.name
     : null;
+
+/**
+ * Whether the program `name` is one an installed plugin carries
+ * (`<plugin>:<name>`), not one the app's plugin list registers (a bare
+ * name). A person reviewed an installed plugin's programs when they enabled
+ * it, so a launch and the agents it starts stand approved like a registered
+ * program's; but its text is a third party's, so the tools it lists still
+ * pass the user's switches and the approval gates, and the files it hands a
+ * child are resolved as a model's script's are.
+ */
+export const isInstalledProgram = (name: string): boolean => name.includes(':');
 
 /**
  * Why a run stops. `user` is an explicit stop of the work (a stop button,

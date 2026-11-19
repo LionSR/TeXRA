@@ -10,6 +10,7 @@
 import {
   Context,
   Effect,
+  type FileSystem,
   Layer,
   Scope,
   ScopedRef,
@@ -32,6 +33,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
+import type { AppState } from '@platform/interfaces';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
@@ -203,6 +205,9 @@ export const agentRunLayer = (
   | HttpClient.HttpClient
   | Secrets
   | SubscriptionAccounts
+  // An installed plugin's program is read from the plugin as it is now.
+  | AppState
+  | FileSystem.FileSystem
 > =>
   Layer.effect(
     AgentRun,

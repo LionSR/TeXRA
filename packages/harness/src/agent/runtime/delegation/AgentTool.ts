@@ -30,6 +30,7 @@ import {
   type RunEnd,
   type RunId,
   type ToolResult,
+  isInstalledProgram,
   programOf,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
@@ -326,8 +327,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   // The call's files, the program's file arguments among them: a
   // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a program's files pass as named.
-  const trusted = programOf(run.config) !== null;
+  // completed child of it; a registered program's files pass as named, an
+  // installed plugin's program's are resolved like a model's.
+  const caller = programOf(run.config);
+  const trusted = caller !== null && !isInstalledProgram(caller);
   const fileArgs =
     program === null
       ? []
@@ -487,14 +490,17 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // below; the options are the program's arguments, shown for approval.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
   // A program's run is the program's own, whatever agent an approval named.
-  // The plugin table is constant for the process and the check above found
-  // the program, so this launch cannot fail.
-  const programConfig =
+  // An installed plugin's program can be gone since the check above (its
+  // plugin disabled or changed while the approval waited).
+  const relaunched =
     program === null
       ? null
-      : yield* programLaunch(program.name, program.args, approved).pipe(
-          Effect.orDie,
+      : yield* Effect.result(
+          programLaunch(program.name, program.args, approved),
         );
+  if (relaunched !== null && Result.isFailure(relaunched))
+    return errorResult(relaunched.failure.message);
+  const programConfig = relaunched?.success ?? null;
   const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
   const configPayload = {
     ...approved,

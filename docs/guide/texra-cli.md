@@ -334,7 +334,8 @@ TeXRA installs plugins published for Claude Code and Codex. It reads the
 plugin's own manifest, `.claude-plugin/plugin.json` or
 `.codex-plugin/plugin.json`, and the folders beside it: skills from `skills/`,
 commands from `commands/`, agents from `agents/`, MCP servers from `.mcp.json`,
-plus any of these paths the manifest declares.
+plus any of these paths the manifest declares. A plugin can also carry
+[programs](#programs-in-a-plugin) for TeXRA in `programs/`.
 
 ```bash
 texra plugin install github.com/LionSR/AgenticPublicationProtocol
@@ -357,7 +358,7 @@ An installed plugin stays off until you enable it:
 
 Once enabled and trusted, a plugin's components load under its namespace:
 
-- **Names**: Skills and commands become `<plugin>:<name>`, agents become `<plugin>:<name>`, and MCP tools are offered to top-level chat runs as `mcp__plugin_<plugin>_<server>__<tool>`.
+- **Names**: Skills, commands, agents and programs become `<plugin>:<name>`, and MCP tools are offered to top-level chat runs as `mcp__plugin_<plugin>_<server>__<tool>`.
 - **Tool inheritance**: A plugin agent that lists `tools` receives only those. One that omits `tools` inherits its parent's offered tools (for a subagent) or the file, shell, web, and enabled plugin tools (for a top-level run). A subagent never receives more tools than its parent.
 - **Runtime changes**: Each MCP server runs as its own process in the plugin folder, with tool calls approved like shell commands. Enabling, disabling, or modifying a plugin takes effect at the next model request in a running conversation; calls to removed tools are refused, while earlier history is preserved.
 
@@ -366,6 +367,42 @@ Fetched plugins are stored in `~/.texra/v1/global-storage/plugins/<name>/`, pinn
 A repository with a marketplace file (`.claude-plugin/marketplace.json` or `.agents/plugins/marketplace.json`) and no plugin manifest installs the plugin it lists; if it lists several, pass `--plugin <name>` (repeatable). <!-- guidance-refs-ignore -->
 
 The CLI, VS Code extension, and desktop app share installed plugins and trust decisions. In the extension and desktop app, manage them under **Settings → Plugins**.
+
+#### Programs in a plugin
+
+A plugin is also where your own programs live: a folder with a manifest and a
+`programs/` directory is enough. Each `programs/<name>.js` is one program,
+started as `<plugin>:<name>`:
+
+```js
+// my-programs/programs/todo-list.js
+export const description = 'List the TODO lines of each input file.';
+export const uses = ['read_file'];
+
+export default async (args, { inputFiles }) => {
+  const found = [];
+  for (const file of inputFiles) {
+    const { output } = await tools.read_file({ path: file });
+    for (const line of output.split('\n'))
+      if (line.includes('TODO')) found.push(file + ': ' + line.trim());
+  }
+  return found.join('\n') || 'No TODO lines.';
+};
+```
+
+```bash
+mkdir -p my-programs/.claude-plugin
+echo '{ "name": "my-programs", "version": "0.1.0" }' > my-programs/.claude-plugin/plugin.json
+texra plugin install ./my-programs
+texra plugin enable my-programs
+texra run my-programs:todo-list --input paper.tex
+```
+
+- **The two declarations**: the file must begin with `export const description = '...';` (one line, at most 300 characters) and `export const uses = ['...'];`, in either order, each a quoted literal ending in `;`, with only comments before and between them. `uses` names the tools the program's run is offered. TeXRA reads both from the text of the file and never runs the file to find them, so a computed value, a template string or code before them refuses that file by name; the plugin's other programs still load. (The list is not called `tools`: inside the program, `tools.read_file(...)` calls a tool, and a `tools` of your own would hide it.)
+- **The program**: the default export is `async (args, launch) => result`, where `launch` holds the `instruction` and the `inputFiles`, `contextFiles` and `mediaFiles` it was started with. What it returns is its answer. It runs in the same sandbox as a script a model writes: no filesystem, network, timers or `Date.now()`, only the tools `uses` names (`tools.<name>(...)`, and `agent(...)`, `program(...)` when listed). It can `import` the built-in modules and the other programs of enabled plugins by name.
+- **Naming**: the file name is the program's name: lowercase letters, digits and hyphens. TeXRA follows no symbolic link in `programs/`.
+- **Trust**: `texra plugin enable` lists each program with its description and tools, and each file it refused. A program acts only through the tools it lists. Unlike a built-in program's, those tools are withheld while their plugin is switched off, and need approval where they would for an agent; the agents and programs it starts are not asked about one by one. Editing any file in the plugin, a program included, withdraws every program of the plugin until you enable it again.
+- **Where it shows**: `texra plugin list` and **Settings → Plugins** name a plugin's programs, `texra run <plugin>:<name>` starts one, and an agent that can start programs is told of it with the built-in ones.
 
 ## Shell completion
 

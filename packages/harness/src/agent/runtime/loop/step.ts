@@ -54,6 +54,7 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
+  isInstalledProgram,
   PROGRAM_TOOL_NAME,
   programOf,
   SKILL_CATALOG_MAX_SKILLS,
@@ -223,8 +224,10 @@ const openStep = Effect.fn('Step.open')(function* (
   const roots = yield* SessionRoots;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
-    // A program's tools are fixed; else read the switches live.
-    const trusted = programOf(run.config) !== null;
+    // A registered program's tools are fixed; anyone else's, an installed
+    // plugin's program's among them, follow the switches read live.
+    const program = programOf(run.config);
+    const trusted = program !== null && !isInstalledProgram(program);
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
@@ -260,12 +263,22 @@ const openStep = Effect.fn('Step.open')(function* (
       Object.keys(imported),
       // Only a run offered `program` can start one.
       resolved.registry.has(PROGRAM_TOOL_NAME)
-        ? available.flatMap(({ programs = {} }) =>
-            Object.entries(programs).map(([name, { description }]) => ({
-              name,
-              description,
-            })),
-          )
+        ? [
+            ...available.flatMap(({ programs = {} }) =>
+              Object.entries(programs).map(([name, { description }]) => ({
+                name,
+                description,
+              })),
+            ),
+            // An installed plugin's, while it loads: enabled, and trusted
+            // as it is now.
+            ...[...pinned.installed.values()].flatMap(({ plugin }) =>
+              plugin.programs.loaded.map(({ name, description }) => ({
+                name,
+                description,
+              })),
+            ),
+          ]
         : [],
     );
     // The plugins whose sections the step's system text renders.
