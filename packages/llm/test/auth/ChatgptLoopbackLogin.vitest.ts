@@ -16,7 +16,7 @@ import type { CredentialStore } from '../../src/providers/credentials.js';
 import type { SubscriptionAuthorizeRequest } from '../../src/oauth/subscriptionCoordinator.js';
 
 /** The app the sign-in registers as. */
-const CLIENT = { name: 'Synthetic', id: 'synthetic' };
+const CLIENT = Object.freeze({ name: 'Synthetic', id: 'synthetic' });
 
 /** The callback path ChatGPT's sign-in returns to. */
 const CALLBACK_PATH = '/auth/callback';

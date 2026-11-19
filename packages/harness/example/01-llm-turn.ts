@@ -85,7 +85,10 @@ const unauthorizedFetch: typeof fetch = async () =>
   );
 
 /** The app the requests are sent for: llm names no client of its own. */
-const EXAMPLE_CLIENT = { name: 'Example App', id: 'example-app' };
+const EXAMPLE_CLIENT = Object.freeze({
+  name: 'Example App',
+  id: 'example-app',
+});
 
 const program = Effect.gen(function* () {
   // 1. Streamed turn over synthetic SSE
