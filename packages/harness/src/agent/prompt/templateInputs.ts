@@ -19,8 +19,6 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
  * the skills) is rendered per request (`stepInstructions`).
  */
 interface PromptVariables {
-  /** Provider gate for Anthropic-specific agent prompt blocks. */
-  IS_ANTHROPIC_MODEL: boolean;
   /** Working directory the run's tools operate in. */
   CWD: string;
   /** Absolute agent-directory paths from the external-roots registry, ''
@@ -77,7 +75,6 @@ export interface TemplateOpening {
  */
 export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   agentConfig: AgentConfig,
-  isAnthropicModel: boolean,
   options: BuildTemplateInputsOptions,
 ): Effect.fn.Return<TemplateOpening, never, FileSystem.FileSystem> {
   const attachedMemories = yield* getAttachedMemories(
@@ -87,7 +84,6 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   // An unregistered agent directory renders as '' (e.g. in tests that run
   // no activation).
   const inputs: PromptVariables = {
-    IS_ANTHROPIC_MODEL: isAnthropicModel,
     CWD: options.workingDirectory ?? options.workspaceRoot ?? '.',
     BUILTIN_AGENTS_DIR: '',
     CUSTOM_AGENTS_DIR: '',
