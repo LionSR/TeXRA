@@ -33,8 +33,9 @@ const SCHEMA_VERSION = 105;
  * insert rather than a surprise at read.
  *
  * `event_sequence` is one aggregate: a local integer surrogate `id` (never
- * outside the file), the `(kind, logical_id)` the codec maps an
- * `AggregateId` to, the durable `uid`, its sequence counter, its parent
+ * outside the file), the `(kind, logical_id)` the codec maps a run id to
+ * (`kind` is `run`; a row under any other kind is an earlier build's), the
+ * durable `uid`, its sequence counter, its parent
  * edge, and two lifecycle facts written by the transaction that makes
  * them: `start_commit` (the commit of seq 1) and `closed_by` (the
  * deletion marker's commit, `NULL` while open). The foreign keys are the

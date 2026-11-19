@@ -17,6 +17,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { logFailure } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 
 import { type CommitOrdinal, type DisplayRow } from '@shared/schemas';
@@ -60,6 +61,11 @@ interface SessionStore {
    *  request's cancellation write nothing; the first late trace row says so. */
   readonly close: Effect.Effect<void>;
   readonly closed: () => boolean;
+  /** Completes, with what to tell the person, if a feed of committed rows
+   *  (the presenter's, or the one that drops finished transient text)
+   *  stopped: it could not read from the store a stretch it fell behind.
+   *  The session's owner shows it; nothing else would. */
+  readonly feedStopped: Effect.Effect<string>;
 }
 
 /** Wait until `level` reaches `commit`; it dies if `level` ends first
@@ -97,9 +103,36 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     const database = yield* Database;
     const view = yield* SessionViewService;
     const chunks = yield* TextChunkSource;
-    // Taken now, before anything can publish: they see every batch.
-    const textFeed = yield* events.subscribe;
-    const presenterFeed = yield* events.subscribe;
+    // From the head as of now, before anything can publish: every batch. A
+    // feed reads the store only for a stretch it fell too far behind to be
+    // handed; a read that fails then ends the feed as a defect (rows nobody
+    // was shown must not pass for shown), logged and told to the person.
+    const feedStopped = yield* Deferred.make<string>();
+    const feed = (reader: string, lost: string) =>
+      events.batches(events.head()).pipe(
+        Stream.tapError((error) =>
+          logFailure(
+            'sessionStore',
+            `The ${reader} could not read the committed rows it fell behind; it stops`,
+          )(error).pipe(
+            Effect.andThen(
+              Deferred.succeed(
+                feedStopped,
+                `TeXRA could not read rows this session wrote (${error.message}), so ${lost} until the project is opened again.`,
+              ),
+            ),
+          ),
+        ),
+        Stream.orDie,
+      );
+    const textFeed = feed(
+      'transient text feed',
+      'text a run has finished streaming may stay on screen',
+    );
+    const presenterFeed = feed(
+      'presenter',
+      'a finished run may not be announced and changed files may not refresh',
+    );
     const presented = yield* SubscriptionRef.make(events.head());
     const presenterEnded = yield* Deferred.make<void>();
     const viewApplied = (commit: CommitOrdinal) =>
@@ -151,7 +184,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       closed,
     });
     // The text a committed row closes is dropped as its batch is published.
-    yield* Stream.flattenTake(Stream.fromSubscription(textFeed)).pipe(
+    yield* textFeed.pipe(
       Stream.runForEach(({ rows }) =>
         Effect.forEach(rows, trace.committed, { discard: true }),
       ),
@@ -195,7 +228,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       detach: events.detach,
       removeRun: events.removeRun,
       // Pulled in order: `presented` moves once a batch's rows were run.
-      applied: Stream.flattenTake(Stream.fromSubscription(presenterFeed)).pipe(
+      applied: presenterFeed.pipe(
         Stream.mapEffect((batch) =>
           Effect.as(viewApplied(batch.through), batch),
         ),
@@ -217,6 +250,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         ),
       ),
       closed,
+      feedStopped: Deferred.await(feedStopped),
     };
   },
 );

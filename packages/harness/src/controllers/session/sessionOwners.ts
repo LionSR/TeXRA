@@ -172,6 +172,13 @@ export const sessionOwnersLayer = (
       // The presentation host the session was opened with, which answers
       // while no host is attached; disposed after the runs.
       const interactions = yield* Interactions.make(open.interactions);
+      // A feed of the store that stopped is told to the person, once.
+      yield* store.feedStopped.pipe(
+        Effect.flatMap((message) =>
+          interactions.emit('requestShowError', { message }),
+        ),
+        Effect.forkIn(consumers),
+      );
       // The approvals, with the one reading of the policy over the host.
       const approvals = yield* sessionApprovals.pipe(Effect.provide(project));
       const withPolicy = project.pipe(

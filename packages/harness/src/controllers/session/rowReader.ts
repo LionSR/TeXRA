@@ -10,6 +10,7 @@
 import { zstdDecompressSync } from 'node:zlib';
 
 import { Effect, Result, Schema, Struct } from 'effect';
+import type { SqlError } from 'effect/sql/SqlError';
 
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { withLogChannel } from '@logger/effectLog';
@@ -34,6 +35,7 @@ import { sha256Hex } from '@utils/core/idHash';
 
 import {
   decodeRow,
+  EARLIER_AGGREGATE_PARENTS,
   EARLIER_RUNS,
   factKindOf,
   EVENT_COLUMNS,
@@ -44,6 +46,7 @@ import {
   type SqlRow,
 } from './rowCodec';
 import { StoreCheckFailed } from './storeAside';
+import type { StoreConnection } from './storeConnection';
 
 /** One aggregate's surrogate, from its two columns. */
 export const AGGREGATE =
@@ -141,8 +144,8 @@ const INLINE_BLOBS = `SELECT DISTINCT b.digest AS digest, b.value AS value
   FROM event_blob l JOIN blob b ON b.digest = l.digest
   WHERE l.inline = 1 AND l."commit" IN (SELECT value FROM json_each(?))`;
 const decodeCommit = Schema.decodeUnknownSync(Schema.Int);
-
-/** An earlier-build run row, as `EARLIER_RUNS` selects it. */
+/** An earlier-build run row, as `EARLIER_RUNS` and
+ *  `EARLIER_AGGREGATE_PARENTS` select it. */
 const EarlierRowSchema = Schema.Struct({
   logicalId: Schema.String,
   commit: Schema.Int,
@@ -170,14 +173,8 @@ const factHeader = (data: unknown) => {
   return Result.getOrUndefined(header);
 };
 
-/** A statement runner over the reader's connection. */
-type Exec<E> = (
-  statement: string,
-  params: readonly unknown[],
-) => Effect.Effect<readonly SqlRow[], E>;
-
 /** A selected row's reader, and the runs it found it cannot open. */
-export interface RowReader<E> {
+export interface RowReader {
   /** The events of `rows`. A newer row fails the read; one that does not
    *  decode fails a strict read (`whole`: a run's history and its records),
    *  so no decision is made from part of a run's rows, and is left out of a
@@ -190,29 +187,28 @@ export interface RowReader<E> {
    *  the store lacks fails the read. */
   readonly blobs: (
     digests: readonly string[],
-  ) => Effect.Effect<StoredBlobs, E | StoreCheckFailed>;
+  ) => Effect.Effect<StoredBlobs, SqlError | StoreCheckFailed>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
   ) => Effect.Effect<
     readonly SessionRow[],
-    E | DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
+    SqlError | DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
   >;
   /** Every run found unopenable so far, with why: shown read-only. */
-  readonly damaged: Effect.Effect<readonly UnreadableRun[], E>;
+  readonly damaged: Effect.Effect<readonly UnreadableRun[], SqlError>;
 }
 
 /**
- * The reader of the store at `path`, over the process's plugin `factKinds`. Its
- * first strict read or `damaged` finds, through `exec`, every run holding an
+ * The reader of a store's rows, over the process's plugin `factKinds`. Its
+ * first strict read or `damaged` finds, on the connection, every run holding an
  * earlier build's row, which the listing (it never reads a run's history)
  * would not meet: one finding, read by the listing, history and resume alike.
  */
-export function rowReader<E>(
-  path: string,
+export function rowReader(
+  { exec, path }: Pick<StoreConnection, 'exec' | 'path'>,
   factKinds: FactKinds,
-  exec: Exec<E>,
-): RowReader<E> {
+): RowReader {
   const warned = new Set<string>();
   const unopenable = new Map<RunId, UnreadableRun['reason']>();
   // The runs an earlier build wrote, each with the first such row.
@@ -241,7 +237,10 @@ export function rowReader<E>(
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
-    for (const row of yield* exec(...EARLIER_RUNS)) {
+    for (const row of [
+      ...(yield* exec(...EARLIER_RUNS)),
+      ...(yield* exec(EARLIER_AGGREGATE_PARENTS, [])),
+    ]) {
       const { logicalId, commit, type } =
         Schema.decodeUnknownSync(EarlierRowSchema)(row);
       markEarlier(

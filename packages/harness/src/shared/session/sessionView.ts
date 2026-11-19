@@ -12,19 +12,17 @@ import { Schema } from 'effect';
 
 import { ApprovalGrantsSchema } from '@shared/approvalBypassKind';
 import {
-  AggregateIdSchema,
+  RunIdSchema,
   AnsweredBySchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
   RequestPayloadSchema,
-  PluginFactDraftSchema,
   RunActionSchema,
   RunEndSchema,
   RunIdentitySchema,
   RunNoticeSchema,
   RunOutcomeSchema,
   RunPositionSchema,
-  RunIdSchema,
   StageSchema,
   TokenUsageStatsSchema,
   WorktreeInfoSchema,
@@ -336,11 +334,10 @@ export const SessionViewSchema = Schema.Struct({
    *  applied (the subscription's `fromSeq` until a row is applied). Created
    *  when the aggregate enters the subscription set, deleted with its
    *  transcript when it leaves; never a commit ordinal. */
-  transcriptSeq: Schema.ReadonlyMap(AggregateIdSchema, Count),
+  transcriptSeq: Schema.ReadonlyMap(RunIdSchema, Count),
   /** Project-level aggregate; a rail badge reads it and derives nothing. */
   rollup: Schema.Struct({ running: Count, waiting: Count, interrupted: Count }),
   requests: Schema.Array(PendingRequestSchema),
-  pluginFacts: Schema.Array(PluginFactDraftSchema),
 });
 /** One published level of the session's fold: an immutable value. */
 export type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
@@ -427,7 +424,6 @@ export function emptySessionView(key: string, debug = false): SessionView {
     transcriptSeq: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     requests: [],
-    pluginFacts: [],
   };
 }
 

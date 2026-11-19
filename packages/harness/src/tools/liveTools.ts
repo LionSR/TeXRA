@@ -27,6 +27,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import { withLogChannel } from '@logger/effectLog';
 import { AppSignals } from '@platform/appSignals';
@@ -100,7 +101,11 @@ export const ToolCatalogOwner = Context.Service<
      *  `drain`, while its services are still up. */
     readonly drain: Effect.Effect<void>;
     /** A session's catalog, in the caller's scope (the session's). */
-    readonly session: Effect.Effect<SessionTools, never, Scope.Scope>;
+    readonly session: Effect.Effect<
+      SessionTools,
+      never,
+      Scope.Scope | SubscriptionAccounts
+    >;
   }
 >('@texra-ai/harness/tools/ToolCatalogOwner');
 

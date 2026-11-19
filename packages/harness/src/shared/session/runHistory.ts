@@ -216,12 +216,12 @@ export interface RunCell {
    *   tool message binds results to calls positionally, the run history
    *   keys them by `callId`.
    */
-  readonly append: <E = never>(
+  readonly append: (
     rows:
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
-    alongside?: Alongside<E>,
-  ) => Effect.Effect<RunState, CellError | E>;
+    alongside?: Alongside,
+  ) => Effect.Effect<RunState, CellError>;
   /**
    * Re-read the run under the cell's lock: the state with every row another
    * writer committed (a `request.decided` a surface landed), in commit

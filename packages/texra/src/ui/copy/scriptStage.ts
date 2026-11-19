@@ -14,6 +14,7 @@ import {
   formatResultCount,
   joinFacts,
 } from '@texra-ai/harness/schemas';
+import { REQUEST_NOUN } from '@ui/copy/requestCards';
 import type { StatusLook } from '@ui/copy/runStatus';
 
 export const SCRIPT_CALL_STATUS_LABEL = Object.freeze({
@@ -62,17 +63,17 @@ function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
   const { payload } = detail;
   switch (payload.kind) {
     case 'bash':
-      return `Wants bash: ${payload.data.command}`;
+      return `Wants ${REQUEST_NOUN.bash}: ${payload.data.command}`;
     case 'toolEdit':
-      return `Wants edit: ${payload.data.relativePath}`;
+      return `Wants ${REQUEST_NOUN.toolEdit}: ${payload.data.relativePath}`;
     case 'retry':
-      return `Wants retry: ${payload.data.operation}`;
+      return `Wants ${REQUEST_NOUN.retry}: ${payload.data.operation}`;
     case 'proposal':
-      return 'Wants approval for a proposal';
+      return `Wants approval for a ${REQUEST_NOUN.proposal}`;
     case 'planApproval':
-      return 'Wants approval for a plan';
+      return `Wants approval for a ${REQUEST_NOUN.planApproval}`;
     case 'userQuestion':
-      return 'Wants an answer to a question';
+      return `Wants an answer to a ${REQUEST_NOUN.userQuestion}`;
     default:
       return payload satisfies never;
   }

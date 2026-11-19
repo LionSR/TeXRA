@@ -214,13 +214,13 @@ const none: Effect.Effect<readonly SessionRowDraft[]> = Effect.succeed([]);
 
 /** One checked batch, committed in the job `within` names or in the
  *  session's own (`sessionLog`). */
-const commit = Effect.fn('RunCell.commit')(function* <E>(
+const commit = Effect.fn('RunCell.commit')(function* (
   sessionLog: Pick<SessionLogShape, 'transact'>,
   run: RunId,
   state: RunState,
   rows: readonly RunHistoryDraft[],
   registration: Effect.Effect<readonly SessionRowDraft[]>,
-  alongside: Alongside<E>,
+  alongside: Alongside,
   within: Append | undefined,
 ) {
   const violation = contractViolation(run, rows);
