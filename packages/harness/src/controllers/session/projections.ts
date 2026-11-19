@@ -37,12 +37,7 @@ import {
   type TokenUsageStats,
   NonNegativeIntSchema,
 } from '@shared/schemas';
-import {
-  EVENT_COLUMNS,
-  EVENT_FROM,
-  aggregateColumns,
-  type SqlRow,
-} from './rowCodec';
+import { EVENT_COLUMNS, EVENT_FROM, aggregateColumns } from './rowCodec';
 import { AGGREGATE, UNREAD_KEY } from './rowReader';
 import type { RowReader } from './rowReader';
 import type { StoreConnection } from './storeConnection';
