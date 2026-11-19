@@ -25,6 +25,7 @@ import {
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 import { DETAIL_SEPARATOR } from '@texra-ai/harness/schemas';
+import { nextListIndex } from '@ui/wa/listInteraction';
 
 /** `index` held to a valid index of a `length`-item list (0 when empty). */
 function clampIndex(index: number, length: number): number {
@@ -153,11 +154,11 @@ function nextSelectHighlightIndex<T>({
     if (!wrap) {
       return clampIndex(clampedHighlight + direction, items.length);
     }
-    return nextWrappingHighlightIndex({
-      direction,
-      highlight: clampedHighlight,
-      itemCount: items.length,
-    });
+    return nextListIndex(
+      direction === 1 ? 'next' : 'previous',
+      clampedHighlight,
+      items.length,
+    );
   }
 
   for (
@@ -168,21 +169,6 @@ function nextSelectHighlightIndex<T>({
     if (!items[next]?.disabled) return next;
   }
   return clampedHighlight;
-}
-
-export function nextWrappingHighlightIndex({
-  direction,
-  highlight,
-  itemCount,
-}: {
-  readonly direction: -1 | 1;
-  readonly highlight: number;
-  readonly itemCount: number;
-}): number {
-  if (itemCount <= 0) return 0;
-  const clampedHighlight = clampIndex(highlight, itemCount);
-  if (direction === 1) return (clampedHighlight + 1) % itemCount;
-  return clampedHighlight <= 0 ? itemCount - 1 : clampedHighlight - 1;
 }
 
 function visibleSelectRange({

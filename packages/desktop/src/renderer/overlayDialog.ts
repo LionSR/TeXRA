@@ -19,40 +19,16 @@ export function renderElement(template: TemplateResult): HTMLElement {
 }
 
 /**
- * Small icon-only close button shared by the desktop's imperative dialog
- * overlays — each wires it to its own `dialog.open = false`
- * handler.
- */
-function createDialogCloseButton(
-  className: string,
-  label: string,
-  onClose: () => void,
-): HTMLElement {
-  return renderElement(
-    renderIconActionButton({
-      icon: 'xmark',
-      label,
-      size: 's',
-      className: `${className} desktop-overlay-close icon-button focus-ring-inset`,
-      onClick: onClose,
-    }),
-  );
-}
-
-/**
  * Shared scaffolding for the desktop's imperative `wa-dialog` overlays
- * (Settings, prompt): one shell — `withoutHeader` / `lightDismiss` / `aria-label`,
- * a titled header with an aligned close button, and the
- * `appRoot.append` — so each overlay owns only its content and behavior and
- * the near-identical shells (and their `desktop-*` class families) cannot
- * drift.
+ * (Settings, prompt, discard): one shell — `withoutHeader` / `lightDismiss` /
+ * `aria-label`, a titled header with an aligned close button, and the
+ * `appRoot.append` — so each overlay owns only its content and behavior.
+ * Every shell carries the one `desktop-overlay` class family; `prefix` names
+ * the overlay for its own layout and for tests.
  */
 interface OverlayDialogOptions {
   appRoot: HTMLElement;
-  /**
-   * CSS class family. Derives `${prefix}-overlay`, `${prefix}-close`,
-   * `${prefix}-body` / `-header` / `-title`.
-   */
+  /** Derives the dialog's `${prefix}-overlay` and its `${prefix}-close`. */
   prefix: string;
   ariaLabel: string;
   closeLabel: string;
@@ -73,26 +49,31 @@ export function createOverlayDialog(
 ): OverlayDialogHandle {
   const { prefix } = options;
   const dialog = document.createElement('wa-dialog');
-  dialog.classList.add(`${prefix}-overlay`);
+  dialog.classList.add('desktop-overlay', `${prefix}-overlay`);
   dialog.withoutHeader = true;
   dialog.lightDismiss = false;
   dialog.setAttribute('aria-label', options.ariaLabel);
 
   const body = document.createElement('section');
-  body.classList.add(`${prefix}-body`);
+  body.classList.add('desktop-overlay-body');
   const header = document.createElement('header');
-  header.classList.add(`${prefix}-header`, 'desktop-overlay-header');
+  header.classList.add('desktop-overlay-header');
   const titleEl = document.createElement('h2');
-  titleEl.classList.add(`${prefix}-title`, 'desktop-overlay-title');
+  titleEl.classList.add('desktop-overlay-title');
   titleEl.textContent = options.title;
-  const subtitleEl = document.createElement('p');
-  subtitleEl.classList.add(`${prefix}-subtitle`, 'desktop-overlay-subtitle');
   header.append(
     titleEl,
-    createDialogCloseButton(`${prefix}-close`, options.closeLabel, () => {
-      dialog.open = false;
-    }),
-    subtitleEl,
+    renderElement(
+      renderIconActionButton({
+        icon: 'xmark',
+        label: options.closeLabel,
+        size: 's',
+        className: `${prefix}-close icon-button focus-ring-inset`,
+        onClick: () => {
+          dialog.open = false;
+        },
+      }),
+    ),
   );
   body.append(header, options.content);
   dialog.append(body);

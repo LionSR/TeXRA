@@ -34,14 +34,14 @@ export interface CompactionActivityBlock {
 export const COMPACTION_ACTIVITY_LABEL: Record<
   CompactionActivityStatus,
   string
-> = {
+> = Object.freeze({
   running: 'Compacting context…',
   completed: 'Context compacted',
   failed: 'Context compaction failed',
   cancelled: 'Context compaction cancelled',
   skipped: 'Context compaction was not needed',
   interrupted: 'Context compaction interrupted',
-};
+});
 
 export interface CompactionActivityProjection {
   readonly blocks: CompactionActivityBlock[];

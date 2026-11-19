@@ -56,17 +56,24 @@ function addDisplayMathParagraphInterruptions(md: MarkdownItInstance): void {
 }
 
 export function createKatexHtmlProcessor(): MarkdownProcessor {
+  // texmath hands this one object to every KaTeX call, and KaTeX writes a
+  // `\gdef` into its `macros`. Each document starts from a fresh copy of the
+  // project set, so a definition lasts for the document that makes it.
+  const katexOptions = {
+    throwOnError: false,
+    errorColor: ERROR_COLOR,
+    macros: { ...katexMacros },
+  };
   const renderer = createMarkdownRenderer({
     highlight: highlightCode,
     usePlugin: (md) => {
       const configured = md.use(texmath, {
         engine: katex,
         delimiters: [...DELIMITERS],
-        katexOptions: {
-          throwOnError: false,
-          errorColor: ERROR_COLOR,
-          macros: katexMacros,
-        },
+        katexOptions,
+      });
+      configured.core.ruler.before('normalize', 'katex_fresh_macros', () => {
+        katexOptions.macros = { ...katexMacros };
       });
       addDisplayMathParagraphInterruptions(configured);
       return configured;

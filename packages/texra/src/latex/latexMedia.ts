@@ -1,6 +1,6 @@
 // Node imports
 import * as path from 'node:path';
-import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { type AgentTrace, type WorkspaceFs } from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
@@ -9,7 +9,11 @@ import { meansAbsent } from '@texra-ai/harness/node';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
-import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  type FileLocation,
+  hasExtension,
+} from '@texra-ai/harness/schemas';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 // Local file imports
@@ -17,7 +21,7 @@ import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { resolveLatexDir } from './latexParsingUtils';
 import { compileTikzPictures, extractTikzPictures } from './tikzPictures';
-import { compileLatex2Pdf } from './texTools';
+import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -100,15 +104,8 @@ const compileOnePdf = Effect.fn('latexMedia.compileOnePdf')(function* (
   file: FileLocation,
 ): Effect.fn.Return<FileLocation | undefined, Error, MediaServices> {
   const fs = yield* FileSystem.FileSystem;
-  // One build directory per input (the shape TikZ compiles use): up to
-  // LATEX_CONCURRENCY engines run at once, and two inputs in one folder
-  // that share an `\include` or a `.bib` would otherwise write the same
-  // `.aux`/`.bbl` files into one `build/` and corrupt each other's.
-  const buildDir = path.join(
-    path.dirname(file.absolutePath),
-    'build',
-    path.parse(file.absolutePath).name,
-  );
+  // Up to LATEX_CONCURRENCY engines run at once, each in its own folder.
+  const buildDir = perInputBuildDirectory(file.absolutePath);
   yield* fs.makeDirectory(buildDir, { recursive: true });
   const compiled = yield* compileLatex2Pdf(file, roots, {
     outputDirectory: buildDir,
@@ -148,7 +145,7 @@ const compilePdfs = Effect.fn('latexMedia.compilePdfs')(function* (
               `Skipping PDF compile for ${file.absolutePath}: ${toErrorMessage(error)}`,
               { data: { sourceFile: file.absolutePath, error } },
             ),
-          () => Effect.succeed(undefined),
+          () => Effect.undefined,
         ),
       ),
     { concurrency: LATEX_CONCURRENCY },
@@ -177,7 +174,7 @@ const mirrorProjectSiblings = Effect.fn('latexMedia.mirrorProjectSiblings')(
             projectDir,
             error,
           ),
-        () => Effect.succeed(undefined),
+        () => Effect.undefined,
       ),
     );
     if (!entries) return;

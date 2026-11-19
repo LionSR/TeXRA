@@ -18,7 +18,7 @@ import {
   type RunToolCall,
 } from '@agent/runtime/RunCall';
 import { goalGrant } from '@agent/runtime/runApprovalQueue';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
   NO_APPROVAL_GRANTS,
@@ -33,6 +33,7 @@ import {
 import {
   GOAL_PLAN_KIND,
   RunIdSchema,
+  runsScript,
   type Plan,
   type RunId,
   type ToolFact,
@@ -107,7 +108,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // A goal forks a conversation and reports to its later turns: a run no
   // later turn reaches has none, and a script's run is no conversation to
   // fork.
-  if (noLaterTurn(call.run) || call.run.config.script != null)
+  if (noLaterTurn(call.run) || runsScript(call.run.config))
     return executed(
       'A goal runs from a conversation, forks it and reports to its later turns; this run is not one: work on the approved plan in this run instead.',
       'Plan approved: no goal outside a conversation',
@@ -121,7 +122,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   const issued = (yield* (yield* RunHistory).load(runId))?.calls ?? {};
   const { results } = yield* (yield* SessionLog).runRows(runId, 'results');
   const { runs } = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
-  const live = yield* Runs;
+  const live = yield* RunRegistry;
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
   const stillRunning = (id: RunId): boolean => {
@@ -255,7 +256,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
 
   switch (result.action) {
     case 'cancel':
-      return yield* denialResult('cancelled', result.cause ?? undefined);
+      return yield* denialResult('cancelled', result.cause);
     case 'deny':
       return yield* denialResult('denied', result.reason);
     case 'reject': {

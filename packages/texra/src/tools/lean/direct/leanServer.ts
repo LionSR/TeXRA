@@ -45,7 +45,7 @@ import {
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/host';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
@@ -150,6 +150,8 @@ export class LeanServer extends Context.Service<
       {
         readonly diagnostics: LeanDiagnostic[];
         readonly complete: boolean;
+        /** The text Lean was sent for the version these describe. */
+        readonly text: string;
       },
       LeanSessionError
     >;
@@ -182,6 +184,8 @@ export class LeanServer extends Context.Service<
 /** What Lean has said about the open version of a file. */
 interface FileState {
   readonly version: number;
+  /** The file's text as this version was opened with it. */
+  readonly text: string;
   /** Absent until Lean publishes diagnostics for this version. */
   readonly diagnostics?: LeanDiagnostic[];
   /** Lean's last `$/lean/fileProgress` for this version, if it sent one. */
@@ -196,10 +200,9 @@ interface ServerEnd {
 }
 
 function spawnFailure(error: PlatformError.PlatformError): LeanStartError {
-  const cause = error.reason.cause ?? error;
   return new LeanStartError({
-    message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(cause)}`,
-    cause,
+    message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(error)}`,
+    cause: error,
   });
 }
 
@@ -496,7 +499,7 @@ const make = ({
       const version = reopened
         ? (yield* SubscriptionRef.get(reopened)).version + 1
         : 1;
-      const state: FileState = { version, progress: 'unreported' };
+      const state: FileState = { version, text, progress: 'unreported' };
       const file = reopened ?? (yield* SubscriptionRef.make(state));
       if (reopened) yield* SubscriptionRef.set(reopened, state);
       else openFiles.set(absolute, file);
@@ -573,7 +576,11 @@ const make = ({
     ) {
       const { file, complete } = yield* openElaborated(filePath);
       const state = yield* SubscriptionRef.get(file);
-      return { diagnostics: state.diagnostics ?? [], complete };
+      return {
+        diagnostics: state.diagnostics ?? [],
+        complete,
+        text: state.text,
+      };
     });
 
     const requestElaborated = Effect.fn('LeanServer.requestElaborated')(
@@ -673,14 +680,11 @@ function fileUriToPath(uri: string): Effect.Effect<string | null> {
   // throw. This runs on the JSON-RPC notification path, so map to null
   // (an untracked URI the caller skips) rather than letting the exception
   // escape and break diagnostics handling.
-  return Effect.try({
-    try: () => fileURLToPath(uri),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
+  return Effect.sync(() => fileURLToPath(uri)).pipe(
+    Effect.catchDefect((defect) =>
       Effect.logDebug(`Ignoring unmappable file URI ${uri}`).pipe(
         withLogChannel(LOG_CHANNEL),
-        Effect.annotateLogs({ data: error }),
+        Effect.annotateLogs({ data: defect }),
         Effect.as(null),
       ),
     ),

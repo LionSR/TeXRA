@@ -8,6 +8,7 @@
 import { Schema, Struct } from 'effect';
 
 import { DELIVERY_FAMILY_PATTERN } from '@shared/deliveryTags';
+import { ActivatedSkillsSchema } from './activeSkills';
 import { RunIdSchema } from './identifiers';
 import { ProcessExitSchema } from './runRecords';
 import { ScriptDeliverySummarySchema } from './scriptDelivery';
@@ -48,32 +49,21 @@ const ChildRunDeliverySchema = Schema.Struct({
     Schema.isPattern(new RegExp(`^${DELIVERY_FAMILY_PATTERN}$`)),
   ),
   runId: Schema.String,
-  /** The prompt the child took, echoed (cut short) as an attribute. */
-  prompt: Schema.optional(Schema.String),
-  /** The attributes after `id` and `prompt`, in order (`agent`, `status`,
-   *  `command`, `thread-id`, …); one whose value is null is left out. */
+  /** The attributes after `id`, in order (`agent`, `status`, `command`,
+   *  a plugin's `prompt` and `thread-id`, …); an absent one is left out. */
   attributes: Schema.optional(
-    Schema.Array(
-      Schema.Struct({
-        name: Schema.String,
-        value: Schema.NullOr(
-          Schema.Union([Schema.String, Schema.Finite, Schema.Boolean]),
-        ),
-      }),
-    ),
+    Schema.Array(Schema.Struct({ name: Schema.String, value: Schema.String })),
   ),
   /** How a background command exited. */
   exit: Schema.optional(ProcessExitSchema),
-  /** How long the child ran, as it reads (`1.2s`). */
-  wallTime: Schema.optional(Schema.String),
+  /** How long the child ran, in milliseconds (`formatWallTime` words it). */
+  wallTimeMs: Schema.optional(Schema.Finite),
   /** A turn's or a script's answer, inline; an empty one reads
    *  `(no response)`. */
   response: Schema.optional(Schema.String),
   usage: Schema.optional(
-    Schema.NullOr(
-      TokenUsageStatsSchema.mapFields(
-        Struct.pick(['inputTokens', 'outputTokens']),
-      ),
+    TokenUsageStatsSchema.mapFields(
+      Struct.pick(['inputTokens', 'outputTokens']),
     ),
   ),
   /** A background script's summary: its calls, what they wrote and cost. */
@@ -99,10 +89,14 @@ export type ChildRunDelivery = typeof ChildRunDeliverySchema.Type;
 const FollowUpMessageSchema = Schema.Struct({
   text: Schema.String,
   /** What the transcript and the queued list show instead of `text`. */
-  displayText: Schema.optional(Schema.NullOr(Schema.String)),
+  displayText: Schema.optional(Schema.String),
   /** Media a user follow-up attached (e.g. pasted images), by address:
    *  the row links the blobs, so they live as long as it does. */
   media: Schema.optional(Schema.Array(StoredMediaSchema)),
+  /** The skills a user activated with the message, by name: `text` already
+   *  carries their instructions, and the run records them when it takes
+   *  the message. */
+  skills: Schema.optional(ActivatedSkillsSchema),
   from: FollowUpSenderSchema,
 });
 /** A follow-up that is a message, not a child's delivery. */

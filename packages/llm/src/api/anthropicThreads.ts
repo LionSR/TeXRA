@@ -3,7 +3,7 @@ import { hash } from 'node:crypto';
 
 // Third-party imports
 import { APIError } from '@anthropic-ai/sdk';
-import { Clock, Effect, Result, Schema, type Scope } from 'effect';
+import { Clock, Effect, type Scope } from 'effect';
 
 // Local imports - canonical model contract
 import {
@@ -12,8 +12,15 @@ import {
   type TurnResult,
 } from '../turn.js';
 import type { ModelError } from '../errors.js';
-import type { MessageCreateParamsStreaming } from '@anthropic-ai/sdk/resources/messages';
-import type { BetaMessageThreadParam } from '@anthropic-ai/sdk/resources/beta/messages';
+import type { Stream } from '@anthropic-ai/sdk/core/streaming';
+import type {
+  MessageCreateParamsStreaming,
+  RawMessageStreamEvent,
+} from '@anthropic-ai/sdk/resources/messages';
+import type {
+  BetaMessageThreadParam,
+  BetaRawMessageStreamEvent,
+} from '@anthropic-ai/sdk/resources/beta/messages';
 
 /*
  * Message threads (beta): the server holds a conversation between turns, so
@@ -54,27 +61,19 @@ function threadKey(
   return hash('sha256', JSON.stringify([fixed, messages]), 'hex');
 }
 
-const ThreadErrorSchema = Schema.Struct({
-  error: Schema.Struct({
-    details: Schema.Struct({ error_code: Schema.String }),
-  }),
-});
-
 /**
- * How a rejected threaded request recovers, from the API error body:
+ * How a rejected threaded request recovers, from the API error's code:
  * `replay` and `not-found` send the full conversation as a new thread,
  * `unsupported` sends it without one. The API rejects these before the
- * model runs, so nothing was generated or billed.
+ * model runs, so nothing was generated or billed. A fingerprint mismatch
+ * means a field the thread holds fixed differs from its create; the API's
+ * remedy for that is a new thread, which the replay is.
  */
 function threadRejection(
   error: ModelError,
 ): 'replay' | 'not-found' | 'unsupported' | null {
   if (!(error.cause instanceof APIError)) return null;
-  const decoded = Schema.decodeUnknownResult(ThreadErrorSchema)(
-    error.cause.error,
-  );
-  if (Result.isFailure(decoded)) return null;
-  switch (decoded.success.error.details.error_code) {
+  switch (error.cause.errorCode) {
     case 'thread_not_found':
       return 'not-found';
     case 'thread_fingerprint_mismatch':
@@ -107,9 +106,9 @@ interface StoredThread {
 }
 
 /** An SDK event stream, plain or beta: the codec reads either. */
-export type SdkSource = AsyncIterable<unknown> & {
-  readonly controller: AbortController;
-};
+export type SdkSource =
+  | Stream<RawMessageStreamEvent>
+  | Stream<BetaRawMessageStreamEvent>;
 
 /** What a binding sends its requests through. */
 interface MessageThreads {

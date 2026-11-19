@@ -6,11 +6,10 @@ import {
   useRef,
 } from 'react';
 import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
-import { Cause, Effect, SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { attachClipboardImage } from '@cli/runtime/terminal/clipboardImage';
-import { writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
@@ -25,7 +24,7 @@ import {
   withPastedImage,
   withPastedText,
   withText,
-  type Draft,
+  type InputDraft,
 } from '../input/draftAttachments';
 import { useImagePastes } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
@@ -47,6 +46,7 @@ import {
   slashPaletteOpen,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { useMountScope } from '../state/useMountScope';
 import { useSubscriptionRef } from '../state/useSubscriptionRef';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
@@ -57,10 +57,10 @@ const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 interface InputBarProps {
   /** The chat's draft: what the input shows, its chips' content and the
    *  activated skills. A message the session does not take comes back here. */
-  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
+  readonly draft: SubscriptionRef.SubscriptionRef<InputDraft>;
   /** Called with the submitted draft only on real (non-paste) Enter, or on
    *  Shift-Tab with `holdUntil: 'turn'`. */
-  readonly onSubmit: (draft: Draft, holdUntil?: 'turn') => void;
+  readonly onSubmit: (draft: InputDraft, holdUntil?: 'turn') => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
   /** Inline reason shown when the disabled input remains visible. */
@@ -112,10 +112,11 @@ const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, holdsKeystroke, onSubmit } = props;
-  const { roots, runtime } = useChatProcess();
+  const { roots, chat } = useChatProcess();
+  const mount = useMountScope();
   const draftRef = props.draft;
   const keyboardActive = props.keyboardActive ?? true;
-  const value = useSubscriptionRef(runtime, draftRef).text;
+  const value = useSubscriptionRef(mount, draftRef).text;
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const { columns } = useWindowSize();
   const commands = useSlashContext().commands;
@@ -126,8 +127,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     [draftRef],
   );
   const writeDraft = useCallback(
-    (next: Draft) => runtime.runSync(SubscriptionRef.set(draftRef, next)),
-    [draftRef, runtime],
+    (next: InputDraft) => mount.sync(SubscriptionRef.set(draftRef, next)),
+    [draftRef, mount],
   );
   // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,
   // `savedDraft` restores whatever was typed before browsing began, and
@@ -162,7 +163,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     },
     [readDraft, writeDraft],
   );
-  const imagePasteQueue = useImagePastes(runtime);
+  const imagePasteQueue = useImagePastes(mount);
 
   const clearDraft = useCallback(() => {
     imagePasteQueue.discardPending();
@@ -258,27 +259,17 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       }
       const historyText = expandTextForHistory(message).trim();
       clearDraft();
-      // Persisting history is best-effort — a disk failure (read-only fs,
-      // ENOSPC) must not block the submit. Surface the failure through the
-      // shared log sink so it isn't completely silent.
+      // The chat's work, not the bar's: the entry is added even when a
+      // foreground surface replaces the bar right after the submit. Storing
+      // it never holds the submit; a failed store is reported on stderr.
       const historyPersist =
         historyText.length > 0 && !commands.shouldRedact(historyText)
           ? historyRef.current?.push(historyText)
           : undefined;
-      if (historyPersist) {
-        runtime.runFork(
-          Effect.catchCause(historyPersist, (cause) =>
-            Effect.sync(() => {
-              writeTextStderr(
-                `texra: failed to persist input history: ${String(Cause.squash(cause))}`,
-              );
-            }),
-          ),
-        );
-      }
+      if (historyPersist) chat.fork(historyPersist);
       onSubmit(message, holdUntil);
     },
-    [clearDraft, commands, onSubmit, readDraft, runtime],
+    [chat, clearDraft, commands, onSubmit, readDraft],
   );
 
   const acceptSlashCommand = useCallback(

@@ -92,7 +92,7 @@ const guideSidebar = [
       { text: 'Code Review', link: '/guide/code-review' },
       { text: 'Agent Integrations', link: '/guide/agent-integrations' },
       { text: 'File Management', link: '/guide/file-management' },
-      { text: 'ProgressBoard', link: '/guide/progress-board' },
+      { text: 'Tasks view', link: '/guide/progress-board' },
     ],
   },
   {

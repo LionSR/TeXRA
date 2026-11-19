@@ -57,18 +57,33 @@ report.
 
 Lanes 2 to 9 are handed out in "Who takes what" below.
 
+The table above is the state on 2026-11-07. Each step under "Lanes that run
+in parallel" now ends with its state as read on `main` at `c78e9f9`
+(2026-11-17): the names it deletes searched as whole words, and the row of
+the [round-7 catalogue](../../evidence/2026-11-07-design-red-flags-lenses/catalogue.md)
+that records its findings. The
+[2026-11-15 catalogue](../../evidence/2026-11-15-design-red-flags/catalogue.md)
+records what those landings left as rows of its own (each names the earlier
+id under "earlier:" in its report); every one cited below has landed. What
+is still open: M4, H9 and M9 (step 5.5). `childEndReport`'s switch on
+kind (lane 9) was refused on 2026-11-19
+(`RUNEND-child-report-from-launch` in
+`.agents/docs/refuted-candidates.json`).
+
 Open pull requests the order waits on:
 
 - **14713** (a document task tells its chat what the user changed) edits
   `hostRunActions.ts`, `documentTools.ts` and `workflowOutput.ts`: G5, I1,
-  I3, I4, I5 and I7 land after it.
+  I3, I4, I5 and I7 land after it. It has merged: the round-7 catalogue
+  cites its squash message, and G5 and the I rows landed after it.
 - **14773** (programs, not agents, for the catalog and codemode) was set
   aside by the owner (2026-11-07), who returned to it on 2026-11-14: 14940
   supersedes it. Of M4, M9 and H9, which its outcome could replace, the
   reworked note replaces only M9; where each goes is in its section "随
   #14773 搁置的三条发现"
   ([programs, not agents](./2026-11-06-programs-not-agents.md)). They stay
-  out of the order until the owner places them.
+  out of the order until the owner places them. 14940 merged as that note,
+  and its phases 1 and 2 landed in #14968; M9's phase (5) has not started.
 - **14777** (one unwrap of a platform error) landed 2026-11-07, so G10's
   error tags can join the storage-errors inventory now.
 - **14741** (blob link kinds) touches only the store; nothing here waits.
@@ -185,31 +200,50 @@ lists the findings it closes and the primitive.
 1. R9, two loops. Landed in PR 14778.
 2. R9, the gate as a `Latch` and a probe permit, `AgentRun.model` as a
    `ScopedRef` (landed in PR 14781); the coordinator as one `Semaphore(1)`
-   (PR 14782, in review); the bearer on the credential (next).
+   (landed in PR 14782, catalogue row D6; `sharedAttempt` has 0
+   references); the bearer on the credential (landed in PR 14785, row D5).
 3. O7, the sign-in flows: `Effect.scoped` over `Effect.acquireRelease` for the
    presenter in both flows, the detached launcher as a `Deferred`, the
    loopback's wait as `Effect.retry({ while, schedule })`; depends on step 2's
-   coordinator.
+   coordinator. Done: landed in PR 14785 (row O7).
 4. O3, the subscription provider as one `Context.Service` per account
    provided by `Layer.effect`, its `WeakMap` memo and optional policy hooks
-   deleted; depends on step 2.
+   deleted; depends on step 2. Done: one `SubscriptionAccounts` service,
+   PR 14829 (row O3); `forProvider` has 0 references. Its remainder, the
+   sign-in steps each caller ran, is the 2026-11-15 row LM-3, landed in
+   #14967.
 
 **Lane 2, the view and the hosts' verbs** (package A; the largest lane).
 
 1. **R6**, the view carries `position`, `outcome`, `holder`, `actions`; one
    app function maps them to words. J7 (three tone tables, two of which
-   disagree) lands here. This step unblocks the rest of the lane.
+   disagree) lands here. This step unblocks the rest of the lane. Done:
+   PR 14789 (rows R6, C1, C2, J7). `RUN_PHASE`, `durableOutcome`,
+   `isTerminalOutcomePhase`, `HISTORY_RUN_STATUS` and `cliRunStanding`
+   have 0 references; `statusKey` stays as a field of the task listing
+   (8 references, `packages/texra/src/controllers/server/protocol.ts`),
+   whose `actions` were refused (`RT-listing-entry-actions`).
 2. **R10's hosts' verbs, exit code and drainer**, with G4 (`openGuiWindow`'s
    contract typed from four controllers' parameter lists, the thirteen-field
    bag), G5 (a refused launch presented from three sites, final output opened
    from two, three pass-through ports), N2 (binding tables carrying whole
    flows), K5 (the chat's exit decided in one place and run from three) and
    K9's controller half. After PR 14713 for `hostRunActions.ts`; one PR with
-   step 2.3.
+   step 2.3. Done except one refused part: the GUI half with G4, G5 and
+   N2 in PR 14794, the drainer (F6) in PR 14794, K5 and K9 in PR 14802,
+   the chat's launch path (F3) in PR 14875 (rows R10, G4, G5, N2, K5, K9,
+   F3, F6); `createHostRunActions` is the one action body. The one exit
+   function was refused (`RT-cli-exit-code-one-function`), so
+   `setExitCode` stays (15 references in `packages/cli`). The remainders
+   are the 2026-11-15 rows CL-1 (K9's 21-field bag, #14975) and TC-2
+   (G4's `FileOpResult`, #14973), both landed.
 3. **R8's second half**, with M8 (platform ports carrying app facts as
    optional members; `WorkspaceRoots` restating `GlobalStorageFs` and
    `AppState` as fields). Taken on 2026-11-07 as far as the evidence below
-   carries it.
+   carries it. Done in PR 14802 (rows R8, M8, B7), with the refused parts
+   below; `SessionHostInteractions` has 0 references. Its remainder, the
+   app's command directories read from a module cache, is the 2026-11-15
+   row TC-6, landed in #14973.
 
 #### R8's second half and M8: what landed and what was refused
 
@@ -253,9 +287,10 @@ Refused on investigation:
   settings contract, not a sweep. Recorded as
   `PLATFORM-roots-drop-global-slots`.
 - **`AgentDirectoriesPort.teamMembers` and `resourcesRoot`.** The harness
-  persists a team selection (`shared/schemas/workspaceAgents.ts`,
-  `WorkspaceAgentsController.setTeam`) and filters its catalog by it; the
-  optional reader is the one place the app's definition of a team enters.
+  persisted a team selection (`shared/schemas/workspaceAgents.ts`,
+  `WorkspaceAgentsController.setTeam`) and filtered its catalog by it; the
+  optional reader was the one place the app's definition of a team entered.
+  Teams and the reader were removed 2026-11-17.
   `resourcesRoot` is where a host's bundle sits, a host fact the harness
   reads for the plugins' agent directories and the creator's docs; it is
   absent for an embedder that ships none. Neither is an app fact restated.
@@ -291,18 +326,24 @@ Refused on investigation:
    the funnel is a field of it. Deletes the ten `let`s and the `publish`
    closure of `hostSnapshotSource`, the refresher's boolean and lane, the
    extension's second wiring of the funnel and the setup launch, and the
-   cached credential answer.
+   cached credential answer. Done: PR 14791 (rows G3, G6, N3);
+   `packages/texra/src/controllers/session/hostSnapshotSource.ts` holds no
+   `let` and no `publish`.
 3. **A window's session: N1 + N7.** One opener as `Layer.effect` over
    `Effect.acquireRelease`, built into the window's `Scope`, used by all three
    hosts; the desktop's open projects as `RcMap` keyed by root, so the
    bindings map, its hand diff, the `released` flag and the Symbol-keyed lane
-   go.
+   go. Done in PR 14799 (rows N1, N7): one `openProjectSession`, and the
+   open projects behind one `Semaphore`; the `RcMap` design was refused
+   (`RT-desktop-projects-rcmap`). Its remainder, the recent-projects
+   mirror, is the 2026-11-15 row DT-5, landed in #14976.
 4. **The settings view: G8 + J5 + J6, and N11's settings-frontend item.** One
    `SubscriptionRef<SettingsSnapshot>` the host updates; each page is
    `Stream.concat(Stream.make(void), changes)` into its build, so a mutation
    names no page. Sixteen pushed message kinds become one snapshot; the
    217-line dispatcher and its test-mode switch go; the frontend has one
-   spelling of "not loaded".
+   spelling of "not loaded". Done: PR 14791 (rows G8, J5, J6, and N11's
+   "not loaded").
 5. **The webview transport: J1 + J2, then J3 + J4.** `RpcClient.make` over a
    protocol whose `send` is the host bridge's `postMessage` replaces the
    hand-rolled RPC, its in-flight Sets and the Promise surface layer; one
@@ -311,16 +352,28 @@ Refused on investigation:
    `Schema.TaggedUnion` inside the surface `SubscriptionRef`, and the five
    per-run maps one `Schema.ReadonlyMap(RunIdSchema, RunSurfaceSchema)` with
    its `Iso`. **Check first:** `effect/rpc` in the webview bundle against the
-   browser-bundle lint rule and the bundle budget.
+   browser-bundle lint rule and the bundle budget. Done the second way
+   step B's "Check first" names: the webview kept its own framing
+   (`effect/rpc` is used only by the service client,
+   `packages/texra/src/controllers/server/client.ts`), the Promise layer
+   and in-flight Sets went in PR 14791, the frame generation stays (row
+   J1, PR 14837), and J2 to J4 landed in PR 14806. Its remainder, a busy
+   set in `run-tabs`, is the 2026-11-15 row TU-7, landed in #14973.
 6. **The desktop window and renderer: N9, N5, N4, N8.** `FiberHandle` with
    `onlyIfMissing` and a `Deferred` for the window's lifecycle; one `post` for
    the renderer with its failure surfaced, not a fallback "so tests work";
    one presenter as a `Context.Reference`; the editor pane's five generation
-   counters as one `FiberHandle.run` per supersedable read.
+   counters as one `FiberHandle.run` per supersedable read. Done: N9 as one
+   `WindowState` and N4 in PR 14799 (N9's `FiberHandle` design refused,
+   `RT-desktop-window-fiberhandle`), N5 in PR 14791, N8 in PR 14806 (rows
+   N4, N5, N8, N9).
 7. **The progress view's surfaces and the session bridge: N6, G7, G2.** The
    two surfaces as a `FiberMap` keyed by surface; the bridge's requests in a
    `FiberSet` in its scope, closed by `awaitEmpty` under `Effect.timeout`; the
    process recorder as a `SubscriptionRef<Recording>` with a `FiberHandle`.
+   Done: PR 14791 (rows N6, G7, G2; G7's request mask in PR 14799, its
+   `held` queue stays). Its remainder, which surface is on screen, is the
+   2026-11-15 row EX-3, landed in #14974.
 
 **Lane 4, plugins** (package C, but I8 + H10 are package F's; each PR stays
 inside one plugin).
@@ -331,7 +384,11 @@ inside one plugin).
    `pollLoopStop` `Deferred` go; a tick commits one `Ref<State>` at its end,
    which deletes the staged-cache hand-off. Then the typed error channel
    instead of the `PollHookRejected` carrier unwrapped at four sites, and the
-   target grammar as one `Schema.TaggedUnion` with one string codec.
+   target grammar as one `Schema.TaggedUnion` with one string codec. Done:
+   PR 14790 (rows H1 to H4), the subscriptions as a `Map` and a
+   `FiberMap`, the `RcMap` and `PubSub` design refused
+   (`GH-subscriptions-rcmap-pubsub`); `onKeysChanged`, `pollLoopStop` and
+   `PollHookRejected` have 0 references.
 2. **Lean: H5 + H7, then H6 and H8.** The pool on `LayerMap`'s own `RcMap`
    count with a lease in the run's `Scope`, which deletes the second refcount,
    the owners table and the module `WeakSet`; the roster derived from
@@ -350,32 +407,56 @@ inside one plugin).
    today); documents reported once, by the fact row; then a revision's record
    as a value each step returns, not a map six modules write into, after
    which the lineage is one field and the compile outcome one `TaggedUnion`.
-   The extraction ladder's decision stays pure TypeScript.
+   The extraction ladder's decision stays pure TypeScript. Done: PR 14796
+   (rows I1 to I5, I7; I4's recipe half in PR 14807; J9 in PRs 14796 and
+   14818); the `r<N>` grammar is `RevisionDirSchema` in
+   `packages/texra/src/shared/constants/revisionLayout.ts`. Its
+   remainders are the 2026-11-15 rows TC-10 (I2's single-input fallback)
+   and TU-10 (J9's other request cards), both landed in #14973.
 4. **LaTeX tools and arXiv: I6, I10, I8 + H10.** One latexdiff orchestrator
    failing with `Schema.TaggedError`s; the toolchain catalog as data rendered
    by one function, not prose parsed back; the arXiv download as
    `Stream.run(NodeSink.fromWritable(…))` under `Effect.timeout` with
    `Effect.retry({ while })` on the typed error, and its rate limit served by
    the plugin's `processLayer` (`effect/persistence`'s `RateLimiter` over
-   `layerStoreMemory`) instead of a module `SynchronizedRef`.
+   `layerStoreMemory`) instead of a module `SynchronizedRef`. Done except
+   I8: I6 in PRs 14790 and 14796 (`LatexDiffManager` has 0 references),
+   I10 in PR 14790, H10 in PR 14786; I8 refused
+   (`ARXIV-download-retry-cause-pair`), its tar extraction as a stream left
+   open as unproven (rows I6, I8, I10, H10). I10's remainder is the
+   2026-11-15 row TT-10, landed in #14973.
 
 **Lane 5, the harness's built-in tools** (package F).
 
 1. M2: the MCP pool's failed start as a failing `RcMap` lookup (4.1.2 keeps a
    failed lookup's exit in the entry until it is released or invalidated),
-   which deletes the `failed` Set and the success-shaped failure.
+   which deletes the `failed` Set and the success-shaped failure. Refused
+   (`MCP-failed-start-rcmap-lookup`; see package F below).
 2. M1: `toolAvailability` as one `SubscriptionRef` per root and
    `Stream.switchMap` over the signal stream, which deletes the latest-wins
-   lane scheduler, the refcount map and the Queue and Deferred relay.
+   lane scheduler, the refcount map and the Queue and Deferred relay. Done:
+   PR 14810 (row M1).
 3. M5 and M6: the `/executions` routes as one table column; the background
    shell's head and tail as a projection of its `process.output` rows.
+   Done: M5 in PR 14786, M6 in PR 14810 (rows M5, M6). M6's remainder, the
+   head-and-tail window written four times, is the 2026-11-15 row HT-6,
+   landed in #14978.
 4. M10: `utils/core/index.ts`'s barrel and the three modules with domain
-   owners moved to them.
+   owners moved to them. Done: PR 14874 (row M10); `utils/core/` has no
+   `index.ts` (`pathBasics.ts` and `backoffSchedule.ts` took its topics).
+   Its remainder is the 2026-11-15 row HT-8, landed in #14978.
 5. Set aside with PR 14773 (owner, 2026-11-07; superseded by 14940, see
    "Open pull requests the order waits on"), not in the order: M4 (the
    plan tool reads its fact row, not its own past tool results), M9 (the
    catalog follower as one feed with `Stream.take(1)` for the first load),
-   H9 (a plugin reaches its host one way).
+   H9 (a plugin reaches its host one way). Still open, all three held
+   (rows M4, M9, H9). M4 holds: `runPlanAsGoal`
+   (`packages/harness/src/tools/plan/PlanTool.ts`) still finds its goal by
+   decoding its own past `plan` results. M9 waits for phase 5 of
+   [programs, not agents](./2026-11-06-programs-not-agents.md), not
+   started. H9 is held whole; the 2026-11-15 row TT-2 (`open_pdf` offered
+   on hosts with no PDF viewer, a one-capability fix beside it) landed in
+   #14973.
 
 **Lane 6, the terminal UI** (package D; 6.5 is package A's).
 
@@ -391,6 +472,14 @@ inside one plugin).
 4. K7: one fitter with a policy field, pure.
 5. K9's registry half, after step 2.2.
 
+Steps 6.1 to 6.4 are done: PR 14792 (rows K1, K2, K3, K6, K7, K8, K10).
+For 6.3, `usePolledRead`, `codexPreferenceVersion`, `inFlightKey` and
+`deferredAction` have 0 references, and `interruptUnsafe` has none in
+`packages/cli`; its four remaining calls are in
+`packages/harness/src/agent/runtime/runRegistry.ts`, outside K10's scope.
+Step 6.5 is done: one `SlashCommands` value, PR 14802 (row K9); the
+21-field option bag it left is the 2026-11-15 row CL-1, landed in #14975.
+
 **Lane 7, llm providers** (package E, after lane 1).
 
 1. O1 + O2 + O6: the route decision as one pure function over `RouteFacts`,
@@ -401,6 +490,12 @@ inside one plugin).
    assembly reducer.
 3. O5 and O8: no synthetic transport identity on the turn; the key lookup as
    one `Effect<{ value, origin }>`.
+
+All three are done: O1, O2, O5, O6 and O8's lookup in PR 14785 (through
+PR 14787), O4's decoder state in PR 14785 with the codec file layout
+refused (`LLM-one-no-completed-turn-check`), O8's status in PR 14801, O9's
+parts in PRs 14825 and 14873 (rows O1, O2, O4, O5, O6, O8, O9). O5's
+leftover constants are the 2026-11-15 row LM-5, landed in #14967.
 
 **Lane 8, sweeps by package** (package F; one PR per package).
 
@@ -420,11 +515,19 @@ inside one plugin).
      `WeakMap`, the memo O3 replaces with one account service per
      subscription; and `ModelInvoker`'s `attemptStarts`, which is per
      invocation, not module state, and goes with R9's verdict row (D8).
+   - **The other packages: done.** M7 in PR 14874 (its six file-lane maps
+     refused, `M7-file-lanes-as-references`), G11 in PRs 14793, 14818,
+     14830 and 14874 (part g refused), I12 in PR 14807, K4 and F7's CLI
+     singletons in PR 14820 (`registerCliStateResetHook` has 0
+     references), N11 in PR 14874 (rows M7, G11, I12, K4, F7, N11).
+     G11's remainder, the binary probes written three ways, is the
+     2026-11-15 row TT-9, landed in #14973.
 2. G9: `UsageLogService` as `Queue.sliding` into `Stream.groupedWithin` into
-   `Effect.retry`.
+   `Effect.retry`. Done: PR 14810 (row G9).
 3. G10's error tags nothing branches on (H3 is step 4.1's): the unread
-   fields landed in #14786; one `HostFailed` for the host ports waits on
-   packages A and B.
+   fields landed in #14786; one `HostFailed` for the host ports landed in
+   #14802 (row G10). Its remainder in the extension is the 2026-11-15 row
+   EX-1, landed in #14974.
 
 **Lane 9, harness small** (package E, after lane 7).
 
@@ -438,6 +541,23 @@ flattening (E6), the script door's `Deferred` maps (E10), deletion's three
 entry points (B9). The R9 driver folds in `openStep`'s mode (E9), `RunRows`
 and `recordOf` (C10) and the script run's `handedDown` branches (E4) where
 its files are open.
+
+Done except one item. Of PR 1's record, every §3 entry this lane names has
+ended, as that record's §3 says
+([PR 1's record](./2026-11-06-root-designs-pr1-compromises.md));
+`USER_FOLLOW_UP_SUPPORT` and `NOT_ROWS` have 0 references. E3, E6, E9, B9
+and C10 landed in PR 14788, E4 in PR 14880, and E10 was refused
+(`DISPATCH-script-lanes-semaphore`) (rows E3, E4, E6, E9, E10, B9, C10).
+`childEndReport`
+(`packages/harness/src/agent/runtime/childDelivery.ts`) still switches on
+the child's kind, a background script's notice or a subagent's envelope,
+and stays that way: a launch cannot supply the report, because a resume
+is the same run program over the stored configuration with no launcher
+behind it, so the kind would be read from that configuration again where
+the launch is built, with a field added to carry the answer
+(`RUNEND-child-report-from-launch`). What landed on 2026-11-19 is the
+one owner: the report that could not be built is worded there too, and
+the run's terminal (`endRun`) no longer reads the kind.
 
 ## Who takes what
 
@@ -615,9 +735,12 @@ Done as one PR, #14786 (2026-11-07), after each finding was re-checked on
   gives no close), M1 (scheduling, publication and `refresh`'s wait together),
   G10's one `HostFailed` (it spans the hosts packages A and B edit), and
   I8's tar extraction as a stream (needs proof the writable's end covers the
-  file writes). M6 was not reached.
+  file writes). M6 was not reached. Since then G9, M1 and M6 landed in
+  PR 14810 and the one `HostFailed` in PR 14802; the tar stream is still
+  open.
 - **Still package F's, later:** 8.1, the module-level facts, one package at a
-  time after that package's owner has landed there; M10 last.
+  time after that package's owner has landed there; M10 last. Both have
+  since landed (step 8.1 and step 5.4 above).
 
 ## Acceptance
 

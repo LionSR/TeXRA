@@ -43,10 +43,10 @@ import {
   EVENT_FROM,
   aggregateColumns,
   aggregateOf,
-  type SqlRow,
 } from './rowCodec';
 import { AGGREGATE, UNREAD_KEY } from './rowReader';
 import type { RowReader } from './rowReader';
+import type { StoreConnection } from './storeConnection';
 
 /** One write a projector asks its upkeep to make. */
 type ProjectionOp =
@@ -284,15 +284,11 @@ function opStatement(op: ProjectionOp): [string, unknown[]] {
   }
 }
 
-/** The upkeep of the store at `path`'s projections, in the caller's
- *  transaction: `exec` runs a statement, `read` decodes selected rows. */
-export function projectionUpkeep<E>(
-  exec: (
-    statement: string,
-    params?: readonly unknown[],
-  ) => Effect.Effect<readonly SqlRow[], E>,
-  read: RowReader<E>['read'],
-  path: string,
+/** The upkeep of a store's projections, in the caller's transaction on
+ *  its connection: `read` decodes selected rows. */
+export function projectionUpkeep(
+  { exec, path }: Pick<StoreConnection, 'exec' | 'path'>,
+  read: RowReader['read'],
 ) {
   const states = Effect.map(
     exec(

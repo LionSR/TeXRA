@@ -32,7 +32,7 @@
         <div class="mem-meta">
           <span class="pin-badge">Pinned</span>
           <span class="meta-dot">·</span>
-          <span>1.2 KB</span>
+          <span>1.2 KiB</span>
           <span class="meta-dot">·</span>
           <span>34 lines</span>
           <span class="meta-dot">·</span>

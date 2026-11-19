@@ -27,7 +27,6 @@ import {
   programOf,
   listingKeyOf,
   isTranscriptEvent,
-  blocksCaller,
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
@@ -42,7 +41,6 @@ import {
   type TranscriptSubscription,
   factName,
 } from '@shared/schemas';
-import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
@@ -77,6 +75,7 @@ import {
   emptySessionView,
   isInterrupted,
   requireRun,
+  emptyRollup,
   rollupOf,
 } from './sessionView';
 import type { RunRows, SharedRunRows } from './runRowsShape';
@@ -340,7 +339,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     inputFiles: [],
     agentScope: null,
     facts: {},
-    worktree: event.worktree ?? null,
+    worktree: event.worktree,
     position: 'ready' as const,
     outcome: null,
     holder: 'none' as const,
@@ -354,7 +353,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turn: null,
     takesFollowUps: event.takesFollowUps,
     queuedFollowUps: [],
-    grants: event.approvalPolicy ?? NO_APPROVAL_GRANTS,
+    grants: event.grants,
     context: null,
     parentId: event.parent?.id ?? null,
     launch:
@@ -368,7 +367,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     forkPoint: null,
     ancestors: [],
     childIds: [],
-    rollup: { total: 0, running: 0, finished: 0 },
+    rollup: emptyRollup(),
     approval: 'none' as const,
     actions: [],
     usage: emptyUsageStats(),
@@ -458,11 +457,8 @@ function withAggregates(u: Update, run: RunView): RunView {
     run.outcome === null && u.state.local.runsHere.includes(run.id)
       ? 'here'
       : 'none';
-  // Only a request that blocks its tool is a wait: one that does not left
-  // its run working, listed for the panel but still Running.
   const waiting =
-    holder === 'here' &&
-    view.requests.some((r) => r.runId === run.id && blocksCaller(r.payload));
+    holder === 'here' && view.requests.some((r) => r.runId === run.id);
   const unreadable = u.state.unreadable.get(run.id);
   const children = run.childIds.map((id) => requireRun(view, id));
   const treeUsage = sumUsageStats([
@@ -477,12 +473,11 @@ function withAggregates(u: Update, run: RunView): RunView {
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (run.lost !== null)
     statusNotice = { kind: 'lost', message: run.lost };
-  const facts = { ...run, holder };
   const work = runWork(u, run.id);
   const next = withDerived(run, {
     holder,
     approval,
-    actions: runActions(facts, unreadable !== undefined),
+    actions: runActions({ ...run, holder }, unreadable !== undefined),
     runStartedAt:
       holder === 'here' && run.position === 'running' && !waiting
         ? work.turnStartedAt
@@ -719,9 +714,11 @@ function applyRunEvent(
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
-        agentScope: { delegationAgentScope: null, ...config }
-          .delegationAgentScope,
-        program: programOf(config),
+        agentScope:
+          ('delegationAgentScope' in config
+            ? config.delegationAgentScope
+            : undefined) ?? null,
+        program: programOf(config)?.name ?? null,
       };
     }
     case 'context.state':

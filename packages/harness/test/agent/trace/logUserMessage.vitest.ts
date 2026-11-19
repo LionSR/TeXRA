@@ -4,6 +4,7 @@ import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { TraceEmitter, runEventDraft } from '@agent/trace/TraceEmitter';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { logUserMessage } from '@agent/trace/traceLogs';
 import { prepareEventDraft } from '@controllers/session/rowCodec';
 import type { AgentEvent } from '@shared/session/agentEvent';
@@ -47,9 +48,6 @@ describe('logUserMessage', () => {
     assert(draft);
     const prepared = prepareEventDraft(draft);
     const frame = Schema.decodeUnknownSync(EventsFrameSchema)({
-      kind: 'events',
-      session: '/synthetic/project',
-      generation: 0,
       cursor: 2,
       inputs: [
         {
@@ -60,8 +58,10 @@ describe('logUserMessage', () => {
             aggregateId: draft.aggregateId,
             identity: { kind: 'agent', agent: 'chat' },
             takesFollowUps: true,
+            worktree: null,
             parent: null,
             provenance: null,
+            grants: NO_APPROVAL_GRANTS,
             seq: 1,
             commit: 1,
             at: 0,

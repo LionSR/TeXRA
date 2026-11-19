@@ -20,7 +20,11 @@ import {
   UsageLogEntrySchema,
   type UsageLogEntry,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import {
+  withLogChannel,
+  type AppState,
+  type ConfigProvider,
+} from '@texra-ai/harness/plugins';
 import { envFlag } from '@texra-ai/harness/node';
 import {
   extractErrorMessage,
@@ -30,7 +34,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
-import type { AppState, ConfigProvider } from '@texra-ai/harness/host';
 
 const CHANNEL = 'UsageLogService';
 
@@ -109,6 +112,12 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
   'TEXRA_NO_TELEMETRY',
   'DO_NOT_TRACK',
 ] as const;
+
+/** The opt-out variables as a person sets them, for the surfaces that say
+ *  how to turn usage logging off. */
+export const USAGE_LOGGING_ENV_OPT_OUT = TELEMETRY_OPT_OUT_ENV_VARS.map(
+  (name) => `${name}=1`,
+).join(' or ');
 
 /** The variable that opts usage logging out, in the process's environment
  *  or in the recording run's (its project's `.env` over the process's):

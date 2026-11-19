@@ -9,10 +9,10 @@ import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
-import { Runs } from '@agent/runtime/runRegistry';
-import type { LiveRun } from '@agent/runtime/runs';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import type { LiveRun, RunsShape } from '@agent/runtime/runs';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { deriveResumability } from '@agent/storage/resumability';
+import { deriveContinuation } from '@agent/storage/continuation';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
@@ -64,7 +64,7 @@ export interface RunRecords {
   readonly readSkills: Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: Effect.Effect<boolean, Error>;
+  readonly readContinues: Effect.Effect<boolean, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
@@ -99,11 +99,11 @@ const heldRun = (run: LiveRun): HeldRun => ({
   runId: run.runId,
   drained: Effect.asVoid(run.drained),
   modelSwitchDisabledReason: (model) =>
-    run.controls?.modelSwitchDisabledReason(model) ?? Effect.succeed(undefined),
+    run.controls?.modelSwitchDisabledReason(model) ?? Effect.undefined,
 });
 
 /** The runs `runs` holds here: one, or all. */
-function heldRuns(runs: Runs['Service']): LocalSession['held'] {
+function heldRuns(runs: RunsShape): LocalSession['held'] {
   function held(runId: RunId): HeldRun | undefined;
   function held(): readonly HeldRun[];
   function held(runId?: RunId): HeldRun | undefined | readonly HeldRun[] {
@@ -209,21 +209,21 @@ export function sessionReads(
           read,
         ),
         readSkills: read(stored.readSkills()),
-        readResumable: Effect.map(
-          read(deriveResumability(runId)),
+        readContinues: Effect.map(
+          read(deriveContinuation(runId)),
           (decision) => decision.kind === 'checkpoint',
         ),
         readConversation: read(
           readCompletedRunConversation(
             runId,
-            Context.get(session, SessionRoots).config,
+            Context.get(session, SessionRoots),
           ),
         ),
         readTrace: read(assembleTrace(runId)),
       };
     },
     listRuns: read(listRuns()),
-    held: heldRuns(Context.get(session, Runs)),
+    held: heldRuns(Context.get(session, RunRegistry)),
     deleteRuns: deleteRuns(session),
     emit: interactions.emit,
     drained: log.drained,

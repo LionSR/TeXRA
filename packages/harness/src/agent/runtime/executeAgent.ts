@@ -1,24 +1,15 @@
 /**
- * The run program, fresh or resumed, in two phases: the opening, which
- * commits in the caller's fiber (the run's entry rows, its trace held until
- * then, its first step) and answers the commit of that batch; and the run,
- * which the registry forks under the run's id (`RunRegistry.start`) and
- * which runs the loop with the per-run layer and ends through the one
- * terminal (`endRun`, `AgentRunLifecycle`). A root launch reaches it
- * through `rootRun` (`session.start`), a resume through `resumeRun`, and a
- * child's launch through `startChildRun` (`delegation/childLaunch.ts`).
+ * The run program, fresh or resumed, as one fiber runs it under the run's
+ * id (`RunRegistry.start`): the opening (the run's resources, in the
+ * fiber's scope, and its entry rows, its trace held until then), which
+ * answers the commit of that batch to the launcher; the loop with the
+ * per-run layer; and the one terminal (`endRun`, `AgentRunLifecycle`). A
+ * root launch reaches it through `rootRun` (`session.start`), a resume
+ * through `resumeRun`, and a child's launch through `startChildRun`
+ * (`delegation/childLaunch.ts`).
  */
-import {
-  Clock,
-  ConfigProvider,
-  Context,
-  Effect,
-  Exit,
-  Layer,
-  Scope,
-} from 'effect';
+import { Clock, ConfigProvider, Effect, Layer } from 'effect';
 
-import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -30,7 +21,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
-  type CommitOrdinal,
+  runsScript,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -46,7 +37,8 @@ import { openToolUse, runToolUse } from './loop/runLoop';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import { LabelsRootRuns, withSessionDescription } from './sessionDescription';
-import type { AgentRunServices } from './runRegistry';
+import { type AgentRunServices, type Launch, LaunchKeys } from './runRegistry';
+import type { RunReport } from './runReport';
 import type { PreparedAgentDefinition } from './AgentLaunchContext';
 
 const CHANNEL = 'executeAgent';
@@ -70,13 +62,6 @@ export interface ExecuteAgentOptions {
   readonly stopAfterCycle?: boolean;
 }
 
-/** A run whose opening committed: the commit of that batch, and the run
- *  itself, which the fiber that owns the run (the registry's) runs once. */
-export interface PreparedRun {
-  readonly activation: CommitOrdinal;
-  readonly run: Effect.Effect<void, Error, AgentRunServices>;
-}
-
 /**
  * How a launch enters its run (`LaunchEntry`), its trace held until then:
  * the opening's batch carries it up to its first stream (the prompt line and
@@ -90,7 +75,7 @@ const enterRun = Effect.fn('enterRun')(function* (
 ) {
   const log = yield* SessionLog;
   const { config } = definition;
-  const parent = options.registration?.parentId ?? options.parentId ?? null;
+  const parent = options.registration?.parent?.id ?? options.parentId ?? null;
   // A resumed run's facts, read once: whether its parent's call awaits it,
   // and whether its launch let it take input.
   const facts =
@@ -99,7 +84,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   // registration says; a resumed run's rows do.
   const awaited =
     options.registration !== undefined
-      ? options.registration.parentCall?.awaited === true
+      ? options.registration.parent?.call?.awaited === true
       : (facts?.start?.parent?.call?.awaited ?? false);
   // Whether the run ends after one cycle, decided once: every child does
   // (a message to it is a resume), a script's run (its call is its only
@@ -107,7 +92,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   // which no message may reach, whoever resumes it.
   const stopAfterCycle =
     parent !== null ||
-    config.script != null ||
+    runsScript(config) ||
     options.stopAfterCycle === true ||
     facts?.start?.takesFollowUps === false;
   const registered =
@@ -168,7 +153,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   runId: RunId,
   options: ExecuteAgentOptions,
 ) {
-  const { config, persona, modelConfig } = definition;
+  const { config, persona } = definition;
   // The run's working directory is decided here, once: absolute or absent.
   // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
   // and trusts it rather than re-validating.
@@ -179,7 +164,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   // The session is the fiber's: a delegated launch runs on its parent's
   // session, and a root launch on the session it was started on.
   const roots = yield* SessionRoots;
-  const resumed = options.registration === undefined;
   const {
     logger: agentLogger,
     stopAfterCycle,
@@ -187,20 +171,17 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   } = yield* enterRun(definition, runId, options);
 
   // A resume renders nothing again: the run's rows hold its opening.
-  const opening = resumed
-    ? null
-    : yield* buildTemplateInputs(
-        config,
-        modelConfig.provider === ModelProvider.ANTHROPIC,
-        {
+  const opening =
+    entry.registration === null
+      ? null
+      : yield* buildTemplateInputs(config, {
           // The session's own roots, handed to prompt assembly as data, so
           // the working directory and memories resolve in this project, not
           // the calling fiber's.
           workspaceRoot: roots.workspace,
           workingDirectory,
           storageRoot: roots.storage,
-        },
-      );
+        });
 
   const launch: RunLaunch = {
     runId,
@@ -217,27 +198,17 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
 });
 
 /**
- * The provider API-key variables a launch brought, by variable name
- * (`StartInput.apiKeys`), provided where the session starts or resumes
- * the run. A run reads them as it opens and carries them on its own fiber,
- * so a child it starts or resumes from its tool calls, and a leftover child
- * it resumes, opens with them; a sweep with no launch behind it has none.
- */
-export const LaunchKeys = Context.Reference<Readonly<Record<string, string>>>(
-  '@texra-ai/harness/LaunchKeys',
-  { defaultValue: () => ({}) },
-);
-
-/**
- * `effect` in the run's environment with the launch's keys in it:
- * the project's `.env` first, then the keys, then this process's, for the
+ * `effect` in the run's environment with the launch's keys in it
+ * (`LaunchKeys`, which the registry carries onto the run's fiber): the
+ * project's `.env` first, then the keys, then this process's, for the
  * model binding (`ModelAccess`, which captures the config provider where
  * its layer is built) and for what a child process inherits
  * (`ProjectEnvironment`). Without keys, the environment as it is.
  */
-const withApiKeys =
-  (apiKeys: Readonly<Record<string, string>>) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> => {
+const withLaunchKeys = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  Effect.flatMap(Effect.service(LaunchKeys), (apiKeys) => {
     if (Object.keys(apiKeys).length === 0) return effect;
     return Effect.flatMap(ProjectEnvironment, (project) => {
       const variables = { ...apiKeys, ...project };
@@ -251,118 +222,129 @@ const withApiKeys =
         ),
       );
     });
-  };
+  });
+
+/** What a launch hands the agent run before it opens: the definition it
+ *  resolved and the options it runs with. */
+export interface AgentLaunch {
+  readonly definition: PreparedAgentDefinition;
+  readonly options: ExecuteAgentOptions;
+}
 
 /**
- * The run program, fresh or resumed. The opening runs here, in the
- * caller's fiber: it resolves the run's context and its per-run layer (its
- * `AgentRun` and the invoker, over the session's services the fiber
- * carries) and commits the run's entry (a fresh run registers with its
- * opening, `options.registration`; a resume activates the run its rows
- * hold), so a launch that fails before the run exists fails here with no
- * run behind it. The run it answers runs the loop over that opening, and
- * every way the loop exits reaches the run's terminal (`endRun`) exactly
- * once, as the exit of the one masked region it runs in. Callers read the
- * outcome and output from its committed end. Root launches use `rootRun`
- * and resumes `resumeRun`; a caller runs `run` only on the fiber
- * `RunRegistry.start` forked for it.
+ * The opening of an agent run, on the run's own fiber: it resolves the
+ * run's context and its per-run layer (its `AgentRun` and the invoker,
+ * over the session's services the fiber carries) into the fiber's scope,
+ * and commits the run's entry (a fresh run registers with its opening,
+ * `options.registration`; a resume activates the run its rows hold), so a
+ * launch that fails before the run exists fails here with no run behind
+ * it. Interruptible: every acquisition finishes atomically inside its own
+ * `acquireRelease`, so an interruption lands between steps and the scope's
+ * finalizers release whatever was acquired.
  */
-export const executeAgent = Effect.fn('executeAgent')(function* (
-  definition: PreparedAgentDefinition,
+const openAgent = Effect.fn('executeAgent.open')(function* (
+  { definition, options }: AgentLaunch,
   runId: RunId,
-  options: ExecuteAgentOptions,
-): Effect.fn.Return<PreparedRun, Error, AgentRunServices> {
-  // The run's resources: released as the run's fiber exits, or here when
-  // the opening fails first.
-  const scope = yield* Scope.make();
-  const resume = options.registration === undefined;
-  const keys = yield* LaunchKeys;
-  const prepared = yield* Effect.gen(function* () {
-    const launch = yield* buildAgentLaunchContext(definition, runId, options);
-    // Said as the launch opens, before the model binds: a host's e2e reads
-    // the service's log for it, and a launch refused for want of a key
-    // still names the run it was asked for.
-    if (!resume)
-      yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
-        Effect.annotateLogs({
-          data: {
-            agent: launch.config.agent,
-            model: launch.config.model,
-            input: launch.config.inputFiles[0] ?? '(none)',
-            outputs: launch.config.outputFiles.length,
-          },
+) {
+  const launch = yield* buildAgentLaunchContext(definition, runId, options);
+  // Said as the launch opens, before the model binds: a host's e2e reads
+  // the service's log for it, and a launch refused for want of a key
+  // still names the run it was asked for.
+  if (launch.entry.registration !== null)
+    yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
+      Effect.annotateLogs({
+        data: {
+          agent: launch.config.agent,
+          model: launch.config.model,
+          input: launch.config.inputFiles[0] ?? '(none)',
+          outputs: launch.config.outputFiles.length,
+        },
+      }),
+      withLogChannel(CHANNEL),
+    );
+  const services = yield* Layer.build(
+    modelInvokerLayer().pipe(
+      Layer.provideMerge(
+        agentRunLayer(launch, {
+          modelConfig: definition.modelConfig,
+          tools: options.tools,
+          callbacks: { onProgress: options.onProgress },
         }),
-        withLogChannel(CHANNEL),
-      );
-    const services = yield* Layer.build(
-      modelInvokerLayer().pipe(
-        Layer.provideMerge(
-          agentRunLayer(launch, {
-            modelConfig: definition.modelConfig,
-            tools: options.tools,
-            callbacks: { onProgress: options.onProgress },
-          }),
-        ),
       ),
-    );
-    const opening = yield* openToolUse({ resume }).pipe(
-      Effect.provide(services),
-    );
-    return { launch, services, opening };
-  }).pipe(
-    withApiKeys(keys),
-    Scope.provide(scope),
-    Effect.onExit((exit) =>
-      Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void,
     ),
   );
-  const { launch, services, opening } = prepared;
-  const { config } = launch;
-  const run = Effect.gen(function* () {
-    // A root run of a session that labels its runs gets its description
-    // beside the run (`withSessionDescription`); a resumed run whose process
-    // died before its description was written gets one now.
-    const labelled = launch.entry.parent === null && (yield* LabelsRootRuns);
-    const flow = runToolUse({ resume }, opening).pipe(Effect.provide(services));
-    // The flow is an Effect: a fiber interruption reaches its provider work
-    // directly, and its finalizers run before the resources above are
-    // disposed. The run starts only inside the region whose exit is the
-    // terminal, so no stop lands between the two: a started run is always
-    // finalized. The host's stop is this run fiber's interruption
-    // (`RunRegistry.stop`); the requests this run left open are cancelled in
-    // its end's transaction (`cancelRequestRows`).
-    // A background child runs under the session's child-run budget; an
-    // awaited one rides its parent's turn, a root takes none. The permit is
-    // taken inside the region whose exit is the terminal: a stop that lands
-    // while the run waits for one still ends it.
-    const { parent, awaited } = launch.entry;
-    const budgeted =
-      parent === null || awaited
-        ? flow
-        : Effect.flatMap(ChildRunBudget, (budget) =>
-            budget.withPermits(1)(flow),
-          );
-    // A labelled run is a root, so its flow takes no budget permit.
-    const described = labelled
-      ? budgeted.pipe(
-          withSessionDescription(
-            runId,
-            config,
-            definition.agentEntry.description,
-            resume,
-          ),
-        )
-      : budgeted;
-    return yield* Effect.uninterruptibleMask((restore) =>
-      Effect.flatMap(Effect.exit(restore(described)), (exit) =>
-        endRun(launch, exit),
-      ),
-    );
-  }).pipe(Effect.onExit((exit) => Scope.close(scope, exit)));
+  const opening = yield* openToolUse().pipe(Effect.provide(services));
   return {
     activation: opening.activation,
-    // The registry forks the run on the session's context, which holds no
-    // launch's keys: the run carries its own.
-    run: run.pipe(withApiKeys(keys), Effect.provideService(LaunchKeys, keys)),
+    description: definition.description,
+    launch,
+    services,
+    opening,
   };
+});
+
+/** What an agent run's opening answered: the commit of its entry batch
+ *  (`activation`), which its launcher holds, and what the run goes on
+ *  with. */
+type OpenedAgent = Effect.Success<ReturnType<typeof openAgent>>;
+
+/**
+ * The run over its opening: the loop with the per-run layer. A root run of
+ * a session that labels its runs gets its description beside the run
+ * (`withSessionDescription`); a resumed run whose process died before its
+ * description was written gets one now. A background child runs under the
+ * session's child-run budget; an awaited one rides its parent's turn, a
+ * root takes none. The permit is taken inside the run, whose every exit
+ * reaches the terminal: a stop that lands while the run waits for one
+ * still ends it. The host's stop is this fiber's interruption
+ * (`RunRegistry.stop`), which reaches the loop's provider work directly;
+ * the requests this run left open are cancelled in its end's transaction
+ * (`cancelRequestRows`).
+ */
+const runAgent = Effect.fn('executeAgent.run')(function* ({
+  launch,
+  services,
+  opening,
+  description,
+}: OpenedAgent) {
+  const { runId, config } = launch;
+  const { parent, awaited } = launch.entry;
+  const labelled = parent === null && (yield* LabelsRootRuns);
+  const flow = runToolUse(opening).pipe(Effect.provide(services));
+  const budgeted =
+    parent === null || awaited
+      ? flow
+      : Effect.flatMap(ChildRunBudget, (budget) => budget.withPermits(1)(flow));
+  // A labelled run is a root, so its flow takes no budget permit.
+  return yield* labelled
+    ? budgeted.pipe(
+        withSessionDescription(
+          runId,
+          config,
+          description,
+          launch.entry.registration === null,
+        ),
+      )
+    : budgeted;
+});
+
+/**
+ * The agent run program, fresh or resumed, as the registry runs it on the
+ * run's own fiber (`RunRegistry.start`): `prepare` (the launch's own
+ * decision: a root's model and definition, a resume's refusal), then the
+ * opening, the loop, and the run's one terminal (`endRun`), which every way
+ * the loop exits reaches exactly once. All of it in the launch's keys.
+ * Callers read the outcome and output from its committed end. Root
+ * launches use `rootRun`, resumes `resumeRun`, a child's launch
+ * `startChildRun`.
+ */
+export const executeAgent = <E extends Error>(
+  runId: RunId,
+  prepare: Effect.Effect<AgentLaunch, E, AgentRunServices>,
+): Launch<OpenedAgent, E | Error, RunReport, void> => ({
+  open: Effect.flatMap(prepare, (launch) =>
+    withLaunchKeys(openAgent(launch, runId)),
+  ),
+  run: (opened) => withLaunchKeys(runAgent(opened)),
+  end: (opened, exit) => withLaunchKeys(endRun(opened.launch, exit)),
 });

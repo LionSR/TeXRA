@@ -15,26 +15,41 @@ import { Schema } from 'effect';
 //   - `build`: the PDF's modification time in ms. A rebuild posts the same
 //     URL, so this is what tells the open tab to reload.
 
-export const DESKTOP_PDF_COMMANDS = {
+//
+// `desktop:pdfLoadFailed` reports a PDF frame the window could not load (a
+// file deleted since its tab was opened or restored). The frame gives the
+// renderer no failure event, so the main process, which hears it from
+// Chromium, names the URL and the reason as a sentence.
+
+export const DESKTOP_PDF_COMMANDS = Object.freeze({
   SHOW_PDF: 'desktop:showPdf',
-} as const;
+  LOAD_FAILED: 'desktop:pdfLoadFailed',
+} as const);
+
+const PdfUrlSchema = Schema.String.check(
+  Schema.makeFilter(
+    (url) => {
+      const parsed = URL.parse(url);
+      if (parsed === null || parsed.protocol !== 'file:')
+        return 'Not a file: URL';
+      return parsed.pathname.toLowerCase().endsWith('.pdf')
+        ? undefined
+        : 'Not a PDF';
+    },
+    { message: 'a file: URL of a PDF' },
+  ),
+);
 
 export const DesktopShowPdfMessageSchema = Schema.Struct({
   session: Schema.NonEmptyString,
   command: Schema.Literal(DESKTOP_PDF_COMMANDS.SHOW_PDF),
   title: Schema.String,
-  pdfUrl: Schema.String.check(
-    Schema.makeFilter(
-      (url) => {
-        const parsed = URL.parse(url);
-        if (parsed === null || parsed.protocol !== 'file:')
-          return 'Not a file: URL';
-        return parsed.pathname.toLowerCase().endsWith('.pdf')
-          ? undefined
-          : 'Not a PDF';
-      },
-      { message: 'a file: URL of a PDF' },
-    ),
-  ),
+  pdfUrl: PdfUrlSchema,
   build: Schema.Number,
+});
+
+export const DesktopPdfLoadFailedMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PDF_COMMANDS.LOAD_FAILED),
+  pdfUrl: PdfUrlSchema,
+  reason: Schema.String,
 });

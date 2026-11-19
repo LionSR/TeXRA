@@ -2,27 +2,26 @@
 
 import * as path from 'node:path';
 
-import {
-  type LaunchError,
-  type Run,
-  type RunFailure,
-  type Session,
-  type StartInput,
-  type WorkspaceRoots,
+import type {
+  LaunchError,
+  Run,
+  RunFailure,
+  Session,
+  StartInput,
+  WorkspaceRoots,
+  Notices,
 } from '@texra-ai/harness';
 import {
   getHelperModelName,
   type ProcessServices,
   type readModelOptions,
-  StateReadFailed,
   presentFollowUpResult,
   presentRunFailure,
-  type Notices,
   workspaceEnvironmentLayer,
   programLaunch,
 } from '@texra-ai/harness/host';
-import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
-import { Effect, FileSystem, Scope } from 'effect';
+import { withLogChannel, StateReadFailed } from '@texra-ai/harness/plugins';
+import { Effect, Scope } from 'effect';
 
 import {
   agentFileName,
@@ -38,7 +37,7 @@ import {
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
-import { HISTORY_DIR } from '@housekeeping/constants';
+import { PACKED_RUNS_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { fileNameTimestamp } from '@housekeeping/artifactFiles';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import {
@@ -142,11 +141,11 @@ export interface HostRunActions {
     operation: 'pack' | 'clean',
   ): Effect.Effect<void, RequestError | Unavailable>;
   /** A new task holding the run's conversation up to `at` (its latest
-   *  finished point when null), continued here so it takes a message: the
-   *  fork's id. */
+   *  finished point when absent), continued here so it takes a message:
+   *  the fork's id. */
   fork(
     runId: RunId,
-    at: number | null,
+    at: number | undefined,
   ): Effect.Effect<RunId, RequestRefusal, ProcessServices>;
   /** Send `text` to the conversation that launched `runId` (the chat that
    *  called a document task), past any background script it ran under; a
@@ -158,18 +157,9 @@ export const createHostRunActions = Effect.fn(
   'hostRunActions.createHostRunActions',
 )(function* (
   ports: HostRunActionPorts,
-): Effect.fn.Return<
-  HostRunActions,
-  never,
-  FileSystem.FileSystem | Secrets | Scope.Scope
-> {
-  // Resolved once here and carried: the planner's workspace probes below
-  // read through this filesystem rather than taking one from whatever
-  // context each of its callers happens to run on.
-  const fs = yield* FileSystem.FileSystem;
+): Effect.fn.Return<HostRunActions, never, Scope.Scope> {
   // What an action does when its run ends lives as long as the window.
   const scope = yield* Scope.Scope;
-  const secrets = yield* Secrets;
   const { roots, session } = ports;
   const view = () => session.view.current();
   const runView = (runId: RunId) => view().runs.get(runId);
@@ -438,7 +428,7 @@ export const createHostRunActions = Effect.fn(
                   // within the same second (the timestamp's granularity)
                   // don't collide.
                   to: path.posix.join(
-                    HISTORY_DIR,
+                    PACKED_RUNS_DIRECTORY,
                     `${yield* fileNameTimestamp}_${path.parse(inputFile).name}_${agentFileName(config.agent)}_${modelFileName(config.model)}_${runId.replaceAll('-', '').slice(0, 8)}`,
                   ),
                 }
@@ -485,7 +475,6 @@ export const createHostRunActions = Effect.fn(
       const config = yield* readConfig(runId);
       const modelOptions = yield* loadModelOptions(roots).pipe(
         Effect.provide(workspaceEnvironmentLayer(roots.workspace)),
-        Effect.provideService(Secrets, secrets),
       );
       const fixer = yield* planCompileFixer({
         runId,
@@ -493,7 +482,7 @@ export const createHostRunActions = Effect.fn(
         rounds: roundsOfRun(runId),
         modelOptions,
         workspaceRoot: roots.workspace,
-      }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+      });
       yield* runAgentRequest(fixer, { helperModel: true });
     }),
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {

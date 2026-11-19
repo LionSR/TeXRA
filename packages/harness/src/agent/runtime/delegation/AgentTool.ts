@@ -108,6 +108,12 @@ const LAUNCH_FIELDS = {
 const AgentInputSchema = Schema.Struct({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
 type AgentInput = typeof AgentInputSchema.Type;
 
+/** An agent a launch carries instead of naming a catalog entry. */
+type InlineAgent = Extract<
+  NonNullable<AgentProposal['agentSource']>,
+  { kind: 'inline' }
+>;
+
 /**
  * One child launch as the shared core runs it: its prompt and what the
  * child is. A chat (`program: null`) runs the agent `agentName`, may ask
@@ -129,7 +135,7 @@ type ChildLaunch = {
       readonly program: null;
       readonly agentName: string;
       /** An agent the call defines, named `agentName`: no catalog entry. */
-      readonly persona?: AgentProposal['persona'];
+      readonly persona?: InlineAgent['persona'] | null;
       readonly schema: Record<string, unknown> | null | undefined;
       readonly mediaFiles: readonly string[];
     }
@@ -290,15 +296,26 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           outputFiles: [],
         }
       : launch.files;
-  // A program's child is the program's own run, named for it.
-  const persona =
-    launch.program === null ? launch.persona : { name: launch.program.name };
-  const agent =
+  // A program's child is the program's own run, named for it; a chat's is
+  // the agent the call defines, or the catalog's.
+  const agent: {
+    name: string;
+    source: NonNullable<AgentProposal['agentSource']>;
+  } =
     launch.program !== null
-      ? { name: launch.program.name, source: AGENT_SOURCE.INLINE }
+      ? {
+          name: launch.program.name,
+          source: { kind: AGENT_SOURCE.INLINE, persona: {} },
+        }
       : launch.persona == null
-        ? yield* requireAgent(call.env.roots, launch.agentName, run)
-        : { name: launch.agentName, source: AGENT_SOURCE.INLINE };
+        ? yield* Effect.map(
+            requireAgent(call.env.roots, launch.agentName, run),
+            (entry) => ({ name: entry.name, source: { kind: entry.source } }),
+          )
+        : {
+            name: launch.agentName,
+            source: { kind: AGENT_SOURCE.INLINE, persona: launch.persona },
+          };
   const unusable = yield* rejectUnusableWorkingDirectory(
     call.env.roots,
     launch.workingDirectory ?? undefined,
@@ -359,7 +376,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           prompt: launch.prompt,
           ...(handsOff && { handoff: call.instruction ?? null }),
           agent: agent.name,
-          ...(persona != null && { persona }),
+          ...(agent.source.kind === AGENT_SOURCE.INLINE && {
+            persona: agent.source.persona,
+          }),
           model: launch.model ?? null,
           schema: outputSchema ?? null,
           ...files,
@@ -434,7 +453,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     {
       agent: agent.name,
       agentSource: agent.source,
-      ...(persona != null && { persona }),
       model: selected.success.model,
       memories: launch.memories,
       ...(workingDirectory !== undefined && { workingDirectory }),
@@ -477,13 +495,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       : yield* programLaunch(program.name, program.args, approved).pipe(
           Effect.orDie,
         );
-  const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
-  const grants = delegatedChildGrants(childApproval);
+  const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
   const configPayload = {
     ...approved,
-    // An approval that picked a catalog agent drops the one defined here.
-    persona:
-      approved.agentSource === AGENT_SOURCE.INLINE ? approved.persona : null,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
     ...programConfig,
@@ -540,7 +554,6 @@ Its result is the agent's final reply, or a \`schema\` value. Pick the agent who
       launchChildAgent({
         agentName: input.agentName,
         persona: input.persona && {
-          name: input.agentName,
           prompt: input.persona.prompt,
           tools: input.persona.tools ?? [],
         },

@@ -17,7 +17,7 @@ export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 
 /** The policies a launch can narrow a run to: anything below Auto-approve,
  *  which is never stricter than a project's policy. */
-export const APPROVAL_POLICY_LIMITS = ['never', 'ask'] as const;
+export const APPROVAL_POLICY_LIMITS = Object.freeze(['never', 'ask'] as const);
 export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
 
 /** What a launch asks of its run's approvals: Auto-approve (its run starts
@@ -42,7 +42,7 @@ type OwnGrant = typeof OwnGrantSchema.Type;
  * defers to its parent's grants while the edge stands, which is read off
  * the rows (`resolveBypass`), never stored here.
  */
-export const ApprovalPolicySnapshotSchema = Schema.Struct({
+export const ApprovalGrantsSchema = Schema.Struct({
   /** A human's `on` or `off` per kind, or `parent`: derived when a resume
    *  ended an ancestor's goal grant, following the ancestry's human values. */
   own: Schema.Record(
@@ -57,7 +57,7 @@ export const ApprovalPolicySnapshotSchema = Schema.Struct({
    *  for this run only, never widened (`policyLimit`). */
   limit: Schema.optional(Schema.Literals(APPROVAL_POLICY_LIMITS)),
 });
-export type ApprovalGrants = typeof ApprovalPolicySnapshotSchema.Type;
+export type ApprovalGrants = typeof ApprovalGrantsSchema.Type;
 
 const STRICTNESS: Readonly<Record<ApprovalPolicy, number>> = {
   never: 0,
@@ -106,15 +106,10 @@ export function withUnborn(
   source: ApprovalGrantSource,
   runId: RunId,
   parentId: RunId | null,
-  grants: ApprovalGrants | null | undefined,
+  grants: ApprovalGrants,
 ): ApprovalGrantSource {
   if (source.runs.has(runId)) return source;
-  return {
-    runs: new Map(source.runs).set(runId, {
-      parentId,
-      grants: grants ?? NO_APPROVAL_GRANTS,
-    }),
-  };
+  return { runs: new Map(source.runs).set(runId, { parentId, grants }) };
 }
 
 /** The strictest launch limit on a run's ancestry while its edges stand,
@@ -150,7 +145,10 @@ function* ancestry(
 }
 
 /** No grants of its own: every kind defers to the run's ancestry. */
-export const NO_APPROVAL_GRANTS: ApprovalGrants = { own: {}, goal: [] };
+export const NO_APPROVAL_GRANTS: ApprovalGrants = Object.freeze({
+  own: Object.freeze({}),
+  goal: Object.freeze([]),
+});
 
 /** The rows a bypass is read from: each run's parent edge and its own
  *  grants, as the session view folds them. */

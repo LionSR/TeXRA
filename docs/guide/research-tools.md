@@ -1,7 +1,6 @@
 # Research tools
 
 <script setup>
-import InquiryFlowHero from '../.vitepress/components/InquiryFlowHero.vue';
 import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
 import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
@@ -17,7 +16,7 @@ TeXRA's research agents connect to arXiv, Zotero, DuckDuckGo, WolframScript, and
 
 ### <wa-icon library="texra" name="mortar-board"></wa-icon> Find papers
 
-Ask a literature-search agent (`search`, `assistant`, `review`, or `presenter`) to find papers. TeXRA searches **arXiv**, the web, and your Zotero library:
+Ask `search` or `assistant` to find papers. They search **arXiv**, the web, and your Zotero library (`presenter` searches arXiv and the web, `review` arXiv only):
 
 ```
 Find recent papers on transformer architectures for document understanding.
@@ -26,7 +25,7 @@ Focus on work from 2023-2024 that handles mathematical equations.
 
 <SearchResultsHero />
 
-<p class="hero-caption">A typical <code>search</code> result set: each preprint carries its title, authors, an arXiv source tag, and a one-click <strong>Cite</strong>. Every row is a real lookup, never fabricated.</p>
+<p class="hero-caption">A typical <code>search</code> result set: each preprint carries its title, authors, and an arXiv source tag. Every row is a real lookup, never fabricated.</p>
 
 The same search streams in a terminal, with each lookup shown as a tool call:
 
@@ -52,7 +51,7 @@ For documentation, project pages, or general information:
 Find the official PyTorch documentation for attention mechanisms.
 ```
 
-The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model provider's hosted search. `web_fetch` retrieves a specific URL and extracts its main content.
+The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model provider's hosted search. `web_fetch` retrieves a specific URL and returns the page as clean text.
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
@@ -83,7 +82,7 @@ Add this arXiv paper to my Zotero library.
 <p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
 
 ::: tip Default bibliography path
-Set a default location for Zotero exports so agents always know where to save bibliography entries. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
+Name your project's main `.bib` file once so agents know where to look up citations: they are told its path, and `extract_bib_entries` also reads it unless the agent names another `.bib` file. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
 :::
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram
@@ -94,22 +93,14 @@ The `research` agent runs Wolfram Language through `wolframscript` in the shell 
 
 The `lean` agent formalizes mathematical statements and proofs directly in Lean 4. It searches Mathlib lemmas using Loogle, inspects live proof states and tactic goals, reads compiler diagnostics, and iterates on tactic scripts until the theorem compiles without `sorry`. Read the [Lean 4 proofs guide](./lean.md) for full details.
 
-### <wa-icon library="texra" name="comment-discussion"></wa-icon> External inquiry
-
-The `inquiry` tool lets a TeXRA agent ask one question in an external chat (ChatGPT, Claude, Gemini) through a copy/paste flow, then resume with the answer. Dispatch is non-blocking: the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key is required; it uses your existing subscription. The inquiry tool is not available in the CLI; there, agents use `ask_user_question` for synchronous terminal input.
-
-<InquiryFlowHero />
-
-<p class="hero-caption">The <code>inquiry</code> copy-out / paste-back loop: TeXRA prepares a question, you copy it into ChatGPT, Claude, or Gemini, then paste the reply back to resume the run. No API key needed.</p>
-
 ## Which agent to use
 
-Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
+Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="robot"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
 
 <DropdownMenu
   label="Agent"
   value="search"
-  valueIcon="sparkle"
+  valueIcon="robot"
   maxWidth="320px"
   :groups="[{ label: 'Research & Verification', items: [
     { name: 'search', icon: 'mortar-board', badge: 'chat', badgeVariant: 'info', active: true },
@@ -141,7 +132,7 @@ Specialist research agents are tuned for different stages of the work. Pick one 
   ]"
 />
 
-<p class="hero-caption">Each research agent and the tools it has enabled. Check <code>Settings → Agents</code> (<wa-icon library="texra" name="sparkle"></wa-icon>) for the exact set.</p>
+<p class="hero-caption">Each research agent and the tools it has enabled. Check <code>Settings → Agents</code> (<wa-icon library="texra" name="robot"></wa-icon>) for the exact set.</p>
 
 ## Next steps
 

@@ -72,6 +72,8 @@ Left, in order:
    the call states them through its `ToolContext` and dispatch reads them when
    it commits (no return change, but a collector the call writes to, which
    `packages/harness/AGENTS.md` "Event channels and cards" argues against).
+   Not decided at `c78e9f9`: `consumedFollowUps` and `facts` are still
+   fields of the tool's result (`toolResult.ts:156,159`).
 2. With the fields off the result, `extractToolAttachments`
    (`packages/harness/src/tools/core/toolAttachmentExtraction.ts`) only
    strips bytes.
@@ -94,12 +96,15 @@ What the code does:
   the same struct from an envelope a model echoes as text, where only the tag
   and attributes are known. It would build the generic case, or
   `deliverySummary` would take a narrower input than the stored type.
-- The delivery is stored on `followup.queued` (version 6) and exported from
+- The delivery (`ChildRunDeliverySchema`,
+  `packages/harness/src/shared/schemas/followUp.ts`) is stored on
+  `followup.queued` (version 8 at `c78e9f9`) and exported from
   `@texra-ai/harness/plugins`, so the change is a row version bump and a
   plugin-contract change.
 
 Landed: nothing. No step separates from the stored shape, and the version
-bump is the owner's decision.
+bump is the owner's decision. Still so at `c78e9f9` (2026-11-17): the
+schema is one struct with an open `family` and ordered `attributes`.
 
 Proposed shape, for that decision:
 
@@ -119,3 +124,22 @@ case is worth keeping beside the three typed ones, or the typed ones are a
 second spelling of it, is the comparison to make first: if a plugin's case
 must stay generic, typing only the harness's three leaves two designs in one
 schema.
+
+Compared 2026-11-19, and kept as one struct (`refuted-candidates.json`,
+`DELIVERY-union-on-family-and-outcome`):
+
+- The plugin's case must stay generic: its family is open, and the agent-CLI
+  tools set prompt, ids, wall time, response, usage, lines and message, the
+  union of the harness's facts. The three typed cases would be a second
+  spelling of the generic one.
+- `outcome` beside `message` adds a field and removes no state: `message`
+  present already separates the two envelopes, and a report the end turns
+  into an error (`endProcessChild` in `processRun.ts`, on rows the store
+  refused) keeps its response, so the failed case would carry every
+  completed field.
+- `echoedDelivery` is gone (#15017), and the attribute order stays with
+  the builders.
+
+What the bump of that day did instead (`followup.queued` v11): the wall
+time is `wallTimeMs`, the prompt is an attribute its builder cuts, and an
+attribute's value is a string, never `null`.

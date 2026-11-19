@@ -59,7 +59,8 @@ import type { ToolTable } from '@tools/toolTable';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { databaseLayer, globalDatabaseLayer } from './databaseLayer';
+import { databaseLayer } from './databaseLayer';
+import { globalDatabaseLayer } from './globalDatabaseLayer';
 import { processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
 import {
@@ -82,12 +83,12 @@ const CHANNEL = 'sessionLayer';
  */
 class SessionKey implements Equal.Equal {
   readonly open: SessionHandleInit;
+  /** The root the map keys and releases the session by, read once so a
+   *  caller that changes its roots record later cannot move the key. */
+  readonly storage: string;
   constructor(open: SessionHandleInit) {
     this.open = open;
-  }
-
-  get storage(): string {
-    return this.open.roots.storage;
+    this.storage = open.roots.storage;
   }
 
   [Equal.symbol](that: Equal.Equal): boolean {
@@ -170,23 +171,7 @@ const rootLanes = new Map<string, PerKeyLane>();
 const openSession = (open: SessionHandleInit) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
-    // The map keys and releases a session by this root, so a caller's
-    // mutable or inherited root record may not change it later. Read the
-    // structural fields so inherited or non-enumerable getters work too.
-    const { roots } = open;
-    const key = new SessionKey({
-      ...open,
-      roots: {
-        workspace: roots.workspace,
-        storageRoot: roots.storageRoot,
-        storage: roots.storage,
-        globalStorage: roots.globalStorage,
-        config: roots.config,
-        workspaceState: roots.workspaceState,
-        repoState: roots.repoState,
-        globalState: roots.globalState,
-      },
-    });
+    const key = new SessionKey(open);
     const context = yield* sessions
       .contextEffect(key)
       .pipe(Effect.onError(() => sessions.invalidate(key)));

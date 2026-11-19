@@ -8,10 +8,9 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { pathExists } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
+import { ensureError, hasExtension } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'LatexParsing';
 
@@ -81,17 +80,37 @@ export const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
  * an odd number of backslashes precedes it (`\%` is a percent sign, `\\%` a
  * line break and then a comment). Inside the argument of `\url`, `\path`,
  * `\nolinkurl` and the first argument of `\href`, a `%` is part of the URL.
+ *
+ * A comment runs through its line break and the indentation of the next
+ * line, as TeX reads it: `micro%` above `scope` is `microscope`. Before a
+ * blank line it stops at the line break, which is the blank line's paragraph
+ * break to keep, and so it does right after a control word, whose name the
+ * line break ends: joining `\alpha%` to `x` would make `\alphax`.
  */
 const COMMENT_PATTERN =
-  /(?<=(?<!\\)(?:\\\\)*)(?:(\\(?:url|nolinkurl|path|href)\s*\{[^{}\n]*\})|%.*$)/gm;
+  /(?<=(?<!\\)(?:\\\\)*)(?:(\\(?:url|nolinkurl|path|href)\s*\{[^{}\n]*\})|(?<=(?<!\\)(?:\\\\)*\\[A-Za-z@]+)%.*|%.*(?:\n[ \t]*(?=\S))?)/g;
 
-/** Removes each comment, from its `%` to the end of the line. */
-export function stripLatexComments(content: string): string {
-  return content.replaceAll(
-    COMMENT_PATTERN,
-    (_match, url: string | undefined) => url ?? '',
-  );
-}
+/** The reads of a LaTeX file's references probe the filesystem, so each
+ *  bounds its fan-out to this many at once. */
+export const LATEX_PROBE_CONCURRENCY = 8;
+
+/**
+ * The text of the LaTeX file at `absolutePath` with each comment removed, so
+ * nothing commented out reads as a figure, input, bibliography or picture the
+ * document uses, and what remains compiles as the file does.
+ */
+export const readUncommentedLatex = Effect.fn('latex.readUncommentedLatex')(
+  function* (absolutePath: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const content = yield* readNormalizedFile(fs, absolutePath).pipe(
+      Effect.mapError(ensureError),
+    );
+    return content.replaceAll(
+      COMMENT_PATTERN,
+      (_match, url: string | undefined) => url ?? '',
+    );
+  },
+);
 
 /** `\input{…}` or `\include{…}`: the command, then the file it names. */
 const TEX_INPUT = String.raw`\\(input|include)\s*\{([^}]+)\}`;
@@ -99,7 +118,7 @@ const TEX_INPUT = String.raw`\\(input|include)\s*\{([^}]+)\}`;
 /** A comment (kept whole, so nothing in it counts) or a file input. */
 const TEX_INPUT_OR_COMMENT_PATTERN = new RegExp(
   `${COMMENT_PATTERN.source}|${TEX_INPUT}`,
-  'gm',
+  'g',
 );
 
 /**

@@ -46,14 +46,14 @@ import {
   SubscriptionRef,
   Context,
 } from 'effect';
-import { afterAll, describe, expect, vi } from 'vitest';
+import { afterAll, assert, describe, expect, vi } from 'vitest';
 
 import {
   type RunId,
   RunIdSchema,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { ResumeRefused, Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/harness';
 import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/makeRunHistory';
@@ -215,7 +215,7 @@ describe('the golden 1.0 store', () => {
       );
       return Effect.gen(function* () {
         // The fixture's own connection runs the reader's earlier-build scan.
-        const exec = (statement: string, params: readonly unknown[]) =>
+        const exec = (statement: string, params: readonly unknown[] = []) =>
           Effect.sync(() =>
             raw(storage, (db) =>
               db
@@ -228,9 +228,8 @@ describe('the golden 1.0 store', () => {
             ),
           );
         const events = yield* rowReader(
-          storage,
+          { path: storage, exec },
           toolTable(texraPlugins({ name: 'vscode' })).factKinds,
-          exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
         const types = new Set<string>(events.map((event) => event.type));
@@ -512,12 +511,7 @@ describe('the golden 1.0 store', () => {
       return Effect.gen(function* () {
         expect(
           yield* Effect.flip(
-            Effect.provide(
-              Effect.gen(function* () {
-                yield* Database;
-              }),
-              substrate(storage),
-            ),
+            Effect.provide(Effect.asVoid(Database), substrate(storage)),
           ),
         ).toMatchObject({
           _tag: 'DatabaseOpenFailed',
@@ -610,7 +604,7 @@ describe('the golden run killed after its effect', () => {
         () =>
           Effect.gen(function* () {
             const { storage, workspace } = (yield* FakeHost).roots;
-            if (workspace === undefined) throw new Error('no test workspace');
+            assert(workspace !== undefined, 'no test workspace');
             // The resume, in a session that closes before the store is read.
             yield* Effect.scoped(
               Effect.gen(function* () {
@@ -618,8 +612,7 @@ describe('the golden run killed after its effect', () => {
                 const result = yield* resumeRun(KILLED, {}).pipe(
                   Effect.provide(session),
                 );
-                if (!('activation' in result))
-                  throw new Error('resume refused');
+                assert('activation' in result, 'resume refused');
                 // The resumed activation rests, or ends.
                 yield* Stream.runHead(
                   Stream.filter(
@@ -693,6 +686,12 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     ).pipe(Layer.provide(validationModelLayer));
     return { sent, process: SessionGraph.with({ model }) };
   };
+  /** A resume refused on what the chat's rows hold. */
+  const refusedAs = (reason: object) => ({
+    _tag: 'ResumeRefused',
+    runId: CHAT,
+    reason,
+  });
   /** The commit of the chat's last model response, read from the store: a
    *  literal would name another row after the next regeneration. */
   const RESPONSE = `(SELECT max(e."commit") FROM event e
@@ -729,16 +728,28 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
         [
           "an earlier build's row",
           `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
-          { kind: 'earlierBuild', cause: expect.any(String) },
+          refusedAs({ kind: 'earlierBuild', cause: expect.any(String) }),
         ],
         [
           'a row that does not decode',
           `UPDATE event SET data = '{}' WHERE "commit" = ${RESPONSE}`,
-          { kind: 'unusableCheckpoint' },
+          refusedAs({ kind: 'unusableCheckpoint' }),
+        ],
+        [
+          'a run.config bound to a backend this build does not have',
+          `UPDATE event SET data = json_set(data, '$.binding.backend', 'withdrawn')
+           WHERE type = 'run.config' AND aggregate =
+             (SELECT id FROM event_sequence WHERE logical_id = '${CHAT}')`,
+          // Its rows read as written; the route is what this build lacks,
+          // and the failure names it.
+          {
+            _tag: 'RunFailure',
+            message: expect.stringContaining('ran on withdrawn'),
+          },
         ],
       ] as const)(
         'refuses a run holding %s before any request, and adds no row',
-        ([, rewrite, reason]) => {
+        ([, rewrite, failure]) => {
           const { sent, process } = countedModel();
           return Effect.gen(function* () {
             const { storage, session } = yield* goldenSession(rewrite);
@@ -746,8 +757,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
             const refused = yield* Effect.flip(
               session.resume(CHAT, { interactive: true }),
             );
-            expect(refused).toBeInstanceOf(ResumeRefused);
-            expect(refused).toMatchObject({ runId: CHAT, reason });
+            expect(refused).toMatchObject(failure);
             expect(sent.turns).toBe(0);
             expect(chatRows(storage)).toEqual(before);
           }).pipe(Effect.scoped, Effect.provide(process, { local: true }));

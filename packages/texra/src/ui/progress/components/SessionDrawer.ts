@@ -11,25 +11,24 @@
  */
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
-import { live } from 'lit/directives/live.js';
 
 import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { SessionView } from '@texra-ai/harness/schemas';
 import './RunTabs';
+import { renderTaskFilter, taskFilterStyles } from './taskFilter';
 
 @customElement('session-drawer')
 export class SessionDrawer extends LitElement {
@@ -37,6 +36,7 @@ export class SessionDrawer extends LitElement {
     designTokens,
     commonViewStyles,
     overlaySurfaceStyles,
+    taskFilterStyles,
     css`
       wa-drawer {
         --size: 320px;
@@ -44,15 +44,7 @@ export class SessionDrawer extends LitElement {
 
       .overlay-title {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .drawer-search {
-        flex: 0 0 auto;
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+        ${truncateDeclarations}
       }
 
       .drawer-body {
@@ -94,13 +86,6 @@ export class SessionDrawer extends LitElement {
     );
   };
 
-  private handleSearchInput = (event: Event): void => {
-    if (!(event.target instanceof WaInput)) return;
-    // An input event always follows a typed value, so `value` is set.
-    const value = event.target.value ?? '';
-    this.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value }));
-  };
-
   private openInEditor = (): void => {
     this.dispatchEvent(
       SessionUiEvents.host({
@@ -110,7 +95,6 @@ export class SessionDrawer extends LitElement {
   };
 
   override render(): TemplateResult {
-    const search = this.surface?.search ?? '';
     const inEditor = this.placement === 'editor';
     return html`
       <wa-drawer
@@ -132,17 +116,7 @@ export class SessionDrawer extends LitElement {
             },
           })}
         </div>
-        <div class="drawer-search">
-          <wa-input
-            size="s"
-            placeholder="Filter tasks"
-            aria-label="Filter tasks"
-            .value=${live(search)}
-            @input=${this.handleSearchInput}
-          >
-            ${waIcon('magnifying-glass', { slot: 'start' })}
-          </wa-input>
-        </div>
+        ${renderTaskFilter(this, this.surface?.search ?? '')}
         <div class="drawer-body">
           <run-tabs
             sections

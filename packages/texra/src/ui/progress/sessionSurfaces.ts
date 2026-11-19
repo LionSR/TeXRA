@@ -5,8 +5,9 @@
  * draft, a picker returns its paths, a polish its text). The sidebar and
  * the editor tab hold one session; the Electron renderer holds one per
  * open project. A root assigns each session's three records to its shell and
- * forwards the shell's events here; nothing else reaches the runtime or
- * the host bridge for a session.
+ * forwards the shell's events here; nothing else reaches the host bridge
+ * for a session, and a pane with Effect work of its own runs it on the
+ * runtime this hands out.
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Effect, Result } from 'effect';
@@ -17,7 +18,7 @@ import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type {
   HostOutcome,
-  UpMessage,
+  SessionWire,
 } from '@texra/shared/session/sessionFrames';
 import {
   applySurfaceAction,
@@ -31,7 +32,7 @@ import {
   runSurface,
   shownRun,
   updateRun,
-  type Draft,
+  type FollowUpDraft,
   type Surface,
   type SurfaceAction,
 } from '@texra/shared/session/surface';
@@ -89,6 +90,7 @@ interface SessionSurface {
 }
 
 export interface SessionSurfaces {
+  runtime: WebviewTransport['runtime'];
   /** One message from the host's session channel. */
   receive(data: unknown): void;
   /** Open the sessions the host names and close the rest. */
@@ -137,7 +139,7 @@ function withPickedPaths(
 
 export function createSessionSurfaces(options: {
   readonly storage: KeyValueStore;
-  readonly post: (message: UpMessage) => void;
+  readonly post: (message: SessionWire) => void;
 }): SessionSurfaces {
   const transport = installWebviewTransport(options.post);
   interface Held extends SessionSurface {
@@ -151,10 +153,6 @@ export function createSessionSurfaces(options: {
   const notify = () => {
     for (const listener of [...listeners]) listener();
   };
-
-  function requestId(): string {
-    return crypto.randomUUID();
-  }
 
   /** The transcript subscription follows the shown run. */
   function transcriptTier(entry: Held): {
@@ -172,12 +170,12 @@ export function createSessionSurfaces(options: {
     };
   }
 
-  /** A new generation over the tier: on every open, then whenever the
-   *  tier moves. */
+  /** Name the tier's transcripts to the session's view whenever the tier
+   *  moves; a session opens naming none. */
   function subscribeTranscript(entry: Held): void {
     const { transcript, aggregates } = transcriptTier(entry);
     entry.subscribedTranscript = transcript;
-    transport.subscribe(entry.session, aggregates);
+    transport.subscribe(entry.key, aggregates);
   }
 
   function setSurface(entry: Held, next: Surface): void {
@@ -230,7 +228,6 @@ export function createSessionSurfaces(options: {
       },
     );
     held.set(key, entry);
-    subscribeTranscript(entry);
   }
 
   /** An asynchronous operation keeps the draft that started it, even if
@@ -345,7 +342,10 @@ export function createSessionSurfaces(options: {
         return;
       case 'launch':
         if (launch.instruction === request.launch.instruction) {
-          act(entry, { kind: 'launch', patch: { instruction: '' } });
+          act(entry, {
+            kind: 'launch',
+            patch: { instruction: '', skills: [] },
+          });
         }
         return;
       default:
@@ -396,14 +396,7 @@ export function createSessionSurfaces(options: {
     // Built when it runs: a click that finds the stream busy sends nothing.
     const exchange = Effect.flatMap(
       Effect.suspend(() =>
-        Effect.result(
-          transport.hostRequest({
-            kind: 'host.request',
-            session: entry.key,
-            requestId: requestId(),
-            request,
-          }),
-        ),
+        Effect.result(transport.hostRequest({ session: entry.key, request })),
       ),
       (result) =>
         Effect.sync(() => applyHostAnswer(entry, request, origin, result)),
@@ -462,14 +455,7 @@ export function createSessionSurfaces(options: {
         applyRuntimeAnswer(entry, request, result, submitted, fromForm),
       );
     const exchange = Effect.flatMap(
-      Effect.result(
-        transport.runtimeRequest({
-          kind: 'runtime.request',
-          session: key,
-          requestId: requestId(),
-          request,
-        }),
-      ),
+      Effect.result(transport.runtimeRequest({ session: key, request })),
       answered,
     );
     transport.run(
@@ -493,7 +479,7 @@ export function createSessionSurfaces(options: {
     entry: Held,
     request: RuntimeCommand,
     result: Answer<Outcome>,
-    submitted: Draft | undefined,
+    submitted: FollowUpDraft | undefined,
     fromForm: boolean,
   ): void {
     const runId = 'runId' in request ? request.runId : null;
@@ -567,7 +553,7 @@ export function createSessionSurfaces(options: {
         kind: 'followUp.send',
         runId,
         text: text === '' ? '(image)' : text,
-        media: media.length > 0 ? media : null,
+        ...(media.length > 0 && { media }),
       });
       return;
     }
@@ -649,6 +635,7 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) act(entry, action);
     },
+    runtime: transport.runtime,
     answer: transport.hostRequest,
     listen(root, sessionOf) {
       const entryOf = (event: Event) => {

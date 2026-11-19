@@ -16,7 +16,7 @@ import {
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { recordedDecision } from '@agent/runtime/requests';
-import { programOf } from '@shared/schemas';
+import { programOf, ToolError } from '@shared/schemas';
 import type {
   AgentProposal,
   DecisionOf,
@@ -60,10 +60,8 @@ export const requireAgent = Effect.fn('requireAgent')(function* (
   );
   const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
-  return yield* Effect.fail(
-    new Error(
-      `Unknown agent '${name}'. Available: ${agents.map((a) => a.name).join(', ') || 'none'}`,
-    ),
+  return yield* new ToolError(
+    `Unknown agent '${name}'. Available: ${agents.map((a) => a.name).join(', ') || 'none'}`,
   );
 });
 
@@ -245,10 +243,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return {
       proposal,
-      approvalMeta: {
-        autoApproved: true,
-        childApproval: decision.childApproval,
-      },
+      approvalMeta: { childApproval: decision.childApproval },
     } satisfies ApprovedDelegation;
   }
 
@@ -322,18 +317,16 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       // pins the exact entry the re-validation just resolved.
       ...(resolvedAgentOverride && {
         agent: resolvedAgentOverride.name,
-        agentSource: resolvedAgentOverride.source,
+        agentSource: { kind: resolvedAgentOverride.source },
       }),
     },
     approvalMeta: {
-      autoApproved: false,
+      childApproval: 'inherit',
       ...(modelOverride && {
-        modelOverride,
-        requestedModel: proposal.model,
+        model: { chosen: modelOverride, proposed: proposal.model },
       }),
       ...(agentOverride && {
-        agentOverride,
-        requestedAgent: proposal.agent,
+        agent: { chosen: agentOverride, proposed: proposal.agent },
       }),
     },
   } satisfies ApprovedDelegation;

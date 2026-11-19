@@ -1,5 +1,5 @@
-/** The Lean 4 plugin: its language-server tools, its availability check,
- *  its icons and its card. */
+/** The Lean 4 plugin: its language-server tools, its programs, its
+ *  availability check, its icons and its card. */
 
 // Third-party imports
 import { Clock, Effect, Option } from 'effect';
@@ -8,11 +8,13 @@ import { Clock, Effect, Option } from 'effect';
 import { definePlugin } from '@texra-ai/harness/plugins';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import { directLeanLanguageServices } from './direct/leanServerPool';
 import { LeanLanguageServices } from './leanLanguageServices';
 import { isLeanServerActive, summarizeLeanServers } from './leanServerInfo';
 import { LEAN4_EXTENSION_ID } from './leanTypes';
+import { LEAN_MODULES, LEAN_PROGRAMS } from './programs';
 import {
   LeanDiagnosticsTool,
   LeanFileTool,
@@ -23,9 +25,10 @@ import {
 /**
  * Lean 4 over the `lake env lean --server` pool, in every host; its probe
  * reports the tools runnable exactly when `lake` is found, the one thing the
- * pool needs.
+ * pool needs. Its programs, `prove` and `blueprint`, check each round of
+ * their child's work with its tools.
  */
-export const lean4: TexraPlugin = {
+export const lean4: TexraPlugin = texraPlugin({
   ...definePlugin<LeanLanguageServices>({
     id: 'lean4',
     tools: [
@@ -34,6 +37,16 @@ export const lean4: TexraPlugin = {
       LeanProjectTool,
       LeanInspectTool,
     ],
+    // The script tool's description lists the programs; a run offered
+    // `program` without it reads them here.
+    prompt: ({ offered }) =>
+      offered.includes('program') && !offered.includes('script')
+        ? `The Lean programs \`program\` starts: ${Object.entries(LEAN_PROGRAMS)
+            .map(([name, { description }]) => `\`${name}\` (${description})`)
+            .join('; ')}.`
+        : '',
+    scriptModules: LEAN_MODULES,
+    programs: LEAN_PROGRAMS,
     availability: {
       check: Effect.fn('lean4.availability')(function* () {
         // A probe reads the plugin's servers while its layer is up; it never
@@ -91,4 +104,4 @@ export const lean4: TexraPlugin = {
         'Requires `lake` on PATH in every build; each Lake project can have its own language server, which stops when the last run using it ends, surfaced below.',
     },
   },
-};
+});

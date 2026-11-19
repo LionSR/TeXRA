@@ -1,8 +1,7 @@
 <script setup>
 // Frameless slice of the New task view's Media file group (FILE_SELECT_CONFIGS in
 // store.ts), lifted out of FileSelectHero's MockupFrame so the figure focuses
-// on just the Media surface: the uppercase MEDIA label with its inline wand
-// "Auto-extract options" button, the right-aligned three-action toolbar (Add
+// on just the Media surface: the uppercase MEDIA label, the right-aligned three-action toolbar (Add
 // opened files / Clear all / Add media files), and the recessed ordered list
 // of reorderable file rows (each with a decorative grip + trailing trash).
 //
@@ -29,9 +28,6 @@ const items = [
             name="device-camera-video"
           ></wa-icon>
           Media
-          <span class="act" title="Auto-extract options">
-            <wa-icon library="texra" name="wand"></wa-icon>
-          </span>
         </span>
         <div class="acts">
           <span class="act" title="Add opened files as media">

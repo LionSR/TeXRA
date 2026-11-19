@@ -63,18 +63,13 @@ function sortFastFirst(
   );
 }
 
-/**
- * What the row's availability kind means and says; `undefined` is a row the
- * backend left unresolved (the secret-free basic list), which blocks nothing.
- */
+/** What the row's availability kind means and says. */
 function availabilityOf({ availability, usageRoute }: ModelSelectionItem) {
-  return availability === undefined
-    ? undefined
-    : {
-        ...MODEL_AVAILABILITY_STATUS[availability],
-        missingKey: availability === 'missing-key',
-        label: modelAvailabilityLabel({ availability, usageRoute }),
-      };
+  return {
+    ...MODEL_AVAILABILITY_STATUS[availability],
+    missingKey: availability === 'missing-key',
+    label: modelAvailabilityLabel({ availability, usageRoute }),
+  };
 }
 
 @customElement('model-selection-list')
@@ -158,7 +153,7 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
       <wa-select
         class="reasoning-level-select"
         .value=${currentValue}
-        ?disabled=${availabilityOf(model)?.available === false}
+        ?disabled=${availabilityOf(model).available === false}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
         <span slot="label" class="visually-hidden"
@@ -215,7 +210,7 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
         <wa-switch
           ?checked=${model.enabled}
           ?disabled=${
-            (availabilityOf(model)?.available === false && !model.enabled) ||
+            (availabilityOf(model).available === false && !model.enabled) ||
             isLastEnabledModel
           }
           @change=${(e: Event) => {
@@ -321,17 +316,14 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
     const isOpen = this.expandedDeprecated.has(group.provider);
 
     return html`
-      <wa-button
-        class="deprecated-toggle"
-        appearance="plain"
-        size="s"
-        aria-expanded=${String(isOpen)}
-        @click=${() => this.toggleDeprecated(group.provider)}
-      >
-        ${waIcon('chevron-right', { className: 'disclosure-chevron' })}
-        ${group.deprecated.length}
-        ${pluralize(group.deprecated.length, 'deprecated model', 'deprecated models')}
-      </wa-button>
+      <div class="deprecated-toggle settings-disclosure-summary">
+        ${renderDisclosureToggle({
+          expanded: isOpen,
+          onToggle: () => this.toggleDeprecated(group.provider),
+          content: html`${group.deprecated.length}
+          ${pluralize(group.deprecated.length, 'deprecated model', 'deprecated models')}`,
+        })}
+      </div>
       ${
         isOpen
           ? html`<ul class="model-list deprecated-models">

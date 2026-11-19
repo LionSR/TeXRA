@@ -81,7 +81,7 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   const arxivId = input.id.trim();
   const validationError = validateArxivId(arxivId);
   if (validationError) {
-    return yield* Effect.fail(new ToolError(validationError));
+    return yield* new ToolError(validationError);
   }
 
   const downloadResult = yield* downloadArxivSource(arxivId, {

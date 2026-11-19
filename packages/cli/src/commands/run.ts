@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
-import { hasMagic } from 'glob';
 
 import {
   toErrorMessage,
@@ -52,21 +51,24 @@ import {
 } from '../runtime/headless/terminalStatus';
 import {
   hasMixedStdinDocumentTaskInputSpecs,
-  classifyInputFiles,
   withExpandedRunInputs,
   DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE,
 } from '../runtime/headless/documentTaskInputs';
 import {
-  assertOutputDirAvailable,
-  assertOutputFileAvailable,
+  isTaskFileGlob,
+  splitMediaFiles,
+} from '@texra/controllers/session/taskFiles';
+import { inputDerivedOutputFiles } from '@texra/controllers/progressView/documentTaskOutputs';
+import {
+  assertOutputDestinationAvailable,
   cliLaunchOutput,
   formatDocumentTaskTextResult,
-  inputDerivedOutputFiles,
   resolveDocumentTaskOutput,
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
 import type { Sessions } from '@texra-ai/harness';
+import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { programLaunch, type ProcessServices } from '@texra-ai/harness/host';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
@@ -125,7 +127,13 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       init.agent,
       missingRunTargetMessage(init.agent, [...programs.keys()]),
     );
-    return yield* runToolUseAgent(context, init, source, instruction, services);
+    return yield* runToolUseAgent(
+      context,
+      init,
+      { kind: source },
+      instruction,
+      services,
+    );
   }
 
   // A program with no `--input` cannot run, and the output probes below
@@ -139,23 +147,21 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   }
   // Fast-fail an `--output-dir` or `--output` path the final copy would reject
   // (`EEXIST` / `EISDIR`) only after the full agent run.
-  yield* assertOutputDirAvailable(init.outputDir, context.cwd);
-  yield* assertOutputFileAvailable(init.output, context.cwd);
+  yield* assertOutputDestinationAvailable(
+    'directory',
+    init.outputDir,
+    context.cwd,
+  );
+  yield* assertOutputDestinationAvailable('file', init.output, context.cwd);
   if (init.output) {
     // Only literal text specs can be rejected before expanding globs or
     // reading stdin. The expanded files are checked below.
     const literalInputs = init.inputFiles
       .map((file) => file.trim())
-      .filter(
-        (file) =>
-          !hasMagic(file, {
-            magicalBraces: true,
-            windowsPathsNoEscape: process.platform === 'win32',
-          }),
-      );
+      .filter((file) => !isTaskFileGlob(file));
     if (
       hasMixedStdinDocumentTaskInputSpecs(
-        classifyInputFiles(literalInputs).inputFiles,
+        splitMediaFiles(literalInputs).inputFiles,
       )
     ) {
       return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
@@ -166,12 +172,12 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     init.inputFiles,
     init.contextFiles,
     context.cwd,
-    {},
+    'program',
     Effect.fnUntraced(function* ({
       inputFiles,
       mediaFiles,
       contextFiles,
-      stdinInputPath,
+      writtenFiles,
     }) {
       if (init.output && inputFiles.length > 1) {
         return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
@@ -187,7 +193,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       // on the config below, and read back from the recorded config at
       // finalization.
       const expectedOutputFiles = init.outputDir
-        ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
+        ? inputDerivedOutputFiles(inputFiles, writtenFiles)
         : undefined;
       // Persist CLI destinations absolutely so resumption has one path
       // representation and never reconstructs output locations.
@@ -228,7 +234,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
 
       return yield* executeCliRun(config, context, {
         services,
-        recoveryInputIsDurable: stdinInputPath === undefined,
+        recoveryInputIsDurable: writtenFiles.length === 0,
       });
     }),
   );
@@ -264,15 +270,12 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     init.inputFiles,
     init.contextFiles,
     context.cwd,
-    {
-      allowEmptyInput: true,
-      requireWorkspaceFiles: true,
-    },
+    'agent',
     Effect.fnUntraced(function* ({
       inputFiles,
       mediaFiles,
       contextFiles,
-      stdinInputPath,
+      writtenFiles,
     }) {
       const config: AgentConfigPayload = {
         agent: init.agent,
@@ -292,7 +295,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 
       const run = yield* executeCliConfig(config, context, {
         services,
-        recoveryInputIsDurable: stdinInputPath === undefined,
+        recoveryInputIsDurable: writtenFiles.length === 0,
       });
       if (!run.ok) return run.exitCode;
 
@@ -355,8 +358,9 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
       if (Result.isFailure(recorded)) {
         const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
         if ((output || outputDir) && ended.outcome === RUN_OUTCOME.COMPLETED)
-          documentTaskOutputError = new Error(message, {
-            cause: recorded.failure,
+          documentTaskOutputError = new TaskRecordsFailed({
+            runId: ended.runId,
+            message,
           });
         else writeTextStderr(`[warn] ${message}`);
       }
@@ -373,10 +377,10 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
         session.view.read([]).pipe(
           Effect.mapError(
             (cause) =>
-              new Error(
-                `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
-                { cause },
-              ),
+              new TaskRecordsFailed({
+                runId: ended.runId,
+                message: `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
+              }),
           ),
           Effect.flatMap((stored) => {
             const run = stored.runs.get(ended.runId);
@@ -427,7 +431,7 @@ export const headlessRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a program or an agent headlessly' },
   args: {
     ...SKILL_SOURCE_ARGS,
-    agent: {
+    target: {
       type: 'positional',
       required: true,
       description: RUN_TARGET_NAME_DESCRIPTION,
@@ -477,7 +481,7 @@ export const headlessRunCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     runHeadlessAgent(context, {
-      agent: ctx.args.agent,
+      agent: ctx.args.target,
       ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),

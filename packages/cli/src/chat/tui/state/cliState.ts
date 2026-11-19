@@ -8,10 +8,9 @@ import {
   APPROVAL_POLICY_DEFAULT,
   type ApprovalPolicy,
   RunIdSchema,
-  type AgentSource,
+  type AgentConfig,
   type RunId,
   descendantRuns,
-  needsUser,
   FACT_SEPARATOR,
 } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
@@ -19,28 +18,20 @@ import {
   applySurfaceAction,
   emptySurface,
   pruneSurface,
+  runExpanded,
   shownRun,
   type SelectionRule,
   type Surface,
   type SurfaceAction,
 } from '@texra/shared/session/surface';
-import {
-  RUN_SECTION_LABELS,
-  RUN_SECTION_ORDER,
-  runStatus,
-} from '@ui/copy/runStatus';
-import type { RunSection } from '@texra/shared/session/runStatusKey';
+import { runListSections } from '@ui/copy/runStatus';
 import { sessionView } from './sessionView';
 import type { RootLaunch } from './sessionRunState';
 import type { LocalNotice } from './transcript';
 import type { FormSlot } from './formSlot';
 import type { ApprovalSurface } from './approvalQueue';
-import type {
-  RunModelDecisionReason,
-  AgentDelegationScope,
-} from '@texra-ai/harness/host';
+import type { RunModelDecisionReason } from '@texra-ai/harness/host';
 import type { RunView } from '@texra-ai/harness/schemas';
-import type { CliTeam } from '@cli/runtime/cliTeams';
 
 // ---------------------------------------------------------------------------
 // types
@@ -53,14 +44,11 @@ import type { CliTeam } from '@cli/runtime/cliTeams';
 export interface SessionMeta {
   readonly agent: string;
   /** The source of the entry `agent` resolved to, pinned on every root run. */
-  readonly agentSource?: AgentSource;
+  readonly agentSource?: NonNullable<AgentConfig['agentSource']>;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly approvalPolicy: ApprovalPolicy;
-  /** The team the root agent leads, when a team was launched. */
-  readonly team?: CliTeam;
-  readonly delegationAgentScope?: AgentDelegationScope;
   readonly version: string;
 }
 
@@ -239,14 +227,8 @@ export type SessionListRow =
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
   const included = sessionRunIds.get();
-  const { runs } = surface.get();
+  const shown = surface.get();
   const rows: SessionListRow[] = [];
-  const groups: Record<RunSection, RunView[]> = {
-    running: [],
-    waiting: [],
-    interrupted: [],
-    recent: [],
-  };
   // Top-level runs come in the session view's order. A child this terminal owns
   // under a parent outside the scope (detached from an earlier turn) is a
   // root here but not in `view.order`: only these sort, after the session view's.
@@ -267,12 +249,8 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
       !included.has(run.parentId),
   );
   detached.sort(compareByNewestCreationTime);
-  for (const run of [...tops, ...detached]) {
-    if (included.has(run.id)) groups[runStatus(run).section].push(run);
-  }
   const append = (run: RunView, depth: number): void => {
-    const open =
-      needsUser(run, view.runs) || runs.get(run.id)?.expanded === true;
+    const open = runExpanded(shown, view, run);
     rows.push({ kind: 'run', run, depth, expanded: open });
     if (open) {
       for (const id of run.childIds) {
@@ -281,10 +259,9 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
       }
     }
   };
-  for (const section of RUN_SECTION_ORDER) {
-    const runs = groups[section];
-    if (runs.length === 0) continue;
-    rows.push({ kind: 'group', label: RUN_SECTION_LABELS[section] });
+  const roots = [...tops, ...detached].filter((run) => included.has(run.id));
+  for (const { label, runs } of runListSections(roots)) {
+    rows.push({ kind: 'group', label });
     for (const run of runs) append(run, 0);
   }
   return rows;
@@ -560,9 +537,9 @@ export interface FormProgress {
   readonly status: 'running' | 'succeeded' | 'failed';
   readonly title: string;
   readonly message?: string;
-  readonly copyableMessage?: string;
-  /** Whether `copyableMessage` has already been written to scrollback by `archiveCopyable`. */
-  readonly copyableMessageArchived?: boolean;
+  /** A message the person may copy (a sign-in link), and whether
+   *  `archiveCopyable` has already written it to scrollback. */
+  readonly copyable?: { readonly text: string; readonly archived: boolean };
   readonly archiveCopyable: () => void;
   readonly cancel: () => void;
   readonly dismiss: () => void;

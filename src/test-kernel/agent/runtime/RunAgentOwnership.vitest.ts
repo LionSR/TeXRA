@@ -17,7 +17,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   waitingAfter,
   persistentTestSession,
@@ -63,7 +63,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
               message: `Run is already running: ${runId}`,
             });
-            yield* Context.get(session, Runs).stop(runId, 'user');
+            yield* Context.get(session, RunRegistry).stop(runId, 'user');
             yield* Fiber.await(first);
             expect(
               storedRows(roots.storage).filter(

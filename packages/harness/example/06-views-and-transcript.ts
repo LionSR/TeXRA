@@ -3,8 +3,9 @@
  *
  * 1. Writes a `paper.tex` file in the workspace and subscribes to the run's
  *    transcript via `session.view.subscribe`.
- * 2. Runs an agent that calls the built-in `read_file` tool on `paper.tex` and
- *    answers from its contents.
+ * 2. Runs an agent whose script calls the built-in `read_file` tool on
+ *    `paper.tex` (the model is sent `script` alone), and answers from its
+ *    contents.
  * 3. Reads `SessionView` with `@texra-ai/harness/schemas` helpers
  *    (`sessionActivity`, `attentionOf`, `acceptsFollowUp`) and formats every
  *    `TranscriptRow` with `@texra-ai/harness/transcript` (`rowHeadline`,
@@ -24,15 +25,15 @@ import {
 } from '@texra-ai/harness/schemas';
 import { elideText, rowHeadline } from '@texra-ai/harness/transcript';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 const { workspace, platform, route } = await makeExampleWorkspace([
   {
     toolCalls: [
       {
         id: 'call_read_1',
-        name: 'read_file',
-        input: { path: 'paper.tex' },
+        name: 'script',
+        input: { code: "return await tools.read_file({ path: 'paper.tex' });" },
       },
     ],
   },
@@ -104,9 +105,11 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provideMerge(route.transport),
-    ),
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: EXAMPLE_CLIENT,
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 

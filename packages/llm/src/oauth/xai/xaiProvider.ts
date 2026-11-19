@@ -5,7 +5,7 @@
  *
  * Rides a public Grok-CLI OAuth client registration. xAI can change or revoke
  * that registration without notice — never present this as an xAI-sanctioned
- * TeXRA integration. Keep every sign-in magic value here so an upstream change
+ * integration. Keep every sign-in magic value here so an upstream change
  * is a one-file edit; the API endpoint the subscription bills is xAI's own
  * (`XAI_DEFAULT_ENDPOINT`), which the route decision names.
  *
@@ -33,7 +33,9 @@ import {
   SubscriptionSessionBaseSchema,
   SubscriptionTokenResponseSchema,
 } from '../subscriptionSessionSchema.js';
+import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import type { SubscriptionOAuthPolicy } from '../subscriptionCoordinator.js';
+import type { ClientIdentity } from '../../node.js';
 
 /** Borrowed OAuth client id (Grok CLI desktop registration). */
 const XAI_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
@@ -66,12 +68,6 @@ function xaiRedirectUri(): string {
 /** OAuth scopes requested at authorize / device time. */
 const XAI_SCOPE =
   'openid profile email offline_access grok-cli:access api:access';
-
-/**
- * Attribution referrer on the authorize URL. Our own string — do not
- * impersonate `opencode` or `grok-cli`.
- */
-const XAI_REFERRER = 'texra';
 
 /**
  * `plan=generic` opts the consent screen into xAI's generic OAuth plan tier;
@@ -113,8 +109,6 @@ const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields(
         Schema.catchDecoding(() =>
           Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
         ),
-      )
-      .pipe(
         Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
       ),
     token_type: Schema.optional(Schema.NullOr(Schema.String)),
@@ -195,18 +189,6 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
   return decodeJwtClaimsWithSchema(token, XaiJwtPayloadSchema, EMPTY_CLAIMS);
 }
 
-/** The user refused the device authorization (terminal, re-auth required). */
-class DeviceAuthorizationDenied extends Schema.TaggedError<DeviceAuthorizationDenied>()(
-  'DeviceAuthorizationDenied',
-  { message: Schema.String, status: Schema.Number },
-) {}
-
-/** The server expired the device code before the user approved. */
-class DeviceCodeExpired extends Schema.TaggedError<DeviceCodeExpired>()(
-  'DeviceCodeExpired',
-  { message: Schema.String, status: Schema.Number },
-) {}
-
 /** Begin the RFC 8628 device-code flow. */
 const requestDeviceCode = Effect.fn('xai.requestDeviceCode')(function* () {
   const response = yield* postOAuthForm(
@@ -241,8 +223,8 @@ const DeviceErrorBodySchema = Schema.Struct({
  * fails with {@link DeviceAuthorizationPending} while the user has not yet
  * approved. A network blip mid-poll is {@link DeviceAuthorizationTransient},
  * which the shared poll retries a few times before failing with it.
- * Terminal device errors are {@link DeviceAuthorizationDenied} and
- * {@link DeviceCodeExpired}.
+ * A refused authorization or an expired code is a
+ * {@link SubscriptionOAuthError} that needs a fresh sign-in.
  */
 const pollDeviceToken = Effect.fn('xai.pollDeviceToken')(function* (
   deviceCode: string,
@@ -282,14 +264,16 @@ const pollDeviceToken = Effect.fn('xai.pollDeviceToken')(function* (
     });
   }
   if (oauthError === 'access_denied' || oauthError === 'authorization_denied') {
-    return yield* new DeviceAuthorizationDenied({
+    return yield* new SubscriptionOAuthError({
       message: 'Grok device authorization was denied',
+      kind: 'fatal',
       status: response.status,
     });
   }
   if (oauthError === 'expired_token') {
-    return yield* new DeviceCodeExpired({
+    return yield* new SubscriptionOAuthError({
       message: 'Grok device code expired — please sign in again',
+      kind: 'expired',
       status: response.status,
     });
   }
@@ -336,46 +320,53 @@ const xaiDeviceGrant = Effect.fn('xai.deviceGrant')(function* (
 /**
  * The Grok sign-in policy for the shared `SubscriptionOAuthCoordinator`: only
  * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT,
- * so the shared coordinator runs it as is.
+ * so the shared coordinator runs it as is. The authorize URL's attribution
+ * referrer is `client.id`, the app's own: never another client's
+ * (`opencode`, `grok-cli`).
  */
-export const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
-  secretKey: XAI_SESSION_SECRET_KEY,
-  sessionSchema: XaiSessionSchema,
-  tokenEndpoint: Object.freeze({
-    tokenUrl: XAI_TOKEN_URL,
-    clientId: XAI_CLIENT_ID,
-    tokenResponseSchema: XaiTokenResponseSchema,
-  }),
-  notSignedInMessage: 'Not signed in with Grok. Run sign-in first.',
-  loopback: Object.freeze({
-    ports: [XAI_CALLBACK_PORT],
-    callbackPath: XAI_CALLBACK_PATH,
-    displayName: 'Grok',
-  }),
-  deviceGrant: xaiDeviceGrant,
-  // xAI pins one redirect port, so the bind's port is ignored.
-  authorize: Object.freeze({
-    url: XAI_AUTHORIZE_URL,
-    scope: XAI_SCOPE,
-    redirectUri: xaiRedirectUri,
-    params: Object.freeze({ plan: XAI_PLAN, referrer: XAI_REFERRER }),
-  }),
-  buildSession(tokens, refreshToken, nowMs, previous) {
-    // Refresh keys off the *access* token. Prefer access JWT exp over
-    // id_token.exp (which can outlive the access token). Each token is
-    // decoded exactly once here and the email claim reuses that decode.
-    // `expires_in` is already normalized to a positive number by
-    // XaiTokenResponseSchema, so no second default is applied here.
-    const idClaims = tokens.id_token ? decodeXaiJwtClaims(tokens.id_token) : {};
-    const accessClaims = decodeXaiJwtClaims(tokens.access_token);
-    const expiresAtMs =
-      accessClaims.expiresAtMs ?? nowMs + tokens.expires_in * 1000;
-    return {
-      accessToken: tokens.access_token,
-      refreshToken,
-      idToken: tokens.id_token ?? previous?.idToken,
-      expiresAtMs,
-      email: idClaims.email ?? accessClaims.email ?? previous?.email,
-    };
-  },
-});
+export const xaiPolicy = (
+  client: ClientIdentity,
+): SubscriptionOAuthPolicy<XaiSession> =>
+  Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
+    secretKey: XAI_SESSION_SECRET_KEY,
+    sessionSchema: XaiSessionSchema,
+    tokenEndpoint: Object.freeze({
+      tokenUrl: XAI_TOKEN_URL,
+      clientId: XAI_CLIENT_ID,
+      tokenResponseSchema: XaiTokenResponseSchema,
+    }),
+    notSignedInMessage: 'Not signed in with Grok. Run sign-in first.',
+    loopback: Object.freeze({
+      ports: [XAI_CALLBACK_PORT],
+      callbackPath: XAI_CALLBACK_PATH,
+      displayName: 'Grok',
+    }),
+    deviceGrant: xaiDeviceGrant,
+    // xAI pins one redirect port, so the bind's port is ignored.
+    authorize: Object.freeze({
+      url: XAI_AUTHORIZE_URL,
+      scope: XAI_SCOPE,
+      redirectUri: xaiRedirectUri,
+      params: Object.freeze({ plan: XAI_PLAN, referrer: client.id }),
+    }),
+    buildSession(tokens, refreshToken, nowMs, previous) {
+      // Refresh keys off the *access* token. Prefer access JWT exp over
+      // id_token.exp (which can outlive the access token). Each token is
+      // decoded exactly once here and the email claim reuses that decode.
+      // `expires_in` is already normalized to a positive number by
+      // XaiTokenResponseSchema, so no second default is applied here.
+      const idClaims = tokens.id_token
+        ? decodeXaiJwtClaims(tokens.id_token)
+        : {};
+      const accessClaims = decodeXaiJwtClaims(tokens.access_token);
+      const expiresAtMs =
+        accessClaims.expiresAtMs ?? nowMs + tokens.expires_in * 1000;
+      return {
+        accessToken: tokens.access_token,
+        refreshToken,
+        idToken: tokens.id_token ?? previous?.idToken,
+        expiresAtMs,
+        email: idClaims.email ?? accessClaims.email ?? previous?.email,
+      };
+    },
+  });

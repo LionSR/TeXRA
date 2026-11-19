@@ -11,7 +11,7 @@
 import { dirname, isAbsolute, join } from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
 
 import {
   ChildRuns,
@@ -23,7 +23,6 @@ import {
   type AgentTrace,
   sourceLocationUnder,
 } from '@texra-ai/harness/plugins';
-import { hasExtension } from '@texra-ai/harness/host';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -31,6 +30,7 @@ import {
   toErrorMessage,
   type FileLocation,
   NonNegativeIntSchema,
+  hasExtension,
 } from '@texra-ai/harness/schemas';
 import replacementEngine, {
   logReplacementDiagnostics,
@@ -112,7 +112,11 @@ const rejectOversizedBibAttachments = Effect.fn(
 )(function* (
   workspaceRoot: string | undefined,
   contextFiles: readonly string[],
-): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  void,
+  ToolError | PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   const fs = yield* FileSystem.FileSystem;
   const bibFiles = contextFiles
     .filter((file) => file.trim() !== '')
@@ -123,9 +127,7 @@ const rejectOversizedBibAttachments = Effect.fn(
     let absolute = bibFile;
     if (!isAbsolute(bibFile)) {
       if (!workspaceRoot) {
-        return yield* Effect.fail(
-          new Error('Workspace path is not available.'),
-        );
+        return yield* new ToolError('Workspace path is not available.');
       }
       absolute = join(workspaceRoot, bibFile);
     }
@@ -145,11 +147,9 @@ const rejectOversizedBibAttachments = Effect.fn(
 
     const sizeBytes = Number(stats.size);
     const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then start the program again without the full .bib file.`;
-    return yield* Effect.fail(
-      new ToolError(message, {
-        summary: 'Rejected oversized BibTeX attachment',
-      }),
-    );
+    return yield* new ToolError(message, {
+      summary: 'Rejected oversized BibTeX attachment',
+    });
   }
 });
 
@@ -196,14 +196,12 @@ const openTask = Effect.fn('documents.openTask')(function* (
   const inputs = yield* located([...config.inputFiles, ...config.mediaFiles]);
   const unreadable = inputs.filter((input) => !input.ok);
   if (inputs.length === 0 || unreadable.length > 0)
-    return yield* Effect.fail(
-      new ToolError(
-        `The document program '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text): ${
-          unreadable.length > 0
-            ? `cannot read ${unreadable.map((input) => `${input.path} (${input.error})`).join(', ')}.`
-            : 'it has none.'
-        }`,
-      ),
+    return yield* new ToolError(
+      `The document program '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text): ${
+        unreadable.length > 0
+          ? `cannot read ${unreadable.map((input) => `${input.path} (${input.error})`).join(', ')}.`
+          : 'it has none.'
+      }`,
     );
   const contexts = yield* located(config.contextFiles);
   // A missing context file is skipped, as the prompt skips it; only the
@@ -282,10 +280,8 @@ export const DocumentContextTool = defineTool({
     });
     const revisions = docs.task.requests.length;
     if (revision >= revisions)
-      return yield* Effect.fail(
-        new ToolError(
-          `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
-        ),
+      return yield* new ToolError(
+        `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
       );
     const asked: RevisionRequest = {
       attachTeXCount: input.attachTeXCount ?? false,
@@ -353,8 +349,8 @@ export const DocumentExtractTool = defineTool({
     yield* logReplacementDiagnostics(replaced.diagnostics);
     const reply = replaced.text;
     if (end?.outcome !== 'completed' || !reply.trim())
-      return yield* Effect.fail(
-        new ToolError(`Run ${run} gave no reply to take documents from.`),
+      return yield* new ToolError(
+        `Run ${run} gave no reply to take documents from.`,
       );
     const { logger } = docs.run;
     const { roots, fileService } = docs.deps;
@@ -642,14 +638,10 @@ export const DocumentProposeTool = defineTool({
     const docs = yield* documentsOfCall();
     const last = docs.rounds.findLast((round) => round.outputs.length > 0);
     if (last === undefined)
-      return yield* Effect.fail(
-        new ToolError('The task produced no documents to propose.'),
-      );
+      return yield* new ToolError('The task produced no documents to propose.');
     if (last.compile?._tag === 'checked' && last.compile.rejected)
-      return yield* Effect.fail(
-        new ToolError(
-          `The documents of the last revision did not compile: ${last.compile.failures.map((f) => `${f.displayName} (${f.logRelativePath})`).join(', ')}.`,
-        ),
+      return yield* new ToolError(
+        `The documents of the last revision did not compile: ${last.compile.failures.map((f) => `${f.displayName} (${f.logRelativePath})`).join(', ')}.`,
       );
     const files = last.outputs.map((output) =>
       fileLocationDisplayPath(output.location),

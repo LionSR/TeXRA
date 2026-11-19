@@ -3,8 +3,17 @@
  * their content blocks, the usage and the stop facts. `anthropicMessages.ts`
  * decodes these into canonical parts.
  */
+// Third-party imports
 import { Schema, Struct } from 'effect';
+import type {
+  CacheCreation,
+  OutputTokensDetails,
+  RefusalStopDetails,
+  StopReason,
+  Usage,
+} from '@anthropic-ai/sdk/resources/messages';
 
+// Local imports
 import { CountSchema, JsonObjectSchema } from '../protocol.js';
 
 /** A count the API may leave out or send as null. */
@@ -143,3 +152,39 @@ export const EventSchema = Schema.Union([
     index: CountSchema,
   }),
 ]);
+
+/** The event types `EventSchema` decodes; the record's key type keeps them in step. */
+export const EVENT_TYPES: ReadonlySet<string> = new Set(
+  Object.keys({
+    message_start: true,
+    message_delta: true,
+    message_stop: true,
+    content_block_start: true,
+    content_block_delta: true,
+    content_block_stop: true,
+  } satisfies Record<(typeof EventSchema.Type)['type'], true>),
+);
+
+type AssertNever<T extends never> = T;
+type WireStopReason = NonNullable<typeof StopSchema.Type.stop_reason>;
+type WireRefusal = NonNullable<typeof RefusalSchema.Type.category>;
+type WireUsage = typeof UsageSchema.Type;
+
+/**
+ * The SDK's types pin these runtime lists, so an SDK upgrade that renames,
+ * adds or drops one fails the typecheck here. The schemas stay: the SDK
+ * types the stream but validates none of it. `stop_sequence` is the one
+ * stop reason left out, since no request sends `stop_sequences`.
+ */
+type _WireMatchesSdk = AssertNever<
+  | Exclude<WireStopReason, StopReason>
+  | Exclude<StopReason, WireStopReason | 'stop_sequence'>
+  | Exclude<WireRefusal, RefusalStopDetails['category']>
+  | Exclude<NonNullable<RefusalStopDetails['category']>, WireRefusal>
+  | Exclude<keyof WireUsage, keyof Usage>
+  | Exclude<keyof NonNullable<WireUsage['cache_creation']>, keyof CacheCreation>
+  | Exclude<
+      keyof NonNullable<WireUsage['output_tokens_details']>,
+      keyof OutputTokensDetails
+    >
+>;

@@ -8,7 +8,13 @@ status: proposed
 基线：`main` 的 `d173e42`（2026-11-14）。路径相对仓库根。度量用 `wc -l`
 和 `grep`，"现状的度量"一节给出可复核的数字。本文是设计的当前状态，不是
 讨论的记录；负责人的裁决集中在"决定记录"，2026-11-14 这次改写改了什么、
-无上下文审稿后又改了什么，列在"修订记录"。
+无上下文审稿后又改了什么，列在"修订记录"。基线之后落地的两处：第 1、2
+期的程序（#14968），和从第 5 期提前的 team 删除（2026-11-17，见"分期"和
+"修订记录"）；"现状的度量"里 team 的那几行是基线时的数字。
+
+正文里的"今天"和各处度量说的是基线 `d173e42`。此后第 1、2、6 期已随
+#14968 落地（2026-11-17 对照 `c78e9f9` 的源码核对过，逐项见"分期"）；第
+3、4、5 期没有动，第 7 期等"负责人问题"2。
 
 ## 摘要
 
@@ -455,6 +461,25 @@ store。
   （diff、accept、Pass N of M）认 run 上有没有 documents 的 fact，不认名
   字，这样包了一层的程序照样有界面。
 
+已落地（2026-11-19）：不另存记录，也不加表；三个谓词都在
+`packages/harness/src/shared/schemas/runRecords.ts`，每处读它要问的那个，
+没有一处再直接测 `config.script` 或 `kind` 字面量。
+
+- `programOf`：受不受信（`step.ts` 固定工具、`proposalFlow.ts` 批准委派、
+  `AgentTool.ts` 文件照传），以及插件的界面读的程序名和参数（视图的
+  `program`、`documentState.ts`、`readProgramResult`、CLI）。受信今天和
+  "是程序"是同一个式子，所以没有单独的受信谓词。
+- `runsScript`：形状。不渲染 prompt、不激活 skill、一个周期就结束、
+  `Stop` hook 视为已激活、不能 fork 也不能从它开 goal（`executeAgent.ts`、
+  `hooks.ts`、`templateInputs.ts`、`forkRun.ts`、`PlanTool.ts`、`self`）。
+  后台脚本和程序在每一处答得一样，所以是一个事实。
+- `backgroundScriptOf`：后台脚本，它的结束作为脚本投递交给启动它的对话，
+  它的 `self()` 是那个对话（`childDelivery.ts`、`SelfTool.ts`）。
+
+形状里有两条今天只认程序：花费含子运行（`runOwnership.ts`）和结束后不再
+从行恢复（`continuesFromRows`，读视图的 `program`）。后台脚本在这两处答
+得不同，这次没改行为；它们和视图上的 `program` 字段一起随第 5 期定。
+
 ### 入口只有一个 agent
 
 入口 agent 只有一个，用户不能改它（负责人 2026-11-14）。它不是一个 agent
@@ -483,8 +508,9 @@ TeXRA 用户的旋钮。
   id 排，放不到最前面。`assistant.yaml` 里各能力的那几句搬到各自插件的
   段里，插件没开就没有那几句，不必再写"when available"。
 - **模型拿到的只有 `script`。** code mode 默认打开：一次聊天的请求里只
-  发 `script` 这一个工具，别的都从脚本里调。今天这是
-  `codeMode.scriptOnly`，默认关。
+  发 `script` 这一个工具，别的都从脚本里调。这是
+  `codeMode.scriptOnly`：harness 那一行默认关，TeXRA 的 catalog 把它设成
+  开（#14968）。
 - **能调的** = 开着的插件默认开放的工具，按步解析，config 里不抄表。今
   天 `assistant.yaml` 抄的 37 个就是这个集合：52 个工具去掉 setup 的 8
   个、六个步骤工具和 `self`。那 15 个默认不开放，只有点名它的程序或启动
@@ -536,7 +562,9 @@ harness 那一行的默认值改成开：非 crash 的套件 248 个文件里 4 
 话是按直接调工具写的，默认值一翻，它的每个直接调用都被拒绝。CLI 的
 validation 脚本和桌面 e2e 跑的也是这个模型。
 
-所以这一处改动由四件事组成：
+所以这一处改动由四件事组成，四件都已随 #14968 落地（`texraSettings.ts`
+的 `defaults`、`ModelAccess.ts` 的 `keepsDirectToolCalls`、`AgentsTab.ts`
+里的那一行、`packages/cli/scripts/validate-journeys.mjs` 的 `--direct`）：
 
 1. **默认值放在 TeXRA 的 catalog 里**（`settingsCatalog` 的
    `defaults`），harness 那一行仍然是关。code mode 默认开是产品的决定，
@@ -552,7 +580,7 @@ validation 脚本和桌面 e2e 跑的也是这个模型。
 4. **journey 脚本默认跑 `only` 那一组**，`--direct` 取代
    `--script-only`，否则两组跑的是同一件事。
 
-原来排在翻之前的三件事，改成翻之后补：
+原来排在翻之前的三件事，改成翻之后补，三件都还没做：
 
 1. 按 Q10 补 glm 和 fan-out journey。
 2. 加一个整套聊天的 journey，其中要用的工具没有声明，得靠搜索找到。"只
@@ -1006,7 +1034,7 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 | -------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
 | 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、TeXRA 自己的 skill                            | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段    |
 | harness：agent 索引、catalog follower、workspace 选择、persona schema、`AgentBlock`                      | 约 2800                | skills 子系统                       |
-| team：预设、启动、CLI、标签页、`apply_team`                                                              | 1647                   | 无                                  |
+| team：预设、启动、CLI、标签页、`apply_team`（已删，2026-11-17）                                          | 1647                   | 无                                  |
 | agent 设置页（前端和后端）                                                                               | 1353                   | Skills 标签页；Plugins 页多一列程序 |
 | documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成 | 约 1000 of 2271        | 文档工具本身和 `revise`             |
 | CLI：`texra agents`（`team` 已计入上面）                                                                 | 271                    | `texra run`、`texra skills`         |
@@ -1096,12 +1124,13 @@ red-flags 的顺序（`2026-11-07-red-flags-round-2-and-order.md` lane 5 的第
   feed，`Deferred` 在同一期换掉。
 - **M4**（plan 工具从自己过去的 tool result 里找它启动的 goal）不被取
   代。本提案不动 goal：`builtIn:goal`、`launchBackgroundScript` 和
-  `kind: 'background'` 都原样，第 1 期只换 `recipe` 那一个成员。建议它回
-  到顺序里，和第 1 期谁先谁后都行。
+  `kind: 'background'` 都原样，第 1 期只换了 `recipe` 那一个成员。建议它回
+  到顺序里；第 1 期已落地，没有先后要排。
 - **H9**（插件用六种方式拿 host 的服务，一个能力是裸 flag）不被取代。本
   提案不改 `texraPlugins(host)` 怎么把 host 的服务交给插件。建议它回到顺
-  序里，但和第 1 期一先一后：两者都改
-  `packages/texra/src/tools/registry.ts`。
+  序里。原来要和第 1 期一先一后（两者都改
+  `packages/texra/src/tools/registry.ts`）；第 1 期已落地，这条约束没有
+  了。
 
 ## 更彻底的方案：Unix
 
@@ -1177,8 +1206,9 @@ history 的行。
 
 ## 分期
 
-每一期独立可合，存法只变两次，各自落在需要它的那一期。第 1 期现在就
-开，不等 1.0 PRD 的在途线（负责人 2026-11-14）。
+每一期独立可合，存法只变两次，各自落在需要它的那一期。第 1、2、6 期
+已随 #14968 落地，每一期末尾写了核对到什么、还剩什么；第 3、4、5 期未
+做，第 7 期等"负责人问题"2。
 
 1. **按名启动和它的存法**（harness 加 documents 的启动路径；用户看不到
    变化）。`Plugin.programs`；`script` 的 `recipe` 成员换成 `program` 成
@@ -1188,6 +1218,16 @@ history 的行。
    的 recipe 本身：它登记成一个程序，15 个 task agent 仍通过它跑，agent
    名和选项在 `args` 里。结果的读法原样挪到程序的登记上。goal 不动，
    `scriptModules` 和 `builtIn:` 不动。
+   **已落地（#14968）。** `launchesTasks`、`document_task`、
+   `isTaskConfig`、`recipeBlockOf`、`agentBlock` 按整词搜索源码都是 0 处；
+   `Plugin.programs` 在 `packages/harness/src/tools/plugins.ts`，
+   `script.kind: 'program'` 在
+   `packages/harness/src/shared/schemas/agentConfig.ts`，插件 id 是
+   `theory`，`run.config` 升了行版本；`script` 的描述列出能启动的程序
+   （`ScriptTool.ts`），沙箱按 specifier 原样查表，不再走 QuickJS 的
+   normalizer（`packages/harness/src/agent/codeSandbox/worker.ts`）。还剩：`program` 工具
+   （`packages/harness/src/agent/runtime/delegation/ProgramTool.ts`）只接受
+   登记的名字，模型现写的 `{ code, tools }` 还不能由它启动。
 2. **`theory` 的前八个程序**。`revise` 原语和步骤工具的契约变更；15 个
    task 搬成八个程序文件。先移 `edit` 和 `annotate`，journey 跑一次作回
    归；再移其余六个；最后一个移完就删 15 个 task 文件、`task:` 块、
@@ -1195,15 +1235,25 @@ history 的行。
    对模型写的程序开放，`describeTool` 对程序名返回源码。结果的读法在这
    一期对比后决定删不删。程序能由 `texra run` 和入口 agent 启动；launch
    form 这一期不动。
-3. **`lean4` 插件的两个程序**。它的 agent 和 skill 先不删（team 还指着
-   它们），留到第 5 期。
+   **已落地（#14968，后续 #14998）。** 八个程序在
+   `packages/texra/src/tools/theory/programs.ts`（源码是这个文件里的字符
+   串，不是各自的 `.js` 文件）；task 文件、`task:` 块、选项表和
+   `critic.yaml` 已删，`packages/extension/resources/agents` 剩 19 个文
+   件，`DOCUMENT_TASK_OPTIONS` 整词搜索 0 处；`describeTool` 对程序名返回
+   源码；launch form 的 task 开关和 task agent 也在这一期删了。还剩：结
+   果的读法没有删（`Program.result` 仍由
+   `packages/harness/src/agent/runtime/childDelivery.ts` 读），那次对比没
+   有记录；步骤工具对模型写的程序开放，等第 1 期剩下的那一项。
+3. **`lean4` 插件的两个程序**。它的 agent 和 skill 留到第 5 期：team 已
+   先删，不再有名单指着它们，留着只因为 agent 目录整体在那一期删。
 4. **安装式插件带程序**，即"用户自己的程序"一节。要在第 5 期之前，否
    则删掉 custom agent 时用户自己的东西没处放。
 5. **删 agent 文件和补偿层，聊天的存法变更**。`run.chat` 去掉 persona 和
    agent 名（第二次存法变更），`agent()` 和 `StartRequest` 改签名；
-   agents 目录（含 lean4 的）、agent 索引和 schema、team、workspace 选
-   择、TeXRA 自己的 skill、customize、`agents` 和 `team` 两个 CLI 命令、
-   `latex-extract` 插件、launch form 的 agent 列表；聊天
+   agents 目录（含 lean4 的）、agent 索引和 schema、workspace 选
+   择（team 删后剩 `all` 和 `custom` 两种）、`AgentConfig` 上已无人写的
+   `delegationAgentScope`、TeXRA 自己的 skill、customize、`agents` 这个
+   CLI 命令、`latex-extract` 插件、launch form 的 agent 列表；聊天
    的 system 文本改由 app 的基础文本和插件的段拼出，根聊天能调的改为
    "开着的"、声明的改为一张短表，MCP 改为配了就能调；测试套件改写或
    删；文档、迁移说明和 `texra-action`。只有入口 agent 的 launch form 到
@@ -1212,7 +1262,21 @@ history 的行。
    以上各期，是单独的一处改动；它由哪四件事组成见"入口只有一个
    agent"。在第 5 期之前翻，`assistant.yaml` 的 37 个工具仍全部声明；
    "只声明小核心"要等第 5 期的短表。
+   **已落地（#14968）**，四件事都在源码里（见"入口只有一个 agent"）。翻
+   之后要补的三件（glm 和 fan-out journey、靠搜索找工具的整套聊天
+   journey、回退名单里的真实模型）还没做。
 7. **（可选）工具改 CLI**。先从 `arxiv` 试。
+
+**team 已从第 5 期提前删除（2026-11-17）。** 它不依赖第 4 期：custom
+team 只是一张名单，删掉之后没有东西需要新家。删掉的是五个预设和
+starter、Teams 分区、`apply_team`、`setup` 里问学科的那一步、launch
+form 和 `/agent` 里的 team 行、`texra team`、workspace 选择的 `inherit`
+和 `team` 两种 kind、默认 team 的全局键和 `AgentDirectoriesPort.teamMembers`。
+留给第 5 期的：`all` 和 `custom` 两种 workspace 选择、hidden custom
+agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
+这个字段（app 里已经没有写它的地方；它是 `run.config` 的一部分，随第二
+次存法变更一起删，不为它单独升一次行版本）。过渡期的代价：一个没有手动
+勾选过的 workspace，picker 里是全部 agent。
 
 ## 负责人问题
 
@@ -1274,7 +1338,17 @@ history 的行。
   team）；**不同意删安装式插件的 skills、commands 和 agents**。
 - `latex-extract`："extract 那个可以去掉了"。
 
+负责人 2026-11-17：
+
+- "我们这个 team 设计在新的 general skills、more codemode 和 more
+  plugins 下比较过时了，也许应该 remove。"team 据此从第 5 期提前，单独
+  删除（"分期"末段）。
+
 ## 修订记录
+
+**2026-11-17，team 先删。** 第 5 期里 team 的部分单独落地，其余不动；
+"分期"第 3、5 条和"删除清单"随之改。存法没有变：`run.config` 的行版本
+不升，`delegationAgentScope` 留在 harness 上等第 5 期。
 
 **2026-11-14，按小内核和程序插件重写。** 相对 11-06 版：
 

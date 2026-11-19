@@ -3,9 +3,8 @@
  * new-task launcher: the instruction, chips for agent and model (and the
  * working directory, only with two or more roots), and the polish,
  * dictation, attach, and send controls. The agent menu lists each agent
- * once, then the teams: the agent picked decides the launch mode. Open on
- * an agent's proposal (a proposal card's Edit), its send approves that
- * proposal with the form's changes. The follow-up keeps a two-line writing area and a separate action
+ * once. Open on an agent's proposal (a proposal card's Edit), its send
+ * approves that proposal with the form's changes. The follow-up keeps a two-line writing area and a separate action
  * row, under a line that offers the parent instead when there is one.
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
@@ -30,11 +29,10 @@ import {
   canSendFollowUp,
   EMPTY_DRAFT,
   runSurface,
-  type Draft,
+  type FollowUpDraft,
   type Surface,
 } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { appendClipboardImageChips } from '@texra/shared/utils/clipboard';
 import {
   clipboardImageFiles,
   getExtensionFromMimeType,
@@ -43,11 +41,12 @@ import {
 } from '@texra/shared/utils/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { isCommitEnter } from '@ui/wa/keyActivation';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
@@ -87,9 +86,7 @@ export class SessionComposer extends LitElement {
       }
       .routing .routing-target {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
       .routing .routing-parent,
       .routing .routing-parent::part(base) {
@@ -111,7 +108,7 @@ export class SessionComposer extends LitElement {
       /* The shared field focus (selectStyles.ts), at card radius. */
       .composer:focus-within {
         border-color: var(--wa-color-focus);
-        box-shadow: 0 0 0 1px var(--wa-color-focus);
+        box-shadow: var(--field-focus-halo);
       }
       /* Follow-ups keep a writing area above the same action row as launch.
          Controls never move into the text line or appear only on focus. */
@@ -218,15 +215,8 @@ export class SessionComposer extends LitElement {
       .chip-label {
         display: block;
         max-width: 14ch;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
-      .menu-heading {
-        padding: var(--wa-space-3xs) var(--wa-space-xs);
-        ${overlineDeclarations}
-      }
-
       .recording::part(base) {
         color: var(--color-error);
       }
@@ -271,7 +261,7 @@ export class SessionComposer extends LitElement {
     return this.run !== null;
   }
 
-  private get draft(): Draft {
+  private get draft(): FollowUpDraft {
     const run = this.run;
     if (!run) return EMPTY_DRAFT;
     return this.surface ? runSurface(this.surface, run.id).draft : EMPTY_DRAFT;
@@ -296,7 +286,7 @@ export class SessionComposer extends LitElement {
     );
   }
 
-  private setText(text: string, patch: Partial<Draft> = {}): void {
+  private setText(text: string, patch: Partial<FollowUpDraft> = {}): void {
     const run = this.run;
     if (run) {
       // A draft's images are the `[name]` chips its text still carries: a
@@ -324,7 +314,7 @@ export class SessionComposer extends LitElement {
   };
 
   private handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    if (!isCommitEnter(event) || event.shiftKey) return;
     event.preventDefault();
     this.send();
   };
@@ -389,10 +379,15 @@ export class SessionComposer extends LitElement {
     }
     // The paste was taken over above, so its text goes in even when every
     // image failed: otherwise the failure would also cost the typed text.
-    const insert = appendClipboardImageChips(
-      pastedText,
-      added.map(({ fileName }) => fileName),
-    );
+    const chips = added.map(({ fileName }) => `[${fileName}]`).join(' ');
+    const boundary =
+      chips !== '' &&
+      pastedText &&
+      !pastedText.endsWith(' ') &&
+      !pastedText.endsWith('\n')
+        ? ' '
+        : '';
+    const insert = `${pastedText}${boundary}${chips}`;
     // The draft holds each chip's name now and its stored path once the
     // host answers (`sessionSurfaces.applyHostOutcome`).
     const pending = added.map(({ fileName }) => ({ fileName, media: null }));

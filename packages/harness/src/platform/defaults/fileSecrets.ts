@@ -15,7 +15,14 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { Effect, Fiber, FileSystem, type PlatformError, Stream } from 'effect';
+import {
+  Effect,
+  Fiber,
+  FileSystem,
+  type PlatformError,
+  Schedule,
+  Stream,
+} from 'effect';
 
 import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -60,6 +67,16 @@ function failure(
   });
 }
 
+/**
+ * Windows refuses a rename while another handle holds either file open: a
+ * process reading the key after a change, or a scanner on the file just
+ * staged. The handle closes within milliseconds, so the rename is tried
+ * again; elsewhere the same error is a real denial.
+ */
+const heldOpenOnWindows = (error: PlatformError.PlatformError): boolean =>
+  process.platform === 'win32' &&
+  (error.reason._tag === 'PermissionDenied' || error.reason._tag === 'Busy');
+
 /** The keys stored under `directory`, staged writes left out. */
 const storedKeys = (
   directory: string,
@@ -95,7 +112,7 @@ export class FileSecrets implements PlatformSecrets {
       fs.readFileString(this.fileOf(key)),
     ).pipe(
       Effect.map((value): string | undefined => value),
-      Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
+      Effect.catchIf(meansAbsent, () => Effect.undefined),
       Effect.mapError((cause) => failure(this.directory, 'get', cause, key)),
       Effect.provide(nodeFileServices),
     );
@@ -116,7 +133,15 @@ export class FileSecrets implements PlatformSecrets {
         // The commit: the staged file becomes the key's in one rename, so a
         // reader sees the old value or the new one, never a partial file.
         yield* fs.writeFileString(staged, value, { mode: FILE_MODE }).pipe(
-          Effect.andThen(fs.rename(staged, file)),
+          Effect.andThen(
+            fs.rename(staged, file).pipe(
+              Effect.retry({
+                schedule: Schedule.exponential('10 millis'),
+                times: 6,
+                while: heldOpenOnWindows,
+              }),
+            ),
+          ),
           Effect.onError(() =>
             fs.remove(staged, { force: true }).pipe(
               Effect.ignore({

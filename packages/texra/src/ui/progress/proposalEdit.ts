@@ -26,7 +26,7 @@ type LaunchPatch = Extract<SurfaceAction, { kind: 'launch' }>['patch'];
 /** The proposal's agent as an option value: options carry source-qualified
  *  keys, and a proposal with no source names the agent bare. */
 function proposedAgentKey({ agent, agentSource }: AgentProposalRequest) {
-  return agentSource == null ? agent : agentKey(agentSource, agent);
+  return agentSource == null ? agent : agentKey(agentSource.kind, agent);
 }
 
 /** Whether an agent option value (a key) is the proposal's agent. */
@@ -51,8 +51,8 @@ export function editedProposal(
 
 /**
  * The agents a proposal may launch instead: for a chat, the ones the asking
- * run may delegate to (its team's, which may be hidden from the catalog,
- * else every visible one); for a program, none, since the proposal names
+ * run may delegate to (those its launch pinned, which may be hidden from the
+ * catalog, else every visible one); for a program, none, since the proposal names
  * the program and not an agent. The proposed one is always among them, so
  * an unchanged form launches what was proposed.
  */
@@ -69,8 +69,8 @@ function proposalAgentOptions(
       ? host.agentOptions
       : scope.flatMap((key) => {
           const option = host.agentOptions.find(({ value }) => value === key);
-          // A member the catalog hides is offered, as the team names it,
-          // only when proposed.
+          // A pinned agent the catalog hides is offered, by its key, only
+          // when proposed.
           if (option === undefined)
             return isProposedAgent(key, data)
               ? [{ value: key, label: agentName(key) }]
@@ -83,7 +83,7 @@ function proposalAgentOptions(
 }
 
 /** The catalogs as the launch form offers them: while it is open on a
- *  proposal, its agents are the proposal's and it offers no team. */
+ *  proposal, its agents are the proposal's. */
 export function formHost(
   surface: Surface,
   view: SessionView,
@@ -94,7 +94,6 @@ export function formHost(
   return {
     ...host,
     agentOptions: proposalAgentOptions(edited.data, edited.run, host),
-    teamOptions: [],
   };
 }
 
@@ -129,8 +128,8 @@ export function proposalApproval(
 ): Extract<RequestDecision, { action: 'approve' }> {
   return {
     action: 'approve',
-    agent: isProposedAgent(launch.agent, data) ? null : launch.agent,
-    model: launch.model === data.model ? null : launch.model,
+    ...(!isProposedAgent(launch.agent, data) && { agent: launch.agent }),
+    ...(launch.model !== data.model && { model: launch.model }),
     instruction: launch.instruction,
     inputFiles: [...launch.inputFiles],
     contextFiles: [...launch.contextFiles],

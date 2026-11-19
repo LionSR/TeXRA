@@ -44,6 +44,7 @@ export {
 export {
   acceptsFollowUp,
   isInterrupted,
+  isLive,
   isUnreadable,
   isWorking,
   attentionOf,
@@ -85,6 +86,7 @@ export type {
   AgentProposal,
   AgentSource,
   AttachedMemoryMiss,
+  CatalogAgentSource,
   CompactionActivityData,
   CompactionActivityOutcome,
   ContextManagementData,
@@ -192,6 +194,13 @@ export {
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
+// One node of a stored conversation, as `records(runId).readConversation`
+// answers it and an export's format reads it.
+export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
+// A trace event by its row type: the members of the root's `AgentEvent`.
+export type { TraceRow } from '@shared/session/agentEvent';
+// The owner of a session row: a run, the session, or a plugin's key.
+export type { AggregateId } from '@shared/schemas';
 // An exported run, as a static viewer parses it back.
 export {
   AssembleTraceResultSchema,
@@ -203,10 +212,11 @@ export {
   type TraceFactKind,
 } from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
-// and its base name without the extension.
+// its base name without the extension, and a case-free extension check.
 export {
   getBasename,
   getFileStem,
+  hasExtension,
   normalizeFilePath,
 } from '@utils/core/pathBasics';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): the
@@ -234,11 +244,9 @@ export {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   OPENAI_FAST_TIER_SETTING,
-  SCRIPT_ONLY_SETTING,
   CHATGPT_PREFER_SUBSCRIPTION_SETTING,
   DEBUG_MODE_SETTING,
   GOAL_STRATEGY_SETTING,
-  GOOGLE_BACKGROUND_RESPONSES_SETTING,
   MAX_IMAGE_DIMENSION_SETTING,
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
@@ -253,7 +261,7 @@ export {
   type SettingStore,
   type StateKey,
 } from '@shared/state/stateSettings';
-// What a `ConfigProvider` (root) writes to and reads back per scope.
+// What a `ConfigProvider` (`./plugins`) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
 // The providers' custom-endpoint and China-region rows, and a provider's
 // own, if it has them.
@@ -283,6 +291,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatWallTime,
   joinFacts,
   pluralize,
   previewLabel,
@@ -312,6 +321,7 @@ export {
 
 // Agents, request payloads, harness setting keys, skills, and run outputs.
 export {
+  ACTIVATED_SKILLS_MAX,
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
   AGENT_FILE_EXTENSION,
@@ -364,7 +374,6 @@ export {
   type PlanApprovalRequest,
   planOf,
   planSummaryLine,
-  type PluginRequest,
   type RequestKind,
   // Who answers a request: a person, or the run grant that answers it.
   type AnsweredBy,
@@ -380,6 +389,8 @@ export {
   RunEndSchema,
   runIdentityDisplayName,
   runIdentityName,
+  runNoun,
+  NESTED_NOUNS,
   RunIdSchema,
   RunRecordFieldsSchema,
   RunOutcomeSchema,

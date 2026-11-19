@@ -7,14 +7,16 @@ import {
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
-import { storeCredential } from '@texra/common/secrets/storeCredential';
+import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
+import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 import {
-  GITHUB_TOKEN_STORAGE_KEY,
+  removeGitHubToken,
   resolveGitHubTokenSource,
+  saveGitHubToken,
 } from '@texra/tools/github/githubAuth';
 
 import { WorkspaceAgentsForm } from './WorkspaceAgentsForm';
@@ -96,11 +98,8 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const applyUpdate = Effect.fn('applyUpdate')(function* (
     entry: TexraSettingRow,
     value: unknown,
-  ): Effect.fn.Return<void, Error, AppSignals> {
-    const result = yield* applyStateSettingUpdate(entry.key, value, {
-      host: 'cli',
-      stores: roots,
-    });
+  ): Effect.fn.Return<void, SettingsRequestFailed, AppSignals> {
+    const result = yield* applyStateSettingUpdate(entry, value, roots);
     const label = entry.title;
     switch (result.kind) {
       case 'applied':
@@ -110,19 +109,15 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         // ConfigForm rolls its optimistic value back on a failure and
         // reports it, so a refused write must fail rather than read as
         // applied.
-        return yield* Effect.fail(
-          new Error(
-            `Failed to update "${label}": ${toErrorMessage(result.error)}`,
-            { cause: result.error },
-          ),
-        );
+        return yield* new SettingsRequestFailed({
+          message: `Failed to update "${label}": ${toErrorMessage(result.error)}`,
+          cause: result.error,
+        });
       case 'ignored':
       case 'workspace-required':
-        return yield* Effect.fail(
-          new Error(
-            `Setting "${label}" is not writable from /config (${result.kind}).`,
-          ),
-        );
+        return yield* new SettingsRequestFailed({
+          message: `Setting "${label}" is not writable from /config (${result.kind}).`,
+        });
     }
     settings.reload();
     if (entry.key === APPROVAL_POLICY_SETTING.key) {
@@ -131,7 +126,11 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         Effect.flatMap((policy) =>
           Effect.try({
             try: () => props.onApprovalPolicyChanged?.(policy),
-            catch: ensureError,
+            catch: (cause) =>
+              new SettingsRequestFailed({
+                message: ensureError(cause).message,
+                cause,
+              }),
           }),
         ),
         Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),
@@ -162,7 +161,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         {
           name: 'agents',
           label: 'Agents',
-          description: 'workspace agents and user default team',
+          description: 'workspace agents and the default chat agent',
         },
         {
           name: 'api-keys',
@@ -191,7 +190,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             // The save and the refresh that follows it are one program.
             onSave={(provider, key) =>
               Effect.gen(function* () {
-                yield* commitCliProviderApiKey(roots, provider, key);
+                yield* commitProviderKey(tuiUi, roots, provider, key);
                 apiKeys.setData(
                   (current) => current && { ...current, [provider]: 'secret' },
                 );
@@ -208,18 +207,14 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             statusView={githubTokenStatusView}
             onSave={(token) =>
               Effect.gen(function* () {
-                yield* storeCredential(yield* Secrets, {
-                  secretName: GITHUB_TOKEN_STORAGE_KEY,
-                  value: token,
-                  kind: 'github',
-                });
+                yield* saveGitHubToken(token);
                 githubToken.setData(() => 'secret');
                 yield* githubToken.refresh();
               })
             }
             onRemove={() =>
               Effect.gen(function* () {
-                yield* (yield* Secrets).delete(GITHUB_TOKEN_STORAGE_KEY);
+                yield* removeGitHubToken;
                 yield* githubToken.refresh();
               })
             }

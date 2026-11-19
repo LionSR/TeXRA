@@ -11,7 +11,9 @@ import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_SOURCE,
+  backgroundScriptOf,
   factName,
+  programOf,
   type AgentConfig,
   type RunId,
 } from '@shared/schemas';
@@ -22,15 +24,25 @@ import { ToolRegistry, type ProgramChange } from '@tools/toolTable';
 
 /**
  * The script a program's run makes: import the module registered under
- * `name` and call its default export with `args`. What that resolves to is
- * the script's return, so the run ends with it as its structured output.
+ * `name` and call its default export with its own `args` and the launch's
+ * instruction and files. What that resolves to is the script's return, so
+ * the run ends with it as its output.
  */
 const programScript = (
   name: string,
   args: Readonly<Record<string, Schema.Json>>,
+  launch: Pick<
+    AgentConfig,
+    'instruction' | 'inputFiles' | 'contextFiles' | 'mediaFiles'
+  >,
 ): string =>
   `const { default: program } = await import(${JSON.stringify(`builtIn:${name}`)});
-return await program(${JSON.stringify(args)});`;
+return await program(${JSON.stringify(args)}, ${JSON.stringify({
+    instruction: launch.instruction,
+    inputFiles: launch.inputFiles,
+    contextFiles: launch.contextFiles,
+    mediaFiles: launch.mediaFiles,
+  })});`;
 
 /** The `script` call a run opened on `script` makes, and the tools its run
  *  offers that call. */
@@ -81,8 +93,7 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
   const named = files.outputFiles.filter(Boolean);
   return {
     agent: name,
-    agentSource: AGENT_SOURCE.INLINE,
-    persona: { name },
+    agentSource: { kind: AGENT_SOURCE.INLINE, persona: {} },
     outputFiles: named.some((file) => !files.inputFiles.includes(file))
       ? named
       : [...(program.outputs ?? [])],
@@ -95,14 +106,15 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
 export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
   config: AgentConfig,
 ): Effect.fn.Return<ScriptCall | null, ProgramNotRegistered, ToolRegistry> {
-  const { script } = config;
-  if (script == null) return null;
-  if (script.kind === 'background') return script;
-  const program = yield* registeredProgram(script.name);
+  const background = backgroundScriptOf(config);
+  if (background !== null) return background;
+  const program = programOf(config);
+  if (program === null) return null;
+  const { tools } = yield* registeredProgram(program.name);
   return {
-    code: programScript(script.name, script.args),
-    title: script.name,
-    tools: program.tools,
+    code: programScript(program.name, program.args, config),
+    title: program.name,
+    tools,
   };
 });
 
@@ -132,9 +144,9 @@ export const readProgramResult = Effect.fn('readProgramResult')(function* (
   DatabaseReadFailed,
   ToolRegistry | SessionLog
 > {
-  const script = config?.script;
-  if (script?.kind !== 'program') return undefined;
-  const { name } = script;
+  const program = config === null ? null : programOf(config);
+  if (program === null) return undefined;
+  const { name } = program;
   const refused = (reason: string) =>
     Effect.logWarning(
       `Run ${runId} of the program '${name}' reports nothing its registration reads: ${reason}`,

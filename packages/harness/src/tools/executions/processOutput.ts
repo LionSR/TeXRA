@@ -126,7 +126,7 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // log, and would not know a command launched a moment ago.
   const run = (yield* (yield* SessionViewAccess).read([runId])).runs.get(runId);
   if (run === undefined) {
-    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
+    return yield* new ToolError(`Run not found: ${runId}`);
   }
   if (run.identity.kind !== 'process') {
     return executed(

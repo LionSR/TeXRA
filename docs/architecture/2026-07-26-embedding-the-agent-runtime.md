@@ -4,7 +4,7 @@
 repository embeds the harness through the published package
 `@texra-ai/harness` and its entries (`.`, `/node`, `/plugins`, `/schemas`,
 `/transcript`), documented in `packages/harness/README.md`:
-`Sessions.layer({ platform, plugins })` composes everything §1 walks through,
+`Sessions.layer({ platform, plugins, client })` composes everything §1 walks through,
 and the §1 example uses only those entries. The rest of this note documents
 the internal composition behind that layer, reached through the repo-root path
 aliases declared in `tsconfig.json`, for work on the harness itself. Plain
@@ -173,7 +173,7 @@ object it passes to `attach` (§3), which keeps the approval-gated tools away fr
 ### Putting it together
 
 An embedder does not run the steps above itself. `Sessions.layer({ platform,
-plugins })` installs the process runtime (Step 1) over the platform's process
+plugins, client })` installs the process runtime (Step 1) over the platform's process
 services, seeds the first-install tool switches, and serves the `Sessions`
 that open a session over the platform's roots (Prerequisite A). The catalog
 loads on its first miss (Prerequisite B). `nodePlatform` reads provider keys
@@ -223,7 +223,15 @@ const program = Effect.gen(function* () {
   Effect.scoped,
   // The process and its sessions live for this layer's scope; releasing it
   // closes every session, then the process under them.
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  // `client` names the embedder's app to the model providers (a ChatGPT
+  // sign-in shows its name); the harness names none of its own.
+  Effect.provide(
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: { name: 'My App', id: 'my-app' },
+    }),
+  ),
 );
 
 const result = await Effect.runPromise(program);
@@ -353,14 +361,10 @@ resumes a waiting run.
 
 ### The request kinds
 
-The payload union is the vocabulary: the harness's own `toolEdit`, `bash`,
-`retry`, `proposal`, `planApproval` and `userQuestion`, and a plugin's
-request, `plugin` (`PermissionPayloadSchema`,
-`packages/harness/src/shared/schemas/request.ts`). Every kind of the
-harness's own blocks the tool or turn that opened it; a plugin's request
-declares whether it does (`blocksCaller`) and which answers it takes
-(`answers`). TeXRA's external inquiry is a plugin request that blocks
-nothing and is answered later.
+The payload union is the vocabulary, a closed set the harness declares:
+`toolEdit`, `bash`, `retry`, `proposal`, `planApproval` and `userQuestion`
+(`RequestPayloadSchema`, `packages/harness/src/shared/schemas/request.ts`).
+Every request blocks the tool or turn that opened it.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 

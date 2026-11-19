@@ -58,8 +58,6 @@ export interface AgentDirectoryServiceOptions {
   resourcesPath: string;
   /** Where the configured custom agent directory is read from. */
   state: Pick<StateStore, 'get'>;
-  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
-  teamMembers?: AgentDirectoriesPort['teamMembers'];
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: {
@@ -72,12 +70,10 @@ const CHANNEL = 'AgentLoad';
 
 export class AgentDirectoryService {
   readonly resourcesRoot: string;
-  readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 
   private readonly options: AgentDirectoryServiceOptions;
   constructor(options: AgentDirectoryServiceOptions) {
     this.options = options;
-    if (options.teamMembers) this.teamMembers = options.teamMembers;
     this.resourcesRoot = options.resourcesPath;
   }
 
@@ -194,7 +190,7 @@ export class AgentDirectoryService {
     FileSystem.FileSystem
   > {
     if (!configuredPath) {
-      return Effect.succeed(undefined);
+      return Effect.undefined;
     }
 
     return Effect.gen({ self: this }, function* () {
@@ -296,11 +292,12 @@ export function agentSourceRoots(
 // directory stamped with `basedOn`, the digest of the bundled file it was
 // taken from, so the catalog can tell when an app update ships a newer
 // bundled version (`AgentCatalog.newerBuiltIn`). Every host's "customize"
-// and "keep mine" write through `AgentCatalog.customize`.
+// writes through `AgentCatalog.customize`, and its "keep mine" through
+// `AgentCatalog.keepCustom`.
 
 /**
- * `customize` or `removeCustom` refused the change: the entry has no file of
- * its own to copy or delete (`noFile`), its copy or the file to delete
+ * `customize`, `keepCustom` or `removeCustom` refused the change: the entry
+ * has no file of its own to copy, keep or delete (`noFile`), its copy or the file to delete
  * would lie outside the custom directory (`escapes`), a copy is already
  * there (`exists`, at `path`), or a copy has no newer bundled version
  * to keep (`current`).
@@ -315,13 +312,11 @@ export class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefu
 ) {}
 
 /**
- * A change to a custom copy of a bundled agent: `copy` writes a new one
- * into the custom directory, stamped with the bundled file's digest
- * (`basedOn`), and is refused when one is there; `overwrite` replaces it;
- * `keep` re-stamps the user's copy with the changed bundled version, which
- * dismisses its newer-version notice and touches nothing else.
+ * A custom copy of an agent: `copy` writes a new one into the custom
+ * directory, stamped with the bundled file's digest (`basedOn`), and is
+ * refused when one is there; `overwrite` replaces it.
  */
-export type AgentCustomization = 'copy' | 'overwrite' | 'keep';
+export type AgentCustomization = 'copy' | 'overwrite';
 
 /**
  * Write the definition at `from` to `to`, recording `digest` as the bundled
@@ -364,11 +359,13 @@ const copyTarget = Effect.fn('AgentDirectoryService.copyTarget')(function* (
   return isStrictlyWithin(customDir, target) ? target : undefined;
 });
 
-/** Apply `change` to the custom copy of `entry`; `newerBuiltIn` is the
- *  changed bundled version a `keep` re-stamps with. The copy's path. */
+/** Apply `change` to the custom copy of `entry`; `keep` re-stamps the
+ *  user's copy with `newerBuiltIn`, the changed bundled version, which
+ *  dismisses its newer-version notice and touches nothing else. The copy's
+ *  path. */
 export const customizeCopy = Effect.fn('customizeCopy')(function* (
   entry: AgentEntry,
-  change: AgentCustomization,
+  change: AgentCustomization | 'keep',
   newerBuiltIn: AgentEntry | undefined,
 ) {
   // The bundled version the copy is stamped with.

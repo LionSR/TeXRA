@@ -38,17 +38,23 @@ import type { PendingRequest, SessionView } from '@shared/session/sessionView';
 import type { HostSkillOptions } from '@skills/skillSources';
 import type { Plugin } from '@tools/plugins';
 import type { Effect, Stream, Scope, SubscriptionRef } from 'effect';
+import type { ClientIdentity } from '@texra-ai/llm/node';
 
 import type { LaunchError, ResumeRefused, RunFailure } from './errors.js';
 import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
 
 /** What an embedder composes the process from: its platform, its plugins
- *  (the harness's built-ins among them) and its skill sources, without
- *  which it discovers no skills. The setting rows its plugins read travel
- *  with the platform's config (`ConfigProvider.catalog`). */
+ *  (the harness's built-ins among them), the app it is, and its skill
+ *  sources, without which it discovers no skills. The setting rows its
+ *  plugins read travel with the platform's config (`ConfigProvider.catalog`). */
 export interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  /** The app the process signs in and sends model requests as: OpenAI shows
+   *  its `name` for a ChatGPT sign-in, and its `id` attributes a Grok
+   *  sign-in, namespaces a ChatGPT plan's tools and is the client name an
+   *  MCP server is told. */
+  readonly client: ClientIdentity;
   readonly skills?: HostSkillOptions;
 }
 

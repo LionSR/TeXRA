@@ -19,54 +19,28 @@ not a commit.
 
 ## 1. Audio transcription calls the OpenAI SDK from the app
 
-`packages/texra/src/controllers/session/audio.ts` imports `openai`, builds its own
-client and names the model (`gpt-4o-transcribe`). To get a key,
-`packages/texra/src/controllers/session/hostDraftRequests.ts` asks for the
-route of a pinned chat model it never calls. It is the only provider SDK
-import outside `packages/llm`, and the app package carries the `openai`
-dependency for it.
-
-```
-before  app: ownKeyCredential(roots, MODEL_CONFIGS['openai/gpt-4o-…'])
-        app: new OpenAI({ apiKey, baseURL }).audio.transcriptions.create(…)
-after   llm: transcribe(audio, credential)      // beside the other OpenAI wire code
-        app: transcribe(recording)              // no SDK, no model id, no chat-model lookup
-```
-
-Decision needed: what the harness exposes as "the credential for
-transcription" (a route of its own, or the OpenAI own-key route by provider).
+Taken in part on 2026-11-18: `transcribeAudio` in `@texra-ai/llm/node`
+(`packages/llm/src/api/openaiTranscription.ts`) owns the client and the
+model id, and the app no longer depends on `openai`. Still open: to get a
+key, `packages/texra/src/controllers/session/hostDraftRequests.ts` asks for
+the own-key route of a pinned chat model it never calls. Decision needed:
+what the harness exposes as "the credential for transcription" (a route of
+its own, or the OpenAI own-key route by provider).
+The transcription credential is open question 3 of
+[a subscription is a credential](../feature/2026-11-17-subscriptions-as-credentials.md).
 
 ## 2. The harness asks "is this Anthropic?" to choose prompt text
 
-`packages/harness/src/agent/runtime/loop/step.ts` and `executeAgent.ts` compare
-`model.config.provider` with `ModelProvider.ANTHROPIC`;
-`packages/harness/src/agent/prompt/PromptBuilder.ts` picks the tool-call
-paragraph from it, `templateInputs.ts` sets `IS_ANTHROPIC_MODEL`, and the
-public `PromptSection` context in `packages/harness/src/tools/toolTable.ts`
-carries `isAnthropic`. The fact the prompt depends on is whether the model
-issues parallel tool calls, which is a capability `packages/llm` should
-state. No plugin in `packages/texra` reads `ctx.isAnthropic` and no bundled
-agent uses the template variable; the agent-creation docs advertise it.
-
-```
-before  isAnthropic: model.config.provider === ModelProvider.ANTHROPIC
-after   parallelToolCalls: model.config.capabilities.parallelToolCalls
-```
-
-Decision needed: the capability's name on the model config, and whether
-`IS_ANTHROPIC_MODEL` is dropped (it breaks a user agent that reads it) or
-kept as a derived value for one release. It changes the plugins API report.
+Taken on 2026-11-19: `issuesParallelToolCalls` (`packages/llm/src/models/modelRoute.ts`)
+states the fact the step's tool-call paragraph depends on, and the
+`IS_ANTHROPIC_MODEL` prompt variable is gone with no alias.
 
 ## 3. Provider usage endpoints live in app controllers
 
-`packages/texra/src/controllers/modelAccess/subscriptionUsage/` calls the Kimi
-and GLM quota endpoints and picks the GLM host by region, which
-`packages/llm/src/providers/providerPlugins.ts` already does for the same
-plans. The endpoint, the region choice and the response parsing belong beside
-the plan routes in `packages/llm`; the app keeps the cache
-(`SubscriptionUsageService.ts`) and the presentation. About 470 lines move.
-The refuted `G11g-usage-region-out-of-cache-key` is about the cache key, not
-this.
+Taken on 2026-11-18: `fetchPlanUsage` (`packages/llm/src/providers/planUsage.ts`)
+asks the Kimi Code and GLM quota endpoints, the GLM one on its region's host
+from `GLM_BASE_URLS`; the app keeps the cache and the snapshot
+(`SubscriptionUsageService.ts`).
 
 ## 4. The merge feature's edited file is a harness launch field
 
@@ -75,39 +49,29 @@ Taken on 2026-11-16: the merge program reads `editedFile` from its `args`,
 
 ## 5. The run list is built twice
 
-`packages/texra/src/ui/progress/components/RunTabs.ts` and
-`packages/cli/src/chat/tui/state/cliState.ts` each group top-level runs by
-`runStatus(run).section` in `RUN_SECTION_ORDER`, apply "expanded when it needs
-the user or the surface chose it", and recurse into children. One pure
-`runListRows(view, surface, filters)` beside `Surface` in
-`packages/texra/src/shared/session/surface.ts` would leave both painting rows.
-The copies differ in scope (the terminal lists one session's runs and appends
-detached children; the web has search and an active-only filter), so the
-function takes those as arguments. About 40 lines.
+Taken on 2026-11-17: `runListSections` (`packages/texra/src/ui/copy/runStatus.ts`)
+groups and `runExpanded` (`packages/texra/src/shared/session/surface.ts`)
+decides expansion for the web tab strip and the TUI tree.
 
 ## 6. Web components replace the status word `runStatus` decides
 
-`RunHeader.ts` shows "Ready" for a finished run that accepts a follow-up and
-`RunTab.ts` shows "Needs approval" when a descendant waits; the terminal
-paints `runStatus(run).word`. The same run reads "Ready" in the web header
-and "Completed" in the web tab and the terminal. Either the two readings
-become keys in `packages/texra/src/shared/session/runStatusKey.ts`, or the
-overrides go. Decision needed: which word is right.
+`RunHeader.ts` shows "Ready" for a finished run that accepts a follow-up;
+the terminal paints `runStatus(run).word`. The same run reads "Ready" in the
+web header and "Completed" in the web tab and the terminal. Either the
+reading becomes a key in `packages/texra/src/shared/session/runStatusKey.ts`,
+or the override goes. Decision needed: which word is right.
 
-## 7. A tool call's time limit and its interrupted reading are decided in the web renderer
+Taken on 2026-11-18 for the tab: a request under the run reads in the status
+table's word for that state, "Waiting on you", not a second "Needs approval".
 
-- `getToolTimeoutMs` in
-  `packages/texra/src/ui/progress/formatters/logFormatters/toolFormatters/toolCard.ts`
-  keys on tool names and re-reads `timeout`, `run_in_background` and
-  `action === 'wait'` from raw input. `toolRowModel`
-  (`packages/harness/src/shared/transcript/toolRowModel.ts`) already parses
-  the same input into sections and can expose `timeoutMs`.
-- "An open call on an interrupted run is not running" is computed in
-  `StageList.ts` and `toolFormatters.ts`; the terminal's
-  `toolRenderers.tsx` has no such case and keeps painting the call as
-  running. The row model can carry it beside `cutByRunEnd`.
+## 7. An open call on an interrupted run reads differently per host
 
-Both change the transcript entry's API report.
+The time limit half is taken (`toolRowModel` carries `timeoutMs`).
+"An open call on an interrupted run is not running" is computed in
+`StageList.ts` and `toolFormatters.ts`; the terminal's `toolRenderers.tsx`
+has no such case and keeps painting the call as running. The row model can
+carry it beside `cutByRunEnd`, which changes the transcript entry's API
+report.
 
 ## 8. Child counts call every descendant an agent
 
@@ -140,6 +104,34 @@ public export of the plugins entry. The `claude-agent` plugin still
 registers an icon for `str_replace_editor`, so that branch's producer is a
 question for the plugin, not dead code yet. Needs the decision on how a
 delegated Claude Code call is labelled.
+
+## 10. The terminal title restates `sessionActivity` (found 2026-11-17)
+
+`packages/cli/src/chat/tui/terminalTitle.ts` computes approval over
+`attentionRequests` (this terminal's runs, plugin requests dropped) and
+running over `rootRunIds` plus a launch in flight, where
+`sessionActivity` (`packages/harness/src/shared/session/sessionView.ts`)
+reads the whole view. A detached child working in the background leaves the
+terminal title idle. Folding it into `sessionActivity` needs that function to
+take a run scope and a pending-launch fact, or the TUI to bind a narrowed
+view; and a plugin request the TUI cannot show would turn its title to
+approval. Needs the decision on scope.
+
+## 11. The status bar's task cost is a bare amount (found 2026-11-17)
+
+`taskCostSegment` (`packages/cli/src/chat/tui/panes/statusBarDisplay.ts`)
+prints `formatCostUsd`, while `/status` reads `usageCostLabel` ("$x via
+…"). The bar shows the access mode in its own segment, so whether the cost
+segment should carry the route too is a narrow-terminal layout decision.
+
+## 12. Two tone drifts between web and terminal (found 2026-11-17)
+
+- A run grant: the terminal paints `superYolo` in its error colour
+  (`statusBarDisplay.ts`), the web's `runGrantChips.ts` every grant as a
+  warning.
+- A user-feedback rejection: the terminal's `toolRenderers.tsx` paints any
+  `isError` row `danger`; the web's `toolFormatters.ts` excludes
+  `isUserFeedback`. The row model (`toolRowModel`) could carry the tone.
 
 ## Checked and left alone
 

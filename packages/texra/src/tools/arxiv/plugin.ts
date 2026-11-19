@@ -8,10 +8,11 @@ import * as RateLimiter from 'effect/persistence/RateLimiter';
 // Local imports
 import { definePlugin } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import { ArxivDownloadTool } from './ArxivDownloadTool';
 import { ArxivSearchTool } from './ArxivSearchTool';
 
-export const arxiv: TexraPlugin = {
+export const arxiv: TexraPlugin = texraPlugin({
   ...definePlugin<RateLimiter.RateLimiter>({
     id: 'arxiv',
     tools: [ArxivSearchTool, ArxivDownloadTool],
@@ -27,4 +28,4 @@ export const arxiv: TexraPlugin = {
     name: 'ArXiv Search & Download',
     description: 'Search arXiv papers and download LaTeX source packages.',
   },
-};
+});

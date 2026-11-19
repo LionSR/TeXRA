@@ -43,10 +43,8 @@ import {
   type AgentConfig,
   SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
-import type {
-  RegisterRunOptions,
-  Registration,
-} from '@shared/session/runFacts';
+import type { Registration } from '@agent/storage/runLifecycle';
+import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { RunHistory } from '@shared/session/runHistory';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { buildTerminalTool } from '@tools/structuredOutput';
@@ -232,7 +230,7 @@ export const agentRunLayer = (
       // subagent does: the standard file, shell and web tools and the
       // installed plugins' tools, whoever launched it.
       const inherits =
-        config.agentSource === AGENT_SOURCE.PLUGIN &&
+        config.agentSource?.kind === AGENT_SOURCE.PLUGIN &&
         script === null &&
         persona.tools.length === 0;
       // A persona that declares no tools writes text only: the injected
@@ -272,7 +270,7 @@ export const agentRunLayer = (
         injectTools:
           script === null &&
           !textOnly &&
-          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
+          (config.agentSource?.kind !== AGENT_SOURCE.PLUGIN || inherits),
         // The installed plugins' tools reach a top-level run (unless it is a
         // plugin agent that names its tools), a `self()` child, which runs as
         // its caller, and an inheriting plugin agent wherever it runs; any
@@ -281,7 +279,7 @@ export const agentRunLayer = (
           script === null &&
           !textOnly &&
           (root || config.asCaller === true || inherits) &&
-          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
+          (config.agentSource?.kind !== AGENT_SOURCE.PLUGIN || inherits),
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).

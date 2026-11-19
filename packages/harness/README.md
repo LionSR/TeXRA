@@ -51,14 +51,15 @@ you own.
 
 ## Usage
 
-The package's surface is Effect: `Sessions.layer({ platform, plugins })`
+The package's surface is Effect: `Sessions.layer({ platform, plugins, client })`
 composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
 plugin of the embedder's own beside them. `session.start` runs an agent as a conversation. A plugin can also register
 a program (`Plugin.programs`): one of its script modules, started by name
 with the `program` tool or a `script` of kind `program`, whose run is that
-module's default export called with the launch's arguments.
+module's default export called with the launch's arguments, instruction
+and files.
 `@texra-ai/harness` ships no built-in programs.
 
 ```ts
@@ -88,7 +89,13 @@ const program = Effect.gen(function* () {
   return yield* run.result;
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: { name: 'Example App', id: 'example-app' },
+    }),
+  ),
 );
 
 const result = await Effect.runPromise(program);
@@ -206,7 +213,7 @@ const program = Effect.gen(function* () {
 
 | Service    | What it is                                                                                                                                                                                                                                                                                                        |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.                                          |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins, client })` composes that process for the layer's lifetime. Build it once per process.                                  |
 | `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
 | `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`, the user's `run.stop`. `start` returns once the run exists, before its first model call.                                 |
 
@@ -430,14 +437,14 @@ files.
 
 ## Entry points
 
-| Entry                          | Contents                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, and every tagged error the surface fails with. About fifty names; start here                                                                                                                            |
-| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                          |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                    |
-| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`              |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                   |
-| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, the config and state stores, skills, installed plugins, model options, the presentation surface (`HostInteractions`), and shared file, error and log helpers. TeXRA's own hosts read it; no stability promise |
+| Entry                          | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                                                                                      |
+| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                                                                                          |
+| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                                                                                    |
+| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                                                                                   |
+| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise                                                                        |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
 exports, with their TSDoc and declarations, are listed in its API reference
@@ -486,9 +493,11 @@ const scripted: typeof fetch = async () =>
 
 program.pipe(
   Effect.provide(
-    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provideMerge(Layer.succeed(ModelFetch)(scripted)),
-    ),
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: { name: 'Example App', id: 'example-app' },
+    }).pipe(Layer.provideMerge(Layer.succeed(ModelFetch)(scripted))),
   ),
 );
 ```

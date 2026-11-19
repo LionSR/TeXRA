@@ -42,7 +42,10 @@ a message reaches a run.
 | 5   | Smaller: one dead schema value, one false comment                                                                          | dead code, a comment that says what the code does not                       | `holdUntil: 'instruction'`, `endIn`'s comment                                                                                            |
 
 Findings 1 and 4 are defects traced through the code, not reproduced;
-findings 1, 2 and 3 each carry an owner decision named in their section.
+findings 1, 2 and 3 each carried an owner decision named in their section.
+At `c78e9f9` (2026-11-17) only finding 3's is still to make: finding 1's
+cancel rule is in the code and finding 2's `takesFollowUps` rule was ruled
+in #14986 (see "Since this note's base").
 
 ## Since this note's base
 
@@ -62,6 +65,44 @@ caused.
 **On `main` since `2f63e5a4`.** #14936 deleted `openOwnedChildren`, which
 the first version of finding 5 listed. #14926 fixed one more case of
 finding 1's cause. No other finding changed; their lines are updated.
+
+**On `main` at `c78e9f9` (2026-11-17).** Each item of "Order" was read
+again in the tree. The line references below are still those of
+`d173e42d`; where a name moved, this paragraph gives the new one.
+
+- **Finding 1's cancel rule is in the code.** `cancelledRequests` and
+  `unboundRequests` have no references. One function, `cancelRequestRows`
+  (`shared/session/runState.ts`), writes the cancellations for a run's end
+  (`agent/storage/runLifecycle.ts`) and for a resume's activation
+  (`agent/runtime/makeRunHistory.ts`), and it leaves a request that does not
+  block its caller open. No suite holds the regression test the order asks
+  for: the one test with a `blocksCaller: false` request
+  (`src/test-kernel/controllers/session/sessionEvents.vitest.ts`) covers a
+  missing plugin, not a clean close.
+- **Finding 2's first case is gone.** #14969 rewrote `needsWake`
+  (`agent/followUp/FollowUpReader.ts`): any run's message now wakes a run
+  that ended, except after a user's stop. The second case stands: a run's
+  message to a run the user stopped is still answered `queued`.
+  `admission` is now `Inbox.acceptance` (`agent/followUp/Inbox.ts`), and it
+  still reads only `inputClosed` and the in-memory readers.
+- **Finding 2's `takesFollowUps` rule is ruled** (#14986): a message keeps
+  reading the view in `submitFollowUp`, and the comment there says why (the
+  store's answer would reject every ended one-shot root, which a later
+  resume does read). So the view check stays and leaves "What goes".
+- **`holdUntil: 'instruction'` is gone.** The field is
+  `Schema.optional(Schema.Literal('turn'))` (`shared/schemas/followUp.ts`).
+- **Still as written:** the decide door's rejection
+  (`controllers/session/SessionRequests.ts`) and `requestAnswerability` (8
+  references); the script request's own run reload (`AgentTool.ts`);
+  `readers`, `disposed` and the two answer shapes; the `Promise.all`
+  sentence, the barrier state (`places`, `barrier`, `since`) and the
+  in-memory launch count (`countLaunch`, `agentChild.ts`); the live-only
+  `endTurn`; `endIn`'s comment.
+- **Design B's receipt half is gone.** `followUpReceipt` has no references,
+  and "has this message been taken" is read only through `applyRunRow`
+  (`sharedRowsFrom`, `shared/session/runRowReads.ts`);
+  `followUpMessages.ts` no longer has a read-then-tail. What is left of B is
+  reading the input once per loop step.
 
 ## What picks the targets
 
@@ -126,7 +167,7 @@ derived id, and a resume rejoins it by deriving the id again:
 | A blocking request (approval, plan, question, …) | `request.opened`, id `${responseId}/${callId}:${attempt}:${n}` | `resumedAttempt` (`shared/session/inFlight.ts:410-432`), the guard      |
 | A script's shared `agent()` request              | the script call's attempt-0 request                            | its own lookup (`agent/runtime/delegation/AgentTool.ts:190-228`)        |
 | A model retry request                            | `failed{next: ask}` with `request.opened`                      | `nextAttempt`'s ask case                                                |
-| A non-blocking plugin request (an inquiry)       | `request.opened`; the answer commits with its effects          | none: it stays open                                                     |
+| A non-blocking plugin request                    | `request.opened`; the answer commits with its effects          | none: it stays open                                                     |
 | An awaited child                                 | the child's `run.start` under `callChildRunId`                 | `earlierChild`, `standingOf` (`agent/runtime/delegation/agentChild.ts`) |
 | A detached child or a background command         | the child's `run.end` and its report on the parent             | `closeLeftoverRun`, `cutShort` (`agent/runtime/leftoverChildren.ts`)    |
 | A hook process                                   | `hook.outcome` per point                                       | the recorded outcome is reused (`agent/runtime/loop/hooks.ts`)          |
@@ -175,9 +216,9 @@ waiter itself.
 **Two cancel rules disagree.** A non-blocking request is promised to
 outlive a restart: "its plugin's decision hook delivers the answer to
 whichever process holds the run by then, so it stays open across every
-resume" (`shared/schemas/request.ts:172-178`); the inquiry tool says its
-answer arrives "even hours later, even after a restart"
-(`packages/texra/src/tools/inquiry/ExternalInquiryTool.ts:8-11`).
+resume" (`shared/schemas/request.ts:172-178`). The external inquiry, the
+one plugin that opened such a request, promised the same until it was
+removed on 2026-11-19.
 
 - A resume's activation cancels only the requests no attempt re-enters
   (`unboundRequests`, `shared/session/runState.ts:238-259`, applied at
@@ -188,11 +229,10 @@ answer arrives "even hours later, even after a restart"
   `endIn` at `:310`).
 - A clean close writes an end: a `CANCELLED` end with a `shutdown` stop,
   which a resume continues (`cutShort`, `agent/runtime/leftoverChildren.ts:95-97`).
-- The decide door answers only pending requests, as the inquiry plugin
-  notes ("the session decides only pending requests",
-  `packages/texra/src/tools/inquiry/inquiryActions.ts:113`).
+- The decide door answers only pending requests
+  (`controllers/session/SessionRequests.ts`).
 
-So an inquiry survives a crash, which writes no end, and is cancelled by a
+So a non-blocking request survives a crash, which writes no end, and is cancelled by a
 clean close, which does: the opposite of what both docs say. This chain is
 read step by step and not reproduced.
 
@@ -223,9 +263,8 @@ waiter call go.
 
 **One cancel rule.** A run's end cancels the blocking requests it leaves,
 which nothing waits on any more, and leaves a non-blocking request open
-until it is answered or the run is deleted, as `blocksCaller`'s doc and
-the inquiry tool say. Which rule wins is an owner decision; the docs and
-the plugin were written for this one.
+until it is answered or the run is deleted, as `blocksCaller`'s doc says.
+Which rule wins is an owner decision; the docs were written for this one.
 
 **What goes:** the rejection in the decide door, `requestAnswerability`
 and `RequestAnswerability` (public), the panels' resume state, the script
@@ -321,18 +360,19 @@ whether it wakes), `replay` (a caller id already sent) or `refused`
 it; `sentBefore` still runs first, as the receipt rule requires
 (`packages/harness/AGENTS.md`, "Run loop architecture"). The answer is
 then `sent | queued | refused`, and a message nothing would read is
-refused with its reason. This forces the `takesFollowUps` question #14893
-left open: whichever rule the owner picks is the verdict's, in one place.
+refused with its reason. The `takesFollowUps` question #14893 left open was
+ruled in #14986: a message keeps reading the view, so that rule is not the
+verdict's.
 
 **B. One input reading for the reader and the receipt.** The reader reads
 the input once per loop step and answers `{ readable, controls }`; a
 receipt's `wait` applies each new row to what it holds instead of
 reading again. `followUpReceipt`'s separate scan goes.
 
-**What goes:** the view check in `submitFollowUp` (`ToolUseFollowUp.ts:197-208`),
-`owesResume`'s own rule, the scattered `disposed` checks, two of the
-three rejection wordings, the `'instruction'` hold, and the repeated full
-reads. The area pass estimates A at about 60 lines out and 45 in, and B
+**What goes:** `owesResume`'s own rule, the scattered `disposed` checks, two of the
+three rejection wordings, and the repeated full reads (the view check in
+`submitFollowUp` stays, by #14986, and the `'instruction'` hold is already
+deleted). The area pass estimates A at about 60 lines out and 45 in, and B
 at 150 out and 80 in; round 2 found such estimates undercount what
 replaces the code, so read them as such.
 
@@ -371,7 +411,10 @@ response only (`dsh:packages/core/tools/src/batch.ts`).
 
 ### The design
 
-Two choices; the owner picks one.
+Two choices; the owner picks one. The first landed in #15024, checked
+2026-11-19: the description says calls start in the order issued, names the
+declared tools that run alongside the calls around them, and says the rest
+wait. The second stays the owner's.
 
 - **Say what happens.** The description names the tools whose calls run
   together and says the rest run in the order issued. No behavior
@@ -434,7 +477,8 @@ other cases stand.
 
 - `openOwnedChildren`, exported with no caller at `2f63e5a4` (#14769
   removed the last one), was deleted by #14936.
-- `holdUntil: 'instruction'` and `endIn`'s comment (finding 2).
+- `holdUntil: 'instruction'` (deleted since) and `endIn`'s comment (finding
+  2; still there).
 - A deadline restarts at each resume: a script's `timeoutMs`
   (`tools/codemode/ScriptTool.ts:231`), a hook's timeout, and a retry's
   backoff. pi stores `until`. Recorded, not proposed: whether a process's
@@ -445,10 +489,8 @@ other cases stand.
 - Finding 6 (a provider's facts in eight files) as written there.
 - The `history delete` race, recorded in
   [the session surfaces audit](../simplification/2026-11-10-session-surfaces-ad-hoc.md).
-- Two answers to one inquiry at once can leave the thread's record and the
-  decided row naming different answers.
-- The `takesFollowUps` question: finding 2's design A decides it in one
-  place.
+- The `takesFollowUps` question: ruled in #14986 (a message keeps reading
+  the view), so finding 2's design A no longer decides it.
 - The `endTurn` defect: finding 4, now traced through the code.
 
 ## What the peers do that is still not taken
@@ -475,15 +517,22 @@ other cases stand.
 ## Order
 
 0. **Finding 4**, with its regression test. No owner decision.
-1. **Finding 1's cancel rule**, once the owner picks it, with one
-   regression test (a non-blocking request across a clean close).
+1. **Finding 1's cancel rule**: in the code (`cancelRequestRows` leaves a
+   non-blocking request open at a run's end and at an activation). Its one
+   regression test (a non-blocking request across a clean close) is still
+   to write.
 2. **Finding 1's decision as a wake and one request switch.** No stored
    change in the first variant.
-3. **Finding 2's design A**, with the owner's `takesFollowUps` rule; then
-   design B.
+3. **Finding 2's design A**, less the `takesFollowUps` rule, which #14986
+   ruled stays a read of the view in `submitFollowUp`: what is left is the
+   one verdict the sending job, `owesResume` and `openResume` read, the
+   rejection of a run's message after a user's stop, one answer shape, and
+   `readers` and `disposed`. Then design B, whose receipt half is gone:
+   one input reading per loop step.
 4. **Finding 3**: the description now; the guest's order if the owner
    wants it; the launch count from rows.
-5. **Finding 5's deletions** at any time.
+5. **Finding 5's deletions** at any time. `holdUntil: 'instruction'` is
+   deleted; `endIn`'s comment is left.
 
 ## Verified
 

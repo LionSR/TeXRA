@@ -9,11 +9,11 @@ import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
 
 /** The tool switch record's key; its value is the list of plugin ids held off. */
-export const DISABLED_TOOLS_KEY = {
+export const DISABLED_TOOLS_KEY = Object.freeze({
   key: 'tools.disabled',
   slot: 'globalState',
   schema: Schema.Array(Schema.String),
-} as const satisfies StateKey<readonly string[]>;
+} as const satisfies StateKey<readonly string[]>);
 
 const { key } = DISABLED_TOOLS_KEY;
 

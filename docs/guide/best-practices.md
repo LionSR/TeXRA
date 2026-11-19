@@ -51,17 +51,17 @@ project/
 - **Keep an `AGENTS.md` at the workspace root**: record project-wide notation conventions, custom macros, compilation commands, and forbidden edits so every agent session inherits them automatically.
 - **Give a program only the files it needs**: the target `.tex` file as input and shared preamble or `.bib` files as context.
 - **Format before running `latexdiff`**: run `latexindent` or `tex-fmt` before comparing revisions so line-wrapping differences do not obscure prose edits.
-- **Archive milestone revisions**: use **Archive outputs to History** in the ProgressBoard menu to copy key revisions into `History/`, and delete stale run folders when no longer needed.
+- **Archive milestone revisions**: use **Archive outputs to History** in the Tasks view menu to copy key revisions into `History/`, and delete stale run folders when no longer needed.
 
 ## Workflow integration
 
 ### Staged approach
 
-A typical project moves through five stages, each owned by one or more agents:
+A typical project moves through five stages, each owned by one or more agents or programs:
 
 <StagedWorkflowHero />
 
-<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent best suited for it.</p>
+<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent or program best suited for it.</p>
 
 ### Quality assurance
 

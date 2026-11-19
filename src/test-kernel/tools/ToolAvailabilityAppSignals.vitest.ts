@@ -21,17 +21,16 @@ import {
   type PlatformSecrets,
   Secrets,
   type ITool,
-} from '@texra-ai/harness/plugins';
-import {
   type ConfigProvider,
-  ToolAvailability,
   ToolCatalog,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
+import { ToolAvailability } from '@texra-ai/harness/host';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { toolTable } from '@tools/toolTable';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
@@ -55,12 +54,15 @@ const probeInputs: ToolProbeInputs = {
   } satisfies ConfigProvider,
 };
 
-const secretsLayer = Secrets.layer({
-  get: unreadSecret,
-  set: unreadSecret,
-  delete: unreadSecret,
-  listStoredKeys: unreadSecret,
-} satisfies PlatformSecrets);
+const secretsLayer = Secrets.layer(
+  {
+    get: unreadSecret,
+    set: unreadSecret,
+    delete: unreadSecret,
+    listStoredKeys: unreadSecret,
+  } satisfies PlatformSecrets,
+  HARNESS_APP.client,
+);
 
 /** The services a plugin's availability callbacks may read, and the
  *  process's signal hub the service follows key changes on. */

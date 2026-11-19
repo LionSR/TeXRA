@@ -21,12 +21,15 @@ import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   type ProcessRuntime,
   type ProcessServices,
-  type GlobalValues,
   type ScopedFork,
   scopedFork,
   withProcessServices,
 } from '@texra-ai/harness/host';
-import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
+import {
+  withLogChannel,
+  Settings,
+  type GlobalValues,
+} from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   canonicalizeWorkspaceRoot,
@@ -47,6 +50,7 @@ import { taskStatusBar } from '@frontend/statusBar/taskStatusBar';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import {
+  reportingFailure,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessageWithDocs,
@@ -66,13 +70,14 @@ import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import type { ExtensionCommandId } from '@texra/shared/commands/catalog';
+import type { CommandId } from '@texra/shared/commands/catalog';
 import {
   openProjectRoots,
   openProjectSession,
 } from '@texra/controllers/session/openProjectSession';
 import {
   reachBundledService,
+  ServiceUnavailable,
   type ServiceLink,
 } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
@@ -139,7 +144,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ManagedRuntime.make(
       texraProcessLayer({
         name: 'vscode',
-        inquiryPanel: true,
         inlineComments,
         // The editor's commands and terminal, for the setup tools.
         setup: vscodeSetupPlatform,
@@ -196,7 +200,11 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     Effect.gen(function* () {
       const reached: Result.Result<ServiceLink, Error> =
         extras.service === undefined || workspaceRoot === undefined
-          ? Result.fail(new Error('a window with no folder uses no service'))
+          ? Result.fail(
+              new ServiceUnavailable({
+                reason: 'a window with no folder uses no service',
+              }),
+            )
           : // Held with the project state it serves: after the sessions
             // that read it close, before the runtime its reconnects use.
             yield* Effect.result(
@@ -212,7 +220,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         defaultNodeStorageRoot(),
         workspaceRoot,
         global.store,
-        Result.isSuccess(reached) ? reached.success : undefined,
+        Result.getOrUndefined(reached),
       ).pipe(Scope.provide(projectScope));
       // Forked: a notification waits for the person, and activation does not.
       for (const message of [...global.warnings, ...warnings]) {
@@ -260,15 +268,13 @@ const noFolderCommands = (
       ).pipe(
         // A defect is reported like a failure, as the settings body reports
         // one; an interrupt is the window closing, not a failed sign-in.
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : showLoggedErrorMessage(
-                ACCOUNT_OUTCOME.signInFailed(
-                  subscriptionProvider('chatgpt').displayName,
-                ),
-                Cause.squash(cause),
-              ),
+        reportingFailure((error) =>
+          showLoggedErrorMessage(
+            ACCOUNT_OUTCOME.signInFailed(
+              subscriptionProvider('chatgpt').displayName,
+            ),
+            error,
+          ),
         ),
         withLogChannel('welcomeView'),
       ),
@@ -281,7 +287,7 @@ const noFolderCommands = (
  * prerequisite without firing the real command's `onCommand` completion event.
  */
 type WalkthroughCommandNeedingWorkspace = Exclude<
-  ExtensionCommandId,
+  CommandId,
   keyof ReturnType<typeof noFolderCommands>
 >;
 
@@ -451,7 +457,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   setupPill.text = '$(rocket) TeXRA: Get Started';
   setupPill.tooltip =
     'Connect a model: sign in with ChatGPT or add a provider API key';
-  setupPill.command = 'texra.runSetupAssistant' satisfies ExtensionCommandId;
+  setupPill.command = 'texra.runSetupAssistant' satisfies CommandId;
   setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
   context.subscriptions.push(setupPill);
   // The settings view is built with the commands, after the progress view
@@ -478,8 +484,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     },
   );
   yield* Effect.forkScoped(
-    Stream.runForEach(progressViewProvider.credentialUsable, (usable) =>
-      Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
+    Stream.runForEach(
+      progressViewProvider.window.snapshot.credentialUsable,
+      (usable) =>
+        Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
     ),
   );
   yield* Effect.logInfo('TeXRA extension activated').pipe(

@@ -60,7 +60,7 @@ const DocumentsOutputSchema = Schema.Struct({
 export type DocumentsOutput = typeof DocumentsOutputSchema.Type;
 
 /** The theory plugin's one row kind. */
-export const DOCUMENTS_OUTPUT_KIND = {
+export const DOCUMENTS_OUTPUT_KIND = Object.freeze({
   plugin: THEORY_PLUGIN,
   kind: 'output',
   // v2: a proposed task's fact carries its `diffs`. v3: each round holds
@@ -73,7 +73,7 @@ export const DOCUMENTS_OUTPUT_KIND = {
   schema: DocumentsOutputSchema,
   // A document task runs a program, which is never forked.
   fork: 'drop',
-} as const;
+} as const);
 
 /** The key a run's documents are kept under in `RunView.facts`. */
 const DOCUMENTS_OUTPUT_KEY = factName(DOCUMENTS_OUTPUT_KIND);
@@ -108,7 +108,7 @@ const DocumentsAcceptedSchema = Schema.Struct({
 /** The files a run last accepted into the workspace, past the editor's own
  *  write path: what every process that applies the run announces
  *  (`workspaceFilesWritten`). */
-export const DOCUMENTS_ACCEPTED_KIND = {
+export const DOCUMENTS_ACCEPTED_KIND = Object.freeze({
   plugin: THEORY_PLUGIN,
   kind: 'accepted',
   version: 1,
@@ -117,7 +117,7 @@ export const DOCUMENTS_ACCEPTED_KIND = {
   fork: 'drop',
   writes: (value: unknown): readonly string[] =>
     Schema.decodeUnknownSync(DocumentsAcceptedSchema)(value).absolutePaths,
-} as const;
+} as const);
 
 /** The fact that the calling run accepted `absolutePaths` at
  *  `acceptedAt`, for its call's result (`ToolResult.facts`). */

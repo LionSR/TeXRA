@@ -3,6 +3,7 @@ import {
   Cause,
   Effect,
   Exit,
+  Predicate,
   Result,
   Schema,
   type Scope,
@@ -71,6 +72,8 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
     (iterator) => {
       source.controller.abort();
       const returnIterator = iterator.return?.bind(iterator);
+      // The rejection is raised as a defect on the next line, whatever it is.
+      // @effect-diagnostics unknownInEffectCatch:off
       return returnIterator
         ? Effect.tryPromise({
             try: () => returnIterator(),
@@ -79,6 +82,7 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
         : Effect.void;
     },
   );
+  // @effect-diagnostics unknownInEffectCatch:warning
   return pullStream(() => iterator.next(), onError);
 });
 
@@ -140,6 +144,30 @@ export const wireFail = (
   Effect.fail(new ModelError({ kind, message }));
 
 /**
+ * Fails when `raw` is a stream event whose `key` names a type outside
+ * `known`. The provider sends that event again on every repeat of the
+ * request, so the failure is not retried; a malformed event of a known type
+ * still is.
+ */
+export const refuseUnknownEvent = (
+  provider: string,
+  key: string,
+  known: ReadonlySet<string>,
+  raw: unknown,
+): Effect.Effect<void, ModelError> => {
+  const type = Predicate.hasProperty(raw, key) ? raw[key] : undefined;
+  return typeof type !== 'string' || known.has(type)
+    ? Effect.void
+    : Effect.fail(
+        new ModelError({
+          kind: 'provider-rejection',
+          retryable: false,
+          message: `${provider} sent a stream event of a type this version does not support: ${type}.`,
+        }),
+      );
+};
+
+/**
  * Decodes one raw wire value with `schema`, failing as the provider's
  * rejection with `message` when it does not match. The process did not author provider
  * output, so a mismatch is the model's; the parse failure rides along as the
@@ -169,7 +197,10 @@ export const decodeWireOrFail = <A>(
  * recognizes it; anything else is an independent defect, raised through
  * `cleanupFailure`, which makes the primary failure a defect too.
  */
-export const rejoin = (
+// The raw rejection is compared by identity with the primary failure's
+// cause and otherwise raised as a defect, so it must not be wrapped.
+// @effect-diagnostics unknownInEffectCatch:off
+const rejoin = (
   pending: PromiseLike<unknown>,
   exit: Exit.Exit<unknown, unknown>,
   isExpected: (cause: unknown) => boolean,
@@ -190,6 +221,7 @@ export const rejoin = (
     ),
     Effect.asVoid,
   );
+// @effect-diagnostics unknownInEffectCatch:warning
 
 /**
  * The request signal for a streamed body, with the body reader cancelled at
@@ -208,10 +240,8 @@ export const readerAbortSignal = Effect.fn('transport.readerAbortSignal')(
     yield* Effect.addFinalizer((exit) => {
       const body = reader();
       if (body === undefined) return Effect.void;
-      return rejoin(
-        body.cancel(),
-        exit,
-        (cause) => signal.aborted && cause === signal.reason,
+      return rejoin(body.cancel(), exit, (cause) =>
+        isOwnAbort(cause, signal),
       ).pipe(Effect.ensuring(Effect.sync(() => body.releaseLock())));
     });
     const signal = yield* Effect.abortSignal;
@@ -220,24 +250,32 @@ export const readerAbortSignal = Effect.fn('transport.readerAbortSignal')(
 );
 
 /**
+ * Whether a promise rejected because Effect aborted `signal`: once it is
+ * aborted, the abort reason itself (what `fetch` and a streamed body reject
+ * with), an SDK's wrapper around it (OpenAI's `APIUserAbortError` carries it
+ * as `cause`), the Google SDK's `APIUserAbortError`, which drops the reason
+ * and is not exported, so only its name identifies it, or a bare
+ * `AbortError` from a `fetch` that rejects with its own `DOMException`.
+ */
+const isOwnAbort = (cause: unknown, signal: AbortSignal): boolean =>
+  signal.aborted &&
+  (cause === signal.reason ||
+    (cause instanceof Error &&
+      (cause.cause === signal.reason ||
+        cause.name === 'APIUserAbortError' ||
+        cause.name === 'AbortError')));
+
+/**
  * Run a promise-returning provider request under Effect's own abort signal,
  * rejoining the pending promise before the effect completes. On rejoin
- * failure, only the primary failure's own cause, or a caller-recognized
- * abort (`isAbortMatch`), is dropped; anything else is an independent defect.
+ * failure, only the primary failure's own cause, or this request's own
+ * abort ({@link isOwnAbort}), is dropped; anything else is an independent
+ * defect.
  */
 export function ownedAbortSafeRequest<A>(
   request: (signal: AbortSignal) => Promise<A>,
   classify: (cause: unknown) => ModelError,
-  options: {
-    readonly isAbortMatch: (
-      cause: unknown,
-      signal: AbortSignal,
-      exit: Exit.Exit<A, ModelError>,
-    ) => boolean;
-    readonly cleanupFailure?: (cause: unknown) => ModelError;
-  },
 ): Effect.Effect<A, ModelError> {
-  const { isAbortMatch, cleanupFailure = classify } = options;
   return Effect.suspend(() => {
     let started:
       | { readonly signal: AbortSignal; readonly pending: Promise<A> }
@@ -256,8 +294,8 @@ export function ownedAbortSafeRequest<A>(
         return rejoin(
           pending,
           exit,
-          (cause) => isAbortMatch(cause, signal, exit),
-          cleanupFailure,
+          (cause) => isOwnAbort(cause, signal),
+          classify,
         );
       }),
     );

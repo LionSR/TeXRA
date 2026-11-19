@@ -4,11 +4,8 @@ import { Effect, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import {
-  AgentCatalog,
-  AgentDirectories,
-  AppState,
-} from '@texra-ai/harness/host';
+import { AppState } from '@texra-ai/harness/plugins';
+import { AgentCatalog, AgentDirectories } from '@texra-ai/harness/host';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -62,7 +59,6 @@ function onGlobalStorage<A, E>(
  *  live under. */
 const ROOTS = {
   repoState: new FakeStateStore(),
-  globalState: new FakeStateStore(),
   storage: '/papers/first/.texra',
 };
 
@@ -93,7 +89,6 @@ layer(FakeHost.layer())('main-view run launch controller', (it) => {
 
         expect(yield* launchFormOf(config)).toMatchObject({
           ...selections,
-          launchTarget: 'agent',
           instruction: 'Improve the draft.',
         });
       }),

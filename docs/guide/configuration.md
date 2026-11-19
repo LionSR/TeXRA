@@ -19,8 +19,8 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **Models**: **API keys** (including Kimi Code and the GLM Coding Plan),
   **Subscriptions** (ChatGPT and Grok sign-in), and
   **Models** (which models appear, and the helper model).
-- **Agents**: the agent **Library**, **Teams**, **Skills**, and **Advanced**
-  (compaction, retries, script-only tools, and team coordination).
+- **Agents**: the agent **Library**, **Skills**, and **Advanced**
+  (compaction, retries, and multi-agent coordination).
 - **Memory**: the notes TeXRA keeps across tasks.
 - **Plugins**: everything that adds tools or agents: TeXRA's plugins (such as
   Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
@@ -32,12 +32,12 @@ The page remembers the sub-tab you last opened while Settings stays open.
   policy, working-directory protection, and the goal spend cap), **Privacy**
   (telemetry), and **Git** (the GitHub token and Git commit attribution).
 
-Commands such as **TeXRA: Agent Team Settings** or **TeXRA: Git Settings**
+Commands such as **TeXRA: Agent Settings** or **TeXRA: Git Settings**
 open their page on the matching sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
-A few provider transport knobs, such as Google background responses, keep
-their defaults unless you set them in the user-wide `config.json`. File-handling rules and other internal
+A few settings with no control, such as the maximum image size and the debug
+switches, keep their defaults unless you set them in `config.json`. File-handling rules and other internal
 implementation constants are not exposed as configuration.
 
 ## Where settings live
@@ -129,10 +129,10 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records the model name, the provider API it
-was called through, the agent name, token counts, the cost at list prices,
-response time, the billing route (API key or subscription), the task
-identifier, version, and host. Only a bundled agent's id is sent; a custom or plugin
+When telemetry is enabled, TeXRA records the agent name, the model name, the
+provider API it was called through, the billing route (API key or
+subscription), token counts, the cost at list prices, response time, the time
+of the call, the task identifier, version, and host. Only a bundled agent's id is sent; a custom or plugin
 agent is reported as `custom`. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
@@ -215,11 +215,12 @@ TeXRA's native configuration.
 
 Per-run controls in the task composer affect only the task being launched: the
 agent, the model, the approval policy and attached media.
-Persistent agent visibility and team selection belong in Settings instead.
+Persistent agent visibility belongs in Settings instead.
 
 ## Debugging
 
-Enable **Save model I/O** only while diagnosing a run. Its current key is:
+Save model requests and responses only while diagnosing a run. The option has
+no row in Settings; set its key in a `config.json`:
 
 ```json
 {

@@ -24,6 +24,7 @@ import {
   sourceLocationUnder,
 } from '@texra-ai/harness/plugins';
 import {
+  programOf,
   toErrorMessage,
   fileLocationDisplayPath,
   type FileListEntry,
@@ -139,10 +140,8 @@ export const openDocuments = Effect.fn('documents.open')(function* (
   const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
   const task = output?.task ?? described;
   if (task === undefined)
-    return yield* Effect.fail(
-      new ToolError(
-        `Run ${runId} has no documents yet: a document program's first step is \`document_context\` for revision 0.`,
-      ),
+    return yield* new ToolError(
+      `Run ${runId} has no documents yet: a document program's first step is \`document_context\` for revision 0.`,
     );
   const expected = expectedDocuments(config);
   const sources = expected.names.map((file) =>
@@ -212,19 +211,15 @@ const readTemplates = Effect.fn('documents.readTemplates')(function* (
   return yield* Effect.forEach(task.templates, (name) =>
     Effect.gen(function* () {
       if (directory === undefined)
-        return yield* Effect.fail(
-          new ToolError(
-            `This host ships no document templates, so '${name}' cannot be read.`,
-          ),
+        return yield* new ToolError(
+          `This host ships no document templates, so '${name}' cannot be read.`,
         );
       // A template is a file of the bundled directory, named by a program's
       // arguments, which a model may write: a name that leaves the directory
       // would read any file into the prompt unasked.
       if (basename(name) !== name)
-        return yield* Effect.fail(
-          new ToolError(
-            `'${name}' is not a bundled template: name one by its file name.`,
-          ),
+        return yield* new ToolError(
+          `'${name}' is not a bundled template: name one by its file name.`,
         );
       const path = join(directory, name);
       const content = yield* fs
@@ -261,13 +256,13 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   // argument its launch named, read only from a program that registers it
   // as one (`Program.fileArgs`), so the launch checked it where it was
   // accepted.
-  const { script } = config;
+  const program = programOf(config);
   const editedFile =
-    script?.kind === 'program' &&
+    program !== null &&
     (yield* ToolRegistry).programs
-      .get(script.name)
+      .get(program.name)
       ?.fileArgs?.includes(MERGE_EDITED_FILE) === true
-      ? script.args[MERGE_EDITED_FILE]
+      ? program.args[MERGE_EDITED_FILE]
       : undefined;
   // The launch's files as they read now; one that does not read changes
   // what the model sees, so it is reported on the run's own channel.

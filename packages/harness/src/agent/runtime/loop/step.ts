@@ -36,13 +36,15 @@ import {
   Context,
   Effect,
   Exit,
+  type FileSystem,
   Record,
   Schema,
   Scope,
   ScopedRef,
   Ref,
 } from 'effect';
-import { ModelProvider } from '@texra-ai/llm';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { issuesParallelToolCalls } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
@@ -164,6 +166,7 @@ function describedAtFreeze<T extends ResolvedTools>(
     .map((definition) => ({
       definition,
       scriptGlobal: tools.registry.get(definition.name)?.scriptGlobal,
+      lane: tools.registry.get(definition.name)?.lane,
     }));
   const recorded = (name: string) => {
     const shown =
@@ -239,6 +242,11 @@ const openStep = Effect.fn('Step.open')(function* (
       ...(trusted && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
+    // A plugin whose dependency is missing gives the step no program and no
+    // prompt section, as it gives it no tool.
+    const available = pinned.plugins.filter(
+      ({ id }) => !resolved.unavailable.has(id),
+    );
     // A step held to the record loads the modules it recorded, so a
     // resumed script runs the code it ran with.
     const imported =
@@ -254,7 +262,7 @@ const openStep = Effect.fn('Step.open')(function* (
       Object.keys(imported),
       // Only a run offered `program` can start one.
       resolved.registry.has(PROGRAM_TOOL_NAME)
-        ? pinned.plugins.flatMap(({ programs = {} }) =>
+        ? available.flatMap(({ programs = {} }) =>
             Object.entries(programs).map(([name, { description }]) => ({
               name,
               description,
@@ -263,9 +271,7 @@ const openStep = Effect.fn('Step.open')(function* (
         : [],
     );
     // The plugins whose sections the step's system text renders.
-    const contributing = pinned.plugins.filter(
-      ({ prompt }) => prompt !== undefined,
-    );
+    const contributing = available.filter(({ prompt }) => prompt !== undefined);
     // Only the plugins this step uses hold services: a waiting run keeps up
     // nothing it does not offer.
     const used = new Set([
@@ -292,7 +298,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
-        ? Settings.getConfig(roots.config, AGENT_SKILLS_ENABLED_SETTING)
+        ? yield* Settings.get(roots, AGENT_SKILLS_ENABLED_SETTING)
         : recordedSkills.length > 0;
     const catalog =
       listing || names.length > 0
@@ -437,13 +443,20 @@ export const dispatchTools = Effect.fn('Step.dispatch')(function* (
  * holds only what its plugins offer now. The first request a resumed
  * activation opens is held to the record, and so is every wait before it,
  * which leaves the hold unspent. Its base text is the recorded one, or
- * until the opening commits, `openingSystem`.
+ * until the opening commits, what `opening` renders from the tools the step
+ * offers.
  */
 export const stepFor = Effect.fn('Step.for')(function* (
   run: AgentRunShape,
   state: RunState,
   waits: boolean,
-  openingSystem?: string,
+  opening?: (
+    offered: readonly string[],
+  ) => Effect.Effect<
+    string,
+    Error,
+    FileSystem.FileSystem | ChildProcessSpawner
+  >,
 ) {
   const open = yield* Ref.get(run.steps);
   const held = open === null || open.holding;
@@ -463,23 +476,26 @@ export const stepFor = Effect.fn('Step.for')(function* (
     roots,
     run.config.delegationAgentScope ?? undefined,
   );
+  const offered = tools.definitions.map(({ name }) => name);
   const context = {
     ...stepInstructions(
       step.contributing,
       step.listed,
       {
-        offered: tools.definitions.map(({ name }) => name),
+        offered,
         isChild: run.entry.parent !== null,
         config: roots.config,
       },
-      model.config.provider === ModelProvider.ANTHROPIC,
+      issuesParallelToolCalls(model.config),
     ),
     ...(delegation && { delegation }),
   };
   const base =
-    state.input.system === undefined
-      ? openingSystem
-      : stored(state, state.input.system, Schema.String);
+    state.input.system !== undefined
+      ? stored(state, state.input.system, Schema.String)
+      : opening === undefined
+        ? undefined
+        : yield* opening(offered);
   const { system, update } = systemTextAt(state, base, context);
   const modules = Record.map(tools.modules, sha256);
   const changed =
@@ -489,6 +505,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     tools.hooks.identities.join('\0') !== state.offeredWith.hooks.join('\0');
   return {
     tools,
+    base,
     system,
     // The content the set names is stored before the row that names it.
     rows: changed

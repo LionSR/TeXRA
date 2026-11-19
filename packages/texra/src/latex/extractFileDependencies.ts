@@ -11,11 +11,10 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Predicate } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 // Local imports
-import { ensureError, type FileLocation } from '@texra-ai/harness/schemas';
-import { readNormalizedFile } from '@texra-ai/harness/node';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 
 // Local file imports
 import {
@@ -24,16 +23,14 @@ import {
   ensureExtension,
   existingExternalPath,
   joinLatexPath,
+  LATEX_PROBE_CONCURRENCY,
+  readUncommentedLatex,
   resolveLatexDir,
-  stripLatexComments,
   texInputPaths,
 } from './latexParsingUtils';
 
 const USEPACKAGE_PATTERN =
   /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
-
-/** Dependency probes hit the filesystem, so bound the fan-out. */
-const RESOLVE_CONCURRENCY = 8;
 
 /**
  * Resolve a TeX input path (\input / \include argument) to an existing
@@ -76,12 +73,9 @@ export const extractLatexFileDependencies = Effect.fn(
   // Follow symlinks so run-storage paths resolve against the workspace
   const latexDir = yield* resolveLatexDir(latexFileLocation.absolutePath);
 
-  const fs = yield* FileSystem.FileSystem;
-  const content = yield* readNormalizedFile(
-    fs,
+  const uncommented = yield* readUncommentedLatex(
     latexFileLocation.absolutePath,
-  ).pipe(Effect.mapError(ensureError));
-  const uncommented = stripLatexComments(content);
+  );
 
   const bibCandidates = collectBibliographyPaths(latexDir, uncommented);
   const styCandidates = collectCommaSeparatedMatches(
@@ -97,13 +91,13 @@ export const extractLatexFileDependencies = Effect.fn(
       Effect.forEach(
         texInputPaths(uncommented),
         (raw) => resolveTexInputPath(raw, latexDir),
-        { concurrency: RESOLVE_CONCURRENCY },
+        { concurrency: LATEX_PROBE_CONCURRENCY },
       ),
       Effect.forEach(bibCandidates, existingExternalPath, {
-        concurrency: RESOLVE_CONCURRENCY,
+        concurrency: LATEX_PROBE_CONCURRENCY,
       }),
       Effect.forEach(styCandidates, existingExternalPath, {
-        concurrency: RESOLVE_CONCURRENCY,
+        concurrency: LATEX_PROBE_CONCURRENCY,
       }),
     ],
     { concurrency: 3 },

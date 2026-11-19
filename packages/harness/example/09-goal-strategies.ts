@@ -37,7 +37,7 @@ import {
   type PendingRequest,
 } from '@texra-ai/harness/schemas';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 /** Keeps the conversation's turn open while its goal runs. */
 const holdTurn = defineTool({
@@ -96,12 +96,16 @@ const PERSONA = {
   tools: ['hold_turn'],
 };
 
-/** A conversation's one turn: propose the plan, then hold. */
+/** A conversation's one turn: a script that proposes the plan, then holds. */
 const proposeAndHold = (opening: string, objective: string) => ({
   expect: opening,
   toolCalls: [
-    { name: 'plan', input: { objective } },
-    { name: 'hold_turn', input: {} },
+    {
+      name: 'script',
+      input: {
+        code: `await tools.plan(${JSON.stringify({ objective })});\nawait tools.hold_turn({});`,
+      },
+    },
   ],
 });
 
@@ -234,6 +238,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, ledgerPlugin],
+      client: EXAMPLE_CLIENT,
     }).pipe(Layer.provideMerge(route.transport)),
   ),
 );

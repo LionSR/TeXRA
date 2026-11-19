@@ -6,13 +6,12 @@ import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron';
 import { Effect, Predicate, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   HostFailed,
   type ConfirmQuestion,
   type NoticeLevel,
 } from '@texra/hosts/uiHosts';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 /** The project as the title where the platform draws one, and as a line of
@@ -160,29 +159,28 @@ export function createDesktopDialogs(
     pickTranscriptExportFormat: (project: string) =>
       Effect.tryPromise({
         try: () => import('@texra/controllers/progressView/exportTranscript'),
-        catch: ensureError,
-      }).pipe(
-        Effect.flatMap(({ TRANSCRIPT_EXPORT_FORMAT_CHOICES }) =>
-          choose(window, {
-            type: 'question',
-            message: 'Export transcript',
-            detail: 'Choose a format',
-            project,
-            choices: TRANSCRIPT_EXPORT_FORMAT_CHOICES.map(
-              ({ label, format }, index) => ({
-                label,
-                value: format,
-                ...(index === 0 && { default: true as const }),
-              }),
-            ),
-            close: 'Cancel',
+        catch: (cause) =>
+          new HostFailed({
+            member: 'pickTranscriptExportFormat',
+            message: toErrorMessage(cause),
+            cause,
           }),
-        ),
-        Effect.mapError(
-          (cause) =>
-            new TranscriptExportFailed({
-              message: toErrorMessage(cause),
-              cause,
+      }).pipe(
+        Effect.flatMap(
+          ({ TRANSCRIPT_EXPORT_FORMAT_CHOICES, TRANSCRIPT_EXPORT_PICK }) =>
+            choose(window, {
+              type: 'question',
+              message: TRANSCRIPT_EXPORT_PICK.title,
+              detail: TRANSCRIPT_EXPORT_PICK.prompt,
+              project,
+              choices: TRANSCRIPT_EXPORT_FORMAT_CHOICES.map(
+                ({ label, format }, index) => ({
+                  label,
+                  value: format,
+                  ...(index === 0 && { default: true as const }),
+                }),
+              ),
+              close: 'Cancel',
             }),
         ),
       ),

@@ -11,7 +11,6 @@ import { endRunRows, type RunEnding } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { logFailure, withLogChannel } from '@logger/effectLog';
-import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
 import {
@@ -133,10 +132,11 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
  * The run program's terminal, the run's one terminal writer: every way the
  * flow exits (a result, a reported failure, an escaped exception, a stop)
  * reaches this exactly once, as the exit of the one masked region the
- * program runs in. It ends the run through {@link commitEnd}, a child's
- * report with its parent's delivery in the end's transaction
- * (`childEndReport`). A root's failure is logged here and raised as an
- * `AgentError` once its end committed; a child's rides its report.
+ * program runs in. It ends the run through {@link commitEnd}, its report
+ * with the delivery to the runs it worked for in the end's transaction
+ * (`childEndReport`), whether the flow returned one or died. A root's
+ * failure is also logged here and raised as an `AgentError` once its end
+ * committed.
  * Uninterruptible, as that end is.
  */
 export const endRun = Effect.fn('endRun')(function* (
@@ -198,58 +198,30 @@ export const endRun = Effect.fn('endRun')(function* (
         operation: `execute ${agentIdentifier}`,
       });
   }
-  // A child's failure rides its result, the error its delivery reports.
-  const childResult: RunReport | undefined =
-    parentId === null
-      ? carried
-      : {
-          ...(carried ?? emptyReport(ctx, verdict.outcome)),
-          ...(error !== undefined && { failure: error }),
-        };
+  // The run's failure rides its result, the error its delivery reports: a
+  // run that died before returning one reports that, root or child.
+  const result: RunReport = {
+    ...(carried ?? emptyReport(ctx, verdict.outcome)),
+    ...(error !== undefined && { failure: error }),
+  };
   const log = yield* SessionLog;
   yield* commitEnd(
     exit,
     { runId, outcome: verdict.outcome, error, output: carried?.output },
-    // What the child tells its parent, from its report as the end resolves
-    // it: the outcome the end commits, and the end's error where the run
-    // reported no failure of its own (rows the store refused). A report
-    // that cannot be built is the end's error, delivered as such rather
-    // than lost.
-    ({ outcome, error: ended }) =>
-      childResult === undefined
-        ? Effect.succeed(null)
-        : Effect.gen(function* () {
-            const record = yield* log.facts(runId);
-            const wallTimeMs = (yield* Clock.currentTimeMillis) - ctx.startedAt;
-            const failure = childResult.failure ?? ended;
-            return yield* childEndReport(
-              ctx,
-              {
-                ...childResult,
-                outcome,
-                ...(failure !== undefined && { failure }),
-              },
-              record,
-              wallTimeMs,
-            ).pipe(
-              Effect.catch((unbuilt) =>
-                Effect.as(
-                  logFailure(
-                    CHANNEL,
-                    `Run ${runId}: its report could not be built`,
-                  )({ runId, error: unbuilt }),
-                  {
-                    family:
-                      ctx.config.script?.kind === 'background'
-                        ? DELIVERY_FAMILY.script
-                        : DELIVERY_FAMILY.subagent,
-                    runId,
-                    message: `The run ${runId} ended ${outcome}, but its report could not be built: ${unbuilt.message}`,
-                  },
-                ),
-              ),
-            );
-          }),
+    // What the run tells the runs it worked for, from its report as the end
+    // resolves it: the outcome the end commits, and the end's error where
+    // the run reported no failure of its own (rows the store refused).
+    Effect.fnUntraced(function* ({ outcome, error: ended }) {
+      const record = yield* log.facts(runId);
+      const wallTimeMs = (yield* Clock.currentTimeMillis) - ctx.startedAt;
+      const failure = result.failure ?? ended;
+      return yield* childEndReport(
+        ctx,
+        { ...result, outcome, ...(failure !== undefined && { failure }) },
+        record,
+        wallTimeMs,
+      );
+    }),
   );
   if (parentId === null && thrown !== undefined && error !== undefined)
     // A root run's failure. Once its `run.end` row committed, the

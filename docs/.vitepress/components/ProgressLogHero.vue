@@ -12,13 +12,6 @@
 // a task-id chip on one row illustrates "look for task IDs to track specific
 // operations". Static strings only — never a live timestamp.
 
-const filters = [
-  { label: 'All', active: true },
-  { label: 'Info', sev: 'info' },
-  { label: 'Warn', sev: 'warn' },
-  { label: 'Error', sev: 'error' },
-];
-
 const rows = [
   {
     sev: 'info',
@@ -40,7 +33,7 @@ const rows = [
     sev: 'error',
     time: '14:05:39',
     msg: 'latexdiff exited 1 — see build log',
-    detail: 'r0/build/diff.log:84  Undefined control sequence \\DIFadd',
+    detail: 'diff/r0: Undefined control sequence \\DIFadd',
   },
 ];
 
@@ -54,39 +47,15 @@ const sevTag = {
 </script>
 
 <template>
-  <div class="mockup mk-card pblog" role="group" aria-label="ProgressBoard log">
+  <div class="mockup mk-card pblog" role="group" aria-label="Tasks view log">
     <div class="mk-card-head pb-head">
       <wa-icon
         class="mk-card-head-ic"
         library="texra"
         name="list-check"
       ></wa-icon>
-      <span class="mk-card-title">ProgressBoard</span>
+      <span class="mk-card-title">Tasks</span>
       <span class="mk-card-sub">log</span>
-      <span class="pb-search">
-        <wa-icon
-          class="pb-search-ic"
-          library="texra"
-          name="magnifying-glass"
-        ></wa-icon>
-        <span class="pb-search-ph">Search log…</span>
-      </span>
-    </div>
-
-    <div class="pb-filters">
-      <span
-        v-for="f in filters"
-        :key="f.label"
-        class="pb-filter"
-        :class="[{ active: f.active }, f.sev ? `pb-filter--${f.sev}` : '']"
-      >
-        <span
-          v-if="f.sev"
-          class="pb-filter-dot"
-          :class="`pb-dot--${f.sev}`"
-        ></span>
-        {{ f.label }}
-      </span>
     </div>
 
     <ul class="pb-list">

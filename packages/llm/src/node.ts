@@ -17,6 +17,9 @@
  *   account, keyed by its route
  *   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
  *   browser and (Grok's) device-code sign-in.
+ * - **Provider endpoints outside a turn**: [`fetchPlanUsage`](#fetchplanusage)
+ *   reads a coding plan's quota windows, and
+ *   [`transcribeAudio`](#transcribeaudio) a recording's text.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
@@ -40,6 +43,20 @@ export interface SessionToken {
 }
 
 /**
+ * The app llm signs in and sends for, as the providers name it. llm has no
+ * default: the app supplies its own.
+ */
+export interface ClientIdentity {
+  /** What OpenAI shows the person for the client a ChatGPT sign-in registers. */
+  readonly name: string;
+  /**
+   * A lowercase token: xAI's sign-in referrer, and the namespace a ChatGPT
+   * plan's function tools sit in.
+   */
+  readonly id: string;
+}
+
+/**
  * One model on one decided route, and what the caller asks of it. The
  * protocol is the model's provider's, and the route fixes the config it runs
  * (`routeConfig`), the endpoint it sends to, the credential scope stamped on
@@ -55,6 +72,8 @@ export interface BindSpec {
    * plan's request rules apply is the route's `plan`.
    */
   readonly bearer: string | SessionToken;
+  /** The app the requests are sent for (a ChatGPT plan's tools sit in its namespace). */
+  readonly client: ClientIdentity;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
     /** The output ceiling, before the model's own rules; the catalog's by default. */
@@ -69,7 +88,7 @@ export interface BindSpec {
     readonly fastTier?: boolean;
     /** The caller would serve Responses over its WebSocket. */
     readonly webSocket?: boolean;
-    /** The caller would deliver turns as background work; it wins over the socket. */
+    /** The caller gives up the WebSocket where the route takes background work. */
     readonly background?: boolean;
     /** The fetch every HTTP request goes through. */
     readonly fetch?: typeof fetch;
@@ -190,3 +209,34 @@ export type {
 export type { ChatgptSession } from './oauth/chatgpt/chatgptProvider.js';
 export type { XaiSession } from './oauth/xai/xaiProvider.js';
 export { SubscriptionAccounts } from './oauth/subscriptionAccounts.js';
+
+// Provider endpoints outside the turn contract.
+export { fetchPlanUsage } from './providers/planUsage.js';
+
+/**
+ * The text of an audio file, from OpenAI's transcription model with an
+ * OpenAI key at `endpoint`. The SDK loads on the first call.
+ */
+export const transcribeAudio = (
+  audioPath: string,
+  credential: { readonly bearer: string; readonly endpoint: string },
+): Effect.Effect<string, ModelError> =>
+  Effect.flatMap(
+    // A module that fails to load (a broken bundle) still fails as a
+    // ModelError, so the caller's one error case covers it.
+    Effect.tryPromise({
+      try: () => import('./api/openaiTranscription.js'),
+      catch: (cause) =>
+        new ModelError({
+          kind: 'transport',
+          message: `The transcription module failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
+          retryable: false,
+        }),
+    }),
+    (module) => module.transcribeAudio(audioPath, credential),
+  );
+export type {
+  PlanUsage,
+  PlanUsageRequest,
+  PlanUsageWindow,
+} from './providers/planUsage.js';

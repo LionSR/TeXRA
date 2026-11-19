@@ -25,6 +25,7 @@ import {
 } from '@cli/tui/ui/glyphs';
 import {
   compileFailuresOf,
+  roundAlerts,
   formatRoundLabel,
   latexdiffDisplayName,
   outputDiffCounts,
@@ -102,7 +103,7 @@ function documentTaskRunDetailGroups(
     });
   }
   for (const record of facts.rounds) {
-    const { round, outputs, missingOutputs: missing, reply } = record;
+    const { round, outputs, missingOutputs: missing } = record;
     const lines: DocumentTaskRunDetailLine[] = [
       {
         key: `round:${round}`,
@@ -138,10 +139,16 @@ function documentTaskRunDetailGroups(
         });
       }
     }
-    if (reply && (outputs.length === 0 || missing.length > 0))
+    const { noDocuments, replyToCheck } = roundAlerts(record);
+    if (noDocuments || replyToCheck)
       lines.push({
         key: `reply:${round}`,
-        text: `  ${WARNING} ${joinFacts([formatRoundLabel(round), `${outputs.length === 0 ? 'Wrote no documents; reply' : 'Reply'} kept at ${safeTerminalText(reply.absolutePath)}`])}`,
+        text: `  ${WARNING} ${joinFacts([
+          formatRoundLabel(round),
+          noDocuments && 'Wrote no documents',
+          replyToCheck &&
+            `Reply kept at ${safeTerminalText(replyToCheck.absolutePath)}`,
+        ])}`,
         color: COLOR_WARNING,
         role: 'alert',
       });

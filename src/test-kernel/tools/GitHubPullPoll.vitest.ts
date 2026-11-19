@@ -1,44 +1,45 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports - platform
 import { Secrets } from '@texra-ai/harness/plugins';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
-import { noHttpClientLayer } from '@test/support/fetchTestUtils';
+import { scriptedHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { GitHubRateLimitError } from '@texra/tools/github/githubClient';
 import type { GhCheckRun } from '@texra/tools/github/prTypes';
 import { pollPull, type PullState } from '@texra/tools/github/pullPoller';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
-const mocks = vi.hoisted(() => ({
-  fetchAnnotations: vi.fn(),
-  ghGet: vi.fn(),
-}));
+/** The epoch second GitHub names as the rate limit's reset. */
+const RESET_AT = 1_800_000_000;
 
-// Stub the GitHub transport at its module boundaries; the importOriginal
-// spreads keep the real error classes and the check-runs walk.
-vi.mock('@texra/tools/github/checkRunsClient', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@texra/tools/github/checkRunsClient')
-  >()),
-  fetchAnnotations: mocks.fetchAnnotations,
-}));
-vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@texra/tools/github/githubClient')
-  >()),
-  ghGet: mocks.ghGet,
-}));
+/**
+ * GitHub as the poll sees it: every pull request read answers 304 (nothing
+ * changed), and the annotation read hits the primary rate limit.
+ */
+const github = scriptedHttpClientLayer((request) =>
+  new URL(request.url).pathname.endsWith('/annotations')
+    ? new Response(JSON.stringify({ message: 'API rate limit exceeded' }), {
+        status: 403,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset': String(RESET_AT),
+        },
+      })
+    : new Response(null, { status: 304 }),
+);
 
-/** The services the GitHub client requires; the client itself is mocked. */
+/** The services the GitHub client requires, over the scripted API. */
 const githubServices = Layer.merge(
-  Secrets.layer(new FakeSecrets()),
-  noHttpClientLayer,
+  Secrets.layer(new FakeSecrets(), HARNESS_APP.client),
+  github.layer,
 );
 
 function createCheckRun(id: number): GhCheckRun {
@@ -73,19 +74,10 @@ function priorWithQueuedRun(run: GhCheckRun): PullState {
 }
 
 describe('pull request poll annotation drain', () => {
-  beforeEach(() => {
-    mocks.fetchAnnotations.mockReset();
-    mocks.ghGet.mockReset();
-  });
-
   it.effect(
     'fails the poll on an annotation rate limit, so the subscription waits for the reset',
     () =>
       Effect.gen(function* () {
-        mocks.ghGet.mockReturnValue(Effect.succeed({ status: 304 }));
-        const rateLimit = new GitHubRateLimitError({ resetAt: 1_800_000_000 });
-        mocks.fetchAnnotations.mockReturnValue(Effect.fail(rateLimit));
-
         const failure = yield* Effect.flip(
           pollPull(
             { _tag: 'pull', owner: 'owner', repo: 'repo', number: 7 },
@@ -94,7 +86,16 @@ describe('pull request poll annotation drain', () => {
           ),
         );
 
-        expect(failure).toBe(rateLimit);
+        expect(failure).toStrictEqual(
+          new GitHubRateLimitError({ resetAt: RESET_AT }),
+        );
+        expect(
+          github.requests.some((request) =>
+            request.url.endsWith(
+              '/check-runs/42/annotations?per_page=100&page=1',
+            ),
+          ),
+        ).toBe(true);
       }).pipe(Effect.provide(githubServices)),
   );
 });

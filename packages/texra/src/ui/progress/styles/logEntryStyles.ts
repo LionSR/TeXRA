@@ -111,7 +111,6 @@ export const logEntryStyles = css`
   }
 
   .memory-path .file-source {
-    opacity: var(--opacity-subtle);
     font-size: var(--font-size-xs);
   }
 
@@ -170,7 +169,7 @@ export const logEntryStyles = css`
   }
 
   .log-level-icon--info {
-    color: var(--color-success);
+    color: var(--wa-color-icon-info);
   }
 
   .log-level-icon--debug {

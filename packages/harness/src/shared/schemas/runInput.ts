@@ -7,9 +7,8 @@
  */
 import { Schema } from 'effect';
 
-import { ACTIVATED_SKILLS_MAX } from './activeSkills';
+import { ActivatedSkillsSchema } from './activeSkills';
 import { Sha256Schema } from './identifiers';
-import { QualifiedSkillNameSchema } from './skillName';
 import { DeclinableUsageRouteSchema } from './usage';
 
 // ------------------------------------------------------------ launch facts
@@ -29,7 +28,7 @@ export type AttachedMemoryMiss = typeof AttachedMemoryMissSchema.Type;
  * API-key provider a retry offer names (with the coding plans) both read
  * this one list, so a new provider is added once.
  */
-export const MODEL_PROVIDERS = [
+export const MODEL_PROVIDERS = Object.freeze([
   'openai',
   'anthropic',
   'google',
@@ -40,7 +39,7 @@ export const MODEL_PROVIDERS = [
   'minimax',
   'glm',
   'meta',
-] as const;
+] as const);
 
 /**
  * Who serves a run's conversation: the model's own provider, whose plugin
@@ -73,11 +72,7 @@ export const RunInputSchema = Schema.Struct({
   /** The names of the skills the run's user activated: each step resolves
    *  them against its own catalog, and grants one while its plugin, if any,
    *  still contributes. */
-  activated: Schema.optional(
-    Schema.Array(QualifiedSkillNameSchema).check(
-      Schema.isMaxLength(ACTIVATED_SKILLS_MAX),
-    ),
-  ),
+  activated: Schema.optional(ActivatedSkillsSchema),
   /** The attached memories the opening could not read. */
   memoryMisses: Schema.optional(Schema.Array(AttachedMemoryMissSchema)),
 });

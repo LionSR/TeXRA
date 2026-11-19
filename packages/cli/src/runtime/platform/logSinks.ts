@@ -3,13 +3,14 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, LogLevel, PlatformError, Predicate } from 'effect';
+import { Effect, LogLevel, Predicate, Schema } from 'effect';
 
 // Local imports
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   entryChannel,
   entryMessage,
+  setLogSink,
   type LogEntry,
   type LogSink as HostLogSink,
 } from '@texra-ai/harness/node';
@@ -17,6 +18,8 @@ import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
 } from '@cli/schemas/cliOutput';
+
+import { CliExitCode } from './exitCodes';
 
 const closed = { stdout: false, stderr: false };
 
@@ -137,27 +140,73 @@ export function flush(stream: StreamKey): Effect.Effect<void> {
   return writeRawAndWait(stream, '');
 }
 
-/**
- * The user-facing text of a caught error. A `PlatformError`'s own message is
- * `Tag: FileSystem.method (path)`, with no errno text; its Node cause carries
- * the real reason (`ENOSPC: no space left on device, copyfile 'a' -> 'b'`),
- * so that is what the CLI prints.
- */
+/** The user-facing text of a caught error: the CLI's one wording of a
+ *  failure, which every command prints through. */
 export function cliErrorMessage(error: unknown): string {
-  return toErrorMessage(
-    error instanceof PlatformError.PlatformError
-      ? (error.reason.cause ?? error)
-      : error,
+  return toErrorMessage(error);
+}
+
+/** Write a caught error's human-readable message to stderr. */
+export function writeErrorStderr(error: unknown): void {
+  writeTextStderr(cliErrorMessage(error));
+}
+
+/** A CLI entry's one run threw: `cause` is what it threw, reported as is. */
+class CliEntryCrashed extends Schema.TaggedError<CliEntryCrashed>()(
+  'CliEntryCrashed',
+  { cause: Schema.Defect() },
+) {}
+
+/**
+ * A process entry's one run: `body` answers the exit code. Whatever it throws
+ * is an unexpected crash, since usage errors and classified run failures end
+ * in an exit code inside it: the crash is worded on stderr under `label`,
+ * followed by `reportLine`'s line when it has one, and the process exits with
+ * the agent-error code.
+ *
+ * The process owns its diagnostic sink from here: the harness's console
+ * fallback sends DEBUG and INFO to stdout, where under `--output-format
+ * ndjson` a line would break the stream. Until citty has parsed the argv,
+ * diagnostics go to stderr at the default level; `defineCliCommand` then
+ * installs the sink at the level the context decides (`--quiet`,
+ * `--verbose`) for the command's whole life.
+ */
+export function runCliEntry(
+  label: string,
+  body: () => Promise<number>,
+  reportLine?: (error: unknown) => string | undefined,
+): Effect.Effect<void> {
+  return Effect.tryPromise({
+    try: async () => {
+      setLogSink(stderrDiagnosticSink('Warn'), { trusted: true });
+      installCliPipeErrorHandlers();
+      process.exitCode = await body();
+    },
+    catch: (cause) => new CliEntryCrashed({ cause }),
+  }).pipe(
+    Effect.catch(({ cause: error }) =>
+      Effect.sync(() => {
+        writeTextStderr(`${label} failed: ${cliErrorMessage(error)}`);
+        const line = reportLine?.(error);
+        if (line) writeTextStderr(line);
+        process.exitCode = CliExitCode.AgentError;
+      }),
+    ),
   );
 }
 
 /**
- * Write a caught error's human-readable message to stderr. Replaces the
- * `writeTextStderr(cliErrorMessage(error))` pair every command's catch block
- * repeated so the error-formatting choice lives in one place.
+ * A prompt on the terminal got no answer: the input ended, readline failed,
+ * or the code that prepares the terminal for it, or renders or parses what
+ * it shows, threw.
  */
-export function writeErrorStderr(error: unknown): void {
-  writeTextStderr(cliErrorMessage(error));
+export class CliPromptFailed extends Schema.TaggedError<CliPromptFailed>()(
+  'CliPromptFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  /** What prompt code threw, under its own message. */
+  static readonly from = (cause: unknown) =>
+    new CliPromptFailed({ message: ensureError(cause).message, cause });
 }
 
 /**
@@ -173,7 +222,7 @@ export function askCliQuestion(
      *  the question is written straight to stderr instead. */
     readonly hidden?: boolean;
   } = {},
-): Effect.Effect<string, Error> {
+): Effect.Effect<string, CliPromptFailed> {
   return Effect.acquireUseRelease(
     Effect.sync(() => {
       // When stdin is a file it has no `ref`.
@@ -198,13 +247,19 @@ export function askCliQuestion(
       Effect.raceFirst(
         Effect.tryPromise({
           try: () => prompt.question(options.hidden ? '' : question),
-          catch: ensureError,
+          catch: CliPromptFailed.from,
         }),
         // readline leaves a pending question unanswered for good when its
         // input ends (Ctrl-D, a closed pipe); its `close` is the answer.
-        Effect.callback<never, Error>((resume) => {
+        Effect.callback<never, CliPromptFailed>((resume) => {
           prompt.once('close', () =>
-            resume(Effect.fail(new Error('The input ended before an answer.'))),
+            resume(
+              Effect.fail(
+                new CliPromptFailed({
+                  message: 'The input ended before an answer.',
+                }),
+              ),
+            ),
           );
         }),
       ),
@@ -224,7 +279,7 @@ export function askCliQuestion(
 export function confirmCliQuestion(
   question: string,
   options: { readonly default: boolean },
-): Effect.Effect<boolean, Error> {
+): Effect.Effect<boolean, CliPromptFailed> {
   return askCliQuestion(
     `${question} ${options.default ? '[Y/n]' : '[y/N]'} `,
   ).pipe(

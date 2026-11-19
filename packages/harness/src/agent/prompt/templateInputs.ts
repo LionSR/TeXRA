@@ -5,11 +5,10 @@ import { Effect, FileSystem } from 'effect';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryLayout';
 import {
-  programOf,
+  runsScript,
   type AgentConfig,
   type AttachedMemoryMiss,
 } from '@shared/schemas';
-import { activatedSkillNames } from '@skills/runtimeSkills';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
@@ -24,8 +23,6 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
  * the skills) is rendered per request (`stepInstructions`).
  */
 interface PromptVariables {
-  /** Provider gate for Anthropic-specific agent prompt blocks. */
-  IS_ANTHROPIC_MODEL: boolean;
   /** Working directory the run's tools operate in. */
   CWD: string;
   /** Absolute agent-directory paths from the external-roots registry, ''
@@ -64,7 +61,7 @@ type AttachedMemoriesResult = {
 
 /**
  * What a launch opens from: the prompt variables; the names of the skills a
- * tool-use run's instruction activated; the attached memories' XML block,
+ * tool-use run's user activated with its launch; the attached memories' XML block,
  * appended to the system prompt (null when none are attached); and the
  * attached memories that could not be read.
  */
@@ -82,7 +79,6 @@ export interface TemplateOpening {
  */
 export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   agentConfig: AgentConfig,
-  isAnthropicModel: boolean,
   options: BuildTemplateInputsOptions,
 ): Effect.fn.Return<TemplateOpening, never, FileSystem.FileSystem> {
   const attachedMemories = yield* getAttachedMemories(
@@ -92,7 +88,6 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   // An unregistered agent directory renders as '' (e.g. in tests that run
   // no activation).
   const inputs: PromptVariables = {
-    IS_ANTHROPIC_MODEL: isAnthropicModel,
     CWD: options.workingDirectory ?? options.workspaceRoot ?? '.',
     BUILTIN_AGENTS_DIR: '',
     CUSTOM_AGENTS_DIR: '',
@@ -103,12 +98,10 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
 
   return {
     inputs,
-    // What the launch instruction activates (`/skills`): each step resolves
-    // the names against its own catalog; a program's, none.
-    activated:
-      programOf(agentConfig) !== null
-        ? []
-        : activatedSkillNames([agentConfig.instruction]),
+    // What the launch activates (`/skills`): each step resolves the names
+    // against its own catalog; a script's run, which renders no prompt,
+    // none.
+    activated: runsScript(agentConfig) ? [] : (agentConfig.skills ?? []),
     attachedMemories: attachedMemories.xml,
     attachedMemoryMisses: attachedMemories.misses,
   };

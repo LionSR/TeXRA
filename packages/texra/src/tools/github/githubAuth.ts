@@ -16,7 +16,8 @@ import {
   resolveCredential,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import type { PlatformSecrets } from '@texra-ai/harness/plugins';
+import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
+import { storeCredential } from '@texra/common/secrets/storeCredential';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
@@ -42,16 +43,25 @@ export const GITHUB_TOKEN_SAVED_MESSAGE = 'GitHub token saved.';
 /** Confirmation after the token is cleared from the host secret store. */
 export const GITHUB_TOKEN_REMOVED_MESSAGE = 'GitHub token removed.';
 
-/**
- * What every host says when the `githubTokenInvalid` signal fires: GitHub
- * rejected the stored token. One signal, one sentence.
- */
-export function gitHubTokenRejectedMessage(reason: string): string {
-  return `GitHub token rejected: ${reason}`;
+/** Environment variables accepted by GitHub tools, in precedence order. */
+export const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
+
+/** Store the token a host's token form was given: trimmed, and refused
+ *  when it is empty or looks like a placeholder (`storeCredential`). */
+export function saveGitHubToken(token: string) {
+  return Effect.flatMap(Secrets, (secrets) =>
+    storeCredential(secrets, {
+      secretName: GITHUB_TOKEN_STORAGE_KEY,
+      value: token,
+      kind: 'github',
+    }),
+  );
 }
 
-/** Environment variables accepted by GitHub tools, in precedence order. */
-const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
+/** Forget the stored token; the environment variables still apply. */
+export const removeGitHubToken = Effect.flatMap(Secrets, (secrets) =>
+  secrets.delete(GITHUB_TOKEN_STORAGE_KEY),
+);
 
 const resolveGitHubToken = (secrets: PlatformSecrets) =>
   resolveCredential(secrets, GITHUB_TOKEN_STORAGE_KEY, GITHUB_TOKEN_ENV_VARS);

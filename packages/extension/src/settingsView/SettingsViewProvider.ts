@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { Effect, Latch, Result, Schema } from 'effect';
 
-import { hasExtension } from '@texra-ai/harness/host';
+import { hasExtension } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { ensureError } from '@texra-ai/harness/schemas';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -14,6 +13,8 @@ import { selectFolder } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -35,26 +36,20 @@ import type {
 function postToWebview(
   webview: vscode.Webview,
   message: SettingsViewOutboundMessage,
-): Effect.Effect<void, Error> {
-  return Effect.tryPromise({
-    try: async () => {
-      await webview.postMessage(message);
-    },
-    catch: ensureError,
+): Effect.Effect<void, HostFailed> {
+  return fromHost('webview.postMessage', async () => {
+    await webview.postMessage(message);
   });
 }
 
 /** Show `document` in an editor tab of its own. */
 const showDocument = (
   document: () => Thenable<vscode.TextDocument>,
-): Effect.Effect<void, Error> =>
-  Effect.tryPromise({
-    try: async () => {
-      await vscode.window.showTextDocument(await document(), {
-        preview: false,
-      });
-    },
-    catch: ensureError,
+): Effect.Effect<void, HostFailed> =>
+  fromHost('showTextDocument', async () => {
+    await vscode.window.showTextDocument(await document(), {
+      preview: false,
+    });
   });
 
 const CHANNEL = 'SettingsViewProvider';
@@ -91,7 +86,7 @@ export class SettingsViewProvider {
     this.fork = fork;
     this.contentProvider = new BundledViewContentProvider(
       context,
-      'SettingsView',
+      'TeXRA Settings',
       'settingsView',
     );
     this.body = runtime.runSync(
@@ -137,7 +132,7 @@ export class SettingsViewProvider {
               selectFolder({ title, openLabel: 'Select Folder' }),
               (selected) => selected ?? undefined,
             ),
-          ...progressView.settingsRuns,
+          ...progressView.window.settingsRuns,
           signInSubscription: (providerId) =>
             signInWithSubscription(roots, providerId),
           runInTerminal: (name, command) =>
@@ -147,7 +142,6 @@ export class SettingsViewProvider {
               terminal.sendText(command);
             }),
           editor: vscodeEditorIntegration,
-          requiresOpenWorkspace: () => !roots.workspace,
         },
       }),
     );
@@ -234,16 +228,14 @@ export class SettingsViewProvider {
     ready,
   }: SettingsPanel): vscode.Disposable {
     // The template is read off this tick (it never rejects: a failed render
-    // is a logged error page); a panel closed before it lands is not painted.
+    // is a reported error page); a panel closed before it lands is not
+    // painted.
     this.fork(
-      this.contentProvider.getHtmlContent(panel.webview).pipe(
-        Effect.flatMap((html) =>
-          Effect.sync(() => {
-            if (this.panel?.view === panel) panel.webview.html = html;
-          }),
-        ),
-        withLogChannel(CHANNEL),
-      ),
+      this.contentProvider
+        .render(panel.webview, (html) => {
+          if (this.panel?.view === panel) panel.webview.html = html;
+        })
+        .pipe(withLogChannel(CHANNEL)),
     );
     return panel.webview.onDidReceiveMessage((message) => {
       this.fork(

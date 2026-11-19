@@ -116,7 +116,7 @@ Tools: `agent` (in scripts, `agent(prompt, {project})`), `executions`, `accept_r
   - With nobody attached, requests wait durably and the desktop notifies.
   - A request on a run another process owns is shown read-only, because `SessionRequests.decide` answers `NotOwner`.
 - **Memory.** The `memory` tool writes per workspace storage, so the orchestrator folder has its own. The model keeps any other notes as files in the folder.
-- **Other tools.** `plan`, `inquiry`, `ask_user_question`, file tools and `bash`, as today.
+- **Other tools.** `plan`, `ask_user_question`, file tools and `bash`, as today.
 
 ## The prompt
 

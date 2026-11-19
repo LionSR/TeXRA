@@ -36,7 +36,14 @@ const categories = [
     icon: 'mortar-board',
     name: 'Academic Research',
     desc: 'Search arXiv, download paper sources, manage Zotero',
-    tools: ['arxiv_search', 'download_arxiv_source', 'zotero_*'],
+    tools: [
+      'arxiv_search',
+      'download_arxiv_source',
+      'zotero_search',
+      'zotero_add',
+      'zotero_export',
+      'zotero_collections',
+    ],
   },
   {
     icon: 'globe',
@@ -47,8 +54,8 @@ const categories = [
   {
     icon: 'comment-discussion',
     name: 'Delegation',
-    desc: 'Delegate to Codex or Claude Code, consult an external model',
-    tools: ['codex', 'claude_code', 'inquiry'],
+    desc: 'Delegate to Codex or Claude Code',
+    tools: ['codex', 'claude_code'],
   },
   {
     icon: 'beaker',

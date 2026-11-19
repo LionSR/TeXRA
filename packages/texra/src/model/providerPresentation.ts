@@ -5,17 +5,17 @@
  * Keys are platform-specific (a moonshot.cn key does not work on
  * moonshot.ai), so the key page follows the same toggle the endpoint does.
  */
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  Settings,
+  type SettingsStores,
+  type StateReadFailed,
+} from '@texra-ai/harness/plugins';
 import { Effect } from 'effect';
 
-import {
-  providerDisplayName,
-  type ApiKeyProviderId,
-  type RegionalProviderId,
-} from '@texra-ai/llm';
+import { providerDisplayName } from '@texra-ai/llm';
 import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import { KEY_PAGES, type Regional } from '@texra/shared/model/keyPages';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import type { StateReadFailed } from '@texra-ai/harness/host';
 
 /** Whether `provider`'s region toggle picks its China platform. */
 function useChinaRegion(
@@ -31,43 +31,6 @@ function regionByDefault(provider: string): boolean {
   const toggle = providerRegionSetting(provider);
   return toggle ? Settings.defaultOf(TEXRA_SETTINGS.catalog, toggle) : false;
 }
-
-/** A value that differs between a provider's two platforms. */
-interface Regional {
-  readonly china: string;
-  readonly international: string;
-}
-
-/** Each key provider's key page; a regional provider names one per platform. */
-const KEY_PAGES: {
-  readonly [P in ApiKeyProviderId]: P extends RegionalProviderId
-    ? Regional
-    : string;
-} = {
-  openai: 'https://platform.openai.com/api-keys',
-  anthropic: 'https://platform.claude.com/settings/keys',
-  google: 'https://aistudio.google.com/app/apikey',
-  xai: 'https://console.x.ai/',
-  deepseek: 'https://platform.deepseek.com/api_keys',
-  moonshot: {
-    china: 'https://platform.moonshot.cn/console',
-    international: 'https://platform.moonshot.ai/console',
-  },
-  dashscope: {
-    china: 'https://bailian.console.aliyun.com/',
-    international: 'https://dashscope.aliyun.com/api-console/',
-  },
-  minimax: {
-    china: 'https://platform.minimaxi.com/',
-    international: 'https://platform.minimax.io/',
-  },
-  glm: {
-    china: 'https://open.bigmodel.cn/',
-    international: 'https://z.ai/',
-  },
-  meta: 'https://dev.meta.ai/',
-  kimiCode: 'https://www.kimi.com/code/console',
-};
 
 const KEY_PAGE_BY_PROVIDER = new Map<string, string | Regional>(
   Object.entries(KEY_PAGES),

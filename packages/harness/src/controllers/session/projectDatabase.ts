@@ -20,8 +20,11 @@ import { GlobalValues } from '@platform/processRuntime';
 import { Database, ProjectDatabases } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 
-import { databaseLayer } from './databaseLayer';
-import { SESSION_DATABASE_FILE, storeOpenElsewhere } from './storeConnection';
+import {
+  databaseLayer,
+  SESSION_DATABASE_FILE,
+  storeOpenElsewhere,
+} from './databaseLayer';
 import { asideCopies } from './storeAside';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 

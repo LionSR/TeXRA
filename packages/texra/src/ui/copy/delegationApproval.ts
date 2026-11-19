@@ -58,12 +58,13 @@ export const DELEGATION_APPROVAL_COPY = Object.freeze({
 } as const);
 
 /**
- * An agent the call defines (`AgentProposal.persona`), as every approval
- * surface shows it: its name and the tools it asks for, then its prompt.
+ * An agent the call defines (an `inline` `AgentProposal.agentSource`), as
+ * every approval surface shows it: its name and the tools it asks for, then
+ * its prompt.
  */
 export const DEFINED_AGENT_COPY = Object.freeze({
-  heading: (persona: Pick<InlinePersona, 'name' | 'tools'>) =>
-    `Defines agent '${persona.name}' · tools: ${persona.tools?.length ? persona.tools.join(', ') : 'none'}`,
+  heading: (agent: string, persona: Pick<InlinePersona, 'tools'>) =>
+    `Defines agent '${agent}' · tools: ${persona.tools?.length ? persona.tools.join(', ') : 'none'}`,
   promptLabel: 'Its system prompt',
   instructionLabel: 'Its task',
 });

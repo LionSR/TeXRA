@@ -39,13 +39,13 @@ function generateReferenceSpacing(referenceTypes: string[]): PatternDict {
 /** The spellings of a blank line the line-break fixes collapse to one break. */
 const BLANK_LINES = ['\n\n', '\n    \n', '\n\t\n'];
 
-export const CHARACTER_REPLACEMENTS: PatternDict = {
+export const CHARACTER_REPLACEMENTS: PatternDict = Object.freeze({
   ansätze: 'ans{\\"a}tze',
   Rényi: "R{\\'e}nyi",
   Schrödinger: 'Schr{\\"o}dinger',
   // Covers the plural too: the singular rewrite leaves the trailing 's'.
   'Schr{\\\\`o}dinger': 'Schr{\\"o}dinger',
-};
+});
 
 // Common LaTeX equation spacing fixes
 export const EQUATION_REPLACEMENTS: PatternDict = (() => {
@@ -140,7 +140,7 @@ export const EQUATION_REPLACEMENTS: PatternDict = (() => {
     [`{\\${env}}`, `{${env}}`],
   ]);
 
-  return {
+  return Object.freeze({
     ...linebreakFixesPatterns,
     ...referencePatterns,
     ...backslashFixPatterns,
@@ -178,18 +178,17 @@ export const EQUATION_REPLACEMENTS: PatternDict = (() => {
     '\\end{Galign}': '\\end{align}',
 
     ':\\colon': '\\colon',
-  };
+  });
 })();
 
-export const FONT_COMMAND_REPLACEMENTS: PatternDict = {
+export const FONT_COMMAND_REPLACEMENTS: PatternDict = Object.freeze({
   ...generateLegacyFontFixes(LETTERS, ['rm', 'bf', 'it', 'sf', 'tt']),
   ...generateLegacyFontFixes(UPPERCASE_LETTERS, ['cal']),
-};
+});
 
 // These commands (e.g. \end{section}) never appear in valid LaTeX.
-export const LATEX_FORBIDDEN_REPLACEMENTS: PatternDict = createPatterns(
-  SECTION_TYPES,
-  (sectionType) =>
+export const LATEX_FORBIDDEN_REPLACEMENTS: PatternDict = Object.freeze(
+  createPatterns(SECTION_TYPES, (sectionType) =>
     [
       `\\end{${sectionType}}`,
       `\\end{${sectionType}*}`,
@@ -202,9 +201,10 @@ export const LATEX_FORBIDDEN_REPLACEMENTS: PatternDict = createPatterns(
       `\\end { ${sectionType} }`,
       `\\end { ${sectionType}* }`,
     ].map((ending): [string, string] => [ending, '']),
+  ),
 );
 
-export const GPTNESS_REPLACEMENTS: PatternDict = {
+export const GPTNESS_REPLACEMENTS: PatternDict = Object.freeze({
   'delve into': 'discuss',
   'delves into': 'discusses',
   'delving into': 'discussing',
@@ -310,9 +310,9 @@ export const GPTNESS_REPLACEMENTS: PatternDict = {
 
   // Additional GPT-isms
   brittle: 'fragile',
-};
+});
 
-export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
+export const HTML_ENTITY_REPLACEMENTS: PatternDict = Object.freeze({
   // Angle brackets often appear when XML tags are HTML-escaped
   '&lt;': '<',
   '&gt;': '>',
@@ -335,9 +335,6 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
     ]),
   ),
 
-  // Math operators with no glyph twin
-  '&plusmn;': '\\pm',
-
   // Fraction glyphs
   '&frac12;': '\\frac{1}{2}',
   '&frac14;': '\\frac{1}{4}',
@@ -351,19 +348,7 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
   ...createPatterns(Object.keys(UPPERCASE_GREEK_LETTER_CHARACTERS), (name) => [
     [`&${name};`, `\\${name}`],
   ]),
-
-  // Logical and set operators with no glyph twin
-  '&forall;': '\\forall',
-  '&exist;': '\\exists',
-  '&there4;': '\\therefore',
-  '&oplus;': '\\oplus',
-  '&otimes;': '\\otimes',
-
-  // Directional arrows with no glyph twin
-  '&lArr;': '\\Leftarrow',
-  '&uArr;': '\\Uparrow',
-  '&dArr;': '\\Downarrow',
-};
+});
 
 export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
   // Pure XML tags that should not be treated as LaTeX environments.
@@ -377,7 +362,7 @@ export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
     'beamer_poster',
   ];
 
-  return {
+  return Object.freeze({
     // ===== XML to LaTeX conversions =====
     // Examples:
     // <align> -> \begin{align}
@@ -468,21 +453,10 @@ export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
     '<?xml version="1.0" encoding="UTF-8"?>': '',
     '```xml\n': '',
     '</xml>': '',
-  };
+  });
 })();
 
-// A blank line latexdiff leaves before the closing brace of a starred
-// environment: \n\n}\end{align*}%DIFAUXCMD -> \n}\end{align*}%DIFAUXCMD
-export const LATEXDIFF_REPLACEMENTS: PatternDict = createPatterns(
-  ['align*', 'aligned*'],
-  (env) =>
-    BLANK_LINES.map((blank): [string, string] => [
-      `${blank}}\\end{${env}}%DIFAUXCMD`,
-      `\n}\\end{${env}}%DIFAUXCMD`,
-    ]),
-);
-
-export const PERSONAL_STYLE_REPLACEMENTS: PatternDict = {
+export const PERSONAL_STYLE_REPLACEMENTS: PatternDict = Object.freeze({
   // ===== Spacing preferences =====
   // Consistent spacing for math mode and delimiters
   // Note: '\\;' replacements are in latex_spacing category to avoid duplication
@@ -544,22 +518,22 @@ export const PERSONAL_STYLE_REPLACEMENTS: PatternDict = {
   'form \\cref': 'from \\cref',
   ' ~\\citep{': ' \\citep{',
   ' ~\\citet{': ' \\citet{',
-};
+});
 
 // Examples:
 // \end{align}\n\section -> \end{align}\n\n\n\section
 // \end{equation}\n\paragraph -> \end{equation}\n\n\n\paragraph
-export const SECTION_REPLACEMENTS: PatternDict = createPatterns(
-  ['align', 'equation'],
-  (env) =>
+export const SECTION_REPLACEMENTS: PatternDict = Object.freeze(
+  createPatterns(['align', 'equation'], (env) =>
     SECTION_TYPES.slice(0, 3).map((sectionType): [string, string] => [
       `\\end{${env}}\n\\${sectionType}`,
       `\\end{${env}}\n\n\n\\${sectionType}`,
     ]),
+  ),
 );
 
 // LaTeX spacing and punctuation fixes
-export const LATEX_SPACING_REPLACEMENTS: PatternDict = {
+export const LATEX_SPACING_REPLACEMENTS: PatternDict = Object.freeze({
   // ===== Basic spacing fixes =====
   // Remove unnecessary spacing commands
   ' \\; ': ' ',
@@ -669,7 +643,7 @@ export const LATEX_SPACING_REPLACEMENTS: PatternDict = {
 
   // ===== Math limits formatting =====
   '\\sum\\limits_': '\\sum_',
-};
+});
 
 /** Every character from `first` to `last`, by code point. */
 function characterRange(first: number, last: number): string[] {
@@ -678,7 +652,7 @@ function characterRange(first: number, last: number): string[] {
   );
 }
 
-export const UNICODE_REPLACEMENTS: PatternDict = {
+export const UNICODE_REPLACEMENTS: PatternDict = Object.freeze({
   // En dash, non-breaking hyphen, em dash and hyphen to an ASCII hyphen. The
   // minus sign U+2212 is converted in math by replaceMathUnicode.
   '–': '-',
@@ -769,4 +743,4 @@ export const UNICODE_REPLACEMENTS: PatternDict = {
   '$ μT': '$ $\\mu$T',
   '$ μH': '$ $\\mu$H',
   '$ μF': '$ $\\mu$F',
-};
+});

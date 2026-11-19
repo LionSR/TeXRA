@@ -28,6 +28,7 @@ import {
   noticesFor,
 } from '../state/transcript';
 import { useSignal } from '../state/useSignal';
+import { useMountScope } from '../state/useMountScope';
 import { useSubscriptionRef } from '../state/useSubscriptionRef';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
@@ -40,7 +41,7 @@ import {
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
-import { isWorking } from '@texra-ai/harness/schemas';
+import { isWorking, runNoun } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
   let home: string;
@@ -68,7 +69,7 @@ function childHeaderFor(
   return {
     label: child.label,
     modelLabel: child.modelLabel,
-    childKind: child.identity.kind === 'script' ? 'script' : 'subagent',
+    noun: runNoun(child),
     parentLabel: parent === undefined ? 'main' : runLabelOf(parent),
   };
 }
@@ -209,7 +210,8 @@ export function StaticConversationTranscript({
   }, [allNotices, scrollbackRunId, view]);
   // Advance before committing the render, so a tick never commits stale rows
   // first; the advanced record is stored once the render commits.
-  const current = useSubscriptionRef(scrollback.runtime, scrollback.ref);
+  const mount = useMountScope();
+  const current = useSubscriptionRef(mount, scrollback.ref);
   const next = advanceScrollback(current, {
     maxRows,
     meta: sessionMeta,
@@ -223,13 +225,13 @@ export function StaticConversationTranscript({
   const paintedOrigin = useRef(next.origin);
   useLayoutEffect(() => {
     if (next !== current) {
-      scrollback.runtime.runSync(SubscriptionRef.set(scrollback.ref, next));
+      mount.sync(SubscriptionRef.set(scrollback.ref, next));
     }
     if (paintedOrigin.current !== next.origin) {
       paintedOrigin.current = next.origin;
       scrollback.repaint();
     }
-  }, [current, next, scrollback]);
+  }, [current, mount, next, scrollback]);
   const staticItems = useMemo(() => [...next.items], [next.items]);
   return (
     <Static

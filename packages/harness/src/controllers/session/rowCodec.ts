@@ -156,23 +156,25 @@ function rowRefusal({ commit, type, version: stored }: typeof RowSchema.Type) {
  * `json_each(?)` list of `[type, version]` pairs. `CROSS JOIN` keeps the
  * list outermost, so each kind is one range of `event_type_commit`.
  */
-export const EARLIER_RUNS: readonly [string, readonly unknown[]] = [
-  `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
+export const EARLIER_RUNS: readonly [string, readonly unknown[]] =
+  Object.freeze([
+    `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
       e.type AS type FROM json_each(?) k
     CROSS JOIN event e ON e.type = k.value ->> 0 AND e.version < k.value ->> 1
     ${EVENT_JOINS}
     WHERE s.kind = 'run'
     GROUP BY k.key, s.logical_id ORDER BY k.key`,
-  [
-    JSON.stringify(
-      [...RETIRED_ROW_KINDS.keys(), ...Object.keys(ROW_KINDS)].flatMap((type) =>
-        RETIRED_ROW_KINDS.get(type) !== 'display' && readableFrom(type) > 1
-          ? [[type, readableFrom(type)]]
-          : [],
+    Object.freeze([
+      JSON.stringify(
+        [...RETIRED_ROW_KINDS.keys(), ...Object.keys(ROW_KINDS)].flatMap(
+          (type) =>
+            RETIRED_ROW_KINDS.get(type) !== 'display' && readableFrom(type) > 1
+              ? [[type, readableFrom(type)]]
+              : [],
+        ),
       ),
-    ),
-  ],
-];
+    ]),
+  ]);
 
 /** Validate a draft and encode it at its kind's current version, with the
  *  blobs it brings. Throws on a draft that does not parse, is not JSON, or
@@ -371,19 +373,15 @@ export function factKindOf(
 export const pluginKind = (plugin: string, kind: string): string =>
   `plugin.fact/${factName({ plugin, kind })}`;
 
+/** The `stored_kind` entry every current value is recorded under. */
+export const CURRENT_VALUE_KIND = 'current_value';
+
 /** Record the kinds written, bound as one `json_each(?)` array of
  *  `[type, version]` pairs; a kind keeps the highest version written. */
 export const UPSERT_KINDS = `INSERT INTO stored_kind (type, version)
   SELECT value ->> 0, value ->> 1 FROM json_each(?) WHERE true
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
-
-/** The `stored_kind` entry every current value is recorded under. */
-const CURRENT_VALUE_KIND = 'current_value';
-/** The kinds a value write records: its one entry, at this build's version. */
-export const VALUE_KINDS_WRITTEN = JSON.stringify([
-  [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION],
-]);
 
 /** The highest `stored_kind` version this build reads: `Infinity` for a
  *  plugin kind it lacks (`factKindOf` reads its rows), 0 for a core one. */

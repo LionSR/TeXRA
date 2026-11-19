@@ -6,9 +6,9 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import {
   formatCliNoRunnableModelsMessage,
-  getCliModelAccessList,
   modelSelectItemsForCli,
   type CliModelPickerItem,
   type GetModelSwitchDisabledReason,
@@ -27,16 +27,14 @@ interface ModelListFormProps {
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
-  const { roots, runtime } = useChatProcess();
+  const { roots } = useChatProcess();
   return (
     <AsyncListForm<readonly CliModelPickerItem[], string>
       title="/model"
       loadingLabel="Loading models…"
       load={() =>
-        Effect.flatMap(
-          getCliModelAccessList({ stores: { ...roots, runtime } }),
-          (models) =>
-            modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
+        Effect.flatMap(loadModelOptions(roots), (models) =>
+          modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
         )
       }
       items={(items) => items}

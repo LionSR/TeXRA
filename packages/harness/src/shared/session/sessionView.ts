@@ -10,7 +10,7 @@
  */
 import { Schema } from 'effect';
 
-import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
+import { ApprovalGrantsSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
   AnsweredBySchema,
@@ -18,7 +18,6 @@ import {
   ContextStateDataSchema,
   RequestPayloadSchema,
   PluginFactDraftSchema,
-  blocksCaller,
   RunActionSchema,
   RunEndSchema,
   RunIdentitySchema,
@@ -29,7 +28,6 @@ import {
   StageSchema,
   TokenUsageStatsSchema,
   WorktreeInfoSchema,
-  type RequestPayload,
   type RunId,
   FactNameSchema,
   NonNegativeIntSchema,
@@ -92,8 +90,9 @@ const RunViewSchema = Schema.Struct({
   command: Schema.NullOr(Schema.String),
   /** The run's input files, from `run.config`. */
   inputFiles: Schema.Array(Schema.String),
-  /** Its `delegationAgentScope` (a team's agents); null: any visible one. */
-  agentScope: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  /** Its `delegationAgentScope` (the agents its launch pinned); null: any
+   *  visible one. */
+  agentScope: Schema.NullOr(Schema.Array(Schema.String)),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
   facts: Schema.Record(FactNameSchema, Schema.Json),
@@ -136,7 +135,7 @@ const RunViewSchema = Schema.Struct({
   queuedFollowUps: QueuedFollowUpsSchema,
   /** Its own approval grants (`RunRows.grants`): what it decided, never
    *  what it inherits (`resolveBypass` reads the ancestry). */
-  grants: ApprovalPolicySnapshotSchema,
+  grants: ApprovalGrantsSchema,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
   /** The run it is listed under: its launcher, while the view lists
@@ -166,8 +165,15 @@ const RunViewSchema = Schema.Struct({
    *  turn or not started, `finished` the ended ones and those waiting idle
    *  between turns. No separate waiting or interrupted count: both
    *  outrank a collapsed parent (`needsUser`), so it never hides a row that
-   *  needs the user. */
-  rollup: Schema.Struct({ total: Count, running: Count, finished: Count }),
+   *  needs the user. `kinds` splits `total` by the kind of each descendant's
+   *  run, the kind `runNoun` names it by, so a count can say "2 agents,
+   *  1 command". */
+  rollup: Schema.Struct({
+    total: Count,
+    running: Count,
+    finished: Count,
+    kinds: Schema.Struct({ agent: Count, process: Count, script: Count }),
+  }),
   approval: Schema.Literals(['none', 'own', 'descendant']),
   /** What a host may offer on the run now (`runActions`). */
   actions: Schema.Array(RunActionSchema),
@@ -196,6 +202,14 @@ const RunViewSchema = Schema.Struct({
 /** One stream of the {@link SessionView}. */
 export type RunView = ReadonlyDeep<typeof RunViewSchema.Type>;
 
+/** The `rollup` of a run that started nothing, built fresh per run. */
+export const emptyRollup = () => ({
+  total: 0,
+  running: 0,
+  finished: 0,
+  kinds: { agent: 0, process: 0, script: 0 },
+});
+
 /**
  * What `children` and their descendants count toward a parent's `rollup`:
  * the view's count over the run tree (each child's own `rollup` below it),
@@ -208,18 +222,35 @@ export function rollupOf(
   children: readonly RunView[],
   below = (child: RunView) => child.rollup,
 ): RunView['rollup'] {
-  const rollup = { total: 0, running: 0, finished: 0 };
+  const rollup = emptyRollup();
   for (const child of children) {
-    const idle = child.position === 'waiting' && child.approval !== 'own';
+    const idle = isIdle(child);
     const under = below(child);
     rollup.total += 1 + under.total;
-    rollup.running +=
-      (child.holder === 'here' && !idle ? 1 : 0) + under.running;
+    rollup.kinds[child.identity.kind] += 1;
+    rollup.kinds.agent += under.kinds.agent;
+    rollup.kinds.process += under.kinds.process;
+    rollup.kinds.script += under.kinds.script;
+    rollup.running += (isLive(child) ? 1 : 0) + under.running;
     rollup.finished +=
       (child.outcome !== null || idle ? 1 : 0) + under.finished;
   }
   return rollup;
 }
+
+/** Whether the run waits between turns with nothing of its own asked of
+ *  the user: its turn is delivered and its next message continues it, so it
+ *  counts as finished in a rollup. */
+const isIdle = (run: Pick<RunView, 'position' | 'approval'>): boolean =>
+  run.position === 'waiting' && run.approval !== 'own';
+
+/** Whether this process holds the run and it is not idle (`isIdle`):
+ *  working a turn, waiting on the user inside one, or held before its first
+ *  activation. The one reading of a live child every count of running
+ *  children uses. */
+export const isLive = (
+  run: Pick<RunView, 'holder' | 'position' | 'approval'>,
+): boolean => run.holder === 'here' && !isIdle(run);
 
 /** Whether the run was cut while it worked: it has not ended, nobody
  *  drives it, and it does not stand between turns. A resume continues it.
@@ -276,19 +307,17 @@ export function acceptsFollowUp(run: RunView): boolean {
 }
 
 /**
- * Whether this window can answer a pending request: the one rule the host's
- * attention badge and the request card both read, matching what
- * `SessionRequests.decide` accepts. A request that blocks its caller is
- * answered by the fiber waiting on it, so only while its run waits here; an
- * interrupted run has to be resumed first. One that does not, at any time.
+ * Whether this window can answer a pending request of `run`: the one rule
+ * the host's attention badge and the request card both read, matching what
+ * `SessionRequests.decide` accepts. A request is answered by the call
+ * waiting on it, so only while its run waits here; an interrupted run has
+ * to be resumed first.
  */
 export type RequestAnswerability = 'answerable' | 'resume';
 export function requestAnswerability(
-  run: RunView,
-  payload: RequestPayload,
+  run: Pick<RunView, 'approval'>,
 ): RequestAnswerability {
-  if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
-  return 'resume';
+  return run.approval === 'own' ? 'answerable' : 'resume';
 }
 
 /** A pending request: which run asks, the payload the UI shows and who
@@ -358,10 +387,7 @@ function answerableRequests<View extends SessionView>(
 ): View['requests'][number][] {
   return view.requests.filter((request) => {
     const run = view.runs.get(request.runId);
-    return (
-      run !== undefined &&
-      requestAnswerability(run, request.payload) === 'answerable'
-    );
+    return run !== undefined && requestAnswerability(run) === 'answerable';
   });
 }
 

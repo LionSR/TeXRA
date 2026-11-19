@@ -39,7 +39,6 @@ import { ProjectTools } from '@agent/runtime/loop/step';
 import { makeRunHistory } from '@agent/runtime/makeRunHistory';
 import {
   RunRegistry,
-  Runs,
   SessionRunRegistry,
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
@@ -173,6 +172,13 @@ export const sessionOwnersLayer = (
       // The presentation host the session was opened with, which answers
       // while no host is attached; disposed after the runs.
       const interactions = yield* Interactions.make(open.interactions);
+      // A feed of the store that stopped is told to the person, once.
+      yield* store.feedStopped.pipe(
+        Effect.flatMap((message) =>
+          interactions.emit('requestShowError', { message }),
+        ),
+        Effect.forkIn(consumers),
+      );
       // The approvals, with the one reading of the policy over the host.
       const approvals = yield* sessionApprovals.pipe(Effect.provide(project));
       const withPolicy = project.pipe(
@@ -233,14 +239,13 @@ export const sessionOwnersLayer = (
       // first, so no run is accepted over a session that is unwinding.
       // The context the runs' forks capture: the process's services and
       // every service built so far.
-      const services: Context.Context<
-        Exclude<AgentRunServices, Runs | RunRegistry>
-      > = Context.merge(yield* Effect.context<RunServices>(), withRequests);
+      const services: Context.Context<Exclude<AgentRunServices, RunRegistry>> =
+        Context.merge(yield* Effect.context<RunServices>(), withRequests);
       const fork = yield* FiberSet.runtime(fibers)<
-        Exclude<AgentRunServices, Runs | RunRegistry>
+        Exclude<AgentRunServices, RunRegistry>
       >().pipe(Effect.provide(services));
       const forkRun = yield* FiberMap.runtime(runFibers)<
-        Exclude<AgentRunServices, Runs | RunRegistry>
+        Exclude<AgentRunServices, RunRegistry>
       >().pipe(Effect.provide(services));
       const local = (yield* LocalRuntimeSource).ref;
       const runs: SessionRunRegistry = new SessionRunRegistry({
@@ -284,7 +289,6 @@ export const sessionOwnersLayer = (
       });
       yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
       const session: Context.Context<SessionServices> = withRequests.pipe(
-        Context.add(Runs, runs),
         Context.add(RunRegistry, runs),
       );
 

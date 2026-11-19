@@ -7,11 +7,13 @@ import { Effect, type Scope, Stream } from 'effect';
 
 import {
   type RuntimeCommand,
+  Rejected,
+  Unavailable,
   attentionOf,
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { watchTask } from '@cli/runtime/headless/taskAttach';
+import { watchTask } from '@texra/controllers/server/serviceSession';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
   requestOnService,
@@ -19,7 +21,7 @@ import {
 } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import type { OutcomeOf } from '@texra-ai/harness';
-import type { GlobalValues } from '@texra-ai/harness/host';
+import type { GlobalValues } from '@texra-ai/harness/plugins';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {
@@ -75,7 +77,7 @@ export function followAttachedTask(
           Effect.mapError((error) =>
             error._tag === 'RpcClientError'
               ? error
-              : new Error(requestErrorText(error)),
+              : new Rejected({ reason: requestErrorText(error) }),
           ),
         ),
     });
@@ -88,7 +90,10 @@ export function followAttachedTask(
         // and no run in it.
         if (run === undefined && (seen || view.transcriptSeq.has(aggregate)))
           return Effect.fail(
-            new Error('The task is no longer in its project.'),
+            new Unavailable({
+              runId: task.runId,
+              reason: 'The task is no longer in its project.',
+            }),
           );
         seen ||= run !== undefined;
         const tree = treeOf(view, task.runId);

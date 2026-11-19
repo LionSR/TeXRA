@@ -86,7 +86,7 @@ its kind is its `type` column.
 ### 2.1 One file per storage root
 
 The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/storeConnection.ts#SESSION_DATABASE_FILE`). An ephemeral
+(`controllers/session/databaseLayer.ts#SESSION_DATABASE_FILE`). An ephemeral
 session runs the same schema in memory
 (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
@@ -174,12 +174,19 @@ given after close is a defect; a detached one is logged and dropped
 Once a job's transaction commits, the publisher SHALL publish what the job
 wrote, from memory, to the session's subscribers, one batch per job in commit
 order: the batch's display rows as a display read of the same commits returns
-them, and the commit it reached (`agent/runtime/sessionEventsLayer.ts#publish`,
+them, the commit before it and the commit it reached
+(`agent/runtime/sessionEventsLayer.ts#publish`,
 `controllers/session/databaseLayer.ts#displayRows`). Nothing in the session reads
-its own writes back to learn what it committed. A tail reads from the store only
-the rows it starts behind the publisher's last published commit, then follows
-the batches (`agent/runtime/sessionEventsLayer.ts#all`); the session's view takes its
-rows the same way (`controllers/session/sessionInputsLayer.ts#sessionInputsLayer`).
+its own writes back to learn what it committed. The publisher MUST NOT wait
+for a subscriber: it keeps a bounded number of batches for one that is behind
+and drops the oldest past that (`agent/runtime/sessionEventsLayer.ts#KEPT_BATCHES`).
+A reader MUST NOT lose a row to that: a batch whose commit before is past the
+last commit the reader saw shows the gap, and the reader reads the commits
+between from the store. So a tail reads from the store only the rows it starts
+behind the publisher's last published commit and any stretch it fell too far
+behind to be handed, and otherwise follows the batches
+(`agent/runtime/sessionEventsLayer.ts#batches`); the session's view takes its
+rows the same way (`controllers/session/sessionInputsLayer.ts#dropped`).
 Every projection is caught up when the store opens, and each append keeps it
 current in its own transaction, so a read never checks it
 (`controllers/session/databaseLayer.ts#upkeep.catchUp`,
@@ -212,7 +219,7 @@ known kind at a version above the one this build reads
 build lacks passes the gate; its rows read as written, marked unavailable
 (below). The
 gate MUST run at open, so no build opens a store holding core rows it cannot
-read, or writes beside them (`controllers/session/databaseLayer.ts#storeGate`); a
+read, or writes beside them (`controllers/session/databaseLayer.ts#store.gate`); a
 project store's one writer is the process that opened it (section 7), so what
 the store holds cannot change under it. A core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts#readableVersion`). Kinds a build deleted are
@@ -240,7 +247,7 @@ reader (`controllers/session/rowCodec.ts#decodeRow`):
   checked, with `unavailable` saying why; the row is unchanged, and
   a run holding one is refused resume as `pluginUnavailable`, naming the plugin
   (`controllers/session/rowCodec.ts#unavailableFactReason`,
-  `agent/storage/resumability.ts#'pluginUnavailable'`); a retired built-in kind
+  `agent/storage/continuation.ts#'pluginUnavailable'`); a retired built-in kind
   (`RETIRED_PLUGIN_FACTS`) is an earlier build's (`DatabaseRowEarlier`) instead
   (`controllers/session/rowCodec.ts#factKindOf`)
 
@@ -267,7 +274,7 @@ unavailable and passes the gate
 cannot be opened or resumed: a resume of it, and a message to it, is refused as
 `earlierBuild` for an earlier build's row and as `unusableCheckpoint` for a
 corrupt one, never as a read to retry (`shared/session/runHistory.ts#runReadRefusal`,
-`agent/storage/resumability.ts#deriveResumability`,
+`agent/storage/continuation.ts#deriveContinuation`,
 `agent/runtime/resumeRun.ts#refusalFor`).
 
 ## 3. Row kinds
@@ -713,13 +720,22 @@ There is no daemon and no claim. A project store is held by the one process
 that opened it, for its connection's life: the open takes
 `locking_mode = EXCLUSIVE` and the first write lock, and a second opener is
 refused at once with `STORE_HELD_MESSAGE`, never waited for
-(`controllers/session/storeConnection.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
+(`controllers/session/databaseLayer.ts#STORE_HELD_MESSAGE`,
+`#'PRAGMA locking_mode = EXCLUSIVE'`). The
 holder is the store's one writer and one reader; a cold listing of a held
 project fails the same way (`controllers/session/readSessionView.ts`). The
-global store is shared across processes and holds values alone; a change
+global store is shared across processes and holds values alone, served by
+its own layer with no event machinery
+(`controllers/session/globalDatabaseLayer.ts#globalDatabaseLayer`); a change
 another process makes to it is seen through a 250 ms poll of SQLite's
-`data_version` (`controllers/session/databaseLayer.ts#'PRAGMA data_version'`). A
-project store runs no poll: its holder learns what it committed from its own
+`data_version`
+(`controllers/session/globalDatabaseLayer.ts#'PRAGMA data_version'`), and
+since that process can be a newer build, the store gate runs again in each
+of its writes (`controllers/session/storeConnection.ts#Effect.andThen(gate, body)`).
+A read of whether something changed (that poll, a values change feed) that
+keeps failing is retried for about a minute and then reported as a change,
+so its reader's own read meets the failure
+(`controllers/session/currentValues.ts#changeRead`). A project store runs no poll: its holder learns what it committed from its own
 publisher.
 
 ### 7.1 Aggregates
@@ -737,34 +753,35 @@ not ended and is not among them is interrupted
 ### 7.2 Resume
 
 A resume is one launch of the run on the session's registry
-(`agent/runtime/resumeRun.ts#resumeRun`, `agent/runtime/runRegistry.ts#start`):
-its opening reads the run's records, its queued input, whether an open call of
-its parent owns it, and whether its rows can be continued, then commits the
-run's activation (`agent/runtime/resumeRun.ts#openResume`). A run whose
-records are gone, or deleted or whose input closed while those reads ran, is
-refused, as the opening's failure, with no fiber behind it
+(`agent/runtime/resumeRun.ts#resumeRun`, `agent/runtime/runRegistry.ts#start`),
+on the run's own fiber: its opening reads the run's records, its queued input,
+whether an open call of its parent owns it, and whether its rows can be
+continued, then commits the run's activation
+(`agent/runtime/resumeRun.ts#openResume`). A run whose records are gone, or
+deleted or whose input closed while those reads ran, is refused, as the
+opening's failure, and the fiber ends with nothing opened
 (`agent/runtime/resumeRun.ts#openResume`). The registry holds the run from the
-resume's first read: a second resume, or any launch, of the run meanwhile is
-refused (`agent/runtime/runRegistry.ts#RunLive`), and a stop asked meanwhile
-is applied as the opening answers: a failed opening's run ends cancelled on
-its rows, and a committed one is forked and interrupted at once, so its one
-terminal ends it (`agent/runtime/runRegistry.ts#stopAsked`,
-`agent/runtime/runRegistry.ts#stopRows`). A child an open call of its parent
+fiber's first step: a second resume, or any launch, of the run meanwhile is
+refused (`agent/runtime/runRegistry.ts#RunLive`), and a stop meanwhile writes
+its row, interrupts the fiber and refuses the resume
+(`agent/runtime/runRegistry.ts#RunStopped`); rows of the run with no end,
+the previous process's or the activation that was committing as the stop
+landed, end cancelled with the stop's reason
+(`agent/runtime/runRegistry.ts#endUnopened`). A child an open call of its parent
 owns resumes through that parent (`agent/runtime/resumeRun.ts#owningCall`; a
 resume a wake took follows it itself, whoever opened it,
 `agent/followUp/ToolUseFollowUp.ts#wakeRun`, and the package's resume through
 `effect/sessionPrograms.ts#redirectedFrom`).
 
 The activation is one transaction: it folds the stored rows and commits a
-`request.decided` `cancel` for every request the previous process left open
-that blocks its caller, then the activation rows
+`request.decided` `cancel` for every request the previous process left open,
+then the activation rows
 (`agent/runtime/makeRunHistory.ts#activate`). What was in flight counts as not
-done: the call or turn that asked asks again under a new id. A request that
-does not block its caller stays open.
+done: the call or turn that asked asks again under a new id.
 
 ### 7.3 Refusals
 
-A write to a closed aggregate gets `RunHistoryRefused` `not-owner` from the
+A write to a closed aggregate gets a `RunHistoryRefused` from the
 run's next append, with nothing written
 (`agent/runtime/makeRunHistory.ts#notOwner`,
 `shared/session/runHistory.ts#runRefusal`). A tool call that meets a storage
@@ -777,28 +794,27 @@ run a launch here holds that would need the run stopped first is refused as
 
 ### 8.1 Kinds
 
-The request kinds are the harness's own six and one plugin case
-(`shared/schemas/request.ts#RequestPayloadSchema`):
+The request kinds are a closed set the harness declares
+(`shared/schemas/request.ts#RequestPayloadSchema`), each with the answers it
+takes besides the three refusals (`shared/schemas/request.ts#REQUEST_ANSWERS`):
 
-| Kind           | Asks                                    | Blocks its caller |
-| -------------- | --------------------------------------- | ----------------- |
-| `toolEdit`     | approval of a file edit                 | yes               |
-| `bash`         | approval of a command                   | yes               |
-| `retry`        | whether to retry a failed model attempt | yes               |
-| `proposal`     | approval of a proposed agent run        | yes               |
-| `planApproval` | approval of a plan                      | yes               |
-| `userQuestion` | answers to questions                    | yes               |
-| `plugin`       | whatever its plugin asks, in its `data` | as declared       |
+| Kind           | Asks                                    | Answered with                 |
+| -------------- | --------------------------------------- | ----------------------------- |
+| `toolEdit`     | approval of a file edit                 | `approve`                     |
+| `bash`         | approval of a command                   | `approve`                     |
+| `retry`        | whether to retry a failed model attempt | `retry`                       |
+| `proposal`     | approval of a proposed agent run        | `approve`                     |
+| `planApproval` | approval of a plan                      | `approve`, `approve_and_goal` |
+| `userQuestion` | answers to questions                    | `submit`, `skip`              |
 
-Every own kind blocks its caller (the tool call that opened it, or for
-`retry` the model invocation). A plugin's request declares whether it does
-(`blocksCaller`) and which actions answer it (`answers`); its plugin's
-decision hook records each answer (`shared/schemas/request.ts#blocksCaller`).
+Every request blocks its caller (the tool call that opened it, or for
+`retry` the model invocation), and one decision answers it and lets that
+one waiting call go on.
 
 ### 8.2 Decisions
 
-A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
-`skip`, `retry`, `reject`, `deny` and `cancel`
+A decision is one of `approve`, `approve_and_goal`, `submit`, `skip`,
+`retry`, `reject`, `deny` and `cancel`
 (`shared/schemas/request.ts#RequestDecisionSchema`).
 
 ### 8.3 Protocol
@@ -816,7 +832,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
 - Who answers a request is decided once, as it opens, and stored as its
   `answeredBy`: a person when a `PreToolUse` hook asked or the request asks
-  about no operation (a question, a retry, a plugin's request), else the grant
+  about no operation (a question or a retry), else the grant
   its operation takes (`agent/runtime/requests.ts#answererOf`, `#OPERATIONS`).
   The policy's answer at open and a grant turned on while it waits both read
   it, so a grant answers a waiting request exactly when it would have approved
@@ -833,20 +849,13 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#'The run ended.'`);
   one a dead process left is the next resume's to cancel. Both cancel the
-  same requests, the open ones that block their caller
+  same requests, every open one
   (`shared/session/runState.ts#cancelRequestRows`).
 - A request is a row, so it outlives its process. A resume cancels every open
-  one that blocks its caller (section 7.2), and the call that asked asks again
-  (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not
-  block its caller is not cancelled: it
-  stays open until its `request.decided` commits, or until `run.removed`
-  closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#accept`). Its plugin's decision
-  hook records an answer outside the store first, idempotently; the decision,
-  the facts the hook returns and the input it sends a run (the external
-  inquiry's follow-up) then commit in one checked transaction, after which
-  that run is woken (`agent/runtime/requests.ts#decideRequest`,
-  `controllers/session/SessionRequests.ts#wakeIfOwed`).
+  one (section 7.2), and the call that asked asks again
+  (`shared/session/inFlight.ts#resumedAttempt`). A decision is accepted only
+  while the run that asked waits here: its call is the one that takes it
+  (`controllers/session/SessionRequests.ts#is no longer running`).
 
 ## 9. Crash guarantees
 
@@ -930,7 +939,7 @@ What survives at each commit point follows from sections 2 to 8:
   if unbound (section 7.2).
 - `run.end`: The lifecycle is over. A program's run stays finished, and a
   resume answers `finished`
-  (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
+  (`agent/storage/continuation.ts#deriveContinuation`); a loop-driven
   conversation continues on a resume in a new lifecycle
   (`shared/session/runActions.ts#continuesFromRows`), from where its
   rows left the loop (`shared/session/runState.ts#LoopAt`).

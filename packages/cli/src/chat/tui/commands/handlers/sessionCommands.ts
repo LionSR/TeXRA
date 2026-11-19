@@ -22,11 +22,7 @@ import {
   sessionMeta,
   setTransientNotice,
 } from '@cli/chat/tui/state/cliState';
-import {
-  currentView,
-  runningChildCount,
-  runViewOf,
-} from '@cli/chat/tui/state/sessionView';
+import { currentView, runViewOf } from '@cli/chat/tui/state/sessionView';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
   appendLocalErrorTranscript,
@@ -79,13 +75,6 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const view = currentView();
     const activeRunId = selectedRunIdSignal.get();
     const run = runViewOf(view, activeRunId);
-    // The children a status line counts: the active run's, else its
-    // parent's (a focused leaf reports its siblings' activity).
-    const countedParent =
-      run && run.childIds.length === 0 && run.parentId
-        ? runViewOf(view, run.parentId)
-        : run;
-    const activeChildSessions = runningChildCount(view, countedParent);
     const model = run?.model ?? meta.model;
     // The skills the run's latest step lists, read from its rows.
     const activeSkills =
@@ -97,7 +86,6 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       formatCliSessionStatus({
         agent: meta.agent,
         model,
-        teamName: meta.team?.name,
         // A completed request's route cannot change, so it outranks the
         // prospective one.
         modelAccess: run?.usage.usageRoute ?? option?.usageRoute,
@@ -106,7 +94,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
             ? undefined
             : runBypasses(view, activeRunId),
         statusLabel: run && runStatus(run).word,
-        activeChildSessions,
+        activeChildSessions: run?.rollup.running,
         activeSkills,
         sessionId: run ? rootRunId.get() : undefined,
         commandName: context.cliContext.commandName,
@@ -228,9 +216,7 @@ const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
     const source = runViewOf(currentView(), runId);
     // Cut before this chat lets go of the source, so the fork reads it as
     // it stands now.
-    const forked = yield* Effect.result(
-      forkRun(context.runSession, runId, null),
-    );
+    const forked = yield* Effect.result(forkRun(context.runSession, runId));
     if (Result.isFailure(forked)) {
       appendLocalRequestRefusal(forked.failure, runId);
       return;

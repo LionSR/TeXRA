@@ -1,7 +1,7 @@
 <script setup>
 // Memory product slice: the Dashboard's Memory tab. Mirrors the real layout
 // from packages/texra/src/ui/settings/components/memory/ —
-// reminder banner, "Enable memory for chat agents" switch, then a list of
+// the two toolbar actions, the "Enable memory for chat agents" switch, then a list of
 // memory items with pinned/size/lines/updated/by metadata and a collapsible
 // "Contents" preview. Tab order, icons, and `by <agent>` attributions match
 // SettingsApp.ts / SETTINGS_TAB_ORDER and the real tool-use agent list.
@@ -19,19 +19,12 @@ function toggle(id) {
 
 <template>
   <MockupFrame title="Dashboard — texra-paper">
-    <!-- Settings tab strip. Tab order, panel names, and icons mirror
-         SettingsApp.ts (Memory · History · Models · Agents ·
-         Tools · Integrations · Git · LaTeX · Goal). The real UI lays them
-         out horizontally above the content; this hero stacks them vertically
-         only because nine tabs do not fit horizontally at mockup width. -->
+    <!-- Settings pages, in the order of SETTINGS_TAB_ORDER (General · Models ·
+         Agents · Memory · Plugins · LaTeX). -->
     <aside class="board dash-nav">
       <nav class="dash-tabs">
-        <span class="dt dt-on"
-          ><wa-icon library="texra" name="database"></wa-icon> Memory</span
-        >
         <span class="dt"
-          ><wa-icon library="texra" name="clock-rotate-left"></wa-icon>
-          History</span
+          ><wa-icon library="texra" name="gear"></wa-icon> General</span
         >
         <span class="dt"
           ><wa-icon library="texra" name="server"></wa-icon> Models</span
@@ -39,47 +32,30 @@ function toggle(id) {
         <span class="dt"
           ><wa-icon library="texra" name="robot"></wa-icon> Agents</span
         >
-        <span class="dt"
-          ><wa-icon library="texra" name="screwdriver-wrench"></wa-icon>
-          Tools</span
+        <span class="dt dt-on"
+          ><wa-icon library="texra" name="database"></wa-icon> Memory</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="robot"></wa-icon> Integrations</span
-        >
-        <span class="dt"
-          ><wa-icon library="texra" name="code-branch"></wa-icon> Git</span
+          ><wa-icon library="texra" name="cube"></wa-icon> Plugins</span
         >
         <span class="dt"
           ><wa-icon library="texra" name="file-code"></wa-icon> LaTeX</span
-        >
-        <span class="dt"
-          ><wa-icon library="texra" name="compass"></wa-icon> Goal</span
         >
       </nav>
     </aside>
 
     <!-- Memory tab content -->
     <div class="mem-pane">
-      <!-- Reminder banner -->
-      <div class="reminder">
-        <wa-icon class="reminder-ic" library="texra" name="info"></wa-icon>
-        <div class="reminder-body">
-          <div class="reminder-title">Memory notes</div>
-          <div class="reminder-desc">
-            Agents save notes here to retain project conventions and context
-            across sessions.
-          </div>
-          <div class="reminder-acts">
-            <button type="button" class="r-btn">
-              <wa-icon library="texra" name="rotate-right"></wa-icon>
-              Refresh
-            </button>
-            <button type="button" class="r-btn">
-              <wa-icon library="texra" name="folder-open"></wa-icon>
-              Open Folder
-            </button>
-          </div>
-        </div>
+      <!-- Toolbar: the two actions above the switch -->
+      <div class="reminder-acts">
+        <button type="button" class="r-btn">
+          <wa-icon library="texra" name="rotate-right"></wa-icon>
+          Refresh memories
+        </button>
+        <button type="button" class="r-btn">
+          <wa-icon library="texra" name="folder-open"></wa-icon>
+          Open memory folder
+        </button>
       </div>
 
       <!-- Memory toggle (mirrors MemoryToggle), now a bridged wa-switch. -->
@@ -114,11 +90,11 @@ function toggle(id) {
           <div class="mem-meta">
             <span>Pinned</span>
             <span class="meta-dot">·</span>
-            <span>1.2 KB</span>
+            <span>1.2 KiB</span>
             <span class="meta-dot">·</span>
             <span>34 lines</span>
             <span class="meta-dot">·</span>
-            <span>Updated 5m ago</span>
+            <span>Updated Nov 4, 2025, 02:31 PM</span>
             <span class="meta-dot">·</span>
             <span>by research</span>
           </div>
@@ -183,7 +159,7 @@ function toggle(id) {
             <span class="meta-dot">·</span>
             <span>18 lines</span>
             <span class="meta-dot">·</span>
-            <span>Updated 2h ago</span>
+            <span>Updated Oct 28, 2025, 10:04 AM</span>
             <span class="meta-dot">·</span>
             <span>by review</span>
           </div>
@@ -237,7 +213,7 @@ function toggle(id) {
             <span class="meta-dot">·</span>
             <span>9 lines</span>
             <span class="meta-dot">·</span>
-            <span>Updated yesterday</span>
+            <span>Updated Oct 21, 2025, 04:48 PM</span>
             <span class="meta-dot">·</span>
             <span>by assistant</span>
           </div>

@@ -4,7 +4,7 @@
  * The secret reaches the binding's transport and never a row. Every failure
  * is a {@link RouteUnavailable} the user can act on.
  */
-import { Effect } from 'effect';
+import { absurd, Effect } from 'effect';
 
 import {
   apiKey,
@@ -92,15 +92,20 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
     ),
     rejected: (token) => inRequest(account.refreshRejected(token)),
   };
-  if (route === 'chatgpt-subscription') {
-    const fresh = yield* Effect.mapError(
-      accounts[route].getFreshSession(),
-      unavailable,
-    );
-    return { route, provider, bearer, plan: fresh.planType };
+  switch (route) {
+    case 'chatgpt-subscription': {
+      const fresh = yield* Effect.mapError(
+        accounts[route].getFreshSession(),
+        unavailable,
+      );
+      return { route, provider, bearer, plan: fresh.planType };
+    }
+    case 'xai-subscription':
+      yield* Effect.mapError(account.getFreshSession(), unavailable);
+      return { route, provider, bearer };
+    default:
+      return absurd(route);
   }
-  yield* Effect.mapError(account.getFreshSession(), unavailable);
-  return { route, provider, bearer };
 });
 
 /**

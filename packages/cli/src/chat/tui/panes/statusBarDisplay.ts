@@ -36,21 +36,29 @@ import {
 } from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
+import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
 import { runStatus, type RunTone } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
-import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import {
+  AGENT_LIST,
+  NESTED_AGENT,
+  nestedCountsCompact,
+  nestedCountsLabel,
+  TASK_ACTIONS,
+} from '@ui/copy/nestedRuns';
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
+import { taskCostStatus } from '../sessionStatus';
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runViewOf } from '../state/sessionView';
 import type {
   ApprovalBypassKind,
   ApprovalPolicy,
+  RequestKind,
   RunView,
   SessionView,
 } from '@texra-ai/harness/schemas';
-import type { PendingRequestKind } from '../state/approvalQueue';
 
 /** Which approval bypasses are on for a run, its own or inherited. */
 export type BypassState = ReturnType<typeof runBypasses>;
@@ -59,7 +67,7 @@ export type BypassState = ReturnType<typeof runBypasses>;
 type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 function statusKindForApproval(
-  kind: PendingRequestKind,
+  kind: RequestKind,
 ): Exclude<ApprovalQueueStatusKind, 'request'> {
   switch (kind) {
     case 'userQuestion':
@@ -76,7 +84,7 @@ function statusKindForApproval(
 }
 
 export function approvalQueueStatusKind(
-  kinds: Iterable<PendingRequestKind>,
+  kinds: Iterable<RequestKind>,
 ): ApprovalQueueStatusKind {
   let sawApproval = false;
   let sawQuestion = false;
@@ -140,8 +148,6 @@ interface StatusBarChrome {
   readonly turn?: StatusBarTurnInput;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
-  /** Visible agents still in flight. */
-  readonly runningSessions: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly modelAccess: UsageRoute | undefined;
@@ -233,17 +239,20 @@ function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
   if (snapshot?.state !== 'available') return undefined;
-  const limitingWindow = snapshot.windows.toSorted(
+  // The window the plan runs out of first, worded as every usage
+  // percentage is, so the bar and `/status` read one number.
+  const limiting = snapshot.windows.toSorted(
     (left, right) => right.percentUsed - left.percentUsed,
   )[0];
-  if (!limitingWindow) return undefined;
-  const remaining = Math.max(0, Math.round(limitingWindow.percentRemaining));
+  if (!limiting) return undefined;
+  const remaining = limiting.percentRemaining;
+  const left = formatSubscriptionUsagePercent(remaining);
   let tone: RunTone | undefined;
-  if (remaining === 0) tone = 'danger';
+  if (remaining <= 0) tone = 'danger';
   else if (remaining <= 20) tone = 'warning';
   return {
-    text: `${snapshot.planName} ${remaining}% left`,
-    compactText: `${remaining}% left`,
+    text: `${snapshot.planName} ${left} left`,
+    compactText: `${left} left`,
     ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
     policy: 'drop',
@@ -286,16 +295,13 @@ function formatUsage(
   };
 }
 
-// The task's spend so far, its agents included: the root's `treeUsage`,
-// whichever run the bar describes. A subscription that billed nothing
+// The task's total (`taskCostStatus`). A subscription that billed nothing
 // already reads as `subscription`, so a zero total earns no segment.
 function taskCostSegment(
   run: RunView | undefined,
   view: Pick<SessionView, 'runs'>,
 ): StatusBarSegment | undefined {
-  if (run === undefined) return undefined;
-  const root = view.runs.get(run.ancestors[0]?.id ?? run.id);
-  const cost = root?.treeUsage.cost ?? 0;
+  const cost = taskCostStatus(view, run)?.total.cost ?? 0;
   if (cost <= 0) return undefined;
   return {
     text: formatCostUsd(cost),
@@ -701,8 +707,11 @@ export function buildStatusBarDisplay(
     }
   }
 
-  // Every direct and nested subagent the displayed run owns.
-  const subagents = run?.rollup.total ?? 0;
+  // Everything the displayed run started, directly or below, by kind, and
+  // how many of them are live: the view's rollup, the count every surface
+  // reads.
+  const started = run?.rollup;
+  const running = run?.rollup.running ?? 0;
   left.push(
     ...(
       [
@@ -743,19 +752,19 @@ export function buildStatusBarDisplay(
               policy: 'drop',
             }
           : undefined,
-        subagents > 0
+        started !== undefined && started.total > 0
           ? {
-              text: formatResultCount(subagents, 'agent'),
-              compactText: `${subagents} ${NESTED_AGENT.compactCountSuffix}`,
+              text: nestedCountsLabel(started.kinds),
+              compactText: nestedCountsCompact(started.kinds),
               dim: true,
               priority: STATUS_BAR_PRIORITY.activeSubagent,
               policy: 'drop',
             }
           : undefined,
-        input.runningSessions > 0
+        running > 0
           ? {
-              text: `${input.runningSessions} active`,
-              compactText: `${input.runningSessions} ${NESTED_AGENT.compactLiveSuffix}`,
+              text: `${running} active`,
+              compactText: `${running} ${NESTED_AGENT.compactLiveSuffix}`,
               dim: true,
               priority: STATUS_BAR_PRIORITY.activeSubagent,
               policy: 'drop',

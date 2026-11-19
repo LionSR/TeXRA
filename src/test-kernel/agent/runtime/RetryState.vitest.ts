@@ -150,12 +150,16 @@ const invokeOn = ({ layer, cell }: InvokerKit, clock?: Clock.Clock) =>
     const invoker = yield* ModelInvoker;
     return yield* invoker.invoke(cell, REQUEST);
   }).pipe(
-    // `invoke`'s debug-object sink writes through the process `FileSystem`;
-    // this suite runs on `it.effect`'s own runtime, so the service comes from
-    // the Node layer rather than the installed platform.
-    Effect.provide(layer),
-    Effect.provide(nodePlatformLayer),
-    Effect.provide(noHttpClientLayer),
+    Effect.provide(
+      layer.pipe(
+        // `invoke`'s debug-object sink writes through the process
+        // `FileSystem`; this suite runs on `it.effect`'s own runtime, so the
+        // service comes from the Node layer rather than the installed
+        // platform.
+        Layer.provideMerge(nodePlatformLayer),
+        Layer.provideMerge(noHttpClientLayer),
+      ),
+    ),
     Effect.provideService(Random.Random, MIDPOINT_RANDOM),
     clock === undefined
       ? (effect) => effect

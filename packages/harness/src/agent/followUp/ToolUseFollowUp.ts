@@ -1,10 +1,9 @@
 import { Cause, Context, Effect, Exit } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
-import { checkpointRefusal } from '@agent/storage/resumability';
-import { LaunchKeys } from '@agent/runtime/executeAgent';
+import { checkpointRefusal } from '@agent/storage/continuation';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import { LaunchKeys, RunRegistry } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
@@ -19,7 +18,6 @@ import { Inbox, type InboxItem } from './Inbox';
 /** What a follow-up's acceptance and its wake read of the session. */
 type FollowUpServices =
   | Inbox
-  | Runs
   | RunRegistry
   | SessionLog
   | SessionViewAccess
@@ -41,15 +39,24 @@ interface SubmitFollowUpOptions {
   /** A user's message the run reads when its current turn ends, not at the
    *  turn's next model request. */
   readonly hold?: 'turn';
-  /** The message's media, read in the run's send lane once the message is
-   *  accepted, so a slow read never lets a later message commit first. */
-  readonly attach?: Effect.Effect<
-    Pick<Extract<InboxItem, { readonly text: string }>, 'media' | 'blobs'>,
+  /** What the message's read files add to it, read in the run's send lane
+   *  once the message is accepted, so a slow read never lets a later message
+   *  commit first: its media, and the text its activated skills lead. */
+  readonly prepare?: Effect.Effect<
+    Partial<
+      Pick<
+        Extract<InboxItem, { readonly text: string }>,
+        'text' | 'displayText' | 'media' | 'blobs'
+      >
+    >,
     Error
   >;
   /** The keys the run resumes with if the message wakes it: the sending
    *  client's (`followUp.send`'s `apiKeys`), never another run's. */
   readonly apiKeys?: Readonly<Record<string, string>>;
+  /** The skills a user activated with the message (`followUp.send`'s
+   *  `skills`), whose blocks its text already carries. */
+  readonly skills?: readonly string[];
 }
 
 export function presentFollowUpResult(
@@ -63,9 +70,9 @@ export function presentFollowUpResult(
 const CHANNEL = 'ToolUseFollowUp';
 
 /** A resume's refusal of a run that cannot continue here. */
-export const REFUSED: { readonly failed: ResumeRefusal } = {
-  failed: { kind: 'notResumable' },
-};
+export const REFUSED: { readonly failed: ResumeRefusal } = Object.freeze({
+  failed: Object.freeze({ kind: 'notResumable' }),
+});
 
 /**
  * Resume `runId` for the input it holds (a wake, an interrupted task), with
@@ -75,7 +82,7 @@ export const REFUSED: { readonly failed: ResumeRefusal } = {
  */
 const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
-): Effect.fn.Return<void, never, Runs | RunRegistry | SessionLog> {
+): Effect.fn.Return<void, never, RunRegistry | SessionLog> {
   // The store's answer, not the view's: the view trails the log, and a run
   // it has not applied yet would lose its wake.
   const facts = yield* (yield* SessionLog)
@@ -102,7 +109,7 @@ const wakeRun = Effect.fn('wakeRun')(function* (
   // The parent's open call reattaches the run it owns.
   if ('ownedBy' in answer) return yield* wakeRun(answer.ownedBy);
   // A run a launch here holds reads its input itself: nothing to say.
-  if ('failed' in answer && (yield* Runs).get(runId) === undefined)
+  if ('failed' in answer && (yield* RunRegistry).get(runId) === undefined)
     yield* Effect.logWarning(
       `Run ${runId} was not resumed for its input: ${describeRefusal(answer.failed)}`,
     ).pipe(withLogChannel(CHANNEL));
@@ -115,7 +122,7 @@ const wakeRun = Effect.fn('wakeRun')(function* (
 export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
   apiKeys: Readonly<Record<string, string>> = {},
-): Effect.fn.Return<boolean, never, Inbox | Runs | RunRegistry | SessionLog> {
+): Effect.fn.Return<boolean, never, Inbox | RunRegistry | SessionLog> {
   const owed = yield* (yield* Inbox).owesResume(runId);
   if (owed === undefined) return false;
   // The wake's own keys, never the fiber's: the sender may be another
@@ -145,9 +152,9 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, attach, apiKeys } = options;
+  const { hold, prepare, apiKeys, skills } = options;
   const inbox = yield* Inbox;
-  const runs = yield* Runs;
+  const runs = yield* RunRegistry;
   const log = yield* SessionLog;
   const view = yield* SessionViewAccess;
   // From the checks to the row's commit, one send to a run at a time, so a
@@ -194,8 +201,12 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       const facts = yield* log.facts(runId);
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
-    const media = attach === undefined ? {} : yield* attach;
-    const landed = yield* inbox.send(runId, { ...item, ...media }, { hold });
+    const prepared = prepare === undefined ? {} : yield* prepare;
+    const landed = yield* inbox.send(
+      runId,
+      { ...item, ...prepared },
+      { hold, skills },
+    );
     return { status: 'landed', landed, live: live !== undefined } as const;
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if (sent.status !== 'landed') return sent;

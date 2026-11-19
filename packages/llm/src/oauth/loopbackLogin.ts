@@ -45,6 +45,14 @@ export class LoopbackTransportUnavailableError extends Schema.TaggedError<Loopba
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 ) {}
 
+/** The browser sign-in was started and delivered no usable code: the
+ *  provider reported an error, the callback could not be read, or none
+ *  arrived in time. */
+class LoopbackSignInFailed extends Schema.TaggedError<LoopbackSignInFailed>()(
+  'LoopbackSignInFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /** What one browser sign-in runs: the provider's registered callback, the
  *  account's two protocol steps, and the host's presentation. */
 interface LoopbackLoginOptions<S> {
@@ -85,14 +93,14 @@ function successHtml(displayName: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Signed in</title></head>
 <body style="font-family:system-ui;text-align:center;padding-top:4rem">
 <h2>Signed in with ${displayName}</h2>
-<p>You can close this tab and return to TeXRA.</p>
+<p>You can close this tab.</p>
 </body></html>`;
 }
 
 const ERROR_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Sign-in error</title></head>
 <body style="font-family:system-ui;text-align:center;padding-top:4rem">
 <h2>Sign-in error</h2>
-<p>Return to TeXRA and try signing in again.</p>
+<p>Close this tab and try signing in again.</p>
 </body></html>`;
 
 /** One bind attempt; succeeds with undefined when the port is unavailable.
@@ -106,7 +114,7 @@ function listenAttempt(port: number): Effect.Effect<http.Server | undefined> {
     const onError = () => {
       server.removeListener('listening', onListening);
       server.close();
-      resume(Effect.succeed(undefined));
+      resume(Effect.undefined);
     };
     const onListening = () => {
       server.removeListener('error', onError);
@@ -162,7 +170,7 @@ function decideCallback(
   base: string,
   callbackPath: string,
   expectedState: string,
-): Result.Result<CallbackDecision, Error> {
+): Result.Result<CallbackDecision, LoopbackSignInFailed> {
   return Result.try({
     try: (): CallbackDecision => {
       const url = new URL(rawUrl ?? '', base);
@@ -189,7 +197,8 @@ function decideCallback(
       };
     },
     catch: (cause) =>
-      new Error(`Unreadable OAuth callback URL: ${toErrorMessage(cause)}`, {
+      new LoopbackSignInFailed({
+        message: `Unreadable OAuth callback URL: ${toErrorMessage(cause)}`,
         cause,
       }),
   });
@@ -217,7 +226,10 @@ export function loginWithLoopback<S>(
           }),
       );
       const request = yield* authorize(port);
-      const code = yield* Deferred.make<SubscriptionCallback, Error>();
+      const code = yield* Deferred.make<
+        SubscriptionCallback,
+        LoopbackSignInFailed
+      >();
 
       const onRequest = (
         req: http.IncomingMessage,
@@ -249,9 +261,9 @@ export function loginWithLoopback<S>(
             Deferred.doneUnsafe(
               code,
               Effect.fail(
-                new Error(
-                  `${displayName} sign-in failed: ${decision.success.error}`,
-                ),
+                new LoopbackSignInFailed({
+                  message: `${displayName} sign-in failed: ${decision.success.error}`,
+                }),
               ),
             );
             return;
@@ -285,9 +297,9 @@ export function loginWithLoopback<S>(
           duration: Duration.millis(AUTH_CALLBACK_TIMEOUT_MS),
           orElse: () =>
             Effect.fail(
-              new Error(
-                `Timed out waiting for the ${displayName} sign-in callback.`,
-              ),
+              new LoopbackSignInFailed({
+                message: `Timed out waiting for the ${displayName} sign-in callback.`,
+              }),
             ),
         }),
       );

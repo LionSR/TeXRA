@@ -15,7 +15,6 @@ import {
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
-  TeamOptionDataSchema,
 } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
@@ -25,8 +24,8 @@ const WorkspaceRootOptionDataSchema = Schema.Struct({
 });
 
 const AgentConfigBannerDataSchema = Schema.Struct({
-  agentName: Schema.optional(Schema.NullOr(Schema.String)),
-  customDirSet: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  agentName: Schema.String,
+  customDirSet: Schema.Boolean,
 });
 
 /**
@@ -84,7 +83,6 @@ export const HostSnapshotSchema = Schema.Struct({
   /** Every agent the workspace's agent selector lists. */
   agentOptions: Schema.Array(AgentOptionDataSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
-  teamOptions: Schema.Array(TeamOptionDataSchema),
   /** How a tool call is painted, from what the process's plugins declare
    *  (`TexraPlugin`): its icon by normalized tool name, and the tools whose
    *  output reads as a terminal session. */
@@ -137,7 +135,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     project,
     agentOptions: [],
     modelOptions: [],
-    teamOptions: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
     approvalPolicy: APPROVAL_POLICY_DEFAULT,

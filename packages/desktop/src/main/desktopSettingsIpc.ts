@@ -1,9 +1,6 @@
 import { Effect, type Scope } from 'effect';
 
-import {
-  LoopbackTransportUnavailableError,
-  type SubscriptionDeviceCodePrompt,
-} from '@texra-ai/llm/node';
+import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
@@ -11,8 +8,10 @@ import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsVi
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
   subscriptionProvider,
+  type SubscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -31,11 +30,11 @@ export interface DesktopSettingsIpcOptions {
     openSubscriptionSignInUrl(url: string): Effect.Effect<void, HostFailed>;
     presentSubscriptionSignInUrl(
       url: string,
-      productName: string,
+      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
     ): Effect.Effect<void, Error>;
     presentSubscriptionDeviceCode(
       prompt: SubscriptionDeviceCodePrompt,
-      productName: string,
+      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
     ): Effect.Effect<void, Error>;
   };
   /** The roots of the project this settings surface serves. The desktop has
@@ -48,10 +47,11 @@ export interface DesktopSettingsIpcOptions {
 type SettingsViewBody = Effect.Success<ReturnType<typeof makeSettingsViewBody>>;
 
 /** The commands the settings view posts to its host. */
-export const SETTINGS_VIEW_INBOUND_COMMANDS =
+export const SETTINGS_VIEW_INBOUND_COMMANDS = Object.freeze(
   SettingsViewInboundMessageSchema.members.map(
     (member) => member.fields.command.literal,
-  );
+  ),
+);
 
 export interface DesktopSettingsIpc extends Pick<
   SettingsViewBody,
@@ -87,15 +87,15 @@ export function createDesktopSettingsIpc(
         Effect.catch((failure) =>
           bindings.dialogs.notify(
             'error',
-            `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
+            `${SIGN_IN_PROMPT.presentFailed(displayName)}: ${toErrorMessage(failure)}`,
           ),
         ),
       );
 
     /**
-     * The loopback browser is the normal route; failing to reach one is a
-     * transport failure, so the shared flow retries with a device code, which
-     * this window shows in its own dialog.
+     * The loopback browser is the normal route; the shared flow retries with
+     * a device code when the browser could not be opened, which this window
+     * shows in its own dialog.
      */
     const signInSubscription = (providerId: SubscriptionProviderId) => {
       const provider = subscriptionProvider(providerId);
@@ -109,32 +109,27 @@ export function createDesktopSettingsIpc(
               displayName,
               signInPresentation.presentSubscriptionDeviceCode(
                 prompt,
-                displayName,
+                provider,
               ),
             ),
           presentSignInUrl: (url) =>
-            signInPresentation.openSubscriptionSignInUrl(url).pipe(
-              Effect.mapError(
-                (failure) =>
-                  new LoopbackTransportUnavailableError({
-                    message: `Could not open a browser for ${displayName} sign-in.`,
-                    cause: failure.cause,
-                  }),
-              ),
-              Effect.andThen(
-                Effect.sync(() =>
-                  spawn(
-                    reportPresentation(
-                      displayName,
-                      signInPresentation.presentSubscriptionSignInUrl(
-                        url,
+            signInPresentation
+              .openSubscriptionSignInUrl(url)
+              .pipe(
+                Effect.andThen(
+                  Effect.sync(() =>
+                    spawn(
+                      reportPresentation(
                         displayName,
+                        signInPresentation.presentSubscriptionSignInUrl(
+                          url,
+                          provider,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
         },
       });
     };

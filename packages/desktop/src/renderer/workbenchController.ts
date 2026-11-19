@@ -69,6 +69,8 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   const element = document.createElement('div');
   element.className = 'shell-dock';
   element.dataset.session = deps.session;
+  // Shift+F10 opens a tab's menu wherever focus sits in the tab: on
+  // dockview's tab itself or on a control inside ours.
   element.addEventListener('keydown', (event) => {
     if (event.defaultPrevented || event.key !== 'F10' || !event.shiftKey)
       return;
@@ -178,7 +180,11 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
           ].reduce((width, control) => width + control.offsetWidth, 0);
           // Measure the available header, not the current tab's shrink-wrapped
           // strip, or repeated layouts gradually truncate even short titles.
-          tabElement.style.maxWidth = `${Math.max(56, Math.min(260, header.clientWidth - controlsWidth))}px`;
+          // dockStyles.css caps the tab at its widest.
+          tabElement.style.setProperty(
+            '--dock-tab-room',
+            `${Math.max(56, header.clientWidth - controlsWidth)}px`,
+          );
           const left = tabElement.offsetLeft;
           const right = left + tabElement.offsetWidth;
           if (right > strip.scrollLeft + strip.clientWidth)

@@ -3,7 +3,7 @@
  *
  * The agents a delegation tool can launch, the models a child can run and
  * whether worktrees are on all change while a run lives (agent visibility, a
- * team swap, a new credential, the worktree setting). The step reads them
+ * new credential, the worktree setting). The step reads them
  * (`readDelegationTargets`) into the run's context; the system text renders
  * them once, at the step that freezes it (`delegationSection`), and a later
  * change reaches the model as lines of the context update
@@ -14,7 +14,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Array as Arr, Effect } from 'effect';
 
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
@@ -33,6 +33,7 @@ import { decideRunModel } from '@model/runModelDecision';
 import {
   AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
+  ToolError,
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
@@ -152,8 +153,8 @@ function namesChange(
   told: readonly string[],
   now: readonly string[],
 ): string | null {
-  const added = now.filter((name) => !told.includes(name));
-  const removed = told.filter((name) => !now.includes(name));
+  const added = Arr.difference(now, told);
+  const removed = Arr.difference(told, now);
   const parts = [
     ...(added.length > 0 ? [`now available: ${added.join(', ')}`] : []),
     ...(removed.length > 0
@@ -229,7 +230,7 @@ export const selectAvailableDelegationModel = Effect.fn(
     ),
   ];
   if (availableModels.length === 0) {
-    return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
+    return yield* new ToolError(NO_DELEGATION_MODELS_MESSAGE);
   }
 
   const decision = decideRunModel(
@@ -242,13 +243,11 @@ export const selectAvailableDelegationModel = Effect.fn(
     (model) => availableModels.includes(modelRefOf(model) ?? model),
   );
   if (!decision) {
-    return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
+    return yield* new ToolError(NO_DELEGATION_MODELS_MESSAGE);
   }
   if (decision._tag === 'Unavailable') {
-    return yield* Effect.fail(
-      new Error(
-        `Model "${decision.model}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
-      ),
+    return yield* new ToolError(
+      `Model "${decision.model}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
     );
   }
   return decision;

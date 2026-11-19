@@ -29,9 +29,11 @@ export const testRunFork: Effect.Effect<
 
 /** A test registry's launches open on the calling fiber, which stands for
  *  the session ({@link testRunFork}). */
-// cast: nothing a test registry opens asks for a session service.
-export const testRunInSession = ((effect) =>
-  effect) as RunRegistryInit['inSession'];
+export const testRunInSession: RunRegistryInit['inSession'] = <A, E>(
+  effect: Effect.Effect<A, E, unknown>,
+) =>
+  // cast: nothing a test registry opens asks for a session service.
+  effect as Effect.Effect<A, E>;
 
 /** A run started at `runs`' door with nothing to open, and awaited: the
  *  caller's interruption stops it. Its parent, when it has one, is the
@@ -42,7 +44,11 @@ export function startAwaited<A, E, R extends AgentRunServices>(
   program: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
-    runs.start(runId, { open: Effect.void, run: () => program }),
+    runs.start(runId, {
+      open: Effect.void,
+      run: () => program,
+      end: (_, exit) => exit,
+    }),
     ({ fiber }) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );

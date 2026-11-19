@@ -97,14 +97,12 @@ const runLoop = (
   tools: Record<string, StepTool>,
   calls: readonly Call[],
 ) =>
-  Effect.flatMap(openToolUse({ resume: false }), (opened) =>
-    runToolUse({ resume: false }, opened),
-  ).pipe(
+  Effect.flatMap(openToolUse(), runToolUse).pipe(
     Effect.provide(
-      Layer.mergeAll(
-        scriptedInvokerLayer,
-        nativeToolTestLayer({ run: { runId, session, toolPolicy: {} } }),
-      ).pipe(
+      scriptedInvokerLayer.pipe(
+        Layer.provideMerge(
+          nativeToolTestLayer({ run: { runId, session, toolPolicy: {} } }),
+        ),
         Layer.provideMerge(
           agentRunTestLayer({
             runId,
@@ -117,10 +115,11 @@ const runLoop = (
         Layer.provideMerge(
           Layer.succeed(RunHistory)(Context.get(session, RunHistory)),
         ),
+        // The invoker's debug-object sink writes through the process
+        // `FileSystem`.
+        Layer.provideMerge(nodePlatformLayer),
       ),
     ),
-    // The invoker's debug-object sink writes through the process `FileSystem`.
-    Effect.provide(nodePlatformLayer),
   );
 
 /** A fresh session and a started run on it. */

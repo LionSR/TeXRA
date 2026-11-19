@@ -10,6 +10,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { memoryItemFacts } from '@ui/copy/memory';
 import { moreRowsText } from '@cli/tui/overflowText';
+import { CliUsageError } from './platform/cliContext';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
 const MEMORY_DESCRIPTION_MAX = 72;
@@ -53,9 +54,9 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
     const preview = yield* MemoryStore.preview(storagePath).pipe(
       Effect.catchIf(meansAbsent, () =>
         Effect.fail(
-          new Error(
-            `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
-          ),
+          new CliUsageError({
+            message: `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
+          }),
         ),
       ),
     );

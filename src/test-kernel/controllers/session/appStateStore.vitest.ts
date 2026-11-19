@@ -4,13 +4,17 @@
  * database does to a live reader, and when its owner's scope releases it.
  */
 
+// Node imports
+import { rm } from 'node:fs/promises';
+
+// Third-party imports
 import { it } from '@effect/vitest';
 import { Context, Effect, Layer, Result, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AppState } from '@texra-ai/harness/host';
+import { AppState } from '@texra-ai/harness/plugins';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
-import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
+import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -36,44 +40,52 @@ describe('application state on SQLite', () => {
       const storage = yield* Effect.promise(() =>
         makeTempDir('texra-app-state-', tempDirs),
       );
-      const one = yield* openStore(storage);
-      const two = yield* openStore(storage);
-      // Interleaved, as two hosts on one project are: the whole-file store
-      // this replaces would have lost whichever key flushed second.
-      yield* one.update('kimiCode.prefer', true);
-      yield* two.update('glm.codingPlan', false);
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const one = yield* openStore(storage);
+          const two = yield* openStore(storage);
+          // Interleaved, as two hosts on one project are: the whole-file store
+          // this replaces would have lost whichever key flushed second.
+          yield* one.update('kimiCode.prefer', true);
+          yield* two.update('glm.codingPlan', false);
 
-      expect(yield* two.get('kimiCode.prefer')).toBe(true);
-      expect(yield* one.get('glm.codingPlan')).toBe(false);
-      yield* two.update('kimiCode.prefer', undefined);
-      expect(yield* one.get('kimiCode.prefer')).toBeUndefined();
+          expect(yield* two.get('kimiCode.prefer')).toBe(true);
+          expect(yield* one.get('glm.codingPlan')).toBe(false);
+          yield* two.update('kimiCode.prefer', undefined);
+          expect(yield* one.get('kimiCode.prefer')).toBeUndefined();
 
-      // Concurrent read-modify-writes of one key both land: each changes
-      // the value the other committed, never a stale read of its own.
-      const add = (store: typeof one, id: string) =>
-        store.modify(['disabledTools'], ({ disabledTools }) =>
-          Result.succeed([
-            undefined,
-            {
-              disabledTools: [
-                ...(Schema.decodeUnknownSync(
-                  Schema.UndefinedOr(Schema.Array(Schema.String)),
-                )(disabledTools) ?? []),
-                id,
-              ],
-            },
-          ] as const),
-        );
-      yield* Effect.all([add(one, 'a'), add(two, 'b')], {
-        concurrency: 'unbounded',
-      });
-      expect(
-        [
-          ...Schema.decodeUnknownSync(Schema.Array(Schema.String))(
-            yield* one.get('disabledTools'),
-          ),
-        ].sort(),
-      ).toEqual(['a', 'b']);
+          // Concurrent read-modify-writes of one key both land: each changes
+          // the value the other committed, never a stale read of its own.
+          const add = (store: typeof one, id: string) =>
+            store.modify(['disabledTools'], ({ disabledTools }) =>
+              Result.succeed([
+                undefined,
+                {
+                  disabledTools: [
+                    ...(Schema.decodeUnknownSync(
+                      Schema.UndefinedOr(Schema.Array(Schema.String)),
+                    )(disabledTools) ?? []),
+                    id,
+                  ],
+                },
+              ] as const),
+            );
+          yield* Effect.all([add(one, 'a'), add(two, 'b')], {
+            concurrency: 'unbounded',
+          });
+          expect(
+            [
+              ...Schema.decodeUnknownSync(Schema.Array(Schema.String))(
+                yield* one.get('disabledTools'),
+              ),
+            ].sort(),
+          ).toEqual(['a', 'b']);
+        }),
+      );
+      // Both stores' scopes are closed, so their connections must be too:
+      // Windows refuses to remove a file that a connection still holds, and
+      // `rm` without retries fails on the first refusal.
+      yield* Effect.promise(() => rm(storage, { recursive: true }));
     }),
   );
 });

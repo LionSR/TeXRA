@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import {
   CLI_CHEAP_START_MODEL,
@@ -9,8 +9,9 @@ import {
 } from '../platform/cliConfig';
 import { CliUsageError, type CliContext } from '../platform/cliContext';
 import { writeTextStderr } from '../platform/logSinks';
-import { selectCliRunnableModel, type CliModelStores } from './modelAccess';
+import { selectCliRunnableModel } from './modelAccess';
 import type { RunModelCandidate } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(
@@ -28,7 +29,7 @@ export function assertExplicitModelKnown(
 }
 
 function cliRunModelCandidates(
-  stores: CliModelStores,
+  stores: SettingsStores,
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
@@ -44,29 +45,29 @@ function cliRunModelCandidates(
 
 /**
  * `stores` is the three setting slots availability and the command's
- * configured default are read from, with the runtime that serves `Secrets`,
- * handed over by the command's own `CliPlatform` services rather than looked
- * up again here.
+ * configured default are read from, handed over by the command's own
+ * `CliPlatform` services rather than looked up again here.
  */
 export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
-  stores: CliModelStores,
+  stores: SettingsStores,
 ) {
   // One failure channel for the whole resolution: the candidate list's own
   // usage error and the selection's unavailable-model error both reach the
   // caller as the `CliUsageError` the command surfaces, exactly as the
   // former try/catch around the await did.
+  const usageError = (error: unknown) =>
+    new CliUsageError({ message: toErrorMessage(error) });
   const resolution = yield* Effect.try({
     try: () => cliRunModelCandidates(stores, context, modelOverride, role),
-    catch: ensureError,
+    catch: usageError,
   }).pipe(
     Effect.flatMap((candidates) =>
-      selectCliRunnableModel(candidates, { stores }),
-    ),
-    Effect.mapError(
-      (error) => new CliUsageError({ message: toErrorMessage(error) }),
+      selectCliRunnableModel(candidates, { stores }).pipe(
+        Effect.mapError(usageError),
+      ),
     ),
   );
   if (resolution.notice && context.quietLogs !== true) {

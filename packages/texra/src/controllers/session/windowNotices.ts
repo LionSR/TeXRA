@@ -11,8 +11,12 @@
 import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
-import { appSignalStream, type StateStore } from '@texra-ai/harness/host';
-import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
+import { appSignalStream } from '@texra-ai/harness/host';
+import {
+  Settings,
+  withLogChannel,
+  type StateStore,
+} from '@texra-ai/harness/plugins';
 import {
   decodingDefault,
   type RequestShowErrorPayload,
@@ -21,7 +25,6 @@ import {
 import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
 import { settingsTabByCommand } from '@texra/shared/commands/catalog';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import {
   INSTRUCTION_ACTION,
   INSTRUCTION_ACTION_BUTTON_LABELS,
@@ -47,7 +50,7 @@ type AskNotice = (
 ) => Effect.Effect<string | undefined, HostFailed>;
 
 /** What a window's notices need from its host. */
-export interface WindowNoticeHost {
+interface WindowNoticeHost {
   readonly ask: AskNotice;
   /** Ask for a provider API key: a prompt on one host, the Models tab on
    *  the other. */
@@ -187,7 +190,7 @@ export const followGitHubTokenRejections = <R>(
 ) =>
   appSignalStream('githubTokenInvalid').pipe(
     Stream.runForEach(({ message }) =>
-      ask('error', gitHubTokenRejectedMessage(message), [
+      ask('error', `GitHub token rejected: ${message}`, [
         OPEN_GIT_SETTINGS,
       ]).pipe(
         Effect.flatMap((choice) =>

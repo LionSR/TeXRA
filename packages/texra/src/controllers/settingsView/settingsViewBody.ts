@@ -12,7 +12,7 @@
  * can do (an editor's extensions and settings) is a binding the host fills
  * or leaves out. The binding table is `settingsHostBindings.ts`.
  */
-import { Cause, Effect, PubSub, Stream } from 'effect';
+import { Cause, Effect, Stream, SubscriptionRef } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
 
 import {
@@ -26,6 +26,8 @@ import {
   Settings,
   type StorageFs,
   emitAppSignal,
+  type AppSignal,
+  type AppSignalPayloads,
 } from '@texra-ai/harness/plugins';
 import {
   DISABLED_SKILLS_SETTING,
@@ -36,7 +38,7 @@ import type { SubscriptionUsageProvider } from '@texra/shared/model/subscription
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import {
   announceSignIn,
-  subscriptionAuthStatus,
+  subscriptionAuthStatuses,
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
@@ -48,6 +50,7 @@ import {
   settingsPresentation,
   type SettingsHostBindings,
   type SettingsInput,
+  type SettingsInputCounts,
   type SettingsPage,
 } from '@texra/controllers/settingsView/settingsHostBindings';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
@@ -57,11 +60,15 @@ import {
 } from '@texra/controllers/settingsView/modelSelection';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
 import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage';
-import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
+import {
+  removeProviderKey,
+  setProviderKey,
+} from '@texra/controllers/settingsView/providerKeyActions';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
   type SettingsViewInboundMessage,
@@ -71,11 +78,7 @@ import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  AppSignal,
-  AppSignalPayloads,
-  ProcessServices,
-} from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsHandlers = SettingsViewInboundHandlerRegistry<
@@ -96,7 +99,7 @@ interface SettingsViewBodyPorts {
 export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
   function* (ports: SettingsViewBodyPorts) {
     const { bindings, roots } = ports;
-    const inputs = yield* PubSub.unbounded<SettingsInput>();
+    const inputs = yield* SubscriptionRef.make<SettingsInputCounts>({});
 
     const present = settingsPresentation(bindings, inputs);
     const { notice, alert, report, reported, changed } = present;
@@ -132,12 +135,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       hostStatePage(
         'subscriptionAuth',
         ['subscriptions'],
-        // One field per provider, so a provider added to the wire set
-        // without a status here fails to compile.
-        Effect.all({
-          chatgpt: subscriptionAuthStatus('chatgpt', roots),
-          grok: subscriptionAuthStatus('grok', roots),
-        }),
+        subscriptionAuthStatuses(roots),
       ),
       hostStatePage(
         'subscriptionUsage',
@@ -229,11 +227,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       key: string,
       value: unknown,
     ) {
-      const result = yield* applyStateSettingUpdate(key, value, {
-        host: 'settingsView',
-        stores: roots,
-        requiresOpenWorkspace: bindings.requiresOpenWorkspace,
-      });
+      // The webview names the key: only a row this view renders is written.
+      const entry = TEXRA_SETTINGS.settingsViewByKey(key);
+      if (!entry) return;
+      const result = yield* applyStateSettingUpdate(entry, value, roots);
       if (result.kind === 'ignored') return;
       const label = result.entry.title;
       if (result.kind === 'rejected') {
@@ -284,13 +281,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           ),
       ).pipe(withPerKeyLane(skillListLanes, key));
 
-    const profileKeys = new SettingsProfileKeyController({
-      dialogs: bindings.dialogs,
-      stores: roots,
-    });
     // A failed key write is reported, and the profile and the Models page
     // show the key as it is.
-    const keyAction = (action: ReturnType<typeof profileKeys.setProviderKey>) =>
+    const keyAction = (action: ReturnType<typeof setProviderKey>) =>
       action.pipe(
         Effect.catchTag('ProviderKeyActionFailed', (error) =>
           Effect.andThen(
@@ -306,9 +299,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       webviewReady: () => changed('view'),
       ...agents.handlers,
       setProviderKey: (message) =>
-        keyAction(profileKeys.setProviderKey(message.provider)),
+        keyAction(setProviderKey(bindings.dialogs, roots, message.provider)),
       removeProviderKey: (message) =>
-        keyAction(profileKeys.removeProviderKey(message.provider)),
+        keyAction(removeProviderKey(bindings.dialogs, roots, message.provider)),
       openProviderKeyUrl: (message) =>
         getProviderKeyUrl(roots, message.provider).pipe(
           Effect.flatMap((url) =>
@@ -370,14 +363,23 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         }),
       );
 
+    /** Each change, after the follower subscribed, to `view` or to an input
+     *  of `follows`. The counts the subscription starts from are the
+     *  baseline, so a change made before it subscribed is not one. */
+    const moved = (follows: readonly SettingsInput[]) =>
+      SubscriptionRef.changes(inputs).pipe(
+        Stream.map((counts) =>
+          ['view' as const, ...follows].map((key) => counts[key] ?? 0).join(),
+        ),
+        Stream.changes,
+        Stream.drop(1),
+      );
+
     /** Rebuild and send `page` each time an input it follows changes, one
      *  build at a time; inputs that arrive during a build are answered by one
      *  more build. */
     const followPage = (page: SettingsPage<ProcessServices | StorageFs>) =>
-      Stream.fromPubSub(inputs).pipe(
-        Stream.filter(
-          (input) => input === 'view' || page.follows.includes(input),
-        ),
+      moved(page.follows).pipe(
         Stream.buffer({ capacity: 1, strategy: 'sliding' }),
         Stream.runForEach(() => finish(bindings.post(page.build))),
       );
@@ -423,13 +425,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           toolsPage.followToolAvailability,
           // The re-probe's network checks (Zotero and others) never hold the
           // view's ready answer, so the host's tab reveal is not kept waiting.
-          Stream.fromPubSub(inputs).pipe(
-            Stream.filter((input) => input === 'view'),
-            Stream.runForEach(() => finish(toolsPage.refresh)),
-          ),
-          // A run that binds a GitHub subscription, the setup agent's
-          // `apply_team`, and a provider key written by any writer (the setup
-          // agent's `unset_api_key`, another window). OAuth tokens and other
+          moved([]).pipe(Stream.runForEach(() => finish(toolsPage.refresh))),
+          // A run that binds a GitHub subscription, an agent catalog reload,
+          // and a provider key written by any writer (the setup agent's
+          // `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
           followSignal('githubSubscriptionsChanged', () => changed('github')),
           followSignal('workspaceAgentsChanged', () => changed('agents')),

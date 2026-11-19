@@ -8,29 +8,19 @@
  * resume. The consumed follow-up is here too, as its writers commit it; the
  * rules for which pending rows a run reads are the reader's
  * (`agent/followUp/FollowUpReader.ts`).
- * The lifecycle rows a run is registered, activated and ended with are
- * built here, beside the readers of their facts;
- * `agent/storage/runLifecycle.ts` commits them.
  */
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { Schema } from 'effect';
-import {
-  NO_APPROVAL_GRANTS,
-  type ApprovalGrants,
-} from '@shared/approvalBypassKind';
+import { type ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   type DispatchFacts,
-  emptyRunEndOutput,
   type FollowUpContent,
   type FollowUpDisposition,
   type FollowUpMessage,
-  type RunEnd,
-  type RunEndOutput,
   type RunBinding,
   type RunId,
   type RunIdentity,
   type RunInput,
-  type RunOutcome,
   type RunParent,
   type RunProvenance,
   type SessionRow,
@@ -102,26 +92,26 @@ export type RunFacts = {
 };
 
 /** A run's facts before any row. */
-export const NO_FACTS: RunFacts = {
+export const NO_FACTS: RunFacts = Object.freeze({
   answer: '',
-  input: {},
-  edited: [],
-  read: [],
+  input: Object.freeze({}),
+  edited: Object.freeze([]),
+  read: Object.freeze([]),
   toolCalls: 0,
   structured: null,
   handedDown: null,
   finalTool: null,
   answerFinalized: false,
-  calls: byId([]),
-};
+  calls: Object.freeze<RunFacts['calls']>(byId([])),
+});
 
 /** `input` with what a row recorded: each field it names replaces the
  *  last, and a `null` instruction returns to the launch's. */
 export function withInput(
   input: RunFacts['input'],
-  recorded: RunInput | null | undefined,
+  recorded: RunInput | undefined,
 ): RunFacts['input'] {
-  if (recorded == null) return input;
+  if (recorded === undefined) return input;
   const { instruction: was, ...kept } = input;
   const { instruction, system, activated, memoryMisses } = recorded;
   const next = instruction === undefined ? was : (instruction ?? undefined);
@@ -208,11 +198,10 @@ export const boundsLifecycle = (
 
 /** What a run is registered with: the facts its `run.start` carries. */
 export interface RegisterRunOptions {
-  /** The launching run: the whole parent edge, stamped on `run.start`. */
-  readonly parentId?: RunId;
-  /** The parent's call that launched it, which owns this run until it
-   *  detaches, and that call's tool card. */
-  readonly parentCall?: NonNullable<RunParent['call']>;
+  /** The parent edge `run.start` records: the launching run, and its call
+   *  that launched this one (null: no call did). The database stamps the
+   *  parent's `uid`. */
+  readonly parent?: Omit<RunParent, 'uid'>;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
@@ -231,21 +220,6 @@ export interface RegisterRunOptions {
   };
 }
 
-type RunConfigRow = Extract<SessionRowDraft, { readonly type: 'run.config' }>;
-
-/** The rows that register a run, and the `run.start` among them of a run
- *  they give birth to (null: the run exists, and they re-register it). */
-export interface Registration {
-  readonly rows: readonly SessionRowDraft[];
-  readonly start: Extract<SessionRowDraft, { type: 'run.start' }> | null;
-  /** Its configuration as a `run.config`, apart from `rows`, so the batch
-   *  that commits them records one: a run whose loop is not this
-   *  process's records this one (`registerRun`), as does a fork of a run
-   *  that never bound (`forkRun`); a launch that binds a model records its
-   *  own, with the binding (`openToolUse`). */
-  readonly config: RunConfigRow;
-}
-
 /** The row that titles `runId`: the model's summary, a child's label, or
  *  the user's rename, each cut to the length a run list shows. */
 export const descriptionRow = (
@@ -258,77 +232,3 @@ export const descriptionRow = (
   description: truncateWithEllipsis(description, 80),
   by,
 });
-
-/** The rows that register a run, in commit order: a new run's `run.start`,
- *  its `run.activate` (a re-registration's with the grants it ends, `ended`:
- *  null for a run being born), and the description it is born with; and its
- *  configuration, for its first batch to record ({@link Registration}). */
-export function registrationDrafts(
-  runId: RunId,
-  config: RunConfigRow['config'],
-  options: RegisterRunOptions,
-  ended: readonly SessionRowDraft[] | null,
-): Registration {
-  const target = runId;
-  const worktree = config.workingDirectory?.trim();
-  const start: NonNullable<Registration['start']> = {
-    type: 'run.start',
-    aggregateId: target,
-    identity: options.identity,
-    takesFollowUps: options.takesFollowUps ?? false,
-    worktree: worktree ? { workingDirectory: worktree } : undefined,
-    parent:
-      options.parentId === undefined
-        ? null
-        : { id: options.parentId, call: options.parentCall ?? null },
-    provenance: options.provenance ?? null,
-    approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
-  };
-  const rows: SessionRowDraft[] = [
-    ...(ended === null ? [start] : []),
-    { type: 'run.activate', aggregateId: target },
-    ...(ended ?? []),
-  ];
-  if (options.description !== undefined)
-    rows.push(descriptionRow(runId, options.description, 'model'));
-  return {
-    rows,
-    start: ended === null ? start : null,
-    config: { type: 'run.config', aggregateId: target, config },
-  };
-}
-
-/** A resume's activation rows: its `run.activate`, the grants it ends
- *  (`ended`), and its configuration when that changed (`config`). */
-export function activationDrafts(
-  runId: RunId,
-  ended: readonly SessionRowDraft[],
-  config: RunConfigRow['config'] | null,
-): SessionRowDraft[] {
-  const target = runId;
-  const changed: RunConfigRow[] =
-    config === null
-      ? []
-      : [{ type: 'run.config', aggregateId: target, config }];
-  return [{ type: 'run.activate', aggregateId: target }, ...ended, ...changed];
-}
-
-/** The `run.end` row: the run's outcome, its error, and what it produced,
- *  or nothing. Why a cancelled run stopped is its `run.stop` row. */
-export function runEndDraft(
-  runId: RunId,
-  end: {
-    readonly outcome: RunOutcome;
-    readonly error?: RunEnd['error'];
-    readonly output?: RunEndOutput;
-  },
-): Extract<RunInputDraft, { readonly type: 'run.end' }> {
-  const { outcome, error } = end;
-  return {
-    type: 'run.end',
-    aggregateId: runId,
-    outcome,
-    ...(error && { error }),
-    output: end.output ?? emptyRunEndOutput(),
-  };
-}

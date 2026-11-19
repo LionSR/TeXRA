@@ -5,15 +5,17 @@
  * background, a goal round through `self()`) is `executeAgent` under a
  * parent edge, so it runs one cycle: it ends with its `run.end`, whose transaction delivers
  * its report to the parent's input unless the call awaits it
- * (`RunParent.call.awaited`). The run opens in the caller's fiber and is
- * forked on the session's registry under its id, so a launch that fails
- * before the run exists fails the call, and the run outlives the call that
- * started it. An awaited call reads the child's end once the run here has
- * ended; interrupting the call stops the child, unless the stop detached it
- * (`RunRegistry.stop`), in which case it runs on as a root and only the
- * wait ends.
+ * (`RunParent.call.awaited`). The run is forked on the session's registry
+ * under its id and opens on its own fiber; the call waits for its opening,
+ * so a launch that fails before the run exists fails the call, and the run
+ * outlives the call that started it: a background child whose launching
+ * call is interrupted while it opens goes on opening. An awaited call reads
+ * the child's end once the run here has ended; interrupting the call, the
+ * child opening or running, stops the child (`released`), unless the stop
+ * detached it (`RunRegistry.stop`), in which case it runs on as a root and
+ * only the wait ends.
  */
-import { Cause, Effect, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   prepareAgentDefinition,
@@ -32,6 +34,7 @@ import {
   runEndErrorMessage,
   AgentConfigSchema,
   RUN_OUTCOME,
+  ToolError,
   type CommitOrdinal,
   type RunEnd,
   type RunId,
@@ -40,7 +43,6 @@ import {
   type AgentConfigPayload,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /** What a child's end answers its awaiting call. */
 interface ChildRunEnd {
@@ -48,24 +50,12 @@ interface ChildRunEnd {
   readonly result: RunEnd;
 }
 
-/** A defect as a failed `Error`; an interruption stays one. */
-const defectsAsErrors = <A, R>(
-  self: Effect.Effect<A, Error, R>,
-): Effect.Effect<A, Error, R> =>
-  self.pipe(
-    Effect.catchCause((cause) =>
-      Cause.hasInterruptsOnly(cause)
-        ? Effect.failCause(cause)
-        : Effect.fail(ensureError(cause)),
-    ),
-  );
-
 /**
- * Start a fresh native child on the session's registry: its opening (its
- * registration batch) in this fiber, its run forked under its id. Answers
- * the commit of its opening; a launch that fails before the run exists
- * fails this with no run behind it. The child opens in its parent's
- * tool-call fiber, so it takes the parent's `LaunchKeys`, awaited or not.
+ * Start a fresh native child on the session's registry, forked under its
+ * id, its opening (its registration batch) on its own fiber. Answers the
+ * commit of its opening; a launch that fails before the run exists fails
+ * this with no run behind it. The registry carries the launching call's
+ * `LaunchKeys` onto the child, so it takes the parent's, awaited or not.
  */
 export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
@@ -73,13 +63,13 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
   registration: RegisterRunOptions,
   options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const { opened } = yield* (yield* RunRegistry).start(runId, {
-    open: executeAgent(definition, runId, {
-      ...options,
-      registration,
-    }),
-    run: (prepared) => prepared.run,
-  });
+  const { opened } = yield* (yield* RunRegistry).start(
+    runId,
+    executeAgent(
+      runId,
+      Effect.succeed({ definition, options: { ...options, registration } }),
+    ),
+  );
   return opened.activation;
 });
 
@@ -95,21 +85,23 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   parentId: RunId,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const runs = yield* RunRegistry;
-  const { opened } = yield* runs.start(runId, {
-    open: openResume(runs, runId, options, parentId).pipe(
-      Effect.catchTag('ResumeNotOpened', ({ answer }) =>
-        Effect.fail(
-          new Error(
-            'failed' in answer
-              ? `Subagent ${runId} cannot be resumed here (${answer.failed.kind}).`
-              : `Subagent ${runId} belongs to an open call of ${answer.ownedBy}.`,
+  const { opened } = yield* (yield* RunRegistry).start(
+    runId,
+    executeAgent(
+      runId,
+      openResume(runId, options, parentId).pipe(
+        Effect.catchTag('ResumeNotOpened', ({ answer }) =>
+          Effect.fail(
+            new ToolError(
+              'failed' in answer
+                ? `Subagent ${runId} cannot be resumed here (${answer.failed.kind}).`
+                : `Subagent ${runId} belongs to an open call of ${answer.ownedBy}.`,
+            ),
           ),
         ),
       ),
     ),
-    run: (prepared) => prepared.run,
-  });
+  );
   return opened.activation;
 });
 
@@ -127,7 +119,7 @@ const awaitChildRun = Effect.fn('awaitChildRun')(function* (
 ): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices | RunCall> {
   const call = yield* RunCall;
   return yield* call.run.awaitedCalls.withPermits(1)(childRunEnd(runId, start));
-}, defectsAsErrors);
+});
 
 /** {@link awaitChildRun}'s wait, under its permit. */
 const childRunEnd = Effect.fn('childRunEnd')(function* (
@@ -135,17 +127,14 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   start: Effect.Effect<unknown, Error, AgentRunServices>,
 ): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices> {
   const runs = yield* RunRegistry;
-  yield* start;
-  const live = runs.get(runId);
-  // What the child's fiber failed on, when it did: the reason an end is
-  // missing below (the store refused it).
-  const unsaved =
-    live &&
-    (yield* live.drained.pipe(
-      Effect.onInterrupt(() =>
-        // The call let go: the child's stop says so, unless a stop of it
-        // (its parent's cascade) already did.
-        runs.stop(runId, 'released').pipe(
+  // The call let go, the child opening or running: the child's stop says
+  // so, unless a stop of it (its parent's cascade) already did. Nobody
+  // else reads an awaited child's end, so it does not run on unread. A
+  // child that never reached the registry has nothing to release.
+  const release = Effect.suspend(() =>
+    runs.get(runId) === undefined
+      ? Effect.void
+      : runs.stop(runId, 'released').pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(
               `Subagent ${runId}: its release was not recorded`,
@@ -156,25 +145,26 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
           ),
           Effect.andThen(runs.awaitDrained(runId)),
         ),
-      ),
-    ));
+  );
+  yield* start.pipe(Effect.onInterrupt(() => release));
+  const live = runs.get(runId);
+  // What the child's fiber failed on, when it did: the reason an end is
+  // missing below (the store refused it).
+  const unsaved =
+    live && (yield* live.drained.pipe(Effect.onInterrupt(() => release)));
   const result = yield* getRunRecords(runId).readRunEnd();
   if (result === null)
-    return yield* Effect.fail(
-      unsaved === undefined
-        ? new Error(`Subagent ${runId} ended without a recorded end.`)
-        : new Error(
-            `Subagent ${runId} ended without a recorded end: ${unsaved.message}`,
-            { cause: unsaved },
-          ),
-    );
+    return yield* unsaved === undefined
+      ? new ToolError(`Subagent ${runId} ended without a recorded end.`)
+      : new ToolError(
+          `Subagent ${runId} ended without a recorded end: ${unsaved.message}`,
+          { cause: unsaved },
+        );
   if (result.outcome === RUN_OUTCOME.FAILED)
-    return yield* Effect.fail(
-      new Error(
-        result.error === undefined
-          ? `Subagent ${runId} ended with failed outcome.`
-          : runEndErrorMessage(result.error),
-      ),
+    return yield* new ToolError(
+      result.error === undefined
+        ? `Subagent ${runId} ended with failed outcome.`
+        : runEndErrorMessage(result.error),
     );
   return { runId, result };
 });
@@ -186,9 +176,9 @@ interface AwaitedChildLaunch {
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   readonly configPayload: AgentConfigPayload;
-  /** The parent's call that launches the child, which owns it, and its
-   *  tool card. */
-  readonly parentCall?: Omit<NonNullable<RunParent['call']>, 'awaited'>;
+  /** The parent's call that launches the child, which owns it and awaits
+   *  its end, and its tool card. */
+  readonly parentCall: Omit<NonNullable<RunParent['call']>, 'awaited'>;
   /** The grants a fresh child is registered with. */
   readonly grants?: ApprovalGrants;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
@@ -217,10 +207,10 @@ export const executeSubagentInBand = (
         definition,
         {
           identity: { kind: 'agent', agent: definition.config.agent },
-          parentId: launch.parentId,
-          ...(launch.parentCall !== undefined && {
-            parentCall: { ...launch.parentCall, awaited: true },
-          }),
+          parent: {
+            id: launch.parentId,
+            call: { ...launch.parentCall, awaited: true },
+          },
           grants: launch.grants,
           seed: launch.seed,
         },

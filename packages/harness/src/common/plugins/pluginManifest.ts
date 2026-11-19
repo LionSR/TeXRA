@@ -15,6 +15,7 @@ import {
   FileSystem,
   type PlatformError,
   Predicate,
+  Record as EffectRecord,
   Result,
   Schema,
 } from 'effect';
@@ -93,10 +94,10 @@ const PluginManifestSchema = Schema.Struct({
 });
 type PluginManifest = typeof PluginManifestSchema.Type;
 
-export const PLUGIN_MANIFEST_FILES = [
+export const PLUGIN_MANIFEST_FILES = Object.freeze([
   path.join('.claude-plugin', 'plugin.json'),
   path.join('.codex-plugin', 'plugin.json'),
-] as const;
+] as const);
 
 /** A `.mcp.json` file: the servers under `mcpServers`, or the map itself. */
 const McpFileSchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -337,12 +338,7 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
         name: `plugin_${name}_${server.name}`,
         command: expandRoot(dir, server.command),
         args: server.args.map((arg) => expandRoot(dir, arg)),
-        env: Object.fromEntries(
-          Object.entries(server.env).map(([key, value]) => [
-            key,
-            expandRoot(dir, value),
-          ]),
-        ),
+        env: EffectRecord.map(server.env, (value) => expandRoot(dir, value)),
         cwd: dir,
       });
     }

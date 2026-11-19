@@ -45,7 +45,7 @@ The whole loop is a round trip: pull your project down from Overleaf, edit it lo
 
 <OverleafCloneFlow />
 
-<p class="hero-caption">Three quick-input prompts: pick the command, paste the project URL or 24-character ID, then enter your <code>olp_</code> token, which is saved in <code>~/.texra/secrets/</code> for next time.</p>
+<p class="hero-caption">Three steps: pick the command, enter the project URL or 24-character ID, then enter your <code>olp_</code> token, which is saved in <code>~/.texra/secrets/</code> for next time.</p>
 
 > **Token storage:** Reset the saved token at any time by removing its entry from `~/.texra/secrets/`. The token is never written into the clone's remote URL: after cloning, TeXRA offers it to your Git credential helper (the macOS keychain or Git Credential Manager, for example) so later pulls and pushes sign in. Without a helper, Git asks for it; enter the token as the password.
 
@@ -81,7 +81,7 @@ Open `your-local-folder` in VS Code and run your agents and programs (`research`
 
 <OverleafEditActions />
 
-<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Start task</code>, reviewing outputs, <code>latexdiff</code>/merge, and auto-extract.</p>
+<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Start task</code>, reviewing outputs, and <code>latexdiff</code>/merge.</p>
 
 ### 3. Commit local changes
 
@@ -91,7 +91,7 @@ As you work, commit changes often using VS Code's Source Control (<wa-icon libra
 # Stage changes (e.g., all modified files)
 git add .
 # Commit with a descriptive message
-git commit -m "Refined methodology section using TeXRA polish"
+git commit -m "Refine methodology section with TeXRA"
 ```
 
 ### 4. Sync back to Overleaf

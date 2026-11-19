@@ -8,7 +8,7 @@
 import { Effect, SubscriptionRef } from 'effect';
 
 import { getModelLabel, joinFacts } from '@texra-ai/harness/schemas';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ScopeRunner } from '../../scopeRunner';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
 import { printableFinalRows } from './transcriptEntries';
@@ -93,7 +93,8 @@ interface RingTail {
 export interface ChildHeader {
   readonly label: string;
   readonly modelLabel: string | null;
-  readonly childKind: 'script' | 'subagent';
+  /** What the run is called on screen (`runNoun`). */
+  readonly noun: string;
   readonly parentLabel: string;
 }
 
@@ -123,19 +124,13 @@ function sessionHeaderIdentityLine(
     // A child the view gives no model (a process) names none: the
     // session's model is another run's.
     return joinFacts([
-      `${child.childKind}: ${child.label}`,
+      `${child.noun}: ${child.label}`,
       `parent: ${child.parentLabel}`,
       child.modelLabel !== null && `model: ${child.modelLabel}`,
     ]);
   }
   const model = getModelLabel(meta.model || '-');
-  const agent = meta.agent || 'chat';
-  return joinFacts([
-    ...(meta.team
-      ? [`team: ${meta.team.name}`, `root: ${agent}`]
-      : [`agent: ${agent}`]),
-    `model: ${model}`,
-  ]);
+  return joinFacts([`agent: ${meta.agent || 'chat'}`, `model: ${model}`]);
 }
 
 // Dedupe `<Static>` rows by the entry's own id (a random id from the
@@ -524,7 +519,6 @@ export interface ChatScrollback {
   readonly ref: SubscriptionRef.SubscriptionRef<Scrollback>;
   readonly repaint: () => void;
   readonly restart: () => void;
-  readonly runtime: ProcessRuntime;
 }
 
 interface RepaintTarget {
@@ -537,14 +531,13 @@ interface RepaintTarget {
 /** One chat's scrollback over the Ink instance `ink` holds once `render()`
  *  returns it. */
 export function chatScrollback(
-  runtime: ProcessRuntime,
+  chat: ScopeRunner,
   ink: { readonly current?: RepaintTarget },
 ): ChatScrollback {
-  const ref = runtime.runSync(SubscriptionRef.make(EMPTY_SCROLLBACK));
-  const restart = (): void => runtime.runSync(restartScrollback(ref));
+  const ref = chat.sync(SubscriptionRef.make(EMPTY_SCROLLBACK));
+  const restart = (): void => chat.sync(restartScrollback(ref));
   return {
     ref,
-    runtime,
     restart,
     repaint: () => {
       if (ink.current === undefined) {

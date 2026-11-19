@@ -27,6 +27,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
@@ -44,7 +45,7 @@ import {
   type InlineCommentProvider,
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
-import { EditorHost, makeEditorHost, type EditorRegistry } from './editorHost';
+import { EditorHost, editorRegistry, type EditorRegistry } from './editorHost';
 import {
   DocumentCompileTool,
   DocumentContextTool,
@@ -57,7 +58,6 @@ import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { githubActivity } from './github/plugin';
-import { externalInquiry } from './inquiry/plugin';
 import { lean4 } from './lean/plugin';
 import { LeanLoogleTool } from './lean/LoogleTool';
 import { OpenPdfTool } from './OpenPdfTool';
@@ -74,7 +74,6 @@ import { OpenPdfTool } from './OpenPdfTool';
  *     allowlisted one
  *   - send_to_terminal — type into VS Code's integrated terminal for
  *     sudo / interactive prompts the captured-stdio bash tool can't handle
- *   - apply_team — apply a discipline team + record the default team
  *
  * Shell-rc writes go through the regular `bash` tool (and its approval
  * dialog) — there's no dedicated rc-writing tool. A hand-rolled validator
@@ -92,7 +91,6 @@ import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
-import { ApplyTeamTool } from './setup/ApplyTeamTool';
 import {
   SetupHost,
   SetupPlatform,
@@ -105,7 +103,6 @@ import {
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
-import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -167,7 +164,7 @@ const serves = (capabilities: (storage: string) => Iterable<string>) =>
     of: (storage) => new Set(capabilities(storage)),
   });
 
-const latexExtract: TexraPlugin = {
+const latexExtract: TexraPlugin = texraPlugin({
   id: 'latex-extract',
   tools: [
     ExtractLatexFiguresTool,
@@ -184,7 +181,7 @@ const latexExtract: TexraPlugin = {
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
   },
-};
+});
 
 /** The editor's diagnostics, offered while an editor attached for the
  *  session reads them: the plugin serves `HostCapabilities` from the same
@@ -292,14 +289,13 @@ const setup = (
       ReadConfigTool,
       UpdateConfigTool,
       SendToTerminalTool,
-      ApplyTeamTool,
     ],
   });
 
 /** The theorist's programs: the document programs a person or a model
  *  starts by name, the tools they call, and accepting the documents a run
  *  produced into the workspace. */
-const theory: TexraPlugin = {
+const theory: TexraPlugin = texraPlugin({
   id: 'theory',
   icons: { accept_run_files: 'check' },
   prompt: ({ offered }) =>
@@ -340,7 +336,7 @@ const theory: TexraPlugin = {
     DocumentProposeTool,
   ],
   factKinds: APP_FACT_KINDS.theory,
-};
+});
 
 /** TeXRA's plugins, in dashboard order. */
 export const texraPlugins = (host: {
@@ -353,15 +349,12 @@ export const texraPlugins = (host: {
   readonly setup?: SetupPlatformShape;
   /** The host's code editor (VS Code); none elsewhere. */
   readonly editor?: EditorIntegrationShape;
-  /** The composition's editor registry its hosts attach to
-   *  (`makeEditorHost`); none attached when absent. */
+  /** What the composition's windows offer the editor tools (its window
+   *  table's `editors`); none offered when absent. */
   readonly editors?: EditorRegistry;
-  /** The host shows external inquiries (VS Code, desktop): the `inquiry`
-   *  tool is offered only there. */
-  readonly inquiryPanel?: true;
 }): readonly TexraPlugin[] => {
-  const editors = host.editors ?? makeEditorHost();
-  return [
+  const editors = host.editors ?? editorRegistry(() => ({}));
+  const plugins: readonly TexraPlugin[] = [
     {
       ...fileOps({ writeFilter: texWriteFilter }),
       icons: {
@@ -420,24 +413,14 @@ export const texraPlugins = (host: {
       dashboard: {
         name: 'Multi-Agent Workflow',
         description:
-          'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
+          'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent and program tools if its own configuration names them: this switch is an additional kill switch on top of that per-agent opt-in.',
         setup: {
           configNotes:
-            'No local install required. Turning this off removes the agent tool from every agent tool list, even agents whose configuration names it explicitly, so no agent can delegate.',
+            'No local install required. Turning this off removes the agent and program tools from every agent tool list, even agents whose configuration names them explicitly, so no agent can delegate or start a program.',
         },
       },
     },
     githubActivity,
-    host.inquiryPanel
-      ? {
-          ...externalInquiry,
-          processLayer: {
-            layer: serves(() => [
-              'inquiry-panel' satisfies InquiryPanelCapability,
-            ]),
-          },
-        }
-      : externalInquiry,
     codex,
     claudeAgent,
     core(editors, host.inlineComments),
@@ -445,4 +428,7 @@ export const texraPlugins = (host: {
     setup(host.setup ?? {}, host.name, host.editor),
     theory,
   ];
+  // The entries built here are held for the life of the process as the
+  // module-level ones are, so they are frozen the same way.
+  return plugins.map(texraPlugin);
 };

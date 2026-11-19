@@ -1,15 +1,14 @@
 /**
  * The host editor's capabilities TeXRA's tools use: a file's diagnostics, an
- * inline criticism, and a PDF in the host's viewer. One registry per
- * composition, keyed by a session's storage root: the process's windows
- * (`HostWindows`) attach what a session's project's windows offer, routed to
- * the one focused last, while a window of it is attached. The same registry
- * serves the harness's
- * `HostCapabilities`, one capability per attached member, so a tool that
- * declares a member is offered exactly while an implementation is attached:
- * one owner for the capability and its code.
+ * inline criticism, and a PDF in the host's viewer, read by a session's
+ * storage root. A composition's reading is its window table's
+ * (`makeWindowTable`): what the project's attached windows offer, routed to
+ * the one focused last. The same reading serves the harness's
+ * `HostCapabilities`, one capability per offered member, so a tool that
+ * declares a member is offered exactly while a window offers it: one owner
+ * for the capability and its code.
  */
-import { Context, Effect, Schema, type Scope } from 'effect';
+import { Context, type Effect, Schema } from 'effect';
 
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { FileLocation } from '@texra-ai/harness/schemas';
@@ -81,50 +80,33 @@ export interface EditorCapabilities {
  *  compile. */
 export type EditorCapability = keyof EditorCapabilities;
 
-/** The registry's interface: attach for a scope, read by storage root. */
-export interface EditorHostShape {
-  readonly attach: (
-    storage: string,
-    capabilities: EditorCapabilities,
-  ) => Effect.Effect<void, never, Scope.Scope>;
-  /** What the attachment for `storage` offers ({} for none). */
+/** What the editor tools read: the capabilities offered for a session's
+ *  storage root ({} for none). */
+interface EditorHostShape {
   readonly at: (storage: string) => EditorCapabilities;
 }
 
-/** The composition's editor registry, served to the editor tools through
+/** The composition's editor reading, served to the editor tools through
  *  their plugins' process layers. */
 export class EditorHost extends Context.Service<EditorHost, EditorHostShape>()(
   '@texra-ai/texra/tools/EditorHost',
 ) {}
 
-/** A composition's editor registry (`makeEditorHost`). */
-export type EditorRegistry = ReturnType<typeof makeEditorHost>;
-
-/** A registry with nothing attached: what a composition passes its plugins
- *  and attaches its hosts to. Also the harness's `HostCapabilities` over the
- *  same attachments. */
-export function makeEditorHost(): EditorHostShape & {
+/** An editor reading that is also the harness's `HostCapabilities`: the
+ *  members it offers a storage root, by name. */
+export interface EditorRegistry extends EditorHostShape {
   readonly of: (storage: string) => ReadonlySet<string>;
-} {
-  const attached = new Map<string, EditorCapabilities>();
-  const at = (storage: string): EditorCapabilities =>
-    attached.get(storage) ?? {};
-  return {
-    attach: (storage, capabilities) =>
-      Effect.acquireRelease(
-        Effect.sync(() => attached.set(storage, capabilities)),
-        () =>
-          Effect.sync(() => {
-            if (attached.get(storage) === capabilities)
-              attached.delete(storage);
-          }),
-      ).pipe(Effect.asVoid),
-    at,
-    of: (storage) =>
-      new Set(
-        Object.entries(at(storage)).flatMap(([member, value]) =>
-          value === undefined ? [] : [member],
-        ),
-      ),
-  };
 }
+
+/** The registry over `at`, whose offered members are its capabilities. */
+export const editorRegistry = (
+  at: (storage: string) => EditorCapabilities,
+): EditorRegistry => ({
+  at,
+  of: (storage) =>
+    new Set(
+      Object.entries(at(storage)).flatMap(([member, value]) =>
+        value === undefined ? [] : [member],
+      ),
+    ),
+});

@@ -13,20 +13,15 @@ import {
   FileSystem,
   Path,
   type PlatformError,
+  Schema,
   type Scope,
 } from 'effect';
 
-import { runNoun } from '@agent/runtime/forkRun';
 import { RunLive, type RunRegistry } from '@agent/runtime/runRegistry';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { logFailure, withLogChannel } from '@logger/effectLog';
-import {
-  SessionRoots,
-  StorageFs,
-  WorkspaceFs,
-  withSessionFs,
-} from '@platform/rootedFs';
-import { type RunId, type SessionRow } from '@shared/schemas';
+import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import { type RunId, runNoun, type SessionRow } from '@shared/schemas';
 import {
   DatabaseAggregateClosed,
   RunChanged,
@@ -51,6 +46,13 @@ import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
 
+/** A run's generated files were left in place: the storage root no longer
+ *  resolves to the directory the deletion was accepted against. */
+class CleanupRejected extends Schema.TaggedError<CleanupRejected>()(
+  'CleanupRejected',
+  { message: Schema.String },
+) {}
+
 /**
  * Remove each run's run directory under the storage root it was
  * accepted against.
@@ -73,44 +75,42 @@ const removeRunDirectories: (
   fs: FileSystem.FileSystem,
   storage: string,
   runIds: readonly RunId[],
-) => Effect.Effect<void, PlatformError.PlatformError | Error> = Effect.fn(
-  'removeRunDirectories',
-)(
-  function* (
-    fs: FileSystem.FileSystem,
-    storage: string,
-    runIds: readonly RunId[],
-  ) {
-    const runs = path.join(
-      yield* fs.realPath(storage),
-      WORKSPACE_STORAGE_LAYOUT.runs,
-    );
-    // Fails NotFound when the runs directory is absent, which the catch
-    // below reads as "nothing generated to remove".
-    if ((yield* fs.realPath(runs)) !== runs) {
-      return yield* Effect.fail(
-        new Error(
-          `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
-        ),
+) => Effect.Effect<void, PlatformError.PlatformError | CleanupRejected> =
+  Effect.fn('removeRunDirectories')(
+    function* (
+      fs: FileSystem.FileSystem,
+      storage: string,
+      runIds: readonly RunId[],
+    ) {
+      const runs = path.join(
+        yield* fs.realPath(storage),
+        WORKSPACE_STORAGE_LAYOUT.runs,
       );
-    }
-    yield* Effect.forEach(
-      runIds,
-      (runId) => {
-        const target = path.join(runs, runId);
-        if (!isPathWithin(runs, target)) {
-          return Effect.logWarning(
-            `Refusing to remove ${target}: outside the accepted storage root`,
-          ).pipe(withLogChannel(CHANNEL));
-        }
-        return fs.remove(target, { recursive: true, force: true });
-      },
-      { concurrency: 8, discard: true },
-    );
-  },
-  Effect.uninterruptible,
-  Effect.catchIf(meansAbsent, () => Effect.void),
-);
+      // Fails NotFound when the runs directory is absent, which the catch
+      // below reads as "nothing generated to remove".
+      if ((yield* fs.realPath(runs)) !== runs) {
+        return yield* new CleanupRejected({
+          message: `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
+        });
+      }
+      yield* Effect.forEach(
+        runIds,
+        (runId) => {
+          const target = path.join(runs, runId);
+          if (!isPathWithin(runs, target)) {
+            return Effect.logWarning(
+              `Refusing to remove ${target}: outside the accepted storage root`,
+            ).pipe(withLogChannel(CHANNEL));
+          }
+          return fs.remove(target, { recursive: true, force: true });
+        },
+        { concurrency: 8, discard: true },
+      );
+    },
+    // Uninterruptible where it runs: the store's `collect` masks the
+    // cleanup it is handed, then marks the deletion collected.
+    Effect.catchIf(meansAbsent, () => Effect.void),
+  );
 
 /** A run's deletion marker. */
 type RemovalMarker = Extract<SessionRow, { type: 'run.removed' }>;
@@ -251,7 +251,7 @@ export const deleteAcceptedRun = (
     if (accepted.startCommit === null) {
       return yield* new Unavailable({
         runId,
-        reason: `The ${runNoun(deps.view, runId)} has no recorded start.`,
+        reason: `The ${runNoun(deps.view.run(runId))} has no recorded start.`,
       });
     }
     yield* runs
@@ -262,7 +262,7 @@ export const deleteAcceptedRun = (
       .pipe(
         Effect.mapError((error): RequestError => {
           if (error instanceof RunLive) return new RunActive({ runId });
-          const noun = runNoun(deps.view, runId);
+          const noun = runNoun(deps.view.run(runId));
           return new Unavailable({
             runId,
             reason:
@@ -290,9 +290,8 @@ export const runFiles = Effect.fn('runFiles')(function* (
 ): Effect.fn.Return<
   OutcomeOf<'run.files'>,
   RequestError,
-  RunFilesServices | SessionRoots
+  RunFilesServices | WorkspaceFs | StorageFs
 > {
-  const roots = yield* SessionRoots;
   return yield* runs
     .withInactiveRun(
       req.runId,
@@ -328,7 +327,6 @@ export const runFiles = Effect.fn('runFiles')(function* (
             }),
       ),
       Effect.map((result) => ({ kind: 'runFiles', result }) as const),
-      (program) => withSessionFs(roots, program),
       withLogChannel('runFiles'),
     );
 });

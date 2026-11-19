@@ -19,39 +19,28 @@
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { removeBestEffort } from '@texra/common/files/removeBestEffort';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 
 const CHANNEL = 'approval.tempFiles';
 
-/** A staged diff side could not be written to the host filesystem. */
-class ApprovalTempWriteFailed extends Schema.TaggedError<ApprovalTempWriteFailed>()(
-  'ApprovalTempWriteFailed',
-  {
-    side: Schema.Literals(['original', 'proposed']),
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
+/** Write one staged diff side; a failure is the host's, named by the side,
+ *  like the directory the host created for it. */
 const writeSide = (
   fs: FileSystem.FileSystem,
   side: 'original' | 'proposed',
   filePath: string,
   content: string,
-): Effect.Effect<void, ApprovalTempWriteFailed> =>
-  fs.writeFileString(filePath, content).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ApprovalTempWriteFailed({
-          side,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    ),
-  );
+): Effect.Effect<void, HostFailed> =>
+  fs
+    .writeFileString(filePath, content)
+    .pipe(
+      Effect.mapError((cause) => hostFailed(`approval.write.${side}`, cause)),
+    );
 
 export interface ApprovalTempFiles {
   readonly originalPath: string;
@@ -72,23 +61,6 @@ interface WriteApprovalTempFilesInput {
   readonly proposedContent: string;
 }
 
-/** Best-effort temp cleanup: `force` absorbs an already-removed file, and
- *  any other removal fault is logged. */
-const removeTempFile = (
-  fs: FileSystem.FileSystem,
-  target: string,
-): Effect.Effect<void> =>
-  fs
-    .remove(target, { force: true })
-    .pipe(
-      Effect.catch((error: PlatformError.PlatformError) =>
-        Effect.logWarning(`Failed to unlink temp file ${target}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
-      ),
-    );
-
 /**
  * File names use a per-side random ID so reusing a shared directory across
  * concurrent requests cannot collide.
@@ -96,21 +68,18 @@ const removeTempFile = (
 export const writeApprovalTempFiles = Effect.fn('writeApprovalTempFiles')(
   function* (
     input: WriteApprovalTempFilesInput,
-  ): Effect.fn.Return<
-    ApprovalTempFiles,
-    ApprovalTempWriteFailed,
-    FileSystem.FileSystem
-  > {
+  ): Effect.fn.Return<ApprovalTempFiles, HostFailed, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
     const { directory, targetPath, originalContent, proposedContent } = input;
     const ext = path.extname(targetPath) || '.txt';
     const originalPath = path.join(directory, `${randomUUID()}-original${ext}`);
     const proposedPath = path.join(directory, `${randomUUID()}-proposed${ext}`);
 
-    const cleanup = Effect.all(
-      [removeTempFile(fs, originalPath), removeTempFile(fs, proposedPath)],
-      { concurrency: 'unbounded', discard: true },
-    );
+    const cleanup = removeBestEffort(
+      fs,
+      [originalPath, proposedPath],
+      'temp file',
+    ).pipe(Effect.asVoid, withLogChannel(CHANNEL));
     // Both sides start together and the first failure fails the stage, as the
     // `Promise.all` here did; a staged pair nobody can read is not a partial
     // success to salvage, so the side that was written is removed with it.

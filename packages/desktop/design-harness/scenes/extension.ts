@@ -7,16 +7,14 @@ import { html, type TemplateResult } from 'lit';
 
 import {
   AgentConfigSchema,
-  emptyRunEndOutput,
   MESSAGE_TYPES,
   RunIdSchema,
-} from '@shared/schemas';
-import {
-  emptySessionView,
+  type ApprovalGrants,
   type SessionView,
-} from '@shared/session/sessionView';
+} from '@texra-ai/harness/schemas';
 import {
   buildScenario,
+  emptyView,
   CHILD,
   fanOutView,
   viewOf,
@@ -54,6 +52,12 @@ const PROJECT = {
   name: 'LDT-Lean-Paper',
 };
 
+/** A run that skips no approval, its own or inherited. */
+const NO_GRANTS: ApprovalGrants = Object.freeze({
+  own: Object.freeze({}),
+  goal: Object.freeze([]),
+});
+
 function host(): HostSnapshot {
   return {
     ...emptyHostSnapshot(PROJECT),
@@ -63,18 +67,20 @@ function host(): HostSnapshot {
       { value: 'review', label: 'review' },
     ],
     modelOptions: [
-      { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
-      { value: 'gpt-5.6', label: 'GPT 5.6' },
-      { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
-    ],
-    teamOptions: [
       {
-        value: 'review-team',
-        label: 'Review team',
-        source: 'built-in',
-        icon: 'users',
-        description: 'Scout, review, verify.',
-        unavailableMembers: [],
+        value: 'gemini-3.8-flash',
+        label: 'Gemini 3.8 Flash',
+        availability: 'provider-key',
+      },
+      {
+        value: 'gpt-5.6',
+        label: 'GPT 5.6',
+        availability: 'provider-key',
+      },
+      {
+        value: 'claude-sonnet-5-5',
+        label: 'Sonnet 5.5',
+        availability: 'provider-key',
       },
     ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
@@ -171,7 +177,7 @@ function firstRun(
   onboarding: HostSnapshot['onboarding'],
   missingTools: MissingTool[] = [LATEXINDENT],
 ): TemplateResult {
-  const view = emptySessionView(PROJECT.key);
+  const view = emptyView(PROJECT.key);
   const base = host();
   return sidebar(view, surface(view, { kind: 'selectNew' }), {
     ...base,
@@ -234,6 +240,7 @@ function interruptedTasksView(): SessionView {
       parent: null,
       provenance: null,
       takesFollowUps: true,
+      grants: NO_GRANTS,
     });
     log.emit(id, at, { type: 'run.activate' });
     log.emit(id, at + 1, {
@@ -250,13 +257,15 @@ function interruptedTasksView(): SessionView {
       parent: log.parent(REVIEW_TASK),
       provenance: null,
       takesFollowUps: true,
+      worktree: null,
+      grants: NO_GRANTS,
     });
     log.emit(id, T.childProgress, { type: 'run.activate' });
   }
   log.emit(referees[0], T.grandchildDone, {
     type: 'run.end',
     outcome: 'completed',
-    output: emptyRunEndOutput(),
+    output: { response: '', files: [] },
   });
   return viewOf([
     ...log.events.map(tail),
@@ -288,6 +297,7 @@ function forkView(): SessionView {
       parent: null,
       provenance,
       takesFollowUps: true,
+      grants: NO_GRANTS,
     });
     log.emit(id, at, { type: 'run.activate' });
   };
@@ -325,7 +335,7 @@ function forkView(): SessionView {
   log.emit(FORK_SOURCE, T.child + 22_000, {
     type: 'run.end',
     outcome: 'completed',
-    output: emptyRunEndOutput(),
+    output: { response: '', files: [] },
   });
   start(FORK, T.childDone, {
     kind: 'fork',
@@ -362,7 +372,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'ext-no-credential': () => firstRun('needs-credential'),
   // A credential that worked stopped working: the banner, not the card.
   'ext-credential-lost': () => {
-    const view = emptySessionView(PROJECT.key);
+    const view = emptyView(PROJECT.key);
     const base = host();
     return sidebar(view, surface(view, { kind: 'selectNew' }), {
       ...base,
@@ -532,8 +542,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           runId: CHILD,
           task: true,
           agent: 'edit',
-          agentSource: 'inline',
-          persona: { name: 'edit' },
+          agentSource: { kind: 'inline', persona: {} },
           model: 'gemini-3.8-flash',
           instruction: 'Fix the typos and notation slips in Section 2.',
           memories: [],
@@ -597,6 +606,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       parent: null,
       provenance: null,
       takesFollowUps: false,
+      grants: NO_GRANTS,
     });
     log.emit(ROOT, T.root, {
       type: 'run.config',

@@ -20,7 +20,9 @@
  * record is released as it exits. It never starts at login: a client starts it detached when none answers.
  * Its projects are its own (one session per project, opened on demand over
  * that project's own roots, as the desktop opens its folders), and it
- * closes every session the process opened before its socket closes. Every
+ * closes every session the process opened, and then every project's roots
+ * (its hold on the project's store), before its socket closes: the socket
+ * closing is what tells a client the stores are free. Every
  * fact the lifetime follows is a published one (the projects' load, the
  * admissions, the watch streams), never a poll.
  */
@@ -45,14 +47,14 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
 import { type LocalSession, Sessions } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
+import { canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
 import {
+  withLogChannel,
   AppState,
   GlobalValues,
-  type ProcessServices,
   StateStores,
-} from '@texra-ai/harness/host';
-import { canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   openLocalSession,
@@ -319,9 +321,15 @@ export const serve = Effect.fn('server.serve')(function* (
       cause: new Error(WINDOWS_UNSUPPORTED),
     });
   const fs = yield* FileSystem.FileSystem;
-  // Opened first, so the projects close last, after the socket and the
-  // record.
-  const projects = yield* openProjects(options.storageRoot, options.idleAfter);
+  // In a scope of their own, which the exit below closes before the socket:
+  // a client takes the socket's close to mean the service holds no project
+  // store any more (`stopService`), and a store is held exclusively. A run
+  // that fails instead closes them with its scope, after the socket.
+  const projectsScope = yield* Scope.fork(yield* Effect.scope);
+  const projects = yield* openProjects(
+    options.storageRoot,
+    options.idleAfter,
+  ).pipe(Scope.provide(projectsScope));
   const paths = servicePaths(options.storageRoot);
   // This service's own socket: a retired one that exits later can only
   // remove its own file, never this one's.
@@ -507,5 +515,7 @@ export const serve = Effect.fn('server.serve')(function* (
       ),
     ),
   );
+  // Each project's roots, and with them the last hold on its store.
+  yield* Scope.close(projectsScope, Exit.void);
   return exit;
 }, Effect.scoped);

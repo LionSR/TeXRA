@@ -60,7 +60,7 @@ it:
       state: 'warn',
       name: 'LaTeX latexdiff',
       message: 'latexdiff was not found on PATH.',
-      hint: 'Install latexdiff or a TeX distribution that provides it.',
+      hint: 'Install latexdiff: sudo apt-get install -y latexdiff',
     },
   ]"
 />
@@ -147,7 +147,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **Verify API keys**:
    - VS Code extension: open **Settings → Models → API keys** and re-enter the key for the affected provider
-   - CLI: set the provider's API-key environment variable (or connect a provider subscription with `texra auth chatgpt login`)
+   - CLI: run `texra setup` to add a provider API key, or set the provider's API-key environment variable (or connect a provider subscription with `texra auth chatgpt login`)
 
 2. **Check API key validity**:
    - Verify your API keys are active in the provider dashboards
@@ -180,14 +180,14 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 ### Timeouts, context limits, or weak results
 
 - **Rate limits and quota**: Check your provider dashboard if requests fail with quota or billing errors.
-- **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs or raise the model's max output tokens.
+- **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs.
 - **Slow turnaround**: Programs run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or use an interactive chat agent instead.
 - **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). An agent can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
 
 ### Missing or truncated output files
 
 1. **Locate the run folder**:
-   - In VS Code, check **Generated files** in the ProgressBoard or choose **Open task folder** (<wa-icon library="texra" name="folder-open"></wa-icon>) from the task's `⋯` menu to open `executions/<run-id>/`.
+   - In VS Code, check **Generated files** in the Tasks view or choose **Open task folder** (<wa-icon library="texra" name="folder-open"></wa-icon>) from the task's `⋯` menu to open `executions/<run-id>/`.
    - Each revision writes its extracted file under its input filename (e.g., `r0/draft.tex`, `r1/draft.tex`), alongside the raw model response `r0/output.xml`.
 2. **Repair malformed XML**:
    - Programs wrap their output in `<documents><document name="...">...</document></documents>`.
@@ -226,16 +226,16 @@ memory` error.
 
 ## Debugging tips
 
-### Using ProgressBoard
+### Using the Tasks view
 
-The ProgressBoard is your main debugging tool in VS Code. Read the [ProgressBoard guide](./progress-board.md) for a full walkthrough.
+The Tasks view is your main debugging tool in VS Code. Read the [Tasks view guide](./progress-board.md) for a full walkthrough.
 
-1. **Open the ProgressBoard**: Select the TeXRA icon in the Secondary Side Bar and click **Tasks**, or run **TeXRA: Show Tasks** from the Command Palette.
+1. **Open the Tasks view**: Select the TeXRA icon in the Secondary Side Bar and click **Tasks**, or run **TeXRA: Show Tasks** from the Command Palette.
 2. **Inspect logs**: Entries are color-coded by severity (green for info/success, yellow for warnings, red for errors) and expand to show nested tool calls and model responses:
 
 <ProgressLogHero />
 
-<p class="hero-caption">ProgressBoard color-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
+<p class="hero-caption">The Tasks view color-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
 
 3. **Copy diagnostics**: Select `⋯` → **Copy diagnostics** on a task header to copy the task ID, model, status, output paths, and any compile errors for a bug report.
 

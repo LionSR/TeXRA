@@ -66,6 +66,18 @@ break or lose their response id and can never be observed or cancelled. This is
 the owner's call; land it as its own commit under a "Needs your eye" line once
 confirmed.
 
+Checked on 2026-11-19 against the openai 7.60.0 declarations: a non-streamed
+create returns a `Response` whose `id`, `model` and `status` are the three
+facts the acceptance reads, so the decode would take `ResponseSchema`, not
+`ResponseEventSchema`. What the declarations do not say is whether a response
+created without `stream` can afterwards be observed with
+`responses.retrieve(id, { stream: true })`, which is how `observe` reads every
+background turn. That is the fact a live capture has to settle; if it cannot,
+`observe` would need a polling path, which is larger than the block this
+deletes. The discounted completion windows
+(`.agents/docs/proposed/feature/2026-11-18-openai-cost-windows-and-cache-lifetime.md`)
+need the same answer, so one capture decides both.
+
 The refuted alternative — routing the submit through `sdkStream |> take(1)` —
 would flip the deliberate finalizer ordering and need a banned ordering knob, so
 it is not pursued.

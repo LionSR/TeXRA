@@ -76,7 +76,8 @@ the name read where it is shown (two readers). Small; held back only for
 size.
 
 Landed 2026-11-17: `SessionMeta.team: { id, name }`, read by `readCliTeam`;
-a team whose preset is gone shows by its id.
+a team whose preset is gone shows by its id. The field went the same day,
+with teams themselves.
 
 ## 5. `Surface.workbench` is stored untyped and decoded on every read
 
@@ -117,6 +118,9 @@ the readers that needed the stated texts read them from the log
   `ModelFailure` route branch
   (`packages/harness/src/shared/schemas/errors.ts`), joined by a
   field-by-field copy.
+  Landed 2026-11-16 (#14981): `RouteFailureFieldsSchema` in `errors.ts`
+  states the fields once, and `RouteUnavailable` and the `ModelFailure` route
+  branch both spread it.
 
 ## Needs the owner's decision
 
@@ -124,7 +128,14 @@ the readers that needed the stated texts read them from the log
   (`packages/llm/src/turn.ts`): each belongs to one protocol, a filter enforces
   it, and nothing reads their contents. They are stored in every
   `model.message` response, so deleting them is a row version bump.
+  Landed 2026-11-17 (#15017, confirmed 2026-11-19): both fields, their
+  codec producers and the stored-turn schema fields are gone
+  (`model.message` v21).
 - `AgentConfig`'s `agent`, `agentSource` and `persona`
   (`packages/harness/src/shared/schemas/agentConfig.ts`) are a union written
   as optional fields plus a filter, with the name stored twice. Stored on
   `run.config`; about 75 sites.
+  Landed 2026-11-18: `agentSource` is one union, `{ kind }` for a catalog
+  source or `{ kind: 'inline', persona }` with the persona unnamed (it is
+  `agent`'s); no `persona` field and no filter clause. `run.config` v10 and
+  `request.opened` v15 (proposals carry the same field).

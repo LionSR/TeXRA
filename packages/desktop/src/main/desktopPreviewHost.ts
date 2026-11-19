@@ -1,13 +1,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import {
-  Effect,
-  FileSystem,
-  type Path,
-  type PlatformError,
-  Schema,
-} from 'effect';
+import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
 import {
   type ProcessRuntime,
@@ -17,7 +11,10 @@ import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { HostFailed } from '@texra/hosts/uiHosts';
-import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
+import type {
+  BuildDisplayFn,
+  DisplayCompileFailed,
+} from '@texra/controllers/approval/latexPreview';
 
 import { DESKTOP_PDF_COMMANDS } from '../shared/desktopPdfMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
@@ -43,8 +40,9 @@ interface DesktopPreviewHost {
   /** Open a URL in the default browser. The shell's rejection is
    *  {@link HostFailed}; the caller presents it. */
   openExternal(url: string): Effect.Effect<void, HostFailed>;
-  /** Open a workspace file in the OS default application. */
-  openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
+  /** Open a workspace file in the OS default application; a file that is
+   *  not there, or the shell's refusal, is {@link HostFailed}. */
+  openPath(filePath: string): Effect.Effect<void, HostFailed>;
   /**
    * The build-and-show preview of one open project: a LaTeX source compiles
    * against `roots` (its workspace, its LaTeX settings) and its PDF opens in
@@ -61,34 +59,31 @@ interface DesktopPreviewHostOptions {
   runtime: ProcessRuntime;
 }
 
-/**
- * A preview step that could not run, which its caller presents. The message
- * is the whole sentence the user reads, never a prefix over another one.
- */
-export class PreviewUnavailable extends Schema.TaggedError<PreviewUnavailable>()(
-  'PreviewUnavailable',
-  {
-    message: Schema.String,
-  },
-) {}
-
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,
 ): DesktopPreviewHost {
   /** The builds this host has shown: each tab reload names the newest. */
   let builds = 0;
-  const fail = (message: string): Effect.Effect<never, PreviewUnavailable> =>
-    Effect.fail(new PreviewUnavailable({ message }));
+  /** `member`'s failure in a sentence of its own. The sentence already
+   *  says what went wrong, and the cause would add the system error's
+   *  words to it, so none is kept. */
+  const fail = (
+    member: string,
+    message: string,
+  ): Effect.Effect<never, HostFailed> =>
+    Effect.fail(new HostFailed({ member, message, cause: undefined }));
 
   function ensurePathExists(
+    member: string,
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
+  ): Effect.Effect<void, HostFailed, FileSystem.FileSystem> {
     return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
+          member,
           meansAbsent(error)
             ? `File not found: ${filePath}`
-            : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
+            : `Cannot access file ${filePath}: ${toErrorMessage(error)}`,
         ),
       ),
     );
@@ -96,8 +91,8 @@ export function createDesktopPreviewHost(
 
   const openPathProgram = Effect.fn('openPathProgram')(function* (
     filePath: string,
-  ): Effect.fn.Return<void, PreviewUnavailable, FileSystem.FileSystem> {
-    yield* ensurePathExists(filePath);
+  ): Effect.fn.Return<void, HostFailed, FileSystem.FileSystem> {
+    yield* ensurePathExists('openPath', filePath);
 
     const shellError = yield* Effect.tryPromise({
       try: () => options.shell.openPath(filePath),
@@ -105,7 +100,10 @@ export function createDesktopPreviewHost(
     }).pipe(Effect.catch((message) => Effect.succeed(message)));
 
     if (shellError) {
-      yield* fail(`Failed to open file ${filePath}: ${shellError}`);
+      return yield* fail(
+        'openPath',
+        `Failed to open file ${filePath}: ${shellError}`,
+      );
     }
   });
 
@@ -125,11 +123,11 @@ export function createDesktopPreviewHost(
     fileLocation: FileLocation,
   ): Effect.fn.Return<
     void,
-    PreviewUnavailable,
+    HostFailed | DisplayCompileFailed,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     const sourcePath = fileLocation.absolutePath;
-    yield* ensurePathExists(sourcePath);
+    yield* ensurePathExists('openBuildDisplay', sourcePath);
 
     if (!isLatexFile(sourcePath)) {
       yield* openPathProgram(sourcePath);
@@ -146,8 +144,6 @@ export function createDesktopPreviewHost(
       roots,
       fileLocation,
       path.dirname(sourcePath),
-    ).pipe(
-      Effect.catchTag('DisplayCompileFailed', (failed) => fail(failed.message)),
     );
 
     // A successful build names a PDF on disk. Every build gets its own

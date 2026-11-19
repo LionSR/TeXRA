@@ -30,6 +30,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 
 // Local imports - this module's neighbours
 import type { AgentEntry } from './agentEntry';
+import { AgentScanError } from './agentYamlScanner';
 
 /** A subagent's frontmatter; `tools` is a comma-separated list or a list. */
 const SubagentFrontmatterSchema = Schema.Struct({
@@ -49,23 +50,37 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   const content = yield* readNormalizedFile(
     yield* FileSystem.FileSystem,
     file,
-  ).pipe(Effect.mapError((error) => new Error(error.message)));
+  ).pipe(
+    Effect.mapError(
+      (error) =>
+        new AgentScanError({
+          path: file,
+          message: error.message,
+          cause: error,
+        }),
+    ),
+  );
   const split = splitFrontmatterFence(content);
   if (split.kind !== 'ok')
-    return yield* Effect.fail(
-      new Error(`${file} must start with YAML frontmatter (---).`),
-    );
+    return yield* new AgentScanError({
+      path: file,
+      message: `${file} must start with YAML frontmatter (---).`,
+    });
   const parsed = Result.flatMap(
     safeParseYaml(split.frontmatterText),
     Schema.decodeUnknownResult(SubagentFrontmatterSchema),
   );
   if (Result.isFailure(parsed))
-    return yield* Effect.fail(
-      new Error(`${file}: ${toErrorMessage(parsed.failure)}`),
-    );
+    return yield* new AgentScanError({
+      path: file,
+      message: `${file}: ${toErrorMessage(parsed.failure)}`,
+    });
   const systemPrompt = split.body.trim();
   if (!systemPrompt)
-    return yield* Effect.fail(new Error(`${file} has no system prompt.`));
+    return yield* new AgentScanError({
+      path: file,
+      message: `${file} has no system prompt.`,
+    });
   const declared =
     parsed.success.tools === undefined
       ? undefined
@@ -84,11 +99,10 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     declared.length > 0 &&
     mapped.every((t) => t === undefined)
   )
-    return yield* Effect.fail(
-      new Error(
-        `${file} names only tools this build does not have (${declared.join(', ')}).`,
-      ),
-    );
+    return yield* new AgentScanError({
+      path: file,
+      message: `${file} names only tools this build does not have (${declared.join(', ')}).`,
+    });
   // `undefined` when it names none and inherits them (`AgentRun`).
   const tools =
     declared === undefined || declared.length === 0

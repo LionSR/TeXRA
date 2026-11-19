@@ -25,9 +25,8 @@ import {
   type HookOutcomePayload,
   type RefusalDecision,
   type RequestPayload,
-  RequestPayloadSchema,
   type RunId,
-  toJsonValue,
+  ToolError,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
@@ -215,7 +214,10 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // becoming a defect.
   const targets = yield* Effect.try({
     try: () => guard?.writes?.(decoded) ?? [],
-    catch: ensureError,
+    catch: (cause) =>
+      cause instanceof ToolError
+        ? cause
+        : new ToolError(ensureError(cause).message, { cause }),
   });
   for (const target of targets) {
     const path = yield* resolveToolPath(call.env, target);
@@ -348,15 +350,6 @@ export const callRequests = (call: {
           })),
         );
       }),
-    post: (request) =>
-      Effect.suspend(() =>
-        openRequest(
-          asker,
-          // A plugin's data as the JSON its row stores; one that is not
-          // JSON is a defect of the plugin.
-          Schema.decodeUnknownSync(RequestPayloadSchema)(toJsonValue(request)),
-        ),
-      ).pipe(Effect.provide(session), Effect.asVoid),
     present: interactions.emit,
   };
 };

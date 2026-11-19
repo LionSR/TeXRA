@@ -4,8 +4,9 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
 import { findBuildDirectories } from '@housekeeping/buildDirectories';
-import { rootedFsLayer } from '@test/support/fsTestUtils';
+import { nodePlatformLayer, rootedFsLayer } from '@test/support/fsTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 
 describe('findBuildDirectories', () => {
@@ -17,6 +18,10 @@ describe('findBuildDirectories', () => {
         yield* Effect.promise(async () => {
           await writeFile(path.join(workspace, 'build'), '#!/bin/sh\n');
           await mkdir(path.join(workspace, 'paper', 'build'), {
+            recursive: true,
+          });
+          // A managed directory name compares case-insensitively.
+          await mkdir(path.join(workspace, 'thesis', 'Build'), {
             recursive: true,
           });
         });
@@ -31,7 +36,36 @@ describe('findBuildDirectories', () => {
           ),
         );
 
-        expect(found).toEqual(['paper/build']);
+        expect(found).toEqual(['paper/build', 'thesis/Build']);
+      }),
+    ),
+  );
+});
+
+describe('collectFilesFromPatterns', () => {
+  // A folder whose name only contains "build" is not the build folder: its
+  // own `build/` holds the artifacts.
+  it.live('searches the build directory of a folder named like one', () =>
+    withTempDirEffect('texra-artifact-files-', (workspace) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(async () => {
+          await mkdir(path.join(workspace, 'rebuild', 'build'), {
+            recursive: true,
+          });
+          await writeFile(
+            path.join(workspace, 'rebuild', 'build', 'paper.aux'),
+            '',
+          );
+        });
+
+        const found = yield* collectFilesFromPatterns(
+          workspace,
+          'rebuild',
+          ['paper'],
+          ['.aux'],
+        ).pipe(Effect.provide(nodePlatformLayer));
+
+        expect([...found]).toEqual(['rebuild/build/paper.aux']);
       }),
     ),
   );

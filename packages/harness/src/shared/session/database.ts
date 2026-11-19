@@ -60,14 +60,13 @@ export type AggregateState = typeof AggregateStateSchema.Type;
  *  SQLite error that says why (`database is locked`), its reason's cause,
  *  which `toErrorMessage` reads. */
 const storeFailure = { path: Schema.String, cause: Schema.Defect() };
-const storeFailureMessage = (cause: unknown): string => toErrorMessage(cause);
 
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Schema.TaggedError<DatabaseOpenFailed>()(
   'DatabaseOpenFailed',
   storeFailure,
 ) {
-  override readonly message = storeFailureMessage(this.cause);
+  override readonly message = toErrorMessage(this.cause);
 }
 
 /** A batch was rejected whole: no member or sequence moved. */
@@ -75,7 +74,7 @@ export class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>
   'DatabaseWriteFailed',
   storeFailure,
 ) {
-  override readonly message = storeFailureMessage(this.cause);
+  override readonly message = toErrorMessage(this.cause);
 }
 
 /** A batch member targets an aggregate that is closed (deleted) or was
@@ -101,7 +100,7 @@ export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()
   'DatabaseReadFailed',
   storeFailure,
 ) {
-  override readonly message = storeFailureMessage(this.cause);
+  override readonly message = toErrorMessage(this.cause);
 }
 
 /** The strings a blob read returns, by digest: total over the digests it
@@ -180,7 +179,9 @@ export interface CurrentValues {
   /**
    * Emits as subscribed, then after each value write, by this process or
    * (on the global store) another, that changed one of `keys`' values. A
-   * read that fails is logged and retried, so no change is missed.
+   * read of them that fails is logged and retried for about a minute, then
+   * emits as a change would: no change is missed, and the reader's own read
+   * meets the failure.
    */
   readonly changes: (
     family: Pick<ValueFamily<unknown>, 'name'>,
@@ -261,7 +262,7 @@ export class Database extends Context.Service<
     readonly readRunRecord: (
       id: AggregateId,
     ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
-    /** The project's own current values. */
+    /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
     /** One aggregate's rows of `types` from `fromSeq` (through `toSeq`, a
      *  fork's cut), read through the `(aggregate, type, seq)` index in seq
@@ -324,8 +325,8 @@ export class Database extends Context.Service<
 >()('@texra-ai/harness/session/Database') {}
 
 /** The process's one handle on the global storage root, held for the process
- *  runtime's life: every application record of that root (settings, inquiry
- *  threads, the update check, input history, remembered projects) goes through
+ *  runtime's life: every application record of that root (settings, the
+ *  update check, input history, remembered projects) goes through
  *  it, so its `data_version` poll is forked once and no single-row read opens
  *  a connection. Current values and input history only: no event rows. */
 export class GlobalDatabase extends Context.Service<

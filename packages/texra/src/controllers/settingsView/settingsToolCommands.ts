@@ -6,8 +6,8 @@
  */
 import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
 
-import { ToolAvailability, ToolCatalog } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { ToolAvailability } from '@texra-ai/harness/host';
+import { withLogChannel, ToolCatalog } from '@texra-ai/harness/plugins';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
@@ -21,6 +21,7 @@ import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/sett
 
 import {
   SETTINGS_LOG_CHANNEL,
+  SettingsRequestFailed,
   hostStatePage,
   type SettingsHostBindings,
   type SettingsPresentation,
@@ -42,7 +43,9 @@ export function settingsToolCommands(ports: {
   // The page shows no editor control on a host without one.
   const requireEditor = editor
     ? Effect.succeed(editor)
-    : Effect.fail(new Error('This host has no code editor.'));
+    : Effect.fail(
+        new SettingsRequestFailed({ message: 'This host has no code editor.' }),
+      );
   /** Probe this workspace's tools again; the rows follow what it finds. */
   const refresh = Effect.flatMap(ToolAvailability, (availability) =>
     availability.refresh(roots),
@@ -135,9 +138,9 @@ export function settingsToolCommands(ports: {
         (action) =>
           action.kind === 'none'
             ? Effect.fail(
-                new Error(
-                  `No ${kind} command for tool "${toolId}" (${action.reason})`,
-                ),
+                new SettingsRequestFailed({
+                  message: `No ${kind} command for tool "${toolId}" (${action.reason})`,
+                }),
               )
             : bindings.runInTerminal(action.name, action.command),
       ),
@@ -145,7 +148,9 @@ export function settingsToolCommands(ports: {
       isAllowedLatexInstallCommand(installCommand)
         ? bindings.runInTerminal('TeXRA Install', installCommand)
         : Effect.fail(
-            new Error(`Rejected unknown install command: ${installCommand}`),
+            new SettingsRequestFailed({
+              message: `Rejected unknown install command: ${installCommand}`,
+            }),
           ),
     // The rows follow the results the re-probe publishes.
     recheckToolStatus: () => refresh,

@@ -8,18 +8,17 @@ import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Effect } from 'effect';
 
+import { ToolCatalog } from '@texra-ai/harness/plugins';
 import {
   InstalledPlugins,
   ToolAvailability,
   type PluginReview,
 } from '@texra-ai/harness/host';
-import { setCliToolEnabled } from '@cli/runtime/tools';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   PLUGINS_PAGE,
-  PLUGINS_TUI,
   pluginRowKey,
   pluginRowName,
   pluginRowProblem,
@@ -29,6 +28,8 @@ import {
   pluginRowTrust,
   pluginRowUsedBy,
 } from '@ui/copy/plugins';
+import { PLUGINS_TUI } from '../commands/pluginsCopy';
+import { appendLocalNotice } from '../state/transcript';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -77,9 +78,10 @@ export function PluginsListForm(
     });
 
   const toggle = (row: PluginRow) => {
+    // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
     if (row.kind === 'texra')
-      return setCliToolEnabled(row.item.id, row.item.enabled === false).pipe(
-        Effect.asVoid,
+      return Effect.flatMap(ToolCatalog, (catalog) =>
+        catalog.setEnabled(row.item.id, row.item.switch === 'off'),
       );
     if (row.kind === 'installed')
       // On and trusted switches off; on but changed since it was trusted
@@ -87,7 +89,10 @@ export function PluginsListForm(
       return row.plugin.enabled && row.plugin.trusted
         ? InstalledPlugins.disable(row.plugin.name, roots)
         : InstalledPlugins.enable(row.plugin.name, roots, confirmTrust).pipe(
-            Effect.asVoid,
+            Effect.map((outcome) => {
+              if (outcome === 'declined')
+                appendLocalNotice(PLUGINS_PAGE.declined(row.plugin.name));
+            }),
           );
     return Effect.void;
   };
@@ -102,10 +107,14 @@ export function PluginsListForm(
 
   return (
     <AsyncListForm<Effect.Success<ReturnType<typeof buildPluginRows>>, string>
-      title={pending ? PLUGINS_TUI.trustTitle(pending.review.name) : '/plugins'}
+      title={
+        pending
+          ? PLUGINS_TUI.trustTitle(pending.review.name, pending.review.version)
+          : '/plugins'
+      }
       compactTitle={
         pending
-          ? PLUGINS_TUI.trustTitle(pending.review.name)
+          ? PLUGINS_TUI.trustTitle(pending.review.name, pending.review.version)
           : PLUGINS_TUI.compactTitle
       }
       loadingLabel={PLUGINS_PAGE.loading}

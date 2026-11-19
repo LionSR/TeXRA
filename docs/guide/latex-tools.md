@@ -24,7 +24,7 @@ All are configured from **Settings → Plugins** (<wa-icon library="texra" name=
 
 <ToolStatusPanel />
 
-<p class="hero-caption">Settings → Plugins: ready tools show a green check (<strong>Ready</strong>); missing tools show a <strong>Needs setup</strong> badge with <strong>Install in terminal</strong> / <strong>Install</strong> actions. On Settings → LaTeX → Dependencies, missing binaries show a <strong>Not found</strong> tag.</p>
+<p class="hero-caption">Settings → LaTeX → Dependencies: a detected tool shows a green check; a missing one shows a <strong>Not found</strong> tag and a <strong>Setup guide</strong>. On Settings → Plugins, a plugin that is ready reads <strong>Ready</strong> and one that is not reads <strong>Needs setup</strong>, with an <strong>Install in terminal</strong> or <strong>Open install page</strong> action where it has one.</p>
 
 The same status is one command away in any terminal. `texra doctor` probes
 the same toolchain:
@@ -37,7 +37,7 @@ the same toolchain:
       state: 'warn',
       name: 'LaTeX latexindent',
       message: 'latexindent was not found on PATH.',
-      hint: 'Install latexindent or a TeX distribution that provides it.',
+      hint: 'Install latexindent: sudo apt-get install -y texlive-extra-utils (requires Perl).',
     },
   ]"
 />
@@ -84,11 +84,11 @@ The `extract_figures` tool finds `\includegraphics` references and returns the i
 
 ### TikZ figures
 
-The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick) with an install guide. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
+The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick), each with a setup guide when it is missing. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
 
 <TikzDepsHero />
 
-<p class="hero-caption">TikZ extraction needs the compiler and both rasterising binaries present. Here <code>Ghostscript</code> is <strong>Not found</strong>; the <strong>Install guide</strong> link points at the setup steps for the missing dependency.</p>
+<p class="hero-caption">TikZ extraction needs the compiler and, for rasterising, Ghostscript with GraphicsMagick or ImageMagick. Here <strong>Image Processing</strong> is <strong>Not found</strong>; its <strong>Setup guide</strong> holds the install steps.</p>
 
 Read the [TikZ figures guide](./tikz-figures.md) for workflows and the [installation guide](./installation.md) for dependency setup.
 

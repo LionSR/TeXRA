@@ -7,7 +7,10 @@ import { describe, expect } from 'vitest';
 
 import { createWorkspaceLocation } from '@texra-ai/harness/host';
 import { AppSignals } from '@texra-ai/harness/plugins';
-import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
+import {
+  acceptEditedFileReplace,
+  replaceIfUnchanged,
+} from '@latex/acceptedFileTarget';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -37,6 +40,7 @@ describe('acceptEditedFileReplace', () => {
           {
             confirm: () => Effect.succeed(true),
             showInfo: () => Effect.void,
+            replace: replaceIfUnchanged,
           },
         ).pipe(Effect.provide([nodePlatformLayer, AppSignals.layer]));
 
@@ -70,14 +74,19 @@ describe('acceptEditedFileReplace', () => {
           {
             confirm: () => Effect.succeed(true),
             showInfo: () => Effect.void,
+            replace: replaceIfUnchanged,
           },
         ).pipe(Effect.provide([nodePlatformLayer, AppSignals.layer]));
 
         expect(Option.getOrUndefined(accepted)).toBe('new');
         const link = yield* Effect.promise(() => nodeFs.lstat(base));
         expect(link.isSymbolicLink()).toBe(true);
-        const target = yield* Effect.promise(() => nodeFs.stat(shared));
-        expect(target.mode & 0o777).toBe(0o640);
+        // Windows keeps no POSIX mode: `chmod` there only sets the read-only
+        // bit and `stat` reports 0o666 for any writable file.
+        if (process.platform !== 'win32') {
+          const target = yield* Effect.promise(() => nodeFs.stat(shared));
+          expect(target.mode & 0o777).toBe(0o640);
+        }
         expect(
           yield* Effect.promise(() => nodeFs.readFile(shared, 'utf8')),
         ).toBe('new');

@@ -142,8 +142,8 @@ export const RetryRequestSchema = Schema.Struct({
   model: Schema.optional(Schema.String),
   /** The failure as the run recorded it: its verdict, which a host words. */
   failure: ModelFailureSchema,
-  /** Null or absent when the failure offers no credential move. */
-  credentialSwitch: Schema.optional(Schema.NullOr(CredentialSwitchSchema)),
+  /** Null when the failure offers no credential move. */
+  credentialSwitch: Schema.NullOr(CredentialSwitchSchema),
 });
 export type RetryRequest = typeof RetryRequestSchema.Type;
 
@@ -158,7 +158,7 @@ export const AgentProposalSchema = BaseProposalFieldsSchema.mapFields(
   Struct.assign({
     /** Runs a registered program over the files, not a conversation. */
     task: Schema.Boolean,
-    rootUserInstruction: Schema.optional(Schema.NullOr(Schema.String)),
+    rootUserInstruction: Schema.optional(Schema.String),
   }),
 );
 export type AgentProposal = typeof AgentProposalSchema.Type;

@@ -5,7 +5,7 @@
  * embeds the engine. Every window is a client of it; the service owns
  * every task it starts.
  *
- * The payloads are the runtime's own wire schemas (the session bridge's
+ * The payloads are the runtime's own wire schemas (the session channel's
  * `Subscribe` and `EventsFrame`, `RuntimeCommand`, `StartRequestSchema`,
  * `AgentConfig`), used as
  * they are; a procedure's error is the error class the handler fails with,
@@ -29,16 +29,27 @@
  *   deletion, one procedure per member, answered from the service's own
  *   session.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
- *   capabilities to its project's tasks (see `hostCalls.ts`).
+ *   capabilities to its project's tasks, which the service calls over the
+ *   attachment's stream and the window answers (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
  *   reads and writes here rather than opening the project's store itself.
+ * - `file.save` / `file.replace`: a window's write of a project file (the
+ *   editor's save, the accept of a task's output), each a write only while
+ *   the file is as the window read it. The service runs them so they take
+ *   the write lane its tasks' edits take, which is one per process.
  */
 import { hash } from 'node:crypto';
 
 import { type Effect, Schema, Struct } from 'effect';
 import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 
-import { LaunchRefused, type RunRecords } from '@texra-ai/harness';
+import {
+  LaunchRefused,
+  ResumeRefused,
+  RunFailure,
+  ToolsRefused,
+  type RunRecords,
+} from '@texra-ai/harness';
 import {
   AgentConfigSchema,
   AssembleTraceResultSchema,
@@ -48,11 +59,13 @@ import {
   RunResultSchema,
   RunWorkspaceFileSchema,
   OutcomeSchema,
+  Rejected,
   RequestErrorSchema,
   RuntimeCommandSchema,
   SessionViewSchema,
   StartRequestSchema,
   NonNegativeIntSchema,
+  ExportNodeSchema,
 } from '@texra-ai/harness/schemas';
 import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
 import { CommitOrdinalSchema } from '@texra-ai/harness/transcript';
@@ -63,11 +76,11 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
 import {
-  HostAnswerSchema,
   HostCapabilitySchema,
   HostAttachFrameSchema,
+  WindowRpcs,
 } from './hostCalls';
-import { ExportNodeSchema, type ValueFamily } from '@texra-ai/harness/host';
+import type { ValueFamily } from '@texra-ai/harness/plugins';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by
@@ -109,10 +122,10 @@ export type ServiceRecord = typeof ServiceRecordSchema.Type;
 
 /** The storage root's running service: one row of the global root's
  *  current values, read and changed under its write lock. */
-export const TEXRA_SERVICE: ValueFamily<ServiceRecord> = {
+export const TEXRA_SERVICE: ValueFamily<ServiceRecord> = Object.freeze({
   name: 'texra-service',
   schema: ServiceRecordSchema,
-};
+});
 
 /** One top-level task in `tasks.list`. */
 const TaskSummarySchema = Schema.Struct({
@@ -132,20 +145,33 @@ export type TaskSummary = typeof TaskSummarySchema.Type;
 /** The run a `task.start` or `task.resume` reached, and the commit of the
  *  activation it reached (`Run.activation`): a window's handle is for that
  *  activation, whatever later activation the run has by then. */
-const TaskStarted = Schema.Struct({
+export const TaskStarted = Schema.Struct({
   runId: RunIdSchema,
   activation: CommitOrdinalSchema,
 });
 
-/** Why `task.start` or `task.resume` did not reach its run, past a refused
- *  launch (`LaunchRefused`, carried as itself). The service shows it
- *  nowhere: the window that asked presents it. */
+/** Why `task.start` or `task.resume` did not reach its run for a reason of
+ *  the service's own: it is shutting down, or could not open the project.
+ *  The service shows it nowhere: the window that asked presents it. */
 export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   message: Schema.String,
 }) {}
 
-/** What `task.start` and `task.resume` fail with. */
-const TaskStartFailed = Schema.Union([TaskFailed, LaunchRefused]);
+/** What `task.start` fails with: the service's own reason, or what the
+ *  session's start failed with, as the class it is, so a window presents
+ *  it as it would its own session's. */
+const TaskStartFailed = Schema.Union([
+  TaskFailed,
+  LaunchRefused,
+  ToolsRefused,
+  RunFailure,
+]);
+/** What `task.resume` fails with: a start's failures, and the run that
+ *  will not continue. */
+const TaskResumeFailed = Schema.Union([
+  ...TaskStartFailed.members,
+  ResumeRefused,
+]);
 
 /** Why a run's records have no answer: the service could not open the
  *  project, or its store refused the read. */
@@ -184,7 +210,7 @@ export const RUN_RECORDS = Object.freeze({
   readResult: Schema.NullOr(RunResultSchema),
   readWorkspaceFiles: Schema.Array(RunWorkspaceFileSchema),
   readSkills: Schema.Array(Schema.String),
-  readResumable: Schema.Boolean,
+  readContinues: Schema.Boolean,
   /** The run's conversation as every conversation view renders it. */
   readConversation: Schema.Array(ExportNodeSchema),
   /** What the HTML transcript export reads: the run's display rows and its
@@ -230,14 +256,8 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Array(TaskSummarySchema),
   }),
   Rpc.make('task.watch', {
-    // `workspace` names the project; the frames name the session. The
-    // watch is one ordered stream, so it takes no generation.
-    payload: {
-      workspace,
-      subscribe: SubscribeSchema.mapFields(
-        Struct.pick(['debug', 'cursor', 'aggregates']),
-      ),
-    },
+    // `workspace` names the project.
+    payload: { workspace, subscribe: SubscribeSchema },
     success: EventsFrameSchema,
     error: TaskFailed,
     stream: true,
@@ -265,7 +285,7 @@ export const TexraRpcs = RpcGroup.make(
     },
     /** The run that resumed: the asked one, or the parent that owns it. */
     success: TaskStarted,
-    error: TaskStartFailed,
+    error: TaskResumeFailed,
   }),
   /** What the task's activation at `activation` ends with, once it ends:
    *  its stored end (`Run.result`, which fails when none was stored or it
@@ -335,9 +355,39 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Boolean,
     error: ProjectStateFailed,
   }),
+  /** The editor's save of `path` in the project (the `workspaceFile` write,
+   *  `writeWorkspaceFile`): written only while the file still holds `base`,
+   *  what the editor last read; null overwrites whatever is there. */
+  Rpc.make('file.save', {
+    payload: {
+      workspace,
+      path: Schema.String,
+      contents: Schema.String,
+      base: Schema.NullOr(Schema.String),
+    },
+    success: Schema.Struct({
+      kind: Schema.Literals(['done', 'changedOnDisk']),
+    }),
+    error: Rejected,
+  }),
+  /** The accept of a task's output into the file at `target`, an absolute
+   *  path (`replaceIfUnchanged`): replaced only while the file still holds
+   *  `confirmedAgainst`, what the person confirmed against; null is no
+   *  file. Answers whether it was written. */
+  Rpc.make('file.replace', {
+    payload: {
+      target: Schema.String,
+      contents: Schema.String,
+      confirmedAgainst: Schema.NullOr(Schema.String),
+    },
+    success: Schema.Boolean,
+    error: Rejected,
+  }),
   Rpc.make('host.focus', { payload: { attachment: Schema.String } }),
+  /** A window's reply to one of the service's calls on it (`WindowRpcs`),
+   *  as `rpc`'s own message. */
   Rpc.make('host.answer', {
-    payload: { id: Schema.String, answer: HostAnswerSchema },
+    payload: { attachment: Schema.String, message: Schema.Json },
   }),
 );
 
@@ -357,10 +407,17 @@ const shapeOf = (rpc: Rpc.AnyWithProps): string => {
   return digest12(schemas.map((schema) => Schema.toJsonSchemaDocument(schema)));
 };
 
+/** Every procedure's shape: the service's, and the ones a window serves
+ *  it over `host.attach` and `host.answer` (`window.<tag>`), whose messages
+ *  those two carry as JSON. */
 const shapes: Readonly<Record<string, string>> = Object.freeze(
-  Object.fromEntries(
-    [...TexraRpcs.requests].map(([tag, rpc]) => [tag, shapeOf(rpc)]),
-  ),
+  Object.fromEntries([
+    ...[...TexraRpcs.requests].map(([tag, rpc]) => [tag, shapeOf(rpc)]),
+    ...[...WindowRpcs.requests].map(([tag, rpc]) => [
+      `window.${tag}`,
+      shapeOf(rpc),
+    ]),
+  ]),
 );
 
 /**

@@ -19,7 +19,7 @@
  */
 import { Schema, Struct, Tuple } from 'effect';
 
-import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
+import { ApprovalGrantsSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
   aggregateTarget,
@@ -164,7 +164,7 @@ export type RunProvenance = typeof RunProvenanceSchema.Type;
  * Per-run launch facts. Existence fact: a run exists iff its `run.start`
  * exists, once per incarnation, seq 1 of its aggregate; the
  * aggregate's logical id is the run id, so the row carries no second copy of
- * it. `worktree` is absent for a run that executes in the workspace itself
+ * it. `worktree` is null for a run that executes in the workspace itself
  * rather than in a dedicated worktree. `category`
  * and `takesFollowUps` are explicit on every run: the
  * launcher knows them for an agent, a process, and a script alike,
@@ -179,13 +179,15 @@ const RunStartEventSchema = durable('run.start', {
   /** Whether the run takes a message (a person's or a parent's) as its
    *  next cycle: a process run and a headless one-shot root take none. */
   takesFollowUps: Schema.Boolean,
-  worktree: Schema.optional(Schema.NullOr(WorktreeInfoSchema)),
+  worktree: Schema.NullOr(WorktreeInfoSchema),
   /** The launching run with its creation coordinate; null for a root. */
   parent: Schema.NullOr(RunParentSchema),
   /** Null for a run that starts fresh. */
   provenance: Schema.NullOr(RunProvenanceSchema),
-  /** The run's approval policy at launch, from the session's single authority. */
-  approvalPolicy: Schema.optional(Schema.NullOr(ApprovalPolicySnapshotSchema)),
+  /** The run's approval grants at launch, from the session's single
+   *  authority. The name is `grants`, the fact it holds: the project's
+   *  `approvalPolicy` setting is a separate owner. */
+  grants: ApprovalGrantsSchema,
 });
 
 /** The run directories to remove with this lifecycle, derived by the database. */
@@ -233,7 +235,7 @@ const DisplayRowDraftSchema = Schema.Union([
   /** What the run runs with: the newest row's model and `binding` hold. */
   durable('run.config', {
     config: RunRecordFieldsSchema,
-    binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
+    binding: Schema.optional(RunBindingSchema),
   }),
   /**
    * A stop asked of the run, and why: a person's, or the call that
@@ -291,7 +293,7 @@ const DisplayRowDraftSchema = Schema.Union([
     requestId: Schema.NonEmptyString,
     decision: RequestDecisionSchema,
   }),
-  durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
+  durable('approval.policy', { snapshot: ApprovalGrantsSchema }),
   /**
    * The loop's position: `at`, and its coordinates. The one run-history
    * row renderers read: the fold derives the live phase from it (`waiting`
@@ -370,13 +372,13 @@ export type SessionRow = typeof SessionRowSchema.Type;
  */
 export type SessionRowDraft = typeof SessionRowDraftSchema.Type;
 
-/** Aggregate identities introduced by a fact and its declared lifecycle edges. */
+/** Aggregate identities introduced by a fact and its declared lifecycle
+ *  edges ({@link edgesOf}): its own and the parent it names. */
 export function referencedAggregates(event: SessionRow): AggregateId[] {
+  const { parent, reparent = null } = edgesOf(event);
   const ids = [event.aggregateId];
-  if (event.type === 'run.start' && event.parent !== null)
-    ids.push(event.parent.id);
-  if (event.type === 'plugin.fact' && event.parent !== null)
-    ids.push(event.parent);
+  if (parent !== null) ids.push(parent);
+  if (reparent !== null) ids.push(reparent);
   return ids;
 }
 
@@ -385,7 +387,7 @@ export function referencedAggregates(event: SessionRow): AggregateId[] {
  * transaction that appends it: the parent a `run.start` stamps, the
  * aggregate a row hangs its target under (a plugin's aggregate under its
  * `parent` run, or none), and the closure a deletion marker makes.
- * {@link referencedAggregates} reads the same edges off committed rows.
+ * {@link referencedAggregates} reads them off committed rows too.
  * Every kind has a case, so a new kind does not compile until its edges are
  * decided here.
  */

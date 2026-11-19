@@ -15,15 +15,17 @@ import {
 } from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
 import type { Shell } from '@desktop/renderer/shell';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import {
-  emptySessionView,
+  MESSAGE_TYPES,
+  type RunId,
+  type RunView,
   type SessionView,
-} from '@shared/session/sessionView';
+} from '@texra-ai/harness/schemas';
 import {
   BOARD_NOW,
   buildScenario,
   CHILD,
+  emptyView,
   fanOutView,
   viewOf,
   local,
@@ -33,7 +35,6 @@ import {
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { RunView } from '@texra-ai/harness/schemas';
 
 // ── fixtures: three projects, three folded views ────────────────────────────
 
@@ -213,7 +214,7 @@ const transcriptBody = (project: RailProject, run: RunView) =>
       .tools=${{ icons: {}, terminalOutput: [] }}
     ></log-list>`;
 
-const pdfPane = createPdfPane();
+const pdfPane = createPdfPane({ openExternally: () => undefined });
 const tab = (
   kind: WorkbenchTab['kind'],
   title: string,
@@ -289,7 +290,7 @@ function sceneDesktopProjects(): TemplateResult {
   ];
   const run = lp.view.runs.get(CHILD);
   const tabs = [
-    tab('pdf', 'main.pdf', '/paper/main.pdf'),
+    tab('pdf', 'main.pdf', 'file:///paper/main.pdf'),
     tab('editor', 'section2.tex', '/paper/section2.tex'),
     tab('terminal', 'Terminal', '/paper'),
   ];
@@ -297,7 +298,7 @@ function sceneDesktopProjects(): TemplateResult {
     '288px minmax(0,1fr) 440px',
     rail(projects, shellOf('LP', ['LP', 'CT', 'TN'])),
     conversationPane(lp, run, run ? transcriptBody(lp, run) : nothing),
-    workbench(lp.display.key, tabs, tabs[0].id, pdfPane.frameFor(tabs[0])),
+    workbench(lp.display.key, tabs, tabs[0].id, pdfPane.elementFor(tabs[0])),
   );
 }
 
@@ -319,7 +320,7 @@ function sceneDesktopOneProject(): TemplateResult {
  *  the other projects keep their badges. The running project's row is folded so
  *  its badge shows beside the waiting project's amber one. */
 function sceneDesktopEmptyProject(): TemplateResult {
-  const co = project(CO, emptySessionView(CO.key));
+  const co = project(CO, emptyView(CO.key));
   const projects = [
     co,
     project(CT, runningOnlyView()),

@@ -65,16 +65,12 @@ export class AgentCatalogLoadError extends Schema.TaggedError<AgentCatalogLoadEr
 ) {}
 
 /**
- * The two state slots a workspace's agent list resolves against: the
- * repository's selection and the cross-workspace defaults. Every read is
- * answered for the workspace whose slots the caller hands over, so a process
- * holding several sessions never answers one project's question with another's
- * agent list.
+ * The state slot a workspace's agent list resolves against: the repository's
+ * selection. Every read is answered for the workspace whose slot the caller
+ * hands over, so a process holding several sessions never answers one
+ * project's question with another's agent list.
  */
-export type WorkspaceAgentsStores = Pick<
-  WorkspaceRoots,
-  'repoState' | 'globalState'
->;
+export type WorkspaceAgentsStores = Pick<WorkspaceRoots, 'repoState'>;
 
 /**
  * One workspace's agents over the catalog: its selection, the agents it
@@ -147,11 +143,26 @@ export interface AgentCatalogShape {
   readonly pinned: (scope: AgentDelegationScope) => AgentEntry[];
   /** One workspace's agents over this catalog, its stores captured. */
   readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
-  /** Change a custom copy of `entry` (see {@link AgentCustomization}):
+  /** Make a custom copy of `entry` (see {@link AgentCustomization}):
    *  the copy's path. */
   readonly customize: (
     entry: AgentEntry,
     change: AgentCustomization,
+  ) => Effect.Effect<
+    { readonly path: string },
+    | AgentCustomizeRefused
+    | AgentDirectoriesFailed
+    | StateReadFailed
+    | PlatformError.PlatformError
+  >;
+  /**
+   * Keep the custom agent `name` and dismiss its newer-built-in notice: its
+   * copy is re-stamped with the changed bundled version. Refused when the
+   * catalog holds no such custom agent (`noFile`) or its bundled version has
+   * not changed (`current`). The copy's path.
+   */
+  readonly keepCustom: (
+    name: string,
   ) => Effect.Effect<
     { readonly path: string },
     | AgentCustomizeRefused
@@ -205,7 +216,6 @@ interface CatalogState {
   loadFailure: string | undefined;
   /** A source changed and its reload has not begun; cleared as a scan starts. */
   changePending: boolean;
-  readonly teamMembers: AgentDirectories['Service']['teamMembers'];
 }
 
 /** Scan every agent source and publish the result into `state`. */
@@ -343,7 +353,6 @@ export class AgentCatalog extends Context.Service<
         skippedFiles: Object.freeze([]),
         loadFailure: undefined,
         changePending: false,
-        teamMembers: Context.get(services, AgentDirectories).teamMembers,
       };
       // One load at a time: a fiber that arrives while a load runs waits for
       // it, and a failed scan fails only its own caller.
@@ -371,12 +380,9 @@ export class AgentCatalog extends Context.Service<
 
       const workspaceAgents = ({
         repoState,
-        globalState,
       }: WorkspaceAgentsStores): WorkspaceAgents => {
         const selection = new WorkspaceAgentsController<AgentEntry>({
           repoState,
-          globalState,
-          teamMembers: state.teamMembers,
           getAgents: list,
           resolveAgent: get,
         });
@@ -448,6 +454,19 @@ export class AgentCatalog extends Context.Service<
         customizeCopy(entry, change, newerBuiltIn(entry)).pipe(
           Effect.provide(services),
         );
+      const keepCustom = (name: string) => {
+        const entry = state.entries.get(agentKey('custom', agentName(name)));
+        return entry === undefined
+          ? Effect.fail(
+              new AgentCustomizeRefused({
+                reason: 'noFile',
+                message: `${name} has no custom copy.`,
+              }),
+            )
+          : customizeCopy(entry, 'keep', newerBuiltIn(entry)).pipe(
+              Effect.provide(services),
+            );
+      };
 
       return {
         list,
@@ -461,6 +480,7 @@ export class AgentCatalog extends Context.Service<
         pinned: reads.pinned,
         workspaceAgents,
         customize,
+        keepCustom,
       };
     }),
   );

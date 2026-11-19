@@ -8,41 +8,62 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports - export presentation
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
-import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { writeTranscript } from './ChatExportController';
 
 export type TranscriptExportFormat = Parameters<typeof writeTranscript>[1];
 
+/**
+ * A step of the transcript export could not be carried out: the writer's
+ * lazy load, the packaged resources or trace-viewer bundle it needs, or the
+ * trace it assembles. `cause` is the value the failing step produced,
+ * carried unchanged so a host classifies and words it exactly as it would
+ * the bare value. A host's own capabilities (the format pick, the open)
+ * fail with their `HostFailed`.
+ */
+export class TranscriptExportFailed extends Schema.TaggedError<TranscriptExportFailed>()(
+  'TranscriptExportFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
 export type TranscriptExportOpenKind = 'text' | 'pdf' | 'external';
 
-export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
-  {
+/** How every host's format pick is titled and what it asks. */
+export const TRANSCRIPT_EXPORT_PICK = Object.freeze({
+  title: 'Export transcript',
+  prompt: 'Choose a format',
+});
+
+export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = Object.freeze([
+  Object.freeze({
     format: 'html',
     label: 'HTML',
     description: 'Shareable webpage',
-  },
-  {
+  }),
+  Object.freeze({
     format: 'md',
     label: 'Markdown',
     description: 'Plain-text conversation',
-  },
-  {
+  }),
+  Object.freeze({
     format: 'tex',
     label: 'PDF',
     description: 'Formatted via LaTeX',
-  },
+  }),
 ] as const satisfies ReadonlyArray<{
   readonly format: TranscriptExportFormat;
   readonly label: string;
   readonly description: string;
-}>;
+}>);
 
 /** What a host does for a transcript export: ask for a format and open
  *  what was written. */
@@ -50,7 +71,7 @@ export interface TranscriptExportHost {
   /** A cancelled format picker answers `undefined`. */
   readonly pickFormat: Effect.Effect<
     TranscriptExportFormat | undefined,
-    TranscriptExportFailed
+    HostFailed
   >;
   openPath(
     filePath: string,

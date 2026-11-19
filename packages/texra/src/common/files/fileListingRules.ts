@@ -5,10 +5,6 @@ import {
   type ExtensionCategory,
 } from '@texra/common/files/fileTypeUtils';
 
-// The categories a person picks files from; the vocabulary matches
-// DocumentFileTypeSchema ('input' | 'context' | 'media').
-export type ListableFileType = Exclude<ExtensionCategory, 'edited'>;
-
 /**
  * One include/exclude file-filter shape, shared verbatim from category
  * selection through to normalization — `prepareFileFilters` fills these same

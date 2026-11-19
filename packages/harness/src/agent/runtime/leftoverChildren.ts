@@ -9,7 +9,7 @@
  */
 import { Effect } from 'effect';
 
-import { checkpointRefusal } from '@agent/storage/resumability';
+import { checkpointRefusal } from '@agent/storage/continuation';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
@@ -20,7 +20,7 @@ import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 
 import { resumeRun } from './resumeRun';
 import { AgentRun, type RunLaunch } from './run/AgentRun';
-import { Runs } from './runRegistry';
+import { RunRegistry } from './runRegistry';
 
 const CHANNEL = 'leftoverChildren';
 
@@ -67,7 +67,7 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   parent: Pick<RunLaunch, 'runId'>,
   run: RunView,
 ) {
-  if ((yield* Runs).get(run.id) !== undefined) return;
+  if ((yield* RunRegistry).get(run.id) !== undefined) return;
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || facts.end !== null) return;
   if ((yield* owningCall(run.id)) !== null) return;

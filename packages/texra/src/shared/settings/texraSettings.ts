@@ -15,12 +15,12 @@
 
 // Third-party imports
 import { Schema } from 'effect';
+import type { UsageLogEntry } from '@texra-ai/harness/host';
 import {
   decodingDefault,
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   HELPER_MODEL_SETTING,
-  SCRIPT_ONLY_SETTING,
   settingsCatalog,
   type SettingRow,
   type SettingsCatalog,
@@ -76,26 +76,26 @@ const CliModelSchema = Schema.optional(
   Schema.Trim.check(Schema.isMinLength(1)),
 );
 
-export const CLI_AGENT_SETTING = {
+export const CLI_AGENT_SETTING = Object.freeze({
   key: 'agent',
   slot: 'config',
   schema: CliAgentSchema,
   title: 'Default agent',
   description:
     'Agent `texra chat` starts with when neither `--agent` nor `texra.chat.agent` names one.',
-} as const satisfies SettingRow<string | undefined>;
+} as const satisfies SettingRow<string | undefined>);
 
-export const CLI_MODEL_SETTING = {
+export const CLI_MODEL_SETTING = Object.freeze({
   key: 'model',
   slot: 'config',
   schema: CliModelSchema,
   title: 'Default model',
   description:
     'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
-} as const satisfies SettingRow<string | undefined>;
+} as const satisfies SettingRow<string | undefined>);
 
 /** `texra chat`'s overrides of the top-level `agent`/`model` rows. */
-export const CLI_CHAT_SETTING = {
+export const CLI_CHAT_SETTING = Object.freeze({
   key: 'chat',
   slot: 'config',
   schema: Schema.optional(
@@ -106,48 +106,48 @@ export const CLI_CHAT_SETTING = {
     'Agent and model `texra chat` starts with, overriding the top-level defaults.',
 } as const satisfies SettingRow<
   { readonly agent?: string; readonly model?: string } | undefined
->;
+>);
 
 /** `texra run`'s override of the top-level `model` row; its agent is an argument. */
-export const CLI_RUN_SETTING = {
+export const CLI_RUN_SETTING = Object.freeze({
   key: 'run',
   slot: 'config',
   schema: Schema.optional(Schema.Struct({ model: CliModelSchema })),
   title: 'Run defaults',
   description:
     'Model `texra run` starts with, overriding the top-level `texra.model`.',
-} as const satisfies SettingRow<{ readonly model?: string } | undefined>;
+} as const satisfies SettingRow<{ readonly model?: string } | undefined>);
 
-export const CLI_OUTPUT_FORMAT_SETTING = {
+export const CLI_OUTPUT_FORMAT_SETTING = Object.freeze({
   key: 'outputFormat',
   slot: 'config',
   schema: CliOutputFormatSchema,
   title: 'Output format',
   description:
     'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
-} as const satisfies SettingRow<typeof CliOutputFormatSchema.Type>;
+} as const satisfies SettingRow<typeof CliOutputFormatSchema.Type>);
 
-export const AUTO_OPEN_FINAL_SETTING = {
+export const AUTO_OPEN_FINAL_SETTING = Object.freeze({
   key: 'agentOutputs.autoOpenFinal',
   slot: 'config',
   schema: decodingDefault(Schema.Boolean, true),
   title: 'Open the final revision',
   description:
     "When a document task completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
-} as const satisfies SettingRow<boolean>;
+} as const satisfies SettingRow<boolean>);
 
-export const BIB_DEFAULT_PATH_SETTING = {
+export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
   key: 'bib.defaultPath',
   slot: 'config',
   schema: decodingDefault(Schema.String, ''),
   title: 'Default bibliography file',
   description:
     'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string>);
 
 /** The port of Zotero's local endpoints: the Connector API and Better
  *  BibTeX's JSON-RPC. */
-export const ZOTERO_PORT_SETTING = {
+export const ZOTERO_PORT_SETTING = Object.freeze({
   key: 'bib.zoteroPort',
   slot: 'config',
   schema: decodingDefault(
@@ -157,52 +157,52 @@ export const ZOTERO_PORT_SETTING = {
   title: 'Zotero port',
   description:
     'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
-} as const satisfies SettingRow<number>;
+} as const satisfies SettingRow<number>);
 
-export const LATEXINDENT_CONFIG_SETTING = {
+export const LATEXINDENT_CONFIG_SETTING = Object.freeze({
   key: 'latex.latexindentConfig',
   slot: 'config',
   schema: decodingDefault(Schema.String, ''),
   title: 'latexindent configuration file',
   description: 'Path to latexindent configuration file',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string>);
 
-export const TEXFMT_CONFIG_SETTING = {
+export const TEXFMT_CONFIG_SETTING = Object.freeze({
   key: 'latex.texfmtConfig',
   slot: 'config',
   schema: decodingDefault(Schema.String, ''),
   title: 'tex-fmt configuration file',
   description: 'Path to tex-fmt configuration file',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string>);
 
-export const TIKZ_INPUT_DIRECTORY_SETTING = {
+export const TIKZ_INPUT_DIRECTORY_SETTING = Object.freeze({
   key: 'latex.tikzInputDirectory',
   slot: 'config',
   schema: decodingDefault(Schema.String, ''),
   title: 'TikZ input directory',
   description:
     'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string>);
 
-export const INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING = {
+export const INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING = Object.freeze({
   key: 'latex.includeWorkspaceInTexinputs',
   slot: 'config',
   schema: decodingDefault(Schema.Boolean, true),
   title: 'Workspace in TEXINPUTS',
   description:
     'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
-} as const satisfies SettingRow<boolean>;
+} as const satisfies SettingRow<boolean>);
 
-export const TIKZ_TEMPLATE_SETTING = {
+export const TIKZ_TEMPLATE_SETTING = Object.freeze({
   key: 'latex.tikzTemplate',
   slot: 'config',
   schema: decodingDefault(Schema.String, DEFAULT_TIKZ_TEMPLATE),
   title: 'TikZ template',
   description:
     'Template used for generating standalone documents when extracting and compiling TikZ figures',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string>);
 
-export const ENABLED_REPLACEMENTS_SETTING = {
+export const ENABLED_REPLACEMENTS_SETTING = Object.freeze({
   key: 'latex.enabledReplacements',
   slot: 'config',
   schema: decodingDefault(
@@ -213,9 +213,9 @@ export const ENABLED_REPLACEMENTS_SETTING = {
   description: 'Enabled groups of direct LaTeX cleanup replacements.',
 } as const satisfies SettingRow<
   readonly (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number][]
->;
+>);
 
-export const ENABLED_REGEX_REPLACEMENTS_SETTING = {
+export const ENABLED_REGEX_REPLACEMENTS_SETTING = Object.freeze({
   key: 'latex.enabledReplacementsRegex',
   slot: 'config',
   schema: decodingDefault(
@@ -226,39 +226,73 @@ export const ENABLED_REGEX_REPLACEMENTS_SETTING = {
   description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
 } as const satisfies SettingRow<
   readonly (typeof REGEX_REPLACEMENT_CATEGORIES)[number][]
->;
+>);
 
-export const CUSTOM_REGEX_REPLACEMENTS_SETTING = {
+export const CUSTOM_REGEX_REPLACEMENTS_SETTING = Object.freeze({
   key: 'latex.customReplacementsRegex',
   slot: 'config',
   schema: decodingDefault(Schema.Record(Schema.String, Schema.String), {}),
   title: 'Custom pattern replacements',
   description: 'Custom regular-expression replacements.',
-} as const satisfies SettingRow<Readonly<Record<string, string>>>;
+} as const satisfies SettingRow<Readonly<Record<string, string>>>);
 
-export const CUSTOM_REPLACEMENTS_SETTING = {
+export const CUSTOM_REPLACEMENTS_SETTING = Object.freeze({
   key: 'latex.customReplacements',
   slot: 'config',
   schema: decodingDefault(Schema.Record(Schema.String, Schema.String), {}),
   title: 'Custom replacements',
   description: 'Custom direct text replacements.',
-} as const satisfies SettingRow<Readonly<Record<string, string>>>;
+} as const satisfies SettingRow<Readonly<Record<string, string>>>);
+
+/**
+ * What each field of a usage record is, in the words every surface uses, in
+ * the order the sentence lists them. It is total over the record the sender
+ * queues (`UsageLogEntrySchema`): a field added to the wire does not compile
+ * until it is worded here, and a field that leaves the wire leaves the
+ * sentence.
+ */
+const USAGE_RECORD_WORDING = {
+  agentName: 'agent',
+  model: 'model',
+  provider: 'provider API',
+  usageRoute: 'billing route',
+  inputTokens: 'token counts',
+  outputTokens: 'token counts',
+  cachedInputTokens: 'token counts',
+  reasoningTokens: 'token counts',
+  listCost: 'cost at list prices',
+  responseTimeMs: 'response time',
+  timestamp: 'time of the call',
+  streamId: 'task ID',
+  extensionVersion: 'version',
+  editorType: 'host',
+} as const satisfies Record<keyof UsageLogEntry, string>;
+
+/**
+ * What usage logging sends and what it never does: the one statement the
+ * setting, the first-run notice and `texra doctor` show.
+ * The install ID is the request's header, not a field of the record.
+ */
+export const USAGE_LOGGING_SENDS = `TeXRA sends anonymous usage metadata (${[
+  ...new Set(Object.values(USAGE_RECORD_WORDING)),
+].join(
+  ', ',
+)}) with a random install ID and no account. It never sends prompts, document content, file paths or error text.`;
 
 /** The usage-telemetry opt-in. */
-export const TELEMETRY_ENABLED_SETTING = {
+export const TELEMETRY_ENABLED_SETTING = Object.freeze({
   key: 'telemetry.enabled',
   slot: 'config',
   schema: decodingDefault(Schema.Boolean, true),
   title: 'Share usage telemetry',
-  description:
-    'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
+  description: `${USAGE_LOGGING_SENDS} Turning this off stops all reporting.`,
   category: 'privacy',
   configTarget: 'global',
   projectMayOptOut: true,
-  surfaces: { settingsView: 'telemetry' },
-} as const satisfies TexraSettingRow<boolean>;
+  surfaces: Object.freeze({ settingsView: 'telemetry' }),
+} as const satisfies TexraSettingRow<boolean>);
 
-export const LATEX_FORMATTER_SETTING = {
+export const LATEX_FORMATTER_SETTING = Object.freeze({
   key: 'latex.formatter',
   schema: decodingDefault(
     Schema.Literals(LATEX_FORMATTER_VALUES),
@@ -268,20 +302,23 @@ export const LATEX_FORMATTER_SETTING = {
   description: 'Which formatter to run when formatting LaTeX source.',
   category: 'latex',
   slot: 'workspaceState',
-  choices: {
-    latexindent: { description: 'needs Perl' },
-    'tex-fmt': { description: 'standalone Rust binary' },
-    none: { label: 'None', description: 'leave formatting unchanged' },
-  },
-  surfaces: { settingsView: 'latex' },
-} as const satisfies TexraSettingRow<(typeof LATEX_FORMATTER_VALUES)[number]>;
+  choices: Object.freeze({
+    latexindent: Object.freeze({ description: 'needs Perl' }),
+    'tex-fmt': Object.freeze({ description: 'standalone Rust binary' }),
+    none: Object.freeze({
+      label: 'None',
+      description: 'leave formatting unchanged',
+    }),
+  }),
+  surfaces: Object.freeze({ settingsView: 'latex' }),
+} as const satisfies TexraSettingRow<(typeof LATEX_FORMATTER_VALUES)[number]>);
 
 /**
  * Editor squiggles and Problems-panel entries exist only in VS Code. The
  * shared LaTeX snapshot reads the row on every host; the desktop LaTeX page
  * hides it.
  */
-export const INLINE_CRITICISM_SETTING = {
+export const INLINE_CRITICISM_SETTING = Object.freeze({
   key: 'inlineCriticism.enabled',
   schema: decodingDefault(Schema.Boolean, false),
   title: 'Show criticism as editor diagnostics',
@@ -289,12 +326,12 @@ export const INLINE_CRITICISM_SETTING = {
     'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',
   category: 'latex',
   slot: 'globalState',
-  surfaces: { settingsView: 'latex' },
-} as const satisfies TexraSettingRow<boolean>;
+  surfaces: Object.freeze({ settingsView: 'latex' }),
+} as const satisfies TexraSettingRow<boolean>);
 
 /** TeXRA's rows no TeXRA UI shows, in catalog order. */
 /** How many recent commits the launcher's commit picker lists. */
-export const GIT_COMMITS_TO_SHOW_SETTING = {
+export const GIT_COMMITS_TO_SHOW_SETTING = Object.freeze({
   key: 'git.numberOfCommitsToShow',
   slot: 'config',
   schema: decodingDefault(
@@ -304,16 +341,16 @@ export const GIT_COMMITS_TO_SHOW_SETTING = {
   title: 'Commits to show',
   description:
     'Number of recent commits to show in the commit selection dropdown',
-} as const satisfies SettingRow<number>;
+} as const satisfies SettingRow<number>);
 
 /** The audio tools' SoX binary, when automatic detection should not decide. */
-export const SOX_PATH_SETTING = {
+export const SOX_PATH_SETTING = Object.freeze({
   key: 'audio.soxPath',
   slot: 'config',
   schema: decodingDefault(Schema.String, ''),
   title: 'SoX path',
   description: 'Path to the SoX executable. Overrides automatic detection.',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string>);
 
 const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
   GIT_COMMITS_TO_SHOW_SETTING,
@@ -362,8 +399,6 @@ const catalog: SettingsCatalog = settingsCatalog({
     [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL,
     [GIT_AUTHOR_NAME_SETTING.key]: 'texra-ai',
     [GIT_AUTHOR_EMAIL_SETTING.key]: 'texra-ai@users.noreply.github.com',
-    // Code mode is on in TeXRA; the harness leaves it off for embedders.
-    [SCRIPT_ONLY_SETTING.key]: true,
   },
   curatedModels: CURATED_MODELS,
 });
@@ -393,7 +428,7 @@ function isSettingsViewRow(row: TexraSettingRow): row is SettingsViewRow {
  * The catalog TeXRA's hosts hand the harness, and the lookups TeXRA's settings
  * UIs read: every list is a filter over the placed rows, never hand-maintained.
  */
-export const TEXRA_SETTINGS = {
+export const TEXRA_SETTINGS = Object.freeze({
   catalog,
   /** Look up a row the settings view's unified write path owns. */
   settingsViewByKey: (key: string): SettingsViewRow | undefined => {
@@ -413,7 +448,9 @@ export const TEXRA_SETTINGS = {
       (row): row is SettingsViewRow => row.surfaces.settingsView === snapshot,
     ),
   /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
-  cliRows: placedRows.filter((row) => row.surfaces.cliConfig === true),
+  cliRows: Object.freeze(
+    placedRows.filter((row) => row.surfaces.cliConfig === true),
+  ),
   /** Look up a row the CLI `/config` panel lists, and so may write. */
   cliByKey: (key: string): TexraSettingRow | undefined => {
     const row = placedByKey.get(key);
@@ -437,4 +474,4 @@ export const TEXRA_SETTINGS = {
           },
         })),
     ),
-};
+});

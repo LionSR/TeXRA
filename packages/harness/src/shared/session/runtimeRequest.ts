@@ -21,6 +21,7 @@ import {
   LaunchApprovalSchema,
 } from '@shared/approvalBypassKind';
 import {
+  ActivatedSkillsSchema,
   AgentConfigSchema,
   InlinePersonaSchema,
   RequestDecisionSchema,
@@ -57,9 +58,7 @@ export const RuntimeCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.fork'),
     ...runScoped,
-    at: Schema.optional(
-      Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-    ),
+    at: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
   }),
   /** Switch a live run to `model` from its next model boundary. */
   Schema.Struct({
@@ -88,17 +87,18 @@ export const RuntimeCommandSchema = Schema.Union([
     kind: Schema.Literal('followUp.send'),
     ...runScoped,
     text: Schema.NonEmptyString,
-    displayText: Schema.optional(Schema.NullOr(Schema.String)),
+    displayText: Schema.optional(Schema.String),
+    /** The skills the user activated for this message: the session puts
+     *  their instructions before `text`, and the run records them. */
+    skills: Schema.optional(ActivatedSkillsSchema),
     /** What the message attaches: a file (a pasted image's), read and
      *  stored once here, or media the store already holds (a fork's). */
     media: Schema.optional(
-      Schema.NullOr(
-        Schema.Array(Schema.Union([Schema.String, StoredMediaSchema])),
-      ),
+      Schema.Array(Schema.Union([Schema.String, StoredMediaSchema])),
     ),
     /** `turn`: the run reads the message when its current turn ends, not
      *  at the turn's next model request. Absent: at the next request. */
-    holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),
+    holdUntil: Schema.optional(Schema.Literal('turn')),
     /** The provider API-key variables of the sender's environment, as a
      *  start carries them (`StartInput.apiKeys`): what the run resumes
      *  with if this message wakes it. Never stored. */
@@ -119,9 +119,7 @@ export const RuntimeCommandSchema = Schema.Union([
     ...runScoped,
     requestId: Schema.NonEmptyString,
     decision: RequestDecisionSchema,
-    grant: Schema.optional(
-      Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
-    ),
+    grant: Schema.optional(Schema.Literals(APPROVAL_BYPASS_KINDS)),
   }),
   /** A pending tool edit's content, stored with its request: answered
    *  `preview`, null once the request is no longer pending. */

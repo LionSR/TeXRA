@@ -3,6 +3,7 @@
 // JetBrains Mono the code/terminal/path surfaces; both are self-hosted rather
 // than fetched, since the app must render identically offline.
 import { Schema } from 'effect';
+import type { RpcMessage } from 'effect/rpc';
 import {
   decodingDefault,
   extractErrorMessage,
@@ -44,6 +45,7 @@ import type { OsPlatform } from '@texra/shared/osPlatform';
 import { type Shell } from './shell';
 
 import {
+  DESKTOP_COMMAND_PALETTE_ID,
   DESKTOP_LOCAL_COMMANDS,
   dispatchDesktopCommand,
   paletteEntries,
@@ -54,7 +56,6 @@ import { createDesktopCommandPalette } from './desktopCommandPalette';
 import {
   createDesktopShortcutRegistry,
   desktopCommandPaletteShortcut,
-  DESKTOP_COMMAND_PALETTE_ID,
 } from './desktopShortcutRegistry';
 import './desktopShell.css';
 import { shellSidebarTemplate, type RailProject } from './desktopShell';
@@ -345,7 +346,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
             By default it asks before it acts: edits arrive as diffs you accept
             or reject.
           </li>
-          <li>You choose the model and the team; progress stays in view.</li>
+          <li>You choose the model; progress stays in view.</li>
         </ul>
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
@@ -385,8 +386,9 @@ const settingsDialog = createDesktopSettingsDialog(appRoot, {
 const logsController = createLogsPane();
 const logsPane = logsController.element;
 
-const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
-  postToMain(message),
+const promptOverlay = createDesktopPromptOverlay(
+  appRoot,
+  projectSessions.runtime,
 );
 const confirmDiscard = createDiscardChangesDialog(appRoot);
 applyTheme();
@@ -686,6 +688,13 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   },
   showTerminal: showTerminalView,
   showFiles: showFilesView,
+  switchProject: () =>
+    palette.showProjects(
+      railProjects().flatMap(({ display }) =>
+        display.key === shell.active ? [] : [display],
+      ),
+      selectProject,
+    ),
 };
 const shortcuts = createDesktopShortcutRegistry({
   document,
@@ -755,7 +764,13 @@ const routeMessage = createMessageRoutes({
       }),
     );
   },
-  'desktop:showPrompt': (message) => promptOverlay.open(message),
+  'desktop:pdfLoadFailed': (message) => {
+    for (const project of projectWorkbenches.values())
+      project.pdfPane.reportLoadFailure(message.pdfUrl, message.reason);
+  },
+  'desktop:showPrompt': ({ message }) =>
+    // cast: `rpc` reads its own message.
+    promptOverlay.receive(message as unknown as RpcMessage.FromClientEncoded),
   'desktop:terminal:data': (message) =>
     projectWorkbenches
       .get(message.session)

@@ -22,6 +22,7 @@
 import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { decodingDefault } from '@shared/schemas';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -33,7 +34,7 @@ import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
+import { envNameKey, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendTail } from '@utils/text/appendTail';
@@ -125,7 +126,7 @@ function mcpToolName(server: string, tool: string): string {
   return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 
-const isPathName = (n: string) => (IS_WINDOWS ? n.toUpperCase() : n) === 'PATH';
+const isPathName = (name: string) => envNameKey(name) === 'PATH';
 /** The process's environment with the project's `.env` over it, minus
  *  credential-shaped names, plus the entry's, on the extended process PATH
  *  its command is pinned on (`externalFiles`), so the pinned binary runs. */
@@ -328,7 +329,11 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
     .request('initialize', {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: 'texra', version: '1' },
+      // The app the process runs, as it names itself to model providers.
+      clientInfo: {
+        name: (yield* SubscriptionAccounts).client.id,
+        version: '1',
+      },
     })
     .pipe(Effect.mapError(failed));
   yield* decode(InitializeResultSchema, initialized, 'initialize');
@@ -362,7 +367,7 @@ export const acquireMcpServer = Effect.fn('acquireMcpServer')(function* (
 ): Effect.fn.Return<
   LoadedPluginTools,
   never,
-  Scope.Scope | ChildProcessSpawner.ChildProcessSpawner
+  Scope.Scope | ChildProcessSpawner.ChildProcessSpawner | SubscriptionAccounts
 > {
   const scope = yield* Scope.fork(yield* Effect.scope, 'sequential');
   const result = yield* connect(config).pipe(

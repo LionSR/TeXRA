@@ -3,6 +3,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 
+import { PromptRenderFailed } from '@agent/prompt/promptRender';
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -30,7 +31,7 @@ const AGENTS_FILE = 'AGENTS.md';
 export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
   workspace: string | undefined,
   storageRoot: string,
-): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
+): Effect.fn.Return<string, PromptRenderFailed, FileSystem.FileSystem> {
   const fs = yield* FileSystem.FileSystem;
   // Precedence order: the run's workspace, then the storage root. A root
   // whose file is absent or blank falls through to the next one.
@@ -48,7 +49,8 @@ export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
       Effect.catchIf(meansAbsent, () => Effect.succeed('')),
       Effect.mapError(
         (error) =>
-          new Error(`Failed to load ${file}: ${toErrorMessage(error)}`, {
+          new PromptRenderFailed({
+            message: `Failed to load ${file}: ${toErrorMessage(error)}`,
             cause: error,
           }),
       ),

@@ -102,10 +102,8 @@ every other reasoning model's does, and `BindSpec.options.reasoningSummary`
 is gone. `codeMode.scriptOnly` is its own slice: the canned
 validation model (CI's `validate` job, the golden store) calls `plan` and
 `bash` directly, so flipping to script-only first rewrites that conversation
-to call them from scripts, then runs the GLM and `agent()` journeys. One
-key waits for the owner's word, a product-visible default:
-`model.useGoogleBackgroundResponses` (off: Google text-only turns would stop
-streaming). `model.openaiFastTier` stays, on the owner's word (2026-11-05):
+to call them from scripts, then runs the GLM and `agent()` journeys. `model.useGoogleBackgroundResponses` is deleted (#15081): no request read
+it, so nothing sent to a provider changed. `model.openaiFastTier` stays, on the owner's word (2026-11-05):
 paying more for a faster tier is the user's choice, not a fact the route
 holds, so the key keeps `BindSpec.options.fastTier` and has a settings-view
 row; the acceptance above no longer names it._
@@ -168,7 +166,9 @@ and `ChooseReasoningOptions.strict` are gone; `summary` is `'auto'` alone.
 Corrections: `routeEfforts` has a producer (the installed Codex CLI's
 levels, `packages/texra/src/tools/agentCli/codexConfig.ts`) and stays; the
 two id-prefix tests stay until llm-zoo carries a background capability, and
-the GPT-5 summary test with its key above._
+the GPT-5 summary test with its key above. At `c78e9f9` the GPT-5 test is
+gone with that key; the one left is the background test
+(`packages/llm/src/api/responsesConfiguration.ts:120`)._
 
 ## 3. One approval decision
 
@@ -276,12 +276,13 @@ argument; `compactIfNeeded` folded into it); `RegisterRunOptions.descriptionBy`
 is gone (the fork appends its copied title row to its registration rows);
 `ProcessLayerOptions.seedToolSwitches` and `labelRuns` are gone (a store the
 process builds is seeded, a handed-in one left alone, `Sessions.layer` seeds
-the embedder's; `processLayer` provides `RunLabels` to every host);
+the embedder's; `processLayer` provides `LabelsRootRuns` to every host);
 `AgentRuntimeEmitOptions.replayWhenAttached` is gone (replay is the
 behaviour). Kept: `resume.stopAfterCycle` (a host resume is a second
-producer with a varying value). Split off: the `ChildLaunch` union on `task`
-(chat: `schema` + `mediaFiles`; task: `files`): `AgentTool.ts` sits two lines
-under its size cap, so it lands with a trim of that file._
+producer with a varying value). The `ChildLaunch` union is in place at
+`c78e9f9`, now on `program` instead of `task` (a chat: `schema` +
+`mediaFiles`; a program's child: `files` + `args`;
+`packages/harness/src/agent/runtime/delegation/AgentTool.ts:118-147`)._
 
 ## 5. The document task's options: one table, one name, every surface
 
@@ -369,8 +370,8 @@ above.
 - `git.markCommits` gates `git.authorName` and `git.authorEmail`
   (`packages/harness/src/utils/system/execUtils.ts:53-64`): a present name is
   the switch.
-- `followUp.receipt` (`packages/harness/src/shared/session/runtimeRequest.ts:122`)
-  has producers only in `packages/harness/example/`; keep it only as public SDK.
+- `followUp.receipt` had producers only in `packages/harness/example/`.
+  Deleted with caller ids by #14943 (2026-11-14).
 - CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:155-193`);
   `config agents` has eight flags for three choices
   (`packages/cli/src/commands/config.ts:111-131,201-232`); `--input`,
@@ -387,7 +388,7 @@ pseudo-types, which it alone sends); `openInstallGuide` carries no `tool`;
 their one reader each; `RegexRuleSet.flags` is required. Checked and kept:
 `latexdiff.changesOnly` has a LaTeX-tab row; `goal.strategy` is the SDK's
 strategy hook, exercised by `packages/harness/example/09-goal-strategies.ts`;
-`followUp.receipt` stays as public SDK. Waiting on the owner: the four
+`followUp.receipt` stayed as public SDK until #14943 deleted it. Waiting on the owner: the four
 replacement presets with their key pairs (a feature reachable from
 `config.json` by hand) and `git.markCommits`, both kept on 2026-11-05._
 
@@ -414,9 +415,11 @@ collected once, and `--instruction-file` is the one identical pair._
 
 - **`websocket.openai`.** The owner ruled to keep the experimental WebSocket
   transport behind its flag (#12869, closed as not planned: "should not be
-  re-proposed"). It stays. Its description still promises the ChatGPT backend
-  may use the socket while `packages/llm/src/node.ts:193` requires an API key;
-  fix the copy, not the flag.
+  re-proposed"). It stays. Its description promised the ChatGPT backend
+  may use the socket while `packages/llm/src/node.ts` required an API key;
+  fix the copy, not the flag. At `c78e9f9` the copy holds: the socket model
+  is built over the bind's bearer, an API key or a session token
+  (`packages/llm/src/node.ts:131-136`).
 - **Per-provider `useChina` toggles and `endpoint.*` overrides.** Four
   booleans over one generic read (`modelSettings.ts:141-146`) look like §1, but
   the region is a fact only the user knows. Keep; the `endpoint.glm` over

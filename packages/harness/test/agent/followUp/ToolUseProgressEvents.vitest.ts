@@ -37,17 +37,14 @@ interface LoopInit extends Omit<ScriptedRunInit, 'model'> {
 /** Run one scripted tool-use run to completion, with what it asked for. */
 const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   const { model, attempts } = scriptedModel(init.script);
-  const result = yield* Effect.flatMap(
-    openToolUse({ resume: false }),
-    (opened) => runToolUse({ resume: false }, opened),
-  ).pipe(
+  const result = yield* Effect.flatMap(openToolUse(), runToolUse).pipe(
     Effect.provide(
-      Layer.mergeAll(
-        scriptedInvokerLayer,
-        nativeToolTestLayer({
-          run: { runId: init.runId, session: init.session, toolPolicy: {} },
-        }),
-      ).pipe(
+      scriptedInvokerLayer.pipe(
+        Layer.provideMerge(
+          nativeToolTestLayer({
+            run: { runId: init.runId, session: init.session, toolPolicy: {} },
+          }),
+        ),
         Layer.provideMerge(
           agentRunTestLayer({ stopAfterCycle: true, ...init, model }),
         ),
@@ -79,14 +76,14 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const session = yield* quietSession();
             const runId = yield* startedRun(session);
             const events: AgentEvent[] = [];
-            yield* openToolUse({ resume: false }).pipe(
+            yield* openToolUse().pipe(
               Effect.provide(
-                Layer.mergeAll(
-                  scriptedInvokerLayer,
-                  nativeToolTestLayer({
-                    run: { runId, session, toolPolicy: {} },
-                  }),
-                ).pipe(
+                scriptedInvokerLayer.pipe(
+                  Layer.provideMerge(
+                    nativeToolTestLayer({
+                      run: { runId, session, toolPolicy: {} },
+                    }),
+                  ),
                   Layer.provideMerge(
                     agentRunTestLayer({
                       runId,

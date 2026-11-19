@@ -19,10 +19,10 @@ import { open, write, type TranscriptUpdate } from './transcriptState';
 /** The two message types whose payload is streaming markdown text. */
 export const STREAMING_TEXT_ROW_KIND: Partial<
   Record<MessageType, StreamingTextRow['kind']>
-> = {
+> = Object.freeze({
   [MESSAGE_TYPES.MODEL_RESPONSE]: 'assistant',
   [MESSAGE_TYPES.THINKING]: 'thinking',
-};
+});
 
 /** One chunk of a process run's output onto the transcript: a plain log
  *  row, its stderr at the warning level, led by the gap a capped log left

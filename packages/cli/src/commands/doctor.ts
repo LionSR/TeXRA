@@ -17,7 +17,7 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { pruneStorage } from '../runtime/pruneStorage';
 
-import { getCliModelAccessList } from '../runtime/models/modelAccess';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -32,7 +32,7 @@ const readyReport = (context: CliContext) =>
       kind: 'ready',
       modelAccessList: withProcessServices(
         services.runtime,
-        getCliModelAccessList({ stores: services }),
+        loadModelOptions(services),
       ),
       // Consent is read from the workspace configuration the platform
       // opened.
@@ -53,14 +53,13 @@ const readyReport = (context: CliContext) =>
  * logs through Effect.
  */
 const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
-  Effect.try({
-    try: () => {
-      // The report is the whole output and names every failure, so the
-      // runtime's log lines go nowhere from its build on.
-      setLogSink(silentLogSink, { trusted: true });
-      return makeCliProcessRuntime(context);
-    },
-    catch: ensureError,
+  // A build that throws needs no failure of its own: it dies here, and the
+  // report below is made from the whole cause.
+  Effect.sync(() => {
+    // The report is the whole output and names every failure, so the
+    // runtime's log lines go nowhere from its build on.
+    setLogSink(silentLogSink, { trusted: true });
+    return makeCliProcessRuntime(context);
   }).pipe(
     Effect.flatMap((runtime) =>
       Effect.promise(() => runtime.runPromiseExit(readyReport(context))).pipe(

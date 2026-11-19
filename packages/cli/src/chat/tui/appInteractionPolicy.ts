@@ -1,30 +1,31 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
 import { isUnhandledControlInput, metaChordInput } from '@cli/tui/inputKeys';
-import type { RunId, SessionView } from '@texra-ai/harness/schemas';
+import type {
+  RequestKind,
+  RunId,
+  SessionView,
+} from '@texra-ai/harness/schemas';
 // Local imports - shared schemas and utilities
 import type { Key } from 'ink';
 
 // Local imports - TUI state
-import type {
-  PendingApproval,
-  PendingRequestKind,
-} from './state/approvalQueue';
+import type { PendingApproval } from './state/approvalQueue';
 
 export const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
 export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
-  PendingRequestKind,
+  RequestKind,
   number | undefined
-> = {
+> = Object.freeze({
   bash: FORM_FOREGROUND_MAX_ROWS,
   toolEdit: FORM_FOREGROUND_MAX_ROWS,
   proposal: FORM_FOREGROUND_MAX_ROWS,
   planApproval: undefined,
   retry: undefined,
   userQuestion: undefined,
-};
+});
 
 // A bare Esc and the second key of an `Esc 1..9` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS

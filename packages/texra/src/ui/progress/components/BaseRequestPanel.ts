@@ -3,7 +3,7 @@
  * the evidence the decision needs, and the same action row on every kind.
  *
  *   primary (y)  ·  optional ▾ "Approve all <kind> in this run" (a)
- *   ·  kind-specific secondaries  ·  Reject / Skip / Stop run (n)  ·  Add a note…
+ *   ·  kind-specific secondaries  ·  Reject / Skip / Stop task (n)  ·  Add a note…
  *
  * The negative answers in one click; "Add a note…" opens an optional note
  * that rides on the same decision. Esc only closes that note: it never
@@ -39,6 +39,7 @@ import {
 import type { RequestDraft, Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
+import { isSendChord } from '@ui/wa/keyActivation';
 import {
   commonViewStyles,
   designTokens,
@@ -64,15 +65,10 @@ import {
   DELEGATION_APPROVAL_COPY,
   runGrantLabel,
 } from '@ui/copy/delegationApproval';
-
-/** The three ways a card declines, each with its one word. */
-const DECLINE_LABEL = {
-  reject: 'Reject',
-  skip: 'Skip',
-  stop: 'Stop task',
-} as const;
-
-type Decline = keyof typeof DECLINE_LABEL;
+import {
+  requestDeclineLabel,
+  requestPrimaryLabel,
+} from '@ui/copy/requestCards';
 
 /** What a card this window cannot answer says in place of its actions. */
 const UNANSWERABLE_NOTE = {
@@ -140,15 +136,12 @@ export abstract class BaseRequestPanel<
    *  and not yet sent, so a run switch does not lose it. */
   @property({ attribute: false }) surface: Surface | null = null;
 
-  /** Where this card's draft is kept: the request, unless the card names
-   *  its own key. */
-  protected get draftKey(): string {
-    return this.permission.data.requestId;
-  }
-
   /** What is entered on this card and not yet sent. */
   protected get draft(): RequestDraft {
-    return this.surface?.requestDrafts.get(this.draftKey) ?? EMPTY_DRAFT;
+    return (
+      this.surface?.requestDrafts.get(this.permission.data.requestId) ??
+      EMPTY_DRAFT
+    );
   }
 
   /** Store the card's draft; an empty one is none. A read-only card owns
@@ -158,7 +151,7 @@ export abstract class BaseRequestPanel<
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'requestDraft',
-        key: this.draftKey,
+        key: this.permission.data.requestId,
         draft: Object.keys(draft).length === 0 ? null : draft,
       }),
     );
@@ -179,11 +172,6 @@ export abstract class BaseRequestPanel<
   /** The one sentence at the top: what the agent wants, object named. */
   protected abstract renderAsk(): TemplateResult | string;
 
-  /** The primary action's word: Approve, Submit, or Retry. */
-  protected get primaryLabel(): string {
-    return 'Approve';
-  }
-
   protected get primaryIcon(): IconName {
     return 'check';
   }
@@ -193,21 +181,6 @@ export abstract class BaseRequestPanel<
   protected submitPrimary(): void {
     const actions = REQUEST_ACTIONS[this.permission.kind];
     if ('y' in actions) this.emitAction(actions.y);
-  }
-
-  /** The negative's kind; its word comes from {@link DECLINE_LABEL}. */
-  protected get decline(): Decline {
-    return REQUEST_ACTIONS[this.permission.kind].n;
-  }
-
-  /** The decline button's text. */
-  protected get declineLabel(): string {
-    return DECLINE_LABEL[this.decline];
-  }
-
-  /** Whether the decline can carry a note the agent reads. */
-  protected get declineTakesNote(): boolean {
-    return this.decline !== 'stop';
   }
 
   /** The note box's label: what the agent should hear. */
@@ -329,7 +302,7 @@ export abstract class BaseRequestPanel<
       event.preventDefault();
       event.stopPropagation();
       this.closeNote();
-    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    } else if (isSendChord(event)) {
       event.preventDefault();
       this.sendDecline();
     }
@@ -391,10 +364,11 @@ export abstract class BaseRequestPanel<
     const grant = this.readOnly || this.noteOpen ? null : this.grant;
     // A native title, not a wa-tooltip: a new card focuses this button, and
     // a focus-shown tooltip would cover the evidence above it.
+    const primaryLabel = requestPrimaryLabel(this.permission.kind);
     const button = {
       icon: this.primaryIcon,
-      text: this.primaryLabel,
-      title: `${this.primaryLabel} (y)`,
+      text: primaryLabel,
+      title: `${primaryLabel} (y)`,
       action: 'primary',
       disabled: this.readOnly,
       onClick: () => this.submitPrimary(),
@@ -435,7 +409,9 @@ export abstract class BaseRequestPanel<
   }
 
   private renderDecline(): TemplateResult {
-    const label = this.declineLabel;
+    const label = requestDeclineLabel(this.permission.kind);
+    // A decline that stops the run carries no note the agent would read.
+    const takesNote = REQUEST_ACTIONS[this.permission.kind].n !== 'stop';
     return html`
       ${renderLabeledActionButton({
         icon: 'xmark',
@@ -446,7 +422,7 @@ export abstract class BaseRequestPanel<
         onClick: () => this.sendDecline(),
       })}
       ${
-        this.declineTakesNote && !this.noteOpen && !this.readOnly
+        takesNote && !this.noteOpen && !this.readOnly
           ? renderLabeledActionButton({
               text: 'Add a note…',
               kind: 'link',
@@ -460,7 +436,7 @@ export abstract class BaseRequestPanel<
 
   private renderNote(): TemplateResult | typeof nothing {
     if (!this.noteOpen) return nothing;
-    const label = this.declineLabel;
+    const label = requestDeclineLabel(this.permission.kind);
     return html`
       <wa-textarea
         class="request-card__note"

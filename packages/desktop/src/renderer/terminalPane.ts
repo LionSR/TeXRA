@@ -66,6 +66,10 @@ interface TerminalSession {
   readonly host: HTMLElement;
   /** Holds the Restart button while the shell has exited; empty otherwise. */
   readonly exitActions: HTMLElement;
+  /** Input typed before the pane asked for a shell. The main process keeps
+   *  input only for a shell it was asked to start, so the pane holds it
+   *  until then. */
+  heldInput: string;
   started: boolean;
   exited: boolean;
 }
@@ -91,7 +95,7 @@ export function createTerminalPane(
 
   function createSession(sessionId: string): TerminalSession {
     const host = document.createElement('div');
-    host.className = 'desktop-terminal-pane desktop-terminal-surface';
+    host.className = 'desktop-terminal-surface';
 
     const { theme, fontFamily } = resolveXtermTheme(
       document.body,
@@ -115,7 +119,10 @@ export function createTerminalPane(
     terminal.loadAddon(fitAddon);
     terminal.open(host);
 
-    terminal.onData((data) => callbacks.sendInput(sessionId, data));
+    terminal.onData((data) => {
+      if (session.started) callbacks.sendInput(sessionId, data);
+      else session.heldInput += data;
+    });
     terminal.onResize(({ cols, rows }) =>
       callbacks.resize(sessionId, cols, rows),
     );
@@ -129,6 +136,7 @@ export function createTerminalPane(
       fitAddon,
       host,
       exitActions,
+      heldInput: '',
       started: false,
       exited: false,
     };
@@ -204,6 +212,10 @@ export function createTerminalPane(
         // prompt is wrapped for the correct width.
         const { cols, rows } = session.terminal;
         callbacks.start(sessionId, Math.max(cols, 20), Math.max(rows, 5));
+        if (session.heldInput) {
+          callbacks.sendInput(sessionId, session.heldInput);
+          session.heldInput = '';
+        }
       }
       if (focus) session.terminal.focus();
     },

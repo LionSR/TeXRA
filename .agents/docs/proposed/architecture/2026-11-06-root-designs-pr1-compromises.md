@@ -54,6 +54,10 @@ Each item: what the note asked, what landed, why, and what ends it.
    model reads. Costs: an operator of a headless run sees "Command denied"
    only through the transcript, not a `[warn]` line. Ends with: the CLI's
    progress projection rendering a denied `request.decided` as a notice.
+   Ended (read on 2026-11-17 at `c78e9f9`): the headless CLI writes a
+   denied `request.decided` row's reason to stderr as a
+   `[warn] [cli.approval]` line in either output format
+   (`packages/cli/src/runtime/headless/executeCli.ts`).
 5. **R8 landed its first half.** One scoped program, no bag, no cohort, no
    `holds`. Not landed: `WorkspaceFs`/`StorageFs`/`WorkspaceRoots` (the
    controllers' tag) as fields of one `SessionRoots`; `SessionViewService`
@@ -285,7 +289,11 @@ rather than per finding:
   cancelled with no `run.stop` row of its own; its parent's stop is the
   only record. The registry's `stop` is the one writer of that row;
   routing the await's interruption through it would make the child's
-  rows say why.
+  rows say why. Ended (read on 2026-11-17 at `c78e9f9`): the await's
+  interruption stops the child through the registry,
+  `runs.stop(runId, 'released')`, unless its parent's cascade already did,
+  then waits for it to drain (`childRunEnd` in
+  `packages/harness/src/agent/runtime/delegation/childLaunch.ts`).
 - **The session's close deadline, ended in lane 9.** It bounded the drain
   of the runs, not the stop rows `stopAll` writes first: a slow publisher
   delayed a close past the five seconds before the timeout started. The
@@ -306,26 +314,38 @@ rather than per finding:
   provider SDK's error result, which has no exit, keeps `failure`.
 - **`childEndReport`** switches on the child's kind (a background script's
   notice, a subagent's envelope) in one function; two delivery formats, one
-  function, where the kind is known at the launch.
+  function, where the kind is known at the launch. Refused on 2026-11-19
+  (`RUNEND-child-report-from-launch`): the kind is known at a launch but
+  not at a resume, which rebuilds the run from its stored configuration,
+  so the switch would move to where the launch is built and gain a field.
+  The second read of the kind, the fallback family in `endRun`, moved
+  into `childEndReport`.
 - Pre-existing, noted: `Context.merge` of the whole captured context in
   `sessionOwnersLayer` (the runs' fork runtimes are built under the
   session's context deliberately; a `Context.pick` would name the services
   a run needs); `Effect.try` around a parent stage's `end`; `joinOpening`'s
   swallowed facts read; the `Run ID:`/`Run:` pair on a subagent's receipt.
+  Read on 2026-11-17 at `c78e9f9`: `joinOpening`'s read failure is now
+  logged at warn before the resume is refused
+  (`packages/harness/src/agent/runtime/resumeRun.ts`), so that one has
+  ended; the `Context.merge` stands; the
+  `Effect.try` was not found again and is not established either way. The
+  `Run ID:`/`Run:` pair ended on 2026-11-19: everything a model reads says
+  `Run ID:` (the executions summary and the compile fixer's question
+  changed; the five launch receipts already did).
 
 ## 4. Follow-ups
 
-- Hosts' PR (R6+R10): §1.5 (R8's second half), §1.4 (denied-request
-  notice). §1.1 (TUI `approve`) is refused: every window, the TUI
+- Hosts' PR (R6+R10): §1.5 (R8's second half, ended 2026-11-07), §1.4
+  (denied-request notice, ended: see §1.4). §1.1 (TUI `approve`) is refused: every window, the TUI
   included, answers through `request.decide`
   (`RT-tui-approve-handler` in `.agents/docs/refuted-candidates.json`). §3's one reading of a grant landed there (PR 14772).
 - Harness, small, taken by lane 9 (each item's §3 entry says how it
   ended):
   - one delivery-id shape (ended in lane 9);
   - `USER_FOLLOW_UP_SUPPORT` as a boolean (ended in lane 9);
-  - the await's interruption through `RunRegistry.stop` (the registry's
-    `stop` already cascades a stop row to every held descendant; what is
-    left is a tool call interrupted for another reason);
+  - the await's interruption through `RunRegistry.stop` (ended: see its
+    §3 entry);
   - the close deadline over the stop writes (ended in lane 9);
   - a hold per agent-CLI turn (ended in lane 9).
 - Open question: whether a second turn on a process run is worth a run

@@ -42,6 +42,9 @@ const config = Schema.decodeUnknownSync(AgentConfigSchema)(
   }),
 );
 
+// The same launch as a tool-use run, with no program.
+const { script: _program, ...toolUseConfig } = config;
+
 const tempDirs = useTempDirs();
 
 const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
@@ -103,7 +106,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     )((it) => {
       it.layer(TestSession.layer(undefined, { persistent: true }))((it) => {
         it.effect(
-          "carries each run's outcome and resumability, in NDJSON too",
+          "carries each run's outcome and whether it continues, in NDJSON too",
           () =>
             Effect.gen(function* () {
               // The record states the outcome the run ended on (null for
@@ -131,7 +134,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               expect(
                 outcomes.map(([id]) => [
                   byId(id)?.outcome,
-                  byId(id)?.resumable,
+                  byId(id)?.continues,
                 ]),
               ).toEqual([
                 ['cancelled', false],
@@ -161,8 +164,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               // paths.
               yield* publishRunFacts(session, decodeRunId('a1a1a1'), {
                 record: Schema.decodeUnknownSync(AgentConfigSchema)({
-                  ...config,
-                  script: null,
+                  ...toolUseConfig,
                   inputFiles: [],
                   outputFiles: [],
                   workingDirectory: workspace,

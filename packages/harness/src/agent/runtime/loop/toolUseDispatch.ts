@@ -33,6 +33,7 @@ import {
   Exit,
   Fiber,
   FiberMap,
+  Result,
   Schema,
   ScopedRef,
   Semaphore,
@@ -75,6 +76,8 @@ import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
   attemptOf,
   callResultOf,
+  endsTurn,
+  resultsEndTurn,
   resumedAttempt,
   type ToolCallResult,
   type CallStatus,
@@ -86,7 +89,7 @@ import {
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { getBasename } from '@utils/core/pathBasics';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { captureAttachments, storedMediaPart } from '../run/mediaInput';
@@ -149,12 +152,6 @@ interface Call {
 const scriptOf = (fact: Call['fact']): ScriptCallPayload | null =>
   'scriptCallId' in fact ? fact : null;
 
-interface DispatchOutcome {
-  readonly state: RunState;
-  /** A call's result asked to end the turn. */
-  readonly endTurn: boolean;
-}
-
 /** The record of `callId` under the dispatch's response, or null. */
 const recordOf = (dispatch: Dispatch, state: RunState, callId: string) =>
   state.pendingResponse?.responseId === dispatch.responseId
@@ -188,9 +185,6 @@ const withoutEffects = (
   const { edits: _edits, files: _files, ...rest } = result;
   return rest;
 };
-
-const endsTurn = (recorded: Pick<ToolCallResult, 'result'> | null): boolean =>
-  recorded?.result.status === 'executed' && recorded.result.endTurn === true;
 
 const dispositionOf = (
   result: Pick<ToolResult, 'status'>,
@@ -374,8 +368,8 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   // attempt it started (it was waiting on a person) has it.
   let bodyStarted = status.kind === 'started' && status.attempt === attempt;
   // A tool the step offers but did not send (a script's own function, or any
-  // tool while script-only tools are on) is reached from inside a script
-  // alone: a response's call to it has no body.
+  // tool beside `script`) is reached from inside a script alone: a
+  // response's call to it has no body.
   const unsent =
     script === null &&
     step.offered.some((t) => t.name === fact.toolName && !t.sent);
@@ -518,23 +512,21 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     pluginId === undefined
       ? undefined
       : (yield* ToolRegistry).entries.get(pluginId);
-  const extracted = yield* Effect.try({
+  const checked = Result.try({
     try: () =>
       extractToolAttachments(result, (facts) =>
         checkOwnFacts(fact.toolName, plugin, facts),
       ),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        result = {
-          status: 'error',
-          error: `${fact.toolName}: Tool returned an invalid result (${toErrorMessage(error)})`,
-        };
-        return extractToolAttachments(result);
-      }),
-    ),
-  );
+    catch: toErrorMessage,
+  });
+  if (Result.isFailure(checked))
+    result = {
+      status: 'error',
+      error: `${fact.toolName}: Tool returned an invalid result (${checked.failure})`,
+    };
+  const extracted = Result.isSuccess(checked)
+    ? checked.success
+    : extractToolAttachments(result);
   const { attachments, blobs } = yield* captureAttachments(
     extracted.attachments,
     roots.workspace,
@@ -851,12 +843,9 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
     );
   }
   // A handed-down call has no model to answer it, so it ends the turn; else
-  // one of the response's own calls (never a script's) may, by its result.
+  // one of the response's own calls may, by its result.
   const endTurn =
-    latestState.handedDown !== null ||
-    latestPending.calls.some(({ callId }) =>
-      endsTurn(callResultOf(latestPending, callId)),
-    );
+    latestState.handedDown !== null || resultsEndTurn(latestPending);
   const bound = yield* ScopedRef.get(run.model);
   const media: { readonly path: string; readonly part: StoredMediaPart }[] = [];
   const results = latestPending.calls.map((fact, ordinal) => {
@@ -936,7 +925,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
       sourceResponse: responseId,
     }),
   ]);
-  return { state: delivered, endTurn } satisfies DispatchOutcome;
+  return delivered;
 });
 
 /** Dispatch the pending response's unfinished calls under `step`'s tools,
@@ -944,12 +933,12 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   step: StepTools,
-): Effect.fn.Return<DispatchOutcome, InvokeError, AgentRun | AgentRunServices> {
+): Effect.fn.Return<RunState, InvokeError, AgentRun | AgentRunServices> {
   const run = yield* AgentRun;
   const { logger } = run;
   const initial = yield* cell.current;
   const pending = initial.pendingResponse;
-  if (pending === null) return { state: initial, endTurn: false };
+  if (pending === null) return initial;
   const { responseId } = pending;
   // The calls answer the instruction the committed state records.
   const at = initial.input.instruction;

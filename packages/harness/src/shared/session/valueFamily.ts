@@ -20,25 +20,28 @@ export interface ValueFamily<T> {
   readonly schema: Schema.Codec<T, unknown>;
 }
 
-/** The process's settings store, keyed by the setting key. */
-export const APP_STATE: ValueFamily<Schema.Json> = {
+/** The process's settings store, keyed by the setting key. A settings
+ *  store hands its callers' values on as they come (`unknown`): the write
+ *  encodes each with this schema, which fails one that is not JSON. */
+export const APP_STATE: ValueFamily<unknown> = Object.freeze({
   name: 'app-state',
   schema: Schema.Json,
-};
+});
 
 /** The settings every checkout of one repository shares, keyed by the
  *  repository root and the setting key. */
-export const REPO_STATE: ValueFamily<Schema.Json> = {
+export const REPO_STATE: ValueFamily<unknown> = Object.freeze({
   name: 'repo-state',
   schema: Schema.Json,
-};
+});
 
 /**
  * The global root's record of a workspace store, keyed by its storage
  * directory id: the root it serves, so a storage prune can tell a store
  * whose root is gone.
  */
-export const WORKSPACE_STORES: ValueFamily<{ readonly root: string }> = {
-  name: 'workspace-store',
-  schema: Schema.Struct({ root: Schema.NonEmptyString }),
-};
+export const WORKSPACE_STORES: ValueFamily<{ readonly root: string }> =
+  Object.freeze({
+    name: 'workspace-store',
+    schema: Schema.Struct({ root: Schema.NonEmptyString }),
+  });

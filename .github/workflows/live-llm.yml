@@ -6,8 +6,9 @@ name: Live LLM
 # free. It runs when someone asks for it: the `live-llm` label on a PR, or a
 # manual dispatch.
 #
-# A suite whose key is not configured skips itself, so the job is still useful
-# with a subset of the secrets present.
+# A suite whose key is not configured skips its keyed cases (the
+# rejected-credential case needs none), so the job is still useful with a
+# subset of the secrets present.
 on:
   pull_request:
     types: [labeled]

@@ -422,3 +422,14 @@ export const callResultOf = (
   const status = pending.records[callId]?.status;
   return status?.kind === 'finished' ? status : null;
 };
+
+/** A call's committed result asks to end the turn (`submit_output`'s). */
+export const endsTurn = (
+  recorded: Pick<ToolCallResult, 'result'> | null,
+): boolean =>
+  recorded?.result.status === 'executed' && recorded.result.endTurn === true;
+
+/** One of the response's own calls (never a script's) ended the turn by
+ *  its result. */
+export const resultsEndTurn = (pending: PendingResponse): boolean =>
+  pending.calls.some(({ callId }) => endsTurn(callResultOf(pending, callId)));

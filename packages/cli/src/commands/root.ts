@@ -42,7 +42,6 @@ import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
-import { teamCommand } from './team';
 import { pluginCommand } from './plugin';
 import { resumeCommand } from './resume';
 import { serveCommand, serviceCommand } from './service';
@@ -86,7 +85,6 @@ export const rootCommand = withUsageSections(
       agents: agentsCommand,
       skills: skillsCommand,
       plugin: pluginCommand,
-      team: teamCommand,
       models: modelsCommand,
       auth: authCommand,
       doctor: doctorCommand,
@@ -110,7 +108,10 @@ export const rootCommand = withUsageSections(
           'texra clone <project> ./project',
           'clone an Overleaf or ShareLaTeX project',
         ],
-        ['texra run <agent> --input file.tex', 'run an agent headless'],
+        [
+          'texra run <program|agent> --input file.tex --instruction "<text>"',
+          'run a program or an agent headless',
+        ],
         ['texra tasks list', "list every project's tasks"],
         [
           'texra tasks attach <id>',

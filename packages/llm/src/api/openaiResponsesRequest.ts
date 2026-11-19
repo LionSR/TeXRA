@@ -12,7 +12,7 @@ import {
 import { boundTurn, resolveTurn } from './turnInput.js';
 import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import { ModelError } from '../errors.js';
-import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
+import { responseInput } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
 import type { SessionToken } from '../node.js';
@@ -128,7 +128,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       ...(turn.tools.length > 0
         ? {
             tools: groupedTools(
-              toolNamespaceOf(config),
+              config.toolNamespace,
               turn.tools.map((tool): OpenAI.Responses.FunctionTool => {
                 if (config.requestDialect !== 'compatible')
                   return { type: 'function', ...tool, strict: false };
@@ -174,14 +174,6 @@ const groupedTools = (
         },
       ];
 
-/** OpenAI's abort signature: the raw abort reason, or the SDK's wrapper around it. */
-export const openaiAbortMatch = (
-  cause: unknown,
-  signal: AbortSignal,
-): boolean =>
-  cause === signal.reason ||
-  (cause instanceof OpenAI.APIUserAbortError && cause.cause === signal.reason);
-
 /** A bearer token, as a header value takes one. */
 const BearerTokenSchema = Schema.String.check(Schema.isMinLength(1)).check(
   Schema.isPattern(/^[^\r\n]+$/),
@@ -220,8 +212,7 @@ export const authorized = <A, R>(
     if (typeof bearer === 'string') return yield* request(token);
     const first = yield* Effect.result(request(token));
     if (Result.isSuccess(first)) return first.success;
-    if (first.failure.kind !== 'authentication')
-      return yield* Effect.fail(first.failure);
+    if (first.failure.kind !== 'authentication') return yield* first.failure;
     yield* bearer.rejected(token).pipe(Effect.interruptible);
     return yield* request(yield* current);
   });

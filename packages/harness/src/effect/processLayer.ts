@@ -158,6 +158,7 @@ export class Sessions extends Context.Service<
   static layer({
     platform,
     plugins,
+    client,
     skills,
   }: Composition): Layer.Layer<Sessions, PluginsRefused> {
     return sessionsLayer({
@@ -165,7 +166,7 @@ export class Sessions extends Context.Service<
       settings: platform.roots.config.catalog,
       plugins,
       skills,
-      secrets: Secrets.layer(platform.secrets),
+      secrets: Secrets.layer(platform.secrets, client),
       appState: seeded(AppState.layer(platform.roots.globalState), plugins),
       agentDirectories: Layer.succeed(AgentDirectories)(
         platform.agentDirectories,

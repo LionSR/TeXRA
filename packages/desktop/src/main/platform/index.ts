@@ -9,16 +9,15 @@ import { openProjectRoots } from '@texra/controllers/session/openProjectSession'
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
+import {
+  checkResourcesPath,
+  texraProcessLayer,
+} from '@texra/controllers/texraProcessLayer';
 
 // Local file imports
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { adoptLoginShellEnvironment } from '@texra/platform/defaults/loginShellEnvironment';
-import {
-  checkResourcesPath,
-  desktopLayout,
-  type DesktopLayout,
-} from './paths.js';
+import { desktopLayout, type DesktopLayout } from './paths.js';
 import type { ConfigStore } from '@texra-ai/harness/node';
 interface ElectronPlatformInitResult {
   /**
@@ -62,7 +61,6 @@ export const initializeElectronPlatform = Effect.fn(
     ManagedRuntime.make(
       texraProcessLayer({
         name: 'desktop',
-        inquiryPanel: true,
         storageRoot: dataRoot,
         resourcesPath,
         usageLog: {

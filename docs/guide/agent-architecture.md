@@ -10,20 +10,20 @@ A program takes your input files, context references, and instruction, has a mod
 ::: tip When to run a program
 Programs are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. Each revision produces a full XML-wrapped output, and most programs review it in a second revision, so runs with frontier reasoning models can take **10–30 minutes** to finish.
 
-If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model**: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one run, a team lead can start several programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
+If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model**: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one run, a lead agent can start several programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
 ## Agents and programs
 
 An **agent** is a chat persona defined in a flat `.yaml` file: `name`, `description`, `prompt` (the system prompt), `tools` and `temperature`. It converses and calls its tools turn by turn. Browse these files from the **Agents** tab in the TeXRA Settings, or create your own (see [Custom agents](./custom-agents.md)).
 
-A **program** is a fixed procedure that ships with TeXRA: `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides` and `poster` (see the [program reference](./built-in-agents.md#programs)). A program is not in the agent picker. It is started in one of three ways:
+A **program** is a fixed procedure that ships with TeXRA: `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides` and `poster` (see the [program reference](./built-in-agents.md#programs)). The Lean plugin adds `prove` and `blueprint`, which work on Lean files in rounds and are described in [Lean 4 proofs](./lean.md#lean-programs); the rest of this page is about the eight document programs. A program is not in the agent picker. It is started in one of three ways:
 
 - an agent you chat with calls the `program` tool, and you approve the proposed run;
 - `texra run <program> --input …` in the terminal;
 - the **Merge** action, which starts `merge`.
 
-By default a chat agent is sent one tool, `script`, and calls its other tools from the JavaScript it writes there (the **script-only tools** setting under **Settings → Agents → Advanced**), so a `program` call often appears inside a script.
+A chat agent is sent one tool, `script`, and calls its other tools from the JavaScript it writes there, so a `program` call often appears inside a script.
 
 ## Basic execution flow
 
@@ -55,7 +55,7 @@ sequenceDiagram
 **Key stages of a revision:**
 
 1.  **Prompt construction:** TeXRA builds one message from the program's opening text, the files you selected, your instruction, each earlier request with the reply it got, and this revision's request. The program supplies the child's system prompt.
-2.  **Child agent:** A fresh child agent answers the prompt with the final documents wrapped in the fixed `<documents><document name="...">...</document></documents>` container. You can follow this in the [ProgressBoard](./progress-board.md), where each revision's agent call shows as a child run.
+2.  **Child agent:** A fresh child agent answers the prompt with the final documents wrapped in the fixed `<documents><document name="...">...</document></documents>` container. You can follow this in the [Tasks view](./progress-board.md), where each revision's agent call shows as a child run.
 3.  **Extraction:** TeXRA saves the raw reply (as `r{n}/output.xml`, where `r0/` is the first revision). It then extracts the content of each `<document name="...">` entry into its own file under the revision's directory in run storage, named after that entry's `name` (an `edit` run on `paper.tex` produces `r0/paper.tex` for the first revision and `r1/paper.tex` for the second; a `<document name="chapters/main.tex">` entry lands as `r{n}/chapters/main.tex`; only the raw reply uses the fixed `output.xml` stem, and a document literally named `output.tex` is renamed `output_extracted.tex` so it cannot clobber it).
 4.  **Compile check and diff:** For LaTeX files, TeXRA compiles each output and generates a `latexdiff` file comparing it to its input. Read the [LaTeX Diff guide](./latex-diff.md) for details.
 5.  **Optional critic:** With reflection on, a critic reviews every revision but the last (see below).
@@ -73,10 +73,10 @@ The same pipeline runs headlessly from the terminal:
   note="Same program, same revisions, same run storage: no UI attached."
 />
 
-Each revision lands in its own folder under run storage:
+Each revision's reply and documents land in their own folder under run storage, with the diffs beside them:
 
 <RoundOutputTree />
-<p class="hero-caption">Every revision saves the raw <code>output.xml</code>, one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>), and a <code>latexdiff</code> PDF. <code>r0/</code> is the first revision (the draft); <code>r1/</code> and later are review passes.</p>
+<p class="hero-caption">Every revision saves the raw <code>output.xml</code> and one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>). <code>r0/</code> is the first revision (the draft); <code>r1/</code> is the review pass. The <code>latexdiff</code> source of each revision is under <code>diff/</code> and its compiled PDF under <code>output/</code>.</p>
 
 **Output limit:** If the reply is cut off by the model's max output tokens before the closing `</documents>` tag, TeXRA keeps what the model wrote as that revision's output and warns in the transcript that it may be incomplete. Raise the model's max output tokens if a long document gets cut off.
 

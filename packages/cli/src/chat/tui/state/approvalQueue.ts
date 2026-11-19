@@ -16,6 +16,7 @@ import {
   attentionOf,
   offeredGrant,
   type ApprovalBypassKind,
+  type PendingRequest,
   type RequestPayload,
   type RequestKind,
   type RunId,
@@ -35,23 +36,14 @@ import {
   reportRequestDefect,
 } from './transcript';
 import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
-import type { RuntimeCommand, SessionView } from '@texra-ai/harness/schemas';
+import type { ScopeRunner } from '../../scopeRunner';
+import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 
 interface TuiApprovalAdornments {
   /** What a tool edit's card shows: the preview staged for it, or why there
    *  is none to show. */
   readonly toolEdit: ToolEditPreviewRead;
 }
-
-/**
- * The kinds this surface presents: the harness's own, without a plugin's
- * request. The CLI does not offer the async inquiry flow (it shows no
- * inquiry panel, `texraPlugins`), and an inquiry another host opened
- * in a shared session is answered from its thread rather than from a modal
- * here, so {@link attentionRequests} leaves plugin requests out of this queue.
- */
-export type PendingRequestKind = Exclude<RequestKind, 'plugin'>;
 
 /**
  * The presented payload IS the wire {@link RequestPayload}, with the
@@ -61,11 +53,11 @@ export type PendingRequestKind = Exclude<RequestKind, 'plugin'>;
  * TUI handles it.
  */
 export type TuiRequest = {
-  [K in PendingRequestKind]: Extract<RequestPayload, { kind: K }> &
+  [K in RequestKind]: Extract<RequestPayload, { kind: K }> &
     (K extends keyof TuiApprovalAdornments
       ? { readonly tui: TuiApprovalAdornments[K] }
       : { readonly tui?: never });
-}[PendingRequestKind];
+}[RequestKind];
 
 /** The two kinds their modals read by name. */
 export type ToolEditTuiRequest = Extract<TuiRequest, { kind: 'toolEdit' }>;
@@ -89,19 +81,15 @@ export interface PendingApproval {
 }
 
 /** Where a decision goes: the session its `request.decide` lands on, the
- *  runtime that request runs on, and the chat's attached host, which
+ *  chat's runner that request runs on (a decision lands even when its
+ *  modal has closed), and the chat's attached host, which
  *  performs the host command a decision names instead (a retry on the
  *  user's own key lands the decision itself once the key is in place). */
-export interface DecisionSurface {
+interface DecisionSurface {
   readonly requests: SessionRequests;
-  readonly runtime: ProcessRuntime;
+  readonly chat: ScopeRunner;
   readonly performHost: (command: HostCommand) => void;
 }
-
-/** A pending `request.opened` fact, typed to {@link PendingRequestKind}. */
-export type PendingApprovalFact = SessionView['requests'][number] & {
-  readonly payload: Extract<RequestPayload, { kind: PendingRequestKind }>;
-};
 
 /** Each run's pending request kinds in commit order: the badge the session
  *  list and the workflow popup paint on its row. */
@@ -157,29 +145,22 @@ export function pruneToLive(
  * or re-notified by a promotion. The status bar, the title, and the modal
  * all read this one list.
  */
-export const attentionRequests = computed(
-  (): readonly PendingApprovalFact[] => {
-    const included = sessionRunIds.get();
-    const view = sessionView().get();
-    // The session view lists every kind, including a plugin's request (an
-    // inquiry) a persisted session carries from another host; this surface
-    // renders none of those, so the narrowing is a filter rather than an
-    // assertion. It renders only
-    // what this window can answer (`attentionOf`, the rule every host reads):
-    // not a stopped run's leftover (its modal would trap the keys `/resume`
-    // needs), nor a request on a run another process holds.
-    const requests = attentionOf(view).requests.filter(
-      (request): request is PendingApprovalFact =>
-        included.has(request.runId) && request.payload.kind !== 'plugin',
-    );
-    return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
-  },
-);
+export const attentionRequests = computed((): readonly PendingRequest[] => {
+  const included = sessionRunIds.get();
+  const view = sessionView().get();
+  // This surface renders only what this window can answer (`attentionOf`, the rule every host reads):
+  // not a stopped run's leftover (its modal would trap the keys `/resume`
+  // needs), nor a request on a run another process holds.
+  const requests = attentionOf(view).requests.filter((request) =>
+    included.has(request.runId),
+  );
+  return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
+});
 
 /** The payload the modal renders: the staged one when there is one, else the
  *  fact's, for the kinds that need nothing staged. */
 function presentedPayload(
-  request: PendingApprovalFact,
+  request: PendingRequest,
   staged: ReadonlyMap<string, TuiRequest>,
 ): TuiRequest | undefined {
   const entry = staged.get(request.requestId);
@@ -212,7 +193,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   const staged = stagedPresentations.get();
   const done = decided.get();
   const candidates: Array<{
-    readonly request: PendingApprovalFact;
+    readonly request: PendingRequest;
     readonly payload: TuiRequest;
   }> = [];
   for (const request of attentionRequests.get()) {
@@ -223,7 +204,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
     candidates.push({ request, payload });
   }
   const order = new Map([...presentedOrder].map((id, index) => [id, index]));
-  const orderOf = (request: PendingApprovalFact): number =>
+  const orderOf = (request: PendingRequest): number =>
     order.get(request.requestId) ?? 0;
   candidates.sort(
     (a, b) =>
@@ -296,13 +277,13 @@ export function reopenRequest(requestId: string): void {
  */
 function issue(
   requests: SessionRequests,
-  runtime: ProcessRuntime,
+  chat: ScopeRunner,
   runId: RunId,
   requestId: string,
   request: RuntimeCommand,
 ): void {
   const reopen = (): void => reopenRequest(requestId);
-  runtime.runFork(
+  chat.fork(
     requests.request(request).pipe(
       Effect.match({
         onFailure: (error) => {
@@ -335,8 +316,8 @@ function issue(
  * once the credential is in place.
  */
 function decideRequest(
-  { requests, runtime, performHost }: DecisionSurface,
-  request: PendingApprovalFact,
+  { requests, chat, performHost }: DecisionSurface,
+  request: PendingRequest,
   payload: RequestPayload,
   decision: SurfaceDecision,
 ): void {
@@ -347,6 +328,6 @@ function decideRequest(
     decision,
   );
   if ('runtime' in delivery)
-    issue(requests, runtime, runId, request.requestId, delivery.runtime);
+    issue(requests, chat, runId, request.requestId, delivery.runtime);
   else performHost(delivery.host);
 }

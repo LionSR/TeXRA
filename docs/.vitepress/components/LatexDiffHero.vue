@@ -1,8 +1,8 @@
 <script setup>
-// LaTeX Diff product slice: the LaTeXDiffs section beside the compiled, color-
-// coded diff PDF. Mirrors LatexDiffsSection.ts — a source-control-labelled
-// collapsible with Base / Edited / Commit rows, each a labelled <wa-select>
-// fronted by a toolbar of icon actions.
+// LaTeX Diff product slice: the LaTeXDiffs sheet beside the compiled, color-
+// coded diff PDF. Mirrors LatexDiffsSection.ts: Base / Edited / Commit rows,
+// each a labelled <wa-select> with icon actions in its header and, for Edited
+// and Commit, the labelled action buttons under it.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
@@ -51,27 +51,39 @@ import MockupFrame from './MockupFrame.vue';
               Edited</span
             >
             <div class="acts">
-              <span class="act" title="Accept changes"
-                ><wa-icon library="texra" name="check"></wa-icon
+              <span class="act" title="Refresh edited files"
+                ><wa-icon library="texra" name="refresh"></wa-icon
               ></span>
-              <span class="act" title="Compare files"
-                ><wa-icon library="texra" name="diff"></wa-icon
+              <span class="act" title="Set current file as edited"
+                ><wa-icon library="texra" name="file-code"></wa-icon
               ></span>
-              <span class="act" title="Merge edits"
-                ><wa-icon library="texra" name="merge"></wa-icon
-              ></span>
-              <span class="act act-on" title="LaTeXdiff"
-                ><wa-icon library="texra" name="diff-single"></wa-icon
+              <span class="act" title="Clear edited file"
+                ><wa-icon library="texra" name="close"></wa-icon
               ></span>
             </div>
           </div>
           <div class="select">
-            <span class="s-val">spectral-gap_polish_r1.tex</span>
+            <span class="s-val">r1/spectral-gap.tex</span>
             <wa-icon
               class="s-caret"
               library="texra"
               name="chevron-down"
             ></wa-icon>
+          </div>
+          <div class="dacts">
+            <span class="act act-on"
+              ><wa-icon library="texra" name="diff-single"></wa-icon> Diff vs.
+              edited</span
+            >
+            <span class="act"
+              ><wa-icon library="texra" name="diff"></wa-icon> Compare</span
+            >
+            <span class="act"
+              ><wa-icon library="texra" name="merge"></wa-icon> Merge</span
+            >
+            <span class="act"
+              ><wa-icon library="texra" name="check"></wa-icon> Accept</span
+            >
           </div>
         </div>
 
@@ -87,14 +99,8 @@ import MockupFrame from './MockupFrame.vue';
               Commit</span
             >
             <div class="acts">
-              <span class="act" title="LaTeXdiff with commit"
-                ><wa-icon library="texra" name="diff-single"></wa-icon
-              ></span>
-              <span class="act" title="Pack latexdiff output"
-                ><wa-icon library="texra" name="archive"></wa-icon
-              ></span>
-              <span class="act" title="Clean latexdiff output"
-                ><wa-icon library="texra" name="trash"></wa-icon
+              <span class="act" title="Refresh commit list"
+                ><wa-icon library="texra" name="refresh"></wa-icon
               ></span>
             </div>
           </div>
@@ -105,6 +111,20 @@ import MockupFrame from './MockupFrame.vue';
               library="texra"
               name="chevron-down"
             ></wa-icon>
+          </div>
+          <div class="dacts">
+            <span class="act"
+              ><wa-icon library="texra" name="diff-single"></wa-icon> Diff vs.
+              commit</span
+            >
+            <span class="act"
+              ><wa-icon library="texra" name="archive"></wa-icon> Move to Diffs
+              folder</span
+            >
+            <span class="act"
+              ><wa-icon library="texra" name="trash"></wa-icon> Delete diff
+              files</span
+            >
           </div>
         </div>
       </div>
@@ -173,5 +193,20 @@ import MockupFrame from './MockupFrame.vue';
 }
 .s-mute {
   color: var(--color-text-secondary);
+}
+
+/* The labelled action buttons under a selector. */
+.dacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mk-space-4);
+  margin-top: var(--mk-space-6);
+}
+.dacts .act {
+  width: auto;
+  gap: var(--mk-space-5);
+  padding: var(--mk-space-3) var(--mk-space-7);
+  border: 1px solid var(--color-border);
+  font-size: var(--mk-fs-70);
 }
 </style>

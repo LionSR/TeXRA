@@ -1,6 +1,7 @@
 import { Effect, Layer } from 'effect';
 
-import type { RunId } from '@shared/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
+import type { Database } from '../../../../scripts/fixtures/sessionDatabase';
 import {
   loadDatabaseFixture,
   type DatabaseFixture,
@@ -44,7 +45,7 @@ const canonicalRows = (fixture: DatabaseFixture) =>
 function inEventDatabase<A, E>(
   fixture: DatabaseFixture,
   storagePath: string,
-  operation: Effect.Effect<A, E, import('@shared/session/database').Database>,
+  operation: Effect.Effect<A, E, Database>,
 ) {
   return Effect.runPromise(
     operation.pipe(
@@ -95,6 +96,8 @@ async function writeCanonicalRunFixtures(
             takesFollowUps: true,
             parent: null,
             provenance: null,
+            worktree: null,
+            grants: { own: {}, goal: [] },
           },
           { type: 'run.activate', aggregateId: id },
           {
@@ -105,7 +108,7 @@ async function writeCanonicalRunFixtures(
           {
             type: 'run.position',
             aggregateId: id,
-            payload: { at: runFixture.step },
+            payload: { at: runFixture.step, turn: 0 },
           },
         ]);
       }

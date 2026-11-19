@@ -91,6 +91,6 @@ Within a single run, the orchestrator and every subagent it spawns see the **sam
 
 ## Related
 
-- [ProgressBoard](./progress-board.md): see what an agent is doing in real time, including which memories it has read or written
+- [Tasks view](./progress-board.md): see what an agent is doing in real time, including which memories it has read or written
 - [Configuration](./configuration.md): the full list of Settings tabs
 - [Custom agents](./custom-agents.md): give your own agents access to the `memory` tool

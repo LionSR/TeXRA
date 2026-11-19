@@ -24,11 +24,11 @@ export type PluginEnv = Pick<SettingsStores, 'globalState'> & {
 };
 
 /** The install record's key; its value is every installed plugin. */
-export const INSTALLED_PLUGINS_KEY = {
+export const INSTALLED_PLUGINS_KEY = Object.freeze({
   key: 'plugins.installed',
   slot: 'globalState',
   schema: Schema.Array(InstalledPluginSchema),
-} as const satisfies StateKey<readonly InstalledPlugin[]>;
+} as const satisfies StateKey<readonly InstalledPlugin[]>);
 
 /** The record as its schema reads it: absent is empty, anything that does
  *  not validate refuses, so a change never writes over it and loses it. */

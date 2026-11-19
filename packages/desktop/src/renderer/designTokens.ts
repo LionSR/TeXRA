@@ -2,7 +2,8 @@
 // (light DOM) tree: the same sheets every component adopts for its shadow
 // root, so the two trees have one definition and cannot drift.
 // themeTokens.css supplies only the --desktop-* palette and the --wa-* inputs
-// these read. Imported for its effect by each renderer entry.
+// these read. Imported for its effect by each renderer entry and by the
+// trace viewer, which paints its light DOM with the same tokens.
 //
 // Adopted sheets cascade after the document's own, so the shared base goes
 // in a layer: any unlayered renderer rule then refines it, whatever order

@@ -5,7 +5,12 @@ import assert from 'node:assert/strict';
 import { it } from '@effect/vitest';
 import { Effect, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
-import { completedTurn, type TurnRequest } from '@texra-ai/llm';
+import {
+  completedTurn,
+  MODEL_CONFIGS,
+  turnCost,
+  type TurnRequest,
+} from '@texra-ai/llm';
 import { openaiResponsesModel } from '../../src/api/openaiResponses.js';
 import type { OpenAIResponsesConfiguration } from '../../src/turn.js';
 
@@ -29,6 +34,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
   continuationInheritsInstructions: false,
   supportsForcedToolChoice: true,
   requestDialect: 'openai',
+  toolNamespace: null,
   background: false,
   defaults: {
     temperature: 0.7,
@@ -221,10 +227,16 @@ describe('native OpenAI Responses protocol', () => {
           delta: 'I will check.',
         });
         // The ChatGPT backend's side-channel notice adds nothing to the turn.
-        frames.splice(1, 0, {
-          type: 'response.metadata',
-          metadata: { openai_chatgpt_moderation_metadata: {} },
-        });
+        frames.splice(
+          1,
+          0,
+          {
+            type: 'response.metadata',
+            metadata: { openai_chatgpt_moderation_metadata: {} },
+          },
+          // Nor does the transport's keepalive.
+          { type: 'keepalive' },
+        );
         const fetch = vi
           .fn<typeof globalThis.fetch>()
           .mockResolvedValueOnce(response(frames))
@@ -336,6 +348,79 @@ describe('native OpenAI Responses protocol', () => {
             output: 'Error: missing',
           },
         ]);
+      }),
+  );
+
+  it.effect(
+    "bills a receipt's 30-minute and 12-hour cache writes at their write rates",
+    () =>
+      Effect.gen(function* () {
+        // OpenAI's prompt-caching guide: input counts reads and writes, and
+        // a write bills 1.25x input for 30 minutes, 2.5x for 12 hours.
+        const usage = {
+          input_tokens: 12_000,
+          input_tokens_details: {
+            cached_tokens: 4000,
+            cache_write_tokens: 7000,
+            cache_write_tokens_details: {
+              ttl_30m_tokens: 3000,
+              ttl_12h_tokens: 4000,
+            },
+          },
+          output_tokens: 1000,
+          output_tokens_details: { reasoning_tokens: 0 },
+          total_tokens: 13_000,
+        };
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockResolvedValueOnce(
+            response(events([MESSAGE], snapshot([MESSAGE], { usage }))),
+          );
+        const model = yield* modelWith(fetch);
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const result = yield* completedTurn(model.streamTurn(turn));
+        assert(result.usage !== null);
+        // gpt-6.1-sol: $2 input, $0.10 cached, $2.50 and $5 writes, $10 output.
+        expect(
+          turnCost(MODEL_CONFIGS['openai/gpt-6.1-sol'], result.usage, {
+            plan: false,
+          }),
+        ).toBeCloseTo(
+          (1000 * 2 + 4000 * 0.1 + 3000 * 2.5 + 4000 * 5 + 1000 * 10) / 1e6,
+          12,
+        );
+      }),
+  );
+  it.effect(
+    'does not repeat a response that failed on a policy, and repeats a server error',
+    () =>
+      Effect.gen(function* () {
+        const failure = (code: string) =>
+          Effect.gen(function* () {
+            const failed = snapshot([], {
+              status: 'failed',
+              error: { code, message: `failed: ${code}` },
+            });
+            const frames = [
+              ...events([]).slice(0, -1),
+              { type: 'response.failed', response: failed },
+            ];
+            const model = yield* modelWith(
+              vi
+                .fn<typeof globalThis.fetch>()
+                .mockResolvedValue(response(frames)),
+            );
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            return yield* Effect.flip(completedTurn(model.streamTurn(turn)));
+          });
+        expect(yield* failure('bio_policy')).toMatchObject({
+          retryable: false,
+        });
+        expect(yield* failure('server_error')).toMatchObject({
+          retryable: true,
+        });
       }),
   );
 });

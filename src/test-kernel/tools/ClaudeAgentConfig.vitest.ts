@@ -1,6 +1,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ConfigProvider, Effect } from 'effect';
+import { ConfigProvider, Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiKeySecretName } from '@texra-ai/llm';
@@ -8,6 +8,7 @@ import { Secrets } from '@texra-ai/harness/plugins';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { buildClaudeAgentEnv } from '@texra/tools/agentCli/claudeAgentConfig';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 /** Build the env over a stored managed API key, with no keychain
  *  credential: every `security` probe exits 1. */
@@ -16,16 +17,17 @@ function buildEnv(): Promise<NodeJS.ProcessEnv> {
   return Effect.runPromise(
     buildClaudeAgentEnv().pipe(
       Effect.provide(
-        Secrets.layer(
-          new FakeSecrets({ [apiKeySecretName('anthropic')]: 'from-secret' }),
+        Layer.mergeAll(
+          Secrets.layer(
+            new FakeSecrets({ [apiKeySecretName('anthropic')]: 'from-secret' }),
+            HARNESS_APP.client,
+          ),
+          // The live env provider, so the suite's `vi.stubEnv` still governs
+          // the API-key fallback read through `envVar`.
+          ConfigProvider.layer(ConfigProvider.fromEnvRecord(process.env)),
+          spawner.layer,
         ),
       ),
-      // The live env provider, so the suite's `vi.stubEnv` still governs the
-      // API-key fallback read through `envVar`.
-      Effect.provide(
-        ConfigProvider.layer(ConfigProvider.fromEnvRecord(process.env)),
-      ),
-      Effect.provide(spawner.layer),
     ),
   );
 }

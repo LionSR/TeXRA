@@ -190,16 +190,6 @@ export const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING = {
     "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
 } as const satisfies SettingRow<boolean>;
 
-export const GOOGLE_BACKGROUND_RESPONSES_SETTING = {
-  key: 'model.useGoogleBackgroundResponses',
-  slot: 'config',
-  schema: booleanWithDefault(false),
-  configTarget: 'global',
-  title: 'Google background responses',
-  description:
-    'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-} as const satisfies SettingRow<boolean>;
-
 export const OPENAI_FAST_TIER_SETTING = {
   key: 'model.openaiFastTier',
   slot: 'config',
@@ -450,25 +440,6 @@ export const MEMORY_ENABLED_SETTING = {
   description: 'Remember useful details across chat sessions.',
 } as const satisfies SettingRow<boolean>;
 
-/**
- * Code mode's "only" stage: every chat run gets `script`, and the model sees
- * no other tool; the rest are callable from scripts alone. The codemode
- * plugin's `injectedWhen` reads the row to inject `script`; the step reads it
- * to send the model `script` and the run's own tools alone, recorded per tool
- * on its `tools.offered` row. Both read it as off for a model that keeps
- * direct tool calls (`keepsDirectToolCalls`). Off here, so an embedder's
- * agent is sent the tools it declares; an app turns it on with
- * `settingsCatalog`'s `defaults`.
- */
-export const SCRIPT_ONLY_SETTING = {
-  key: 'codeMode.scriptOnly',
-  slot: 'globalState',
-  schema: booleanWithDefault(false),
-  title: 'Script-only tools',
-  description:
-    'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Turn off to send every tool directly.',
-} as const satisfies SettingRow<boolean>;
-
 /** The OpenAI WebSocket transport (experimental). */
 export const WEBSOCKET_OPENAI_SETTING = {
   key: 'websocket.openai',
@@ -476,7 +447,7 @@ export const WEBSOCKET_OPENAI_SETTING = {
   schema: booleanWithDefault(false),
   title: 'OpenAI WebSocket',
   description:
-    'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
+    'EXPERIMENTAL: send OpenAI Responses requests over a persistent WebSocket (lower latency for tool-use loops). Applies only to an OpenAI API key on the default endpoint; the ChatGPT subscription and background responses keep HTTP. Off by default.',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -508,7 +479,7 @@ export const GLM_CODING_PLAN_SETTING = {
   schema: booleanWithDefault(false),
   title: 'GLM Coding Plan',
   description:
-    'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+    "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; TeXRA shows the plan's quota and reports its limits as plan limits. Ignored while a custom GLM endpoint is set.",
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -534,7 +505,6 @@ const HARNESS_SETTINGS = [
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,
   GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
-  GOOGLE_BACKGROUND_RESPONSES_SETTING,
   OPENAI_FAST_TIER_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -552,7 +522,6 @@ const HARNESS_SETTINGS = [
   GIT_WORKTREE_SUPPORT_SETTING,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   MEMORY_ENABLED_SETTING,
-  SCRIPT_ONLY_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   ...PROVIDER_ENDPOINT_SETTINGS,
   HELPER_MODEL_SETTING,

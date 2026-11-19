@@ -66,7 +66,6 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 
 import { layer } from '@effect/vitest';
 import {
@@ -91,7 +90,7 @@ import {
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
 import { decideRequest, SessionRequests } from '@agent/runtime/requests';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   AgentConfigSchema,
   aggregateTarget,
@@ -109,6 +108,7 @@ import {
   answerOf,
   crashAt,
   persistentTestSession,
+  readStoreSnapshot,
   storedRows as rowsOf,
   type StoredRow as Row,
   validationHost,
@@ -418,7 +418,11 @@ const editsOf = (rows: readonly Row[], root: string) =>
     .map((row) => payload(row).cause);
 
 /** The root waits for input with `count` answers, after its last view edit. */
-const waitingAfter = (rows: readonly Row[], root: string, count: number) => {
+const waitingPastLastEdit = (
+  rows: readonly Row[],
+  root: string,
+  count: number,
+) => {
   const mine = rows.filter((row) => row.run === root);
   const last = mine.findLast((row) => row.type === 'run.position');
   const edit = mine.findLast((row) => row.type === 'context.edit');
@@ -456,14 +460,14 @@ const userSteps = (
     // A switch, then a compaction, each asked for once: a request whose
     // row is committed is the resumed run's to apply.
     if (!requested(yield* liveRows(storage), root, 'model')) {
-      yield* until(storage, (rows) => waitingAfter(rows, root, 1));
-      const controls = Context.get(session, Runs).get(root)?.controls;
+      yield* until(storage, (rows) => waitingPastLastEdit(rows, root, 1));
+      const controls = Context.get(session, RunRegistry).get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the waiting run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
     }
     if (!requested(yield* liveRows(storage), root, 'compact')) {
-      yield* until(storage, (rows) => waitingAfter(rows, root, 1));
+      yield* until(storage, (rows) => waitingPastLastEdit(rows, root, 1));
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.compact',
         runId: root,
@@ -474,12 +478,11 @@ const userSteps = (
         storage,
         (rows) =>
           editsOf(rows, root).includes('compaction') &&
-          waitingAfter(rows, root, 2),
+          waitingPastLastEdit(rows, root, 2),
       );
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.fork',
         runId: root,
-        at: null,
       });
     }
     if (bashBypassOf(yield* liveRows(storage), root) !== 'off') {
@@ -746,12 +749,7 @@ const cleanPass = (
       }),
     );
     const clean = join(roots.storage, 'clean.db');
-    const db = new DatabaseSync(join(roots.storage, 'texra.db'));
-    try {
-      db.exec(`VACUUM INTO '${clean}'`);
-    } finally {
-      db.close();
-    }
+    readStoreSnapshot(roots.storage, (db) => db.exec(`VACUUM INTO '${clean}'`));
     return { points, clean };
   });
 
@@ -1109,12 +1107,10 @@ export function crashConformanceSuite(
                       interactive: true,
                     }).pipe(Effect.provide(session)),
                   () =>
-                    Effect.gen(function* () {
-                      yield* until(
-                        roots.storage,
-                        (rows) => settled(rows).length === 3 && allRead(rows),
-                      );
-                    }),
+                    until(
+                      roots.storage,
+                      (rows) => settled(rows).length === 3 && allRead(rows),
+                    ),
                 );
                 const cleanRows = rowsOf(roots.storage);
                 // The child's turn, the script and the command each reported, and

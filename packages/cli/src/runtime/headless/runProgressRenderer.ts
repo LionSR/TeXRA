@@ -17,6 +17,7 @@ import {
   formatCompactDuration,
   pluralize,
   joinFacts,
+  isLive,
 } from '@texra-ai/harness/schemas';
 import {
   formatLoopPositionLabel,
@@ -47,7 +48,7 @@ interface RunProgressSession {
  *  run's own handle does, as does the chat for every run it lists). */
 export function finishedToolCalls(run: RunView): number {
   return run.transcript.rows.filter(
-    (row) => row.kind === 'tool' && !row.model.isInProgress,
+    (row) => row.kind === 'tool' && row.model.status !== 'in_progress',
   ).length;
 }
 
@@ -222,7 +223,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root || this.rootRunTerminal) return [];
     return root.childIds.flatMap((childId) => {
       const child = this.view?.runs.get(childId);
-      return child?.holder === 'here' ? [child] : [];
+      return child !== undefined && isLive(child) ? [child] : [];
     });
   }
 

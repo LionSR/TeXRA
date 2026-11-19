@@ -3,10 +3,13 @@
  *
  * Every fact about a run — what it is, what it is called, how far it got,
  * whose child it is, what it still has to do — is read off the session fold
- * (`SessionView`), and whether it is live here off `Runs`. The fold is the
- * one reading of the durable rows, so this surface never resolves
+ * (`SessionView`), and whether it is live here off the
+ * `RunRegistry`. The fold is the one reading of the durable rows, so this surface never resolves
  * parentage or a task list a second time.
  */
+
+// Node imports
+import * as nodePath from 'node:path';
 
 // Third-party imports
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
@@ -19,10 +22,11 @@ import {
 } from '@agent/storage/runWorkspaceFiles';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import type { RunsShape } from '@agent/runtime/runs';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
-import { findExistingRunStoragePathUnder } from '@common/storage/storageLayout';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
   isRunId,
@@ -35,6 +39,7 @@ import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 import { formatConversation } from '@shared/transcript/conversationFormat';
 import { assertNoParentTraversal } from '@tools/pathResolution';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@agent/storage/completedRunArchive';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -69,7 +74,7 @@ import { scriptCallsView } from './executions/scriptCallsView';
 interface RunToolContext {
   readonly runId: RunId;
   /** The session's runs. */
-  readonly runs: Runs['Service'];
+  readonly runs: RunsShape;
 }
 
 /**
@@ -323,7 +328,7 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   { run }: RunToolCall,
   input: ExecutionsToolInput,
 ) {
-  const context = { runId: run.runId, runs: yield* Runs };
+  const context = { runId: run.runId, runs: yield* RunRegistry };
   const segments = getPathSegments(input.path);
   const route = EXECUTION_ROUTES.find(({ path }) => {
     const parts = path.split('/').slice(1);
@@ -336,10 +341,8 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     );
   });
   if (!route) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
-      ),
+    return yield* new ToolError(
+      `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
     );
   }
   const handle = handlerFor(route.actions, input.action);
@@ -347,10 +350,8 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     const validOn = EXECUTION_ROUTES.filter(
       ({ actions }) => actions[input.action],
     );
-    return yield* Effect.fail(
-      new ToolError(
-        `action='${input.action}' runs on ${validOn.map(({ path }) => path).join(' or ')}, not on ${route.path}.`,
-      ),
+    return yield* new ToolError(
+      `action='${input.action}' runs on ${validOn.map(({ path }) => path).join(' or ')}, not on ${route.path}.`,
     );
   }
   return yield* handle({
@@ -376,7 +377,7 @@ function resolveRunId(
  *  (`RunsShape.get`), or it left the in-flight phases on `view`. A run
  *  launched here whose start has not been applied yet is running. */
 const waitOver = (
-  runs: Runs['Service'],
+  runs: RunsShape,
   view: SessionView,
   runId: RunId,
 ): boolean => {
@@ -424,9 +425,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
 
   // An open run is in the view; one launched here may not have opened yet.
   if (!run)
-    return yield* Effect.fail(
-      missingRun(context.runs, runId, `Run not found: ${runId}`),
-    );
+    return yield* missingRun(context.runs, runId, `Run not found: ${runId}`);
 
   // The report is a private record row, never part of the display fold.
   const report = yield* getRunRecords(runId).readReport();
@@ -460,38 +459,32 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   runId: RunId,
 ) {
   if (context.runId === runId) {
-    return yield* Effect.fail(
-      new ToolError(`Cannot kill your own run (${runId}).`),
-    );
+    return yield* new ToolError(`Cannot kill your own run (${runId}).`);
   }
 
   const { runs } = context;
   if (runs.get(runId) === undefined) {
-    return yield* Effect.fail(
-      new ToolError(`Run ${runId} not found or already completed.`),
-    );
+    return yield* new ToolError(`Run ${runId} not found or already completed.`);
   }
 
   // Only your own children, by the attached parent the fold reads.
   const view = yield* (yield* SessionViewAccess).read([]);
   if (view.runs.get(runId)?.parentId !== context.runId) {
-    return yield* Effect.fail(
-      new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
+    return yield* new ToolError(
+      `Cannot kill run ${runId}: not a child of this session.`,
     );
   }
 
   // The permission gate: off, or a stored value that fails its schema, denies.
   const killDenial = yield* orchestratorKillDenial(yield* SessionRoots);
   if (killDenial !== undefined) {
-    return yield* Effect.fail(new ToolError(killDenial));
+    return yield* new ToolError(killDenial);
   }
 
   // Its children follow the session's stop policy (`RunRegistry.stop`).
   const success = yield* runs.stop(runId, 'user').pipe(Effect.uninterruptible);
   if (success) return executed(`Run ${runId} terminated.`);
-  return yield* Effect.fail(
-    new ToolError(`Run ${runId} could not be terminated.`),
-  );
+  return yield* new ToolError(`Run ${runId} could not be terminated.`);
 });
 
 const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
@@ -532,9 +525,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
   const record = yield* records.readRunRecord();
 
   if (!record) {
-    return yield* Effect.fail(
-      new ToolError(`Config not found for run: ${runId}.`),
-    );
+    return yield* new ToolError(`Config not found for run: ${runId}.`);
   }
 
   // Filter out fields irrelevant to this run's display category, which
@@ -558,14 +549,16 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     limit: number,
   ) {
     const records = getRunRecords(runId);
-    const { config } = yield* SessionRoots;
-    const conversation = yield* readCompletedRunConversation(runId, config);
+    const conversation = yield* readCompletedRunConversation(
+      runId,
+      yield* SessionRoots,
+    );
 
     if (conversation.length === 0) {
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
       // the run's aggregate.
       if (!(yield* records.exists())) {
-        return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
+        return yield* new ToolError(`Run not found: ${runId}`);
       }
       return executed(
         formatConversation([], {
@@ -615,16 +608,17 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
 ) {
   const displayPath = `/executions/${runId}/files/${filePath}`;
   yield* assertNoParentTraversal(filePath);
-  const fullPath = yield* findExistingRunStoragePathUnder(
-    (yield* SessionRoots).storage,
+  const storageFs = yield* StorageFs;
+  const storagePath = nodePath.posix.join(
+    WORKSPACE_STORAGE_LAYOUT.runs,
     runId,
     filePath,
   );
-  if (!fullPath) {
-    return yield* Effect.fail(new ToolError(`File not found: ${displayPath}`));
+  if (!(yield* entryExists(storageFs, storagePath))) {
+    return yield* new ToolError(`File not found: ${displayPath}`);
   }
 
-  return yield* readFileContent(yield* StorageFs, fullPath, {
+  return yield* readFileContent(storageFs, storagePath, {
     directoryErrorPath: displayPath,
     resultPath: displayPath,
     viewRange,
@@ -690,10 +684,8 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
         ? recordedFile(filePath.slice(displayPrefix.length))
         : undefined);
     if (!resolved) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Workspace file not found: /executions/${runId}/workspace-files/${filePath}`,
-        ),
+      return yield* new ToolError(
+        `Workspace file not found: /executions/${runId}/workspace-files/${filePath}`,
       );
     }
 
@@ -765,10 +757,8 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   // A symlink to a directory counts, which is what the bitmask probe this
   // replaced answered for: the standard `stat` follows the link.
   if (stats.type === 'Directory') {
-    return yield* Effect.fail(
-      new ToolError(
-        `Path is a directory: ${directoryErrorPath}. Use without trailing path to list.`,
-      ),
+    return yield* new ToolError(
+      `Path is a directory: ${directoryErrorPath}. Use without trailing path to list.`,
     );
   }
 

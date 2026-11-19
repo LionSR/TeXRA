@@ -25,7 +25,11 @@ import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
 import { acmeNotes, agentsDir as packageAgents, NoteSchema } from 'acme-notes';
 
-import { makeExampleWorkspace, scriptReturnsOf } from './_support.ts';
+import {
+  EXAMPLE_CLIENT,
+  makeExampleWorkspace,
+  scriptReturnsOf,
+} from './_support.ts';
 
 const CODE = `
 const { add } = await import('builtIn:notes');
@@ -41,9 +45,16 @@ const turns = [
   { expect: 'The script returned', text: 'Noted.' },
   {
     expect: 'Add a second note.',
-    toolCalls: [{ name: 'note_add', input: SECOND }],
+    toolCalls: [
+      {
+        name: 'script',
+        input: {
+          code: `return await tools.note_add(${JSON.stringify(SECOND)});`,
+        },
+      },
+    ],
   },
-  { expect: 'noted: Section 3 is done.', text: 'Both noted.' },
+  { expect: 'The script returned', text: 'Both noted.' },
 ];
 const withPlugin = await makeExampleWorkspace(turns, undefined, packageAgents);
 // The same workspace and store, its agent directory its own (no agents).
@@ -100,6 +111,7 @@ const runId = await Effect.runPromise(
       Sessions.layer({
         platform: withPlugin.platform,
         plugins: [...harnessBuiltins, acmeNotes],
+        client: EXAMPLE_CLIENT,
       }).pipe(Layer.provideMerge(route.transport)),
     ),
   ),
@@ -126,8 +138,8 @@ await Effect.runPromise(
       refused._tag !== 'ResumeRefused' ||
       refused.reason.kind !== 'pluginUnavailable' ||
       refused.reason.plugin !== 'acme-notes' ||
-      listed?.resumable !== false ||
-      listed.resumeBlocked !== note.unavailable
+      listed?.continues !== false ||
+      listed.continueBlocked !== note.unavailable
     )
       throw new Error(
         `resume was not refused: ${JSON.stringify({ refused, listed })}`,
@@ -141,6 +153,7 @@ await Effect.runPromise(
       Sessions.layer({
         platform: withoutPlugin.platform,
         plugins: harnessBuiltins,
+        client: EXAMPLE_CLIENT,
       }).pipe(Layer.provideMerge(route.transport)),
     ),
   ),
@@ -185,6 +198,7 @@ await Effect.runPromise(
       Sessions.layer({
         platform: withPlugin.platform,
         plugins: [...harnessBuiltins, acmeNotes],
+        client: EXAMPLE_CLIENT,
       }).pipe(Layer.provideMerge(route.transport)),
     ),
   ),

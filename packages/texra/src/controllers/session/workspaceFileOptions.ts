@@ -8,6 +8,7 @@
  */
 import { Effect } from 'effect';
 
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import { WorkspaceFs } from '@texra-ai/harness/plugins';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { getFileListConfig } from '@texra/common/files/fileListingRules';
@@ -34,12 +35,13 @@ export const findLabelInWorkspace = Effect.fn(
   const [inputs, contexts] = yield* listWorkspaceFiles({
     root: workspaceRoot,
     configs: [getFileListConfig('input'), getFileListConfig('context')],
+    links: 'follow',
   });
   const workspaceFs = yield* WorkspaceFs;
   return yield* openFirstLabelMatch(
     label,
-    new Set([...inputs, ...contexts]),
-    (file) => workspaceFs.readFileString(file),
+    new Set([...inputs.files, ...contexts.files]),
+    (file) => readNormalizedFile(workspaceFs, file),
     (file, line) =>
       workspaceFs
         .resolve(file)
@@ -56,9 +58,10 @@ export const workspaceFileOptions = Effect.fn(
   if (!workspaceRoot) {
     return { baseFile: [], editedFile: [], commit: ['HEAD'] };
   }
-  const [baseFile, editedFile] = yield* listWorkspaceFiles({
+  const [base, edited] = yield* listWorkspaceFiles({
     root: workspaceRoot,
     configs: [getFileListConfig('input'), getFileListConfig('edited')],
+    links: 'follow',
   });
-  return { baseFile, editedFile, commit: ['HEAD'] };
+  return { baseFile: base.files, editedFile: edited.files, commit: ['HEAD'] };
 });

@@ -22,13 +22,9 @@ import { Effect, FileSystem, Predicate, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  AppState,
-  type PerKeyLane,
-  hasExtension,
-  withPerKeyLane,
-} from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/host';
+import { readNormalizedFile } from '@texra-ai/harness/node';
+import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
@@ -39,6 +35,7 @@ import {
   withLogChannel,
   Settings,
   type SettingsStores,
+  AppState,
 } from '@texra-ai/harness/plugins';
 import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -108,8 +105,7 @@ export function makeInlineCriticism(): InlineCriticism {
 
     const fs = yield* FileSystem.FileSystem;
     // An unreadable output file loses its squiggles, not the whole refresh.
-    const text = yield* fs.readFileString(absolutePath).pipe(
-      Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
+    const text = yield* readNormalizedFile(fs, absolutePath).pipe(
       Effect.catch((error) =>
         Effect.logError(
           `Failed to read ${absolutePath}: ${error.message}`,

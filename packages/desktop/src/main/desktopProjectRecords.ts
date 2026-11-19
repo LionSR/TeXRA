@@ -1,7 +1,7 @@
 /** The desktop profile's ordered project selection, independent of project sessions. */
 import { Context, Effect, Result, Schema } from 'effect';
 
-import type { CurrentValues, ValueFamily } from '@texra-ai/harness/host';
+import type { CurrentValues, ValueFamily } from '@texra-ai/harness/plugins';
 
 /** How many closed projects File > Open Recent offers. */
 const RECENT_PROJECT_LIMIT = 10;
@@ -23,19 +23,19 @@ const EMPTY: ProjectLists = { remembered: [], recent: [] };
  * @public Exported for the storage freeze (`npm run storage:freeze`, which
  * fingerprints every stored family), not for another module.
  */
-export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
+export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = Object.freeze({
   name: 'desktop-projects',
   schema: Schema.Struct({
     remembered: Schema.Array(Schema.NonEmptyString),
     recent: Schema.Array(Schema.NonEmptyString),
   }),
-};
+});
 
 /**
  * The remembered projects, on the process's handle on the global root.
  *
- * That root is the shared `~/.texra` this process already keeps its sessions,
- * inquiry threads and update check in, not the Electron profile directory:
+ * That root is the shared `~/.texra` this process already keeps its sessions
+ * and update check in, not the Electron profile directory:
  * one handle per process, since a second root would mean a second connection
  * and a second change poll for one list.
  *

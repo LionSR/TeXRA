@@ -13,7 +13,7 @@ import {
   PersonaSchema,
   type AgentDefinition,
 } from '@shared/schemas';
-import type { AgentSource, AgentScanIssue } from '@shared/schemas';
+import type { AgentScanIssue, CatalogAgentSource } from '@shared/schemas';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -22,13 +22,14 @@ import type { AgentEntry } from './agentEntry';
 const CHANNEL = 'agentRegistry';
 
 /**
- * One file- or directory-level scan failure. Scanning is a best-effort
- * projection: a bad YAML file becomes an issue entry and an unreadable
- * root becomes one issue that contributes no files, so the error never escapes
- * `scanDirectory`'s channel — it exists to be recovered from, and the channel
- * is `never` at the export. Defects (programming errors) stay defects.
+ * One file- or directory-level scan failure, of an agent YAML file or a
+ * plugin's subagent file. Scanning is a best-effort projection: a bad file
+ * becomes an issue entry and an unreadable root becomes one issue that
+ * contributes no files, so the error never escapes a scan's channel — it
+ * exists to be recovered from, and the channel is `never` at the export.
+ * Defects (programming errors) stay defects.
  */
-class AgentScanError extends Schema.TaggedError<AgentScanError>()(
+export class AgentScanError extends Schema.TaggedError<AgentScanError>()(
   'AgentScanError',
   {
     path: Schema.String,
@@ -61,7 +62,7 @@ interface ParsedAgentYaml {
  */
 export function scanDirectory(
   roots: readonly string[],
-  source: AgentSource,
+  source: CatalogAgentSource,
 ): Effect.Effect<AgentDirectoryScan, never, FileSystem.FileSystem> {
   const dirs = roots.filter((root) => root !== '');
   if (dirs.length === 0) return Effect.succeed({ entries: [], issues: [] });
@@ -193,8 +194,7 @@ function readYamlDefinition(
         errors: 'all',
       }),
     );
-    if (Result.isFailure(parsed))
-      return yield* Effect.fail(scanError(parsed.failure));
+    if (Result.isFailure(parsed)) return yield* scanError(parsed.failure);
     const definition = parsed.success;
     return {
       name: definition.name,
@@ -245,7 +245,7 @@ function formatScanFailure(error: unknown): string {
  * applied, the one validation a launch reads, for a file and an inline
  * persona alike. Throws the validation's error.
  */
-export function agentEntryOf(
+function agentEntryOf(
   // As written (a file's tools are parsed, an inline persona's are names).
   definition: typeof AgentDefinitionSchema.Encoded,
   at: Pick<AgentEntry, 'source' | 'path' | 'digest'>,
@@ -264,7 +264,7 @@ export function agentEntryOf(
 /** The entry a definition file makes. */
 function scanYaml(
   entry: ParsedAgentYaml,
-  source: AgentSource,
+  source: CatalogAgentSource,
 ): Effect.Effect<AgentEntry, AgentScanError> {
   return Effect.try({
     try: (): AgentEntry =>

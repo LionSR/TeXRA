@@ -69,7 +69,7 @@ const ReasoningEffortSchema = Schema.NullOr(ReasoningEffortLevelSchema);
 const ResponsesReasoningSchema = Schema.NullOr(
   Schema.Struct({
     effort: ReasoningEffortSchema,
-    mode: Schema.NullOr(Schema.Literals(['standard', 'pro'])),
+    mode: Schema.NullOr(Schema.Literal('pro')),
     summary: Schema.NullOr(Schema.Literal('auto')),
   }),
 );
@@ -93,6 +93,7 @@ const CacheSchema = Schema.Literals(['disabled', '5m']);
 /** The protocol each provider's own usage report belongs to. */
 const PROVIDER_USAGE_PROTOCOL = Object.freeze({
   anthropic: 'anthropic-messages',
+  openai: 'openai-responses',
   xai: 'openai-responses',
 } as const satisfies Record<
   NonNullable<(typeof TurnUsageSchema.Type)['providerUsage']>['kind'],
@@ -105,6 +106,7 @@ export const ThinkingLevelSchema = Schema.Literals([
   'low',
   'medium',
   'high',
+  'xhigh',
 ]);
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
@@ -181,11 +183,14 @@ export type ModelConfiguration =
       readonly supportsForcedToolChoice: boolean;
       /**
        * `openai` sends OpenAI's full request surface; `chatgpt` sends it with
-       * function tools inside the plan's namespace; `compatible` omits what
+       * function tools inside {@link toolNamespace}; `compatible` omits what
        * the vendor Responses endpoints do not take: the encrypted-reasoning
        * `include`, `strict` on tools, and a `store` that is only the default.
        */
       readonly requestDialect: 'openai' | 'compatible' | 'chatgpt';
+      /** The namespace function tools sit in, or null: a ChatGPT plan's (the
+       *  bind's client id) alone. */
+      readonly toolNamespace: string | null;
       readonly defaults: Omit<
         typeof ResponsesControlsSchema.Type,
         'toolChoice' | 'promptCacheKey'

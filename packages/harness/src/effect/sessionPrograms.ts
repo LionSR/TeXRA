@@ -24,7 +24,6 @@ import {
   type AgentCatalog,
 } from '@agent/index/agentCatalog';
 import type { ProjectView } from '@controllers/session/readSessionView';
-import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
@@ -33,7 +32,11 @@ import {
   SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import {
+  LaunchKeys,
+  RunRegistry,
+  RunStopped,
+} from '@agent/runtime/runRegistry';
 import type { ITool } from '@tools/core/ToolTypes';
 import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
@@ -43,6 +46,7 @@ import { asksApproval } from '@agent/runtime/agentToolResolution';
 import { SessionRoots } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  AGENT_SOURCE,
   AgentConfigSchema,
   describeRefusal,
   InlinePersonaSchema,
@@ -78,11 +82,14 @@ type Catalog = Context.Service.Shape<typeof AgentCatalog>;
 const runFailure = (cause: unknown): RunFailure =>
   new RunFailure({ cause, message: toErrorMessage(cause) });
 
-/** A failure of the launch path: a refused launch as itself, an agent this
- *  process cannot run as its refusal (a missing one with the notice that
- *  offers the agent setting), anything else as the run's own. */
+/** A failure of the launch path: a refused launch as itself, one a stop
+ *  cut before it started as a refusal, an agent this process cannot run as
+ *  its refusal (a missing one with the notice that offers the agent
+ *  setting), anything else as the run's own. */
 const launchFailure = (cause: Error): LaunchRefused | RunFailure => {
   if (cause instanceof LaunchRefused) return cause;
+  if (cause instanceof RunStopped)
+    return new LaunchRefused({ message: cause.message });
   if (!(cause instanceof AgentUnavailable)) return runFailure(cause);
   return cause.blocked.blocker === 'agentMissing'
     ? missingAgentRefusal({ agent: cause.blocked.name, message: cause.message })
@@ -130,31 +137,30 @@ const acceptInput = Effect.fn('acceptInput')(function* (
   // A host's whole configuration: its launch resolves the agent itself.
   if ('config' in input) return input.config;
   const { agent } = input;
-  const resolved =
-    typeof agent === 'string'
-      ? catalog.get(agent)
-      : { name: null, source: 'inline' as const };
-  if (!resolved) {
+  const resolved = typeof agent === 'string' ? catalog.get(agent) : null;
+  if (typeof agent === 'string' && !resolved) {
     // The same wording as the catalog's miss, so every host says one thing.
     return yield* missingAgentRefusal({
-      agent: String(agent),
-      message: agentMissMessage(String(agent)),
+      agent,
+      message: agentMissMessage(agent),
     });
   }
   // The schema is the launch's last refusal, and it is a refusal rather
   // than a defect: an input this surface will not accept is the caller's,
   // as an unknown agent above is.
   // The run is named as its persona's schema spells the name.
-  const persona =
-    typeof agent === 'string'
-      ? null
+  const named =
+    resolved != null
+      ? { agent: resolved.name, agentSource: { kind: resolved.source } }
       : yield* Schema.decodeUnknownEffect(InlinePersonaSchema)(agent).pipe(
+          Effect.map(({ name, ...persona }) => ({
+            agent: name,
+            agentSource: { kind: AGENT_SOURCE.INLINE, persona },
+          })),
           Effect.mapError(inputRefused),
         );
   return yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
-    agent: persona?.name ?? resolved.name,
-    agentSource: resolved.source,
-    persona,
+    ...named,
     instruction: input.instruction,
     model: input.model,
   }).pipe(Effect.mapError(inputRefused));
@@ -176,30 +182,18 @@ const start = Effect.fn('start')(function* (
     (SubscriptionRef.getUnsafe(
       Context.get(session, SessionViewAccess).ref,
     ).runs.has(runId) ||
-      Context.get(session, Runs).get(runId) !== undefined)
+      Context.get(session, RunRegistry).get(runId) !== undefined)
   )
     return yield* new LaunchRefused({
       message: `Run ${runId} already exists in this session.`,
     });
-  // A caller interrupted while the run opens never holds it: the opening
-  // unwinds with it. One interrupted after the run opened, before this
-  // hands its handle back, let go of a run that runs: the registry ends it
-  // as a release. Only a run this call opened, so a caller that never
-  // opened one stops nobody else's.
-  let opened = false;
+  // A caller interrupted before the handle comes back gives up only the
+  // wait: the run is its own fiber's, and a stop is how it ends.
   return yield* rootRun({ ...input, config, runId }).pipe(
     Effect.provide(session),
     Effect.provideService(LaunchKeys, input.apiKeys ?? {}),
     Effect.mapError(launchFailure),
-    Effect.map((activation) => {
-      opened = true;
-      return runView(session, runId, activation);
-    }),
-    Effect.onInterrupt(() =>
-      Effect.sync(
-        () => opened && Context.get(session, RunRegistry).interrupt(runId),
-      ),
-    ),
+    Effect.map((activation) => runView(session, runId, activation)),
   );
 });
 

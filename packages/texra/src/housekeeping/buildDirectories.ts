@@ -1,20 +1,27 @@
 // Third-party imports
 import { Effect } from 'effect';
-import { glob } from 'glob';
 
 // Internal imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
-import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
+import { getBasename } from '@texra-ai/harness/schemas';
+import {
+  FILE_HANDLING_RULES,
+  LATEX_BUILD_DIRECTORY,
+} from '@texra/common/files/fileHandlingRules';
+import { removeBestEffort } from '@texra/common/files/removeBestEffort';
+import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
 // Local file imports
 import { CHANNEL } from './constants';
-import { GlobFailed } from './artifactFiles';
 
 /**
  * Every `build/` directory under the session's workspace, relative to its
- * root. The workspace filesystem comes from context and is already rooted,
- * so this listing and {@link removeBuildDirectories} cannot name different
- * workspaces.
+ * root, its name compared case-insensitively like every managed directory.
+ * The workspace filesystem comes from context and is already rooted, so
+ * this listing and {@link removeBuildDirectories} cannot name different
+ * workspaces. Only directories are listed, so a plain file named `build` is
+ * never offered for recursive removal, and links are skipped, so the
+ * removal never reaches through one.
  */
 export const findBuildDirectories = Effect.gen(function* () {
   const workspaceRoot = (yield* WorkspaceFs).root;
@@ -22,25 +29,25 @@ export const findBuildDirectories = Effect.gen(function* () {
 
   // A `build/` inside a package or environment tree is not this project's
   // LaTeX output, so those trees are not searched.
-  const ignorePatterns = FILE_HANDLING_RULES.ignored.bulkOperationDirectories
-    .filter((dir) => dir !== 'build')
-    .map((dir) => `**/${dir}/**`);
-
-  // The trailing slash makes glob match directories only, so a plain file
-  // named `build` is never listed for recursive removal; results still come
-  // back without the slash. `posix` keeps them `/`-separated on Windows too,
-  // the workspace-relative form every listing here uses.
-  const pattern = '**/build/';
-  const directories = yield* Effect.tryPromise({
-    try: () =>
-      glob(pattern, {
-        cwd: workspaceRoot,
-        ignore: ignorePatterns,
-        posix: true,
-      }),
-    catch: (cause) => new GlobFailed({ pattern, cause }),
+  const [{ directories }] = yield* listWorkspaceFiles({
+    root: workspaceRoot,
+    configs: [
+      {
+        include: [],
+        excludeExtensions: [],
+        excludeDirs:
+          FILE_HANDLING_RULES.ignored.bulkOperationDirectories.filter(
+            (dir) => dir !== LATEX_BUILD_DIRECTORY,
+          ),
+        excludeKeywords: [],
+        excludeFiles: [],
+      },
+    ],
+    links: 'skip',
   });
-  return directories.toSorted();
+  return directories.filter(
+    (dir) => getBasename(dir).toLowerCase() === LATEX_BUILD_DIRECTORY,
+  );
 });
 
 /**
@@ -51,25 +58,10 @@ export const removeBuildDirectories = Effect.fn(
   'housekeeping.removeBuildDirectories',
 )(function* (directories: readonly string[]) {
   const workspaceFs = yield* WorkspaceFs;
-  const removed = yield* Effect.forEach(
-    directories,
-    (dir) =>
-      workspaceFs.remove(dir, { recursive: true, force: true }).pipe(
-        Effect.tap(() =>
-          Effect.logDebug(`Removed build directory: ${dir}`).pipe(
-            withLogChannel(CHANNEL),
-          ),
-        ),
-        Effect.as(true),
-        Effect.catch((error) =>
-          Effect.logError(`Error removing build directory ${dir}`).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-            Effect.as(false),
-          ),
-        ),
-      ),
-    { concurrency: 8 },
+  const removed = new Set(
+    yield* removeBestEffort(workspaceFs, directories, 'build directory', {
+      recursive: true,
+    }),
   );
-  return directories.filter((_, index) => !removed[index]);
-});
+  return directories.filter((dir) => !removed.has(dir));
+}, withLogChannel(CHANNEL));

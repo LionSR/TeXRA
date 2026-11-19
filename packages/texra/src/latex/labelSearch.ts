@@ -39,7 +39,7 @@ export function openFirstLabelMatch<ReadError, MatchError, R>(
         );
         continue;
       }
-      const text = content.success.replaceAll('\r\n', '\n');
+      const text = content.success;
       const match = text.match(pattern);
       if (!match || match.index === undefined) continue;
       const line = text.slice(0, match.index).split('\n').length;

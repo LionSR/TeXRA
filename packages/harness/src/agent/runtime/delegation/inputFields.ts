@@ -21,7 +21,7 @@ import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import { displayToStoragePath } from '@agent/memory/memoryLayout';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
-import type { RunId } from '@shared/schemas';
+import { ToolError, type RunId } from '@shared/schemas';
 import type {
   RunHistory,
   SessionLog,
@@ -34,7 +34,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
-import { ensureError, formatError } from '@utils/errors/errorMessage';
+import { formatError, ensureError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
 import {
   GIT_WORKTREE_SUPPORT_SETTING,
@@ -209,10 +209,10 @@ export const CALL_FIELDS = Object.freeze({
 const absoluteWorkspacePath = (
   workspaceRoot: string | undefined,
   target: string,
-): Effect.Effect<string, Error> =>
+): Effect.Effect<string, ToolError> =>
   Effect.try({
     try: () => workspaceAbsolutePath(workspaceRoot, target),
-    catch: ensureError,
+    catch: (cause) => new ToolError(ensureError(cause).message, { cause }),
   });
 
 interface InputFileGroup {
@@ -228,7 +228,7 @@ interface InputFileGroup {
 const assertInputFilesExist = Effect.fn('assertInputFilesExist')(function* (
   workspaceRoot: string | undefined,
   groups: readonly InputFileGroup[],
-): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+) {
   const fs = yield* FileSystem.FileSystem;
   const entries = groups.flatMap(({ label, files }) =>
     files.filter((file) => file.trim() !== '').map((path) => ({ label, path })),
@@ -244,9 +244,7 @@ const assertInputFilesExist = Effect.fn('assertInputFilesExist')(function* (
   );
   const missing = inspected.find((entry) => !entry.exists);
   if (missing) {
-    return yield* Effect.fail(
-      new Error(`${missing.label} not found: ${missing.path}`),
-    );
+    return yield* new ToolError(`${missing.label} not found: ${missing.path}`);
   }
 });
 
@@ -261,7 +259,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
     files: readonly string[],
   ): Effect.fn.Return<
     { file: string; absolutePath: string }[],
-    Error,
+    ToolError,
     | FileSystem.FileSystem
     | ToolRegistry
     | SessionLog
@@ -297,10 +295,8 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
             storagePath !== undefined &&
             runStorageLocationUnder(storage, storagePath) === undefined
           ) {
-            return yield* Effect.fail(
-              new Error(
-                `${file}; workspace-storage files must be declared outputs of a completed child run.`,
-              ),
+            return yield* new ToolError(
+              `${file}; workspace-storage files must be declared outputs of a completed child run.`,
             );
           }
           // Explicit run paths still pass the resolver's symlink rejection,
@@ -332,10 +328,8 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
               runStoragePath,
             );
             if (!output)
-              return yield* Effect.fail(
-                new Error(
-                  `${runStoragePath}; pass a matching file option whose files still exist.`,
-                ),
+              return yield* new ToolError(
+                `${runStoragePath}; pass a matching file option whose files still exist.`,
               );
           }
           return {
@@ -348,7 +342,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
     }).pipe(
       Effect.mapError(
         (error) =>
-          new Error(
+          new ToolError(
             formatError(`The ${label} files could not be resolved`, error),
             { cause: error },
           ),

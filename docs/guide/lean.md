@@ -44,21 +44,39 @@ Open **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>) 
 
 ## Choosing an agent
 
-All the Lean agents ship with TeXRA and need no sign-in. The `lean` agent handles day-to-day proof work. The **Lean Project** team adds a `leanOrchestrator` plus the Lean specialists it delegates to (`leanSearch`, `leanSimplifier`, `leanBlueprint`), and also bundles the `latexFixer` and `progressCheck` helpers.
+All the Lean agents ship with TeXRA and need no sign-in. The `lean` agent handles day-to-day proof work. `leanOrchestrator` leads a whole formalization project and delegates to the other Lean agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`).
 
-| Agent              | Availability         | Best for                                                                 |
-| ------------------ | -------------------- | ------------------------------------------------------------------------ |
-| `lean`             | Built-in             | Writing and debugging proofs; iterating until a file compiles            |
-| `leanSearch`       | Built-in / Lean team | Finding the right Mathlib lemma, exploring APIs, formalization questions |
-| `leanSimplifier`   | Built-in / Lean team | Cleaning up proofs to Mathlib-quality, upstream-ready standards          |
-| `leanBlueprint`    | Built-in / Lean team | Building dependency-tracked LeanBlueprint LaTeX that bridges math ↔ Lean |
-| `leanOrchestrator` | Built-in / Lean team | Coordinating a whole formalization project across the agents above       |
+| Agent              | Best for                                                                 |
+| ------------------ | ------------------------------------------------------------------------ |
+| `lean`             | Writing and debugging proofs; iterating until a file compiles            |
+| `leanSearch`       | Finding the right Mathlib lemma, exploring APIs, formalization questions |
+| `leanSimplifier`   | Cleaning up proofs to Mathlib-quality, upstream-ready standards          |
+| `leanBlueprint`    | Building dependency-tracked LeanBlueprint LaTeX that bridges math ↔ Lean |
+| `leanOrchestrator` | Coordinating a whole formalization project across the agents above       |
 
-To load the full set, open **Settings → Agents → Teams** and select the **Lean Project** team. If you're formalizing a paper that is also part LaTeX, the **Mathematician** team bundles the `lean` agent alongside the LaTeX and research agents.
+If you're formalizing a paper that is also part LaTeX, `orchestrator` can delegate the proofs to `lean` alongside the LaTeX and research agents.
 
 ::: tip
-Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check **Settings → Agents** (<wa-icon library="texra" name="sparkle"></wa-icon>) to see which tools each one has enabled.
+Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="robot"></wa-icon>). Check **Settings → Agents** (<wa-icon library="texra" name="robot"></wa-icon>) to see which tools each one has enabled.
 :::
+
+## Lean programs
+
+The Lean plugin also ships two programs: fixed procedures that check their own work with Lean's tools before they hand it back. Each runs an agent on the files you name, then checks the result; when the check fails, the agent gets another round with the findings.
+
+| Program     | What it does                                                                  | How it checks each round                                                                                                                                            |
+| ----------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prove`     | Completes the proofs in the `.lean` files you pass, keeping their statements. | Lean's diagnostics for every file: no error and no `sorry`, and no `axiom` declared in a file that was not there before. Up to three rounds.                        |
+| `blueprint` | Writes or brings up to date a LeanBlueprint document (its `.tex` files).      | `leanblueprint web` builds it and `leanblueprint checkdecls` finds every `\lean` declaration in the built project. Up to two rounds. Needs the `leanblueprint` CLI. |
+
+The instruction narrows the job ("prove only `oddSum_eq_sq`", "add entries for the new lemmas in `Basic.lean`"). Each program answers with its check's verdict and the agent's account of what it did. A new blueprint starts from `leanblueprint new`; pass the files it creates. `blueprint` stops at once if `leanblueprint` is not installed (`pip install leanblueprint`). `prove` finds a new axiom by reading the files you pass, so it does not see one declared in another file they import; `#print axioms` on a theorem is the full answer. An agent is told of the two programs only where `lake` is found, as it is offered the Lean tools only there.
+
+```bash
+texra run prove --input Proofs/Basic.lean --instruction "Prove the two lemmas about oddSum"
+texra run blueprint --input blueprint/src/content.tex
+```
+
+Both programs are always registered: `texra run` lists them beside the document programs, with or without Lean installed. `prove` needs `lake` on your `PATH`, since its check is Lean's own diagnostics. In the app, ask an agent that can start programs (`leanOrchestrator`, `orchestrator`, or `assistant`) for the job (for example "finish the proofs in Proofs/Basic.lean") and it proposes the program. The `lean` agent itself does not start programs.
 
 ## What you can do
 
@@ -110,7 +128,7 @@ The `lean_file` tool restarts the language server's state for one file: it close
 Download the Mathlib build cache, then build the project.
 ```
 
-The `lean_project` tool runs project-wide commands without a target file, grouped into server control and build operations:
+The `lean_project` tool runs project-wide commands without a target file, grouped into server control and project operations:
 
 <LeanProjectCommands />
 
@@ -134,7 +152,7 @@ In VS Code, the setup agent can run the Lean 4 extension's installers (install o
 
 **Diagnostics look stale**: ask the agent to run `lean_file` on the file, or `lean_project` with `restart_server`. A missing Mathlib cache can also cause long stalls; run `fetch_cache`.
 
-**The Lean Project agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are built in, but your current team may hide them. Select the **Lean Project** team, or show them one by one from **Settings → Agents → Library**.
+**The Lean agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are built in, but your workspace's agent selection may hide them. Show them from **Settings → Agents → Library**.
 
 ## Next steps
 

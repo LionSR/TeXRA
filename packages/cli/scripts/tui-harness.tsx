@@ -29,8 +29,62 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog } from '@texra-ai/harness/host';
-import { Secrets } from '@texra-ai/harness/plugins';
+import {
+  AgentCatalog,
+  buildDiffHunks,
+  countLineChanges,
+  MODEL_SELECTION_KEY,
+} from '@texra-ai/harness/host';
+import { nodeFileServices } from '@texra-ai/harness/node';
+import {
+  Secrets,
+  ToolCatalog,
+  type DraftBlob,
+} from '@texra-ai/harness/plugins';
+import {
+  acceptsFollowUp,
+  AgentConfigSchema,
+  APPROVAL_POLICY_DEFAULT,
+  descendantRuns,
+  MESSAGE_TYPES,
+  parseApprovalPolicy,
+  RUN_OUTCOME,
+  runBypasses,
+  RunIdSchema,
+  toErrorMessage,
+  toJsonValue,
+  type AgentProposalRequest,
+  type ApprovalPolicy,
+  type LogLevel,
+  type MessageType,
+  type NormalizedToolUse,
+  type PlanApprovalRequest,
+  type RequestDecision,
+  type RequestPayload,
+  type RetryRequest,
+  type RunId,
+  type RunOutcome,
+  type SessionRowDraft,
+  type ToolEditContent,
+  type UserQuestionRequest,
+} from '@texra-ai/harness/schemas';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { CURATED_MODELS } from '@texra/model/curatedModels';
+import {
+  ALL_RUNS,
+  buildScenario,
+  viewOf,
+  local,
+  PROCESS,
+  tail,
+} from '@test/shared/session/fanOutScenario';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { runStatus } from '@ui/copy/runStatus';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+// What no public entry serves: the session's own owners, which the fixtures
+// seed rows through, and the leaves they build rows with (this file is an
+// exemption in oxlint.config.mts).
 import {
   attachInteractions,
   Interactions,
@@ -43,75 +97,29 @@ import {
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
+import {
+  AgentProposalRequestSchema,
+  aggregateTarget,
+  describeRefusal,
+  LOG_LEVELS,
+  TOOL_CALL_STATUS,
+} from '@shared/schemas';
 import {
   RunHistory,
   runStateAppend,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
-import { runBypasses } from '@shared/approvalBypassKind';
-import { followUpDisplay } from '@shared/subagentFollowup';
-import { CURATED_MODELS } from '@texra/model/curatedModels';
-import {
-  parseApprovalPolicy,
-  APPROVAL_POLICY_DEFAULT,
-  type ApprovalPolicy,
-} from '@shared/approvalPolicy';
-import {
-  AgentProposalRequestSchema,
-  AgentConfigSchema,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  RUN_OUTCOME,
-  TOOL_CALL_STATUS,
-  RunIdSchema,
-  toJsonValue,
-  type LogLevel,
-  type MessageType,
-  type AgentProposalRequest,
-  type NormalizedToolUse,
-  type RequestPayload,
-  type PlanApprovalRequest,
-  type RequestDecision,
-  type RetryRequest,
-  type RunOutcome,
-  type RunId,
-  type SessionRowDraft,
-  type UserQuestionRequest,
-  aggregateTarget,
-  describeRefusal,
-  type ToolEditContent,
-} from '@shared/schemas';
-import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunHistoryDraft } from '@shared/session/runState';
-import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
-import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
-import {
-  ALL_RUNS,
-  buildScenario,
-  viewOf,
-  local,
-  PROCESS,
-  tail,
-} from '@test/shared/session/fanOutScenario';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { subscribeToSignalChanges } from '@texra/shared/signals';
-import {
-  buildDiffHunks,
-  countLineChanges,
-  firstChangedLine,
-} from '@tools/unifiedDiff';
-import { runStatus } from '@ui/copy/runStatus';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { followUpDisplay } from '@shared/subagentFollowup';
+import { firstChangedLine } from '@tools/unifiedDiff';
 import { blobAddress } from '@utils/core/idHash';
-import { nodeFileServices } from '@utils/files/fsDurability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
 import { builtinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -133,7 +141,6 @@ import {
 import {
   bindSessionView,
   currentView,
-  runningChildCount,
   sessionView,
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
@@ -163,9 +170,9 @@ import { cliPlatform } from '../src/runtime/platform/initPlatform';
 import { CliExitCode } from '../src/runtime/platform/exitCodes';
 import { holdSignals } from '../src/runtime/platform/processSignals';
 import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
-import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/platform/cliContext';
 import { ChatProcessProvider } from '../src/chat/tui/chatProcess';
+import { scopeRunner } from '../src/chat/scopeRunner';
 
 const harnessRunId = Schema.decodeUnknownSync(RunIdSchema);
 const HARNESS_RUN_ID = harnessRunId('aaaa0001f10e');
@@ -252,7 +259,6 @@ const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_PLAN = process.env.HARNESS_PLAN === '1';
 const SHOW_IDLE_PLAN = process.env.HARNESS_PLAN_IDLE === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
-const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
 // Deliveries a child run queued on the root (a `<subagent-result>`
@@ -339,7 +345,9 @@ const HARNESS_PLATFORM_SERVICES =
   await makeCliProcessRuntime(HARNESS_CLI_CONTEXT).runPromise(cliPlatform);
 if (RESET_MULTI_AGENT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
-    setCliToolEnabled('multi-agent', false),
+    Effect.flatMap(ToolCatalog, (catalog) =>
+      catalog.setEnabled('multi-agent', false),
+    ),
   );
 }
 // The one process runtime this harness runs on, as its composition root
@@ -474,6 +482,13 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 // The TUI reads the session fold: bind it and subscribe every
 // run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
+// The chat's scope and its runner, as `runChat` builds them: what the TUI
+// starts from a key press or a mounted component ends with this scope.
+const harnessChatScope = Scope.makeUnsafe();
+HARNESS_DISPOSERS.push(() =>
+  harnessRuntime.runFork(Scope.close(harnessChatScope, Exit.void)),
+);
+const harnessChat = scopeRunner(harnessRuntime, harnessChatScope);
 {
   // The harness's set, held until it disposes.
   const scope = Scope.makeUnsafe();
@@ -516,7 +531,7 @@ const harnessInteractions = createTuiHostInteractions({
     },
   },
   settings: HARNESS_PLATFORM_SERVICES,
-  runtime: harnessRuntime,
+  chat: harnessChat,
 });
 Effect.runSync(
   attachInteractions(session().interactions, harnessInteractions).pipe(
@@ -568,6 +583,8 @@ function seedRun(
         ? null
         : { id: options.parentId, call: null },
     provenance: null,
+    worktree: null,
+    grants: NO_APPROVAL_GRANTS,
   });
   if (identity.kind === 'agent') {
     publish({
@@ -608,6 +625,7 @@ function holdRun(runId: RunId): void {
                   publishRunEnd(runId, RUN_OUTCOME.CANCELLED);
               }),
             ),
+          end: (_, exit) => exit,
         }),
         ({ fiber }) => fiber,
       ),
@@ -651,7 +669,7 @@ function seedStanding(runId: RunId, standing: SeededStanding): void {
     publish({
       type: 'run.position',
       aggregateId: runId,
-      payload: { at: 'waiting' },
+      payload: { at: 'waiting', turn: run?.turn ?? 1 },
     });
   } else {
     publish({
@@ -918,16 +936,13 @@ function seedSubagentFollowupTranscript(): void {
         { name: 'agent', value: 'leanSolver' },
         { name: 'status', value: 'completed' },
       ],
-      wallTime: '2min, 3sec',
+      wallTimeMs: 123_000,
       response: 'Proved </response> is escaped & visible.',
     },
     {
       family: 'subagent',
       runId: 'child-c',
-      attributes: [
-        { name: 'agent', value: 'reviewer' },
-        { name: 'retryable', value: 'true' },
-      ],
+      attributes: [{ name: 'agent', value: 'reviewer' }],
       message: 'rate limit: <tokens> & retries exhausted',
     },
   ];
@@ -1327,7 +1342,6 @@ sessionMeta.set({
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  ...(TEAM_NAME && { team: { id: TEAM_NAME, name: TEAM_NAME } }),
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1731,12 +1745,11 @@ function appendHarnessStatus(): void {
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
-      teamName: meta.team?.name,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run && runStatus(run).word,
-      activeChildSessions: runningChildCount(view, run),
+      activeChildSessions: run?.rollup.running,
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.runs.get(runId)?.queuedFollowUps ?? []).map(
@@ -1833,7 +1846,7 @@ const harnessSlashContext: SlashCommandContext = {
   session: harnessSession,
   runSession: harnessRunSession,
   stores: HARNESS_PLATFORM_SERVICES,
-  runtime: harnessRuntime,
+  chat: harnessChat,
   requestInputExit: () => void exitHarness(0),
   getApprovalPolicy: harnessApprovalPolicy,
   setApprovalPolicy: (policy) =>
@@ -1847,10 +1860,8 @@ const harnessSlashContext: SlashCommandContext = {
       appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
     }),
   resumeTask: () => Effect.void,
-  activateSkill: (selection) =>
-    appendHarnessAssistantTranscript(
-      `Harness skill selected: ${selection.name}.`,
-    ),
+  activateSkill: (name) =>
+    appendHarnessAssistantTranscript(`Harness skill selected: ${name}.`),
   onProjectApprovalPolicyChanged: (policy) =>
     appendHarnessAssistantTranscript(
       `Project approval policy: ${formatApprovalPolicy(policy)}`,
@@ -1869,8 +1880,8 @@ const harnessSlashContext: SlashCommandContext = {
 const harnessLaunch = canInterrupt ? harnessSession.claimLaunch() : undefined;
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
-const scrollback = chatScrollback(harnessRuntime, inkRef);
-const harnessDraft = harnessRuntime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+const scrollback = chatScrollback(harnessChat, inkRef);
+const harnessDraft = harnessChat.sync(SubscriptionRef.make(EMPTY_DRAFT));
 
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
@@ -1885,7 +1896,7 @@ function renderHarnessApp(): React.JSX.Element {
     <SlashContextProvider value={harnessSlashContext}>
       <ChatProcessProvider
         value={{
-          runtime: harnessRuntime,
+          chat: harnessChat,
           roots: HARNESS_PLATFORM_SERVICES.roots,
         }}
       >
@@ -1928,6 +1939,8 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       // refuses a parent that never started.
       parent: parentId === null ? null : log.parent(parentId),
       provenance: null,
+      worktree: null,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(id, 10_000_000, { type: 'run.activate' });
   }

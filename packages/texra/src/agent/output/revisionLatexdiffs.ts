@@ -20,6 +20,7 @@ import {
 } from '@latex/latexdiff/diffOperations';
 import { REVISION_DIFF_PDF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
 import { compileLatex2Pdf } from '@latex/texTools';
+import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import type {
   LatexdiffEntry,
   OutputFileInfo,
@@ -352,7 +353,10 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
     diffDirectory.runId,
   );
 
-  const buildDir = path.join(path.dirname(diffLocation.absolutePath), 'build');
+  const buildDir = path.join(
+    path.dirname(diffLocation.absolutePath),
+    LATEX_BUILD_DIRECTORY,
+  );
   // Reuse the compile check's timeout so a hanging diff build
   // is torn down by its scope instead of orphaning latexmk/pdflatex.
   const timeoutMs = yield* Settings.get(

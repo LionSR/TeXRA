@@ -65,16 +65,16 @@ EOF
 1. Open the folder that holds `draft.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
 3. Keep the default agent in the **Agent** menu and pick
-   **anthropic/claude-sonnet-5-5** from the **Model** menu (or any available model).
+   **Sonnet 5.5** (`anthropic/claude-sonnet-5-5`) from the **Model** menu (or any available model).
 4. Type an instruction that names the file:
    > Polish draft.tex: tighten the prose. Preserve all math and citations.
 5. Select **Start task** (the arrow button).
 6. The agent proposes an `edit` run on `draft.tex`. Check the files and the
    instruction on the proposal card, then approve it.
 
-The ProgressBoard opens and streams the run. When it finishes, a
-**diff** icon appears on the completed stream. Select it to see what
-changed.
+The Tasks view opens and streams the run. When it finishes, the
+revised file is listed under **Generated files**. Select its
+**Compare with base** button to see what changed.
 
 ### In the terminal
 
@@ -92,11 +92,11 @@ texra run edit \
   ]"
 />
 
-<p class="hero-caption">Mid-run: the first revision is written and the second is reviewing and correcting it. The live status line on stderr tracks the current revision. When the run completes, the path to the final document prints on stdout.</p>
+<p class="hero-caption">Mid-run: the first revision is written and the second is reviewing and correcting it. Progress lines on stderr name the current revision. When the run completes, the full path to the final document prints on stdout.</p>
 
-The run streams reasoning, tool calls, and the assembled output.
+The run prints its progress on stderr.
 When it completes, `edit` has written one folder per revision in the run's
-storage folder (`executions/<run-id>/` under TeXRA's workspace storage):
+storage folder (`executions/<run-id>/` in the project's storage under `~/.texra`):
 
 <PolishRunTree />
 
@@ -116,7 +116,7 @@ rereads its own output and corrects it.
 
 <FlowSteps :steps="[
   { n: 1, icon: 'wand', title: 'Revision 1: draft', desc: 'Reads draft.tex, applies your instruction, writes the first revision.', chips: [{ text: 'r0/draft.tex', variant: 'info', icon: 'file-code' }] },
-  { n: 2, icon: 'search', title: 'Revision 2: review', desc: 'Rereads its own first revision against the original, then corrects it.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'weakened sentences', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
+  { n: 2, icon: 'search', title: 'Revision 2: review', desc: 'Rereads its own first revision against the original, then corrects it.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'notation before definition', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
 ]" />
 
 <p class="hero-caption"><code>edit</code> is a two-revision program: the first revision drafts from your instruction, the second reviews its own output against a fixed checklist and corrects it into <code>r1/draft.tex</code>.</p>

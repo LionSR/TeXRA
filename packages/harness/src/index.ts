@@ -7,9 +7,10 @@
  *
  * What an embedder needs to know, in order:
  *
- * 1. `Sessions.layer({ platform, plugins })` builds the process. `platform`
- *    comes from `nodePlatform()` in `./node`; `plugins` is `harnessBuiltins`
- *    from `./plugins`, plus any plugin of your own.
+ * 1. `Sessions.layer({ platform, plugins, client })` builds the process.
+ *    `platform` comes from `nodePlatform()` in `./node`; `plugins` is
+ *    `harnessBuiltins` from `./plugins`, plus any plugin of your own;
+ *    `client` names your app to the model providers (`{ name, id }`).
  * 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
  * 3. `session.start({ agent, instruction })` gives a {@link Run}: read
  *    `run.events` for its progress (`run.events.pipe(responseText)` for
@@ -45,7 +46,19 @@
 export { Sessions } from './effect/processLayer.js';
 export type { ProjectView } from './controllers/session/readSessionView.js';
 export type { AgentPlatform } from '@platform/agentPlatform';
+// The agent directories a platform serves, and why one could not be read.
+export {
+  AgentDirectoriesFailed,
+  type AgentDirectoriesPort,
+} from '@platform/interfaces';
 export type { Composition } from './effect/sessions.js';
+// Where a composition's skills come from.
+export type {
+  HostSkillOptions,
+  SkillSourceOptions,
+} from '@skills/skillSources';
+// What closing the process's sessions reports (`Sessions.close`).
+export type { SessionCloseReport } from '@shared/schemas';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 // The fetch model requests go through, merged beneath `Sessions.layer`:
 // a fake model for a test, or the harness's own transport when absent.
@@ -60,11 +73,25 @@ export type {
   SessionHost,
   StartInput,
 } from './effect/sessions.js';
-// What a session's methods take and hand out: a run's id
+// What a session's methods take and hand out is on `./schemas`: a run's id
 // (`session.resume`), a commit position and a display event (`view`), a
 // stored conversation's nodes (`records(runId).readConversation`), a
 // request (`session.request`), and the request an `ApprovalHandler` is
 // asked with and the decision it answers.
+
+// The presentation surface a `SessionHost` serves and a `LocalSession`'s
+// `emit` shows through: the notices a session's runs ask a host to present,
+// by event, with each event's payload and what a handler answers.
+export type {
+  HostInteractions,
+  Notices,
+} from '@agent/runtime/HostInteractions';
+export type {
+  AgentRuntimeEmitOptions,
+  HostPresentation,
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 
 // What a run reports while it runs, and how it ended.
 export type { AgentEvent, StreamChunkEvent } from '@shared/session/agentEvent';
@@ -82,7 +109,7 @@ export type {
 // runs and calls) and their columns.
 export { HISTORY_TABLES } from '@agent/runtime/historyQuery/views';
 
-// Why starting, resuming or opening fails.
+// Why starting, resuming or opening fails, and why a store read or write does.
 export {
   PluginsRefused,
   ResumeRefused,
@@ -94,6 +121,7 @@ export { LaunchRefused } from '@common/errors/agentErrors';
 export {
   DatabaseOpenFailed,
   DatabaseReadFailed,
+  DatabaseWriteFailed,
   SessionOptionsConflict,
 } from '@shared/session/database';
 export type { SessionOpenError } from '@shared/session/database';

@@ -10,11 +10,11 @@ const MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT = 6;
 const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
 const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
 
-export const PINNED_CHROME_ROWS = {
+export const PINNED_CHROME_ROWS = Object.freeze({
   /** The input bar's round border, above and below its draft rows. */
   inputBorder: 2,
   status: 2,
-} as const;
+} as const);
 /** Each bottom panel owns one separator row above its content, and a lone
  *  row cannot hold separator plus content. */
 const BOTTOM_PANEL_MIN_ROWS = 2;

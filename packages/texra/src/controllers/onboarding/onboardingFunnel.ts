@@ -9,10 +9,13 @@
  *
  * The flags are user-scoped (global state), so a fresh workspace never
  * demotes a veteran back to State 0/1: `firstRunDone` wins. The credential
- * is the shown project's: each host (extension, CLI, desktop) computes
+ * is the shown project's: each window (extension, desktop) computes
  * `hasCredential` under that project's `.env` over the process environment,
  * the key a run of that project would use, and reads and writes the flags
- * below through its `AppState` store.
+ * below through its `AppState` store. The terminal has no funnel: its chat
+ * opens on the "Connect a model" panel when no credential is usable and
+ * otherwise on the default agent. Every process that opens a session still
+ * records the first completed run ({@link recordFirstCompletedRun}).
  *
  * The derivation is {@link deriveOnboardingFunnelState}; each window's host
  * snapshot (`hostSnapshotSource.ts`) holds its inputs and follows them.
@@ -26,11 +29,15 @@ import {
   type StateKey,
 } from '@texra-ai/harness/schemas';
 
-import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
+import {
+  Settings,
+  logFailure,
+  type StateStore,
+  type StateWriteFailed,
+} from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
-import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = decodingDefault(Schema.Boolean, false);
@@ -58,7 +65,7 @@ export function setOnboardingDeclined(
 }
 
 /** Whether a real run has completed (or the user skipped setup). */
-export function getFirstRunDone(state: StateStore) {
+function getFirstRunDone(state: StateStore) {
   return Settings.state(state, FIRST_RUN_DONE_KEY);
 }
 
@@ -97,11 +104,8 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
     const state = session.roots.globalState;
     const record = getFirstRunDone(state).pipe(
       Effect.flatMap((done) => (done ? Effect.void : setFirstRunDone(state))),
-      Effect.catch((error) =>
-        Effect.logWarning('Failed to record the first completed run').pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel('onboarding'),
-        ),
+      Effect.catch(
+        logFailure('onboarding', 'Failed to record the first completed run'),
       ),
     );
     yield* Effect.addFinalizer(() =>

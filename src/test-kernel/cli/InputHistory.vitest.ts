@@ -2,11 +2,11 @@
 
 import { describe, expect, beforeEach } from 'vitest';
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Exit, Layer, Scope } from 'effect';
 
 import { GlobalDatabase } from '@texra-ai/harness/node';
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
-import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
+import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
@@ -36,22 +36,34 @@ describe('CLI TUI input history', () => {
     onGlobalDatabase(
       storage,
       Effect.gen(function* () {
-        const { history } = yield* loadInputHistory;
+        // A load's scope closes once every entry pushed through it is stored.
+        const load = (scope: Scope.Scope) =>
+          loadInputHistory.pipe(
+            Scope.provide(scope),
+            Effect.map(({ history }) => history),
+          );
+        const first = yield* Scope.make();
+        const history = yield* load(first);
         yield* Effect.all(
           [history.push('alpha'), history.push('alpha'), history.push('beta')],
           { concurrency: 'unbounded' },
         );
         yield* history.push('   ');
+        yield* Scope.close(first, Exit.void);
 
-        const { history: reloaded } = yield* loadInputHistory;
+        const stale = yield* Scope.make();
+        const reloaded = yield* load(stale);
 
         expect(reloaded.length()).toBe(2);
         expect(reloaded.at(0)).toBe('alpha');
         expect(reloaded.at(1)).toBe('beta');
         // Another CLI writes between two submissions identical in this cache.
-        yield* reloaded.push('gamma');
-        yield* history.push('beta');
-        const { history: combined } = yield* loadInputHistory;
+        const other = yield* Scope.make();
+        yield* Effect.flatMap(load(other), (h) => h.push('gamma'));
+        yield* Scope.close(other, Exit.void);
+        yield* reloaded.push('beta');
+        yield* Scope.close(stale, Exit.void);
+        const { history: combined } = yield* Effect.scoped(loadInputHistory);
         expect(
           Array.from({ length: combined.length() }, (_, index) =>
             combined.at(index),

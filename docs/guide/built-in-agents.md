@@ -5,7 +5,7 @@ import AgentModeShapes from '../.vitepress/components/AgentModeShapes.vue';
 
 # Built-in agent reference
 
-TeXRA includes built-in agents for derivations, formal proofs, literature search, LaTeX debugging, figures, and code, and eight [programs](#programs) that revise or create LaTeX documents. Pick an agent from the dropdown menu in the TeXRA panel or run it from the CLI; start a program by asking an agent for the edit, or with `texra run <program>`.
+TeXRA includes built-in agents for derivations, formal proofs, literature search, LaTeX debugging, figures, and code, and [programs](#programs): eight that revise or create LaTeX documents and two for Lean projects. Pick an agent from the dropdown menu in the TeXRA panel or run it from the CLI; start a program by asking an agent for the edit, or with `texra run <program>`.
 
 <DropdownMenu
   label="Agent"
@@ -56,12 +56,6 @@ For the structure and execution flow common to all agents, read the [agent archi
 ## Conversational agents
 
 ### `assistant`
-
-::: tip Opt-in
-`assistant` is not a member of the discipline [teams](#built-in-teams); only the
-starter set the `setup` agent applies includes it. While your workspace runs
-one of those teams, enable it from the **Agents** tab to use it.
-:::
 
 A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code), all in a back-and-forth conversation.
 
@@ -149,6 +143,8 @@ Formalize the proof of the theorem in Proofs/GroupTheory.lean. Start with an
 informal outline, then produce Lean code and iterate until it compiles.
 ```
 
+The Lean plugin ships four more agents: `leanSearch` (finds Mathlib lemmas and answers formalization questions), `leanSimplifier` (rewrites proofs in Mathlib style), `leanBlueprint` (writes and maintains LeanBlueprint documents), and the lead agent `leanOrchestrator`. Read [Lean 4 proofs](./lean.md).
+
 ## Presentation & simplification agents
 
 ### `presenter`
@@ -189,7 +185,7 @@ consistent" for `enhance`. A typical loop is `annotate`, then `apply`.
 ### Starting a program
 
 - **In the app**: ask an agent in plain words, for example "polish section 2
-  of main.tex" to the default `orchestrator` (or to `assistant`). The agent
+  of main.tex" to the default `assistant` (or to `orchestrator`). The agent
   proposes a `program` run; the proposal card shows the program, the
   instruction and the files, and you can edit them before you approve.
 - **From the terminal**: `texra run <program> --input <file>`, with an
@@ -207,6 +203,12 @@ consistent" for `enhance`. A typical loop is `annotate`, then `apply`.
 
 Programs are part of the **Multi-Agent Workflow** plugin's `program` tool, so
 an agent can start one only while that plugin is enabled.
+
+The Lean plugin adds two more: `prove` completes the proofs in `.lean` files
+until Lean reports no error and no `sorry`, and `blueprint` writes or updates
+a LeanBlueprint document until `leanblueprint web` and `leanblueprint checkdecls`
+pass. Read
+[Lean 4 proofs](./lean.md#lean-programs).
 
 ### `edit`
 
@@ -353,14 +355,13 @@ current revision (main.tex), highlighting additions and deletions.
 
 ## Software engineering agents
 
-These agents make up the [Software Engineer team](#built-in-teams) for the code
-that accompanies a project: simulations, numerics, data pipelines, scripts,
-and small libraries. The Computer Scientist team also includes `coder` and
-`testEngineer` for implementing and pinning down experiment code.
+These agents work on the code that accompanies a project: simulations,
+numerics, data pipelines, scripts, and small libraries. `engineer` leads the
+other four.
 
 ### `engineer`
 
-The team lead. Turns a coding goal into focused tasks, delegates each to the right specialist, reviews their work, and keeps the codebase coherent.
+The [lead agent](#lead-agents) for code. Turns a coding goal into focused tasks, delegates each to the right specialist, reviews their work, and keeps the codebase coherent.
 
 **Best for:** Multi-step coding goals you want planned, delegated, and verified end to end
 
@@ -425,8 +426,7 @@ preserving every numerical result. Draft the YAML and walk me through testing it
 
 ## Orchestration, search & audit agents
 
-These agents ship with TeXRA and need no sign-in. They lead and staff the
-[built-in teams](#built-in-teams).
+These agents ship with TeXRA and need no sign-in.
 
 ### `search`
 
@@ -456,34 +456,32 @@ single-use helper functions, and remove dead code. Run existing tests after each
 
 ### `orchestrator`
 
-Coordinates multi-agent work on LaTeX research projects. It reads project context, turns broad goals into focused tasks, routes each task to the right specialist, tracks results, reviews generated files, and keeps follow-up work organized. The lead agent for the Physicist, Mathematician, and Computer Scientist [teams](#built-in-teams).
+Coordinates multi-agent work on LaTeX research projects. It reads project context, turns broad goals into focused tasks, routes each task to the right specialist, tracks results, reviews generated files, and keeps follow-up work organized. The [lead agent](#lead-agents) for research projects.
 
 **Best for:** Multi-step research goals that span several specialists
 
 ### `progressCheck`
 
-An end-of-session reviewer. It looks at what was just done and, when the session changed files or depends on wider project context, the project's standing goal and git/PR state. For self-contained read-only work, it stays with the request and the named agent reports. It is read-only: it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams) except Software Engineer.
+An end-of-session reviewer. It looks at what was just done and, when the session changed files or depends on wider project context, the project's standing goal and git/PR state. For self-contained read-only work, it stays with the request and the named agent reports. It is read-only: it advises, but does not edit or delegate.
 
-**Best for:** Auditing what a team run actually delivered versus the goal
+**Best for:** Auditing what a multi-agent run actually delivered versus the goal
 
-## Built-in teams
+## Lead agents
 
-Teams are predefined collections of agents for a discipline. Pick one from the
-**Teams** section of the **Agents** tab in Settings, or run one from the CLI with
-`texra team run <team>`:
-
-| Team               | For                                                                                                                   | Lead agent         |
-| :----------------- | :-------------------------------------------------------------------------------------------------------------------- | :----------------- |
-| Lean Project       | Lean 4 projects: theorem search, tactic simplification, and blueprints                                                | `leanOrchestrator` |
-| Physicist          | Physics research: analytical derivations, numerical experiments, literature search, slides, and critical review       | `orchestrator`     |
-| Mathematician      | Math research: attacking open problems, proofs, Lean 4 formalization, and LaTeX correction                            | `orchestrator`     |
-| Computer Scientist | Computer science research: algorithm design, code-driven experiments and ablations, reproducibility tests, and review | `orchestrator`     |
-| Software Engineer  | A project's code: implementation, review, debugging, and testing across specialists                                   | `engineer`         |
-
-Every team except Software Engineer bundles the `progressCheck` audit helper
-and `latexFixer`. Every member ships with TeXRA, so no team needs a sign-in.
-Every lead can also run its specialists in parallel as a
+Three agents lead multi-agent work. Each plans the task, delegates the pieces
+to the other agents your workspace shows, and reviews what comes back; each
+can also run its specialists in parallel as a
 [multi-agent workflow](./multi-agent-workflows.md).
+
+| Lead               | For                                                                                          |
+| :----------------- | :------------------------------------------------------------------------------------------- |
+| `orchestrator`     | Research projects: derivations, numerical experiments, literature search, review, and slides |
+| `leanOrchestrator` | Lean 4 projects: theorem search, tactic simplification, and blueprints                       |
+| `engineer`         | A project's code: implementation, review, debugging, and testing                             |
+
+A workspace shows every agent. To shorten the agent menu and the list a lead
+delegates from, turn agents off in the **Library** section of the **Agents**
+tab in Settings.
 
 ## Next steps
 

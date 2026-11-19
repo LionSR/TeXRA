@@ -86,39 +86,34 @@ interface OpenedProcess {
 }
 
 /**
- * The run on its fiber: the turn, then on every exit the end every run
- * program commits (`commitEnd`), in the one masked region whose exit is
- * the terminal, so a stop landing mid-turn still ends the run and stays
- * the fiber's exit. The end's transaction delivers the report; one that
- * never wrote fails the fiber, its terminal fact gone.
+ * The run's terminal, from every exit of its turn (a stop landing
+ * mid-turn included, which stays the fiber's exit): the end every run
+ * program commits (`commitEnd`). The end's transaction delivers the
+ * report; one that never wrote fails the fiber, its terminal fact gone.
  */
-const runProcessChild = (
+const endProcessChild = (
   runId: RunId,
   { logger, turn }: OpenedProcess,
-): Effect.Effect<void, Error, AgentRunServices> =>
-  Effect.uninterruptibleMask((restore) =>
-    Effect.flatMap(Effect.exit(restore(turn.run)), (exit) => {
-      const { outcome, error } = endVerdict(
-        Exit.map(exit, (report) =>
-          failureOf(report) === undefined
-            ? RUN_OUTCOME.COMPLETED
-            : RUN_OUTCOME.FAILED,
-        ),
-      );
-      const { report, ...ending } = endingOf(runId, turn, exit, error);
-      // A failure the end adds to the turn's own verdict (rows the store
-      // refused) is the delivery's too: the parent reads what the end says.
-      return commitEnd(exit, { runId, outcome, ...ending }, (end) =>
-        Effect.succeed(
-          report !== null &&
-            end.error !== undefined &&
-            ending.error === undefined
-            ? { ...report, message: runEndErrorMessage(end.error) }
-            : report,
-        ),
-      );
-    }),
+  exit: Exit.Exit<ProcessReport, Error>,
+): Effect.Effect<void, Error, AgentRunServices> => {
+  const { outcome, error } = endVerdict(
+    Exit.map(exit, (report) =>
+      failureOf(report) === undefined
+        ? RUN_OUTCOME.COMPLETED
+        : RUN_OUTCOME.FAILED,
+    ),
+  );
+  const { report, ...ending } = endingOf(runId, turn, exit, error);
+  // A failure the end adds to the turn's own verdict (rows the store
+  // refused) is the delivery's too: the parent reads what the end says.
+  return commitEnd(exit, { runId, outcome, ...ending }, (end) =>
+    Effect.succeed(
+      report !== null && end.error !== undefined && ending.error === undefined
+        ? { ...report, message: runEndErrorMessage(end.error) }
+        : report,
+    ),
   ).pipe(Effect.ensuring(Effect.sync(() => logger.close())));
+};
 
 /** A returned turn's failure: its exit's, or the one it reported. */
 const failureOf = ({ exit, failure }: ProcessReport): string | undefined => {
@@ -171,11 +166,10 @@ const endingOf = (
 };
 
 /**
- * Launch a process child of the calling run: register it under the call
- * (its registration commits in this fiber, so a launch that fails before
- * the run exists fails here with no run behind it), build its turn around
- * its trace, and fork the run on the session's registry. Answers its run
- * id once the run is forked.
+ * Launch a process child of the calling run on the session's registry: its
+ * fiber registers it under the call, builds its turn around its trace and
+ * runs it. Answers its run id once the registration committed, so a launch
+ * that fails before the run exists fails here with no run behind it.
  */
 export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
   parent: { readonly runId: RunId; readonly logId: string },
@@ -188,8 +182,10 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
     yield* registerRun(runId, launch.config, {
       identity: launch.identity,
       takesFollowUps: false,
-      parentId: parent.runId,
-      parentCall: { callId, card: parent.logId, awaited: false },
+      parent: {
+        id: parent.runId,
+        call: { callId, card: parent.logId, awaited: false },
+      },
       description: launch.description,
     });
     const logger = new TraceEmitter((event) => log.publish(runId, event));
@@ -198,7 +194,8 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
   });
   yield* (yield* RunRegistry).start(runId, {
     open,
-    run: (opened) => runProcessChild(runId, opened),
+    run: ({ turn }) => turn.run,
+    end: (opened, exit) => endProcessChild(runId, opened, exit),
   });
   return runId;
 });

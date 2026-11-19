@@ -23,6 +23,7 @@ import {
 import type { Plugin } from '@tools/plugins';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { SecretsFailed } from '@texra-ai/llm';
+import type { ClientIdentity } from '@texra-ai/llm/node';
 
 // The worker's temp home and the directories made in it, kept on the
 // global object so a suite that resets its module registry finds them.
@@ -95,19 +96,20 @@ function fakeGlobalStorage(): string {
 }
 
 /**
- * What an app adds to a fake host: the settings catalog its config reads,
- * the plugins its process runs, and how it reads a team's members. A suite
+ * What an app adds to a fake host: the settings catalog its config reads
+ * and the plugins its process runs. A suite
  * of the harness alone runs over {@link HARNESS_APP}; a suite of TeXRA's
  * tools, settings or agents names `TEXRA_APP` (`support/texraApp.ts`).
  */
 export interface TestApp {
   readonly settings: SettingsCatalog;
+  /** The app its process signs in and sends model requests as. */
+  readonly client: ClientIdentity;
   /** The plugins its process runs, made when the process builds. */
   readonly plugins: () => readonly Plugin[];
-  readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 }
 
-/** The harness alone: its own settings rows and built-in plugins, no teams,
+/** The harness alone: its own settings rows and built-in plugins,
  *  and the models an embedder curates (the harness curates none). */
 export const HARNESS_APP: TestApp = Object.freeze({
   settings: settingsCatalog({
@@ -115,6 +117,7 @@ export const HARNESS_APP: TestApp = Object.freeze({
     rows: [],
     curatedModels: ['openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5-5'],
   }),
+  client: Object.freeze({ name: 'Test app', id: 'test-app' }),
   plugins: () => harnessBuiltins,
 });
 

@@ -46,7 +46,7 @@ export const ONBOARDING_CHOICE_API_KEY = {
 
 /** The card's lede: what connecting a model leads to. */
 export const ONBOARDING_CARD_LEDE =
-  'Sign in with ChatGPT or add an API key. Then the setup assistant checks this project, picks your agent team, and starts your first task.';
+  'Sign in with ChatGPT or add an API key. Then the setup assistant checks this project and starts your first task.';
 
 /**
  * The API-key banner: shown once a task has finished and no sign-in or API
@@ -68,23 +68,26 @@ export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
  * CLI's `/agent`, the card's Run-setup button) stay in the surface.
  */
 export const ONBOARDING_SETUP_HANDOFF =
-  "You're starting with the setup assistant: it checks your environment, applies the right agent team, and helps you run your first task.";
+  "You're starting with the setup assistant: it checks your environment and helps you run your first task.";
 
 /** Button label and leading icon for each getting-started banner action. */
-export const GETTING_STARTED_ACTION_PRESENTATION = {
-  createSampleProject: {
+export const GETTING_STARTED_ACTION_PRESENTATION = Object.freeze({
+  createSampleProject: Object.freeze({
     label: 'Create sample project',
     icon: 'file-circle-plus',
-  },
-  cloneOverleaf: { label: 'Import Overleaf', icon: 'cloud-arrow-down' },
-  downloadArxiv: { label: 'Import arXiv', icon: 'download' },
+  }),
+  cloneOverleaf: Object.freeze({
+    label: 'Import Overleaf',
+    icon: 'cloud-arrow-down',
+  }),
+  downloadArxiv: Object.freeze({ label: 'Import arXiv', icon: 'download' }),
 } as const satisfies Record<
   GettingStartedAction,
   { readonly label: string; readonly icon: IconName }
->;
+>);
 
 /** The welcome card's link to the host's getting-started guide. */
-export const ONBOARDING_OPEN_WALKTHROUGH = {
+export const ONBOARDING_OPEN_WALKTHROUGH = Object.freeze({
   label: 'Open walkthrough',
   icon: 'book',
-} as const satisfies { readonly label: string; readonly icon: IconName };
+} as const satisfies { readonly label: string; readonly icon: IconName });

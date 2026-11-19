@@ -16,7 +16,7 @@ import {
 import { formatFileView, LineRangeSchema } from '@tools/formatting';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import { splitContentLines } from '@utils/text/stringUtils';
-import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
+import { hasExtension, getExtensionLowercase } from '@utils/core/pathBasics';
 import {
   getMimeType,
   isImageMimeType,
@@ -108,10 +108,8 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     const stats = yield* fs.stat(resolved.absolute);
     // Guard against very large EML files exhausting memory during parsing.
     if (Number(stats.size) > ATTACHMENT_MAX_BYTES) {
-      return yield* Effect.fail(
-        new ToolError(
-          `EML file exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
-        ),
+      return yield* new ToolError(
+        `EML file exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
       );
     }
     const raw = yield* fs

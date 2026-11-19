@@ -13,23 +13,19 @@ describe('applyStateSettingUpdate', () => {
   it.effect('uses null as an explicit reset and omission as a no-op', () =>
     Effect.gen(function* () {
       const fake = makeFakeSettingsStores();
-      const ports = { stores: fake.stores, host: 'settingsView' as const };
+      const roots = { ...fake.stores, workspace: '/workspace' };
 
       yield* applyStateSettingUpdate(
-        LATEX_FORMATTER_SETTING.key,
+        LATEX_FORMATTER_SETTING,
         'latexindent',
-        ports,
+        roots,
       );
       expect(
         yield* fake.workspaceState.get(LATEX_FORMATTER_SETTING.key),
       ).toBeDefined();
 
       expect(
-        yield* applyStateSettingUpdate(
-          LATEX_FORMATTER_SETTING.key,
-          null,
-          ports,
-        ),
+        yield* applyStateSettingUpdate(LATEX_FORMATTER_SETTING, null, roots),
       ).toMatchObject({ kind: 'applied' });
       expect(
         yield* fake.workspaceState.get(LATEX_FORMATTER_SETTING.key),
@@ -39,9 +35,9 @@ describe('applyStateSettingUpdate', () => {
       // default, so parsing `undefined` would silently write a default.
       expect(
         yield* applyStateSettingUpdate(
-          LATEX_FORMATTER_SETTING.key,
+          LATEX_FORMATTER_SETTING,
           undefined,
-          ports,
+          roots,
         ),
       ).toEqual({ kind: 'ignored' });
     }).pipe(Effect.provide(AppSignals.layer)),

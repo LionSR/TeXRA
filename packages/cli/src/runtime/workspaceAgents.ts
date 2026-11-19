@@ -5,7 +5,6 @@ import {
   type WorkspaceAgentsController,
 } from '@texra-ai/harness/host';
 import { cliCommandDefaults } from './platform/cliConfig';
-import type { WorkspaceAgentsSelection } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /** The workspace agents controller's own snapshot shape — derived, never restated. */
@@ -35,26 +34,11 @@ export const readCliWorkspaceAgents = Effect.fn('readCliWorkspaceAgents')(
   },
 );
 
-function formatSelection(selection: WorkspaceAgentsSelection): string {
-  switch (selection.kind) {
-    case 'inherit':
-      return 'inherit';
-    case 'all':
-      return 'all';
-    case 'team':
-      return `team:${selection.teamId}`;
-    case 'custom':
-      return 'custom';
-  }
-}
-
 export function formatCliWorkspaceAgents(
   record: CliWorkspaceAgentsRecord,
 ): string {
   const lines = [
-    `Workspace agents: ${formatSelection(record.selection)}`,
-    `Effective agents: ${formatSelection(record.effectiveSelection)}`,
-    `Default team: ${record.defaultTeamId ?? '(none)'}`,
+    `Workspace agents: ${record.selection.kind}`,
     `Default chat agent: ${record.defaultChatAgent ?? '(automatic)'}`,
     `Enabled agents: ${
       record.agentKeys === 'all'
@@ -63,12 +47,7 @@ export function formatCliWorkspaceAgents(
     }`,
   ];
   if (record.unresolvedNames.length > 0) {
-    lines.push(`Unavailable members: ${record.unresolvedNames.join(', ')}`);
-  }
-  if (record.missingTeamId) {
-    lines.push(
-      `Unavailable team: ${record.missingTeamId}; showing all agents instead`,
-    );
+    lines.push(`Unavailable agents: ${record.unresolvedNames.join(', ')}`);
   }
   return lines.join('\n');
 }

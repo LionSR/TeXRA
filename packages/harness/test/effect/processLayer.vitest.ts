@@ -18,6 +18,7 @@ import { describe, expect } from 'vitest';
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 describe('Sessions.layer', () => {
   it.live("logs through the embedder's own logger", () => {
@@ -37,10 +38,21 @@ describe('Sessions.layer', () => {
       expect(lines.some((line) => /Loaded \d+ agents/.test(line))).toBe(true);
     }).pipe(
       Effect.scoped,
-      Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
-      Effect.provide(Logger.layer([captured])),
-      // The catalog's load time is a debug line.
-      Effect.provide(Layer.succeed(References.MinimumLogLevel)('Debug')),
+      Effect.provide(
+        Sessions.layer({
+          platform,
+          plugins: harnessBuiltins,
+          client: HARNESS_APP.client,
+        }).pipe(
+          Layer.provideMerge(
+            Layer.merge(
+              Logger.layer([captured]),
+              // The catalog's load time is a debug line.
+              Layer.succeed(References.MinimumLogLevel)('Debug'),
+            ),
+          ),
+        ),
+      ),
     );
   });
 });

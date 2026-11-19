@@ -1,20 +1,20 @@
 # Multi-agent workflows
 
 <script setup>
-import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
+import CliSubagentsHero from '../.vitepress/components/CliSubagentsHero.vue';
 </script>
 
-When a task is too large for a single agent pass—checking every derivation in a long calculation, testing a conjecture from several angles, or auditing and reconciling a multi-file paper—a team lead such as `orchestrator` delegates the pieces to specialist agents.
+When a task is too large for a single agent pass—checking every derivation in a long calculation, testing a conjecture from several angles, or auditing and reconciling a multi-file paper—a lead agent such as `orchestrator` delegates the pieces to specialist agents.
 
 Normally the lead calls specialists one turn at a time, reads what comes back, and decides what to run next. When the full fan-out and join are known up front, the lead can instead write a short JavaScript script that runs independent specialists in parallel and combines their outputs. TeXRA records every call the script makes, so an interrupted script resumes without repeating finished work.
 
 Three tools drive delegation:
 
 - `agent` runs a named agent with a prompt as a child of the lead's run.
-- `program` starts one of the [programs](./built-in-agents.md#programs) TeXRA ships (`edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`, `poster`) over files, as a child run.
+- `program` starts one of the [programs](./built-in-agents.md#programs) TeXRA ships (`edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`, `poster`, and the Lean plugin's `prove` and `blueprint`) over files, as a child run.
 - `script` runs a short JavaScript program that can call `agent` and `program` many times.
 
-You do not write these calls yourself: the lead proposes them, you approve them, and the child runs appear in the progress view like any other delegation.
+You do not write these calls yourself: the lead proposes them, you approve them, and the child runs appear in the Tasks view like any other delegation.
 
 ## When the lead reaches for a script
 
@@ -30,7 +30,7 @@ The lead still plans in conversation with you first. It reads the project, propo
 
 ## The `agent` and `program` tools
 
-`agent` takes a `prompt` and an `agentName`. The agent works with its own tools and returns its final reply, or a validated value when the call passes a `schema`. `program` takes the program's `name` and the files passed as `inputFiles` (with optional `contextFiles`, `mediaFiles`, and `outputFiles`), and runs the program over them: one revised document each, in the revisions the program defines. Its optional `prompt` is the instruction: what to change, from which point of view, and what to keep. `args` holds the program's own switches, all booleans: `reflect` has a critic review each revision but the last, and `attachTeXCount`, `autoExtractFigure`, `autoExtractTikzFigure` and `autoCompileInputPdf` add context to the prompt. Every call of either tool may set `model` (with an `@effort` suffix such as `@high`), `memories`, a `label` for its card, and `timeoutMs`.
+`agent` takes a `prompt` and an `agentName`. The agent works with its own tools and returns its final reply, or a validated value when the call passes a `schema`. `program` takes the program's `name` and the files passed as `inputFiles` (with optional `contextFiles`, `mediaFiles`, and `outputFiles`), and runs the program over them: one revised document each, in the revisions the program defines. Its optional `prompt` is the instruction: what to change, from which point of view, and what to keep. `args` holds the program's own switches. The document programs take these, each a boolean: `reflect` has a critic review each revision but the last, and `attachTeXCount`, `autoExtractFigure`, `autoExtractTikzFigure` and `autoCompileInputPdf` add context to the prompt. Every call of either tool may set `model` (with an `@effort` suffix such as `@high`), `memories`, a `label` for its card, and `timeoutMs`.
 
 Called directly, the child runs in the background and its result reaches the lead as a follow-up message; each direct call asks for your approval on its own. In a one-shot run, such as `texra run`, the call waits for the child instead.
 
@@ -75,7 +75,7 @@ What a script can use:
 | `program(name, options)`      | Starts a program and waits for it; `program('edit', { prompt, inputFiles })` edits those files as the prompt asks. Resolves to `{ response, files, changes, runId, outcome, cost, spent }`: `changes` lists every revision's files in order, each with `path` (the workspace file) and `absolutePath` (the revised copy). Takes the same options as the `program` tool, with `args` for the program's own switches. With `background: true` it resolves to `{ runId }` at once.                     |
 | `self(prompt, options)`       | Runs this agent again and waits for it: forked from the conversation as it stood when the script started, or from `prompt` alone with `fork: false`. Resolves as `agent()` does; `schema` and `label` work as for `agent()`.                                                                                                                                                                                                                                                                        |
 | `tools.<name>(args)`          | Calls any other tool the lead has, with the same arguments as a direct call, and resolves to `{ output, summary }`.                                                                                                                                                                                                                                                                                                                                                                                 |
-| `section(title)`              | Groups the calls that follow under a title in the progress view.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `section(title)`              | Groups the calls that follow under a title in the Tasks view.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `console.log(...)`            | Writes a line to the script's card; the last 80 lines return to the lead with the result.                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `searchTools`, `describeTool` | Find a tool by keyword and read its full declaration. `describeTool('edit')` returns a program's source.                                                                                                                                                                                                                                                                                                                                                                                            |
 
@@ -97,9 +97,9 @@ The lead reads the bundled `multi-agent-orchestration` skill for how to shape th
 4. **Skip a call.** Stopping a child run skips its call: the call rejects with `Skipped` in the script, which then carries on or stops depending on how it handles failures. A skipped call is not retried for you; ask the lead if you want it redone.
 5. **A result when it finishes.** The lead receives the script's return value and its last log lines. A program's outputs land in run storage like any other delegated run; the lead reviews them and uses `accept_run_files` to bring them into the workspace.
 
-<CliTeamHero />
+<CliSubagentsHero />
 
-<p class="hero-caption">A team session in the CLI. The calls a script makes appear in this same subagent panel, each as a focusable stream with its own transcript.</p>
+<p class="hero-caption">A lead agent's chat in the CLI. The calls a script makes appear in this same subagent panel, each as a focusable stream with its own transcript.</p>
 
 ## Background scripts
 
@@ -116,14 +116,14 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 ## Limits
 
 - A script launches at most 1000 agents, its `agent()` and `self()` calls together. Reused calls do not count.
-- The session's child-run budget sets how many agents run at once.
+- The **Agents at once** setting (**Settings → Agents → Advanced**) sets how many agents run at once; by default it follows the machine's CPU count.
 - The script's own code gets 30 seconds of CPU and 64 MB of memory. Time spent waiting on agents does not count, so this only stops a loop that never waits.
 - The wall clock defaults to 60 minutes and can be set from 1 second to 24 hours with `timeoutMs`.
 - There are no timers, no `Date.now()`, no `Math.random()`, and no imports beyond the modules TeXRA provides (such as `builtIn:goal`), so a resumed script makes the same calls in the same order.
 
 ## Where it is available
 
-**Agents.** A tool is only offered to agents whose configuration names it. The `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team) name `agent`, `program` and `script`; `assistant` names all three too, `setup` names `agent` and `program`, and `creator` names `agent`. A [custom agent](./custom-agents.md) can list them in its tools.
+**Agents.** `agent` and `program` are offered only to agents whose configuration names them. The three [lead agents](./built-in-agents.md#lead-agents), `orchestrator`, `leanOrchestrator` and `engineer`, name both; `assistant` and `setup` name both too, and `creator` names `agent`. A [custom agent](./custom-agents.md) can list them in its tools. `script` is given to every agent that has tools, whether or not its configuration names it.
 
 **The global switch.** The **Multi-Agent Workflow** switch on **Settings → Plugins** gates `agent` and `program` together: when it is off, both are removed from every agent's tool list, whatever the agent's configuration says. It is on by default; in the terminal client, the same switch is the **Multi-Agent Workflow** row in `/plugins`.
 
@@ -143,8 +143,8 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 ## Next steps
 
-- [Built-in agents](./built-in-agents.md#built-in-teams): the teams whose leads run scripts
-- [TeXRA CLI](./texra-cli.md#teams): running a team from the terminal
+- [Built-in agents](./built-in-agents.md#lead-agents): the lead agents that run scripts
+- [TeXRA CLI](./texra-cli.md#lead-agents): running a lead agent from the terminal
 - [Programs: how they work](./agent-architecture.md): what a single `program` call does
 - [Agent integrations](./agent-integrations.md): the Plugins page and approval settings
 - [Custom agents](./custom-agents.md): give your own lead agent these tools

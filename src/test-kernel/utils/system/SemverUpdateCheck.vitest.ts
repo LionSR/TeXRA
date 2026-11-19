@@ -5,8 +5,8 @@ import { it as effectIt } from '@effect/vitest';
 import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { FetchHttpClient, type HttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
-import { GlobalValues } from '@texra-ai/harness/host';
-import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
+import { GlobalValues } from '@texra-ai/harness/plugins';
+import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { globalValuesOver } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { jsonResponse } from '@test/support/fetchTestUtils';
@@ -43,13 +43,17 @@ describe('checkForDesktopUpdate', () => {
         // times. Built outside, it ticks on the live clock and the
         // throttle still sees whatever day the program says it is.
         return yield* Effect.andThen(TestClock.setTime(nowMs), program).pipe(
-          Effect.provide(TestClock.layer()),
-          Effect.provide(releases),
+          // Merged, not fed into one another: the handle is built beside
+          // the test clock and never on it.
           Effect.provide(
-            globalValuesOver(
-              globalDatabaseLayer(storage).pipe(
-                Layer.provide(nodeSpawnerLayer),
-                Layer.orDie,
+            Layer.mergeAll(
+              TestClock.layer(),
+              releases,
+              globalValuesOver(
+                globalDatabaseLayer(storage).pipe(
+                  Layer.provide(nodeSpawnerLayer),
+                  Layer.orDie,
+                ),
               ),
             ),
           ),

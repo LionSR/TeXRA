@@ -20,7 +20,7 @@ import type {
   SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
+import { listMoveOfKey, nextListIndex } from '@ui/wa/listInteraction';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view
@@ -33,7 +33,6 @@ import './tabs/PrivacyTab';
 import './tabs/SubscriptionsTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
-import './tabs/TeamsTab';
 import './tabs/ApprovalTab';
 import './tabs/PluginsTab';
 import './tabs/SkillsTab';
@@ -123,14 +122,14 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')];
     const current = tabs.indexOf(target);
     if (current < 0) return;
-    let key = event.key;
-    if (tablist.getAttribute('aria-orientation') === 'vertical') {
-      if (key === 'ArrowDown') key = 'ArrowRight';
-      else if (key === 'ArrowUp') key = 'ArrowLeft';
-      else if (key === 'ArrowLeft' || key === 'ArrowRight') return;
-    }
-    const next = nextTablistIndex(key, current, tabs.length);
-    if (next === undefined) return;
+    const move = listMoveOfKey(
+      event.key,
+      tablist.getAttribute('aria-orientation') === 'vertical'
+        ? 'vertical'
+        : 'horizontal',
+    );
+    if (move === undefined) return;
+    const next = nextListIndex(move, current, tabs.length);
     event.preventDefault();
     tabs[next].click();
     await this.updateComplete;
@@ -269,12 +268,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .customAgentDirIsDefault=${host.customAgentDir?.isDefault ?? true}
             .customAgentScanIssues=${host.agents?.customAgentIssues ?? []}
           >
-            <teams-tab
-              slot="teams"
-              .activePresetId=${host.teams?.activePresetId ?? null}
-              .presets=${host.teams?.presets ?? []}
-              .orchestratorAgents=${host.teams?.orchestratorAgents ?? []}
-            ></teams-tab>
             <skills-tab
               slot="skills"
               .skills=${host.skills?.skills ?? []}

@@ -23,6 +23,7 @@ export const NON_REGEX_REPLACEMENT_CATEGORIES = Object.freeze([
   'latex_xml',
   'unicode',
   'html_entities',
+  // Its one rule is a pattern: the engine runs it in the regex pass.
   'latexdiff',
   'gptness',
   'personal_style',

@@ -6,21 +6,23 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
-import { type RunId, Rejected } from '@texra-ai/harness/schemas';
+import {
+  type RunId,
+  Rejected,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
 import {
   Cause,
+  Deferred,
   Effect,
   Exit,
   Fiber,
-  FiberHandle,
-  Layer,
   Option,
   Predicate,
   Ref,
   Result,
   Schema,
   type Scope,
-  Semaphore,
   Stream,
   Struct,
 } from 'effect';
@@ -36,38 +38,37 @@ import {
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import type { ITool } from '@texra-ai/harness/plugins';
 import {
-  activationView,
+  type ITool,
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
-  replayTrace,
-} from '@texra-ai/harness/host';
-import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
+import { activationView, replayTrace } from '@texra-ai/harness/host';
+import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { attachWindowHost } from './windowHost';
 import {
   SERVICE_OFFLINE,
-  WINDOW_OUTDATED,
   environmentApiKeys,
-  linkOutage,
+  linkRefusals,
   linkedClient,
   requestOnService,
+  ServiceUnavailable,
   type ServiceClient,
   type ServiceLink,
 } from './client';
+import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import {
   RUN_RECORDS,
   type ProjectStateFailed,
+  type TaskSummary,
   type TaskFailed,
+  type TaskRecordsFailed,
 } from './protocol';
-import type {
-  CommitOrdinal,
-  TranscriptInterest,
-  TranscriptSubscription,
-} from '@texra-ai/harness/transcript';
+import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
 const isRpcClientError = (
   error: unknown,
@@ -80,13 +81,13 @@ const isRpcClientError = (
  * why it holds none, and a failed transport with what it said. The
  * service's own refusals pass through as the classes it failed with.
  */
-const callService = <A, E>(
+const callService = <A, E, F>(
   link: ServiceLink,
-  failed: (message: string, cause: Error) => E,
+  failed: (message: string, cause: Error) => F,
   use: (
     client: ServiceClient,
   ) => Effect.Effect<A, E | RpcClientError.RpcClientError>,
-): Effect.Effect<A, E> =>
+): Effect.Effect<A, E | F> =>
   linkedClient(link).pipe(
     Effect.mapError((away) => failed(away.message, away)),
     Effect.flatMap(use),
@@ -97,8 +98,37 @@ const callService = <A, E>(
     ),
   );
 
-/** A failure to reach an answer, as a plain `Error`. */
-const failedCall = (message: string) => new Error(message);
+/** A failure to reach an answer: the link holds no service, or the
+ *  service did not answer. */
+const failedCall = (reason: string) => new ServiceUnavailable({ reason });
+
+/**
+ * A window's read-decide-write of the project file `file`, run in the
+ * service, where the project's tasks write: the write and a task's edit of
+ * the file then take one write lane, which is one per process. `local` is
+ * the same write in this process, which runs instead while the link holds
+ * no service or the service does not answer, so a save never waits on the
+ * link. The file has two writers until the link is back, which is said at
+ * warn here and by the window's offline banner.
+ */
+export const writeInService = <A, E, R>(
+  link: ServiceLink,
+  file: string,
+  forward: (
+    client: ServiceClient,
+  ) => Effect.Effect<A, E | RpcClientError.RpcClientError>,
+  local: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  callService(link, failedCall, forward).pipe(
+    Effect.catchIf(
+      (error): error is ServiceUnavailable =>
+        error instanceof ServiceUnavailable,
+      (away) =>
+        Effect.logWarning(
+          `Writing ${file} in this window's process, where an edit of it by a task in the TeXRA service is not seen: ${away.message}`,
+        ).pipe(withLogChannel('serviceSession'), Effect.andThen(local)),
+    ),
+  );
 
 /** How many times a change to project state keys is tried again while
  *  another writer moves one between its read and its write. */
@@ -227,9 +257,11 @@ export const serviceProjectState = (
 const runFailure = (message: string) =>
   new RunFailure({ cause: new Error(message), message });
 
-/** The service's answer to a start or resume it did not run, as the run's
- *  own failure, worded `prefix` and its message; a refused launch passes
- *  as itself, for this window's presenter to show with its notice. */
+/** The service's own reason for a start or resume it did not run (it is
+ *  shutting down, the project would not open), as the run's failure,
+ *  worded `prefix` and its message. What the session's start or resume
+ *  failed with passes as itself, for this window to present as it would
+ *  its own session's. */
 const taskFailed = (prefix: string) => (error: TaskFailed) =>
   Effect.fail(runFailure(`${prefix}${error.message}`));
 
@@ -244,102 +276,67 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   roots: WorkspaceRoots,
 ): Effect.fn.Return<Session, never, Scope.Scope> {
   const key = roots.storage;
-  /** The client, once the link has one; or the refusal, once a newer
-   *  TeXRA's service refused this window, which no reconnect undoes. */
+  /** The client, once the link has one; or why it is away for good (a
+   *  newer TeXRA's service refused this window, or the service keeps
+   *  failing to start), which no wait undoes. */
   const connected = Stream.merge(
     link.client.changes.pipe(
       Stream.filter(Predicate.isNotNull),
       Stream.map((client) => ({ client })),
     ),
-    linkOutage(link).pipe(
-      Stream.filter((reason) => reason === WINDOW_OUTDATED),
-      Stream.map((refused) => ({ refused })),
-    ),
+    linkRefusals(link).pipe(Stream.map((refused) => ({ refused }))),
   ).pipe(
     Stream.runHead,
     Effect.map(Option.getOrThrow),
     Effect.flatMap((reached) =>
       'client' in reached
         ? Effect.succeed(reached.client)
-        : Effect.fail(new Error(reached.refused)),
+        : Effect.fail(new ServiceUnavailable({ reason: reached.refused })),
     ),
-  );
-  const sessions = yield* Layer.build(WebviewSessions.layerNoDeps);
-  const graph = yield* WebviewSessions.open(key).pipe(
-    Effect.provideContext(sessions),
   );
   // The window's own view: the listing, plus the transcripts its readers
   // name, each reader's set held for its scope. A change of that set is a
-  // new watch, from the cursor and history the view already holds. The
-  // watch is one ordered stream, so it needs no generation: the previous
-  // watch's fiber is gone before the new watch's frames begin.
-  const window = yield* graph.view.subscribe([]);
-  const watches = new Map<object, readonly TranscriptSubscription[]>();
-  const feed = yield* FiberHandle.make<void, never>();
-  const lane = Semaphore.makeUnsafe(1);
-  const resubscribe = lane.withPermits(1)(
-    Effect.gen(function* () {
-      yield* FiberHandle.clear(feed);
-      const view = graph.view.current();
-      const named = new Set(
-        [...watches.values()].flatMap((set) => set.map((entry) => entry.id)),
-      );
-      const aggregates = [...named].map((id) => ({
-        id,
-        fromSeq: view.transcriptSeq.get(id) ?? 0,
-      }));
-      yield* graph.frames.begin(0);
-      yield* window.set(aggregates);
-      const client = yield* link.client.get;
-      // Offline: the link's return resubscribes.
-      if (client === null) return;
-      yield* FiberHandle.run(
-        feed,
-        client['task.watch']({
-          workspace,
-          subscribe: {
-            debug: view.debug,
-            cursor: view.cursor,
-            aggregates,
-          },
-        }).pipe(
-          Stream.runForEach(graph.frames.feed),
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
-            ).pipe(Effect.annotateLogs({ data: error })),
-          ),
-        ),
-      );
-    }),
-  );
-  /** Name `set`'s transcripts to the view for the caller's scope; the
-   *  handle replaces the set. */
-  const write = (key: object, set: readonly TranscriptSubscription[] | null) =>
-    Effect.suspend(() => {
-      if (set === null) watches.delete(key);
-      else watches.set(key, set);
-      return resubscribe;
-    });
-  const subscribe = (set: readonly TranscriptSubscription[]) =>
-    Effect.acquireRelease(
-      Effect.sync(() => ({})).pipe(Effect.tap((key) => write(key, set))),
-      (key) => write(key, null),
+  // new watch, from the cursor and history the view already holds; the
+  // view interrupts the watch it replaces.
+  const view = yield* remoteSessionView(key, (aggregates, cursor, debug) =>
+    Stream.unwrap(
+      Effect.map(link.client.get, (client) =>
+        // Offline: the link's return asks again.
+        client === null
+          ? Stream.empty
+          : client['task.watch']({
+              workspace,
+              subscribe: { debug, cursor, aggregates },
+            }),
+      ),
     ).pipe(
-      Effect.map((key): TranscriptInterest => ({
-        set: (next) => write(key, next),
-      })),
-    );
-  yield* resubscribe;
-  // The service went (offline: the feed stops) or the link reached it
-  // again (the view resubscribes from where it is). The window tells it
-  // nothing else: the project's approval policy is its persisted setting,
-  // which the service reads itself.
+      Stream.map((frame) => frame.inputs),
+      // A service that went ends this read: the link closing its connection
+      // interrupts the call, which must not end the view with it, and the
+      // next service the link reaches is asked again (below).
+      Stream.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Stream.empty
+          : Stream.fromEffect(
+              Effect.logWarning(
+                `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
+              ).pipe(Effect.annotateLogs({ data: cause })),
+            ).pipe(Stream.drain),
+      ),
+    ),
+  );
+  const { subscribe } = view;
+  // Each service the link reaches, the one it holds now included (the
+  // view's first read may have found none): naming the window's own empty
+  // set again has the view ask that service from where the view is. Offline,
+  // the watch stops. The window tells the service nothing else: the
+  // project's approval policy is its persisted setting, which the service
+  // reads itself.
+  const window = yield* subscribe([]);
   yield* Effect.forkScoped(
     link.client.changes.pipe(
-      Stream.drop(1),
       Stream.runForEach((client) =>
-        client === null ? Effect.void : resubscribe,
+        client === null ? Effect.void : window.set([]),
       ),
     ),
   );
@@ -385,9 +382,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   }: Effect.Success<ReturnType<typeof answered>>): Effect.Effect<RunEnd> =>
     Effect.as(
       Stream.runDrain(
-        graph.view.changes.pipe(
-          Stream.takeUntil((level) => level.cursor >= at),
-        ),
+        view.changes.pipe(Stream.takeUntil((level) => level.cursor >= at)),
       ),
       end,
     );
@@ -488,7 +483,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       // failed (the service died under the task, the link refused), when no
       // such level is coming through the watch.
       view: activationView(
-        { current: graph.view.current, changes: graph.view.changes, subscribe },
+        { current: view.current, changes: view.changes, subscribe },
         runId,
         activation,
       ).pipe(
@@ -539,16 +534,18 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     Object.fromEntries(
       Struct.keys(RUN_RECORDS).map((member) => [
         member,
-        callService<unknown, Error>(link, failedCall, (client) =>
-          client[`records.${member}`]({ workspace, runId }),
+        callService<unknown, TaskRecordsFailed, ServiceUnavailable>(
+          link,
+          failedCall,
+          (client) => client[`records.${member}`]({ workspace, runId }),
         ),
       ]),
     ) as unknown as RunRecords;
   return {
     roots,
     view: {
-      current: graph.view.current,
-      changes: graph.view.changes,
+      current: view.current,
+      changes: view.changes,
       watch,
       read: (runIds) =>
         callService(link, failedCall, (client) =>
@@ -612,3 +609,56 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           ),
   };
 });
+
+/**
+ * The live view of `task`'s session, as the service's frames build it: one
+ * level per change, with `task`'s transcript named so its rows load. Each
+ * frame is handed to `onFrame` before it is applied. The stream fails with
+ * {@link ServiceUnavailable} when the service stops sending; it never ends on
+ * its own. The session view's graph lives as long as the stream, one per
+ * watch. Unlike a window's session view, which follows its link through
+ * a reconnect, it ends with the client it was given: a terminal attached to
+ * a task says the service went, rather than waiting on the next one.
+ */
+export function watchTask(
+  client: ServiceClient,
+  task: Pick<TaskSummary, 'workspace' | 'runId'>,
+  onFrame: (frame: EventsFrame) => void = () => {},
+): Stream.Stream<SessionView, ServiceUnavailable> {
+  return Stream.unwrap(
+    Effect.gen(function* () {
+      // The watch only ends when the service does: the task did not end.
+      const ended = yield* Deferred.make<never, ServiceUnavailable>();
+      const endWith = (reason: string) =>
+        Deferred.fail(
+          ended,
+          new ServiceUnavailable({
+            reason: `The TeXRA service stopped sending task ${task.runId}: ${reason}`,
+          }),
+        );
+      const view = yield* remoteSessionView(
+        task.workspace,
+        (aggregates, cursor, debug) =>
+          client['task.watch']({
+            workspace: task.workspace,
+            subscribe: { debug, cursor, aggregates },
+          }).pipe(
+            Stream.tap((frame) => Effect.sync(() => onFrame(frame))),
+            Stream.map((frame) => frame.inputs),
+            // Each end is said through `ended`, which ends the levels below.
+            Stream.concat(
+              Stream.fromEffect(endWith('the service closed the watch.')).pipe(
+                Stream.drain,
+              ),
+            ),
+            Stream.catch((error) =>
+              Stream.fromEffect(endWith(error.message)).pipe(Stream.drain),
+            ),
+          ),
+      );
+      // Name the transcript: the view asks for it from where it stands.
+      yield* view.subscribe([{ id: task.runId, fromSeq: 0 }]);
+      return view.changes.pipe(Stream.interruptWhen(Deferred.await(ended)));
+    }),
+  );
+}

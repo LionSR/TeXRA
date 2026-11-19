@@ -1,11 +1,10 @@
 <script setup>
-// Frameless run-storage file tree for guide/agent-architecture.md
-// ("Processing (Key Stages)" / "Reflection Rounds"). Each round saves
-// r{round}/output.xml (the raw LLM response, dim) then the extracted
-// r{round}/<input-stem>.tex (link-coloured, e.g. paper.tex), plus an
-// optional latexdiff PDF (<input-stem>_diff.pdf).
-// Round 0 is the draft; r1/r2 carry a small "reflection" tag. A caption
-// between output.xml and paper.tex names the extraction step.
+// Frameless run-storage file tree for guide/agent-architecture.md. Each
+// revision saves r{n}/output.xml (the raw LLM response, dim) then the
+// extracted r{n}/<input-stem>.tex (link-coloured, e.g. paper.tex). The
+// latexdiff source is diff/r{n}/<input-stem>_diff.tex and its compiled PDF
+// output/r{n}/<input-stem>-diff.pdf. r0 is the draft, r1 the review pass. A
+// caption beside r0's paper.tex names the extraction step.
 //
 // Standalone (no MockupFrame) — the focused tree composed inside the shared
 // <MockCard> primitive, so the card shell + inline mono header come for free
@@ -16,31 +15,37 @@ const rounds = [
   {
     name: 'r0/',
     state: 'done',
-    tag: 'Round 0 — draft',
+    tag: 'Revision 1: draft',
     files: [
       { name: 'output.xml', kind: 'xml', note: 'raw LLM response' },
       { name: 'paper.tex', kind: 'tex', note: 'extracted, named after input' },
-      { name: 'paper_diff.pdf', kind: 'pdf', note: 'latexdiff vs input' },
     ],
   },
   {
     name: 'r1/',
     state: 'done',
-    tag: 'reflection',
+    tag: 'Revision 2: review',
     files: [
       { name: 'output.xml', kind: 'xml' },
       { name: 'paper.tex', kind: 'tex' },
-      { name: 'paper_diff.pdf', kind: 'pdf' },
     ],
   },
   {
-    name: 'r2/',
-    state: 'active',
-    tag: 'reflection',
+    name: 'diff/',
+    state: 'done',
+    tag: 'latexdiff vs input',
     files: [
-      { name: 'output.xml', kind: 'xml' },
-      { name: 'paper.tex', kind: 'tex' },
-      { name: 'paper_diff.pdf', kind: 'pdf' },
+      { name: 'r0/paper_diff.tex', kind: 'tex' },
+      { name: 'r1/paper_diff.tex', kind: 'tex' },
+    ],
+  },
+  {
+    name: 'output/',
+    state: 'done',
+    tag: 'compiled diffs',
+    files: [
+      { name: 'r0/paper-diff.pdf', kind: 'pdf' },
+      { name: 'r1/paper-diff.pdf', kind: 'pdf' },
     ],
   },
 ];
@@ -54,7 +59,7 @@ const icon = (kind) =>
     class="rot"
     title="run storage"
     icon="folder-opened"
-    sub="one folder per round"
+    sub="one folder per revision"
   >
     <div class="rot-tree">
       <div v-for="r in rounds" :key="r.name" class="rot-round">

@@ -25,7 +25,8 @@ Read the nested guide before working in its subtree:
 corepack pnpm install
 npm run compile:fast      # build (esbuild + Vite); watch:fast, package:fast, build:fast
 npm run typecheck         # builds do NOT type check, see below
-npm run gate              # the static CI jobs: lint + invariants, docs, typecheck + format
+npm run gate              # the static CI jobs: lint + invariants, docs, typecheck + format,
+                          # Effect diagnostics (gate:effect, the language service)
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
 npm run test:pure         # before a push (~5s): the host-free tier
@@ -115,12 +116,16 @@ aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
 `packages/harness/src` (an ESM package) a relative import names its `.js` file.
 
 **The harness boundary is frozen, not open.** The app and hosts reach the
-harness only through `@texra-ai/harness` and its subpaths (`/node`, `/plugins`,
-`/schemas`, `/transcript`); a host holds the `LocalSession` that
+harness only through `@texra-ai/harness` and its subpaths (`/host`, `/node`,
+`/plugins`, `/schemas`, `/transcript`); a host holds the `LocalSession` that
 `Sessions.open` returns. The harness imports nothing from the app,
 and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
 `npm run lint`) also fails:
 
+- a harness alias or a path into `packages/harness/src` anywhere in another
+  package, its suites, scripts and tooling included (the two validator
+  harnesses in `packages/cli/scripts/` excepted); repo-root `src/test-kernel/`,
+  the suites that compose several packages, may reach internals;
 - an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
   the runtime entries it names; the SDK's entry files run nothing;
 - `new AbortController()` outside its one permanent resident;
@@ -132,14 +137,13 @@ and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
 Each import or property ban in `oxlint.config.mts` is a named set, listed once
 in a zone table with the directories and files where it holds (`except` for
 an exemption). The config writes the overrides from those tables, so a new
-zone, ban or exemption is one entry. The host-layer, app and llm alias bans
-are read from the `tsconfig.json` `paths`, so a new alias needs no lint edit.
+zone, ban or exemption is one entry. The host-layer, app, harness-internal
+and llm alias bans are read from the `tsconfig.json` `paths`, so a new alias needs no lint edit.
 
 `npm run docgen` keeps the core's public-surface reports current
 (`packages/harness/AGENTS.md` "Core quality"). oxlint holds the VS Code-free zones, the host-layer, harness-no-app,
-browser-bundle and llm import rules, and the core syntax bans. The other boundaries (no deep import
-of harness internals from the app or a host, no `@shared/schemas/<leaf>`
-import, one owner per fact) are conventions with no mechanical check; there
+harness-internal, browser-bundle and llm import rules, and the core syntax bans. The other boundaries (no
+`@shared/schemas/<leaf>` import, one owner per fact) are conventions with no mechanical check; there
 are no baseline files and no architecture tests. `.agents/docs/refuted-candidates.json` records refactors
 investigated and refused; landing one on new evidence rewrites its entry in
 the same PR. The open work is the public surface in
@@ -255,16 +259,31 @@ in `node_modules/effect` instead of guessing a pattern.
   `withPerKeyLane` in `packages/harness/src/utils/core/perKeyQueue.ts` for one
   at a time per key), never a hand-written promise chain. Release resources on
   success, failure and interruption.
-- **No `unknown` error channel.** Type
-  it with the tagged error the path raises, or `Error` for a port whose hosts
-  fail differently. Turn a foreign rejection into an `Error` at its boundary
-  with `ensureError` (`@utils/errors/errorMessage`), never a `(e) => e`
-  pass-through and never the thunk form `Effect.try(() => …)` /
+- **A failure is a tagged error, never `unknown` and never a plain `Error`.**
+  An untagged `Error` merges with every other one in the channel, so no
+  caller can recover it with `Effect.catchTag`. Inside a tool, fail with
+  `ToolError`; elsewhere use the tagged error the subsystem already has, or
+  add one `Schema.TaggedError` for the subsystem (`message`, and
+  `cause: Schema.optional(Schema.Defect())`), never one per call site: a
+  kind nothing branches on is still only a message. Only
+  the declared type of a port whose hosts fail differently stays `Error`; its
+  implementations still raise tagged errors. Turn a foreign rejection into
+  the tagged error in the `catch` of `Effect.try` / `Effect.tryPromise`
+  (its own message, `ensureError(cause).message`, and the original as
+  `cause`), never a
+  `(e) => e` pass-through and never the thunk form `Effect.try(() => …)` /
   `Effect.tryPromise(() => …)`, whose `UnknownError` hides the message.
+  `yield*` a tagged error directly; `Effect.fail` is for outside a generator.
 - **Errors**: surface each once and let it propagate to that handler.
   `@common/errors/*` classifies (`classifyAgentError`, the `sdkError/` leaves,
   `errorPredicates`; no barrel); `@utils/errors/errorMessage` narrows `unknown`
   (`toErrorMessage`, `ensureError`, `formatError`) and is browser-safe.
+- **The language service is a gate.** `npm run gate:effect` runs
+  `@effect/language-service` over every source project and the test suites
+  (`tsconfig.test-kernel.json`) and fails on any diagnostic, the ones the
+  editor plugin shows. Fix the code; where a rule is wrong for one line,
+  exempt that line with
+  `// @effect-diagnostics-next-line <rule>:off` and the reason.
 - **Logging**: `Effect.log*` with `withLogChannel` (`@logger/effectLog`), and
   structured payloads as `Effect.annotateLogs({ data })` so the progress view
   renders them. Agent flows log through `AgentTrace` (`@agent/trace`); only a

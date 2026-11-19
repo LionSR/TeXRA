@@ -46,9 +46,7 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('openFile'),
     path: Schema.NonEmptyString,
-    line: Schema.optional(
-      Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-    ),
+    line: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
   }),
   Schema.Struct({ kind: Schema.Literal('openLabel'), label: Schema.String }),
   Schema.Struct({ kind: Schema.Literal('openRunStorage'), ...runScoped }),
@@ -67,11 +65,9 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('fork'),
     ...runScoped,
-    at: Schema.optional(
-      Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-    ),
-    draft: Schema.optional(Schema.NullOr(Schema.String)),
-    media: Schema.optional(Schema.NullOr(Schema.Array(StoredMediaSchema))),
+    at: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+    draft: Schema.optional(Schema.String),
+    media: Schema.optional(Schema.Array(StoredMediaSchema)),
   }),
   /** The latexFixer follow-up over a document task run's compile failures. */
   Schema.Struct({ kind: Schema.Literal('runCompileFixer'), ...runScoped }),
@@ -91,8 +87,8 @@ export const HostCommandSchema = Schema.Union([
    *  and its commit, as the sheet's surface holds them. */
   Schema.Struct({
     kind: Schema.Literal('latexdiffCommit'),
-    baseFile: Schema.optional(Schema.NullOr(Schema.String)),
-    commit: Schema.optional(Schema.NullOr(Schema.String)),
+    baseFile: Schema.optional(Schema.String),
+    commit: Schema.optional(Schema.String),
     action: Schema.Literals([
       'latexdiffvc',
       'packLatexdiffvc',
@@ -117,7 +113,7 @@ export const HostCommandSchema = Schema.Union([
    *  (the header's gear). */
   Schema.Struct({
     kind: Schema.Literal('openSettings'),
-    target: Schema.optional(Schema.NullOr(SettingsTargetSchema)),
+    target: Schema.optional(SettingsTargetSchema),
   }),
   /** The launcher's pickers: `fileType` chooses the dialog and names the
    *  `Surface.launch` field the paths return to. */
@@ -187,9 +183,7 @@ export const HostCommandSchema = Schema.Union([
       'previewProposed',
       'showLatexdiff',
     ]),
-    grant: Schema.optional(
-      Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
-    ),
+    grant: Schema.optional(Schema.Literals(APPROVAL_BYPASS_KINDS)),
   }),
   /** A file verb over `file` and its base. An empty path is refused by the
    *  host, which says which file to choose. */
@@ -214,7 +208,8 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('agentConfigBanner'),
     action: Schema.Literals(['edit', 'dir', 'docs']),
-    customDirSet: Schema.optional(Schema.NullOr(Schema.Boolean)),
+    /** The banner offered the custom directory, not the agent settings. */
+    customDirSet: Schema.Boolean,
   }),
   Schema.Struct({ kind: Schema.Literal('recheckDependencies') }),
   Schema.Struct({ kind: Schema.Literal('openInstallGuide') }),

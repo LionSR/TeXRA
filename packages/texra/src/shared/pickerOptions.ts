@@ -1,11 +1,10 @@
 /**
- * Picker option rows (models, agents, teams) as the hosts send them to their
+ * Picker option rows (models, agents) as the hosts send them to their
  * views. Kept free of any IPC message wrappers so the message modules can
  * compose these without circular dependencies.
  */
 import { Schema, Struct } from 'effect';
 import {
-  decodingDefault,
   agentName,
   AgentSourceSchema,
   DeclinableUsageRouteSchema,
@@ -32,7 +31,7 @@ const PickerOptionBaseSchema = Schema.Struct({
  * `MODEL_AVAILABILITY_STATUS` reads the kind.
  */
 export const ModelAvailabilityFieldsSchema = Schema.Struct({
-  availability: Schema.optional(ModelAvailabilityKindSchema),
+  availability: ModelAvailabilityKindSchema,
   /** The subscription paying for the next request; absent means own keys. */
   usageRoute: Schema.optional(DeclinableUsageRouteSchema),
   /** Effective request route for a model that can use multiple backends. */
@@ -72,27 +71,3 @@ export function isAgentOption(value: string, keyOrName: string): boolean {
     (agentName(keyOrName) === keyOrName && agentName(value) === keyOrName)
   );
 }
-
-/**
- * Team picker option row for the main-view "Run with: Team" target. `value`
- * carries the preset id (a built-in team or a user-saved custom one); hosts
- * resolve the agent list, so the renderer only ever sends team identity back.
- * Availability is resolved against the full live catalog, not just the
- * workspace's enabled agents.
- */
-export const TeamOptionDataSchema = PickerOptionBaseSchema.mapFields(
-  Struct.assign({
-    /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
-    source: Schema.Literals(['built-in', 'custom']),
-    /** The team's icon, a name the host's icon set draws. */
-    icon: Schema.String,
-    /** Preset description, surfaced as the option `title`. */
-    description: decodingDefault(Schema.String, ''),
-    /** Catalog members that did not resolve; empty means fully runnable. */
-    unavailableMembers: decodingDefault(Schema.Array(Schema.String), []),
-    /** Why the team cannot be launched (no runnable team lead); absent for
-     *  one that can. */
-    disabledReason: Schema.optional(Schema.NullOr(Schema.String)),
-  }),
-);
-export type TeamOptionData = typeof TeamOptionDataSchema.Type;

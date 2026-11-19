@@ -9,11 +9,11 @@ const COMMON_COMMANDS = {
 export type Theme = 'dark' | 'light' | 'high-contrast';
 
 /** Theme kinds as reported by the Electron desktop host. */
-export const DESKTOP_THEME_KIND = {
+export const DESKTOP_THEME_KIND = Object.freeze({
   DARK: 'dark',
   LIGHT: 'light',
   HIGH_CONTRAST: 'high-contrast',
-} as const satisfies Record<string, Theme>;
+} as const satisfies Record<string, Theme>);
 
 /** The message a webview posts once it can receive its first snapshot. */
 export const WebviewReadyMessageSchema = Schema.Struct({
@@ -21,7 +21,7 @@ export const WebviewReadyMessageSchema = Schema.Struct({
 });
 
 /** Settings-view command literals, both directions. */
-export const SETTINGS_VIEW_COMMANDS = {
+export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   ...COMMON_COMMANDS,
   // Inbound (webview → host), except `SET_TAB` and the three at the end.
   // Navigation commands
@@ -55,10 +55,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Custom agent directory commands
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
   RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
-  // Team commands
-  APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
-  SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
-  DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
   // Generic settings-view scalar write. The backend looks up {key, value} in the
   // unified catalog, validates and persists it using the row's metadata, then
   // refreshes the row's owning snapshot.
@@ -93,4 +89,4 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Every catalog-derived snapshot in `settingsViewMessages.ts`'s
   // derived-snapshot list, keyed by its `snapshot` field.
   UPDATE_SETTINGS_SNAPSHOT: 'updateSettingsSnapshot',
-} as const;
+} as const);

@@ -20,14 +20,15 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { statusGlyph, type StatusLook } from '@ui/copy/runStatus';
+import { statusGlyph } from '@ui/copy/runStatus';
 import {
   SCRIPT_CALL_STATUS_LABEL,
-  SCRIPT_CALL_STATUS_LOOK,
+  scriptCallLook,
   scriptCallSummary,
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { buttonStyles, formControlStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { isActivationKey } from '@ui/wa/keyActivation';
@@ -89,7 +90,7 @@ const scriptStageStyles = css`
   }
 
   .row.is-linked:hover {
-    background: var(--color-bg-secondary);
+    background: var(--surface-hover);
   }
 
   .row-icon {
@@ -103,18 +104,14 @@ const scriptStageStyles = css`
     flex: 0 0 auto;
     max-width: 40%;
     font-weight: var(--font-weight-semibold);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
   }
 
   .row-last,
   .row-meta,
   .row-rejected {
     min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
     color: var(--color-text-secondary);
   }
 
@@ -211,7 +208,8 @@ export class ScriptStage extends LitElement {
       call.childRunId === undefined
         ? undefined
         : this.view.runs.get(call.childRunId);
-    if (call.status !== 'running' || child === undefined) return nothing;
+    if (call.status !== 'running' || !child?.actions.includes('stop'))
+      return nothing;
     const menu = actionMenu([
       {
         icon: 'circle-stop',
@@ -246,10 +244,7 @@ export class ScriptStage extends LitElement {
       child === undefined
         ? undefined
         : this.surface.runs.get(child.id)?.rejected;
-    // A call waiting on the user reads as a run waiting on the user does.
-    const look: StatusLook = call.needsYou
-      ? { tone: 'warning' }
-      : SCRIPT_CALL_STATUS_LOOK[call.status];
+    const look = scriptCallLook(call);
     return html`<div
       class=${classMap({
         row: true,

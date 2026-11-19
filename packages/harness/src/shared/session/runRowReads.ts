@@ -10,7 +10,6 @@
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
-import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   type RunId,
   type RunOutcome,
@@ -36,7 +35,7 @@ interface RowRead<K extends SessionRow['type'], A> {
 const rowRead = <const K extends SessionRow['type'], A>(
   kinds: readonly K[],
   fold: (rows: readonly RowOf<K>[]) => A,
-): RowRead<K, A> => ({ kinds, fold });
+): RowRead<K, A> => Object.freeze({ kinds: Object.freeze(kinds), fold });
 
 /**
  * The shared rows among a run's committed rows, applied. A read of a kind
@@ -140,7 +139,7 @@ export function reportRecipients(
  * positions. A store reads one through its type index and folds it
  * (`SessionLog.runRows`), so no reader names a row kind.
  */
-export const RUN_ROW_READS = {
+export const RUN_ROW_READS = Object.freeze({
   input: rowRead(
     [
       'followup.queued',
@@ -186,7 +185,7 @@ export const RUN_ROW_READS = {
     ),
   })),
   positions: rowRead(['run.position'], (positions) => ({ positions })),
-};
+});
 
 /** One read of a run's rows: a key of {@link RUN_ROW_READS}. */
 export type RunRowRead = keyof typeof RUN_ROW_READS;
@@ -213,7 +212,7 @@ export function foldRunRows<R extends RunRowRead>(
 /** The kinds a run's record reads: what a store selects to read a record.
  *  {@link recordAfter} has a case for each and for no other, which the
  *  compiler holds both ways. */
-export const RECORD_ROW_TYPES = [
+export const RECORD_ROW_TYPES = Object.freeze([
   'run.start',
   'approval.policy',
   'run.activate',
@@ -227,7 +226,7 @@ export const RECORD_ROW_TYPES = [
   'run.position',
   'plugin.fact',
   'run.description',
-] as const satisfies readonly SessionRow['type'][];
+] as const satisfies readonly SessionRow['type'][]);
 
 /** The record of a run no row has said anything about. */
 export const NO_RUN_ROWS: RunRows = Object.freeze({
@@ -258,11 +257,7 @@ export function recordAfter(record: RunRows, row: SessionRow): RunRows {
   if (!isRecordRow(row)) return record;
   switch (row.type) {
     case 'run.start':
-      return {
-        ...record,
-        start: row,
-        grants: row.approvalPolicy ?? NO_APPROVAL_GRANTS,
-      };
+      return { ...record, start: row, grants: row.grants };
     case 'approval.policy':
       return { ...record, grants: row.snapshot };
     // A resumed run never carries the previous lifecycle's end or stop, and

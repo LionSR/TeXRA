@@ -106,7 +106,7 @@ TeXRA handles file paths as follows:
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
 - **Output**: A program's outputs are saved in run storage. Use **Accept** or
-  **Pack** when you want to copy reviewed outputs back into the workspace.
+  **Archive outputs to History** when you want to copy reviewed outputs back into the workspace.
 
 ### File discovery rules
 
@@ -135,7 +135,7 @@ Every run gets an isolated run folder under TeXRA's workspace storage directory:
 executions/<executionId>/
 ```
 
-A program's outputs are listed in the ProgressBoard under **Generated files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
+A program's outputs are listed in the Tasks view under **Generated files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
 
 - **Accept**: Copies the reviewed output file into your workspace.
 - **Pack / Archive outputs to History** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run folder (its output files, logs, and mirrored dependencies) into a timestamped folder under `History/`.

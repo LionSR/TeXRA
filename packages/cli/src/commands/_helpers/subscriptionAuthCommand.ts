@@ -111,7 +111,7 @@ export function defineSubscriptionAuthCommand(
       device: {
         type: 'boolean',
         description:
-          'Sign in with a one-time device code (for SSH, containers, or any headless shell)',
+          'For SSH, containers, or any headless shell: sign in with a one-time device code where the provider has one, otherwise print the browser sign-in URL',
       },
       'no-browser': {
         type: 'boolean',

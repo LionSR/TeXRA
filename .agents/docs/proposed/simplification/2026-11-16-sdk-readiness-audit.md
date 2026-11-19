@@ -69,7 +69,7 @@ document when the model takes one, page-images when it only takes vision,
 skipped otherwise; an image needs vision; audio needs native audio; anything
 else is unsupported" is written three times in
 `packages/harness/src/agent/runtime/run/mediaInput.ts` and
-`FollowUps.ts`:
+`packages/harness/src/agent/runtime/FollowUps.ts`:
 
 - `partsForFile` (`mediaInput.ts:107-154`) decides it off the file extension /
   mime type while reading bytes and rasterizing PDFs — three outcomes: a real

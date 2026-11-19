@@ -13,6 +13,7 @@ import { Skills } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import { enabledLabel } from '@ui/copy/format';
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -92,26 +93,23 @@ export function SkillsSettingsForm(
       action="toggle"
       showTransientCloseHint={false}
       onSelect={(toggle, { data, update }) => {
-        const key =
+        const row =
           toggle.kind === 'source'
-            ? DISABLED_SKILL_SOURCES_SETTING.key
-            : DISABLED_SKILLS_SETTING.key;
+            ? DISABLED_SKILL_SOURCES_SETTING
+            : DISABLED_SKILLS_SETTING;
         const current =
           toggle.kind === 'source' ? data.disabledScopes : data.disabledNames;
         const value = toggle.kind === 'source' ? toggle.scope : toggle.name;
         const next = toggleDisabled(current, value, current.includes(value));
         update(
-          Effect.flatMap(
-            applyStateSettingUpdate(key, next, {
-              host: 'cli',
-              stores: roots,
-            }),
-            (result) =>
-              result.kind === 'applied'
-                ? Effect.void
-                : Effect.fail(
-                    new Error(`Could not update skills (${result.kind}).`),
-                  ),
+          Effect.flatMap(applyStateSettingUpdate(row, next, roots), (result) =>
+            result.kind === 'applied'
+              ? Effect.void
+              : Effect.fail(
+                  new SettingsRequestFailed({
+                    message: `Could not update skills (${result.kind}).`,
+                  }),
+                ),
           ),
         );
       }}

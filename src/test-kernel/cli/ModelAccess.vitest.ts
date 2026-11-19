@@ -2,103 +2,47 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 import { Effect } from 'effect';
 
-import {
-  selectCliRunnableModel,
-  type CliModelAccess,
-} from '@cli/runtime/models/modelAccess';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { apiKeySecretName } from '@texra-ai/llm';
+import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
-import type { ModelOptionData } from '@texra/shared/pickerOptions';
+import { TEXRA_APP } from '@test/support/texraApp';
 import type { RunModelDecisionReason } from '@texra-ai/harness/host';
 
-function model(
-  value: string,
-  overrides: Partial<CliModelAccess> = {},
-): CliModelAccess {
-  return {
-    model: { value, label: value },
-    available: true,
-    status: 'available',
-    ...overrides,
-  };
-}
+/** A model whose key this host lacks; its DeepSeek siblings can run. */
+const MISSING_KEY_MODEL = 'anthropic/claude-opus-5-5';
 
-function modelOption(
-  value: string,
-  overrides: Partial<ModelOptionData> = {},
-): ModelOptionData {
-  return {
-    value,
-    label: value,
-    ...overrides,
-  };
-}
-
-function missingKeyModel(value: string): CliModelAccess {
-  return model(value, {
-    available: false,
-    status: 'missing api key',
-    model: modelOption(value, {
-      availability: 'missing-key',
-    }),
+/** The lookup for one fallback reason, over the host's stores with a
+ *  DeepSeek key stored. */
+const resolveModel = (fallbackReason: RunModelDecisionReason) =>
+  Effect.gen(function* () {
+    const host = yield* FakeHost;
+    yield* host.secrets
+      .set(apiKeySecretName('deepseek'), 'sk-test-deepseek-key')
+      .pipe(Effect.orDie);
+    return yield* selectCliRunnableModel(
+      [{ model: MISSING_KEY_MODEL, reason: fallbackReason }],
+      { stores: host.roots },
+    );
   });
-}
-
-/**
- * The process stores every access lookup reads, threaded in by the caller the
- * way the CLI composition root threads its own: the fake settings stores and
- * a runtime over the block's graph.
- */
-const stores = Effect.map(SessionGraph.runtime, (runtime) => ({
-  ...makeFakeSettingsStores().stores,
-  runtime,
-}));
-
-/** The lookup for one fallback reason, over the process stores. */
-const resolveModelFromAccessList = (
-  accessList: readonly CliModelAccess[],
-  model: string,
-  { fallbackReason }: { readonly fallbackReason: RunModelDecisionReason },
-) =>
-  Effect.flatMap(stores, (processStores) =>
-    selectCliRunnableModel([{ model, reason: fallbackReason }], {
-      accessList,
-      stores: processStores,
-    }),
-  );
 
 layer(SessionGraph.hosted)('CLI model access resolution', (it) => {
-  // A fresh default host per test, as the lookups read its stores.
-  it.layer(FakeHost.layer({}), { buildPerTest: true })((it) => {
+  // A fresh TeXRA host per test (its curated models are the listed rows),
+  // as the lookups read its stores and keys.
+  it.layer(FakeHost.layer({ app: TEXRA_APP }), { buildPerTest: true })((it) => {
     it.effect('owns fallback behavior by model source', () =>
       Effect.gen(function* () {
-        const entries = [
-          missingKeyModel('missingModel'),
-          model('deepseek/deepseek-v4-flash'),
-        ];
-
-        const refused = yield* Effect.flip(
-          resolveModelFromAccessList(entries, 'missingModel', {
-            fallbackReason: 'explicit-override',
-          }),
-        );
+        const refused = yield* Effect.flip(resolveModel('explicit-override'));
         expect(refused.message).toContain(
-          'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash.',
+          'Model "anthropic/claude-opus-5-5" is not available (missing api key). Available models: deepseek/deepseek-flash, deepseek/deepseek-v4-pro.',
         );
-        expect(
-          yield* resolveModelFromAccessList(entries, 'missingModel', {
-            fallbackReason: 'command-config',
-          }),
-        ).toEqual({
-          model: 'deepseek/deepseek-v4-flash',
+        expect(yield* resolveModel('command-config')).toEqual({
+          model: 'deepseek/deepseek-flash',
           notice:
-            'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash. Using "deepseek/deepseek-v4-flash" instead.',
+            'Model "anthropic/claude-opus-5-5" is not available (missing api key). Available models: deepseek/deepseek-flash, deepseek/deepseek-v4-pro. Using "deepseek/deepseek-flash" instead.',
         });
-        expect(
-          yield* resolveModelFromAccessList(entries, 'missingModel', {
-            fallbackReason: 'builtin-default',
-          }),
-        ).toEqual({ model: 'deepseek/deepseek-v4-flash' });
+        expect(yield* resolveModel('builtin-default')).toEqual({
+          model: 'deepseek/deepseek-flash',
+        });
       }),
     );
   });

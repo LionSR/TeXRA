@@ -20,7 +20,7 @@ import { writeFileSync } from 'node:fs';
 
 import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, PubSub, Schema, Stream } from 'effect';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import {
@@ -109,19 +109,19 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             const { roots } = yield* FakeHost;
             const session = yield* persistentTestSession(roots);
             const runId = generateRunId();
-            if (roots.workspace === undefined)
-              throw new Error('no test workspace');
+            assert(roots.workspace !== undefined, 'no test workspace');
             const release = join(roots.workspace, 'release');
             yield* rootRun({
               config: Schema.decodeUnknownSync(AgentConfigSchema)({
                 agent: 'command_runner',
-                persona: {
-                  name: 'command_runner',
-                  description: 'Runs one command.',
-                  prompt: `GOLDEN-APPROVAL bash until [ -e ${release} ]; do sleep 0.05; done`,
-                  tools: ['bash'],
+                agentSource: {
+                  kind: 'inline',
+                  persona: {
+                    description: 'Runs one command.',
+                    prompt: `GOLDEN-APPROVAL bash until [ -e ${release} ]; do sleep 0.05; done`,
+                    tools: ['bash'],
+                  },
                 },
-                agentSource: 'inline',
                 model: 'openai/gpt-5.6-sol',
                 instruction: 'Run the command.',
               }),

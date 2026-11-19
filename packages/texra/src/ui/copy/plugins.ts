@@ -3,7 +3,8 @@
  * page and the TUI's `/plugins` both print: where it comes from, what it
  * adds, whether it is on, whether it is trusted, whether it can run here,
  * and which agents use it. A renderer lays these out; it spells none of
- * them itself.
+ * them itself. The `/plugins` command's own sentences, which spell its
+ * slash command and flag, are the terminal's.
  */
 import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
@@ -32,22 +33,15 @@ export const PLUGINS_PAGE = Object.freeze({
   openInstallPage: 'Open install page',
   setUp: (name: string) => `Set up ${name}`,
   toolsItAdds: 'Tools it adds',
-});
-
-/** The TUI's `/plugins` copy. */
-export const PLUGINS_TUI = Object.freeze({
-  description:
-    'Switch plugins on or off. Add one: /plugins add <URL or folder>',
-  compactTitle: '/plugins · Switch plugins on or off',
-  switchAction: 'switch on/off',
-  chooseAction: 'choose',
-  trustTitle: (name: string) => `/plugins · Trust ${name}?`,
-  trust: 'Trust and switch on',
-  decline: 'Keep it off',
-  addUsage:
-    'Usage: /plugins add <github.com/owner/repo[@ref], a repository URL, or a folder> [--plugin <name>]',
+  addPrompt:
+    'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
+  addPlaceholder: 'github.com/owner/repo',
   added: (names: readonly string[]) =>
-    `Added ${names.join(', ')}. Switch it on in /plugins to review what it declares and trust it.`,
+    `Installed ${names.join(', ')}. Switch it on to review what it declares and trust it.`,
+  trustQuestion: (name: string, version: string | null) =>
+    `Trust ${name}${version ? ` ${version}` : ''} and enable it?`,
+  trustAction: 'Trust and enable',
+  declined: (name: string) => `${name} was not trusted, so it stays off.`,
 });
 
 /** The row's identity, unique across the three kinds: the page's repeat key
@@ -69,7 +63,7 @@ export function pluginRowKey(row: PluginRow): string {
 export function pluginRowSwitchable(row: PluginRow): boolean {
   switch (row.kind) {
     case 'texra':
-      return row.item.toggleable === true;
+      return row.item.switch !== 'always-on';
     case 'installed':
       return row.plugin.code.length === 0 && row.plugin.problem === undefined;
     case 'mcp':
@@ -126,8 +120,7 @@ export function pluginRowSummary(row: PluginRow): string {
 export function pluginRowState(row: PluginRow): string {
   switch (row.kind) {
     case 'texra':
-      if (row.item.toggleable !== true) return 'always on';
-      return row.item.enabled === false ? 'off' : 'on';
+      return row.item.switch === 'always-on' ? 'always on' : row.item.switch;
     case 'installed':
       return row.plugin.enabled ? 'on' : 'off';
     case 'mcp':

@@ -1,47 +1,22 @@
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
-const ContextManagementAction = Schema.Literals([
-  'clear_tool_uses',
-  'clear_thinking',
-  'truncation',
-  'max_tokens_reduced',
-]);
-
 const PositiveTokenCountSchema = Schema.Int.check(Schema.isGreaterThan(0));
 
-const ContextManagementDataBaseSchema = Schema.Struct({
+/**
+ * The one context-management event the run writes: a request's output
+ * ceiling lowered to fit what the context window leaves.
+ */
+export const ContextManagementDataSchema = Schema.Struct({
+  action: Schema.Literal('max_tokens_reduced'),
   tokensBefore: NonNegativeIntSchema,
   contextWindow: PositiveTokenCountSchema,
   utilizationBefore: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   details: Schema.optional(Schema.String),
+  originalMaxTokens: PositiveTokenCountSchema,
+  reducedMaxTokens: PositiveTokenCountSchema,
 });
-
-const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.mapFields(
-  Struct.assign({
-    action: Schema.Literal('max_tokens_reduced'),
-    originalMaxTokens: PositiveTokenCountSchema,
-    reducedMaxTokens: PositiveTokenCountSchema,
-  }),
-);
-
-const TokensFreedDataSchema = ContextManagementDataBaseSchema.mapFields(
-  Struct.assign({
-    action: ContextManagementAction.pick([
-      'clear_tool_uses',
-      'clear_thinking',
-      'truncation',
-    ]),
-    tokensAfter: NonNegativeIntSchema,
-    utilizationAfter: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-  }),
-);
-
-export const ContextManagementDataSchema = Schema.Union([
-  MaxTokensReducedDataSchema,
-  TokensFreedDataSchema,
-]);
 
 export type ContextManagementData = typeof ContextManagementDataSchema.Type;
 

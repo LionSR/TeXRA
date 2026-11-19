@@ -31,7 +31,6 @@ const SETUP_INVOKABLE_COMMANDS = [
   'texra.showModels',
   'texra.showAgents',
   'texra.showTools',
-  'texra.showTeamSettings',
   'texra.showGitSettings',
   'texra.showMainView',
   'texra.showDashboard',
@@ -62,14 +61,14 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
   const commandId = input.command;
   const commands = platform.commands;
   if (!commands) {
-    return yield* Effect.fail(
-      new ToolError('VS Code command invocation is unavailable in this host.'),
+    return yield* new ToolError(
+      'VS Code command invocation is unavailable in this host.',
     );
   }
   yield* commands
     .invoke(commandId)
     .pipe(
-      Effect.catchTag('SetupCommandFailed', (failure) =>
+      Effect.catchTag('HostFailed', (failure) =>
         Effect.fail(
           new ToolError(
             `VS Code command "${commandId}" failed: ${failure.message}`,

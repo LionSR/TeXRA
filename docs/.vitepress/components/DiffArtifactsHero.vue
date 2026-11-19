@@ -4,8 +4,8 @@
 // emits `_diff.tex`, latexdiff-vc emits `-diff<hash>.tex`, and between-round
 // runs emit `_diffr<newer>r<older>.tex`. This grounds the set: the source pair on top,
 // then each generated diff with its .tex source + compiled .pdf, tagged by the
-// tool that made it. The header carries the same Pack / Clean toolbar the
-// LaTeXDiffs section exposes (mirrors LatexDiffHero's .act buttons) so it's
+// tool that made it. The header carries the same Move to Diffs folder / Delete
+// diff files buttons the LaTeXDiffs sheet has (mirrors LatexDiffHero's) so it's
 // clear what those buttons act on.
 //
 // Standalone (no MockupFrame): just the focused artifact card. The root carries
@@ -23,7 +23,7 @@ const groups = [
         note: 'base',
       },
       {
-        name: 'spectral-gap_polish_r1.tex',
+        name: 'r1/spectral-gap.tex',
         icon: 'file-code',
         kind: 'tex',
         note: 'edited',
@@ -79,11 +79,13 @@ const groups = [
       <span class="mk-card-title">Diff artifacts</span>
       <span class="mk-card-sub">naming · lifecycle</span>
       <div class="da-acts">
-        <span class="act" title="Pack latexdiff output"
-          ><wa-icon library="texra" name="archive"></wa-icon> Pack</span
+        <span class="act"
+          ><wa-icon library="texra" name="archive"></wa-icon> Move to Diffs
+          folder</span
         >
-        <span class="act" title="Clean latexdiff output"
-          ><wa-icon library="texra" name="trash"></wa-icon> Clean</span
+        <span class="act"
+          ><wa-icon library="texra" name="trash"></wa-icon> Delete diff
+          files</span
         >
       </div>
     </div>

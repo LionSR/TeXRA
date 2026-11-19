@@ -25,6 +25,8 @@ import {
   Fiber,
   FiberHandle,
   FiberSet,
+  type ManagedRuntime,
+  Schema,
   Scope,
   Semaphore,
   Stream,
@@ -54,6 +56,12 @@ import {
 
 type CodeEditor = ReturnType<MonacoModule['editor']['create']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
+
+/** Why the editor could not load, or a file request was not carried out. */
+export class EditorPaneError extends Schema.TaggedError<EditorPaneError>()(
+  'EditorPaneError',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /** Everything the pane tracks for one workspace path. */
 interface FileState {
@@ -120,15 +128,15 @@ interface EditorPaneCallbacks {
   /** Lists the direct children of one workspace directory for the tree. */
   listFiles(
     directory: string,
-  ): Effect.Effect<readonly EditorFileEntry[], Error>;
-  readFile(path: string): Effect.Effect<string, Error>;
+  ): Effect.Effect<readonly EditorFileEntry[], EditorPaneError>;
+  readFile(path: string): Effect.Effect<string, EditorPaneError>;
   /** Writes `contents` while the file still holds `base` (null: whatever
    *  it holds); `changedOnDisk` when something else rewrote it. */
   writeFile(
     path: string,
     contents: string,
     base: string | null,
-  ): Effect.Effect<'saved' | 'changedOnDisk', Error>;
+  ): Effect.Effect<'saved' | 'changedOnDisk', EditorPaneError>;
   isReadOnly?(path: string): boolean;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
@@ -163,7 +171,12 @@ interface EditorPane {
   dispose(): void;
 }
 
-export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
+/** `runtime` is the renderer's one runtime: the pane enters Effect through
+ *  it, and runs everything it starts in a scope of its own. */
+export function createEditorPane(
+  runtime: ManagedRuntime.ManagedRuntime<never, never>,
+  callbacks: EditorPaneCallbacks,
+): EditorPane {
   const element = document.createElement('div');
   element.className = 'desktop-editor-pane';
 
@@ -184,57 +197,88 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   let monaco: MonacoModule | undefined;
   let editor: CodeEditor | undefined;
   let theme: Theme = 'dark';
+  /** `program`, with a defect sent to the log instead of ending its fiber
+   *  unseen: nothing joins the pane's fibers. */
+  const logDefect = (program: Effect.Effect<void>): Effect.Effect<void> =>
+    Effect.catchDefect(program, (defect) =>
+      Effect.sync(() => callbacks.onError(defect)),
+    );
   // Everything the pane runs lives in its scope: disposing the pane
   // interrupts whatever is still in flight.
   const scope = Scope.makeUnsafe();
-  const { tree, opening, listing, directoryLoads } = Effect.runSync(
-    Effect.gen(function* () {
-      const tree = yield* SubscriptionRef.make(FRESH_TREE);
-      // The tree renders every value it takes, for the pane's lifetime.
-      yield* Effect.forkIn(
-        Stream.runForEach(SubscriptionRef.changes(tree), (state) =>
-          Effect.sync(() => render(treeTemplate(state), treeHost)),
-        ),
-        scope,
-      );
-      return {
-        tree,
-        /** The open that chooses which file is visible: a newer open
-         *  interrupts it. */
-        opening: yield* FiberHandle.make<void>(),
-        /** The tree's top-level listing: a newer refresh interrupts it. */
-        listing: yield* FiberHandle.make<void>(),
-        /** The folders being listed; a refresh interrupts them all. */
-        directoryLoads: yield* FiberSet.make<void>(),
-      };
-    }).pipe(Scope.provide(scope)),
-  );
+  const { tree, opening, listing, directoryLoads, fork, ensureEditor } =
+    runtime.runSync(
+      Effect.gen(function* () {
+        const tree = yield* SubscriptionRef.make(FRESH_TREE);
+        // The tree renders every value it takes, for the pane's lifetime.
+        yield* Effect.forkIn(
+          logDefect(
+            Stream.runForEach(SubscriptionRef.changes(tree), (state) =>
+              Effect.sync(() => render(treeTemplate(state), treeHost)),
+            ),
+          ),
+          scope,
+        );
+        // Monaco and the pane's editor, made once; a load that failed is
+        // tried again by the next open.
+        const [editorOnce, forgetEditor] =
+          yield* Effect.cachedInvalidateWithTTL(
+            Effect.tryPromise({
+              try: () => loadMonaco(),
+              catch: (cause) =>
+                new EditorPaneError({
+                  message: ensureError(cause).message,
+                  cause,
+                }),
+            }).pipe(
+              Effect.map((loadedMonaco) => {
+                monaco = loadedMonaco;
+                editor = loadedMonaco.editor.create(editorHost, {
+                  ...monacoPresentationOptions(document.body),
+                  theme: applyMonacoTheme(loadedMonaco, theme, document.body),
+                  // Monaco measures its own container, and the pane is resized by
+                  // splits and divider drags, not only by the window.
+                  automaticLayout: true,
+                  // Papers and proofs have paragraph-length lines, so wrapping
+                  // beats a horizontal scrollbar — but wrap on word boundaries,
+                  // not anywhere.
+                  wordWrap: 'bounded',
+                  wordWrapColumn: 120,
+                  wrappingStrategy: 'simple',
+                  folding: true,
+                });
+                return { monaco: loadedMonaco, editor };
+              }),
+            ),
+            Duration.infinity,
+          );
+        return {
+          tree,
+          /** The open that chooses which file is visible: a newer open
+           *  interrupts it. */
+          opening: yield* FiberHandle.make<void>(),
+          /** The tree's top-level listing: a newer refresh interrupts it. */
+          listing: yield* FiberHandle.make<void>(),
+          /** The folders being listed; a refresh interrupts them all. */
+          directoryLoads: yield* FiberSet.make<void>(),
+          /** Starts a fiber of the pane's scope. */
+          fork: yield* FiberSet.makeRuntime<never, void, never>(),
+          ensureEditor: editorOnce.pipe(Effect.tapError(() => forgetEditor)),
+        };
+      }).pipe(Scope.provide(scope)),
+    );
   /** Run `program` in the pane's scope; the promise resolves when it ends,
    *  however it ends (each program reports its own failures). */
   const run = (program: Effect.Effect<void>): Promise<void> =>
     disposed
       ? Promise.resolve()
-      : Effect.runPromise(
-          Effect.forkIn(program, scope).pipe(
-            Effect.flatMap(Fiber.await),
-            Effect.asVoid,
-          ),
-        );
-  /** Run `program` as the fiber `handle` holds, and wait for it. */
-  const runAs = (
-    handle: FiberHandle.FiberHandle<void>,
-    program: Effect.Effect<void>,
-  ): Promise<void> =>
-    Effect.runPromise(
-      FiberHandle.run(handle, program).pipe(
-        Effect.flatMap(Fiber.await),
-        Effect.asVoid,
-      ),
-    );
+      : new Promise((resolve) => {
+          fork(logDefect(program)).addObserver(() => resolve());
+        });
   const files = new Map<string, FileState>();
   /** Change the tree's state from outside an Effect. */
   const setTree = (change: (state: TreeState) => TreeState): void =>
-    Effect.runSync(SubscriptionRef.update(tree, change));
+    runtime.runSync(SubscriptionRef.update(tree, change));
   /** Record whether `path` has unsaved edits, and tell the tab strip. */
   function setDirty(path: string, dirty: boolean): void {
     setTree((state) => ({
@@ -297,7 +341,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         <span>Files</span>
         ${renderIconActionButton({
           id: 'editor-tree-refresh',
-          icon: 'rotate-right',
+          icon: 'arrows-rotate',
           label: 'Refresh file list',
           tooltip: 'Refresh file list',
           className: 'desktop-editor-tree-refresh',
@@ -344,7 +388,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     }));
     if (expanded) {
       void run(
-        FiberSet.run(directoryLoads, loadDirectory(directory)).pipe(
+        FiberSet.run(directoryLoads, logDefect(loadDirectory(directory))).pipe(
           Effect.asVoid,
         ),
       );
@@ -450,35 +494,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     `;
   }
 
-  /** Monaco and the pane's editor, made once; a load that failed is tried
-   *  again by the next open. */
-  const [editorOnce, forgetEditor] = Effect.runSync(
-    Effect.cachedInvalidateWithTTL(
-      Effect.tryPromise({ try: () => loadMonaco(), catch: ensureError }).pipe(
-        Effect.map((loadedMonaco) => {
-          monaco = loadedMonaco;
-          editor = loadedMonaco.editor.create(editorHost, {
-            ...monacoPresentationOptions(document.body),
-            theme: applyMonacoTheme(loadedMonaco, theme, document.body),
-            // Monaco measures its own container, and the pane is resized by
-            // splits and divider drags, not only by the window.
-            automaticLayout: true,
-            // Papers and proofs have paragraph-length lines, so wrapping beats
-            // a horizontal scrollbar — but wrap on word boundaries, not
-            // anywhere.
-            wordWrap: 'bounded',
-            wordWrapColumn: 120,
-            wrappingStrategy: 'simple',
-            folding: true,
-          });
-          return { monaco: loadedMonaco, editor };
-        }),
-      ),
-      Duration.infinity,
-    ),
-  );
-  const ensureEditor = editorOnce.pipe(Effect.tapError(() => forgetEditor));
-
   /** Put `contents` in `model` without marking the file dirty. */
   function setClean(file: FileState, model: TextModel, contents: string): void {
     file.disk = contents;
@@ -497,7 +512,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     path: string,
     file: FileState,
     loadedMonaco: MonacoModule,
-  ): Effect.Effect<TextModel, Error> {
+  ): Effect.Effect<TextModel, EditorPaneError> {
     return file.lane.withPermit(
       Effect.suspend(() => {
         const { model } = file;
@@ -527,7 +542,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     path: string,
     file: FileState,
     model: TextModel,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, EditorPaneError> {
     return Effect.suspend(() => {
       if (isDirty(path)) return Effect.void;
       const version = model.getVersionId();
@@ -575,48 +590,52 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     // Several tree clicks can race the first Monaco load and the reads: the
     // newest open interrupts the one before, so only it chooses which file
     // is visible.
-    return runAs(
-      opening,
-      Effect.gen(function* () {
-        const loaded = yield* ensureEditor.pipe(
-          Effect.catch((error) =>
-            Effect.as(
-              Effect.sync(() => notice.report(undefined, 'load', error)),
-              undefined,
+    return run(
+      FiberHandle.run(
+        opening,
+        logDefect(
+          Effect.gen(function* () {
+            const loaded = yield* ensureEditor.pipe(
+              Effect.catch((error) =>
+                Effect.as(
+                  Effect.sync(() => notice.report(undefined, 'load', error)),
+                  undefined,
+                ),
+              ),
+            );
+            if (!loaded) return;
+            const target = loaded.editor;
+            const file = fileState(path);
+            const model = yield* currentModel(path, file, loaded.monaco);
+            const { openPath } = SubscriptionRef.getUnsafe(tree);
+            if (target.getModel() !== model) {
+              if (openPath) {
+                const state = target.saveViewState();
+                if (state) fileState(openPath).viewState = state;
+              }
+              target.setModel(model);
+              const state = file.viewState;
+              if (state) target.restoreViewState(state);
+            }
+            yield* SubscriptionRef.update(tree, (state) => ({
+              ...state,
+              openPath: path,
+            }));
+            target.updateOptions({
+              readOnly: callbacks.isReadOnly?.(path) ?? false,
+              readOnlyMessage: {
+                value:
+                  'This definition is read-only. Use **Customize** in Settings to edit a copy.',
+              },
+            });
+            notice.clear(path);
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => notice.report(path, 'open', error)),
             ),
           ),
-        );
-        if (!loaded) return;
-        const target = loaded.editor;
-        const file = fileState(path);
-        const model = yield* currentModel(path, file, loaded.monaco);
-        const { openPath } = SubscriptionRef.getUnsafe(tree);
-        if (target.getModel() !== model) {
-          if (openPath) {
-            const state = target.saveViewState();
-            if (state) fileState(openPath).viewState = state;
-          }
-          target.setModel(model);
-          const state = file.viewState;
-          if (state) target.restoreViewState(state);
-        }
-        yield* SubscriptionRef.update(tree, (state) => ({
-          ...state,
-          openPath: path,
-        }));
-        target.updateOptions({
-          readOnly: callbacks.isReadOnly?.(path) ?? false,
-          readOnlyMessage: {
-            value:
-              'This definition is read-only. Use **Customize** in Settings to edit a copy.',
-          },
-        });
-        notice.clear(path);
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => notice.report(path, 'open', error)),
         ),
-      ),
+      ).pipe(Effect.flatMap(Fiber.await), Effect.asVoid),
     );
   }
 
@@ -660,7 +679,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           folders: FRESH_TREE.folders,
         })),
       ),
-      Effect.andThen(FiberHandle.run(listing, listTree)),
+      Effect.andThen(FiberHandle.run(listing, logDefect(listTree))),
       Effect.flatMap(Fiber.await),
     );
     const fileRefreshes = [...files].map(([path, file]) =>
@@ -763,7 +782,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     dispose() {
       disposed = true;
       disposeCommandTooltips();
-      Effect.runFork(Scope.close(scope, Exit.void));
+      runtime.runFork(Scope.close(scope, Exit.void));
       editor?.dispose();
       editor = undefined;
       for (const file of files.values()) {

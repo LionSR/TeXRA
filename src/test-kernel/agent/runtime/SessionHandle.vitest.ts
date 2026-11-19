@@ -88,11 +88,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         const session: Context.Context<SessionServices> =
           yield* isolatedTestSession({
             dispose: () => {
-              refusal = Effect.runSync(
+              refusal = Effect.runSyncWith(session)(
                 Context.get(session, RunRegistry)
                   .start(generateRunId(), {
                     open: Effect.void,
                     run: () => Effect.never,
+                    end: (_, exit) => exit,
                   })
                   .pipe(Effect.flip, Effect.orDie),
               ).message;

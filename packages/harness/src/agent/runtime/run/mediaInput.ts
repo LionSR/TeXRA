@@ -30,10 +30,13 @@ import type { DraftBlob } from '@shared/session/historyTurns';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getBasename } from '@utils/core/pathBasics';
-import { getExtensionLowercase } from '@utils/core/pathCore';
+import { getBasename, getExtensionLowercase } from '@utils/core/pathBasics';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { getBase64EncodedMedia, rasterizePdfPages } from './img';
+import {
+  getBase64EncodedMedia,
+  MediaConversionFailed,
+  rasterizePdfPages,
+} from './img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { InputPart } from '@texra-ai/llm';
 
@@ -65,10 +68,10 @@ const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
   const { pages, pageCount } = yield* rasterizePdfPages(path).pipe(
     Effect.mapError(
       (cause) =>
-        new Error(
-          `Failed to process PDF file as image: ${display}: ${cause.message}`,
-          { cause },
-        ),
+        new MediaConversionFailed({
+          message: `Failed to process PDF file as image: ${display}: ${cause.message}`,
+          cause,
+        }),
     ),
   );
   const parts: InputPart[] = pages.map((base64) => ({
@@ -142,11 +145,9 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     return { parts: [{ kind: 'audio', mimeType, base64 }], kinds: [] };
   }
   if (!isImageMimeType(mimeType) || mimeType === null) {
-    return yield* Effect.fail(
-      new Error(
-        `Unsupported media file: ${display} (${ext || 'no extension'})`,
-      ),
-    );
+    return yield* new MediaConversionFailed({
+      message: `Unsupported media file: ${display} (${ext || 'no extension'})`,
+    });
   }
   if (!capabilities.supportsVision) return skipped('images');
   const base64 = yield* getBase64EncodedMedia(path, config);
@@ -204,9 +205,9 @@ export const attachedMedia = Effect.fn('mediaInput.attached')(
         const path = pathToLocationIn(roots.workspace, entry).absolutePath;
         const mimeType = getMimeType(path);
         if (mimeType === null || !storedMediaPart(mimeType, '', ANY_MODEL))
-          return yield* Effect.fail(
-            new Error(`Unsupported media file: ${entry}`),
-          );
+          return yield* new MediaConversionFailed({
+            message: `Unsupported media file: ${entry}`,
+          });
         const base64 = yield* getBase64EncodedMedia(path, roots.config);
         const digest = blobAddress(base64);
         return {

@@ -90,10 +90,6 @@ export class UserMessage extends LitElement {
         display: var(--texra-fork-from-here, inline-flex);
       }
 
-      .user-message-copy {
-        opacity: 1;
-      }
-
       .user-message-content {
         color: var(--wa-color-text-normal);
         white-space: pre-wrap;

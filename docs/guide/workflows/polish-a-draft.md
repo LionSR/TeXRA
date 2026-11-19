@@ -47,15 +47,15 @@ texra run edit \
 <CliRunHero
   command='texra run edit --input intro.tex --instruction "Tighten prose. Preserve all math and citations."'
   :rounds="[
-    { label: 'r0: first revision', state: 'done' },
-    { label: 'r1: review-and-correct pass', state: 'done' },
+    { label: 'Revision 1: first revision', state: 'done' },
+    { label: 'Revision 2: review-and-correct pass', state: 'done' },
   ]"
-  :outputs="['executions/c4e19b07a52d/r1/intro.tex']"
+  :outputs="['…/executions/c4e19b07a52d/r1/intro.tex']"
 />
 
-<p class="hero-caption">Revisions stream as progress, then the path to the final revision prints on stdout. That printed path is the success signal.</p>
+<p class="hero-caption">Revisions stream as progress, then the full path to the final revision prints on stdout. That printed path is the success signal.</p>
 
-Each revision writes its output into `executions/<run-id>/` under TeXRA's workspace storage directory, keeping the **input filename**:
+Each revision writes its output into `executions/<run-id>/` in the project's storage folder under `~/.texra`, keeping the **input filename**:
 
 <PolishRoundsTree />
 
@@ -71,28 +71,30 @@ texra run edit --input intro.tex --instruction "Tighten prose." --output intro.p
 
 1. Open the folder that holds `intro.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
-3. Keep the default agent (`orchestrator`) and pick a model.
+3. Keep the default agent (`assistant`) and pick a model.
 4. Type what you want in plain words, for example "Polish intro.tex: tighten the prose, preserve all math and citations." Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>; Enter also sends it).
 5. The agent proposes an `edit` run. The proposal card shows the instruction and the files; edit them if needed, then approve.
-6. When the run completes, open the diff from the **ProgressBoard**.
+6. When the run completes, open the diff from the **Tasks view**.
 
 Same program, same output files, whichever surface you used.
 
 ## Reviewing the output
 
-CLI: diff the revisions against your input:
+CLI: diff the revisions against your input. The path printed on stdout ends
+in `executions/<run-id>/r1/intro.tex`; `<run-folder>` below is the
+`executions/<run-id>` folder of that path:
 
 ```sh
-diff -u intro.tex executions/<run-id>/r0/intro.tex
-diff -u executions/<run-id>/r0/intro.tex executions/<run-id>/r1/intro.tex
+diff -u intro.tex <run-folder>/r0/intro.tex
+diff -u <run-folder>/r0/intro.tex <run-folder>/r1/intro.tex
 ```
 
-VS Code: the ProgressBoard shows side-by-side diffs and lets you accept
+VS Code: the Tasks view shows side-by-side diffs and lets you accept
 the output back into the workspace.
 
 <CompareHero />
 
-<p class="hero-caption">The ProgressBoard opens the polished revision as a diff. Accept each change back into your draft.</p>
+<p class="hero-caption">The Tasks view opens the polished revision as a diff. Accept each change back into your draft.</p>
 
 For a **compiled PDF comparison** (additions in blue, deletions in red),
 use the LaTeXdiff feature in the TeXRA panel. Read the

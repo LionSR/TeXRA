@@ -1,13 +1,13 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, type StateStore } from '@texra-ai/harness/plugins';
 import { withCommandDirs } from '@texra-ai/harness/node';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
-import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'extension';
 
@@ -76,8 +76,6 @@ export function initializeLatexSupport(
 
 /** A failed search propagates: `initializeLatexSupport` logs it and skips the
  *  recommendation, rather than reading "the query failed" as "no .tex files". */
-const workspaceContainsLatexFiles = Effect.tryPromise({
-  try: async () =>
-    vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1),
-  catch: ensureError,
-}).pipe(Effect.map((hits) => hits.length > 0));
+const workspaceContainsLatexFiles = fromHost('workspace.findFiles', async () =>
+  vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1),
+).pipe(Effect.map((hits) => hits.length > 0));

@@ -1,8 +1,9 @@
 import { layer } from '@effect/vitest';
 import { assert, expect } from 'vitest';
 
-import { Effect, Exit, Layer, Scope } from 'effect';
+import { Effect, Exit, Layer, Schema, Scope } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
+import { scopeRunner } from '@cli/chat/scopeRunner';
 import { rootRunId } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import type { TuiTerminal } from '@cli/tui/terminalCleanup';
@@ -10,6 +11,11 @@ import { SessionGraph } from '@test/support/testKernel';
 import { spyOnStreamWrite } from './fixtures/streamWriteSpy';
 import { boundTestSessionView } from './fixtures/sessionViewFixture';
 import type { RunId } from '@texra-ai/harness/schemas';
+
+/** The flush failure the exit must survive. */
+class FlushFailed extends Schema.TaggedError<FlushFailed>()('FlushFailed', {
+  message: Schema.String,
+}) {}
 
 /** What the process wrote to its standard streams during the test, which
  *  the exit's hint and warnings reach; the spies go with the test. */
@@ -65,9 +71,10 @@ const createController = (
       commandName: 'texra',
       cwd: '/tmp/project',
       chatScope,
+      chat: scopeRunner(runtime, chatScope),
       // The test's scope stands in for the process's shutdown: the signal
       // holds the exit takes are released with it.
-      shutdownScope: yield* Scope.Scope,
+      untilShutdown: scopeRunner(runtime, yield* Scope.Scope),
       terminal: tuiTerminal,
       runtime,
       // Only an exit that leaves a waiting root leaves the process here.
@@ -75,7 +82,7 @@ const createController = (
         Effect.die(new Error('the exit left the process unexpectedly')),
       submitted,
       getApprovalPolicy: () => 'ask',
-      flushArtifacts: Effect.fail(new Error('disk full')),
+      flushArtifacts: Effect.fail(new FlushFailed({ message: 'disk full' })),
       repaintAfterTerminalResume: () => {},
       interruptActive: () => {},
     });

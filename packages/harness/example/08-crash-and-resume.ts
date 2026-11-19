@@ -13,6 +13,10 @@
  * 3. It resumes the run here. The finished child is not run again, its
  *    result reaches the replayed script once, the script runs on to its
  *    second `self()` from its saved source, and the run completes.
+ * 4. The script imports a plugin's script module, and this process
+ *    registers a changed edition of it. The script that had started
+ *    replays on the source it started with; a script the model writes
+ *    after the resume imports the changed one.
  */
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -28,6 +32,7 @@ import {
 import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
 
 import {
+  EXAMPLE_CLIENT,
   makeExampleWorkspace,
   scriptReturnsOf,
   type ScriptedTurn,
@@ -45,9 +50,16 @@ const holdTool = defineTool({
   execute: () =>
     crashing ? Effect.never : Effect.succeed(executed('released', 'released')),
 });
+/** The module's source differs between the two processes, as after an
+ *  upgrade of the plugin between a crash and its resume. */
+const EDITION = crashing ? 'first' : 'second';
 const plugins = [
   ...harnessBuiltins,
-  definePlugin({ id: 'hold', tools: [holdTool] }),
+  definePlugin({
+    id: 'hold',
+    tools: [holdTool],
+    scriptModules: { review: `export const edition = '${EDITION}';` },
+  }),
 ];
 
 const VERDICT = {
@@ -56,6 +68,7 @@ const VERDICT = {
   required: ['verdict'],
 };
 const CODE = `
+const { edition } = await import('builtIn:review');
 const schema = ${JSON.stringify(VERDICT)};
 const [first] = await Promise.all([
   self('Round 1: check the setup.', { schema }),
@@ -65,14 +78,20 @@ const second = await self('Round 2: check the bound.', { schema });
 return {
   verdicts: [first.structured.verdict, second.structured.verdict],
   firstRun: first.runId,
+  edition,
 };`;
+/** A script written after the resume: a new step, on the module as it is
+ *  registered now. */
+const LATER_CODE = `
+const { edition } = await import('builtIn:review');
+return { edition };`;
 const submit = (verdict: string, expect: string): ScriptedTurn => ({
   expect,
   toolCalls: [{ name: 'submit_output', input: { verdict } }],
 });
 
 // The killed process answers the parent's first turn and the first child;
-// this one only the second child and the parent's last turn.
+// this one the second child, a second script and the parent's last turn.
 const { platform, workspace, requests, route } = await makeExampleWorkspace(
   crashing
     ? [
@@ -84,13 +103,19 @@ const { platform, workspace, requests, route } = await makeExampleWorkspace(
       ]
     : [
         submit('bound-ok', 'Round 2:'),
+        {
+          expect: 'The script returned',
+          toolCalls: [{ name: 'script', input: { code: LATER_CODE } }],
+        },
         { expect: 'The script returned', text: 'Both rounds passed.' },
       ],
   existing,
 );
-const layer = Sessions.layer({ platform, plugins }).pipe(
-  Layer.provideMerge(route.transport),
-);
+const layer = Sessions.layer({
+  platform,
+  plugins,
+  client: EXAMPLE_CLIENT,
+}).pipe(Layer.provideMerge(route.transport));
 
 const crashProgram = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots, {
@@ -178,23 +203,28 @@ const resumeProgram = Effect.gen(function* () {
   );
   const conversation = yield* session.records(runId).readConversation;
   const results = scriptReturnsOf(conversation);
-  const returned = results.at(-1) as {
-    verdicts: string[];
-    firstRun: string;
-  };
+  const [returned, later] = results as [
+    { verdicts: string[]; firstRun: string; edition: string },
+    { edition: string } | undefined,
+  ];
   if (
     end.outcome !== 'completed' ||
-    requests.length !== 2 ||
+    requests.length !== 3 ||
     children.length !== 2 ||
-    results.length !== 1 ||
+    results.length !== 2 ||
     returned.verdicts.join() !== 'setup-ok,bound-ok' ||
-    returned.firstRun !== firstChild
+    returned.firstRun !== firstChild ||
+    returned.edition !== 'first' ||
+    later?.edition !== 'second'
   )
     throw new Error(
       `resume went wrong: ${JSON.stringify({ end, requests: requests.length, children: children.length, results: results.length, returned })}`,
     );
   console.log(
     `[08] resumed: outcome=${end.outcome} model turns here=${requests.length} children=${children.length} script results=${results.length} verdicts=${returned.verdicts.join('|')} first child reused=${returned.firstRun === firstChild}`,
+  );
+  console.log(
+    `[08] module builtIn:review: the replayed script kept the "${returned.edition}" source it started with; a script written after the resume imported "${later.edition}"`,
   );
 }).pipe(Effect.scoped, Effect.provide(layer));
 

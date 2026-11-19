@@ -7,7 +7,11 @@ import { decodingDefault } from '@texra-ai/harness/schemas';
  * `--output-format` flag, and the `TEXRA_OUTPUT_FORMAT` environment read all
  * parse the same list.
  */
-export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
+export const CLI_OUTPUT_FORMATS = Object.freeze([
+  'text',
+  'json',
+  'ndjson',
+] as const);
 
 export const CliOutputFormatSchema = decodingDefault(
   Schema.Literals(CLI_OUTPUT_FORMATS),

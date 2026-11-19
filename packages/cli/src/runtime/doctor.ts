@@ -1,42 +1,50 @@
+// Node imports
+import { homedir } from 'node:os';
+
 // Third-party imports
 import {
   Effect,
   FileSystem,
   PlatformError,
   Result,
-  Schema,
   SemVer,
   SemVerRange,
 } from 'effect';
 
 // Local imports
 import {
-  extractErrorMessage,
   formatResultCount,
+  isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
+import { redactDiagnostics } from '@texra-ai/harness/host';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { probeLatexTools } from '@latex/latexToolchain';
-import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
+import { latexToolchainHealth } from '@latex/latexToolchain';
+import {
+  USAGE_LOGGING_ENV_OPT_OUT,
+  type UsageLoggingOptOut,
+} from '@telemetry/UsageLogService';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import {
-  DOCTOR_LATEX_TOOLS,
-  SUPPORTED_LATEX_COMPILERS,
+  installAdvice,
+  LATEX_DEPENDENCIES,
 } from '@texra/shared/constants/latexToolchain';
+import { osPlatformOf } from '@texra/shared/osPlatform';
 import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
+  USAGE_LOGGING_SENDS,
 } from '@texra/shared/settings/texraSettings';
 
 // Local file imports
 import { CliExitCode } from './platform/exitCodes';
 import { writeCliResult } from '../commands/_helpers/output';
-import { writeTextStderr } from './platform/logSinks';
+import { cliErrorMessage, writeTextStderr } from './platform/logSinks';
 import { createCliStyle } from './terminal/style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from './platform/cliContext';
 import type { CliStyle } from './terminal/style';
-import type { CliModelAccess } from './models/modelAccess';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
 type DoctorCheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
 
@@ -54,20 +62,6 @@ export interface DoctorReport {
 }
 
 /**
- * The failure of a probe this module drives itself: the LaTeX toolchain probe
- * and the telemetry consent read. It carries the value the foreign edge threw,
- * so the check that recovers from it renders the same hint it rendered when it
- * caught the rejection. The two probes the CLI root supplies are programs
- * already and keep their own `Error` failure.
- */
-class DoctorProbeFailed extends Schema.TaggedError<DoctorProbeFailed>()(
-  'DoctorProbeFailed',
-  {
-    cause: Schema.Defect(),
-  },
-) {}
-
-/**
  * The probes only the CLI root can build: platform init either failed
  * (`degraded`, which skips the checks that need it) or produced the stores
  * and runtime they read (`ready`).
@@ -76,37 +70,14 @@ type DoctorInput =
   | { readonly kind: 'degraded'; readonly initError: Error }
   | {
       readonly kind: 'ready';
-      readonly modelAccessList: Effect.Effect<readonly CliModelAccess[], Error>;
+      readonly modelAccessList: Effect.Effect<
+        readonly ModelOptionData[],
+        Error
+      >;
       readonly usageLoggingOptOut: Effect.Effect<UsageLoggingOptOut>;
     };
 
 type ReadyDoctorInput = Extract<DoctorInput, { kind: 'ready' }>;
-
-const EMAIL_LIKE_DIAGNOSTIC_PATTERN =
-  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-
-function maskIdentifierPart(part: string): string {
-  return part ? `${part.at(0)}***` : '***';
-}
-
-function redactEmailDiagnosticValue(value: string): string {
-  const atIndex = value.indexOf('@');
-  const localPart = value.slice(0, atIndex);
-  const domain = value.slice(atIndex + 1);
-  const domainParts = domain.split('.');
-  const suffix = domainParts.length > 1 ? domainParts.at(-1) : undefined;
-  const domainName = suffix ? domainParts.slice(0, -1).join('.') : domain;
-  const maskedDomain = suffix
-    ? `${maskIdentifierPart(domainName)}.${suffix}`
-    : maskIdentifierPart(domainName);
-  return `${maskIdentifierPart(localPart)}@${maskedDomain}`;
-}
-
-function redactEmailDiagnostics(text: string): string {
-  return text.replaceAll(EMAIL_LIKE_DIAGNOSTIC_PATTERN, (value) =>
-    redactEmailDiagnosticValue(value),
-  );
-}
 
 function check(
   id: string,
@@ -155,7 +126,7 @@ function failFromError(
   message: string,
   error: unknown,
 ): DoctorCheck {
-  return fail(id, name, message, extractErrorMessage(error));
+  return fail(id, name, message, cliErrorMessage(error));
 }
 
 const SUPPORTED_NODE_RANGE = SemVerRange.parseUnsafe(
@@ -212,7 +183,7 @@ function checkDirectory(
           access === 'readwrite'
             ? `${dir} is not readable and writable.`
             : `${dir} is not readable.`,
-          failure.reason.cause ?? failure,
+          failure,
         ),
       ),
     ),
@@ -222,7 +193,7 @@ function checkDirectory(
 function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.modelAccessList.pipe(
     Effect.map((models) => {
-      const available = models.filter((entry) => entry.available);
+      const available = models.filter(isModelOptionAvailable);
       if (available.length > 0) {
         return pass(
           'models',
@@ -255,22 +226,24 @@ function checkLatex(): Effect.Effect<
   never,
   ChildProcessSpawner
 > {
-  return probeLatexTools(DOCTOR_LATEX_TOOLS.map((tool) => tool.name)).pipe(
-    Effect.map(({ installed }) => {
+  const platform = osPlatformOf(process.platform);
+  return latexToolchainHealth().pipe(
+    Effect.map(({ compiler, tools }) => {
       const checks: DoctorCheck[] = [];
-      if (!SUPPORTED_LATEX_COMPILERS.some((name) => installed.has(name))) {
+      if (!compiler) {
+        const { label, installs } = LATEX_DEPENDENCIES.compiler;
         checks.push(
           fail(
             'latex.compiler',
             'LaTeX compiler',
             'No supported LaTeX compiler was found on PATH.',
-            'Install latexmk or pdflatex.',
+            installAdvice(label, installs, platform).guide,
           ),
         );
       }
       checks.push(
-        ...DOCTOR_LATEX_TOOLS.map((tool) => {
-          if (installed.has(tool.name)) {
+        ...tools.map((tool) => {
+          if (tool.installed) {
             return pass(
               `latex.${tool.name}`,
               `LaTeX ${tool.name}`,
@@ -282,7 +255,7 @@ function checkLatex(): Effect.Effect<
             `latex.${tool.name}`,
             `LaTeX ${tool.name}`,
             `${tool.name} was not found on PATH.`,
-            `Install ${tool.name} or a TeX distribution that provides it.`,
+            installAdvice(tool.name, [tool.name], platform).guide,
           );
         }),
       );
@@ -345,10 +318,6 @@ const TELEMETRY_STORED_KEY = `${TEXRA_SETTINGS.catalog.namespace}.${TELEMETRY_EN
 
 function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.usageLoggingOptOut.pipe(
-    // A config store that throws reports as this check's failure.
-    Effect.catchDefect((cause) =>
-      Effect.fail(new DoctorProbeFailed({ cause })),
-    ),
     Effect.map((optOut) => {
       if (optOut?.source === 'environment') {
         return skip(
@@ -368,17 +337,18 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         'telemetry',
         'Usage logging',
         'pass',
-        'On: anonymous model, agent, token counts and duration per round, with a random install ID (no account). No prompt, path or document text.',
-        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_STORED_KEY}": false in ~/.texra/v1/global-storage/config.json.`,
+        `On. ${USAGE_LOGGING_SENDS}`,
+        `Turn it off with ${USAGE_LOGGING_ENV_OPT_OUT}, or "${TELEMETRY_STORED_KEY}": false in ~/.texra/v1/global-storage/config.json.`,
       );
     }),
-    Effect.catch((failure) =>
+    // A config store that throws reports as this check's failure.
+    Effect.catchDefect((cause) =>
       Effect.succeed(
         failFromError(
           'telemetry',
           'Usage logging',
           'Could not read the usage-logging setting.',
-          failure.cause,
+          cause,
         ),
       ),
     ),
@@ -444,7 +414,8 @@ export function doctorExitCode(report: DoctorReport): number {
 
 function formatDoctorText(
   report: DoctorReport,
-  style: CliStyle = createCliStyle(false),
+  style: CliStyle,
+  redact: (text: string) => string,
 ): string {
   const marker: Record<DoctorCheckStatus, string> = {
     pass: style.success('PASS'),
@@ -454,10 +425,15 @@ function formatDoctorText(
   };
   return report.checks
     .map((check) => {
-      const head = `${marker[check.status]} ${check.name}: ${redactEmailDiagnostics(check.message)}`;
-      return check.hint
-        ? `${head}\n     ${style.muted(redactEmailDiagnostics(check.hint))}`
-        : head;
+      const head = `${marker[check.status]} ${check.name}: ${redact(check.message)}`;
+      if (!check.hint) return head;
+      // Install advice runs over several lines; each sits under the marker
+      // column, and a blank line between its steps stays blank.
+      const hint = redact(check.hint)
+        .split('\n')
+        .map((line) => (line ? `     ${style.muted(line)}` : ''))
+        .join('\n');
+      return `${head}\n${hint}`;
     })
     .join('\n');
 }
@@ -479,15 +455,27 @@ export function writeDoctorReport(
   // A failing report's text goes to stderr (clig.dev); each stream's own
   // color gate. One stderr-keyed gate leaked ANSI into `doctor | cat` and
   // stripped color from `doctor 2>/dev/null`.
+  // The text report is what gets pasted into a bug report, so it masks what
+  // the desktop's log viewer masks.
+  const redact = (text: string) =>
+    redactDiagnostics(text, { home: homedir(), workspace: context.cwd });
   if (context.outputFormat === 'text' && !report.ok) {
     writeTextStderr(
-      formatDoctorText(report, createCliStyle(context.stderrColorEnabled)),
+      formatDoctorText(
+        report,
+        createCliStyle(context.stderrColorEnabled),
+        redact,
+      ),
     );
     return;
   }
   writeCliResult(context.outputFormat, {
     json: report,
     ndjson: doctorNdjsonRecords(report),
-    text: formatDoctorText(report, createCliStyle(context.stdoutColorEnabled)),
+    text: formatDoctorText(
+      report,
+      createCliStyle(context.stdoutColorEnabled),
+      redact,
+    ),
   });
 }

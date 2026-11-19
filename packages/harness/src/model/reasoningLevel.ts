@@ -6,7 +6,6 @@ import {
 } from '@shared/schemas';
 
 import {
-  acceptedEfforts,
   type BackendProviderId,
   chooseReasoning,
   type ModelConfig,
@@ -16,10 +15,20 @@ import {
   ReasoningEffort,
   ReasoningEffortSchema,
   type ReasoningRequest,
-  wireEffort,
+  reasoningOnRoute,
 } from '@texra-ai/llm';
 import { Settings, type StateStore } from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
+
+/**
+ * The user's saved reasoning effort per model reference. Its entries stay
+ * unparsed in the record so a write keeps every entry, readable or not.
+ */
+export const REASONING_LEVELS_KEY = {
+  key: 'reasoningLevels',
+  slot: 'globalState',
+  schema: decodingDefault(Schema.Record(Schema.String, Schema.Unknown), {}),
+} as const satisfies StateKey<Readonly<Record<string, unknown>>>;
 
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
@@ -31,16 +40,6 @@ import type { StateKey } from '@shared/state/stateSettings';
  * than quietly disappearing. Reads only; the write path keeps the stored
  * record verbatim so an unreadable entry is never dropped from storage.
  */
-/**
- * The user's saved reasoning effort per model reference. Its entries stay
- * unparsed in the record so a write keeps every entry, readable or not.
- */
-export const REASONING_LEVELS_KEY = {
-  key: 'reasoningLevels',
-  slot: 'globalState',
-  schema: decodingDefault(Schema.Record(Schema.String, Schema.Unknown), {}),
-} as const satisfies StateKey<Readonly<Record<string, unknown>>>;
-
 export const reasoningEffortOverrides = Effect.fn('reasoningEffortOverrides')(
   function* (state: StateStore) {
     const stored = yield* Settings.state(state, REASONING_LEVELS_KEY);
@@ -133,19 +132,6 @@ export interface RouteReasoning {
   readonly fallback: SentReasoning;
 }
 
-/** One decision as what it sends: the wire's own effort for it. */
-function sentOf(
-  config: ModelConfig,
-  route: ReasoningRoute,
-  decided: Result.Result<ReasoningChoice, ReasoningChoiceError>,
-): SentReasoning {
-  if (Result.isFailure(decided)) return { refused: decided.failure.message };
-  const { note } = decided.success;
-  const sent =
-    wireEffort(config, llmRoute(route), decided.success) ?? undefined;
-  return note === undefined ? { effort: sent } : { effort: sent, note };
-}
-
 /**
  * The reasoning a run on `route` gives `config` (the config the bind decides
  * over) under the saved level, or undefined when the model does not reason
@@ -158,17 +144,25 @@ export function routeReasoningOf(input: {
   readonly route: ReasoningRoute;
 }): RouteReasoning | undefined {
   const { config, request, saved, route } = input;
+  const { acceptedEfforts: efforts, wireEffort } = reasoningOnRoute(
+    config,
+    llmRoute(route),
+  );
+  // One decision as what it sends: the wire's own effort for it.
+  const sentOf = (
+    decided: Result.Result<ReasoningChoice, ReasoningChoiceError>,
+  ): SentReasoning => {
+    if (Result.isFailure(decided)) return { refused: decided.failure.message };
+    const { note } = decided.success;
+    const sent = wireEffort(decided.success) ?? undefined;
+    return note === undefined ? { effort: sent } : { effort: sent, note };
+  };
   const chosen = decideReasoning(config, request, saved, route);
-  const sent = sentOf(config, route, chosen);
+  const sent = sentOf(chosen);
   const fallback =
     saved === undefined
       ? sent
-      : sentOf(
-          config,
-          route,
-          decideReasoning(config, request, undefined, route),
-        );
-  const efforts = acceptedEfforts(config, llmRoute(route));
+      : sentOf(decideReasoning(config, request, undefined, route));
   // The model does not reason on the route: no level, and no thinking.
   if (
     efforts.length === 0 &&

@@ -4,43 +4,45 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports - platform
 import { Secrets } from '@texra-ai/harness/plugins';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
-import { noHttpClientLayer } from '@test/support/fetchTestUtils';
+import {
+  jsonResponse,
+  scriptedHttpClientLayer,
+} from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
-import { GitHubMalformedBodyError } from '@texra/tools/github/githubClient';
 import type { GhCheckAnnotation } from '@texra/tools/github/prTypes';
-
-const mocks = vi.hoisted(() => ({
-  ghGet: vi.fn(),
-}));
-
-// Stub the GitHub client at its module boundary. The importOriginal spread
-// keeps the real error classes, so the source's own instanceof checks run
-// against the classes production reaches, not against look-alikes.
-vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@texra/tools/github/githubClient')
-  >()),
-  ghGet: mocks.ghGet,
-}));
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 /**
- * The process secret store behind the GitHub client. The client itself is
- * mocked here, so no member is called; the layer satisfies the requirement
- * the host root provides in production.
+ * The GitHub API as the client sees it: `pages[n - 1]` answers page `n`
+ * of the annotation walk, over a process secret store holding no token.
  */
-const secretsLayer = Layer.merge(
-  Secrets.layer(new FakeSecrets()),
-  noHttpClientLayer,
-);
+function githubServing(pages: readonly unknown[]) {
+  const http = scriptedHttpClientLayer((request) => {
+    const page = Number(new URL(request.url).searchParams.get('page'));
+    return jsonResponse(pages[page - 1]);
+  });
+  return {
+    layer: Layer.merge(
+      Secrets.layer(new FakeSecrets(), HARNESS_APP.client),
+      http.layer,
+    ),
+    /** Each request's path and query, as `ghGet` was handed it. */
+    paths: () =>
+      http.requests.map(({ url }) => {
+        const { pathname, search } = new URL(url);
+        return pathname + search;
+      }),
+  };
+}
 
 function annotation(
   level: GhCheckAnnotation['annotation_level'],
@@ -63,64 +65,47 @@ function fullWarningPage(): GhCheckAnnotation[] {
 }
 
 describe('check-run annotation pagination', () => {
-  beforeEach(() => {
-    mocks.ghGet.mockReset();
-  });
-
   it.effect('fetches later annotation pages before level filtering runs', () =>
     Effect.gen(function* () {
-      mocks.ghGet
-        .mockReturnValueOnce(
-          Effect.succeed({ status: 200, data: fullWarningPage() }),
-        )
-        .mockReturnValueOnce(
-          Effect.succeed({
-            status: 200,
-            data: [annotation('failure', 100)],
-          }),
-        );
+      const github = githubServing([
+        fullWarningPage(),
+        [annotation('failure', 100)],
+      ]);
 
       const annotations = yield* fetchAnnotations(
         'owner',
         'repo',
         42,
         Effect.void,
-      );
+      ).pipe(Effect.provide(github.layer));
 
       expect(annotations).toHaveLength(101);
       expect(annotations.at(-1)?.annotation_level).toBe('failure');
-      expect(mocks.ghGet.mock.calls.map((call) => call[0])).toEqual([
+      expect(github.paths()).toEqual([
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=1',
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',
       ]);
-    }).pipe(Effect.provide(secretsLayer)),
+    }),
   );
   // Failure mode: GitHub answers a page with a 200 whose body is not an
   // annotation list. That one optional response must not end the PR's
   // subscription; the walk keeps what it read and stops.
   it.effect('keeps earlier pages when a later page body is malformed', () =>
     Effect.gen(function* () {
-      mocks.ghGet
-        .mockReturnValueOnce(
-          Effect.succeed({ status: 200, data: fullWarningPage() }),
-        )
-        .mockReturnValueOnce(
-          Effect.fail(
-            new GitHubMalformedBodyError({
-              message: 'GitHub returned a malformed body for page 2',
-              cause: new Error('Expected an array'),
-            }),
-          ),
-        );
+      const github = githubServing([
+        fullWarningPage(),
+        { message: 'not an annotation list' },
+      ]);
 
       const annotations = yield* fetchAnnotations(
         'owner',
         'repo',
         42,
         Effect.void,
-      );
+      ).pipe(Effect.provide(github.layer));
 
       expect(annotations).toHaveLength(100);
-    }).pipe(Effect.provide(secretsLayer)),
+      expect(github.paths()).toHaveLength(2);
+    }),
   );
 });

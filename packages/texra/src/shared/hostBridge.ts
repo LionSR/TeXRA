@@ -7,7 +7,7 @@ import {
  * Every host installs its bridge at `globalThis[HOST_BRIDGE_API_KEY]` before
  * this bundle loads. VS Code uses the module-level `buildWebviewHtml` in
  * `packages/extension/src/common/webview/BundledViewContentProvider.ts`;
- * desktop uses `installElectronHostBridge`, and the exported trace viewer
+ * desktop installs it in its preload, and the exported trace viewer
  * uses `installTraceHostBridge`.
  */
 const installed = globalThis[HOST_BRIDGE_API_KEY];

@@ -6,9 +6,11 @@
  * `request.decided`); pending is the fold, opened without decided. Every
  * kind of request is answered with an arm of the decision union, so the
  * frontend action vocabulary, the runtime's reading, and the recovery
- * bindings (a model retry's `failed` row) read one word. The harness's own
- * kinds declare what they take here; a plugin's request declares it on its
- * row.
+ * bindings (a model retry's `failed` row) read one word. The kinds are a
+ * closed set the harness declares, each with the answers it takes
+ * ({@link REQUEST_ANSWERS}); every request blocks the call or turn that
+ * opened it, and one decision answers it and lets that one waiting call go
+ * on.
  *
  * The three refusal arms are the three provenances a declined request can
  * have, each carrying the fact that names it: `reject` is a person declining
@@ -22,7 +24,6 @@ import {
   APPROVAL_BYPASS_KINDS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
-import { RunIdSchema } from './identifiers';
 import {
   AgentProposalRequestSchema,
   BashRequestSchema,
@@ -40,50 +41,42 @@ export const RequestDecisionSchema = Schema.Union([
    *  user left it in the host's diff view. */
   Schema.Struct({
     action: Schema.Literal('approve'),
-    model: Schema.optional(Schema.NullOr(Schema.String)),
-    agent: Schema.optional(Schema.NullOr(Schema.String)),
-    instruction: Schema.optional(Schema.NullOr(Schema.String)),
-    inputFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    contextFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    content: Schema.optional(Schema.NullOr(Schema.String)),
+    model: Schema.optional(Schema.String),
+    agent: Schema.optional(Schema.String),
+    instruction: Schema.optional(Schema.String),
+    inputFiles: Schema.optional(Schema.Array(Schema.String)),
+    contextFiles: Schema.optional(Schema.Array(Schema.String)),
+    mediaFiles: Schema.optional(Schema.Array(Schema.String)),
+    content: Schema.optional(Schema.String),
   }),
   Schema.Struct({
     action: Schema.Literal('approve_and_goal'),
-    autoApproveAll: Schema.optional(Schema.NullOr(Schema.Literal(true))),
+    autoApproveAll: Schema.optional(Schema.Literal(true)),
   }),
   /** A user question's answers, keyed by question text. */
   Schema.Struct({
     action: Schema.Literal('submit'),
     answers: UserQuestionAnswersSchema,
   }),
-  /** A written answer, with the links the person cites. */
-  Schema.Struct({
-    action: Schema.Literal('answer'),
-    answer: Schema.String,
-    sessionLinks: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-  }),
   Schema.Struct({
     action: Schema.Literal('skip'),
-    feedback: Schema.optional(Schema.NullOr(Schema.String)),
+    feedback: Schema.optional(Schema.String),
   }),
   /** A retry, on the configured credentials or on the user's own key once
    *  the host has stored one (`credentials: 'personal'`). */
   Schema.Struct({
     action: Schema.Literal('retry'),
-    feedback: Schema.optional(Schema.NullOr(Schema.String)),
-    credentials: Schema.optional(
-      Schema.NullOr(Schema.Literals(['configured', 'personal'])),
-    ),
+    feedback: Schema.optional(Schema.String),
+    credentials: Schema.optional(Schema.Literals(['configured', 'personal'])),
   }),
   Schema.Struct({
     action: Schema.Literal('reject'),
-    feedback: Schema.optional(Schema.NullOr(Schema.String)),
+    feedback: Schema.optional(Schema.String),
   }),
   Schema.Struct({ action: Schema.Literal('deny'), reason: Schema.String }),
   Schema.Struct({
     action: Schema.Literal('cancel'),
-    cause: Schema.optional(Schema.NullOr(Schema.String)),
+    cause: Schema.optional(Schema.String),
   }),
 ]);
 export type RequestDecision = typeof RequestDecisionSchema.Type;
@@ -94,45 +87,8 @@ export type RefusalDecision = Extract<
   { action: 'reject' | 'deny' | 'cancel' }
 >;
 
-/** The actions that answer a request, as against the three refusals any
- *  request takes. */
-const AnswerActionSchema = Schema.Literals([
-  'approve',
-  'approve_and_goal',
-  'submit',
-  'answer',
-  'skip',
-  'retry',
-] as const satisfies readonly Exclude<
-  RequestDecision['action'],
-  RefusalDecision['action']
->[]);
-
-/**
- * A request a plugin opens in its own vocabulary, with what it takes
- * declared by the plugin: whether the tool that opened it waits on it
- * (`blocksCaller`), and the actions it is answered with besides the three
- * refusals (`answers`). `data` is the plugin's: the harness stores it and
- * reads no more of it than the request and run it names. The plugin's
- * decision hook (`Plugin.decision`) records each answer before it commits.
- */
-const PluginRequestSchema = Schema.Struct({
-  kind: Schema.Literal('plugin'),
-  /** The plugin that opened it, whose decision hook takes its answers. */
-  plugin: Schema.String,
-  blocksCaller: Schema.Boolean,
-  answers: Schema.Array(AnswerActionSchema),
-  data: Schema.StructWithRest(
-    Schema.Struct({ requestId: Schema.String, runId: RunIdSchema }),
-    [Schema.Record(Schema.String, Schema.Json)],
-  ),
-});
-/** A request a plugin opens (`RequestPayload`'s plugin case). */
-export type PluginRequest = typeof PluginRequestSchema.Type;
-
 /** What a pending request shows (diff, command, question), never host
- *  handles: the payload of `request.opened`. The harness's own kinds, and
- *  a plugin's request. */
+ *  handles: the payload of `request.opened`. */
 export const RequestPayloadSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('toolEdit'),
@@ -152,7 +108,6 @@ export const RequestPayloadSchema = Schema.Union([
     kind: Schema.Literal('userQuestion'),
     data: UserQuestionRequestSchema,
   }),
-  PluginRequestSchema,
 ]);
 /** A pending request's payload, as {@link RequestPayloadSchema} reads it. */
 export type RequestPayload = typeof RequestPayloadSchema.Type;
@@ -162,48 +117,27 @@ export type RequestPayload = typeof RequestPayloadSchema.Type;
  * off it, so a spelling that drifts fails to compile.
  */
 export type RequestKind = RequestPayload['kind'];
-/** The kinds the harness opens itself. */
-type OwnKind = Exclude<RequestPayload, PluginRequest>['kind'];
+/** The actions that answer a request, as against the three refusals any
+ *  request takes. */
+type AnswerAction = Exclude<
+  RequestDecision['action'],
+  RefusalDecision['action']
+>;
 
-/**
- * Whether a request blocks the tool that opened it: every kind the harness
- * opens does, and a plugin's request as it declares. One that does not
- * leaves its run working; its plugin's decision hook delivers the answer to
- * whichever process holds the run by then, so it stays open across every
- * resume. The folds and the decision door all read this one predicate.
- */
-export const blocksCaller = (payload: RequestPayload): boolean =>
-  payload.kind !== 'plugin' || payload.blocksCaller;
-
-/** The actions each of the harness's own kinds takes besides the three
- *  refusals. */
-const OWN_ANSWERS = {
+/** The actions each kind takes besides the three refusals. */
+const REQUEST_ANSWERS = {
   toolEdit: ['approve'],
   bash: ['approve'],
   proposal: ['approve'],
   planApproval: ['approve', 'approve_and_goal'],
   retry: ['retry'],
   userQuestion: ['submit', 'skip'],
-} as const satisfies Record<OwnKind, PluginRequest['answers']>;
-
-/** What names the answers a request takes: one of the harness's own kinds,
- *  or a plugin's request with the answers it declared. */
-type AnswerSource =
-  | { readonly kind: OwnKind }
-  | Pick<PluginRequest, 'kind' | 'answers'>;
+} as const satisfies Record<RequestKind, readonly AnswerAction[]>;
 
 /** The decisions a request of kind `K` takes: its own actions and the three
- *  refusals. A plugin's request declares its actions on its row, so its
- *  type accepts any decision. */
-export type DecisionOf<K extends RequestPayload['kind']> =
-  | Extract<
-      RequestDecision,
-      {
-        action: (typeof OWN_ANSWERS & {
-          readonly plugin: PluginRequest['answers'];
-        })[K][number];
-      }
-    >
+ *  refusals. */
+export type DecisionOf<K extends RequestKind> =
+  | Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>
   | RefusalDecision;
 
 /**
@@ -212,7 +146,7 @@ export type DecisionOf<K extends RequestPayload['kind']> =
  * that records the grant. Decided once as the request opens
  * (`openRequest`), from the operation it asks about and what the call's
  * hooks said, and stored on its `request.opened`: a request a hook asked
- * about, a question, a retry and a plugin's request are a person's.
+ * about, a question and a retry are a person's.
  */
 export const AnsweredBySchema = Schema.Union([
   Schema.Literal('person'),
@@ -247,12 +181,12 @@ export const offeredGrant = (request: {
   request.answeredBy === 'person' ? null : request.answeredBy;
 
 /** Whether `decision` is one `request` takes ({@link DecisionOf}). */
-export function decisionFits<P extends AnswerSource>(
+export function decisionFits<P extends { readonly kind: RequestKind }>(
   request: P,
   decision: RequestDecision,
 ): decision is DecisionOf<P['kind']> {
   const answers: readonly RequestDecision['action'][] =
-    request.kind === 'plugin' ? request.answers : OWN_ANSWERS[request.kind];
+    REQUEST_ANSWERS[request.kind];
   return (
     decision.action === 'reject' ||
     decision.action === 'deny' ||

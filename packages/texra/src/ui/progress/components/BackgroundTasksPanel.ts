@@ -6,10 +6,7 @@
  * earliest child still running (the session view clears `runStartedAt` when
  * a run ends, so a finished fan-out carries no since), one row per
  * dispatched child run (`dispatchedChildren`: a script's calls are listed by
- * its stage; nested children indented under theirs), and the inquiry
- * threads the run opened. A card with no child to list is headed by its
- * inquiry threads, which the `inquiries` scope makes of any run (the
- * document task body, whose run board already lists every call). Every row is a
+ * its stage; nested children indented under theirs). Every row is a
  * child of the session view: label, status, tone, latest line, and clock
  * facts come from `view.runs`; the host paints the glyph and the time. The
  * card's open state is the surface's (`RunSurface.disclosures`, key
@@ -29,29 +26,23 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import {
   rollupOf,
   type RunId,
   formatCompactDuration,
-  formatResultCount,
 } from '@texra-ai/harness/schemas';
 import { dispatchedChildren } from '@texra-ai/harness/transcript';
 import type { Surface } from '@texra/shared/session/surface';
-import {
-  inquiryThreadsUnder,
-  type InquiryThreadSummary,
-} from '@texra/shared/plugins/externalInquiry';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
-import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
+import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchDisclosureToggle } from './disclosureToggle';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
@@ -107,14 +98,6 @@ export class BackgroundTasksPanel extends LitElement {
         flex-direction: column;
       }
 
-      .section-label {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-2xs) var(--wa-space-xs) var(--wa-space-3xs);
-        ${overlineDeclarations}
-      }
-
       /* One row per child: the tone glyph, the label, the latest line, the
          clock, the chevron. Selecting the row opens the child. */
       .task-row {
@@ -137,11 +120,7 @@ export class BackgroundTasksPanel extends LitElement {
         cursor: pointer;
       }
       .task-row:hover {
-        background: var(--wa-color-neutral-fill-quiet);
-      }
-      .task-row:focus-visible {
-        outline: var(--focus-ring-width) solid var(--wa-color-focus);
-        outline-offset: calc(-1 * var(--focus-ring-offset));
+        background: var(--surface-hover);
       }
 
       .task-icon {
@@ -154,18 +133,14 @@ export class BackgroundTasksPanel extends LitElement {
         flex: 0 1 auto;
         min-width: 0;
         max-width: min(14rem, 45%);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         font-weight: var(--font-weight-medium);
       }
 
       .task-latest {
         flex: 1 1 8rem;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
       }
@@ -189,24 +164,6 @@ export class BackgroundTasksPanel extends LitElement {
       :dir(rtl) .task-chevron {
         transform: scaleX(-1);
       }
-
-      .inquiry-id {
-        flex: 0 0 auto;
-        font-family: var(--wa-font-family-code);
-        font-size: var(--font-size-xs);
-        font-variant-numeric: tabular-nums;
-        color: var(--color-text-secondary);
-      }
-
-      wa-badge.task-status {
-        flex: 0 0 auto;
-        margin-inline-start: auto;
-      }
-      wa-badge.task-status::part(base) {
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-medium);
-      }
     `,
   ];
 
@@ -219,10 +176,6 @@ export class BackgroundTasksPanel extends LitElement {
 
   /** The clock a running row's elapsed time ticks on. */
   private readonly _ticker = new TickerController(this, 1000);
-
-  /** The complete card, or only the inquiry threads (a document task run's
-   *  body, which has no children to list). */
-  @property() scope: 'all' | 'inquiries' = 'all';
 
   private childrenOf(run: RunView): RunView[] {
     return this.view ? dispatchedChildren(run, this.view) : [];
@@ -245,16 +198,11 @@ export class BackgroundTasksPanel extends LitElement {
     return rollupOf(runs, (child) => this.listedRollup(this.childrenOf(child)));
   }
 
-  private inquiriesOf(run: RunView): InquiryThreadSummary[] {
-    return this.view ? inquiryThreadsUnder(this.view, run.id) : [];
-  }
-
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
     if (!run) return nothing;
-    const children = this.scope === 'all' ? this.childrenOf(run) : [];
-    const inquiries = this.inquiriesOf(run);
-    if (children.length === 0 && inquiries.length === 0) return nothing;
+    const children = this.childrenOf(run);
+    if (children.length === 0) return nothing;
 
     // Over the children this card lists, not every descendant the run's
     // own `rollup` counts: a script's calls are its stage's.
@@ -271,40 +219,27 @@ export class BackgroundTasksPanel extends LitElement {
       (descendant) => descendant.runStartedAt ?? [],
     );
     const since = starts.length > 0 ? Math.min(...starts) : null;
-    // Each kind by its own noun: a command is not counted as an agent.
-    const counts = Object.entries(NESTED_NOUNS)
-      .flatMap(([kind, noun]) => {
-        const count = listed.filter((r) => r.identity.kind === kind).length;
-        return count > 0 ? [formatResultCount(count, noun)] : [];
-      })
-      .join(', ');
-    // With no child to count, the card is its inquiry threads alone.
-    const summary =
-      children.length === 0
-        ? html`${waIcon('comments')} Inquiries
-            <wa-badge variant="neutral" appearance="outlined" pill
-              >${inquiries.length}</wa-badge
-            >`
-        : html`${waIcon('diagram-project')}
-          ${dispatchSummary(counts)}${
-            rollup.running > 0
-              ? html`<wa-badge variant="success" pill
-                  >${rollup.running} running</wa-badge
-                >`
-              : nothing
-          }${
-            approval
-              ? html`<wa-badge variant="warning" pill
-                  >${waIcon('triangle-exclamation')}</wa-badge
-                >`
-              : nothing
-          }${
-            since === null
-              ? nothing
-              : html`<span class="dispatch-since"
-                  >since ${getTimeFormatter().format(new Date(since))}</span
-                >`
-          }`;
+    const counts = nestedCountsLabel(rollup.kinds);
+    const summary = html`${waIcon('diagram-project')}
+    ${dispatchSummary(counts)}${
+      rollup.running > 0
+        ? html`<wa-badge variant="success" pill
+            >${rollup.running} running</wa-badge
+          >`
+        : nothing
+    }${
+      approval
+        ? html`<wa-badge variant="warning" pill
+            >${waIcon('triangle-exclamation')}</wa-badge
+          >`
+        : nothing
+    }${
+      since === null
+        ? nothing
+        : html`<span class="dispatch-since"
+            >since ${getTimeFormatter().format(new Date(since))}</span
+          >`
+    }`;
     const open =
       this.surface?.runs.get(run.id)?.disclosures.get(DISPATCH_GROUP_KEY) !==
       false;
@@ -319,18 +254,6 @@ export class BackgroundTasksPanel extends LitElement {
         <span slot="summary" class="dispatch-summary">${summary}</span>
         <div class="task-list" role="list">
           ${this.renderChildren(children, 0)}
-          ${
-            children.length > 0 && inquiries.length > 0
-              ? html`<div class="section-label">
-                  ${waIcon('comments')} Inquiries
-                </div>`
-              : nothing
-          }
-          ${repeat(
-            inquiries,
-            (thread) => thread.threadId,
-            (thread) => this.renderInquiryItem(thread),
-          )}
         </div>
       </wa-details>
     `;
@@ -370,6 +293,7 @@ export class BackgroundTasksPanel extends LitElement {
         role="listitem"
         class=${classMap({
           'task-row': true,
+          'focus-ring-inset': true,
           [`tone-${status.tone}`]: true,
         })}
         style=${styleMap({ '--tree-depth': String(depth) })}
@@ -382,37 +306,6 @@ export class BackgroundTasksPanel extends LitElement {
         ${renderClock(child, child.approval === 'own', this._ticker.now)}
         ${waIcon('chevron-right', { className: 'task-chevron' })}
       </button>
-    `;
-  }
-
-  private renderInquiryItem(thread: InquiryThreadSummary): TemplateResult {
-    const preview = thread.lastQuestionPreview || '(empty question)';
-    // The thread's id (`ei_` and hex) names its tooltip anchors: a position
-    // would move a tooltip onto another thread's row when the list changes.
-    const idPrefix = `background-inquiry-${thread.threadId}`;
-    return html`
-      <div class="task-row" role="listitem">
-        ${waIcon('circle-question', { className: 'task-icon' })}
-        <span class="inquiry-id">${thread.threadId}</span>
-        <span id="${idPrefix}-description" class="task-latest">${preview}</span>
-        <wa-tooltip for="${idPrefix}-description">${preview}</wa-tooltip>
-        <wa-relative-time
-          id="${idPrefix}-elapsed"
-          class="task-elapsed"
-          date=${thread.lastActivityIso}
-          format="narrow"
-          sync
-        ></wa-relative-time>
-        <wa-tooltip for="${idPrefix}-elapsed"
-          >${thread.lastActivityIso}</wa-tooltip
-        >
-        <wa-badge
-          class="task-status"
-          variant=${inquiryStatusVariant(thread.status)}
-          appearance="filled"
-          >${thread.status}</wa-badge
-        >
-      </div>
     `;
   }
 
@@ -444,14 +337,6 @@ function renderClock(
     format="narrow"
     sync
   ></wa-relative-time>`;
-}
-
-function inquiryStatusVariant(
-  status: InquiryThreadSummary['status'],
-): 'warning' | 'success' | 'neutral' {
-  if (status === 'open') return 'warning';
-  if (status === 'answered') return 'success';
-  return 'neutral';
 }
 
 declare global {

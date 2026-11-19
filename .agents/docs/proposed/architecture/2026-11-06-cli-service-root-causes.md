@@ -1,7 +1,8 @@
 # The CLI service and its sessions: root causes and the plan
 
 Date: 2026-11-06
-Status: open (the plan in §4 is unassigned)
+Status: the plan in §4 landed; one decision is the owner's (see the
+2026-11-17 section)
 Origin: the owner's remark after the review rounds of PR 14769 that the CLI
 service and the service sessions look suspicious, and the instruction to
 fix root causes, never symptoms. Read on `simplify/session-core` at
@@ -13,7 +14,11 @@ read-only reviews (lifecycle; the wire and `serviceSession.ts`; windows and
 attach). R10 of the root designs
 (`2026-11-05-root-designs-effect-native.md`, PR 14766) already covers the
 hosts' verbs and the client's three sessions; this note is the service side
-R10 does not reach, and names what in R10 this reading changes.
+R10 does not reach, and names what in R10 this reading changes. Since that
+read the two CLI files moved to `packages/cli/src/runtime/platform/cliService.ts`
+and `packages/cli/src/runtime/platform/initPlatform.ts`, and the service's
+handlers are in `packages/texra/src/controllers/server/service.ts`
+(`handlers.ts` no longer exists).
 
 ## 1. What the service is today
 
@@ -471,13 +476,125 @@ surface selects a run this window started once its view holds the
 run's activation, which the handle names) and the window-side presenter
 instance (the session presenter over the window's own host).
 
-Left for a later PR, each a smell, none a defect:
+The leftovers that PR listed, as of 2026-11-17 (the host-call modules
+have since moved to `packages/texra/src/controllers/server/`):
 
-- The notice round-trips (`tell` mints an id nothing awaits; an answer
-  past `ANSWER_WITHIN` logged as a notice failure); `editorHost` keyed by
-  storage root beside `HostWindows` keyed by session; two windows on one
-  project, where service sessions always read as "can ask".
-- §3.2's smells, less the two PR 3 ended (`closeAll` run three times,
-  the race loser's usage code) and the one it keeps with its reason (the
-  reconnect's first failure); the record's `protocol`/`version` and the
-  `released` flag went with PR 14771.
+- **The notice round-trips: ended.** An answer past its wait was already
+  logged as late, not as a notice failure. The rest had one cause:
+  whether a window answers had two owners, the service choosing `ask` or
+  `tell` from `ANSWERED` and the window re-deriving the choice by kind,
+  over one frame shape that made `tell` mint an id. The `host.attach`
+  frame is now `ask` (an id and a call a run waits on) or `tell` (a told
+  call, no id); the window answers exactly the frames with an id, and
+  `ANSWERED` is total over the asked kinds (`hostCalls.ts`). A wire
+  change: the protocol digest moves, and the handoff between builds runs
+  on `service.hello` and `service.stop`, whose pinned shapes did not.
+- **`editorHost` keyed by storage root beside `HostWindows`: ended.** The
+  registry was a second record of what a project's windows offer, filled
+  from the window table only because the plugins are built before
+  `HostWindows`. The table is now made first (`makeWindowTable`) and its
+  `editors` is the reading the editor tools and `HostCapabilities` get;
+  the registry's map, `attach` and its identity check went.
+- **Two windows on one project: needs the owner** (the section below).
+- **§3.2's smells: ended, or kept with a reason.** The record's
+  `protocol`/`version` and the `released` flag went with PR 14771;
+  `control` is built after `protocol`; `closeAll` and the race loser's
+  usage code ended in PR 3; the polls are gone. Kept: the reconnect's
+  first failure (its reason above), and liveness read three ways, since
+  each read answers its own question: the record says where the service
+  is, the hello whether it answers, and `process.kill(pid, 0)` in
+  `removeDeadSockets` whose socket file may be removed, which a starting
+  service racing another's listen needs (the socket per pid stays for
+  the same reason).
+
+### 2026-11-18: one link for every host
+
+The one door of §2.4 was the CLI's `linkCliService`, beside the GUI
+hosts' `reachBundledService`, each deciding part of the same policy. It
+is now the app's `linkService` (`packages/texra/src/controllers/server/client.ts`)
+for every host: it decides `TEXRA_NO_SERVICE` (which the GUI hosts now
+honor too), Windows, and whether a caller starts a service when none
+runs (`startsService`; one that retires an older build's service starts
+its own whatever it says). No service is a failure, `ServiceUnavailable`
+of kind `none`, not a value: the GUI hosts already held the link as a
+`Result`, `openProjectSession` reads one, and the CLI's
+`ServiceLink | { none }` union with its `isLinked` guard went. A host
+binds only its spawn and how it words a wait or a failure to reach the
+service. Beside it moved `stopRunningService`, `findTask` (the task, or
+every task an id prefix matched) and, into `serviceSession.ts`,
+`watchTask`; `texra tasks start` starts through the project's `Session`
+as a window does.
+
+### 2026-11-19: a service that fails at every start is not restarted forever
+
+The link's reconnect (`linkService`) retried on a schedule that never
+ends. A service that died and then failed at every start was started again
+about every two minutes for as long as a window stayed open (a wait of the
+start window for another build's service, then its own start and another
+start window with nothing answering): 56 starts in two hours in the
+regression test, each one's output appended to `serve.log`, while the
+window said "The TeXRA service is offline; TeXRA is reconnecting to it."
+and never anything else. One that answered and died right after looped the
+same way, faster. Nothing else restarts a service or a run unattended: a
+run resumes only when someone asks, and the service resumes none at start.
+
+Two designs:
+
+- **The link bounds its own restarts (chosen).** One service, from
+  reaching it until it goes away, is one effect: it fails as a failed
+  start when the service went within its start window (read from the
+  hello's `startedAt`, the service's own fact) and finishes when it had
+  run longer. `Effect.retry` over it with the reconnect schedule cut at
+  three (`Schedule.upTo`) is the limit, and `Effect.forever` around the
+  retry is the reset: a service that stayed up begins the count again
+  because the retried effect succeeded. Only a failed start counts
+  (`ServiceUnavailable`'s `startFailed`: it could not be spawned, it exited
+  abnormally, nothing answered within the start window, or it answered and
+  was gone again within it); a newer or a wedged service, and a caller
+  that starts none, wait on another process and are retried as before. A
+  host's start now answers the spawned process's abnormal end, so a
+  service that exits at start fails the start at once with its exit code
+  instead of after sixty silent seconds. At the limit the link is away for
+  good: `Linked.lasting`, which ends every wait on the link (a session's
+  first client, a window's attachment) with the reason, shows it once as
+  an error in the window and keeps it in the banner. No counter, no timer,
+  no setting, nothing stored.
+- **A restart count in the global store (rejected).** The service's record
+  family gains a count of starts, written by whoever starts one and
+  cleared by a service that stays up; every client reads it before
+  starting, as pi counts `restarts` on the task row. It holds across
+  windows and client restarts, where the chosen design lets each link try
+  three times. It was rejected because the count needs a rule for when it
+  expires (a person who fixed the cause must not stay locked out, so
+  either a clock, a command or a setting), it is a second writer beside
+  the record's compare-and-set, and a new window or command trying again
+  is what a person expects of opening one.
+
+Left as it is: the minute the reconnect waits for another build's service
+before starting its own (a service that was retired and one that died are
+not told apart there), and the reason said twice on stderr by a command
+that needs the service (`linkCliService` says it, then the command fails
+with it).
+
+## 2026-11-17: two windows on one project, and who can ask
+
+A service session opens with `answeredFromView: true`
+(`openLocalSession`), so it always reads as able to ask: an approval
+request is a row that waits until a surface (a window, the terminal
+client) decides it, whether or not one is attached. Calls and notices go
+to the project's window focused last. Two designs:
+
+- **Keep it (recommended).** A request waits for the next surface that
+  shows the project, which sees it as an open row; closing a window never
+  turns a pending approval into a denial. The cost: a task started and
+  left with no window waits on the approval until someone looks.
+- **"Can ask" follows the attachments.** `HostWindows` tells the session
+  whether any surface of the project is attached, and with none the
+  session's policy treats prompts as unavailable: approval-gated tools
+  are withheld and open requests denied by policy. A task with no window
+  goes on with less power instead of waiting, but closing the last window
+  mid-run denies what it was about to approve, and the terminal client
+  would have to count as a surface too.
+
+Notices, either way, stay with the window focused last: sending them to
+every window of the project shows each one twice.

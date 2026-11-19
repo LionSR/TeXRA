@@ -32,9 +32,12 @@ export const visuallyHiddenDeclarations: CSSResult = css`
  * Available to the accessibility tree, absent from the layout. Exported on
  * its own (and interpolated into `commonViewStyles` below) for roots that
  * compose a narrower sheet and so do not take the full common one.
+ * `.has-hidden-label` does the same for a Web Awesome control's `label`, so
+ * the label still names the control's inner input.
  */
 export const visuallyHiddenStyles: CSSResult = css`
-  .visually-hidden {
+  .visually-hidden,
+  .has-hidden-label::part(form-control-label) {
     ${visuallyHiddenDeclarations}
   }
 `;
@@ -51,6 +54,17 @@ export const overlineDeclarations: CSSResult = css`
   letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
   color: var(--color-text-secondary);
+`;
+
+/**
+ * One line cut with an ellipsis: a name, path or title that must neither wrap
+ * nor push the rest of its row away. Interpolate it into the rule that places
+ * the text; a flex item still sets its own `min-width` and basis.
+ */
+export const truncateDeclarations: CSSResult = css`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 /** {@link overlineDeclarations} as a class, for a tree that adopts sheets
@@ -154,11 +168,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item:hover {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 30%,
-      transparent
-    );
+    background-color: var(--surface-hover);
   }
 
   .settings-disclosure-list {
@@ -490,20 +500,6 @@ export const commonViewStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-xs);
     margin-inline-start: auto;
-  }
-
-  /* Quiet limitation note under a keyless (subscription-backed) source. */
-  .keyless-source__limit {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--wa-space-xs);
-    margin: 0 0 var(--wa-space-xs);
-    opacity: 0.85;
-    font-size: var(--font-size-sm);
-  }
-  .keyless-source__limit wa-icon {
-    flex: 0 0 auto;
-    margin-top: var(--wa-space-3xs);
   }
 
   .category-section {

@@ -31,6 +31,7 @@ import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
+import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { latexdiff } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
 import {
@@ -58,6 +59,12 @@ export type BuildDisplayFn = (
  */
 export class DisplayCompileFailed extends Schema.TaggedError<DisplayCompileFailed>()(
   'DisplayCompileFailed',
+  { message: Schema.String },
+) {}
+
+/** A preview asked for with no workspace folder to stage its files in. */
+class PreviewWorkspaceMissing extends Schema.TaggedError<PreviewWorkspaceMissing>()(
+  'PreviewWorkspaceMissing',
   { message: Schema.String },
 ) {}
 
@@ -141,27 +148,6 @@ const TEMP_ID_LENGTH = 8;
  */
 type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
-/** Delete a temp file; a real failure is logged, not raised. */
-const silentDelete = Effect.fn('latexPreview.silentDelete')(function* (
-  targetPath: string,
-): Effect.fn.Return<void, never, FileSystem.FileSystem> {
-  const fs = yield* FileSystem.FileSystem;
-  // `fs.remove` without `recursive`: a non-directory (a symlink included)
-  // is unlinked, a directory is `rm`'d without
-  // recursion, and an already-absent target is not an error — that last is
-  // what `force` carries, not a new best-effort.
-  yield* fs.remove(targetPath, { force: true }).pipe(
-    // Best-effort temp cleanup: `force` already absorbs an absent target,
-    // so what reaches here is a real fault worth a warning.
-    Effect.catch((error) =>
-      Effect.logWarning(`Failed to delete temp file ${targetPath}`).pipe(
-        withLogChannel(CHANNEL),
-        Effect.annotateLogs({ data: error }),
-      ),
-    ),
-  );
-});
-
 /**
  * Delete a file and the LaTeX auxiliary files its build wrote, beside it or
  * in its `build/` folder, found the way Clean Build finds them. A listing
@@ -189,11 +175,11 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
       ),
       withLogChannel(CHANNEL),
     );
-    yield* Effect.forEach(
+    yield* removeBestEffort(
+      yield* FileSystem.FileSystem,
       [filePath, ...[...auxFiles].map((file) => path.resolve(dir, file))],
-      silentDelete,
-      { concurrency: 8, discard: true },
-    );
+      'temp file',
+    ).pipe(withLogChannel(CHANNEL));
   },
 );
 
@@ -268,14 +254,12 @@ const readFileWithFallback = Effect.fn('latexPreview.readFileWithFallback')(
  * Returns the temp file path for further operations.
  */
 const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
-  function* (
-    entry: LatexPreviewEntry,
-    content: string,
-    suffix: string,
-  ): Effect.fn.Return<string, Error, PreviewServices> {
+  function* (entry: LatexPreviewEntry, content: string, suffix: string) {
     const workspaceRoot = entry.request.roots.workspace;
     if (!workspaceRoot) {
-      return yield* Effect.fail(new Error('No workspace folder open'));
+      return yield* new PreviewWorkspaceMissing({
+        message: 'No workspace folder open',
+      });
     }
 
     const originalPath = entry.request.path;

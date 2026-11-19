@@ -6,12 +6,12 @@ import {
   type AgentConfig,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { presentRunFailure, type Notices } from '@texra-ai/harness/host';
+import { presentRunFailure } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { Dialogs } from '@texra/hosts/uiHosts';
-import type { Run, Session } from '@texra-ai/harness';
+import type { Run, Session, Notices } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /** The setup assistant's log channel, for its launch and what follows it. */
@@ -86,7 +86,7 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
     };
     const run = yield* ports.start(config).pipe(
       // The launcher has shown its rejection already.
-      Effect.catch(() => Effect.succeed(undefined)),
+      Effect.catch(() => Effect.undefined),
     );
     if (run === undefined) return;
     // The result fails only when the run stored no end that can be read: no
@@ -104,6 +104,8 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
       scope,
     );
   });
+  // The outer effect builds the launch; its caller runs what it returns.
+  // @effect-diagnostics-next-line returnEffectInGen:off
   return launch.pipe(
     starting.withPermitsIfAvailable(1),
     Effect.asVoid,

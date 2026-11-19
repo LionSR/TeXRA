@@ -16,11 +16,10 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { Run, Session } from '@texra-ai/harness';
+import type { Run, Session, Notices } from '@texra-ai/harness';
 import {
   presentFollowUpResult,
   presentRunFailure,
-  type Notices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness/host';
@@ -30,14 +29,13 @@ import {
   type SessionView,
   type AgentConfig,
   type AgentConfigPayload,
-  escapeText,
   generateRunId,
   programOf,
   type RunId,
+  Rejected,
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { readCliTeam } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
@@ -46,6 +44,7 @@ import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { selectChatModel } from './tui/commands/handlers/slashContext';
+import type { ScopeRunner } from './scopeRunner';
 import {
   selectedRunId as selectedRunIdSignal,
   focusRun,
@@ -58,7 +57,6 @@ import type { TuiSession } from './tui/state/sessionRunState';
 import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import {
   createTuiHostInteractions,
   presentInTranscript,
@@ -81,10 +79,9 @@ import {
   resolveImages,
   restoreDraft,
   withSkill,
-  type Draft,
+  type InputDraft,
 } from './tui/input/draftAttachments';
 import type { ModelConnection } from './tui/modelConnection';
-import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
@@ -144,14 +141,14 @@ export interface ChatSessionController {
    * the user stopped it.
    */
   submit(
-    draft: Draft,
+    draft: InputDraft,
     holdUntil?: 'turn',
   ): Effect.Effect<void, Error, ProcessServices>;
   /** Succeeds once every message submitted so far has been sent, or has
    *  started its run. */
   readonly submitted: Effect.Effect<void>;
-  /** Activate a skill for the next submitted message. */
-  activateSkill(selection: SkillActivation): void;
+  /** Activate a skill, by name, for the next submitted message. */
+  activateSkill(name: string): void;
   /** Drop every activated skill. */
   clearPendingSkills(): void;
   /** Perform the host command a decision names instead of a
@@ -174,14 +171,14 @@ interface ChatSessionControllerInit {
   /** How the user invoked this CLI, for the resume command a notice names. */
   readonly commandName: string;
 
-  /** The chat's scope: the host attachment and the resumed-root watch
-   *  close with it, which the exit drain awaits. */
-  readonly chatScope: Scope.Scope;
+  /** The runner of the chat's scope: the host attachment and the
+   *  resumed-root watch close with it, which the exit drain awaits. */
+  readonly chat: ScopeRunner;
 
-  /** The process's shutdown scope: the work that outlives a turn (run
-   *  actions, sends, resumed roots) runs there, so every exit path, signal
-   *  or graceful, awaits it. */
-  readonly shutdownScope: Scope.Scope;
+  /** The runner of the process's shutdown scope: the work that outlives a
+   *  turn (run actions, sends, resumed roots) runs there, so every exit
+   *  path, signal or graceful, awaits it. */
+  readonly untilShutdown: ScopeRunner;
 
   readonly cwd: string;
   /**
@@ -190,9 +187,9 @@ interface ChatSessionControllerInit {
    * looked up again here.
    */
   readonly stores: SettingsStores;
-  /** The process runtime this controller runs its programs on, captured once
-   *  here: the controller lives for the length of the chat session, and its
-   *  Promise-facing methods are that session's run edge. */
+  /** The process runtime, for a stop alone: Ctrl-C asks for one, and a
+   *  second Ctrl-C leaves the process at once, closing the shutdown scope
+   *  before a fiber it held could land the request. */
   readonly runtime: ProcessRuntime;
   /** The policy the chat asked for itself (its flag, then `/approval`),
    *  which each launch carries (`launchApproval`); none follows the
@@ -200,7 +197,7 @@ interface ChatSessionControllerInit {
   readonly approvalPolicy: () => ApprovalPolicy | undefined;
   /** The composer's draft: the skills a message takes, and where a message
    *  the session does not take goes back to. */
-  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
+  readonly draft: SubscriptionRef.SubscriptionRef<InputDraft>;
   /** Chat messages wait here until a model is connected. */
   readonly modelConnection: ModelConnection;
 }
@@ -213,29 +210,6 @@ type MessageResult =
 
 const SENT: MessageResult = Object.freeze({ kind: 'sent' });
 
-interface PreparedChatInstruction {
-  readonly instruction: string;
-  readonly displayInstruction?: string;
-}
-
-/** The instruction a message sends: its line, wrapped in the prompts of the
- *  skills activated for it. */
-function preparedInstruction(
-  line: string,
-  skills: readonly SkillActivation[],
-): PreparedChatInstruction {
-  if (skills.length === 0) return { instruction: line };
-  return {
-    instruction: [
-      skills.map((skill) => skill.activationPrompt).join('\n\n'),
-      '<user_request>',
-      escapeText(line),
-      '</user_request>',
-    ].join('\n'),
-    displayInstruction: line,
-  };
-}
-
 export function createChatSessionController(
   init: ChatSessionControllerInit,
 ): ChatSessionController {
@@ -243,8 +217,8 @@ export function createChatSessionController(
     session,
     runSession,
     served,
-    chatScope,
-    shutdownScope,
+    chat,
+    untilShutdown,
     cwd,
     stores,
     runtime,
@@ -265,26 +239,16 @@ export function createChatSessionController(
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
-  const adoptRunConfig = Effect.fn('adoptRunConfig')(function* (
-    config: Pick<
-      AgentConfig,
-      'agent' | 'agentSource' | 'model' | 'launch' | 'delegationAgentScope'
-    >,
+  const adoptRunConfig = (
+    config: Pick<AgentConfig, 'agent' | 'agentSource' | 'model'>,
     modelSource?: 'history',
-  ) {
-    const team = yield* readCliTeam(
-      runSession.roots.repoState,
-      launchTeamId(config),
-    );
+  ): void =>
     patchSessionMeta({
       agent: config.agent,
       agentSource: config.agentSource ?? undefined,
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
-      team,
-      delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
-  });
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -322,22 +286,21 @@ export function createChatSessionController(
   const interactions = createTuiHostInteractions({
     requests: runSession,
     settings: stores,
-    runtime,
+    chat,
   });
   // Attached to the chat's session for its lifetime: here, its requests'
   // host; in the service, one of its project's windows, whose notices its
   // tasks raise here.
   // The attachment closes after the interactions are disposed.
-  runtime.runSync(
+  chat.sync(
     Effect.gen(function* () {
-      const attached = yield* Scope.fork(chatScope);
-      yield* Scope.addFinalizer(
-        chatScope,
+      const attached = yield* Scope.fork(chat.scope);
+      yield* Effect.addFinalizer(() =>
         Effect.sync(() => interactions.dispose?.()),
       );
       yield* runSession
         .attach(interactions)
-        .pipe(Scope.provide(attached), Effect.forkIn(chatScope));
+        .pipe(Scope.provide(attached), Effect.forkScoped);
     }),
   );
 
@@ -346,7 +309,7 @@ export function createChatSessionController(
   // transcript is always on screen, so nothing is revealed, and a run is
   // taken up by the path that launched it (the root launch adopts its run;
   // a task resumed beside the chat joins the agent list).
-  const runActions = runtime.runSync(
+  const runActions = untilShutdown.sync(
     createHostRunActions({
       roots: runSession.roots,
       session: runSession,
@@ -357,7 +320,7 @@ export function createChatSessionController(
         Effect.sync(() => appendLocalNotice(`Final output: ${absolutePath}`)),
       notify: (_level, message) =>
         Effect.sync(() => appendLocalNotice(message)),
-    }).pipe(Scope.provide(shutdownScope)),
+    }),
   );
   const resumeTask: ChatSessionController['resumeTask'] = (id) =>
     runActions.resume(id);
@@ -392,6 +355,8 @@ export function createChatSessionController(
     const result = yield* Effect.cached(run.result);
     yield* Effect.raceFirst(shownHeld(run.runId), Effect.ignore(result));
     session.endLaunch(launched, { runId: run.runId });
+    // The cached result is handed back as an effect for the caller to await.
+    // @effect-diagnostics-next-line returnEffectInGen:off
     return result;
   });
 
@@ -404,7 +369,7 @@ export function createChatSessionController(
    */
   const launchRootRun = <R>(
     resolveConfig: Effect.Effect<AgentConfigPayload, Error, R>,
-    shownInstruction?: string,
+    shownInstruction: string,
   ): Effect.Effect<boolean, never, R | ProcessServices> =>
     // The claim and the fork of the program that ends it are one
     // uninterruptible step: an interrupted caller never leaves a launch
@@ -421,13 +386,12 @@ export function createChatSessionController(
         const prepared = Effect.gen(function* () {
           const config = yield* resolveConfig;
           resolved = true;
-          yield* adoptRunConfig(config);
+          adoptRunConfig(config);
           return yield* decodeLaunchConfig(config);
         }).pipe(
           Effect.tapError((error) =>
             Effect.sync(() => {
-              if (!resolved && shownInstruction !== undefined)
-                appendLocalUserTranscript(shownInstruction);
+              if (!resolved) appendLocalUserTranscript(shownInstruction);
             }).pipe(Effect.andThen(showFailure(error))),
           ),
         );
@@ -471,7 +435,7 @@ export function createChatSessionController(
               session.endLaunch(launched, { exitCode: CliExitCode.Success }),
             ),
           ),
-          Effect.forkIn(shutdownScope),
+          Effect.forkIn(untilShutdown.scope),
           Effect.andThen(restore(Deferred.await(launched))),
           Effect.map(() => held),
         );
@@ -523,19 +487,16 @@ export function createChatSessionController(
                   Effect.sync(() => appendLocalRequestRefusal(refusal, id)),
                 ),
               ),
-              shutdownScope,
+              untilShutdown.scope,
             );
             return;
           }
-          // A run launched to run once reads no messages: once it ended, a
-          // chat over it would refuse every one, so it continues as a fork.
-          // One stopped mid-turn still resumes to finish it. Read from the
-          // log: at startup a service window's own view has not filled yet.
+          // Read from the log: at startup a service window's own view has
+          // not filled yet.
           const stored = (yield* runSession.view.read([id])).runs.get(id);
-          if (stored?.takesFollowUps === false && stored.outcome !== null) {
-            appendLocalErrorTranscript(
-              oneShotResumeNotice(init.commandName, id),
-            );
+          const oneShot = oneShotResumeNotice(init.commandName, id, stored);
+          if (oneShot !== undefined) {
+            appendLocalErrorTranscript(oneShot);
             yield* endWithout(CliExitCode.Usage);
             return;
           }
@@ -562,10 +523,10 @@ export function createChatSessionController(
               ? config
               : yield* init.runSession.records(run.runId).readConfig;
           if (adoptedConfig === null)
-            return yield* Effect.fail(
-              new Error(`Run ${run.runId} has no configuration to resume`),
-            );
-          yield* adoptRunConfig(adoptedConfig, 'history');
+            return yield* new Rejected({
+              reason: `Run ${run.runId} has no configuration to resume`,
+            });
+          adoptRunConfig(adoptedConfig, 'history');
           clearLocalTranscript();
           // The transcript and the work plan are the view's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
@@ -594,7 +555,7 @@ export function createChatSessionController(
           ),
         ).pipe(
           Effect.ensuring(endWithout(CliExitCode.Interrupted)),
-          Effect.forkIn(shutdownScope),
+          Effect.forkIn(untilShutdown.scope),
           Effect.andThen(restore(Deferred.await(launched))),
           Effect.asVoid,
         );
@@ -608,8 +569,10 @@ export function createChatSessionController(
     Effect.gen(function* () {
       const config = yield* init.runSession.records(runId).readConfig;
       if (!config)
-        return yield* Effect.fail(new Error('it has no stored configuration'));
-      yield* adoptRunConfig(config, 'history');
+        return yield* new Rejected({
+          reason: 'it has no stored configuration',
+        });
+      adoptRunConfig(config, 'history');
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() =>
@@ -629,7 +592,7 @@ export function createChatSessionController(
   const adoptRoot = (runId: RunId): void => {
     if (!session.takeUpRoot(runId)) return;
     focusRun(runId);
-    runtime.runSync(Effect.forkIn(adoptRunRecord(runId), shutdownScope));
+    untilShutdown.fork(adoptRunRecord(runId));
   };
   // A run counts from the level where it is live here and was not on the
   // level before, so neither a child detached while running (live already)
@@ -658,12 +621,7 @@ export function createChatSessionController(
   // A chat of the service adopts only the runs it launches or resumes: the
   // service's view also holds other terminals' conversations.
   if (!served) {
-    runtime.runSync(
-      Effect.forkIn(
-        Stream.runForEach(viewChanges, observeResumedRoots),
-        chatScope,
-      ),
-    );
+    chat.fork(Stream.runForEach(viewChanges, observeResumedRoots));
   }
 
   // -----------------------------------------------------------------------
@@ -697,16 +655,17 @@ export function createChatSessionController(
     );
   };
 
-  /** A fresh root run of the chat's agent on the model it selects now. */
+  /** A fresh root run of the chat's agent on the model it selects now,
+   *  with the skills the user activated for its instruction. */
   const startSession = (
     instruction: string,
-    mediaFiles?: readonly string[],
-    displayInstruction?: string,
+    mediaFiles: readonly string[],
+    skills: readonly string[],
   ): Effect.Effect<boolean, never, ProcessServices> =>
     launchRootRun(
       Effect.gen(function* () {
         const meta = sessionMetaSignal.get();
-        const selection = yield* selectChatModel(stores, runtime, {
+        const selection = yield* selectChatModel(stores, {
           model: meta.model,
           reason: meta.modelSource,
         });
@@ -715,16 +674,12 @@ export function createChatSessionController(
           agentSource: meta.agentSource,
           model: selection.model,
           instruction,
-          ...(displayInstruction !== undefined ? { displayInstruction } : {}),
+          ...(skills.length > 0 && { skills: [...skills] }),
           workingDirectory: cwd,
-          ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.team ? { launch: { teamId: meta.team.id } } : {}),
-          ...(meta.delegationAgentScope
-            ? { delegationAgentScope: meta.delegationAgentScope }
-            : {}),
+          ...(mediaFiles.length > 0 ? { mediaFiles: [...mediaFiles] } : {}),
         } satisfies AgentConfigPayload;
       }),
-      displayInstruction ?? instruction,
+      instruction,
     );
 
   // Where each message goes is decided one at a time, in the order typed,
@@ -733,12 +688,11 @@ export function createChatSessionController(
   // a run's messages in order.
   const inOrder = Semaphore.makeUnsafe(1).withPermit;
   // The sends in flight, which a graceful exit waits for.
-  const sending = runtime.runSync(
-    FiberSet.make<MessageResult>().pipe(Scope.provide(shutdownScope)),
-  );
+  const sending = untilShutdown.sync(FiberSet.make<MessageResult>());
 
   /**
-   * Send `prepared` to `target`. The session decides everything about the
+   * Send `line`, with the skills the user activated for it, to `target`.
+   * The session decides everything about the
    * message: whether the run takes it, waiting for a run that is stopping
    * to finish, and resuming a run that is not running. `continuing`: the
    * message may continue `target`, the root: a root the session does not
@@ -748,7 +702,8 @@ export function createChatSessionController(
   const sendMessage = Effect.fn('sendMessage')(function* (
     target: RunId,
     continuing: boolean,
-    prepared: PreparedChatInstruction,
+    line: string,
+    skills: readonly string[],
     mediaFiles: readonly string[],
     holdUntil: 'turn' | undefined,
   ) {
@@ -761,8 +716,8 @@ export function createChatSessionController(
           .request({
             kind: 'followUp.send',
             runId: target,
-            text: prepared.instruction,
-            displayText: prepared.displayInstruction,
+            text: line,
+            skills: skills.length > 0 ? [...skills] : undefined,
             media: mediaFiles.length > 0 ? [...mediaFiles] : undefined,
             holdUntil,
           })
@@ -813,7 +768,7 @@ export function createChatSessionController(
 
   /** A message back in the input, below whatever was typed since. */
   const returnToInput = (
-    message: Draft,
+    message: InputDraft,
     reason?: string,
   ): Effect.Effect<void> =>
     SubscriptionRef.update(draft, (current) =>
@@ -832,7 +787,7 @@ export function createChatSessionController(
     );
 
   const submitChatMessage = Effect.fn('submitChatMessage')(function* (
-    submitted: Draft,
+    submitted: InputDraft,
     line: string,
     holdUntil: 'turn' | undefined,
   ) {
@@ -841,13 +796,12 @@ export function createChatSessionController(
       current.skills,
       { ...current, skills: [] },
     ]);
-    const message: Draft = { ...submitted, skills };
-    const prepared = preparedInstruction(line, skills);
+    const message: InputDraft = { ...submitted, skills };
     const mediaFiles = resolveImages(message).map((image) => image.path);
     const send = (target: RunId, continuing: boolean) =>
       FiberSet.run(
         sending,
-        sendMessage(target, continuing, prepared, mediaFiles, holdUntil),
+        sendMessage(target, continuing, line, skills, mediaFiles, holdUntil),
       );
     const returned = (reason?: string): MessageResult => ({
       kind: 'returned',
@@ -879,11 +833,7 @@ export function createChatSessionController(
           (root.outcome === 'cancelled' && acceptsFollowUp(root)))
       )
         return yield* send(root.id, true);
-      const started = yield* startSession(
-        prepared.instruction,
-        mediaFiles,
-        prepared.displayInstruction,
-      );
+      const started = yield* startSession(line, mediaFiles, skills);
       if (!started) yield* returnToInput({ ...EMPTY_DRAFT, skills });
       return SENT;
     });
@@ -919,7 +869,7 @@ export function createChatSessionController(
   });
 
   const submit = Effect.fn('chatSubmit')(function* (
-    submitted: Draft,
+    submitted: InputDraft,
     holdUntil?: 'turn',
   ) {
     const line = expandText(submitted).trim();
@@ -927,16 +877,14 @@ export function createChatSessionController(
     yield* submitChatMessage(submitted, line, holdUntil);
   });
 
-  const activateSkill = (selection: SkillActivation): void => {
-    const wasPending = SubscriptionRef.getUnsafe(draft).skills.some(
-      (skill) => skill.name === selection.name,
-    );
-    runtime.runSync(
-      SubscriptionRef.update(draft, (current) => withSkill(current, selection)),
+  const activateSkill = (name: string): void => {
+    const wasPending = SubscriptionRef.getUnsafe(draft).skills.includes(name);
+    chat.sync(
+      SubscriptionRef.update(draft, (current) => withSkill(current, name)),
     );
     appendLocalNotice(
       [
-        `Skill ${wasPending ? 'refreshed' : 'activated'}: ${selection.name}.`,
+        `Skill ${wasPending ? 'refreshed' : 'activated'}: ${name}.`,
         'It will be applied to your next message.',
       ].join(' '),
     );
@@ -954,7 +902,7 @@ export function createChatSessionController(
     activateSkill,
     performHost: interactions.performHost,
     clearPendingSkills: () =>
-      runtime.runSync(
+      chat.sync(
         SubscriptionRef.update(draft, (current) => ({
           ...current,
           skills: [],

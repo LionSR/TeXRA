@@ -14,9 +14,10 @@ import {
   formatResultCount,
   joinFacts,
 } from '@texra-ai/harness/schemas';
+import { REQUEST_NOUN } from '@ui/copy/requestCards';
 import type { StatusLook } from '@ui/copy/runStatus';
 
-export const SCRIPT_CALL_STATUS_LABEL = {
+export const SCRIPT_CALL_STATUS_LABEL = Object.freeze({
   queued: 'Queued',
   running: 'Running',
   interrupted: 'Interrupted',
@@ -26,23 +27,31 @@ export const SCRIPT_CALL_STATUS_LABEL = {
   cancelled: 'Cancelled',
   failed: 'Failed',
   'not run': 'Not run',
-} as const satisfies Record<ScriptCallStatus, string>;
+} as const satisfies Record<ScriptCallStatus, string>);
 
 /** How each call status is painted. A queued call has not started and a
  *  reused one ran nothing this time, so neither shows its tone's glyph. */
-export const SCRIPT_CALL_STATUS_LOOK: Readonly<
-  Record<ScriptCallStatus, StatusLook>
-> = Object.freeze({
-  queued: Object.freeze({ tone: 'neutral', glyph: 'circle-dot' }),
-  running: Object.freeze({ tone: 'running' }),
-  interrupted: Object.freeze({ tone: 'warning' }),
-  finished: Object.freeze({ tone: 'success' }),
-  reused: Object.freeze({ tone: 'success', glyph: 'clock-rotate-left' }),
-  skipped: Object.freeze({ tone: 'neutral' }),
-  cancelled: Object.freeze({ tone: 'neutral' }),
-  failed: Object.freeze({ tone: 'danger' }),
-  'not run': Object.freeze({ tone: 'neutral' }),
-});
+const SCRIPT_CALL_STATUS_LOOK: Readonly<Record<ScriptCallStatus, StatusLook>> =
+  Object.freeze({
+    queued: Object.freeze({ tone: 'neutral', glyph: 'circle-dot' }),
+    running: Object.freeze({ tone: 'running' }),
+    interrupted: Object.freeze({ tone: 'warning' }),
+    finished: Object.freeze({ tone: 'success' }),
+    reused: Object.freeze({ tone: 'success', glyph: 'clock-rotate-left' }),
+    skipped: Object.freeze({ tone: 'neutral' }),
+    cancelled: Object.freeze({ tone: 'neutral' }),
+    failed: Object.freeze({ tone: 'danger' }),
+    'not run': Object.freeze({ tone: 'neutral' }),
+  });
+
+/** How a call's row is painted: its status's look, except that a call
+ *  waiting on the user reads as a run waiting on the user does. */
+export function scriptCallLook(call: ScriptCallView): StatusLook {
+  return call.needsYou
+    ? WAITING_ON_YOU_LOOK
+    : SCRIPT_CALL_STATUS_LOOK[call.status];
+}
+const WAITING_ON_YOU_LOOK: StatusLook = Object.freeze({ tone: 'warning' });
 
 /** What a row says before its answer, in one line. */
 function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
@@ -54,19 +63,17 @@ function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
   const { payload } = detail;
   switch (payload.kind) {
     case 'bash':
-      return `Wants bash: ${payload.data.command}`;
+      return `Wants ${REQUEST_NOUN.bash}: ${payload.data.command}`;
     case 'toolEdit':
-      return `Wants edit: ${payload.data.relativePath}`;
+      return `Wants ${REQUEST_NOUN.toolEdit}: ${payload.data.relativePath}`;
     case 'retry':
-      return `Wants retry: ${payload.data.operation}`;
+      return `Wants ${REQUEST_NOUN.retry}: ${payload.data.operation}`;
     case 'proposal':
-      return 'Wants approval for a proposal';
+      return `Wants approval for a ${REQUEST_NOUN.proposal}`;
     case 'planApproval':
-      return 'Wants approval for a plan';
-    case 'plugin':
-      return 'Wants an answer';
+      return `Wants approval for a ${REQUEST_NOUN.planApproval}`;
     case 'userQuestion':
-      return 'Wants an answer to a question';
+      return `Wants an answer to a ${REQUEST_NOUN.userQuestion}`;
     default:
       return payload satisfies never;
   }

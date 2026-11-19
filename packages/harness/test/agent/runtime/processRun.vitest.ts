@@ -12,7 +12,7 @@ import { layer } from '@effect/vitest';
 import { Context, Effect } from 'effect';
 import { expect } from 'vitest';
 
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { ChildRuns } from '@agent/runtime/ToolServices';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -64,7 +64,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               }),
             ),
           );
-          yield* Context.get(session, Runs).get(runId)?.drained ?? Effect.void;
+          yield* (
+            Context.get(session, RunRegistry).get(runId)?.drained ?? Effect.void
+          );
 
           const records = getRunRecords(runId);
           const end = yield* records.readRunEnd().pipe(Effect.provide(session));

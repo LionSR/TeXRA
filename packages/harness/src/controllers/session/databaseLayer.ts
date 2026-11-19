@@ -1,13 +1,12 @@
 /**
- * The persistence substrate: the run history's one write path, the
- * aggregate lifecycle, deletion and collection, and the reads, over one
- * store's connection (`storeConnection.ts`). One database per session root
+ * The persistence substrate: the run history's one write path (on the
+ * connection `storeConnection.ts` builds), the aggregate lifecycle, deletion and
+ * collection, and the reads. One database per session root
  * (`SessionWorkspace`), never a process singleton; a project store is held
- * exclusively by the one process that opened it; an ephemeral session runs
- * the same schema in SQLite memory, and a failed file open is an error,
- * never the ephemeral mode. The process's global store holds current values
- * alone, so it is a connection with no event store over it
- * (`globalDatabaseLayer`). `storeSchema.ts` owns the DDL and the open
+ * exclusively by the one process that opened it (`locking_mode =
+ * EXCLUSIVE`); an ephemeral session runs the same schema in SQLite memory,
+ * and a failed file open is an error, never the ephemeral mode. The global
+ * storage root's store is `globalDatabaseLayer.ts`'s. `storeSchema.ts` owns the DDL and the open
  * sequence; `rowCodec.ts` every stored shape, by the fact kinds the process's
  * plugins contribute (this module reads no payload); `projections` the
  * projectors and their upkeep, run in this module's transactions. This
@@ -15,6 +14,9 @@
  * ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
+import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 import { isSqlError } from 'effect/sql/SqlError';
 import {
@@ -23,13 +25,12 @@ import {
   type FileSystem,
   Layer,
   Option,
-  Schedule,
   Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
-import { logFailure } from '@logger/effectLog';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   DISPLAY_ROW_TYPES,
   edgesOf,
@@ -53,13 +54,12 @@ import { InPublisherJob } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
   Database,
-  GlobalDatabase,
   DatabaseOpenFailed,
   DatabaseAggregateClosed,
   RunChanged,
 } from '@shared/session/database';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { currentValues, READ_RETRY } from './currentValues';
+import { ToolRegistry } from '@tools/toolTable';
+import { currentValues } from './currentValues';
 import {
   LISTED_KINDS,
   PRICED_ROW_TYPES,
@@ -76,7 +76,6 @@ import {
   encodeDraft,
   pluginKind,
   prepareEventDraft,
-  storeGate,
   UPSERT_KINDS,
   type EncodedRow,
   type SqlRow,
@@ -89,13 +88,17 @@ import {
   READ_RUN_RECORD,
   rowReader,
 } from './rowReader';
-import {
-  mapDatabaseFailure,
-  storeConnection,
-  type StoreMode,
-} from './storeConnection';
-import { reclaimFreePages } from './storeSchema';
-const CHANNEL = 'sessionDatabase';
+import { isBusy, isDamaged, mapDatabaseFailure } from './storeAside';
+import { storeConnection } from './storeConnection';
+import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
+/** The database file of a storage root, beside the stores it replaces. */
+export const SESSION_DATABASE_FILE = 'texra.db';
+/** The store file under `storage`, by the directory's real path. SQLite
+ *  makes only the file, so `create` makes the directory first. */
+export const storeFile = (storage: string, create: boolean): string => {
+  if (create) mkdirSync(storage, { recursive: true });
+  return join(realpathSync.native(storage), SESSION_DATABASE_FILE);
+};
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
 /** First append creates the aggregate and mints its uid; a closed one
@@ -120,7 +123,6 @@ const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
  *  `[digest, inline]` pairs. */
 const INSERT_REFS = `INSERT INTO event_blob ("commit", digest, inline)
   SELECT ?, value ->> 0, value ->> 1 FROM json_each(?)`;
-
 /** Aggregates bound as one `json_each(?)` array of `[kind, logicalId]`
  *  pairs (`aggregateList`), each found by its unique key. */
 const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
@@ -181,8 +183,17 @@ const displayUnion = (where: string, order: string, extra?: string) =>
     ${extra === undefined ? '' : `UNION ALL ${extra}`}
   ) WHERE ${where} ORDER BY ${order}`;
 
+/** How a store is opened: a project store, created if absent
+ *  (`persistent`) or only opened (`existing`), is held exclusively by this
+ *  process for the connection's life; `ephemeral` runs in memory. */
+type StoreMode = 'persistent' | 'existing' | 'ephemeral';
+
+/** Why a project store did not open: another process holds it. */
+export const STORE_HELD_MESSAGE =
+  'Another TeXRA process holds this project; close it there first.';
+
 export const databaseLayer = (
-  mode: Exclude<StoreMode, 'global'>,
+  mode: StoreMode,
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
@@ -191,21 +202,56 @@ export const databaseLayer = (
   Layer.effect(
     Database,
     Effect.gen(function* () {
-      const { storage } = yield* SessionWorkspace;
-      const {
+      const roots = yield* SessionWorkspace;
+      const path =
+        mode === 'ephemeral'
+          ? IN_MEMORY_STORE
+          : join(roots.storage, SESSION_DATABASE_FILE);
+      const openFailed = (cause: unknown): DatabaseOpenFailed =>
+        new DatabaseOpenFailed({ path, cause });
+      const create = mode !== 'existing';
+      // The store's directory is made unless the store must exist already.
+      const filename =
+        mode === 'ephemeral'
+          ? IN_MEMORY_STORE
+          : yield* Effect.try({
+              try: () => storeFile(roots.storage, create),
+              catch: (cause) => openFailed(ensureError(cause)),
+            });
+      // A project store has one holder, this process, so the driver opens
+      // it with no busy wait: a lock another process holds refuses the open
+      // instead of waiting out the driver's timeout. The exclusive lock
+      // below waits at most the 25 ms slice `prepareStore` leaves set.
+      const { sql, movedAside } = yield* openStore(
+        SqliteClient.make({
+          filename: create
+            ? filename
+            : `file:${filename.replaceAll(/[%?#]/g, encodeURIComponent)}?mode=rw`,
+          disableWAL: mode === 'ephemeral',
+          busyTimeout: 0,
+        }),
         path,
-        sql,
-        movedAside,
-        exec,
-        execOne,
-        query,
-        own,
-        transaction,
-        transact,
-        openFailed,
-        readFailed,
-        writeFailed,
-      } = yield* storeConnection(mode, storage);
+        filename,
+      ).pipe(
+        Effect.catchIf(isBusy, () =>
+          Effect.fail(openFailed(new Error(STORE_HELD_MESSAGE))),
+        ),
+        mapDatabaseFailure(openFailed),
+      );
+      if (mode !== 'ephemeral')
+        // Taken once and kept for the connection's life: in WAL mode an
+        // exclusive holder keeps the wal-index in its own memory, so no
+        // other process reads or writes the store until it closes.
+        yield* Effect.all([
+          sql.unsafe('PRAGMA locking_mode = EXCLUSIVE'),
+          sql.unsafe('BEGIN IMMEDIATE'),
+          sql.unsafe('COMMIT'),
+        ]).pipe(
+          Effect.catchIf(isBusy, () =>
+            Effect.fail(openFailed(new Error(STORE_HELD_MESSAGE))),
+          ),
+          mapDatabaseFailure(openFailed),
+        );
       /** Moved by every value write: what `values.changes` wakes on. */
       const valuesWritten = yield* SubscriptionRef.make(0);
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
@@ -213,11 +259,19 @@ export const databaseLayer = (
         row === undefined
           ? 0
           : Schema.decodeUnknownSync(EventSeqSchema)(row.seq);
-      /** The store gate (`storeGate`), run at open: this process is the
-       *  store's one writer, so what it holds cannot change under it. */
       const { factKinds } = yield* ToolRegistry;
-      const gate = storeGate(exec, factKinds);
-      const reader = rowReader(path, factKinds, exec);
+      const store = storeConnection(sql, path, { shared: false, factKinds });
+      const {
+        exec,
+        execOne,
+        own,
+        transaction,
+        transact,
+        query,
+        snapshot,
+        writeFailed,
+      } = store;
+      const reader = rowReader(store, factKinds);
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
@@ -229,19 +283,29 @@ export const databaseLayer = (
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
       );
-      yield* gate.pipe(mapDatabaseFailure(openFailed));
+      // The store gate, run once: this process is the store's one writer,
+      // so what the store holds cannot change under it.
+      yield* store.gate.pipe(mapDatabaseFailure(openFailed));
+      // An aggregate and its open descendants. A descendant an earlier
+      // deletion closed belongs to that deletion's marker alone, which
+      // names its files and collects it.
       const dependents = `WITH RECURSIVE dependents(id) AS (
         SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?
         UNION ALL
         SELECT child.id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.id
+        WHERE child.closed_by IS NULL
       )`;
-      const dependentStates = `${dependents} ${STATE_COLUMNS}
-        WHERE s.id IN (SELECT id FROM dependents)`;
       const deletionRuns = `${dependents}
         SELECT logical_id AS runId FROM event_sequence
         WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
         ORDER BY runId
+      `;
+      // Taken out from under the closing tree first, so the tree's
+      // collection does not cascade into an earlier marker's aggregate.
+      const detachClosed = `${dependents}
+        UPDATE event_sequence SET parent_id = NULL
+        WHERE closed_by IS NOT NULL AND parent_id IN (SELECT id FROM dependents)
       `;
       const closeDependents = `${dependents}
         UPDATE event_sequence SET closed_by = ?
@@ -307,10 +371,7 @@ export const databaseLayer = (
         if (held === undefined) return yield* invariant(`${absent}: ${id}`);
         return yield* new DatabaseAggregateClosed({ aggregateId: id });
       });
-      const upkeep = projectionUpkeep(exec, reader.read, path);
-      /** A read of several statements, as one snapshot. */
-      const snapshot = <A, E>(read: Effect.Effect<A, E>) =>
-        transaction(read, readFailed);
+      const upkeep = projectionUpkeep(store, reader.read);
       const appendRows = Effect.fn('appendRows')(function* (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
@@ -449,16 +510,20 @@ export const databaseLayer = (
             [commit, aggregate],
           );
         }
-        if (edges.reparent !== undefined) {
-          // A plugin's aggregate hangs under its `parent` run, so that
-          // run's deletion collects it, or under none.
+        // A child run hangs under its parent run, and a plugin's aggregate
+        // under its `parent` run or none, so the parent's deletion closes
+        // and collects it.
+        const hangsUnder =
+          edges.reparent === undefined ? edges.parent : edges.reparent;
+        if (edges.reparent !== undefined || hangsUnder !== null) {
           const parentColumns =
-            edges.reparent === null
-              ? [null, null]
-              : aggregateColumns(edges.reparent);
+            hangsUnder === null ? [null, null] : aggregateColumns(hangsUnder);
           yield* exec(reparent, [...parentColumns, aggregate]);
         }
-        if (edges.closes) yield* exec(closeDependents, [...columns, commit]);
+        if (edges.closes) {
+          yield* exec(detachClosed, columns);
+          yield* exec(closeDependents, [...columns, commit]);
+        }
         return {
           ...committedDraft,
           seq,
@@ -533,14 +598,7 @@ export const databaseLayer = (
               },
             ),
           ),
-        values: currentValues({
-          exec,
-          execOne,
-          transact,
-          query,
-          afterCommit: sql.afterCommit,
-          written: valuesWritten,
-        }).values,
+        values: currentValues(store, valuesWritten),
         readAggregate: (id, fromSeq, types, toSeq = Number.MAX_SAFE_INTEGER) =>
           query(
             decodedRows(
@@ -578,12 +636,8 @@ export const databaseLayer = (
         runRemoval: (id, expectedStartCommit) =>
           transaction(
             Effect.gen(function* () {
-              const observed = yield* states(
-                dependentStates,
-                aggregateColumns(id),
-              );
-              const target = observed.find((row) => row.aggregateId === id);
-              if (target === undefined || observed.some((row) => row.closed))
+              const [target] = yield* readState([id]);
+              if (target === undefined || target.closed)
                 return yield* new DatabaseAggregateClosed({ aggregateId: id });
               if (target.startCommit !== expectedStartCommit)
                 return yield* new RunChanged({ aggregateId: id });
@@ -639,59 +693,25 @@ export const databaseLayer = (
     }),
   ).pipe(Layer.provide(Reactivity.layer));
 
-/**
- * The process's handle on the global storage root: one connection and
- * `data_version` poll for every application record of that root, closed with
- * the entry's runtime. It holds current values and input history alone, so
- * it is the connection and those two, with no event store over it. Building
- * it creates the directory, the file and the poll fiber; an entry that must
- * create none passes a refusing layer. */
-export const globalDatabaseLayer = (
-  storage: string,
-): Layer.Layer<GlobalDatabase, DatabaseOpenFailed, FileSystem.FileSystem> =>
-  Layer.effect(
-    GlobalDatabase,
-    Effect.gen(function* () {
-      const { sql, exec, execOne, query, transact, openFailed } =
-        yield* storeConnection('global', storage);
-      // The store's other processes can be newer builds, so the gate runs
-      // at open and again in every value write.
-      const gate = storeGate(exec, toolTable([]).factKinds);
-      yield* gate.pipe(mapDatabaseFailure(openFailed));
-      /** Moved by every value write, this process's or (by the poll)
-       *  another's: what `values.changes` wakes on. */
-      const written = yield* SubscriptionRef.make(0);
-      // Each change of the store's `data_version` wakes the readers of
-      // values (the first read, at start, wakes them for nothing). A failed
-      // read logs and retries.
-      yield* Effect.forkScoped(
-        Stream.fromEffectSchedule(
-          query(execOne('PRAGMA data_version', [])).pipe(
-            Effect.map((row) => row?.data_version),
-            Effect.tapError(
-              logFailure(
-                CHANNEL,
-                'The session database change poll failed; retrying.',
-              ),
-            ),
-            Effect.retry(READ_RETRY),
-            Effect.orDie,
-          ),
-          Schedule.spaced('250 millis'),
-        ).pipe(
-          Stream.changes,
-          Stream.runForEach(() =>
-            SubscriptionRef.update(written, (wake) => wake + 1),
-          ),
+/** Whether another process has the store open (its exclusive lock is
+ *  refused), or the file is no SQLite store at all (NOTADB, CORRUPT). */
+export const storeOpenElsewhere = (filename: string) =>
+  Effect.scoped(
+    Effect.flatMap(
+      SqliteClient.make({ filename, disableWAL: true, busyTimeout: 0 }),
+      (sql) =>
+        Effect.andThen(
+          sql.unsafe('PRAGMA locking_mode = EXCLUSIVE'),
+          sql.unsafe('BEGIN EXCLUSIVE'),
         ),
-      );
-      return currentValues({
-        exec,
-        execOne,
-        transact: (body) => transact(Effect.andThen(gate, body)),
-        query,
-        afterCommit: sql.afterCommit,
-        written,
-      });
-    }),
-  ).pipe(Layer.provide(Reactivity.layer));
+    ),
+  ).pipe(
+    Effect.as('free' as const),
+    Effect.catchIf(isBusy, () => Effect.succeed('open' as const)),
+    Effect.catchCause((cause) =>
+      isDamaged(cause)
+        ? Effect.succeed('unreadable' as const)
+        : Effect.failCause(cause),
+    ),
+    Effect.provide(Reactivity.layer),
+  );

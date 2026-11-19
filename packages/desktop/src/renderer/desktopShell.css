@@ -5,18 +5,18 @@
 }
 .desktop-app {
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: var(--height-header) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
 .shell-workspace-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--wa-space-s);
   min-width: 0;
-  padding: 0 12px;
+  padding: 0 var(--wa-space-s);
   background: var(--wa-color-surface-lowered);
-  border-bottom: 1px solid var(--wa-color-surface-border);
+  border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
   -webkit-app-region: drag;
 }
 body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
@@ -31,7 +31,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   position: absolute;
   right: 0;
   top: 0;
-  --dot-size: 6px;
   --dot-color: var(--color-warning);
   pointer-events: none;
 }
@@ -48,17 +47,17 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-view-switch {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--wa-space-2xs);
   -webkit-app-region: no-drag;
 }
 .shell-workspace-tools {
   display: flex;
-  gap: 4px;
+  gap: var(--wa-space-2xs);
   align-items: center;
   -webkit-app-region: no-drag;
 }
 .shell-frame {
-  --divider-width: 1px;
+  --divider-width: var(--border-thin);
   --divider-hit-area: 10px;
   --min: 208px;
   --max: min(340px, 36vw);
@@ -106,7 +105,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   background: var(--wa-color-surface-lowered);
 }
 .shell-sidebar-primary {
-  padding: 12px 12px 4px;
+  padding: var(--wa-space-s) var(--wa-space-s) var(--wa-space-2xs);
 }
 .shell-sidebar-scroll {
   min-height: 0;
@@ -114,7 +113,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   scrollbar-width: thin;
 }
 .shell-sidebar-section {
-  padding: 0 12px;
+  padding: 0 var(--wa-space-s);
   min-width: 0;
 }
 .shell-sidebar-section-heading {
@@ -122,8 +121,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   align-items: center;
   justify-content: space-between;
   min-height: 36px;
-  gap: 8px;
-  padding-inline: 8px 4px;
+  gap: var(--wa-space-xs);
+  padding-inline: var(--wa-space-xs) var(--wa-space-2xs);
 }
 .shell-sidebar-section-label {
   color: var(--wa-color-text-quiet);
@@ -132,16 +131,16 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   letter-spacing: 0.02em;
 }
 .shell-history-section {
-  margin-top: 18px;
+  margin-top: var(--wa-space-m);
 }
 .shell-project-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px 24px;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) repeat(2, var(--height-control-compact));
+  gap: var(--wa-space-2xs);
   align-items: center;
   min-height: 34px;
-  padding-inline-end: 4px;
-  margin-block: 2px;
+  padding-inline-end: var(--wa-space-2xs);
+  margin-block: var(--wa-space-3xs);
   border-radius: var(--row-radius);
 }
 .shell-project-item.is-active {
@@ -163,11 +162,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .shell-project-status {
   grid-column: 2;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
   justify-self: center;
-  background: var(--tone-color);
+  --dot-color: var(--tone-color);
 }
 .shell-project-status.tone-unseen {
   --tone-color: var(--wa-color-brand-fill-loud);
@@ -175,21 +171,21 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-menu {
   display: block;
   grid-column: 3;
-  width: 24px;
-  height: 24px;
+  width: var(--height-control-compact);
+  height: var(--height-control-compact);
   color: var(--wa-color-text-quiet);
 }
 .shell-project-rename {
-  margin-inline-start: 4px;
-  width: calc(100% - 4px);
+  margin-inline-start: var(--wa-space-2xs);
+  width: calc(100% - var(--wa-space-2xs));
 }
 .shell-project-runs {
-  --run-tab-padding-inline-start: 8px;
-  --run-tab-row-gap: 2px;
-  --run-tab-radius: 6px;
+  --run-tab-padding-inline-start: var(--wa-space-xs);
+  --run-tab-row-gap: var(--wa-space-3xs);
+  --run-tab-radius: var(--row-radius);
   --run-tab-meta-display: none;
   --run-tab-detail-display: none;
-  --run-tab-status-width: 24px;
+  --run-tab-status-width: var(--height-control-compact);
   --run-tab-status-label-display: none;
 }
 .shell-sidebar-sessions > run-tabs {
@@ -199,7 +195,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   --color-border: transparent;
 }
 .shell-sidebar-footer {
-  padding: 8px 12px;
+  padding: var(--wa-space-xs) var(--wa-space-s);
 }
 
 /* Task reading surface. The transcript owns its one bounded content column. */
@@ -215,7 +211,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .shell-files {
   align-content: start;
-  padding: 8px;
+  padding: var(--wa-space-xs);
 }
 .shell-files .desktop-editor-tree-header > span {
   font-size: var(--font-size-xs);
@@ -233,19 +229,19 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .shell-files .desktop-editor-tree-row::part(item) {
   min-height: 28px;
-  padding: 0 4px;
+  padding: 0 var(--wa-space-2xs);
 }
 .desktop-editor-tree-empty {
-  padding: 8px;
+  padding: var(--wa-space-xs);
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
 }
 .shell-editor-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  border-top: 1px solid var(--wa-color-surface-border);
+  gap: var(--wa-space-xs);
+  padding: 0 var(--wa-space-s);
+  border-top: var(--border-thin) solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
   min-width: 0;
 }
@@ -257,6 +253,20 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   white-space: nowrap;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
+}
+.shell-workbench-pdf {
+  display: grid;
+  /* The notice row collapses to nothing while the PDF has no failure. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+}
+.shell-workbench-pdf-frame[hidden] {
+  display: none;
+}
+/* The footer keeps the last row while a failed PDF's frame is hidden. */
+.shell-workbench-pdf > footer {
+  grid-row: 3;
 }
 .shell-workbench-pdf-frame {
   display: block;
@@ -273,7 +283,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
     margin-inline-start: auto;
   }
   .shell-workspace-toolbar {
-    gap: 8px;
+    gap: var(--wa-space-xs);
   }
 }
 @media (prefers-reduced-motion: reduce) {

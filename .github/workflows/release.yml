@@ -47,6 +47,12 @@ jobs:
     if: ${{ startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      # Marketplace Trusted Publishing: vsce exchanges this job's GitHub OIDC
+      # token for a 15-minute Marketplace credential.
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -92,24 +98,20 @@ jobs:
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Visual Studio Marketplace
-        # Pinned to the COMMIT `v2` resolves to: this action receives the
-        # Marketplace and Open VSX publish credentials, so a moved tag would
-        # hand them to code nobody reviewed. Actions requires a commit SHA, so
-        # resolve with `git ls-remote <repo> 'refs/tags/v2^{}'` — plain
-        # `refs/tags/v2` yields the annotated tag object, which does not
-        # resolve. Bump the SHA and the trailing tag together.
-        uses: HaaLeo/publish-vscode-extension@1b8df468b849f76a143b8c18bf0ffa2075398d12 # v2
-        with:
-          pat: ${{ secrets.VSCE_PAT }}
-          registryUrl: https://marketplace.visualstudio.com
-          extensionFile: ${{ steps.vsix.outputs.path }}
-          preRelease: ${{ steps.channel.outputs.channel == 'preview' }}
-          skipDuplicate: true
+        # Trusted Publishing over OIDC, not a stored PAT: Azure DevOps retires
+        # global PATs on 2026-12-01, and a Marketplace PAT is one. Needs a
+        # Trusted Publishing policy for this repository and `release.yml` on
+        # the publisher's management page. vsce does not fall back to a PAT.
+        working-directory: packages/extension
+        env:
+          VSIX: ${{ github.workspace }}/${{ steps.vsix.outputs.path }}
+          VSCE_PUBLISH_FLAGS: ${{ steps.channel.outputs.channel == 'preview' && '--pre-release' || '' }}
+        run: pnpm exec vsce publish --oidc --packagePath "$VSIX" --skip-duplicate $VSCE_PUBLISH_FLAGS
 
       - name: Publish to Open VSX
         # Pinned to the COMMIT `v2` resolves to: this action receives the
-        # Marketplace and Open VSX publish credentials, so a moved tag would
-        # hand them to code nobody reviewed. Actions requires a commit SHA, so
+        # Open VSX publish credential, so a moved tag would hand it to code
+        # nobody reviewed. Actions requires a commit SHA, so
         # resolve with `git ls-remote <repo> 'refs/tags/v2^{}'` — plain
         # `refs/tags/v2` yields the annotated tag object, which does not
         # resolve. Bump the SHA and the trailing tag together.

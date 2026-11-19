@@ -13,6 +13,7 @@ import {
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { modelFailureText } from '@ui/copy/modelAccess';
+import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -129,9 +130,10 @@ function definedAgentLines(
   proposal: AgentProposalRequest,
   promptLines: readonly string[],
 ): readonly string[] {
-  if (!proposal.persona) return [];
+  const source = proposal.agentSource;
+  if (source?.kind !== 'inline') return [];
   return [
-    DEFINED_AGENT_COPY.heading(proposal.persona),
+    DEFINED_AGENT_COPY.heading(proposal.agent, source.persona),
     `${DEFINED_AGENT_COPY.promptLabel}:`,
     ...promptLines.map((line) => `  ${line}`),
   ];
@@ -172,10 +174,12 @@ function agentProposalApprovalSummary(
       ...instructionLines.map((line) => `  ${line}`),
     ].join('\n');
   return [
-    `Agent proposal requested: ${proposal.agent} (${agentProposalLabel(proposal)})`,
+    `${REQUEST_ASK.proposal(proposal.task)} ${proposal.agent} (${agentProposalLabel(proposal)})`,
     `Model: ${getModelLabel(proposal.model)}`,
     ...definedAgentLines(proposal, promptLines),
-    ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
+    ...(workingDirectory
+      ? [`${WORKING_DIRECTORY_LABEL}: ${workingDirectory}`]
+      : []),
     ...fileGroups,
     'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
@@ -193,7 +197,9 @@ export function buildAgentProposalApprovalContent(
     boundedAgentProposalInstructionLines(instructionLines);
   // A defined agent's prompt is bounded as the instruction is.
   const promptLines = agentProposalInstructionLines(
-    proposal.persona?.prompt ?? '',
+    proposal.agentSource?.kind === 'inline'
+      ? (proposal.agentSource.persona.prompt ?? '')
+      : '',
   );
   const boundedPromptLines = boundedAgentProposalInstructionLines(promptLines);
   const fileGroups = getProposalFileGroups(proposal);
@@ -224,12 +230,12 @@ export function buildAgentProposalApprovalContent(
 }
 
 export function formatRetryRequestMessage(payload: RetryRequest): string {
-  return `Retry requested (${payload.operation}): ${modelFailureText(payload.failure)}`;
+  return `${REQUEST_ASK.retry(payload.model)} (${payload.operation}): ${modelFailureText(payload.failure)}`;
 }
 
 export function formatBashApprovalSummary(payload: BashRequest): string {
-  const cwd = payload.cwd ? `Directory: ${payload.cwd}\n` : '';
-  return `Command requested:\n${cwd}${payload.command}`;
+  const cwd = payload.cwd ? `${WORKING_DIRECTORY_LABEL}: ${payload.cwd}\n` : '';
+  return `${REQUEST_ASK.command}:\n${cwd}${payload.command}`;
 }
 
 /** What a tool edit's prompt shows: its path and tool, and the diff. */
@@ -259,11 +265,18 @@ function boundedToolEditDiffLines(
   });
 }
 
+/** `Edit draft.tex (from edit_file)`: the ask, and the tool that asked. */
+export function toolEditAsk(
+  request: Pick<ToolEditRequest, 'path' | 'sourceTool'>,
+): string {
+  return `${REQUEST_ASK.edit} ${request.path} (from ${request.sourceTool})`;
+}
+
 function toolEditApprovalSummary(
   request: ToolEditPrompt,
   diffLines: readonly string[],
 ): string {
-  const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
+  const header = toolEditAsk(request);
   if (diffLines.length === 0) {
     return `${header}\nNo content changes proposed.`;
   }

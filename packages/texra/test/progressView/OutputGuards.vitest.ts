@@ -1,0 +1,81 @@
+import { stat, symlink } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
+
+import { checkOutputDestination } from '@texra/controllers/progressView/documentTaskOutputs';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+
+const tempDirs = useTempDirs();
+
+// `it.live`, not `it.effect`, for the suites below: they probe the real
+// filesystem, so a TestContext clock starting at 0 would be a trap rather
+// than a help.
+describe('dangling output symlinks', () => {
+  it.live(
+    'keeps a dangling file destination symlink writable and rejects a dangling directory destination before run',
+    (context) =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-dangling-output-', tempDirs),
+        );
+        const fileReferent = join(root, 'absent.tex');
+        const fileLink = join(root, 'file-link.tex');
+        const directoryReferent = join(root, 'absent-directory');
+        const directoryLink = join(root, 'directory-link');
+        const linkError = yield* Effect.promise(async (): Promise<unknown> => {
+          try {
+            await symlink(fileReferent, fileLink, 'file');
+            await symlink(
+              directoryReferent,
+              directoryLink,
+              process.platform === 'win32' ? 'junction' : 'dir',
+            );
+            return undefined;
+          } catch (error) {
+            return error;
+          }
+        });
+        if (linkError !== undefined) {
+          const code =
+            linkError instanceof Error && 'code' in linkError
+              ? linkError.code
+              : undefined;
+          if (
+            typeof code === 'string' &&
+            ['EACCES', 'EINVAL', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code)
+          ) {
+            context.skip();
+            return;
+          }
+          throw linkError;
+        }
+
+        expect(
+          yield* checkOutputDestination({ kind: 'file', path: fileLink }, root),
+        ).toBeUndefined();
+
+        const dirError = yield* Effect.flip(
+          checkOutputDestination(
+            { kind: 'directory', path: directoryLink },
+            root,
+          ),
+        );
+        expect(dirError).toMatchObject({
+          _tag: 'OutputDeliveryRejected',
+          reason: { _tag: 'Destination', destination: 'directory' },
+        });
+
+        const statError = yield* Effect.promise(() =>
+          stat(directoryReferent).then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+        );
+        expect(statError).toMatchObject({ code: 'ENOENT' });
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+});

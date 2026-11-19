@@ -5,8 +5,11 @@ import {
   HttpIncomingMessage,
 } from 'effect/http';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { GlobalValues, type ValueFamily } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  GlobalValues,
+  type ValueFamily,
+} from '@texra-ai/harness/plugins';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
@@ -54,10 +57,10 @@ const DAILY_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 
 /** The global root's update-check record of each host, keyed by the host. */
-export const UPDATE_CHECKS: ValueFamily<UpdateCheckRecord> = {
+export const UPDATE_CHECKS: ValueFamily<UpdateCheckRecord> = Object.freeze({
   name: 'update-check',
   schema: UpdateCheckRecordSchema,
-};
+});
 
 /** Change `host`'s update-check record, from an empty one when it has none. */
 export const recordUpdateCheck = (

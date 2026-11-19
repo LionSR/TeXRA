@@ -20,7 +20,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .proposal-model wa-dropdown-item {
     font-size: var(--font-size-sm);
-    font-weight: normal;
+    font-weight: var(--font-weight-normal);
   }
 
   /* A script request's lede. */
@@ -61,14 +61,14 @@ export const proposalRequestPanelStyles: CSSResult = css`
   /* A script request shows the whole source and the calls it issued. */
   .script-proposal__source {
     max-height: 10em;
-    font-family: var(--wa-font-family-code);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
   }
 
   .script-proposal__calls {
     margin: 0;
     padding-inline-start: 1.5em;
-    font-family: var(--wa-font-family-code);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
     overflow-wrap: anywhere;
   }

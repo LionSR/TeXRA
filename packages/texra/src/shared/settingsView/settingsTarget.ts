@@ -12,14 +12,14 @@ import { Schema } from 'effect';
  * Retired internal panels are removed together with their producers and
  * command surfaces so no stale IPC target remains.
  */
-export const SETTINGS_TAB_ORDER = [
+export const SETTINGS_TAB_ORDER = Object.freeze([
   'general',
   'models',
   'agents',
   'memory',
   'plugins',
   'latex',
-] as const;
+] as const);
 
 /**
  * Webview panel-addressing key for a tab, e.g. `'agents'`. A literal union
@@ -34,23 +34,28 @@ export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
  * Each page's sections in sub-tab order; a page with fewer than two shows no
  * second nav row. `vscode` (LaTeX) exists on the extension only.
  */
-export const SETTINGS_PAGE_SECTIONS = {
-  models: ['keys', 'subscriptions', 'models'],
-  agents: ['library', 'teams', 'skills', 'advanced'],
-  plugins: [],
-  latex: ['dependencies', 'compile', 'formatting', 'vscode'],
-  memory: [],
-  general: ['appearance', 'approval', 'privacy', 'git'],
-} as const satisfies Record<SettingsTabPanelName, readonly string[]>;
+export const SETTINGS_PAGE_SECTIONS = Object.freeze({
+  models: Object.freeze(['keys', 'subscriptions', 'models'] as const),
+  agents: Object.freeze(['library', 'skills', 'advanced'] as const),
+  plugins: Object.freeze([] as const),
+  latex: Object.freeze([
+    'dependencies',
+    'compile',
+    'formatting',
+    'vscode',
+  ] as const),
+  memory: Object.freeze([] as const),
+  general: Object.freeze(['appearance', 'approval', 'privacy', 'git'] as const),
+} as const satisfies Record<SettingsTabPanelName, readonly string[]>);
 
-/** A section of page `P`, e.g. `'teams'` for `'agents'`. */
+/** A section of page `P`, e.g. `'skills'` for `'agents'`. */
 export type SettingsSectionName<
   P extends SettingsTabPanelName = SettingsTabPanelName,
 > = (typeof SETTINGS_PAGE_SECTIONS)[P][number];
 
 /**
  * Where a settings link lands: a page (on its remembered section), or one
- * section of it spelled `page/section`, e.g. `'agents/teams'`.
+ * section of it spelled `page/section`, e.g. `'agents/skills'`.
  */
 export type SettingsTarget =
   | SettingsTabPanelName

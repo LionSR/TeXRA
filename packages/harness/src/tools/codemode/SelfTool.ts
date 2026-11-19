@@ -29,7 +29,12 @@ import {
   childOutputSchema,
   printSubagentProgress,
 } from '@agent/runtime/delegation/subagentRun';
-import { AgentConfigSchema, ToolError } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  backgroundScriptOf,
+  runsScript,
+  ToolError,
+} from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
@@ -65,22 +70,21 @@ type SelfInput = typeof SelfInputSchema.Type;
  */
 const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const { run } = call;
-  const { script } = run.config;
-  if (script == null)
+  if (!runsScript(run.config))
     return {
       config: run.config,
       source: run.runId,
       before: Number.POSITIVE_INFINITY,
       boundAt: undefined,
     };
-  if (script.kind !== 'background')
+  if (backgroundScriptOf(run.config) === null)
     return { config: run.config, source: null, before: 0, boundAt: undefined };
   const start = (yield* (yield* SessionLog).facts(run.runId))?.start;
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
   const edge = start?.parent;
-  if (edge?.call == null) return yield* Effect.fail(missing);
+  if (edge?.call == null) return yield* missing;
   const { id: parent } = edge;
   const { card } = edge.call;
   const config = yield* getRunRecords(parent).readConfig();
@@ -93,8 +97,7 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const issued = Object.values(conversation?.calls ?? {}).find(
     ({ logId }) => logId === card,
   );
-  if (config === null || issued === undefined)
-    return yield* Effect.fail(missing);
+  if (config === null || issued === undefined) return yield* missing;
   return {
     config,
     source: parent,
@@ -112,10 +115,8 @@ const runSelf = Effect.fn('self.call')(function* (
   const { runId: parentId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
-    return yield* Effect.fail(
-      new ToolError(
-        "A program's script has no conversation to fork: call self() with `fork: false`.",
-      ),
+    return yield* new ToolError(
+      "A program's script has no conversation to fork: call self() with `fork: false`.",
     );
   const name = config.agent;
   const outputSchema = yield* childOutputSchema(input.schema);
@@ -142,20 +143,23 @@ const runSelf = Effect.fn('self.call')(function* (
       const forked = fork
         ? yield* forkSeed(source, before, runId, task, boundAt)
         : null;
+      // The child's first message is its task or its seed, never its
+      // parent's launch, so it renders none of the skills that launch
+      // activated; forked, it holds the activations its seed copies.
+      const { skills: _skills, ...record } = forked?.record ?? {
+        ...launch,
+        model: (yield* ScopedRef.get(run.model)).modelId,
+        instruction: task,
+        displayInstruction: input.prompt,
+        outputFiles: [],
+        launch: undefined,
+      };
       return yield* executeSubagentInBand({
         runId,
         parentId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
-          ...(forked?.record ?? {
-            ...launch,
-            model: (yield* ScopedRef.get(run.model)).modelId,
-            instruction: task,
-            displayInstruction: input.prompt,
-            outputFiles: [],
-            launch: null,
-          }),
-          script: null,
-          outputSchema: outputSchema ?? null,
+          ...record,
+          outputSchema,
           asCaller: true,
         }),
         ...(forked !== null && { seed: forked.seed }),

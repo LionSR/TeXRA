@@ -7,11 +7,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
-import { Schema } from 'effect';
+import { Schema, Struct } from 'effect';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
+import { ResolvedTurnSchema } from '@texra-ai/llm';
 
+import { RecordedRequestSchema } from '@agent/runtime/run/recordedRequest';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
 import {
@@ -22,7 +24,6 @@ import {
 } from '@shared/schemas';
 import { APP_STATE, REPO_STATE } from '@shared/session/valueFamily';
 import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
-import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
 import { toolTable } from '@tools/toolTable';
@@ -56,7 +57,6 @@ const VALUE_FAMILIES = [
   REPO_STATE,
   WORKSPACE_STORES,
   DESKTOP_PROJECTS,
-  INQUIRY_THREADS,
   UPDATE_CHECKS,
   TEXRA_SERVICE,
 ];
@@ -70,6 +70,25 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
+  // A `context.blob` stores its value as JSON, so the recorded request it
+  // holds, with the controls each protocol's prepared turn carries, is held
+  // under the kind's version beside it.
+  {
+    name: 'context.blob.request',
+    version: ROW_KINDS['context.blob'].version,
+    schema: RecordedRequestSchema.mapFields(
+      Struct.assign({
+        // A protocol's background turn carries its foreground controls.
+        controls: Schema.Union([
+          ...new Set(
+            ResolvedTurnSchema.members.flatMap((group): Schema.Top[] =>
+              group.members.map((turn) => turn.fields.controls),
+            ),
+          ),
+        ]),
+      }),
+    ),
+  },
   ...Object.entries(toolTable(texraPlugins({ name: 'vscode' })).factKinds).map(
     ([name, factKind]) => ({
       name: `plugin.fact.${name.replace('/', '.')}`,
@@ -120,7 +139,7 @@ describe('row versions', () => {
       )
       .flatMap((file) => [
         ...readFileSync(file, 'utf8').matchAll(
-          /:\s*ValueFamily<[^=]*=\s*\{\s*name:\s*'([^']+)'/g,
+          /:\s*ValueFamily<[^=]*=\s*(?:Object\.freeze\(\s*)?\{\s*name:\s*'([^']+)'/g,
         ),
       ])
       .map((match) => match[1]);

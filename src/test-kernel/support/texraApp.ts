@@ -1,13 +1,13 @@
 /**
- * TeXRA as a fake host's app (`TestApp`): its settings catalog, its plugins
- * (with no setup platform, as a host that passes none), and its teams. A suite of
+ * TeXRA as a fake host's app (`TestApp`): its settings catalog and its
+ * plugins (with no setup platform, as a host that passes none). A suite of
  * TeXRA's tools, settings or agents names it (`FakeHost.layer({ app:
  * TEXRA_APP })`); a suite of the harness alone runs over `HARNESS_APP`.
  */
 import { Layer } from 'effect';
 
-import { teamMembers } from '@texra/shared/agentTeams';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
+import { TEXRA_CLIENT } from '@texra/controllers/texraProcessLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { texraPlugins } from '@texra/tools/registry';
 import type { Plugin } from '@tools/plugins';
@@ -17,8 +17,8 @@ import { FakeHost, SessionGraph } from './testKernel';
 
 export const TEXRA_APP: TestApp = Object.freeze({
   settings: TEXRA_SETTINGS.catalog,
+  client: TEXRA_CLIENT,
   plugins: () => texraPlugins({ name: 'vscode' }),
-  teamMembers,
 });
 
 /** `SessionGraph.hosted` over a default host running TeXRA. */
@@ -32,7 +32,6 @@ export const texraHosted = Layer.provideMerge(
  *  agents with. */
 const FACT_KIND_PLUGINS: readonly Plugin[] = [
   { id: 'theory', factKinds: APP_FACT_KINDS.theory },
-  { id: 'external-inquiry', factKinds: APP_FACT_KINDS['external-inquiry'] },
 ];
 
 /** The plugin table a store or catalog suite runs over: every row kind

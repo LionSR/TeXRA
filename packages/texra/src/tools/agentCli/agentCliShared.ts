@@ -21,6 +21,8 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   AgentConfigSchema,
+  ensureError,
+  formatWallTime,
   toErrorMessage,
   previewLabel,
   type RunId,
@@ -29,6 +31,9 @@ import {
 } from '@texra-ai/harness/schemas';
 
 import type { ClaimThread } from './agentCliSessionStores';
+
+/** How much of its prompt a delivery echoes. */
+const DELIVERY_PROMPT_MAX = 200;
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
@@ -91,13 +96,20 @@ export interface AgentCliTurn {
   readonly response: string;
   /** The turn's own spend; null when the provider reported none. */
   readonly usage: TokenUsageStats | null;
-  /** The delivery's attributes: the id a later call continues with. */
-  readonly attributes: ChildRunDelivery['attributes'];
+  /** The delivery's attributes after its prompt: the id a later call
+   *  continues with, when the provider gave one. */
+  readonly attributes: NonNullable<ChildRunDelivery['attributes']>;
   /** Body lines the delivery carries, failed or not (Claude's cost). */
   readonly lines?: readonly string[];
   /** Set when the provider reported the turn failed without throwing. */
   readonly failure?: string;
 }
+
+/** A failure that is not the tool's own (a throw from a provider's SDK, a
+ *  harness service's error) as the tool's failure, under the message it
+ *  carried. */
+export const asToolError = (cause: unknown): ToolError =>
+  new ToolError(ensureError(cause).message, { cause });
 
 /** A launch the provider prepared from the call's input. */
 interface AgentCliLaunch {
@@ -108,7 +120,7 @@ interface AgentCliLaunch {
   /** The turn, on the trace of the run the launch registered. A stop
    *  interrupts it: the provider hands its SDK a signal that interruption
    *  aborts. */
-  readonly turn: (logger: AgentTrace) => Effect.Effect<AgentCliTurn, Error>;
+  readonly turn: (logger: AgentTrace) => Effect.Effect<AgentCliTurn, ToolError>;
 }
 
 /** What a provider supplies to be an agent-CLI tool. */
@@ -148,10 +160,8 @@ export function agentCliTool<I extends { readonly prompt: string }, S, R>(
       // A one-shot run has no later turn to take the delivery: refuse rather
       // than launch work nobody collects.
       if (noLaterTurn(run)) {
-        return yield* Effect.fail(
-          new ToolError(
-            `${provider.name} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
-          ),
+        return yield* new ToolError(
+          `${provider.name} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
         );
       }
       const resumeId = provider.resumeId(input);
@@ -166,10 +176,8 @@ export function agentCliTool<I extends { readonly prompt: string }, S, R>(
         Effect.gen(function* () {
           const claim = yield* claimThread(resumeId);
           if (claim === undefined)
-            return yield* Effect.fail(
-              new ToolError(
-                `${provider.threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
-              ),
+            return yield* new ToolError(
+              `${provider.threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
             );
           return yield* restore(
             Effect.suspend(() => launchTurn(provider, input, claim)),
@@ -247,16 +255,21 @@ function childTurn(params: {
   prompt: string;
   runId: RunId;
   logger: AgentTrace;
-  turn: Effect.Effect<AgentCliTurn, Error>;
+  turn: Effect.Effect<AgentCliTurn, ToolError>;
   /** The claim on the thread this turn continues, closed as it ends. */
   claim: Scope.Closeable | undefined;
 }): ProcessTurn {
-  const { family, prompt, runId, logger, claim } = params;
+  const { family, runId, logger, claim } = params;
+  // The delivery echoes the start of the prompt the child took, first after
+  // its id, so the parent's model can tell its reports apart.
+  const prompt = {
+    name: 'prompt',
+    value: params.prompt.slice(0, DELIVERY_PROMPT_MAX),
+  };
   const run = Effect.gen(function* () {
     const startedAt = yield* Clock.currentTimeMillis;
     const turn = yield* params.turn;
     const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
-    const wallTime = `${(wallTimeMs / 1000).toFixed(1)}s`;
     // Every turn the provider returns, a failed one included, reports its
     // spend: the child has no model rows, so its `usage` rows are its one
     // record of spend.
@@ -269,14 +282,14 @@ function childTurn(params: {
       });
       logger.emit({ type: 'usage', usage: turn.usage });
     }
-    logger.info(`Turn completed in ${wallTime}`);
+    logger.info(`Turn completed in ${formatWallTime(wallTimeMs)}`);
     if (turn.failure !== undefined) {
       logger.error(turn.failure);
       return {
         report: {
           family,
           runId,
-          prompt,
+          attributes: [prompt],
           lines: turn.lines,
           message: turn.failure,
         },
@@ -287,11 +300,10 @@ function childTurn(params: {
       report: {
         family,
         runId,
-        prompt,
-        attributes: turn.attributes,
-        wallTime,
+        attributes: [prompt, ...turn.attributes],
+        wallTimeMs,
         response: turn.response,
-        usage: turn.usage,
+        ...(turn.usage !== null && { usage: turn.usage }),
         lines: turn.lines,
       },
     };
@@ -305,7 +317,7 @@ function childTurn(params: {
     reportError: (error) => ({
       family,
       runId,
-      prompt,
+      attributes: [prompt],
       message: toErrorMessage(error),
     }),
   };

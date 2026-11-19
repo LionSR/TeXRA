@@ -2,12 +2,15 @@
 import { css } from 'lit';
 
 // Local imports - shared styles
-import { disclosureChevronStyles } from '@ui/styles/commonViewStyles';
-import { toneStyles } from '@ui/styles/toneStyles';
+import {
+  disclosureChevronStyles,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
+import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 
 /** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
-  ${toneStyles}
+  ${statusIndicatorStyles}
   ${disclosureChevronStyles}
 
   :host {
@@ -82,19 +85,13 @@ export const runTabStyles = css`
   .tab-title {
     flex: 1;
     min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
   }
 
   /* Finished while the user was elsewhere: a quiet cue that clears once the
      run is on screen, the way an unread mark does. */
   .tab-unseen {
-    flex-shrink: 0;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--wa-color-brand-fill-loud);
+    background-color: var(--wa-color-brand-fill-loud);
   }
 
   .tab-container.is-unseen .tab-title {
@@ -102,7 +99,7 @@ export const runTabStyles = css`
   }
 
   /* Canonical states use only the glyph, except a pending approval, which
-     also says "Needs approval".
+     also says its word ("Waiting on you").
      Selection overrides both below so row hierarchy remains stronger than
      lifecycle. */
   .tab-status {
@@ -131,8 +128,7 @@ export const runTabStyles = css`
 
   .tab-status-label {
     display: var(--run-tab-status-label-display, inline);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    ${truncateDeclarations}
   }
 
   .tone-running:not(.has-pending-approval) .tab-status-icon {
@@ -166,11 +162,7 @@ export const runTabStyles = css`
   }
 
   .tab-container:hover {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 30%,
-      transparent
-    );
+    background-color: var(--surface-hover);
   }
 
   /* The selected row's background and foreground are one pair: VS Code's
@@ -209,9 +201,7 @@ export const runTabStyles = css`
     display: var(--run-tab-detail-display, block);
     width: 100%;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
     font-size: var(--font-size-xs);
     color: var(--color-warning);
   }
@@ -241,10 +231,6 @@ export const runTabStyles = css`
     min-width: 0;
     margin-inline: var(--wa-space-2xs);
     align-self: center;
-  }
-
-  .tab-container.is-read-only .tab-title {
-    color: var(--color-text-secondary);
   }
 
   .nested-run-icon {
@@ -298,9 +284,7 @@ export const runTabStyles = css`
   .tab-meta .agent-name {
     flex-shrink: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
   }
 
   @media (forced-colors: active) {

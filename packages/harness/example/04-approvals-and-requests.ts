@@ -3,7 +3,8 @@
  *
  * 1. Defines an approval-gated tool (`requiresApproval: true`).
  * 2. Attaches a `SessionHost` (`session.attach({ approve })`) that inspects
- *    `PendingRequest` and approves the tool call.
+ *    `PendingRequest` and approves the tool call a script makes (the
+ *    model is sent `script` alone).
  * 3. Starts an `interactive: true` run, waits for its first cycle to reach
  *    `waiting`, sends a follow-up via
  *    `session.request({ kind: 'followUp.send' })`, waits for the run to wait
@@ -22,7 +23,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import type { PendingRequest } from '@texra-ai/harness/schemas';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 const publishPreprintTool = defineTool({
   name: 'publish_preprint',
@@ -52,8 +53,10 @@ const { platform, route } = await makeExampleWorkspace([
     toolCalls: [
       {
         id: 'call_pub_1',
-        name: 'publish_preprint',
-        input: { target: 'arXiv' },
+        name: 'script',
+        input: {
+          code: "return await tools.publish_preprint({ target: 'arXiv' });",
+        },
       },
     ],
   },
@@ -142,6 +145,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, preprintPlugin],
+      client: EXAMPLE_CLIENT,
     }).pipe(Layer.provideMerge(route.transport)),
   ),
 );

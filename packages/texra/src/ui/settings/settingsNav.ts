@@ -54,10 +54,9 @@ const SETTINGS_TAB_METADATA: {
     group: 'AI',
     icon: 'robot',
     label: 'Agents',
-    description: 'Choose the agents, teams, and skills your tasks can use.',
+    description: 'Choose the agents and skills your tasks can use.',
     sections: {
       library: 'Library',
-      teams: 'Teams',
       skills: 'Skills',
       advanced: 'Advanced',
     },
@@ -104,16 +103,18 @@ const SETTINGS_TAB_METADATA: {
 };
 
 /** Navigation pages in display order, each with its sub-tabs in order. */
-export const SETTINGS_NAV_ENTRIES: readonly SettingsNavEntry[] =
+export const SETTINGS_NAV_ENTRIES: readonly SettingsNavEntry[] = Object.freeze(
   SETTINGS_TAB_ORDER.map((panel) => {
     const { sections, ...meta } = SETTINGS_TAB_METADATA[panel];
     const labels: Readonly<Record<string, string>> = sections;
-    return {
+    return Object.freeze({
       panel,
       ...meta,
-      sections: SETTINGS_PAGE_SECTIONS[panel].map((section) => ({
-        section,
-        label: labels[section],
-      })),
-    };
-  });
+      sections: Object.freeze(
+        SETTINGS_PAGE_SECTIONS[panel].map((section) =>
+          Object.freeze({ section, label: labels[section] }),
+        ),
+      ),
+    });
+  }),
+);

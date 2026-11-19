@@ -65,4 +65,4 @@ export const targetPath: (target: SubscriptionTarget) => string =
 /** How messages name each kind of target. */
 export const TARGET_LABEL: Readonly<
   Record<SubscriptionTarget['_tag'], string>
-> = { pull: 'PR', issue: 'Issue', repo: 'Repo' };
+> = Object.freeze({ pull: 'PR', issue: 'Issue', repo: 'Repo' });

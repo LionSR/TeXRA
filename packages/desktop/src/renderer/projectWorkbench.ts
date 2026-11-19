@@ -27,7 +27,7 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   type DesktopWorkspaceRequest,
 } from '../shared/desktopWorkspaceMessages';
-import { createEditorPane } from './editorPane';
+import { createEditorPane, EditorPaneError } from './editorPane';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
@@ -35,7 +35,7 @@ import {
   createWorkbenchController,
   type PaneKind,
 } from './workbenchController';
-import { agentDocumentIdentity } from '../shared/desktopAgentDocument';
+import { agentDocumentIdentity } from '@texra/shared/agentDocumentTarget';
 
 const FILE_REQUEST_TIMEOUT_MS = 60_000;
 
@@ -86,7 +86,9 @@ export function createProjectWorkbench(options: {
   // interrupts whatever is still pending.
   const unexpected = (outcome: HostOutcome) =>
     Effect.fail(
-      new Error(`The host answered a file request with ${outcome.kind}.`),
+      new EditorPaneError({
+        message: `The host answered a file request with ${outcome.kind}.`,
+      }),
     );
   // A read or a list on a hung mount would otherwise leave the pane's refresh
   // pending until the project closes. A write is never abandoned: the host
@@ -96,15 +98,18 @@ export function createProjectWorkbench(options: {
   ) =>
     surfaces
       .answer(
-        {
-          kind: 'host.request',
-          session,
-          requestId: crypto.randomUUID(),
-          request: { kind: 'workspaceFile', action },
-        },
+        { session, request: { kind: 'workspaceFile', action } },
         action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
       )
-      .pipe(Effect.mapError((error) => new Error(requestErrorText(error))));
+      .pipe(
+        Effect.mapError(
+          (error) =>
+            new EditorPaneError({
+              message: requestErrorText(error),
+              cause: error,
+            }),
+        ),
+      );
   const editorCallbacks = {
     isReadOnly: (path: string) => {
       const identity = agentDocumentIdentity(path);
@@ -145,14 +150,14 @@ export function createProjectWorkbench(options: {
       // Closing a project rejects its pending I/O as part of disposal.
       if (!disposed) console.error('TeXRA editor pane', error);
     },
-  } satisfies Parameters<typeof createEditorPane>[0];
-  const fileTree = createEditorPane(editorCallbacks);
+  } satisfies Parameters<typeof createEditorPane>[1];
+  const fileTree = createEditorPane(surfaces.runtime, editorCallbacks);
   const editors = new Map<string, ReturnType<typeof createEditorPane>>();
   let currentTheme: Theme | undefined;
   function editorFor(tabId: string) {
     let editor = editors.get(tabId);
     if (!editor) {
-      editor = createEditorPane(editorCallbacks);
+      editor = createEditorPane(surfaces.runtime, editorCallbacks);
       if (currentTheme) editor.setTheme(currentTheme);
       editors.set(tabId, editor);
     }
@@ -193,7 +198,16 @@ export function createProjectWorkbench(options: {
       send({ command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, sessionId }),
   });
   const reviewPane = createReviewPane();
-  const pdfPane = createPdfPane();
+  const pdfPane = createPdfPane({
+    // The desktop answers `openFile` by handing the path to the OS, and
+    // shows a failure in the window's own notice before it answers.
+    openExternally: (path) =>
+      void Effect.runFork(
+        Effect.exit(
+          surfaces.answer({ session, request: { kind: 'openFile', path } }),
+        ),
+      ),
+  });
   // A browser tab loads its page the first time its panel is laid out.
   const loadedBrowserTabs = new Set<string>();
   const panes = {
@@ -243,8 +257,8 @@ export function createProjectWorkbench(options: {
     },
     pdf: {
       zone: 'document',
-      mount: (tab, host) => host.append(pdfPane.frameFor(tab)),
-      update: (tab) => void pdfPane.frameFor(tab),
+      mount: (tab, host) => host.append(pdfPane.elementFor(tab)),
+      update: (tab) => void pdfPane.elementFor(tab),
       release: (tab) => pdfPane.dispose(tab.id),
     },
     browser: {
@@ -332,6 +346,7 @@ export function createProjectWorkbench(options: {
     },
     terminalPane,
     reviewPane,
+    pdfPane,
     workbench,
     setTheme(theme: Theme) {
       currentTheme = theme;

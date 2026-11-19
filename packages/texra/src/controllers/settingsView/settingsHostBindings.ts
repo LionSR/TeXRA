@@ -3,7 +3,7 @@
  * (`settingsViewBody.ts`): everything the host performs its own way,
  * and nothing it decides.
  */
-import { Cause, Effect, PubSub } from 'effect';
+import { Cause, Effect, Schema, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { formatError } from '@texra-ai/harness/schemas';
@@ -30,6 +30,13 @@ type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 
 export const SETTINGS_LOG_CHANNEL = 'SettingsView';
 
+/** A settings page or command that could not answer. The message is the
+ *  sentence the user reads. */
+export class SettingsRequestFailed extends Schema.TaggedError<SettingsRequestFailed>()(
+  'SettingsRequestFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /** What a host performs its own way behind the settings body. */
 export interface SettingsHostBindings {
   /** Build and post one message to the open settings view; neither when
@@ -46,10 +53,6 @@ export interface SettingsHostBindings {
   /** Show YAML the user must not save back over where it came from. */
   showReadOnlyYaml(filePath: string, text: string): HostEffect;
   pickFolder(title: string): HostEffect<string | undefined>;
-  /** Select the tool-use root a team just applied named in the launcher
-   *  of the project this view belongs to. Every launcher's catalogs follow
-   *  the agent list on their own (`workspaceAgentsChanged`). */
-  selectLauncherAgent(agent: string): HostEffect;
   /** Run one subscription's sign-in (`SubscriptionProvider.signIn`) over
    *  this host's prompts and answer the account. The body tells the user how
    *  it ended; a user who backs out of a prompt fails with `Cancelled`,
@@ -66,8 +69,6 @@ export interface SettingsHostBindings {
    *  recommended settings and LaTeX Workshop, and a plugin card offers to
    *  install the extension it names. */
   readonly editor?: EditorIntegrationShape;
-  /** A workspace-target config write needs an open folder (the extension). */
-  readonly requiresOpenWorkspace?: () => boolean;
 }
 
 /**
@@ -86,6 +87,15 @@ export type SettingsInput =
   | 'memory'
   | 'plugins'
   | 'latex';
+
+/**
+ * How many times each input changed since the view's body was built (absent
+ * is none). A page rebuilds when a count it follows moved, so only the latest
+ * counts matter: a page that skips an intermediate value has lost no change.
+ */
+export type SettingsInputCounts = Readonly<
+  Partial<Record<SettingsInput, number>>
+>;
 
 /** One page of the view: the message it builds, rebuilt as its inputs
  *  change. */
@@ -132,7 +142,7 @@ export interface SettingsPresentation {
  *  holds the program that raised it. */
 export function settingsPresentation(
   bindings: SettingsHostBindings,
-  inputs: PubSub.PubSub<SettingsInput>,
+  inputs: SubscriptionRef.SubscriptionRef<SettingsInputCounts>,
 ): SettingsPresentation {
   const shown = (level: NoticeLevel, message: string) =>
     bindings.dialogs.notify(level, message);
@@ -145,7 +155,11 @@ export function settingsPresentation(
     alert(formatError(prefix, cause));
   return {
     post: bindings.post,
-    changed: (input) => Effect.asVoid(PubSub.publish(inputs, input)),
+    changed: (input) =>
+      SubscriptionRef.update(inputs, (counts) => ({
+        ...counts,
+        [input]: (counts[input] ?? 0) + 1,
+      })),
     notice: (message) => shown('info', message),
     alert,
     report,

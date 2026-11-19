@@ -116,313 +116,357 @@ export const CURRENT_VALUE_VERSION = 1;
 
 /** Every arm of `SessionRowDraftSchema`: a new arm without an entry, its
  *  version and its listing class, does not compile. */
-export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
-  // v2: the launching call's id and card are one `parent.call`, with no
-  // top-level `parentCard`.
-  // v3: the parent call says whether it awaits the child (`awaited`); an
-  // earlier build's child end would deliver to a call that reads it.
-  // v4: whether the run takes a message is a boolean (`takesFollowUps`),
-  // not `userFollowUpSupport`; an earlier build's row names neither.
-  'run.start': { version: 4, listing: 'lifecycle' },
-  'run.activate': { ...V1, listing: 'own' },
-  // v2: a recipe's script names its block and options; `toolConfig` is gone
-  // (an earlier build's v1 row refuses its run as written by that build,
-  // rather than launching with its options dropped).
-  // v3: a script's handed-down call commits in the run's opening batch (a v2
-  // script run cut before its handed-down row would resume into a model call
-  // instead of its script).
-  // v4: media-only tasks can produce outputs; earlier readers reject those
-  // configurations because they count only text inputs.
-  // v5: no OpenRouter backend (an earlier build's row would fail as damaged).
-  // v6: no Copilot backend.
-  // v7: the app's launch facts are an opaque `launch` record, not a `cli`
-  // block (an earlier build's team and output fields would be dropped).
-  // v8: a plugin's script is a `program` named by its registration, with
-  // its `args`; no `recipe` kind with its source, block and options.
-  // v9: no `editedFile`: the merge program reads it from its `args` (an
-  // earlier build would resume a merge without the edited file).
-  'run.config': { version: 9, listing: 'own' },
-  // v2: no `shutdown` reason: a process that exits writes nothing for its
-  // runs (an earlier build's shutdown stop would fail as damaged).
-  'run.stop': { version: 2, listing: 'own' },
-  // v2: a recipe's value is `structured`, with no `documents`.
-  // v3: the error's classification as `model.message` v9.
-  // v4: an error always carries its `message` (an earlier build's error
-  // without one would fail as damaged).
-  // v5: the error's classification as `model.message` v10 (an earlier build
-  // would fail a subscription's failure as damaged).
-  // v6: a cancelled end carries `reason` (`user` or `shutdown`), which the
-  // halt row carried as `closed` before, and the error kind `abort` is gone
-  // (an earlier build's shutdown end would read as a user's stop, holding a
-  // child's delivery back).
-  // v7: the error is a model failure as the run's rows record it (`kind:
-  // 'model'`, its classification beside) or a local one (`disk-full`,
-  // `result-lost`, `unexpected`); `context-window` and `missing-api-key` are
-  // classifications, no longer kinds (an earlier build's classified end would
-  // fail as damaged).
-  // v8: no `reason`: why a run stopped is its `run.stop` row (an earlier
-  // build's shutdown end would read as a person's stop, holding a child's
-  // delivery back and spending a retry).
-  // v9: a model failure is its verdict (`failure`: llm's on the vendor's
-  // reply, the route's, or an attempt the process stopped during), never
-  // its words or a classification of it (an earlier build's end would read
-  // without its verdict).
-  // v10: a model failure has no `interrupted` source, as `model.message`
-  // v18.
-  'run.end': { version: 10, listing: 'own' },
-  'run.removed': { ...V1, listing: 'lifecycle' },
-  // v2: a model's summary carries its helper request's priced `usage`,
-  // which the run's spend counts (a v1 summary would read as free).
-  'run.description': { version: 2, listing: 'own' },
-  'plugin.fact': { ...V1, listing: 'own' },
-  // v2: `holdUntil` gained `turn` and `generation`, and a child's progress
-  // notice is known by `holdUntil: 'generation'`, no longer by its text: a v1
-  // notice would read as an ordinary message.
-  // v3: attached media by blob address (`media`), no `mediaFiles` paths (a v2
-  // row's paths would be read as no media).
-  // v4: a delivery or notice carries its summary as `displayText`, which
-  // every surface shows (a v3 delivery would show its raw envelope).
-  // v5: no `holdUntil: 'generation'`: a child queues no progress notice, and
-  // a host's notification is known by its sender (a v4 row holding it would
-  // fail as damaged).
-  // v6: a child's delivery carries its facts typed (`delivery`), rendered
-  // where the row becomes its parent's message, not its envelope's text and
-  // summary (a v5 delivery would read as a message, its facts untyped).
-  // v7: a background command's `exit` has no code when it timed out or had
-  // none of its own, and no `noExitCode` (a v6 row's conventional code would
-  // read as the command's own).
-  // v8: a run sender carries no `relation`: any run's message instructs and
-  // wakes its recipient (a v7 peer's or sibling's message, stored as
-  // information only, would read as an instruction).
-  'followup.queued': { version: 8, listing: 'followup' },
-  // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
-  // it and fails to decode.
-  // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
-  // row dropped for it would fail as damaged).
-  'followup.consumed': { version: 3, listing: 'followup' },
-  // v2: a task proposal carries its plugin's `options`, not `toolConfig`
-  // v3: a retry's credential switch names no OpenRouter key.
-  // v4: a task proposal records whether approving it may bypass later prompts
-  // (`allowBypass`); a v3 proposal lacks the field and fails to decode.
-  // v5: tool edits require their stored proposal, whose original content
-  // distinguishes a missing file from an empty one.
-  // v6: no `externalInquiry` kind; a plugin's request is `kind: 'plugin'`,
-  // declaring whether it blocks its caller and what it is answered with (an
-  // earlier build's inquiry would fail as damaged).
-  // v7: a retry carries its failure once and whole (`errorDetails`, no
-  // `errorMessage`), classified as `model.message` v9, and a host words a
-  // used-up plan from that classification (an earlier build's retry would
-  // read without the tier and reset its text named).
-  // v8: a retry's failure carries no `userRetryable`; the offer is the
-  // `failed` row's own `next`.
-  // v9: `allowBypass` is `offersGrant`, what it means: whether the request
-  // offers the run grant of its kind (an earlier build's would fail to read).
-  // v10: a retry carries its failure as the verdict (`failure`), not its
-  // words and classification (`errorDetails`), and a host words it.
-  // v11: who answers a request is its row's `answeredBy`, decided once as
-  // it opens, and no payload carries `offersGrant` (an earlier build's row
-  // names no answerer).
-  // v12: a retry's failure has no `interrupted` source, as `model.message`
-  // v18.
-  // v13: a retry's credential switch has no `automatic`: a person takes
-  // every switch (an earlier build's flag would be silently dropped).
-  // v14: an external inquiry holds its open turn once (`turn`) beside the
-  // turns before it (`earlierTurns`); an earlier build's would not render.
-  'request.opened': { version: 14, listing: 'request' },
-  // v2: no `setup` arm; a proposal's approve may carry edited files,
-  // instruction and options.
-  'request.decided': { version: 2, listing: 'request' },
-  'approval.policy': { ...V1, listing: 'own' },
-  // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
-  // its check).
-  // v3: a halt carries no `reason`; the end's `reason` says what stopped the
-  // run (an earlier build's closed halt would read as a crash and spend a
-  // retry).
-  // v4: no `halted` position: `run.end` is the halt (an earlier build's halt
-  // row would fail its check).
-  // v5: no `family`: every run has the one loop, so the field said nothing
-  // (an earlier build's row would have it silently dropped).
-  // v6: no `response.ready` or `results.ready`: the run state reads them off
-  // the `response` row and the delivering `append` (an earlier build's row
-  // would fail as damaged).
-  'run.position': { version: 6, listing: 'own' },
-  // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
-  // holds both.
-  // v3: a user message names its attached media by blob address (`media`),
-  // not by `mediaFiles` paths.
-  // v4: an error row's classification as `model.message` v9, and a used-up
-  // plan's automatic retry is a `quotaFallback` row recording the route it
-  // moved off (an earlier build's GLM exhaustion would be refused as a
-  // damaged payload).
-  // v5: an error row's classification as `model.message` v10 (an earlier
-  // build would refuse a subscription's failure as a damaged payload).
-  // v6: an error row carries no `userRetryable` (an earlier build's error row
-  // would be refused as a damaged payload).
-  // v7: a script delivery's summary counts its `sectionCount`, not
-  // `phaseCount` (an earlier build's user message would be refused as a
-  // damaged payload).
-  // v8: an error row's model failure is its verdict (`failure`), with no
-  // worded `message`, status or classification beside it (an earlier
-  // build's error row would be refused as a damaged payload).
-  // v9: an error row's model failure has no `interrupted` source, as
-  // `model.message` v18.
-  // v10: no `quotaFallback` message type: a used-up plan asks before the
-  // run moves off it (an earlier build's notice would fail as damaged).
-  // v11: a completed compaction's activity row carries what it `freed`, and
-  // no context-management row has the `compaction` action (an earlier
-  // build's would fail as damaged, and its activity would read with
-  // nothing freed).
-  // v12: a file list's entry has no `source`, which nothing read beside the
-  // `sourceDisplay` it repeated (an earlier build's would be silently
-  // stripped).
-  log: { version: 12, listing: 'none' },
-  // v2: no `phase` kind and no `index`/`total` (an earlier build's script
-  // phase stage would fail its run as damaged rather than read as that
-  // build's).
-  // v3: no run, turn or process-run stage, no `parentId` and no `kind` (an
-  // earlier build's `Run:` stage would read as a section of this build's).
-  'stage.start': { version: 3, listing: 'none' },
-  'stage.end': { ...V1, listing: 'none' },
-  // v2: a tool's card is stated (`card`), not derived from its name, so the
-  // fold has no Codex builders (an earlier build's card would read without
-  // its sections).
-  // v4: a script's call names its `section` (the guest's `section()`
-  // title), not its `phase` (an earlier build's title would be silently
-  // dropped).
-  'tool.start': { version: 4, listing: 'none' },
-  // v2: an agent-CLI card states what its tool last said as a typed `log`,
-  // not as an untyped `result` (an earlier build's card would close with no
-  // output, summary or error).
-  'tool.end': { version: 2, listing: 'none' },
-  // v2: the counts carry `TurnUsage`'s names (`cachedInputTokens`,
-  // `cacheWriteTokens`, `toolUsePromptTokens`), and `elapsedTime` is gone (an
-  // earlier build's cache counts would read as absent).
-  usage: { version: 2, listing: 'none' },
-  'context.state': { ...V1, listing: 'own' },
-  'stream.start': { ...V1, listing: 'none' },
-  'stream.end': { ...V1, listing: 'none' },
-  // v2: `cut` names the limit that ended the answer early (an earlier build
-  // would show a cut answer as complete).
-  'response.finalized': { version: 2, listing: 'none' },
-  'run.report': { ...V1, listing: 'own' },
-  // v2: a capped log's tail row says how many characters it follows a gap
-  // of (`elided`), in place of a notice row (an earlier build's capped log
-  // would read as one unbroken stream).
-  'process.output': { version: 2, listing: 'none' },
-  'process.exit': { ...V1, listing: 'own' },
-  'followup.closed': { ...V1, listing: 'own' },
-  // v2: dispatch facts record `lane`, not `parallelSafe` (an earlier build's
-  // v1 row refuses its run as written by that build).
-  // v3: dispatch facts carry no `ordinal` (a call's place is its index) and
-  // no `stageId`.
-  // v4: stateless Google responses may have a null provider ID. Older builds
-  // must refuse the newer store rather than parse those rows as corrupt.
-  // v5: a media part holds its bytes by blob address, never inline (an
-  // earlier build's inline bytes would read as the newer shape's missing
-  // address).
-  // v6: no OpenRouter protocol (an earlier build's row would fail as
-  // damaged).
-  // v7: no `vscode-lm` protocol and no editor turn.
-  // v8: a turn's usage counts its cache writes and tool-use prompt tokens
-  // (`cacheWriteTokens`, `toolUsePromptTokens`) beside its cache reads, and
-  // the priced usage names them so (an earlier build's `cacheCreationTokens`
-  // would read as absent).
-  // v9: a failure's used-up plan carries its tier and reset (`planType`,
-  // `resetsInMs`), and the GLM Coding Plan's exhaustion is named by its
-  // route, `glm-coding-plan-subscription` (an earlier build's GLM exhaustion
-  // would fail as damaged).
-  // v10: a subscription that could not bill is classified as
-  // `subscription-session`, with its route, whether it needs a sign-in, and
-  // the session's own failure (an earlier build would fail the classification
-  // as damaged).
-  // v11: no `context-window-exceeded` finish reason: an overflow is the
-  // `context-overflow` failure on every protocol, and a `failed` row carries
-  // the priced `usage` of a response the provider billed before refusing it
-  // (an earlier build's overflowed turn would read as a completed one).
-  // v12: a failed attempt's error carries no `userRetryable`; whether a
-  // person is offered a retry is the row's own `next` (a v11 row's flag would
-  // otherwise be silently dropped).
-  // v13: no `stop-sequence` finish reason or `stopSequence`, and an
-  // accepted operation is its origin and response id alone, with no stream
-  // position (an earlier build's operation would have its position silently
-  // dropped).
-  // v14: no `purpose`; a compaction's summary records no attempt.
-  // v15: a failed attempt whose plan ran out records the route it declines
-  // (`next: decline`) instead of a retry request answered at once, and the
-  // rebind records the declined route on a `run.config` (an earlier build's
-  // fallback would resume without its route declined).
-  // v16: a failed attempt's error is its verdict: llm's (its kind, the
-  // vendor's own message and status, the quota a plan or credit names),
-  // the route's, or `interrupted` for an attempt the process stopped
-  // during, in place of a made-up failure message (an earlier build's
-  // error would read without its verdict).
-  // v17: no `identified` kind: an accepted operation holds the provider's
-  // response id, and nothing read it elsewhere (an earlier build's row
-  // would fail as damaged).
-  // v18: a failure has no `interrupted` source: a resume sends an attempt
-  // no row saw end again and asks nobody (an earlier build's question
-  // about such an attempt would fail as damaged).
-  // v19: a failed attempt has no `next: decline`: a used-up plan opens the
-  // retry request, whose answer declines the route (an earlier build's
-  // row would fail as damaged).
-  // v20: a completed turn has no `kind` or `modelFingerprint`, and a
-  // Responses anchor no `kind` (an earlier build reads this build's turn as
-  // damaged without them).
-  // v21: a completed turn has no `finishEvidence` or `refusalEvidence`,
-  // which nothing read (an earlier build's would be silently stripped).
-  'model.message': { version: 21, listing: 'none' },
-  // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
-  // of another cause would fail its run as damaged rather than read as that
-  // build's).
-  // v3: media parts by address, as `model.message` v5.
-  // v4: no OpenRouter protocol, as `model.message` v6.
-  // v5: no `vscode-lm` origin, as `model.message` v7.
-  // v6: the priced usage's cache writes are `cacheWriteTokens`, as
-  // `model.message` v8.
-  // v7: a compaction may be triggered by an `overflow`, the request the
-  // model's window could not hold (an earlier build would refuse the trigger
-  // as damaged).
-  // v8: no `base`: an edit is written by the fiber that holds the view it
-  // edits (an earlier build's row would have the field silently dropped).
-  'context.edit': { version: 8, listing: 'none' },
-  // v2: the intent names the card its attempt opens (`logId`, `toolName`,
-  // the `input` the body runs on, the tool's `card`, a script's `section`),
-  // which a display read shows as the call's `tool.start`; the run loop
-  // stores no card row beside it (an earlier build's row would open no card).
-  'tool.intent': { version: 2, listing: 'none' },
-  // v2: the guest's latest title is `section`, not `phase` (an earlier
-  // build's row would fail as damaged).
-  // v3: no `stageId`: a script's calls open under the stage its own card's
-  // id names (an earlier build would read this build's row as damaged).
-  'script.call': { version: 3, listing: 'none' },
-  // v2: a captured attachment holds its bytes by blob address, never inline.
-  // v3: an executed result names the files its call read (`reads`), which an
-  // edit of an existing file requires; an earlier build's row would read as a
-  // call that read nothing, and the run's edits would be refused (nothing
-  // records what that build's calls read).
-  // v4: no `diagnostics`; an earlier build's row holding them would have
-  // them silently dropped.
-  // v5: the result names the card it closes (`logId`), which a display read
-  // shows as the call's `tool.end`; the run loop stores no card row beside
-  // it (an earlier build's row would close no card).
-  // v6: no `attachmentSummary`, which nothing wrote or read: the summary of
-  // a call's attachments is composed where its text is (an earlier build's
-  // row holding one would have it silently dropped).
-  'tool.result': { version: 6, listing: 'none' },
-  // v2: no `continuation`: goal mode is a script, and a waiting run never
-  // continues itself (an earlier build's row names a plugin continuation this
-  // build has none of).
-  // v3: each tool records whether the step's requests send its declaration
-  // (`sent`); an earlier build's row would send every tool directly.
-  // v4: the modules a script may import (`modules`); an earlier build's row
-  // would resume a script against the modules shipped now.
-  'tools.offered': { version: 4, listing: 'none' },
-  'context.blob': { ...V1, listing: 'none' },
-  // v2: a `PreToolUse` answer is `decision` (allow, deny, ask) with its
-  // `reason` and `updatedInput`, not a `deny` reason alone (an earlier
-  // build's row has no decision to read).
-  'hook.outcome': { version: 2, listing: 'none' },
-};
+export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
+  Object.freeze({
+    // v2: the launching call's id and card are one `parent.call`, with no
+    // top-level `parentCard`.
+    // v3: the parent call says whether it awaits the child (`awaited`); an
+    // earlier build's child end would deliver to a call that reads it.
+    // v4: whether the run takes a message is a boolean (`takesFollowUps`),
+    // not `userFollowUpSupport`; an earlier build's row names neither.
+    // v5: `approvalPolicy` (the run's grants at launch) is always written and
+    // `worktree` is null, never absent, for a run in the workspace (an
+    // earlier build's row without them would fail as damaged).
+    // v6: that field is `grants`, the fact it holds, not `approvalPolicy`
+    // (an earlier build's row names `approvalPolicy`, not the required
+    // `grants`, so it would fail as damaged).
+    'run.start': Object.freeze({ version: 6, listing: 'lifecycle' }),
+    'run.activate': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: a recipe's script names its block and options; `toolConfig` is gone
+    // (an earlier build's v1 row refuses its run as written by that build,
+    // rather than launching with its options dropped).
+    // v3: a script's handed-down call commits in the run's opening batch (a v2
+    // script run cut before its handed-down row would resume into a model call
+    // instead of its script).
+    // v4: media-only tasks can produce outputs; earlier readers reject those
+    // configurations because they count only text inputs.
+    // v5: no OpenRouter backend (an earlier build's row would fail as damaged).
+    // v6: no Copilot backend.
+    // v7: the app's launch facts are an opaque `launch` record, not a `cli`
+    // block (an earlier build's team and output fields would be dropped).
+    // v8: a plugin's script is a `program` named by its registration, with
+    // its `args`; no `recipe` kind with its source, block and options.
+    // v9: no `editedFile`: the merge program reads it from its `args` (an
+    // earlier build would resume a merge without the edited file).
+    // v10: the agent's source is one field (`agentSource`) whose `inline`
+    // case carries the persona, unnamed since it is the agent's; no
+    // `persona` beside it (an earlier build's row would fail as damaged).
+    // v11: the skills the user activated are named (`skills`) beside the
+    // instruction as typed, no longer written into it (an earlier build's
+    // instruction would carry the blocks and its rerun would activate none).
+    // v12: an optional field is absent when unset, never `null` (an earlier
+    // build's `null` would fail as damaged).
+    'run.config': Object.freeze({ version: 12, listing: 'own' }),
+    // v2: no `shutdown` reason: a process that exits writes nothing for its
+    // runs (an earlier build's shutdown stop would fail as damaged).
+    'run.stop': Object.freeze({ version: 2, listing: 'own' }),
+    // v2: a recipe's value is `structured`, with no `documents`.
+    // v3: the error's classification as `model.message` v9.
+    // v4: an error always carries its `message` (an earlier build's error
+    // without one would fail as damaged).
+    // v5: the error's classification as `model.message` v10 (an earlier build
+    // would fail a subscription's failure as damaged).
+    // v6: a cancelled end carries `reason` (`user` or `shutdown`), which the
+    // halt row carried as `closed` before, and the error kind `abort` is gone
+    // (an earlier build's shutdown end would read as a user's stop, holding a
+    // child's delivery back).
+    // v7: the error is a model failure as the run's rows record it (`kind:
+    // 'model'`, its classification beside) or a local one (`disk-full`,
+    // `result-lost`, `unexpected`); `context-window` and `missing-api-key` are
+    // classifications, no longer kinds (an earlier build's classified end would
+    // fail as damaged).
+    // v8: no `reason`: why a run stopped is its `run.stop` row (an earlier
+    // build's shutdown end would read as a person's stop, holding a child's
+    // delivery back and spending a retry).
+    // v9: a model failure is its verdict (`failure`: llm's on the vendor's
+    // reply, the route's, or an attempt the process stopped during), never
+    // its words or a classification of it (an earlier build's end would read
+    // without its verdict).
+    // v10: a model failure has no `interrupted` source, as `model.message`
+    // v18.
+    'run.end': Object.freeze({ version: 10, listing: 'own' }),
+    'run.removed': Object.freeze({ ...V1, listing: 'lifecycle' }),
+    // v2: a model's summary carries its helper request's priced `usage`,
+    // which the run's spend counts (a v1 summary would read as free).
+    'run.description': Object.freeze({ version: 2, listing: 'own' }),
+    'plugin.fact': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: `holdUntil` gained `turn` and `generation`, and a child's progress
+    // notice is known by `holdUntil: 'generation'`, no longer by its text: a v1
+    // notice would read as an ordinary message.
+    // v3: attached media by blob address (`media`), no `mediaFiles` paths (a v2
+    // row's paths would be read as no media).
+    // v4: a delivery or notice carries its summary as `displayText`, which
+    // every surface shows (a v3 delivery would show its raw envelope).
+    // v5: no `holdUntil: 'generation'`: a child queues no progress notice, and
+    // a host's notification is known by its sender (a v4 row holding it would
+    // fail as damaged).
+    // v6: a child's delivery carries its facts typed (`delivery`), rendered
+    // where the row becomes its parent's message, not its envelope's text and
+    // summary (a v5 delivery would read as a message, its facts untyped).
+    // v7: a background command's `exit` has no code when it timed out or had
+    // none of its own, and no `noExitCode` (a v6 row's conventional code would
+    // read as the command's own).
+    // v8: a run sender carries no `relation`: any run's message instructs and
+    // wakes its recipient (a v7 peer's or sibling's message, stored as
+    // information only, would read as an instruction).
+    // v9: a user's message names the skills it activates (`skills`), no
+    // longer only in its text (a v8 row's activations would read as none).
+    // v10: a delivery with no usage leaves `usage` out, never `null`, and a
+    // message's `displayText` is never `null` (an earlier build's agent-CLI
+    // delivery without usage would fail as damaged).
+    // v11: a delivery's wall time is a number (`wallTimeMs`), worded where
+    // it is rendered; a prompt it echoes is an attribute its builder cut;
+    // an attribute's value is a string, never `null` (an earlier build's
+    // `wallTime` and `prompt` would be silently dropped).
+    'followup.queued': Object.freeze({ version: 11, listing: 'followup' }),
+    // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
+    // it and fails to decode.
+    // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
+    // row dropped for it would fail as damaged).
+    'followup.consumed': Object.freeze({ version: 3, listing: 'followup' }),
+    // v2: a task proposal carries its plugin's `options`, not `toolConfig`
+    // v3: a retry's credential switch names no OpenRouter key.
+    // v4: a task proposal records whether approving it may bypass later prompts
+    // (`allowBypass`); a v3 proposal lacks the field and fails to decode.
+    // v5: tool edits require their stored proposal, whose original content
+    // distinguishes a missing file from an empty one.
+    // v6: no `externalInquiry` kind; a plugin's request is `kind: 'plugin'`,
+    // declaring whether it blocks its caller and what it is answered with (an
+    // earlier build's inquiry would fail as damaged).
+    // v7: a retry carries its failure once and whole (`errorDetails`, no
+    // `errorMessage`), classified as `model.message` v9, and a host words a
+    // used-up plan from that classification (an earlier build's retry would
+    // read without the tier and reset its text named).
+    // v8: a retry's failure carries no `userRetryable`; the offer is the
+    // `failed` row's own `next`.
+    // v9: `allowBypass` is `offersGrant`, what it means: whether the request
+    // offers the run grant of its kind (an earlier build's would fail to read).
+    // v10: a retry carries its failure as the verdict (`failure`), not its
+    // words and classification (`errorDetails`), and a host words it.
+    // v11: who answers a request is its row's `answeredBy`, decided once as
+    // it opens, and no payload carries `offersGrant` (an earlier build's row
+    // names no answerer).
+    // v12: a retry's failure has no `interrupted` source, as `model.message`
+    // v18.
+    // v13: a retry's credential switch has no `automatic`: a person takes
+    // every switch (an earlier build's flag would be silently dropped).
+    // v14: an external inquiry holds its open turn once (`turn`) beside the
+    // turns before it (`earlierTurns`); an earlier build's would not render.
+    // v15: a proposal names its agent's source as `run.config` v10 does: an
+    // inline agent's persona inside `agentSource`, no `persona` beside it.
+    // v16: a proposal's agent source, working directory and root instruction
+    // are absent when unset, never `null`, as `run.config` v12.
+    // v17: no `plugin` kind: every request is one the harness declares,
+    // and blocks the call that opened it (an earlier build's plugin request
+    // would fail as damaged).
+    'request.opened': Object.freeze({ version: 17, listing: 'request' }),
+    // v2: no `setup` arm; a proposal's approve may carry edited files,
+    // instruction and options.
+    // v3: a decision's optional fields are absent when unset, never `null`
+    // (an earlier build's `null` feedback would fail as damaged).
+    // v4: no `answer` arm, which only a plugin's request took (an earlier
+    // build's would fail as damaged).
+    'request.decided': Object.freeze({ version: 4, listing: 'request' }),
+    'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
+    // its check).
+    // v3: a halt carries no `reason`; the end's `reason` says what stopped the
+    // run (an earlier build's closed halt would read as a crash and spend a
+    // retry).
+    // v4: no `halted` position: `run.end` is the halt (an earlier build's halt
+    // row would fail its check).
+    // v5: no `family`: every run has the one loop, so the field said nothing
+    // (an earlier build's row would have it silently dropped).
+    // v6: no `response.ready` or `results.ready`: the run state reads them off
+    // the `response` row and the delivering `append` (an earlier build's row
+    // would fail as damaged).
+    // v7: no `turn.end` `outcome`: how a turn ended is a loop fact and the
+    // run's own end is its `run.end` row, so nothing read it (an earlier
+    // build's `turn.end` would have its `outcome` silently stripped).
+    'run.position': Object.freeze({ version: 7, listing: 'own' }),
+    // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
+    // holds both.
+    // v3: a user message names its attached media by blob address (`media`),
+    // not by `mediaFiles` paths.
+    // v4: an error row's classification as `model.message` v9, and a used-up
+    // plan's automatic retry is a `quotaFallback` row recording the route it
+    // moved off (an earlier build's GLM exhaustion would be refused as a
+    // damaged payload).
+    // v5: an error row's classification as `model.message` v10 (an earlier
+    // build would refuse a subscription's failure as a damaged payload).
+    // v6: an error row carries no `userRetryable` (an earlier build's error row
+    // would be refused as a damaged payload).
+    // v7: a script delivery's summary counts its `sectionCount`, not
+    // `phaseCount` (an earlier build's user message would be refused as a
+    // damaged payload).
+    // v8: an error row's model failure is its verdict (`failure`), with no
+    // worded `message`, status or classification beside it (an earlier
+    // build's error row would be refused as a damaged payload).
+    // v9: an error row's model failure has no `interrupted` source, as
+    // `model.message` v18.
+    // v10: no `quotaFallback` message type: a used-up plan asks before the
+    // run moves off it (an earlier build's notice would fail as damaged).
+    // v11: a completed compaction's activity row carries what it `freed`, and
+    // no context-management row has the `compaction` action (an earlier
+    // build's would fail as damaged, and its activity would read with
+    // nothing freed).
+    // v12: a file list's entry has no `source`, which nothing read beside the
+    // `sourceDisplay` it repeated (an earlier build's would be silently
+    // stripped).
+    log: Object.freeze({ version: 12, listing: 'none' }),
+    // v2: no `phase` kind and no `index`/`total` (an earlier build's script
+    // phase stage would fail its run as damaged rather than read as that
+    // build's).
+    // v3: no run, turn or process-run stage, no `parentId` and no `kind` (an
+    // earlier build's `Run:` stage would read as a section of this build's).
+    'stage.start': Object.freeze({ version: 3, listing: 'none' }),
+    'stage.end': Object.freeze({ ...V1, listing: 'none' }),
+    // v2: a tool's card is stated (`card`), not derived from its name, so the
+    // fold has no Codex builders (an earlier build's card would read without
+    // its sections).
+    // v4: a script's call names its `section` (the guest's `section()`
+    // title), not its `phase` (an earlier build's title would be silently
+    // dropped).
+    'tool.start': Object.freeze({ version: 4, listing: 'none' }),
+    // v2: an agent-CLI card states what its tool last said as a typed `log`,
+    // not as an untyped `result` (an earlier build's card would close with no
+    // output, summary or error).
+    'tool.end': Object.freeze({ version: 2, listing: 'none' }),
+    // v2: the counts carry `TurnUsage`'s names (`cachedInputTokens`,
+    // `cacheWriteTokens`, `toolUsePromptTokens`), and `elapsedTime` is gone (an
+    // earlier build's cache counts would read as absent).
+    usage: Object.freeze({ version: 2, listing: 'none' }),
+    'context.state': Object.freeze({ ...V1, listing: 'own' }),
+    'stream.start': Object.freeze({ ...V1, listing: 'none' }),
+    'stream.end': Object.freeze({ ...V1, listing: 'none' }),
+    // v2: `cut` names the limit that ended the answer early (an earlier build
+    // would show a cut answer as complete).
+    'response.finalized': Object.freeze({ version: 2, listing: 'none' }),
+    'run.report': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: a capped log's tail row says how many characters it follows a gap
+    // of (`elided`), in place of a notice row (an earlier build's capped log
+    // would read as one unbroken stream).
+    'process.output': Object.freeze({ version: 2, listing: 'none' }),
+    'process.exit': Object.freeze({ ...V1, listing: 'own' }),
+    'followup.closed': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: dispatch facts record `lane`, not `parallelSafe` (an earlier build's
+    // v1 row refuses its run as written by that build).
+    // v3: dispatch facts carry no `ordinal` (a call's place is its index) and
+    // no `stageId`.
+    // v4: stateless Google responses may have a null provider ID. Older builds
+    // must refuse the newer store rather than parse those rows as corrupt.
+    // v5: a media part holds its bytes by blob address, never inline (an
+    // earlier build's inline bytes would read as the newer shape's missing
+    // address).
+    // v6: no OpenRouter protocol (an earlier build's row would fail as
+    // damaged).
+    // v7: no `vscode-lm` protocol and no editor turn.
+    // v8: a turn's usage counts its cache writes and tool-use prompt tokens
+    // (`cacheWriteTokens`, `toolUsePromptTokens`) beside its cache reads, and
+    // the priced usage names them so (an earlier build's `cacheCreationTokens`
+    // would read as absent).
+    // v9: a failure's used-up plan carries its tier and reset (`planType`,
+    // `resetsInMs`), and the GLM Coding Plan's exhaustion is named by its
+    // route, `glm-coding-plan-subscription` (an earlier build's GLM exhaustion
+    // would fail as damaged).
+    // v10: a subscription that could not bill is classified as
+    // `subscription-session`, with its route, whether it needs a sign-in, and
+    // the session's own failure (an earlier build would fail the classification
+    // as damaged).
+    // v11: no `context-window-exceeded` finish reason: an overflow is the
+    // `context-overflow` failure on every protocol, and a `failed` row carries
+    // the priced `usage` of a response the provider billed before refusing it
+    // (an earlier build's overflowed turn would read as a completed one).
+    // v12: a failed attempt's error carries no `userRetryable`; whether a
+    // person is offered a retry is the row's own `next` (a v11 row's flag would
+    // otherwise be silently dropped).
+    // v13: no `stop-sequence` finish reason or `stopSequence`, and an
+    // accepted operation is its origin and response id alone, with no stream
+    // position (an earlier build's operation would have its position silently
+    // dropped).
+    // v14: no `purpose`; a compaction's summary records no attempt.
+    // v15: a failed attempt whose plan ran out records the route it declines
+    // (`next: decline`) instead of a retry request answered at once, and the
+    // rebind records the declined route on a `run.config` (an earlier build's
+    // fallback would resume without its route declined).
+    // v16: a failed attempt's error is its verdict: llm's (its kind, the
+    // vendor's own message and status, the quota a plan or credit names),
+    // the route's, or `interrupted` for an attempt the process stopped
+    // during, in place of a made-up failure message (an earlier build's
+    // error would read without its verdict).
+    // v17: no `identified` kind: an accepted operation holds the provider's
+    // response id, and nothing read it elsewhere (an earlier build's row
+    // would fail as damaged).
+    // v18: a failure has no `interrupted` source: a resume sends an attempt
+    // no row saw end again and asks nobody (an earlier build's question
+    // about such an attempt would fail as damaged).
+    // v19: a failed attempt has no `next: decline`: a used-up plan opens the
+    // retry request, whose answer declines the route (an earlier build's
+    // row would fail as damaged).
+    // v20: a completed turn has no `kind` or `modelFingerprint`, and a
+    // Responses anchor no `kind` (an earlier build reads this build's turn as
+    // damaged without them).
+    // v21: a completed turn has no `finishEvidence` or `refusalEvidence`,
+    // which nothing read (an earlier build's would be silently stripped).
+    // v22: an OpenAI turn's usage carries its cache writes split by lifetime
+    // (`providerUsage` kind `openai`), which an earlier build fails to read.
+    'model.message': Object.freeze({ version: 22, listing: 'none' }),
+    // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
+    // of another cause would fail its run as damaged rather than read as that
+    // build's).
+    // v3: media parts by address, as `model.message` v5.
+    // v4: no OpenRouter protocol, as `model.message` v6.
+    // v5: no `vscode-lm` origin, as `model.message` v7.
+    // v6: the priced usage's cache writes are `cacheWriteTokens`, as
+    // `model.message` v8.
+    // v7: a compaction may be triggered by an `overflow`, the request the
+    // model's window could not hold (an earlier build would refuse the trigger
+    // as damaged).
+    // v8: no `base`: an edit is written by the fiber that holds the view it
+    // edits (an earlier build's row would have the field silently dropped).
+    'context.edit': Object.freeze({ version: 8, listing: 'none' }),
+    // v2: the intent names the card its attempt opens (`logId`, `toolName`,
+    // the `input` the body runs on, the tool's `card`, a script's `section`),
+    // which a display read shows as the call's `tool.start`; the run loop
+    // stores no card row beside it (an earlier build's row would open no card).
+    'tool.intent': Object.freeze({ version: 2, listing: 'none' }),
+    // v2: the guest's latest title is `section`, not `phase` (an earlier
+    // build's row would fail as damaged).
+    // v3: no `stageId`: a script's calls open under the stage its own card's
+    // id names (an earlier build would read this build's row as damaged).
+    'script.call': Object.freeze({ version: 3, listing: 'none' }),
+    // v2: a captured attachment holds its bytes by blob address, never inline.
+    // v3: an executed result names the files its call read (`reads`), which an
+    // edit of an existing file requires; an earlier build's row would read as a
+    // call that read nothing, and the run's edits would be refused (nothing
+    // records what that build's calls read).
+    // v4: no `diagnostics`; an earlier build's row holding them would have
+    // them silently dropped.
+    // v5: the result names the card it closes (`logId`), which a display read
+    // shows as the call's `tool.end`; the run loop stores no card row beside
+    // it (an earlier build's row would close no card).
+    // v6: no `attachmentSummary`, which nothing wrote or read: the summary of
+    // a call's attachments is composed where its text is (an earlier build's
+    // row holding one would have it silently dropped).
+    'tool.result': Object.freeze({ version: 6, listing: 'none' }),
+    // v2: no `continuation`: goal mode is a script, and a waiting run never
+    // continues itself (an earlier build's row names a plugin continuation this
+    // build has none of).
+    // v3: each tool records whether the step's requests send its declaration
+    // (`sent`); an earlier build's row would send every tool directly.
+    // v4: the modules a script may import (`modules`); an earlier build's row
+    // would resume a script against the modules shipped now.
+    'tools.offered': Object.freeze({ version: 4, listing: 'none' }),
+    // The recorded request a blob holds is part of this kind's shape, its
+    // controls as each protocol prepares them: a resumed background turn is
+    // rebuilt from it, so a change to it is a version, never only new
+    // digests (`rowVersions.vitest.ts` holds it at a release).
+    'context.blob': Object.freeze({ ...V1, listing: 'none' }),
+    // v2: a `PreToolUse` answer is `decision` (allow, deny, ask) with its
+    // `reason` and `updatedInput`, not a `deny` reason alone (an earlier
+    // build's row has no decision to read).
+    'hook.outcome': Object.freeze({ version: 2, listing: 'none' }),
+  });
 
 /**
  * The listing type the fold keys `latest` by, from the kind's listing class,

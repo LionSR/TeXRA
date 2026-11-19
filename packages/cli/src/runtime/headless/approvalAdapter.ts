@@ -19,7 +19,6 @@ import {
   type RunId,
   type UserQuestionAnswers,
   type UserQuestionRequest,
-  ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
@@ -35,6 +34,7 @@ import {
   formatBashApprovalSummary,
   formatRetryRequestMessage,
   formatUserQuestionPrompt,
+  toolEditAsk,
 } from '../approval/approvalSummaries';
 import {
   parseUserQuestionAnswer,
@@ -47,9 +47,9 @@ import {
 } from '@texra/shared/session/surfaceDecision';
 import { CliInvocation } from '../platform/cliContext';
 import { formatLineChanges } from '@ui/copy/format';
-import { writeTextStderr } from '../platform/logSinks';
-import type { Session, SessionHost } from '@texra-ai/harness';
-import type { HostInteractions } from '@texra-ai/harness/host';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { CliPromptFailed, writeTextStderr } from '../platform/logSinks';
+import type { Session, SessionHost, HostInteractions } from '@texra-ai/harness';
 
 const CHANNEL = 'cli.approval';
 
@@ -77,7 +77,7 @@ const askHeadlessUserQuestion = Effect.fn(
               ...payload,
               questions: [question],
             }),
-          catch: ensureError,
+          catch: CliPromptFailed.from,
         });
         const answer = yield* whilePrompting(
           hooks,
@@ -90,7 +90,7 @@ const askHeadlessUserQuestion = Effect.fn(
         );
         const parsed = yield* Effect.try({
           try: () => parseUserQuestionAnswer(answer, question),
-          catch: ensureError,
+          catch: CliPromptFailed.from,
         });
         if (parsed != null) answers[question.question] = parsed;
       }),
@@ -133,21 +133,18 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       if (read.kind === 'preview')
         return buildToolEditApprovalContent({ ...data, ...read.content });
       return {
-        summary: `Tool edit requested by ${data.sourceTool}: ${data.relativePath} (${formatLineChanges(data.addedLines, data.removedLines)})\nPreview unavailable: ${read.reason}`,
+        summary: `${toolEditAsk({ path: data.relativePath, sourceTool: data.sourceTool })}: ${formatLineChanges(data.addedLines, data.removedLines)}\nPreview unavailable: ${read.reason}`,
       } satisfies CliApprovalContent;
     },
   );
 
-  /** One request, answered by the prompt. A plugin's request is not this
-   *  host's to answer: the plugin that opens one, the external inquiry, is
-   *  unavailable on the CLI, so one listed was opened by another host in a
-   *  shared session and is answered there; this handler waits until the
-   *  view drops the request (the answerer interrupts it then). */
+  /** One request, answered by the prompt. */
   const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
     payload: RequestPayload,
   ): Effect.fn.Return<RequestDecision, Error, CliInvocation> {
-    const ask = (content: CliApprovalContent) => askApproval(content, hooks);
+    const ask = (content: CliApprovalContent) =>
+      askApproval(payload.kind, content, hooks);
     switch (payload.kind) {
       case 'bash':
         return yield* ask({ summary: formatBashApprovalSummary(payload.data) });
@@ -155,7 +152,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
         return yield* ask(yield* toolEditContent(runId, payload));
       case 'planApproval':
         return yield* ask({
-          summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
+          summary: `${REQUEST_ASK.plan}:\n${payload.data.plan.objective}`,
         });
       case 'proposal':
         return yield* ask(buildAgentProposalApprovalContent(payload.data));
@@ -175,15 +172,12 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
         // A dismissed retry is the operator stopping the task, not a policy
         // refusal; the note they left goes to stderr beside it.
         const note =
-          (decision.action === 'reject' ? decision.feedback : decision.cause) ??
-          undefined;
+          decision.action === 'reject' ? decision.feedback : decision.cause;
         writeTextStderr(note ? `${summary}\n${note}` : summary);
         return declineDecision('retry', note);
       }
       case 'userQuestion':
         return yield* askHeadlessUserQuestion(payload.data, hooks);
-      case 'plugin':
-        return yield* Effect.never;
     }
   });
 

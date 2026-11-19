@@ -1,10 +1,12 @@
 /**
  * The one failure tag a GUI host's capability names (`hostFailure`), and
- * `fromHost`, which lifts a capability that still answers with a promise (a
- * VS Code command, an editor API, a Promise-faced controller port) at the
- * host edge rather than at the depth that calls it. A refusal the callee
- * already worded travels as itself; every other rejection is tagged with the
- * member it came from, so the bridge can tell a refusal from a defect.
+ * `fromHost`, which lifts a host API that still answers with a promise (a
+ * VS Code command, an editor API, an Electron dialog) at the host edge
+ * rather than at the depth that calls it. `hostFailure` passes a refusal
+ * the callee already worded through as itself and tags every other
+ * rejection with the member it came from, so the bridge can tell a refusal
+ * from a defect; `fromHost` tags every rejection, since a host API raises
+ * no refusal. `openLink` is the one wording of a browser open that failed.
  */
 import { Effect } from 'effect';
 
@@ -14,7 +16,7 @@ import {
   Rejected,
   Unavailable,
 } from '@texra-ai/harness/schemas';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { HostFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
 
 /**
  * How a host's request handler fails: with a tagged error, always. The three
@@ -57,13 +59,26 @@ export function hostFailure(
 }
 
 /** A host capability that still answers with a promise, lifted once and
- *  named through {@link hostFailure}. */
+ *  named through {@link hostFailed}: a host API raises no refusal, so its
+ *  every rejection is the member's failure. */
 export function fromHost<A>(
   member: string,
   call: () => PromiseLike<A>,
-): Effect.Effect<A, HostFailed | RequestRefusal> {
+): Effect.Effect<A, HostFailed> {
   return Effect.tryPromise({
     try: call,
-    catch: (cause) => hostFailure(member, cause),
+    catch: (cause) => hostFailed(member, cause),
   });
+}
+
+/** A page in the browser through a host's `open`; one the host would not
+ *  open is a rejection in the host's words, so the view shows which address
+ *  did not open. */
+export function openLink(
+  open: ExternalOpener['openExternal'],
+  url: string,
+): Effect.Effect<void, Rejected> {
+  return open(url).pipe(
+    Effect.mapError((failed) => new Rejected({ reason: failed.message })),
+  );
 }

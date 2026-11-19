@@ -17,6 +17,7 @@ import {
   type ReasoningMode,
 } from 'llm-zoo';
 
+import type { PlanRoute } from '../errors.js';
 import type { ModelRoute } from './modelRoute.js';
 
 /** The effort used when neither the caller nor the user names one. */
@@ -33,6 +34,15 @@ const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
   ReasoningEffort.LOW,
   ReasoningEffort.MEDIUM,
 ];
+
+/** The efforts each plan's backend serves; `undefined` for every effort
+ *  the model has. */
+const PLAN_EFFORTS = Object.freeze({
+  'chatgpt-subscription': CODEX_ROUTE_EFFORTS,
+  'xai-subscription': undefined,
+  'kimi-code-subscription': undefined,
+  'glm-coding-plan-subscription': undefined,
+} satisfies Record<PlanRoute, readonly ReasoningEffort[] | undefined>);
 
 /**
  * The reasoning controls `config` has on `route`; without a route, the
@@ -57,15 +67,20 @@ function routeControls(
       return { ...reasoning, off: undefined };
     case ModelProvider.MINIMAX:
       return { ...reasoning, efforts: [ReasoningEffort.HIGH] };
-    default:
-      return route.kind === 'session' && route.plan === 'chatgpt-subscription'
-        ? {
+    default: {
+      const served =
+        'plan' in route && route.plan !== null
+          ? PLAN_EFFORTS[route.plan]
+          : undefined;
+      return served === undefined
+        ? reasoning
+        : {
             ...reasoning,
             efforts: reasoning.efforts.filter((effort) =>
-              CODEX_ROUTE_EFFORTS.includes(effort),
+              served.includes(effort),
             ),
-          }
-        : reasoning;
+          };
+    }
   }
 }
 
@@ -252,33 +267,35 @@ export function chooseReasoning(
 }
 
 /**
- * The effort values `route` may send for a model: the levels it accepts
- * while thinking, plus `none` where `none` is how thinking is turned off.
- * Without a route, the model's own.
+ * What `route` carries of a model's reasoning, over its controls there
+ * (without a route, the model's own):
+ *
+ * - `acceptedEfforts`: the effort values it may send, the levels it accepts
+ *   while thinking plus `none` where `none` is how thinking is turned off;
+ * - `wireEffort`: the effort it sends for a {@link chooseReasoning} choice,
+ *   the chosen level, or `none` when thinking is off and `none` is how the
+ *   route says so.
  */
-export function acceptedEfforts(
+export function reasoningOnRoute(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
   route?: ModelRoute,
-): ReasoningEffort[] {
+): {
+  readonly acceptedEfforts: readonly ReasoningEffort[];
+  readonly wireEffort: (choice: ReasoningChoice) => ReasoningEffort | null;
+} {
   const reasoning = routeControls(config, route);
-  if (reasoning === undefined) return [];
-  return [
-    ...(reasoning.off === undefined ? [] : [ReasoningEffort.NONE]),
-    ...reasoning.efforts,
-  ];
-}
-
-/**
- * The effort `route` sends for `config`: the chosen level, or `none` when
- * thinking is off and `none` is how the route says so.
- */
-export function wireEffort(
-  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: ModelRoute | undefined,
-  reasoning: ReasoningChoice,
-): ReasoningEffort | null {
-  if (reasoning.thinking || routeControls(config, route)?.off === undefined) {
-    return reasoning.effort;
-  }
-  return reasoning.effort ?? ReasoningEffort.NONE;
+  const offSendsNone = reasoning?.off !== undefined;
+  return {
+    acceptedEfforts:
+      reasoning === undefined
+        ? []
+        : [
+            ...(offSendsNone ? [ReasoningEffort.NONE] : []),
+            ...reasoning.efforts,
+          ],
+    wireEffort: (choice) =>
+      choice.thinking || !offSendsNone
+        ? choice.effort
+        : (choice.effort ?? ReasoningEffort.NONE),
+  };
 }

@@ -9,11 +9,7 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream } from 'effect';
-import {
-  isInterrupted,
-  isWorking,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import type {
   RunView,
@@ -97,33 +93,13 @@ export function killableRunId(run: RunView | undefined): RunId | undefined {
     : undefined;
 }
 
-/** The interrupted run a resume picks up, while its `actions` offers one. */
+/** The run a resume picks up, while its `actions` offers one. */
 export function resumableRunId(run: RunView | undefined): RunId | undefined {
-  return run !== undefined &&
-    isInterrupted(run) &&
-    run.actions.includes('resume')
-    ? run.id
-    : undefined;
+  return run?.actions.includes('resume') === true ? run.id : undefined;
 }
 
 /** The name a run goes by on this surface: `main` for a root, the
  *  session view's label below it. */
 export function runLabelOf(run: RunView): string {
   return run.parentId === null ? 'main' : run.label;
-}
-
-/**
- * The direct children working a turn here. The session view's
- * `rollup.running` counts every descendant, a child waiting on the user
- * included; the TUI's "active" is direct children, by the view's one reading
- * of working, so a child cut while it ran is not counted as active.
- */
-export function runningChildCount(
-  view: SessionView,
-  run: RunView | undefined,
-): number {
-  return (run?.childIds ?? []).filter((id) => {
-    const child = view.runs.get(id);
-    return child !== undefined && isWorking(child);
-  }).length;
 }

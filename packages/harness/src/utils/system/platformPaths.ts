@@ -5,7 +5,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import which from 'which';
-import { Context, Effect } from 'effect';
+import { Context, Effect, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -28,6 +28,11 @@ export function existsAtAbsolute(target: string): boolean {
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
 
+/** An environment variable's name as the platform compares it: Windows
+ *  matches names case-insensitively (`Path` is `PATH`), POSIX exactly. */
+export const envNameKey = (name: string): string =>
+  IS_WINDOWS ? name.toUpperCase() : name;
+
 /**
  * The directories an app adds to the PATH a command runs and resolves on:
  * the package-manager and tool installs a GUI-launched process may lack.
@@ -37,6 +42,12 @@ export const CommandDirs = Context.Reference<() => readonly string[]>(
   '@texra-ai/harness/CommandDirs',
   { defaultValue: () => () => [] },
 );
+
+/** The operating system named no home directory for this user. */
+class HomeDirectoryUnresolved extends Schema.TaggedError<HomeDirectoryUnresolved>()(
+  'HomeDirectoryUnresolved',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /**
  * The user's home directory, or `undefined` where none resolves.
@@ -48,11 +59,15 @@ export const CommandDirs = Context.Reference<() => readonly string[]>(
  */
 export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
   try: () => os.homedir(),
-  catch: ensureError,
+  catch: (cause) =>
+    new HomeDirectoryUnresolved({ message: ensureError(cause).message, cause }),
 }).pipe(
   Effect.filterOrFail(
     (home) => home !== '',
-    () => new Error('os.homedir() returned an empty string'),
+    () =>
+      new HomeDirectoryUnresolved({
+        message: 'os.homedir() returned an empty string',
+      }),
   ),
   Effect.catch((error) =>
     Effect.logWarning(
@@ -65,7 +80,7 @@ export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
 /**
  * Extend PATH with the `appDirs` (`CommandDirs`) that are missing, checked
  * on every call: a directory the user creates mid-session (installing git on
- * the advice of our own "Git not found in PATH" message) is on the next
+ * the advice of our own "Git is not installed" message) is on the next
  * command's PATH. The check is a few `stat`s, microseconds beside the spawn
  * it precedes.
  */

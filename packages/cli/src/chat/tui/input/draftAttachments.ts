@@ -14,7 +14,8 @@
 // `--print`) path has no input and never creates a placeholder, so piped
 // output stays byte-identical.
 
-import type { SkillActivation } from '../forms/SkillsListForm';
+import { Array as Arr } from 'effect';
+import { ACTIVATED_SKILLS_MAX } from '@texra-ai/harness/schemas';
 
 /** Collapse a paste into a chip when it exceeds either bound. */
 const PASTE_CHAR_THRESHOLD = 800;
@@ -25,7 +26,7 @@ interface PastedTextEntry {
   readonly content: string;
 }
 
-export interface PastedImageEntry {
+interface PastedImageEntry {
   readonly id: number;
   readonly kind: 'image';
   /** Absolute path to the on-disk image (under the run/chat storage dir). */
@@ -91,17 +92,17 @@ function removeChipRange(input: string, start: number, end: number): string {
   );
 }
 
-export interface Draft {
+export interface InputDraft {
   /** What the input shows, chips included. */
   readonly text: string;
   /** The content behind each chip, by chip id. */
   readonly attachments: ReadonlyMap<number, DraftAttachment>;
   readonly nextId: number;
   /** Skills activated for the next message, by name. */
-  readonly skills: readonly SkillActivation[];
+  readonly skills: readonly string[];
 }
 
-export const EMPTY_DRAFT: Draft = Object.freeze({
+export const EMPTY_DRAFT: InputDraft = Object.freeze({
   text: '',
   attachments: new Map(),
   nextId: 1,
@@ -110,7 +111,7 @@ export const EMPTY_DRAFT: Draft = Object.freeze({
 
 /** The draft with `text` typed. An emptied draft holds no chip, so it drops
  *  them; its skills stay for the next message. */
-export function withText(draft: Draft, text: string): Draft {
+export function withText(draft: InputDraft, text: string): InputDraft {
   if (text === draft.text) return draft;
   return text === ''
     ? { ...EMPTY_DRAFT, skills: draft.skills }
@@ -118,9 +119,9 @@ export function withText(draft: Draft, text: string): Draft {
 }
 
 function withAttachment(
-  draft: Draft,
+  draft: InputDraft,
   attachment: (id: number) => DraftAttachment,
-): { readonly draft: Draft; readonly id: number } {
+): { readonly draft: InputDraft; readonly id: number } {
   const id = draft.nextId;
   const attachments = new Map(draft.attachments);
   attachments.set(id, attachment(id));
@@ -129,9 +130,9 @@ function withAttachment(
 
 /** Keep pasted text; returns the draft and the chip to insert in its text. */
 export function withPastedText(
-  draft: Draft,
+  draft: InputDraft,
   content: string,
-): { readonly draft: Draft; readonly chip: string } {
+): { readonly draft: InputDraft; readonly chip: string } {
   const next = withAttachment(draft, () => ({ kind: 'text', content }));
   const numLines = pastedNewlineCount(content);
   return {
@@ -145,18 +146,21 @@ export function withPastedText(
 
 /** Keep a pasted image; returns the draft and the chip to insert in its text. */
 export function withPastedImage(
-  draft: Draft,
+  draft: InputDraft,
   image: Omit<PastedImageEntry, 'id' | 'kind'>,
-): { readonly draft: Draft; readonly chip: string } {
+): { readonly draft: InputDraft; readonly chip: string } {
   const next = withAttachment(draft, (id) => ({ id, kind: 'image', ...image }));
   return { draft: next.draft, chip: `[Image #${next.id}]` };
 }
 
-/** The skill activated for the next message, replacing one of its name. */
-export function withSkill(draft: Draft, skill: SkillActivation): Draft {
+/** The skill activated for the next message, replacing one of its name;
+ *  a message takes the latest `ACTIVATED_SKILLS_MAX`. */
+export function withSkill(draft: InputDraft, skill: string): InputDraft {
   return {
     ...draft,
-    skills: [...draft.skills.filter((s) => s.name !== skill.name), skill],
+    skills: [...draft.skills.filter((s) => s !== skill), skill].slice(
+      -ACTIVATED_SKILLS_MAX,
+    ),
   };
 }
 
@@ -167,7 +171,7 @@ export function withSkill(draft: Draft, skill: SkillActivation): Draft {
  * re-matched). Image chips are left in place: the image bytes ride along as
  * media files (see {@link resolveImages}).
  */
-export function expandText(draft: Draft, input = draft.text): string {
+export function expandText(draft: InputDraft, input = draft.text): string {
   let out = input;
   for (const match of matchChips(input).toReversed()) {
     const entry = draft.attachments.get(match.id);
@@ -182,7 +186,7 @@ export function expandText(draft: Draft, input = draft.text): string {
  * image chips are not: once submitted, their media entries are cleared and a
  * recalled `[Image #N]` would be a bare token with no file attached.
  */
-export function expandTextForHistory(draft: Draft): string {
+export function expandTextForHistory(draft: InputDraft): string {
   let out = draft.text;
   for (const match of matchChips(draft.text).toReversed()) {
     const entry = draft.attachments.get(match.id);
@@ -197,7 +201,7 @@ export function expandTextForHistory(draft: Draft): string {
  * chips (deleted from the text) are dropped, matching Claude Code's orphan
  * gate.
  */
-export function resolveImages(draft: Draft): PastedImageEntry[] {
+export function resolveImages(draft: InputDraft): PastedImageEntry[] {
   const present = new Set(matchChips(draft.text).map((m) => m.id));
   const images: PastedImageEntry[] = [];
   for (const id of present) {
@@ -211,17 +215,18 @@ export function resolveImages(draft: Draft): PastedImageEntry[] {
  * A message the session did not take, back in the input: its text below
  * whatever was typed since, its chips renumbered into the current draft's id
  * space, and its skills activated again unless one of the same name was
- * activated since.
+ * activated since, the latest `ACTIVATED_SKILLS_MAX` kept.
  */
-export function restoreDraft(current: Draft, returned: Draft): Draft {
-  let next: Draft = {
+export function restoreDraft(
+  current: InputDraft,
+  returned: InputDraft,
+): InputDraft {
+  let next: InputDraft = {
     ...current,
     skills: [
       ...current.skills,
-      ...returned.skills.filter(
-        (skill) => !current.skills.some((s) => s.name === skill.name),
-      ),
-    ],
+      ...Arr.difference(returned.skills, current.skills),
+    ].slice(-ACTIVATED_SKILLS_MAX),
   };
   if (returned.text.length === 0) return next;
   const renumbered = new Map<number, number>();

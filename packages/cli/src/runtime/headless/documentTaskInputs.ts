@@ -1,84 +1,59 @@
-import * as path from 'node:path';
 import { text as streamText } from 'node:stream/consumers';
-import {
-  isPathWithin,
-  isStrictlyWithin,
-  toPosixPath,
-} from '@texra-ai/harness/host';
 
-import { glob, hasMagic } from 'glob';
-import { Effect, FileSystem, Scope } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
-import { ensureError } from '@texra-ai/harness/schemas';
-import { meansAbsent } from '@texra-ai/harness/node';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
-import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-
-// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
-// swap; safe at the call site below since the input is always a relative
-// path from path.relative behind an isStrictlyWithin check.
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
+import {
+  resolveTaskFiles,
+  type TaskFileRole,
+  type TaskFileSource,
+  type TaskFiles,
+  type TaskFilesReason,
+} from '@texra/controllers/session/taskFiles';
 
 const STDIN_INPUT_TOKEN = '-';
-// LaTeX derives auxiliary filenames from the input basename; leading-dot
-// job names can be rejected by TeX's file-open policy when it writes `.aux`.
-const STDIN_TEMP_PREFIX = 'texra-stdin-';
-export const STDIN_DOCUMENT_TASK_INPUT_BASENAME = 'stdin.tex';
+const STDIN_DOCUMENT_TASK_INPUT_BASENAME = 'stdin.tex';
 /**
- * One wording for "a program's run has no input", said both by the expansion
- * below (a spec that resolves to nothing) and by `texra run`'s pre-flight guard
- * (no `--input` at all), which has to refuse before it probes an output
- * destination into existence.
+ * One wording for "a program's run has no input", said both for a spec that
+ * resolves to nothing and by `texra run`'s pre-flight guard (no `--input` at
+ * all), which has to refuse before it probes an output destination into
+ * existence.
  */
 export const DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE =
   'At least one input file is required for a program.';
 
-function normalizeCliInputPath(candidate: string, cwd: string): string {
-  const absolutePath = path.resolve(cwd, candidate);
-  return isStrictlyWithin(cwd, absolutePath)
-    ? toPosixPath(path.relative(cwd, absolutePath))
-    : absolutePath;
+const FLAG_BY_ROLE: Readonly<Record<TaskFileRole, string>> = {
+  input: '--input',
+  context: '--context',
+};
+
+/** A refused file named on the command line, in the flag's words. */
+function usageMessage(reason: TaskFilesReason): string {
+  switch (reason._tag) {
+    case 'NotFound':
+      return `${FLAG_BY_ROLE[reason.role]}: file not found: ${reason.path}`;
+    case 'NoMatch':
+      return `${FLAG_BY_ROLE[reason.role]}: no files matched: ${reason.pattern}`;
+    case 'NoTexFiles':
+      return `No .tex input files found in directory: ${reason.directory}`;
+    case 'OutsideProject':
+      return `${FLAG_BY_ROLE[reason.role]}: file is outside --cwd: ${reason.path}`;
+    case 'EmptyText':
+      return 'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.';
+    case 'NoInput':
+      return DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE;
+  }
 }
 
-const normalizeCliInputPathForRun = Effect.fn('normalizeCliInputPathForRun')(
-  function* (
-    candidate: string,
-    cwd: string,
-    flagLabel: string,
-    options: DocumentTaskInputExpansionOptions,
-  ): Effect.fn.Return<string, CliUsageError> {
-    if (
-      options.requireWorkspaceFiles === true &&
-      !isPathWithin(cwd, path.resolve(cwd, candidate))
-    ) {
-      return yield* new CliUsageError({
-        message: `${flagLabel}: file is outside --cwd: ${candidate}`,
-      });
-    }
-    return normalizeCliInputPath(candidate, cwd);
-  },
+function isStdinSpec(spec: string): boolean {
+  return spec.trim() === STDIN_INPUT_TOKEN;
+}
+
+// With an encoding set the chunks are strings, so a leading BOM is kept.
+const readProcessStdinText = fromHost('process.stdin', () =>
+  streamText(process.stdin.setEncoding('utf8')),
 );
-
-function isStdinDocumentTaskInputSpec(inputSpec: string): boolean {
-  return inputSpec.trim() === STDIN_INPUT_TOKEN;
-}
-
-interface DocumentTaskInputExpansionOptions {
-  readonly allowEmpty?: boolean;
-  readonly requireWorkspaceFiles?: boolean;
-}
-
-type DocumentTaskInputExpansionEntry = readonly string[] | 'stdin';
-
-interface PreparedDocumentTaskInputExpansion {
-  readonly entries: DocumentTaskInputExpansionEntry[];
-  readonly flagLabel: string;
-}
-
-const readProcessStdinText: Effect.Effect<string, Error> = Effect.tryPromise({
-  // With an encoding set the chunks are strings, so a leading BOM is kept.
-  try: () => streamText(process.stdin.setEncoding('utf8')),
-  catch: ensureError,
-});
 
 export function hasMixedStdinDocumentTaskInputSpecs(
   inputSpecs: readonly string[],
@@ -89,318 +64,64 @@ export function hasMixedStdinDocumentTaskInputSpecs(
   return distinctSpecs.has(STDIN_INPUT_TOKEN) && distinctSpecs.size > 1;
 }
 
-const materializeStdinDocumentTaskInput = Effect.fn(
-  'materializeStdinDocumentTaskInput',
-)(function* (
-  readStdinText: Effect.Effect<string, Error>,
-  tempDir: string,
-): Effect.fn.Return<string, Error, Scope.Scope | FileSystem.FileSystem> {
-  const fs = yield* FileSystem.FileSystem;
-  // No resource exists while stdin is pending. Interruption cannot leave a
-  // Promise continuation that creates a directory after shutdown.
-  const text = yield* readStdinText;
-  if (text.trim().length === 0)
-    return yield* new CliUsageError({
-      message:
-        'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.',
-    });
-  // Not makeTempDirectoryScoped: its release omits `force` and dies on a
-  // directory that is already gone.
-  const inputDir = yield* Effect.acquireRelease(
-    fs.makeTempDirectory({
-      directory: tempDir,
-      prefix: `${STDIN_TEMP_PREFIX}${process.pid}-`,
-    }),
-    (directory) =>
-      fs.remove(directory, { recursive: true, force: true }).pipe(Effect.orDie),
-  );
-  const inputFile = path.join(inputDir, STDIN_DOCUMENT_TASK_INPUT_BASENAME);
-  // Finish this finite local write before the scope removes its directory.
-  yield* fs
-    .writeFileString(inputFile, text, { flag: 'wx' })
-    .pipe(Effect.uninterruptible);
-  return inputFile;
-});
-
-/**
- * Expand a single user-supplied path spec into the absolute / cwd-relative
- * paths it resolves to. The stdin token is resolved by
- * `prepareDocumentTaskInputExpansion` before it gets here, so it never reaches
- * this function.
- *
- * `flagLabel` is the CLI flag name (e.g. `--input`, `--context`) used in
- * Usage-error messages so a missing file is attributed to the right flag.
- */
-const expandDocumentTaskInputSpec = Effect.fn('expandDocumentTaskInputSpec')(
-  function* (
-    inputSpec: string,
-    cwd: string,
-    flagLabel: string,
-    options: DocumentTaskInputExpansionOptions,
-  ): Effect.fn.Return<string[], Error, FileSystem.FileSystem> {
-    const trimmed = inputSpec.trim();
-    if (!trimmed) return [];
-
-    const normalizeMatches = (matches: string[]) =>
-      Effect.forEach(
-        matches.toSorted(),
-        (match) => normalizeCliInputPathForRun(match, cwd, flagLabel, options),
-        { concurrency: 8 },
-      );
-
-    const absolutePath = path.resolve(cwd, trimmed);
-    // Prefer an exact existing path even when its valid filename contains glob
-    // syntax. Windows glob mode deliberately has no backslash escape channel.
-    const fs = yield* FileSystem.FileSystem;
-    const stats = yield* fs
-      .stat(absolutePath)
-      .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(null)));
-
-    const globOptions = {
-      magicalBraces: true,
-      windowsPathsNoEscape: process.platform === 'win32',
-    };
-    if (!stats && hasMagic(trimmed, globOptions)) {
-      const isAbsolute = path.isAbsolute(trimmed);
-      const matches = yield* Effect.tryPromise({
-        try: () =>
-          glob(trimmed, {
-            cwd: isAbsolute ? undefined : cwd,
-            absolute: isAbsolute,
-            nodir: true,
-            ...globOptions,
-          }),
-        catch: ensureError,
-      });
-      if (matches.length === 0) {
-        return yield* new CliUsageError({
-          message: `${flagLabel}: no files matched: ${trimmed}`,
-        });
-      }
-      return yield* normalizeMatches(matches);
-    }
-
-    if (stats?.type === 'Directory') {
-      // Validate the directory itself before globbing its contents.
-      yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
-      const matches = yield* Effect.tryPromise({
-        try: () =>
-          glob('**/*.tex', {
-            cwd: absolutePath,
-            absolute: true,
-            nodir: true,
-          }),
-        catch: ensureError,
-      });
-      if (matches.length === 0) {
-        return yield* new CliUsageError({
-          message: `No .tex input files found in directory: ${trimmed}`,
-        });
-      }
-      return yield* normalizeMatches(matches);
-    }
-
-    // Fail fast with a Usage error (exit 2) instead of paying full platform
-    // init + agent loading just to ENOENT inside the agent run (exit 1).
-    if (!stats) {
-      return yield* new CliUsageError({
-        message: `${flagLabel}: file not found: ${trimmed}`,
-      });
-    }
+/** One flag's specs as sources. `-` is stdin, read once: a later `-` in the
+ *  same flag names the same file, so it is dropped. */
+function flagSources(
+  role: TaskFileRole,
+  specs: readonly string[],
+): TaskFileSource[] {
+  let stdinNamed = false;
+  return specs.flatMap((spec): TaskFileSource[] => {
+    if (!isStdinSpec(spec)) return [{ role, spec }];
+    if (stdinNamed) return [];
+    stdinNamed = true;
     return [
-      yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options),
+      {
+        role,
+        text: readProcessStdinText,
+        name: STDIN_DOCUMENT_TASK_INPUT_BASENAME,
+      },
     ];
-  },
-);
-
-const prepareDocumentTaskInputExpansion = Effect.fn(
-  'prepareDocumentTaskInputExpansion',
-)(function* (
-  inputSpecs: readonly string[],
-  cwd: string,
-  flagLabel: string,
-  options: DocumentTaskInputExpansionOptions,
-): Effect.fn.Return<
-  PreparedDocumentTaskInputExpansion,
-  Error,
-  FileSystem.FileSystem
-> {
-  // The specs expand at once (stats and globs only read); the first failing
-  // spec in argument order is the one reported.
-  const expanded = yield* Effect.forEach(
-    inputSpecs,
-    (spec) =>
-      Effect.result<
-        DocumentTaskInputExpansionEntry,
-        Error,
-        FileSystem.FileSystem
-      >(
-        isStdinDocumentTaskInputSpec(spec)
-          ? Effect.succeed('stdin')
-          : expandDocumentTaskInputSpec(spec, cwd, flagLabel, options),
-      ),
-    { concurrency: 8 },
-  );
-  const entries = yield* Effect.forEach(expanded, (entry) =>
-    Effect.fromResult(entry),
-  );
-  return { entries, flagLabel };
-});
-
-const finishDocumentTaskInputExpansion = Effect.fn(
-  'finishDocumentTaskInputExpansion',
-)(function* (
-  prepared: PreparedDocumentTaskInputExpansion,
-  cwd: string,
-  options: DocumentTaskInputExpansionOptions,
-  readStdinText: Effect.Effect<string, Error>,
-): Effect.fn.Return<
-  { readonly files: string[]; readonly stdinPath?: string },
-  Error,
-  Scope.Scope | FileSystem.FileSystem
-> {
-  const expanded: string[] = [];
-  const stdinPath = prepared.entries.includes('stdin')
-    ? yield* normalizeCliInputPathForRun(
-        yield* materializeStdinDocumentTaskInput(readStdinText, cwd),
-        cwd,
-        prepared.flagLabel,
-        options,
-      )
-    : undefined;
-  for (const entry of prepared.entries) {
-    if (entry === 'stdin') {
-      if (stdinPath) expanded.push(stdinPath);
-      continue;
-    }
-    expanded.push(...entry);
-  }
-  const deduped = [...new Set(expanded)];
-  if (deduped.length === 0 && options.allowEmpty !== true) {
-    return yield* new CliUsageError({
-      message: DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE,
-    });
-  }
-  return { files: deduped, stdinPath };
-});
-
-/**
- * `files` split by what a run does with each: binary media travels as media,
- * so it stays out of the text inputs a run interpolates and names its
- * outputs after.
- */
-export function classifyInputFiles(files: readonly string[]) {
-  const extensions = getIncludedExtensions('media');
-  const inputFiles: string[] = [];
-  const mediaFiles: string[] = [];
-  for (const file of files) {
-    if (extensions.includes(path.extname(file).toLowerCase()))
-      mediaFiles.push(file);
-    else inputFiles.push(file);
-  }
-  return { inputFiles, mediaFiles };
-}
-
-interface ExpandedRunInputs {
-  /** The `--input` files a run reads as text. */
-  readonly inputFiles: string[];
-  /** The `--input` files that are binary media. */
-  readonly mediaFiles: string[];
-  readonly contextFiles: string[];
-  /** Path this invocation materialized stdin to, when the literal `-` token was
-   *  expanded. Ground truth for "was this run's input read from stdin" — never
-   *  re-derive it by inspecting a path's shape. */
-  readonly stdinInputPath?: string;
+  });
 }
 
 /**
- * Expand the `--input` and `--context` specs a headless run accepts. `--input`
- * requires at least one resolved file unless `allowEmptyInput` is set.
- * `--context` is expanded with the same helper so a missing path fails as a
- * Usage error (exit 2) attributed to `--context`.
- */
-const expandRunInputs = Effect.fn('expandRunInputs')(function* (
-  inputSpecs: readonly string[],
-  contextSpecs: readonly string[],
-  cwd: string,
-  options: {
-    readonly allowEmptyInput?: boolean;
-    readonly requireWorkspaceFiles?: boolean;
-    /** Where `-` reads from; a test hands in its own text. */
-    readonly readStdinText?: Effect.Effect<string, Error>;
-  } = {},
-): Effect.fn.Return<
-  ExpandedRunInputs,
-  Error,
-  Scope.Scope | FileSystem.FileSystem
-> {
-  if (
-    inputSpecs.some(isStdinDocumentTaskInputSpec) &&
-    contextSpecs.some(isStdinDocumentTaskInputSpec)
-  ) {
-    return yield* new CliUsageError({
-      message:
-        'Use `-` for either --input or --context, not both; stdin can only be read once.',
-    });
-  }
-
-  const shared = { requireWorkspaceFiles: options.requireWorkspaceFiles };
-  const readStdinText = options.readStdinText ?? readProcessStdinText;
-  const inputExpansion = yield* prepareDocumentTaskInputExpansion(
-    inputSpecs,
-    cwd,
-    '--input',
-    shared,
-  );
-  const contextExpansion = yield* prepareDocumentTaskInputExpansion(
-    contextSpecs,
-    cwd,
-    '--context',
-    shared,
-  );
-
-  const inputs = yield* finishDocumentTaskInputExpansion(
-    inputExpansion,
-    cwd,
-    { ...shared, allowEmpty: options.allowEmptyInput },
-    readStdinText,
-  );
-  const contexts = yield* finishDocumentTaskInputExpansion(
-    contextExpansion,
-    cwd,
-    { ...shared, allowEmpty: true },
-    readStdinText,
-  );
-  return {
-    ...classifyInputFiles(inputs.files),
-    contextFiles: contexts.files,
-    // `-` is rejected above when it appears in both, so at most one is set.
-    stdinInputPath: inputs.stdinPath ?? contexts.stdinPath,
-  };
-});
-
-/**
- * Own the stdin-temp-file lifecycle for headless runs that accept --input /
- * --context. Callers get already-expanded paths; this module creates and
- * removes the temporary stdin file whether expansion, run, or output
- * handling fails.
+ * Expand the `--input` and `--context` specs a headless run accepts and hold
+ * the stdin file `-` writes for as long as `run` runs: it is removed whether
+ * expansion, the run, or output handling fails. A program needs at least one
+ * input and may read files outside `cwd`; an agent may have none and reads
+ * only inside it.
  */
 export function withExpandedRunInputs<T, E, R = never>(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
-  options: Parameters<typeof expandRunInputs>[3],
-  run: (inputs: ExpandedRunInputs) => Effect.Effect<T, E, R>,
+  task: 'program' | 'agent',
+  run: (inputs: TaskFiles) => Effect.Effect<T, E, R>,
 ): Effect.Effect<T, E | Error, R | FileSystem.FileSystem> {
+  if (inputSpecs.some(isStdinSpec) && contextSpecs.some(isStdinSpec)) {
+    return Effect.fail(
+      new CliUsageError({
+        message:
+          'Use `-` for either --input or --context, not both; stdin can only be read once.',
+      }),
+    );
+  }
   return Effect.scoped(
     Effect.gen(function* () {
-      const inputs = yield* expandRunInputs(
-        inputSpecs,
-        contextSpecs,
+      const files = yield* resolveTaskFiles(
+        [
+          ...flagSources('input', inputSpecs),
+          ...flagSources('context', contextSpecs),
+        ],
         cwd,
-        options,
+        task,
+      ).pipe(
+        Effect.catchTag('TaskFilesRejected', ({ reason }) =>
+          Effect.fail(new CliUsageError({ message: usageMessage(reason) })),
+        ),
       );
-      return yield* run(inputs);
+      return yield* run(files);
     }),
   );
 }

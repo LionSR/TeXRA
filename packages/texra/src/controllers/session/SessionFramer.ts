@@ -9,9 +9,8 @@
  * one row are merged, which the offsets make lossless; every frame
  * carries the commit the reader had drained, left-out rows included, so
  * the subscriber's cursor moves past them. The buffer suspends the framer
- * when the port falls behind, never the publisher. A later `Subscribe` on
- * the port supersedes the replay in flight; its frames echo its
- * generation and the receiver drops the superseded one's.
+ * when the port falls behind, never the publisher. A subscriber that names
+ * another set interrupts this stream and asks again.
  *
  * Rows are framed as committed: secrets never enter the event table, so no
  * framer redacts.
@@ -31,13 +30,6 @@ import type { Session } from '@texra-ai/harness';
 
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;
-
-/** What a framer reads: the session key every frame carries, and the
- *  session's view, whose `watch` is the ordered input reader. */
-interface FramerSource {
-  readonly key: string;
-  readonly view: Pick<Session['view'], 'current' | 'watch'>;
-}
 
 /** One batch as the subscriber takes it: the rows and chunks of aggregates
  *  it did not name left out, adjacent chunks of one row merged. */
@@ -78,11 +70,11 @@ function framed(
 
 /**
  * The frames that answer one `Subscribe`: a stream that replays, then
- * tails until interrupted. Pure over its source, so a test drives it under
+ * tails until interrupted. Pure over the view, so a test drives it under
  * `TestClock`.
  */
 export function frameSubscription(
-  source: FramerSource,
+  view: Pick<Session['view'], 'current' | 'watch'>,
   subscribe: Subscribe,
 ): Stream.Stream<EventsFrame> {
   const named = new Set(subscribe.aggregates.map((entry) => entry.id));
@@ -91,8 +83,8 @@ export function frameSubscription(
     // reads below, on a cold mount; the subscriber's own on a resubscribe.
     // The watch holds the subscriber's transcript set while it runs.
     const tailFrom =
-      subscribe.cursor === 0 ? source.view.current().cursor : subscribe.cursor;
-    return source.view
+      subscribe.cursor === 0 ? view.current().cursor : subscribe.cursor;
+    return view
       .watch(subscribe.aggregates, {
         cursor: tailFrom,
         debug: subscribe.debug,
@@ -105,9 +97,6 @@ export function frameSubscription(
               batch.findLast((input) => input._tag === 'drained')?.cursor ??
               drained;
             const frame: EventsFrame = {
-              kind: 'events',
-              session: source.key,
-              generation: subscribe.generation,
               cursor,
               inputs: framed(named, batch),
             };

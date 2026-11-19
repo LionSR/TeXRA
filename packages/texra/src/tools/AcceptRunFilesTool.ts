@@ -20,7 +20,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
@@ -122,11 +122,11 @@ function summarizeRejections(
     .join('\n');
   switch (action) {
     case 'cancel':
-      return { path, decision: { action, cause: text || null } };
+      return { path, decision: { action, ...(text && { cause: text }) } };
     case 'deny':
       return { path, decision: { action, reason: text } };
     case 'reject':
-      return { path, decision: { action, feedback: text || null } };
+      return { path, decision: { action, ...(text && { feedback: text }) } };
   }
 }
 
@@ -213,10 +213,8 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     !hasDirectory &&
     !(yield* (yield* ChildRuns).records(input.execution_id).exists)
   ) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
-      ),
+    return yield* new ToolError(
+      `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
     );
   }
   const { execution_id: runId, files, strip_criticize } = input;
@@ -230,22 +228,21 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       const sourceLocation = yield* resolveSourceFile(
         runFiles,
         mapping.path,
-        call,
+        call.env.roots.storage,
       );
 
       const destPath = mapping.original ?? mapping.path;
-      // The call's own workspace root, as data: the source may resolve
-      // under any root, but the destination is this session's.
-      const workspaceRoot = call.env.roots.workspace;
-      const dest = workspaceRoot
-        ? pathToLocationIn(workspaceRoot, destPath)
+      // The source may resolve under any root, but the destination is this
+      // session's workspace.
+      const workspaceFs = yield* WorkspaceFs;
+      const dest = workspaceFs.root
+        ? pathToLocationIn(workspaceFs.root, destPath)
         : undefined;
       if (dest?.kind !== 'workspace') {
-        return yield* Effect.fail(
-          new ToolError(`original must be inside the workspace: ${destPath}`),
+        return yield* new ToolError(
+          `original must be inside the workspace: ${destPath}`,
         );
       }
-      const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
       const hostFs = yield* FileSystem.FileSystem;
 
       const rawContent = yield* readNormalizedFile(
@@ -397,10 +394,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   }
 
   // Phase 3: Clean up diff files from workspace for accepted files
-  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
-    call.env.roots.workspace,
-    acceptedEntries,
-  );
+  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(acceptedEntries);
   for (const f of cleaned) {
     results.push(`cleaned: ${f}`);
   }
@@ -441,37 +435,31 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
   function* (
     runFiles: RunWorkspace,
     runPath: string,
-    call: ToolContextShape,
+    storage: string,
   ): Effect.fn.Return<
     FileLocation,
     Error,
     FileSystem.FileSystem | WorkspaceFs
   > {
     const { runId } = runFiles;
-    const entry = yield* runEntryUnder(
-      call.env.roots.storage,
-      runId,
-      runPath,
-    ).pipe(Effect.mapError(ensureError));
+    const entry = yield* runEntryUnder(storage, runId, runPath).pipe(
+      Effect.mapError(ensureError),
+    );
     switch (entry.kind) {
       case 'file':
         return entry.location;
       case 'symlink':
-        return yield* Effect.fail(
-          new ToolError(
-            `Cannot accept ${runPath} from run ${runId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
-          ),
+        return yield* new ToolError(
+          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
         );
       case 'directory':
       case 'unsupported':
-        return yield* Effect.fail(
-          new ToolError(
-            `Cannot accept ${runPath} from run ${runId}: the run-storage entry is not a regular file.`,
-          ),
+        return yield* new ToolError(
+          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is not a regular file.`,
         );
       case 'invalid':
-        return yield* Effect.fail(
-          new ToolError(`Cannot accept ${runPath}: ${entry.reason}`),
+        return yield* new ToolError(
+          `Cannot accept ${runPath}: ${entry.reason}`,
         );
       case 'missing':
         break;
@@ -480,7 +468,7 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
     // Fall back to workspace
     const workspaceFs = yield* WorkspaceFs;
     // `runPath` is non-empty here: run storage refused an empty one above.
-    const wsLoc = pathToLocationIn(call.env.roots.workspace, runPath);
+    const wsLoc = pathToLocationIn(workspaceFs.root, runPath);
     if (
       wsLoc.kind === 'workspace' &&
       (yield* entryTypeIn(workspaceFs, wsLoc.relativePath).pipe(
@@ -490,11 +478,9 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
       return wsLoc;
     }
 
-    return yield* Effect.fail(
-      new ToolError(
-        `File not found in run storage or workspace: ${runPath}. ` +
-          `Use executions tool with path /executions/${runId}/files to list available files.`,
-      ),
+    return yield* new ToolError(
+      `File not found in run storage or workspace: ${runPath}. ` +
+        `Use executions tool with path /executions/${runId}/files to list available files.`,
     );
   },
 );

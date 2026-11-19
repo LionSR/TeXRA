@@ -6,25 +6,9 @@ import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc
 import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
 import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import {
-  DEFAULT_LATEX_SETTINGS_STATUS,
-  SettingsViewInboundMessageSchema,
-} from '@texra/shared/settingsView/settingsViewMessages';
-import type { ConfigProvider, ProcessServices } from '@texra-ai/harness/host';
-
-// The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
-// the machine's tools, as the harness's unprobed tool availability does for
-// the Tools page.
-vi.mock(
-  '@texra/controllers/settingsView/LatexToolingController',
-  async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import('@texra/controllers/settingsView/LatexToolingController')
-    >()),
-    detectLatexSettingsStatus: () =>
-      Effect.succeed(DEFAULT_LATEX_SETTINGS_STATUS),
-  }),
-);
+import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ConfigProvider } from '@texra-ai/harness/plugins';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 const noOpEffect = (): Effect.Effect<void> => Effect.void;
 
@@ -34,15 +18,14 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     post: noOpEffect,
     dialogs: {
       notify: noOpEffect,
-      input: () => Effect.succeed(undefined),
+      input: () => Effect.undefined,
       confirm: () => Effect.succeed(true),
     },
     externalOpener: { openExternal: noOpEffect },
     openPath: noOpEffect,
     revealPath: noOpEffect,
     showReadOnlyYaml: noOpEffect,
-    pickFolder: () => Effect.succeed(undefined),
-    selectLauncherAgent: noOpEffect,
+    pickFolder: () => Effect.undefined,
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     runInTerminal: noOpEffect,

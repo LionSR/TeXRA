@@ -35,8 +35,8 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
     const id = input.extensionId;
     const extensions = yield* EditorIntegration;
     if (!extensions) {
-      return yield* Effect.fail(
-        new ToolError('This host cannot install VS Code extensions.'),
+      return yield* new ToolError(
+        'This host cannot install VS Code extensions.',
       );
     }
     if (extensions.installed(id)) {

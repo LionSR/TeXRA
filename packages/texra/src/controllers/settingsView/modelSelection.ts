@@ -13,7 +13,6 @@ import {
   getEnabledModels,
   getHelperModelName,
   readModelOptions,
-  StateWriteFailed,
   type ModelVerdict,
   REASONING_LEVELS_KEY,
 } from '@texra-ai/harness/host';
@@ -27,7 +26,13 @@ import {
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
-import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  type Secrets,
+  type SettingsStores,
+  StateWriteFailed,
+} from '@texra-ai/harness/plugins';
+
+import { SettingsRequestFailed } from './settingsHostBindings';
 
 /** Membership form of the order the Models tab groups by. */
 const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
@@ -54,9 +59,9 @@ export const buildModelSelectionPage = Effect.fn('buildModelSelectionPage')(
     // TeXRA's catalog names a default, so none is a broken catalog, said
     // instead of shown as an empty select.
     if (helperModel === undefined)
-      return yield* Effect.fail(
-        new Error('The settings catalog names no default helper model.'),
-      );
+      return yield* new SettingsRequestFailed({
+        message: 'The settings catalog names no default helper model.',
+      });
     return { models, helperModel };
   },
 );

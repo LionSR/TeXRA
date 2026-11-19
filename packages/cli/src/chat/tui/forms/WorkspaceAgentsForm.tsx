@@ -1,4 +1,4 @@
-import { Effect, Predicate } from 'effect';
+import { Effect } from 'effect';
 import { useState } from 'react';
 
 import {
@@ -6,38 +6,28 @@ import {
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import {
-  agentKeyOf,
-  formatResultCount,
-  type WorkspaceAgentsSelection,
-} from '@texra-ai/harness/schemas';
+import { agentKeyOf, formatResultCount } from '@texra-ai/harness/schemas';
 import {
   readCliWorkspaceAgents,
   type CliWorkspaceAgentsRecord,
 } from '@cli/runtime/workspaceAgents';
 
 import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { TICK } from '@cli/tui/ui/glyphs';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import type { SelectItem } from '@cli/tui/ui/Select';
 
-import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import { useChatProcess } from '../chatProcess';
 
-type WorkspaceAgentsFormMode =
-  | 'overview'
-  | 'workspace'
-  | 'default'
-  | 'chat-default'
-  | 'custom';
+type WorkspaceAgentsFormMode = 'overview' | 'chat-default' | 'custom';
 
 interface WorkspaceAgentsData {
   readonly record: CliWorkspaceAgentsRecord;
-  readonly presets: readonly TeamPreset[];
   readonly agents: readonly AgentEntry[];
 }
 
@@ -51,12 +41,6 @@ interface WorkspaceAgentsFormProps {
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
-}
-
-function selectionLabel(record: CliWorkspaceAgentsRecord): string {
-  const selection = record.selection;
-  if (selection.kind === 'team') return `team: ${selection.teamId}`;
-  return selection.kind;
 }
 
 function buildChatDefaultAgentItems(
@@ -94,7 +78,7 @@ export function WorkspaceAgentsForm(
   const [mode, setMode] = useState<WorkspaceAgentsFormMode>('overview');
   // The workspace agents read, every workspace agents write and the default chat-agent write
   // below all target the slots this form was handed.
-  const { roots, runtime } = useChatProcess();
+  const { roots, chat } = useChatProcess();
   const { data, error, reload, reportError } =
     useAsyncListForm<WorkspaceAgentsData>({
       // The workspace agents read loads the local agent catalog the lists read.
@@ -102,12 +86,10 @@ export function WorkspaceAgentsForm(
         Effect.map(
           Effect.all({
             record: readCliWorkspaceAgents(roots),
-            presets: workspaceTeams(roots.repoState),
             catalog: AgentCatalog,
           }),
-          ({ record, presets, catalog }): WorkspaceAgentsData => ({
+          ({ record, catalog }): WorkspaceAgentsData => ({
             record,
-            presets,
             agents: [...catalog.list()],
           }),
         ),
@@ -119,7 +101,7 @@ export function WorkspaceAgentsForm(
     action: () => Effect.Effect<void, Error, ProcessServices>,
     nextMode = mode,
   ): void =>
-    runFormWrite(runtime, action, {
+    runFormWrite(chat, action, {
       onSuccess: () => {
         setMode(nextMode);
         reload();
@@ -136,16 +118,9 @@ export function WorkspaceAgentsForm(
     });
   }
 
-  const notices = [
-    error ? <ToneLine key="error" tone="danger" text={error} /> : null,
-    data.record.missingTeamId ? (
-      <ToneLine
-        key="missing-team"
-        tone="warning"
-        text={`Team "${data.record.missingTeamId}" is unavailable; showing all agents.`}
-      />
-    ) : null,
-  ].filter(Predicate.isNotNull);
+  const notices = error
+    ? [<ToneLine key="error" tone="danger" text={error} />]
+    : [];
   const frame = <T extends string>(
     items: readonly SelectItem<T>[],
     onSelect: (value: T) => void,
@@ -165,22 +140,13 @@ export function WorkspaceAgentsForm(
   );
 
   if (mode === 'overview') {
-    return frame(
+    const showsAll = data.record.selection.kind === 'all';
+    return frame<'all' | 'chat-default' | 'custom'>(
       [
         {
-          value: 'workspace',
-          label: 'Workspace agents',
-          description: selectionLabel(data.record),
-        },
-        {
-          value: 'default',
-          label: 'Default team',
-          description: data.record.defaultTeamId ?? '(none)',
-        },
-        {
-          value: 'chat-default',
-          label: 'Default chat agent',
-          description: data.record.defaultChatAgent ?? '(automatic)',
+          value: 'all',
+          label: `${showsAll ? `${TICK} ` : ''}All agents`,
+          description: 'Show every agent in this workspace',
         },
         {
           value: 'custom',
@@ -190,77 +156,21 @@ export function WorkspaceAgentsForm(
               ? 'all agents'
               : formatResultCount(data.record.agentKeys.length, 'agent'),
         },
-      ],
-      setMode,
-      props.onClose,
-    );
-  }
-
-  if (mode === 'workspace') {
-    const items: SelectItem<string>[] = [
-      {
-        value: 'inherit',
-        label: 'Inherit default',
-        description: 'Use the default team, or all agents when it is unset',
-      },
-      {
-        value: 'all',
-        label: 'All agents',
-        description: 'Show every agent in this workspace',
-      },
-      ...data.presets.map((preset) => ({
-        value: `team:${preset.id}`,
-        label: preset.name,
-        description: preset.description,
-      })),
-    ];
-    return frame(
-      items,
-      (value) => {
-        const selection: WorkspaceAgentsSelection =
-          value === 'inherit' || value === 'all'
-            ? { kind: value }
-            : { kind: 'team', teamId: value.slice('team:'.length) };
-        write(
-          () =>
-            Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
-              agents.select(selection),
-            ),
-          'overview',
-        );
-      },
-      () => setMode('overview'),
-    );
-  }
-
-  if (mode === 'default') {
-    return frame(
-      [
         {
-          value: '',
-          label: 'No default team',
-          description: 'Inherited workspaces show all agents',
+          value: 'chat-default',
+          label: 'Default chat agent',
+          description: data.record.defaultChatAgent ?? '(automatic)',
         },
-        // Only a built-in team can be the user default: a saved team belongs
-        // to one workspace.
-        ...data.presets
-          .filter((preset) => preset.source === 'built-in')
-          .map((preset) => ({
-            value: preset.id,
-            label: preset.name,
-            description: preset.description,
-          })),
       ],
       (value) => {
-        write(
-          () =>
-            Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
-              agents.setDefaultTeam(value || undefined),
-            ),
-          'overview',
+        if (value !== 'all') return setMode(value);
+        write(() =>
+          Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
+            agents.select({ kind: 'all' }),
+          ),
         );
       },
-      () => setMode('overview'),
+      props.onClose,
     );
   }
 
@@ -277,9 +187,10 @@ export function WorkspaceAgentsForm(
             cwd
               ? setWorkspaceCliChatAgent(roots, value || undefined)
               : Effect.fail(
-                  new Error(
-                    'Default chat-agent selection requires a workspace.',
-                  ),
+                  new SettingsRequestFailed({
+                    message:
+                      'Default chat-agent selection requires a workspace.',
+                  }),
                 ),
           'overview',
         );

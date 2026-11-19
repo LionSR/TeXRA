@@ -3,12 +3,12 @@ import { Effect, Predicate, Result, Schema, type Types } from 'effect';
 
 // Local imports - platform
 import { modelConfig, MODELS } from '@texra-ai/llm';
+import { mcpConfigPathOf, readMcpConfig } from '@texra-ai/harness/host';
 import {
-  mcpConfigPathOf,
-  readMcpConfig,
+  Settings,
+  type SettingsStores,
   type ConfigProvider,
-} from '@texra-ai/harness/host';
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import type { SettingRow } from '@texra-ai/harness/schemas';
 import {
   JsonConfigProvider,
@@ -17,6 +17,7 @@ import {
 } from '@texra-ai/harness/node';
 
 // Local imports - shared
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   CLI_AGENT_SETTING,
@@ -154,9 +155,9 @@ export const setWorkspaceCliChatAgent = Effect.fn(
 )(function* (stores: SettingsStores, agent: string | undefined) {
   const trimmed = agent?.trim();
   if (agent !== undefined && !trimmed) {
-    return yield* Effect.fail(
-      new Error('The default chat agent must not be empty.'),
-    );
+    return yield* new SettingsRequestFailed({
+      message: 'The default chat agent must not be empty.',
+    });
   }
   // The workspace file's own section, not the merged read: the write below
   // lands in the workspace target, so seeding from `workspace over user` would

@@ -1,4 +1,5 @@
 import { css, type CSSResult } from 'lit';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 
 export const catalogDetailStyles: CSSResult = css`
   .catalog-toolbar-actions,
@@ -65,8 +66,6 @@ export const catalogDetailStyles: CSSResult = css`
     font-size: var(--font-size-xs);
     font-family: var(--wa-font-family-mono);
     color: var(--color-text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
   }
 `;

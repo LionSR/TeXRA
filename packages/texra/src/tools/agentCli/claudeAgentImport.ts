@@ -93,7 +93,7 @@ const CLAUDE_BINARY_NAME =
 export function findClaudeBinaryPath() {
   const platformPackages =
     PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
-  if (!platformPackages) return Effect.succeed(undefined);
+  if (!platformPackages) return Effect.undefined;
 
   return findCliBinary({
     platformPackages,

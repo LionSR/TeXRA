@@ -19,6 +19,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import { SessionRequests } from '@agent/runtime/requests';
 import { SessionLog } from '@shared/session/runHistory';
+import { seedEditedFiles } from '@test/support/runRecordSeeds';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -176,6 +177,35 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         assert.match(result.error ?? '', /require a prior read/);
         assert.strictEqual(writes.length, 0);
         assert.strictEqual(openedEdits().length, 0);
+      }),
+    );
+
+    it.effect('edits the first line of a file that starts with a BOM', () =>
+      Effect.gen(function* () {
+        const { session, runId, stubWorkspaceFile, inRun, writes } =
+          yield* setUp();
+        // The proposal and the approved write read the same bytes: a BOM one
+        // of them dropped made line 1 differ, and the edit read as a
+        // concurrent change to the line it replaces.
+        stubWorkspaceFile('bom.tex', {
+          exists: true,
+          content: '\uFEFF\\section{Old}\nbody\n',
+        });
+        yield* seedEditedFiles(session, runId, ['bom.tex']);
+
+        const result = yield* inRun(
+          EditFileTool.call({
+            path: 'bom.tex',
+            old_str: 'Old',
+            new_str: 'New',
+          }),
+        );
+
+        assert.strictEqual(result.status, 'executed');
+        assert.deepStrictEqual(
+          writes.map((write) => write.content),
+          ['\uFEFF\\section{New}\nbody\n'],
+        );
       }),
     );
 

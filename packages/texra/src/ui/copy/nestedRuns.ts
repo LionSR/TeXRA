@@ -17,39 +17,59 @@
  * "Copy diagnostics" output, which is for bug reports.
  */
 
+// Third-party imports
+import { Record } from 'effect';
+
 // Local imports
-import type { RunIdentity, RunView } from '@texra-ai/harness/schemas';
-import { formatResultCount, joinFacts } from '@texra-ai/harness/schemas';
-
-/** What a task started, by the kind of its run: the noun a count of them
- *  takes, in the order a summary lists them. */
-export const NESTED_NOUNS = Object.freeze({
-  agent: 'agent',
-  process: 'command',
-  script: 'script',
-} as const satisfies Record<RunIdentity['kind'], string>);
-
-/** What a run is called on screen: the task the user started, or what a
- *  task started, by the kind of its run. */
-export const runNoun = (run: Pick<RunView, 'parentId' | 'identity'>): string =>
-  run.parentId === null ? 'task' : NESTED_NOUNS[run.identity.kind];
+import type { RunView } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  joinFacts,
+  NESTED_NOUNS,
+  runNoun,
+} from '@texra-ai/harness/schemas';
 
 /** The agents a task started. */
-export const NESTED_AGENT = {
-  /** Count noun (singular; pair with a formatter): "3 agents". */
-  countNoun: 'agent',
-  /** The CLI status bar's narrow count suffix: "3 agt". */
-  compactCountSuffix: 'agt',
+export const NESTED_AGENT = Object.freeze({
   /** The CLI status bar's narrow suffix for agents still working: "2 live". */
   compactLiveSuffix: 'live',
   /** Expand-toggle aria when the tree is open. */
   collapseAction: 'Collapse agents',
-} as const;
+} as const);
 
-/** A collapsed parent's descendants in words: "2 agents · 1 running". */
+type NestedKinds = RunView['rollup']['kinds'];
+
+/** The CLI status bar's narrow count suffix for each kind: "3 agt". */
+const COMPACT_COUNT_SUFFIX = {
+  agent: 'agt',
+  process: 'cmd',
+  script: 'scr',
+} as const satisfies Record<keyof NestedKinds, string>;
+
+/** What a task started, each kind counted by its own noun and none called
+ *  an agent that is not one: "2 agents, 1 command". */
+export const nestedCountsLabel = (kinds: NestedKinds): string =>
+  Record.toEntries(NESTED_NOUNS)
+    .flatMap(([kind, noun]) =>
+      kinds[kind] > 0 ? [formatResultCount(kinds[kind], noun)] : [],
+    )
+    .join(', ');
+
+/** The same counts for the CLI status bar's narrow form: "2 agt 1 cmd". */
+export const nestedCountsCompact = (kinds: NestedKinds): string =>
+  Record.toEntries(COMPACT_COUNT_SUFFIX)
+    .flatMap(([kind, suffix]) =>
+      kinds[kind] > 0 ? [`${kinds[kind]} ${suffix}`] : [],
+    )
+    .join(' ');
+
+/** A collapsed parent's descendants in words: "2 agents, 1 command ·
+ *  1 running". */
 export function nestedRollupLabel(rollup: RunView['rollup']): string {
-  const agents = formatResultCount(rollup.total, NESTED_AGENT.countNoun);
-  return joinFacts([agents, rollup.running > 0 && `${rollup.running} running`]);
+  return joinFacts([
+    nestedCountsLabel(rollup.kinds),
+    rollup.running > 0 && `${rollup.running} running`,
+  ]);
 }
 
 /** The dispatch card's heading over the counts of what it lists ("3 agents,
@@ -61,7 +81,7 @@ export const dispatchSummary = (counts: string): string =>
  * CLI agent-list navigation. The list shows the task and the agents it
  * started.
  */
-export const AGENT_LIST = {
+export const AGENT_LIST = Object.freeze({
   /** Status-bar Tab action: `Tab agents`. */
   openAction: 'agents',
   /** Help / prose for the same Tab binding. */
@@ -74,10 +94,10 @@ export const AGENT_LIST = {
     'Agent list. Enter opens an agent. Esc stays here and returns to typing.',
   /** Status-bar Esc action while a nested agent is focused: walk to its parent. */
   parentAction: 'parent',
-} as const;
+} as const);
 
 /** The task-level actions every host names the same way. */
-export const TASK_ACTIONS = {
+export const TASK_ACTIONS = Object.freeze({
   /** The header and row menus' destructive item, named for what it
    *  deletes: "Delete task", "Delete agent". */
   delete: (run: Pick<RunView, 'parentId' | 'identity'>) =>
@@ -105,7 +125,7 @@ export const TASK_ACTIONS = {
   ancestors: 'Started by',
   /** The CLI's exit line before the `texra resume …` command. */
   resumeHint: 'Resume this task with:',
-} as const;
+} as const);
 
 /** An agent row's one action: open its agent's conversation, the composer
  *  addressed to it, to steer it while it runs or keep talking after. */

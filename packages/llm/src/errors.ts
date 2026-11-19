@@ -40,12 +40,13 @@ export const remoteOperation = (
  * API credit, keyed by the route that bills through each. `provider` is the
  * account the plan bills; a route names its plan as `plan`, so it bills
  * `plan ?? 'api-key'`. A `session` plan is the `plan` of a `session` route:
- * it signs in with an OAuth session and renews its token once on a 401; a
- * used-up quota asks before switching to an API key, because the switch starts
- * spending API credit. A `key` plan is the `plan` of an `api-key` route on a
- * provider console key (`null` for a key paid per token); a used-up quota
- * falls back to the model's own key without asking. Hosts store these
- * spellings, so a key is never renamed.
+ * it signs in with an OAuth session and renews its token once on a 401, and
+ * a resumed run keeps it only on the backend it ran on. A `key` plan is the
+ * `plan` of an `api-key` route on a provider console key (`null` for a key
+ * paid per token). For either kind a used-up quota asks before moving the
+ * run to the model's own key: the retry request offers the move, and only
+ * the person's answer takes it, because it starts spending API credit.
+ * Hosts store these spellings, so a key is never renamed.
  */
 export const PLAN_ROUTES = Object.freeze({
   'chatgpt-subscription': Object.freeze({
@@ -173,6 +174,9 @@ export class ModelError extends Schema.TaggedError<ModelError>()('ModelError', {
   ...ModelErrorFieldsSchema.fields,
   cause: Schema.optional(Schema.Defect()),
 }) {
+  // The constructor fills `retryable` and `scope` from the status. Decoding a
+  // stored ModelError passes the same fields through it, which is intended.
+  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(
     fields: Omit<ModelErrorFields, 'retryable'> & {
       readonly retryable?: boolean;
@@ -220,13 +224,27 @@ export const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 /**
- * Every provider's failure mapping treats HTTP 401/403 as `authentication`
- * and anything else the provider rejected as `provider-rejection`.
+ * Whether an HTTP status is 401 or 403, the statuses an API answers a
+ * credential it refuses with. The one reading of that status test, for a
+ * model provider, an OAuth token endpoint and any other HTTP API a TeXRA
+ * package calls. A caller whose API gives a 403 another meaning refines it
+ * first: GitHub answers a valid token over its rate limit with a 403 and
+ * rate-limit headers.
+ */
+export const isAuthFailureStatus = (status: number | undefined): boolean =>
+  status === 401 || status === 403;
+
+/**
+ * Every provider's failure mapping treats an {@link isAuthFailureStatus}
+ * status as `authentication` and anything else the provider rejected as
+ * `provider-rejection`, except where a provider's own reply names the
+ * credential (Google answers an invalid key with a 400;
+ * `SdkHttpFailure.credentialRejected`).
  */
 export const authOrRejectionKind = (
   status: number | undefined,
 ): 'authentication' | 'provider-rejection' =>
-  status === 401 || status === 403 ? 'authentication' : 'provider-rejection';
+  isAuthFailureStatus(status) ? 'authentication' : 'provider-rejection';
 
 /**
  * The delay one response asks the caller to wait, in milliseconds:
@@ -262,6 +280,8 @@ interface SdkHttpFailure {
   readonly status?: number;
   readonly headers?: Headers;
   readonly requestId?: string | null;
+  /** The reply says the credential itself was refused, whatever its status. */
+  readonly credentialRejected?: boolean;
 }
 
 /**
@@ -300,8 +320,12 @@ export function sdkModelError(
   fallbackMessage: string,
 ): ModelError {
   const retryAfterMs = retryAfterMsOf(http?.headers);
+  // The server's own word that repeating cannot help, which the SDKs obey
+  // too. Its `true` is not taken over a status that cannot succeed again.
+  const doNotRetry = http?.headers?.get('x-should-retry') === 'false';
   let kind: ModelError['kind'] = 'transport';
   if (cause instanceof SyntaxError) kind = 'provider-rejection';
+  else if (http?.credentialRejected) kind = 'authentication';
   else if (http) kind = authOrRejectionKind(http.status);
   return new ModelError({
     kind,
@@ -309,6 +333,7 @@ export function sdkModelError(
     ...(http?.status === undefined ? {} : { status: http.status }),
     ...(http?.requestId == null ? {} : { requestId: http.requestId }),
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    ...(doNotRetry ? { retryable: false } : {}),
     cause,
   });
 }

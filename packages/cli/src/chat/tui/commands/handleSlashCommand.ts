@@ -2,6 +2,7 @@ import { Cause, Effect } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
+import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import { setTransientNotice } from '../state/cliState';
 import { appendLocalErrorTranscript } from '../state/transcript';
 import {
@@ -106,9 +107,9 @@ export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
       }
       yield* runGuardedSlashCommand(commands, line, registered, () =>
         Effect.fail(
-          new Error(
-            `/${parsed.name} is registered but is not available in this CLI view yet.`,
-          ),
+          new CliUsageError({
+            message: `/${parsed.name} is registered but is not available in this CLI view yet.`,
+          }),
         ),
       );
       return true;

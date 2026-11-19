@@ -4,8 +4,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import { entryTypeIn, workspaceRelativePath } from '@texra-ai/harness/node';
 
-import { COMMIT_HASH_HEX_RANGE } from '@texra/utils/git/commitHashPattern';
-
 type GeneratedLatexdiffArtifactKind =
   | 'workspaceDiff'
   | 'versionControlDiff'
@@ -62,7 +60,11 @@ export function generateDiffFileName(
   return `${path.parse(editedFile).name}${suffix}.tex`;
 }
 
-/** Hash group sourced from `@texra/utils/git/commitHashPattern` so it can't drift from the git-commit validator. */
+/** An abbreviated or full git commit hash: git accepts one as short as 4
+ *  characters (shorter prefixes risk ambiguity) up to a full 40-character
+ *  SHA-1. */
+const COMMIT_HASH_HEX_RANGE = '[0-9a-fA-F]{4,40}';
+
 const VERSION_CONTROL_DIFF_PATTERN = new RegExp(
   `^(.+)${VERSION_CONTROL_DIFF_INFIX}(${COMMIT_HASH_HEX_RANGE})$`,
   'i',
@@ -138,18 +140,63 @@ export function parseVersionControlDiffFilename(
   };
 }
 
+/** The source a generated latexdiff artifact was built from, and whether
+ *  it is on disk. */
+export interface LatexdiffArtifactSource {
+  readonly sourcePath: string;
+  readonly sourceExists: boolean;
+}
+
 /**
- * Augment a fix-agent instruction with latexdiff-artifact awareness.
- *
- * Generated latexdiff artifacts are valid fixer targets — latexdiff itself
- * often emits non-compiling markup that regenerating the diff would only
- * reproduce — but the fixer should know the file is a diff so it repairs the
- * markup in place, and should propagate source-rooted fixes to the source so
- * they survive regeneration.
- *
- * `workspaceRoot` is the root the source hint is made relative to — the
- * caller's own session root, held as data. `undefined` (no folder open)
- * leaves the hint on the path the caller already has.
+ * The source of the generated latexdiff artifact at `filePath`, or `null`
+ * when the file is not one. A user may legitimately keep a source file named
+ * `chapter_diff.tex`, so a plain `_diff` suffix counts as generated only when
+ * its inferred source exists. A relative `filePath` is probed under `root`,
+ * and the answered `sourcePath` is relative the same way.
+ */
+export const latexdiffArtifactSource = Effect.fn(
+  'latexdiff.latexdiffArtifactSource',
+)(function* (filePath: string, root: string) {
+  const artifact = detectGeneratedLatexdiffArtifact(filePath);
+  if (!artifact) return null;
+  const fs = yield* FileSystem.FileSystem;
+  const sourceExists =
+    (yield* entryTypeIn(fs, path.resolve(root, artifact.sourcePath))) !==
+    undefined;
+  if (artifact.kind === 'workspaceDiff' && !sourceExists) return null;
+  return { sourcePath: artifact.sourcePath, sourceExists };
+});
+
+/**
+ * What a fixer is told about a latexdiff artifact. Generated artifacts are
+ * valid fixer targets (latexdiff itself often emits non-compiling markup that
+ * regenerating the diff would only reproduce), but the fixer should repair
+ * the markup in place, and carry a source-rooted fix to the source, when it
+ * is there, so it survives regeneration. `subject` names the artifact and
+ * `source.sourcePath` is shown as given.
+ */
+export function latexdiffArtifactNote(
+  subject: string,
+  { sourcePath, sourceExists }: LatexdiffArtifactSource,
+): string {
+  const origin = sourceExists
+    ? ` generated from ${sourcePath}`
+    : `; its inferred source ${sourcePath} is not present in the workspace`;
+  return [
+    `${subject} is a latexdiff artifact${origin}.`,
+    'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
+    ...(sourceExists
+      ? [
+          `If an error originates in the original source document, fix ${sourcePath} too so a regenerated diff stays fixed.`,
+        ]
+      : []),
+  ].join(' ');
+}
+
+/**
+ * `base` with the latexdiff note appended when `activeFilePath` (absolute) is
+ * a generated latexdiff artifact. `workspaceRoot` is the root the source is
+ * shown relative to; `undefined` (no folder open) shows it absolute.
  */
 export const buildLatexdiffAwareFixInstruction = Effect.fn(
   'latexdiff.buildLatexdiffAwareFixInstruction',
@@ -158,25 +205,14 @@ export const buildLatexdiffAwareFixInstruction = Effect.fn(
   activeFilePath: string,
   workspaceRoot: string | undefined,
 ) {
-  const artifact = detectGeneratedLatexdiffArtifact(activeFilePath);
-  if (!artifact) return base;
-
-  const fs = yield* FileSystem.FileSystem;
-  const sourceExists =
-    (yield* entryTypeIn(fs, artifact.sourcePath)) !== undefined;
-  // A user may legitimately keep a source file named chapter_diff.tex. Treat
-  // a plain `_diff` suffix as generated only when the inferred source exists.
-  if (artifact.kind === 'workspaceDiff' && !sourceExists) {
-    return base;
-  }
-
-  const sourceHint = sourceExists
-    ? ` generated from ${workspaceRelativePath(workspaceRoot, artifact.sourcePath)}`
-    : '';
-  return [
-    base,
-    `This file is a latexdiff artifact${sourceHint}.`,
-    'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
-    'If an error originates in the original source document, fix the source too so a regenerated diff stays fixed.',
-  ].join(' ');
+  const source = yield* latexdiffArtifactSource(
+    activeFilePath,
+    path.dirname(activeFilePath),
+  );
+  if (!source) return base;
+  const note = latexdiffArtifactNote('This file', {
+    ...source,
+    sourcePath: workspaceRelativePath(workspaceRoot, source.sourcePath),
+  });
+  return `${base} ${note}`;
 });

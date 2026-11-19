@@ -1,7 +1,7 @@
 // The completion, busy-frame and error plumbing every built-in slash form
 // runs its selection through.
 
-import { Cause, Effect, Fiber } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
@@ -34,7 +34,7 @@ export type FormAction<T> = (
 
 /**
  * Bind a slash form's selection to its action: it runs on the chat's
- * runtime, a failure is said in the transcript, and it completes through the
+ * runner (a form may close before its action ends), a failure is said in the transcript, and it completes through the
  * form's done and persistence props. A picker passes only its action and
  * what it overrides.
  */
@@ -48,7 +48,7 @@ export function bindSelection<T>(
     readonly busyTitle?: (value: T) => string;
   } = {},
 ): (value: T) => void {
-  const { runtime } = context;
+  const { chat } = context;
   const { onPersist, echoOnPersist = false } = props;
   const onDone = overrides.onDone ?? props.onDone;
   const { completion = 'afterAction', busyTitle } = overrides;
@@ -74,22 +74,21 @@ export function bindSelection<T>(
       // interrupts it instead of detaching from a promise that keeps running.
       const cancel = (): void => {
         if (!currentProgress()) return;
-        runtime.runFork(Fiber.interrupt(actionFiber));
+        actionFiber.interruptUnsafe();
         formProgress.set(undefined);
         onDone(value);
       };
       const title = busyTitle?.(value) ?? 'Working';
       const archiveCopyable = (): void => {
         const current = currentProgress();
-        if (!current?.copyableMessage || current.copyableMessageArchived) {
-          return;
-        }
+        const copyable = current?.copyable;
+        if (!current || !copyable || copyable.archived) return;
         if (echoOnPersist) onPersist?.();
-        appendLocalNotice(current.copyableMessage);
+        appendLocalNotice(copyable.text);
         formProgress.set({
           ...current,
           message: 'Authentication instructions were written to scrollback.',
-          copyableMessageArchived: true,
+          copyable: { ...copyable, archived: true },
         });
       };
       formProgress.set({
@@ -124,20 +123,20 @@ export function bindSelection<T>(
             ...current,
             message,
             ...(options?.copyable
-              ? { copyableMessage: message, copyableMessageArchived: false }
+              ? { copyable: { text: message, archived: false } }
               : {}),
           });
         },
       };
 
-      const actionFiber = runtime.runFork(
+      const actionFiber = chat.fork(
         Effect.suspend(() => action(value, context, output)).pipe(
           Effect.matchCauseEffect({
             onSuccess: () =>
               Effect.sync(() => {
                 const current = currentProgress();
                 if (!current) return;
-                if (current.copyableMessage) {
+                if (current.copyable) {
                   formProgress.set({ ...current, status: 'succeeded' });
                 } else {
                   close();
@@ -149,15 +148,13 @@ export function bindSelection<T>(
               if (echoOnPersist) onPersist?.();
               const error = Cause.squash(cause);
               const errorMessage = toErrorMessage(error);
-              const copyableMessage = current.copyableMessage;
+              const copyable = current.copyable?.text;
               yield* reportError(
-                copyableMessage
-                  ? new Error(`${errorMessage}\n${copyableMessage}`)
-                  : error,
+                copyable ? new Error(`${errorMessage}\n${copyable}`) : error,
               );
               current = currentProgress();
               if (!current) return;
-              if (current.copyableMessage) {
+              if (current.copyable) {
                 formProgress.set({
                   ...current,
                   status: 'failed',
@@ -178,7 +175,7 @@ export function bindSelection<T>(
       onDone(value);
     }
 
-    runtime.runFork(
+    chat.fork(
       Effect.suspend(() =>
         action(value, context, transcriptSlashCommandOutput),
       ).pipe(

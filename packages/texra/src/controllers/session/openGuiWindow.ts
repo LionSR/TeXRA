@@ -26,17 +26,20 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  Session,
+  WorkspaceRoots,
+  HostPresentation,
+  RuntimePresentationEventPayloads,
+} from '@texra-ai/harness';
 import {
   AgentCatalog,
   AgentDirectories,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
-  type HostPresentation,
   type PresentationEventHandlers,
   type ProcessServices,
-  type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import {
   AppSignals,
@@ -50,7 +53,7 @@ import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import type { Dialogs } from '@texra/hosts/uiHosts';
+import type { Dialogs, ExternalOpener } from '@texra/hosts/uiHosts';
 import type { TexraPlugin } from '@texra/tools/registry';
 import {
   ToolEditApprovalController,
@@ -83,6 +86,7 @@ import {
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { latexdiffVerbs, type LatexdiffHost } from './latexdiffVerbs';
+import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -93,6 +97,7 @@ import {
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
+import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { RunId } from '@texra-ai/harness/schemas';
 import {
   agentKeyOf,
@@ -109,20 +114,25 @@ import {
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
-import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  openLink,
+  type HostCommandFailure,
+} from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
- *  or in the background service), and the link the window attaches
- *  through (this process's windows, or the service's). */
-export interface GuiSession {
-  readonly session: Session;
-  readonly link: ServiceLink<WindowClient>;
-  /** Where the runs run, decided once at open: in the service, or in this
-   *  process with why when the window has a folder the service would hold
-   *  (it was out of reach); null for a window with no folder, which the
-   *  service never holds. */
-  readonly where: 'service' | { readonly local: string | null };
-}
+ *  or in the background service, decided once at open as `where`), and the
+ *  link the window attaches through (this process's windows, or the
+ *  service's). */
+export type GuiSession = { readonly session: Session } & (
+  | { readonly where: 'service'; readonly link: ServiceLink }
+  /** In this process, with why when the window has a folder the service
+   *  would hold (it was out of reach); null for a window with no folder,
+   *  which the service never holds. */
+  | {
+      readonly where: { readonly local: string | null };
+      readonly link: ServiceLink<WindowClient>;
+    }
+);
 
 /** The kinds a host answers its own way, and what the refusal of one a
  *  host lacks names; the shared body answers every other kind. */
@@ -132,7 +142,6 @@ const OWN_REQUEST_LABEL = {
   useCurrentFile: "The editor's current file",
   addOpenedFiles: "The editor's open files",
   gettingStarted: 'Starting a project',
-  workspaceFile: 'The file editor',
 } as const satisfies Partial<Record<HostCommand['kind'], string>>;
 
 /** The requests a host answers its own way. */
@@ -151,7 +160,6 @@ const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
 export type OwnHostHandlers = {
   readonly [K in OwnHostCommand['kind']]?: (
     request: Extract<OwnHostCommand, { kind: K }>,
-    port: string,
   ) => HostVerb<HostOutcome>;
 };
 
@@ -171,11 +179,9 @@ type HostVerb<A> = Effect.Effect<
 export interface SharedHostCommandBindings {
   /** Open a file of this session's workspace, at a line when one is named. */
   openPath(file: string, line: number | undefined): HostVerb<void>;
-  /** The files the user picked for a launcher field; null when they picked
-   *  none. */
-  pickFiles(
-    fileType: Extract<HostCommand, { kind: 'pickFiles' }>['fileType'],
-  ): HostVerb<readonly string[] | null>;
+  /** The host's native dialog that opens several files, behind the
+   *  launcher's file picker. */
+  readonly openFiles: OpenFilesDialog;
   /** How a generated diff opens and a diff run shows its progress. */
   readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
@@ -184,9 +190,9 @@ export interface SharedHostCommandBindings {
    *  prompt on one host, the Models tab on the other. The caller re-reads
    *  the secret store after this returns. */
   setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
-  /** Open a web address in the browser. */
-  openExternal(url: string): HostVerb<void>;
-  readonly openInstallGuide: HostVerb<void>;
+  /** Open a web address in the browser. A failed open is answered, in the
+   *  body below, as a rejection naming the address. */
+  readonly openExternal: ExternalOpener['openExternal'];
   /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
    *  takes, the two skips write the funnel's flags and Run Setup launches
@@ -254,11 +260,11 @@ interface GuiWindowPorts {
   ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
 }
 
-/** The settings body's verbs on a window's runs: its own session and
- *  launcher, never those of another project its host happens to show. */
+/** The settings body's verbs on a window's runs: its own session's, never
+ *  those of another project its host happens to show. */
 export type GuiWindowSettingsRuns = Pick<
   SettingsHostBindings,
-  'selectLauncherAgent' | 'revealRun' | 'runLabel'
+  'revealRun' | 'runLabel'
 >;
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
@@ -377,6 +383,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // service, why (reaching it again, or refused by a newer TeXRA), so the
   // view never sits frozen without saying so.
   const { where } = runs;
+  // The service's link, when the service holds the project: where this
+  // window's writes of the project's files run.
+  const service = runs.where === 'service' ? runs.link : undefined;
   if (where === 'service')
     yield* Effect.forkScoped(
       Stream.runForEach(linkOutage(runs.link), (reason) =>
@@ -462,6 +471,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       },
       runs: runActions,
       latexdiff: latexdiff.file,
+      service,
     },
   );
 
@@ -502,13 +512,19 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'pickFiles': {
-          const paths = yield* bindings.pickFiles(request.fileType);
+          const paths = yield* pickLauncherFiles(
+            roots.workspace,
+            request.fileType,
+            bindings.openFiles,
+          );
           if (paths === null) return yield* new Cancelled();
           return { kind: 'files', paths } satisfies HostOutcome;
         }
         case 'openFile':
-          yield* bindings.openPath(request.path, request.line ?? undefined);
+          yield* bindings.openPath(request.path, request.line);
           return done;
+        case 'workspaceFile':
+          return yield* answerWorkspaceFile(request.action, service);
         case 'openLabel': {
           // The search is the body's; the host only opens the match.
           const opened = yield* findLabelInWorkspace(
@@ -584,12 +600,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         }
         case 'fork': {
-          const forked = yield* runActions.fork(
-            request.runId,
-            request.at ?? null,
-          );
+          const forked = yield* runActions.fork(request.runId, request.at);
           const { draft } = request;
-          if (draft != null) {
+          if (draft !== undefined) {
             // The composer keeps an image while its text holds the image's
             // `[name]` chip, the attached file's name. A send from the CLI
             // names it `[Image #N]` instead, so a missing chip is added.
@@ -661,12 +674,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           );
           return done;
         case 'openSettings':
-          yield* bindings.openSettings(request.target ?? undefined);
+          yield* bindings.openSettings(request.target);
           return done;
         case 'apiKeyBanner':
           yield* request.action === 'set'
             ? bindings.setApiKey()
-            : bindings.openExternal(
+            : openLink(
+                bindings.openExternal,
                 texraGuideUrl('installation', 'setting-up-api-keys'),
               );
           return done;
@@ -678,7 +692,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             case 'dir': {
               // Without a custom directory there is nothing to reveal, so the
               // banner's link is the agent settings instead.
-              if (request.customDirSet !== true) {
+              if (!request.customDirSet) {
                 yield* bindings.openSettings('agents/library');
                 return done;
               }
@@ -691,7 +705,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               return done;
             }
             case 'docs':
-              yield* bindings.openExternal(texraGuideUrl('custom-agents'));
+              yield* openLink(
+                bindings.openExternal,
+                texraGuideUrl('custom-agents'),
+              );
               return done;
           }
           return done;
@@ -699,7 +716,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* snapshot.refreshHostBanners;
           return done;
         case 'openInstallGuide':
-          yield* bindings.openInstallGuide;
+          // Every dependency the banner lists installs from the one guide
+          // page.
+          yield* openLink(bindings.openExternal, texraGuideUrl('installation'));
           return done;
         case 'onboarding':
           switch (request.action) {
@@ -728,10 +747,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   }
   /** An own kind the host binds runs its handler; one it leaves out is
    *  refused, worded here for both hosts. */
-  const own = (
-    request: OwnHostCommand,
-    port: string,
-  ): HostVerb<HostOutcome> => {
+  const own = (request: OwnHostCommand): HostVerb<HostOutcome> => {
     const handler = host.own[request.kind];
     if (handler === undefined)
       return Effect.fail(
@@ -740,28 +756,21 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         }),
       );
     // cast: the handler bound under `request.kind` takes a request of that kind.
-    return (
-      handler as (
-        request: OwnHostCommand,
-        port: string,
-      ) => HostVerb<HostOutcome>
-    )(request, port);
+    return (handler as (request: OwnHostCommand) => HostVerb<HostOutcome>)(
+      request,
+    );
   };
   function handle(
     request: HostCommand,
     port: string,
   ): Effect.Effect<HostOutcome, HostCommandFailure, ProcessServices> {
     return Effect.provide(
-      isOwnHostCommand(request) ? own(request, port) : shared(request, port),
+      isOwnHostCommand(request) ? own(request) : shared(request, port),
       requestLayer,
     );
   }
 
   const settingsRuns: GuiWindowSettingsRuns = {
-    selectLauncherAgent: (agent) =>
-      Effect.sync(() =>
-        bridge.surfaceAction({ kind: 'launch', patch: { agent } }),
-      ),
     revealRun: (runId) =>
       session.view.current().runs.has(runId)
         ? host.runs

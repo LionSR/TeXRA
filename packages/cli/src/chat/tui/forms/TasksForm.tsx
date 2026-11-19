@@ -4,7 +4,7 @@
 // detaches; the task keeps running in the service.
 
 import { Box, Text, useInput, useWindowSize } from 'ink';
-import { Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
 import { presentFollowUpResult } from '@texra-ai/harness/host';
@@ -44,8 +44,9 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
+import { useMountScope } from '../state/useMountScope';
 import { AsyncListForm } from './_shared/ListForm';
-import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
+import type { TuiRequest } from '../state/approvalQueue';
 
 interface TasksFormProps {
   readonly connect: ConnectService;
@@ -116,7 +117,8 @@ interface AttachedTaskProps {
 
 function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const { task } = props;
-  const { runtime } = useChatProcess();
+  const { chat } = useChatProcess();
+  const mount = useMountScope();
   const { columns } = useWindowSize();
   const [level, setLevel] = useState<AttachedTaskLevel>({
     run: undefined,
@@ -132,7 +134,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const actions = useRef<AttachedTaskActions>(undefined);
 
   useEffect(() => {
-    const fiber = runtime.runFork(
+    const fiber = mount.fork(
       followAttachedTask(
         props.connect,
         task,
@@ -147,14 +149,14 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           ),
       ),
     );
-    return () => {
-      runtime.runFork(Fiber.interrupt(fiber));
-    };
-  }, [runtime, props.connect, task]);
+    return () => fiber.interruptUnsafe();
+  }, [mount, props.connect, task]);
 
   /** Run one action on the service, saying so when it fails. The notice
    *  is about the latest attempt: a new one clears it, and an older attempt
-   *  that finishes later says nothing. */
+   *  that finishes later says nothing. An action belongs to the chat, not
+   *  this view: a decision or a stop already sent lands even when the view
+   *  closes first. */
   const attempt = useRef(0);
   const act = (
     program: (
@@ -173,7 +175,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       say('Still connecting to the TeXRA service.');
       return;
     }
-    runtime.runFork(
+    chat.fork(
       program(ready, say).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
@@ -185,16 +187,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   };
 
-  // A plugin's request (the external inquiry's) is answered from its
-  // thread and never blocks its run, so it is named apart and never stands
-  // in front of a request this view can answer.
   const pending = level.requests.find(
-    (request): request is PendingApprovalFact =>
-      request.payload.kind !== 'plugin' && !decided.has(request.requestId),
+    (request) => !decided.has(request.requestId),
   );
-  const inquiries = level.requests.filter(
-    (request) => request.payload.kind === 'plugin',
-  ).length;
   // Previews of decided requests go: each holds two whole documents.
   useEffect(() => {
     const open = new Set(level.requests.map((request) => request.requestId));
@@ -361,11 +356,6 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           availableRows={10}
           onDecide={decide}
         />
-      )}
-      {inquiries > 0 && (
-        <Text dimColor>
-          {`${inquiries === 1 ? 'An external inquiry waits' : `${inquiries} external inquiries wait`}; answer from its thread.`}
-        </Text>
       )}
     </Box>
   );

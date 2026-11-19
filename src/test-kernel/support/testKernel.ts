@@ -37,26 +37,29 @@ import {
   Sessions,
   type LocalSession,
   type OpenOptions,
+  type HostInteractions,
 } from '@texra-ai/harness';
 import {
   AgentCatalog,
   AgentDirectories,
-  AppState,
-  GlobalStorageFs,
-  GlobalValues,
   processLayer,
-  StateStores,
   ToolAvailability,
-  ToolCatalog,
   UsageLog,
-  type HostInteractions,
   type ProcessRuntime,
-  type StateStore,
   type ProcessServices,
   type ValidationModel,
 } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
-import { AppSignals, Secrets } from '@texra-ai/harness/plugins';
+import {
+  AppSignals,
+  Secrets,
+  AppState,
+  GlobalStorageFs,
+  GlobalValues,
+  StateStores,
+  ToolCatalog,
+  type StateStore,
+} from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
   Interactions,
@@ -176,8 +179,6 @@ const followedPorts = (current: Ref.Ref<HostRecord>) => {
     custom: () => host().platform.agentDirectories.custom(),
     customConfigured: () => host().platform.agentDirectories.customConfigured(),
     builtIn: () => host().platform.agentDirectories.builtIn(),
-    teamMembers: (repoState, teamId) =>
-      host().app.teamMembers?.(repoState, teamId) ?? Effect.succeed(undefined),
   };
   return { secrets, appState, agentDirectories };
 };
@@ -265,7 +266,7 @@ const composedProcess = ({
         storageRoot: host.roots.storageRoot,
         settings: host.app.settings,
         plugins: [...host.app.plugins(), ...extra],
-        secrets: Secrets.layer(ports.secrets),
+        secrets: Secrets.layer(ports.secrets, host.app.client),
         appState: AppState.layer(ports.appState),
         agentDirectories: Layer.succeed(AgentDirectories)(
           ports.agentDirectories,

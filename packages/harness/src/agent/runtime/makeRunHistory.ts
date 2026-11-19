@@ -30,11 +30,7 @@ import {
   type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runState';
-import type {
-  HistoryMessage,
-  RunHistoryRow,
-  WithBlobs,
-} from '@shared/session/historyTurns';
+import type { HistoryMessage, WithBlobs } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import {
@@ -57,7 +53,7 @@ const isMessageBearing = (row: RunHistoryDraft): boolean =>
  * The first violated precondition of `RunCell.append` that only the batch
  * shows, or null. Which row may follow which, a delivery's tool group
  * included, is checked by the row handlers (`applyRunRows`), which
- * `commit` runs the batch through before publishing it.
+ * `commit`'s job runs the stored batch through before it commits.
  */
 function contractViolation(
   run: RunId,
@@ -137,18 +133,6 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
     : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
 }
 
-/** The batch's history rows at provisional commits above the state's: the
- *  handlers read a `commit` only for strict increase, so these apply as the
- *  published rows will. */
-const candidates = (
-  state: RunState,
-  rows: readonly RunHistoryDraft[],
-): readonly RunHistoryRow[] =>
-  rows.filter(isRunStateRow).map((row, i) => ({
-    ...row,
-    ...{ seq: i + 1, commit: state.commit + i + 1, at: 0 },
-  }));
-
 /**
  * The prepared-history rules over `history` from message `from` on: they
  * are between neighbours, so a suffix starting on a checked message, never
@@ -170,19 +154,22 @@ const unprepared = (
   });
 };
 
-type Refusal = DatabaseAggregateClosed;
 /** A closed aggregate's refusal, worded by `runRefusal`; any other rollback
  *  stays the write failure it is. */
 const notOwner =
   (runId: RunId) =>
   <A, E, R>(
     effect: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, Exclude<E, Refusal> | RunHistoryRefused, R> =>
+  ): Effect.Effect<
+    A,
+    Exclude<E, DatabaseAggregateClosed> | RunHistoryRefused,
+    R
+  > =>
     Effect.mapError(effect, (failure) =>
       failure instanceof DatabaseAggregateClosed
         ? runRefusal(runId, failure)
         : // cast: the instanceof test above ruled the refusal out.
-          (failure as Exclude<E, Refusal>),
+          (failure as Exclude<E, DatabaseAggregateClosed>),
     );
 
 /** The refusal of rows that cannot be applied. */
@@ -242,31 +229,9 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
       if (unsafe !== null)
         return yield* new RunHistoryRefused({
-          reason: 'unsafe-endpoint',
           runId: run,
           detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
         });
-  // `load`'s answer with the batch in, before publishing it: a committed
-  // batch `load` cannot apply is a run nothing can read again. A delivery
-  // its results do not match is the writer's own batch: a defect.
-  const batch = applyRunRows(state, candidates(state, rows));
-  if (Result.isFailure(batch) && batch.failure.reason === 'mismatched-delivery')
-    return yield* broken(batch.failure.detail);
-  const after = yield* loaded(run, batch, false);
-  // The history `load` checks with `PreparedHistorySchema`, checked here
-  // from where the batch changes it (an edit's range start, else the
-  // already-checked history's end); re-checking all is quadratic.
-  const assembled = after?.messages ?? [];
-  if (rows.some(isMessageBearing) && assembled.length > 0) {
-    const edit = rows.find((row) => row.type === 'context.edit');
-    const held = state.messages.length;
-    const kept =
-      edit?.type === 'context.edit'
-        ? Math.min(edit.payload.range.from, held)
-        : held;
-    const refusal = unprepared(run, assembled, kept);
-    if (refusal !== null) return yield* refusal;
-  }
   // Converted before the job: a row this build cannot store is refused
   // with its reason, nothing written.
   const drafts: WithBlobs<SessionRowDraft>[] = [];
@@ -292,21 +257,40 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     const beside = yield* alongside;
     const written = yield* runStateAppend(append)([...born, ...drafts]);
     yield* append(beside);
-    return written;
+    // `load`'s answer with the batch in, at the commits the publisher
+    // assigned: the state the run continues from. A batch `load` cannot
+    // apply fails the job, so nothing is written that no run could read
+    // again. A delivery its results do not match is the writer's own
+    // batch: a defect.
+    const batch = applyStored(state, written.filter(isRunStateRow));
+    if (
+      Result.isFailure(batch) &&
+      batch.failure.reason === 'mismatched-delivery'
+    )
+      return yield* broken(batch.failure.detail);
+    const after = yield* loaded(run, batch, false);
+    if (after === null) return yield* broken('its batch left no run state');
+    // The history `load` checks with `PreparedHistorySchema`, checked here
+    // from where the batch changes it (an edit's range start, else the
+    // already-checked history's end); re-checking all is quadratic.
+    if (rows.some(isMessageBearing) && after.messages.length > 0) {
+      const edit = rows.find((row) => row.type === 'context.edit');
+      const held = state.messages.length;
+      const kept =
+        edit?.type === 'context.edit'
+          ? Math.min(edit.payload.range.from, held)
+          : held;
+      const refusal = unprepared(run, after.messages, kept);
+      if (refusal !== null) return yield* refusal;
+    }
+    return after;
   }, Effect.scoped);
-  // A target no longer held open is `not-owner`, nothing written.
-  const committed = yield* (
+  // A target no longer held open refuses the write, nothing written.
+  return yield* (
     within === undefined
       ? sessionLog.transact((tx) => job(tx.append))
       : job(within)
   ).pipe(notOwner(run));
-  // The same history rows again at the commits the publisher assigned: the
-  // state the run continues from. A failure here is this module's defect.
-  const applied = applyStored(state, committed.filter(isRunStateRow));
-  if (Result.isSuccess(applied) && applied.success !== null)
-    return applied.success;
-  const why = Result.isFailure(applied) ? applied.failure.detail : 'nothing';
-  return yield* broken(`its own rows reject the published batch: ${why}`);
 });
 
 /**
@@ -335,12 +319,13 @@ export function makeRunHistory(
    * request a dead process left waiting on a person, so no surface outlives
    * the process that asked and the call or turn that asked asks again, then
    * the activation's rows. The cancellations come first: a decision before
-   * the activation is not one its owner was given. A request that does not
-   * block its caller keeps nothing waiting and stays open.
+   * the activation is not one its owner was given.
    */
   const activate = <E>(
     run: RunId,
-    activation: NonNullable<RunOpening<E>['activation']>,
+    activation: (
+      state: RunState | null,
+    ) => Effect.Effect<readonly SessionRowDraft[], E>,
   ) =>
     sessionLog
       .transact((tx) =>
@@ -368,15 +353,20 @@ export function makeRunHistory(
 
   const open = Effect.fn('RunHistory.open')(function* <E>(
     run: RunId,
-    opening: RunOpening<E> = {},
+    opening?: RunOpening<E>,
   ) {
-    const { within, activation } = opening;
+    const within =
+      opening !== undefined && 'within' in opening ? opening.within : undefined;
     const seeded =
-      (activation === undefined
-        ? yield* read(run, Infinity, within === undefined)
-        : yield* activate(run, activation)) ?? freshRunState(0);
+      (opening !== undefined && 'activation' in opening
+        ? yield* activate(run, opening.activation)
+        : yield* read(run, Infinity, within === undefined)) ?? freshRunState(0);
     const ref = yield* SynchronizedRef.make(seeded);
-    let registration = opening.registration ?? none; // the first append's
+    // The first append's.
+    let registration =
+      opening !== undefined && 'registration' in opening
+        ? opening.registration
+        : none;
     const cell: RunCell = {
       runId: run,
       current: SynchronizedRef.get(ref),

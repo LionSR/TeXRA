@@ -28,6 +28,10 @@ import {
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import {
+  DESKTOP_PDF_COMMANDS,
+  DesktopPdfLoadFailedMessageSchema,
+} from '../shared/desktopPdfMessages.js';
+import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
   getDesktopLogFilePath,
@@ -55,7 +59,7 @@ import {
   openProjectSurface,
   type ProjectSurface,
 } from './desktopProjectSurface.js';
-import { DesktopPromptController } from './desktopPromptController.js';
+import { makeDesktopPrompts } from './desktopPromptController.js';
 import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
 import { createDesktopShellCommands } from './desktopShellIpc.js';
 import type { DesktopLayout } from './platform/paths.js';
@@ -89,6 +93,11 @@ interface DesktopWindowOptions {
 
 /** The one field every session message carries: which project it names. */
 const SessionMessageEnvelopeSchema = Schema.Struct({ session: Schema.String });
+
+/** Chromium's net error codes for a load a newer one replaced, which is not a
+ *  failure, and for a `file:` URL that names nothing. */
+const CHROMIUM_ERR_ABORTED = -3;
+const CHROMIUM_ERR_FILE_NOT_FOUND = -6;
 
 /** Opening is synchronous, as Electron's window creation is: see
  *  {@link DesktopWindows.open}. */
@@ -153,10 +162,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   });
   const host = createDesktopWindowHost({ window, runtime, spawn, bridge });
   const { previewHost } = host;
-  const promptController = yield* Effect.acquireRelease(
-    Effect.sync(() => new DesktopPromptController(host.post)),
-    (controller) => Effect.sync(() => controller.dispose()),
-  );
+  const promptController = yield* makeDesktopPrompts(host.post);
   attachRendererConsoleLog(window.webContents);
   // A rejected GitHub token is told in this window, whose Git settings
   // replace it; the window's close ends the follower and its notices.
@@ -224,7 +230,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     } = SubscriptionRef.getUnsafe(projects.state);
     host.post({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      open: open.flatMap(({ key, root }) => (root === undefined ? [] : [key])),
+      open: open.flatMap(({ key, roots }) =>
+        roots.workspace === undefined ? [] : [key],
+      ),
       activeKey,
       recent,
     });
@@ -267,7 +275,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
    *  answers undefined) and recording ownership: new ports, same sessions. */
   const resetForNewDocument = reconcileLane.withPermits(1)(
     Effect.gen(function* () {
-      promptController.dispose();
+      yield* promptController.reset;
       yield* bindings.releaseAll;
       yield* bindings.sync;
       yield* surface.reattach();
@@ -279,6 +287,27 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // `subscribe` (or terminal) reaches the binding the reset makes, never the
   // one it is about to close.
   const routing = Semaphore.makeUnsafe(1).withPermit;
+
+  // A PDF tab is a frame of this window, and a frame that cannot load tells
+  // only the main process. A failure of any other frame does not decode as
+  // a PDF's and is left to the frame.
+  window.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, url, isMainFrame) => {
+      if (isMainFrame || errorCode === CHROMIUM_ERR_ABORTED) return;
+      const failed = Schema.decodeUnknownResult(
+        DesktopPdfLoadFailedMessageSchema,
+      )({
+        command: DESKTOP_PDF_COMMANDS.LOAD_FAILED,
+        pdfUrl: url,
+        reason:
+          errorCode === CHROMIUM_ERR_FILE_NOT_FOUND
+            ? 'The file is no longer on disk. Build the document again to reload it.'
+            : `The viewer reported ${errorDescription}.`,
+      });
+      if (Result.isSuccess(failed)) host.post(failed.success);
+    },
+  );
 
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler
@@ -340,7 +369,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     },
     createDesktopLogIpc(host.post, {
       readLog: () =>
-        readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
+        readDesktopLogSnapshot({
+          workspaceRoot: projects.active().roots.workspace,
+        }),
       logFile: getDesktopLogFilePath,
       following: logFollowing,
       copyLog: (text) => clipboard.writeText(text),

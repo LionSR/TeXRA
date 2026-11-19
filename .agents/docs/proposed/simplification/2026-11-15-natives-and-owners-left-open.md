@@ -20,15 +20,13 @@ another open PR to merge first.
 4. **`replyDocuments.ts` reads three files with `readFileString` and a CRLF
    replace**, the body of `readNormalizedFile`. Left for the same reason: the
    open #14941 edits that file.
-5. **`import.meta.dirname`.** Eight scripts under `packages/harness/scripts`,
-   `packages/llm/scripts` and `scripts/` build their directory with
-   `fileURLToPath(new URL('..', import.meta.url))`, and the bundle banner
-   (`scripts/esm-cjs-globals-banner.mjs`) rebuilds `__filename` and
-   `__dirname` from `import.meta.url`. Node 22 gives both directly. The banner
-   runs inside the packaged desktop and CLI bundles, so the change wants a
-   packaged smoke run. The open #14951 already converts
-   `scripts/verify-desktop.mjs` and drops `nanoid` for `node:crypto`, so this
-   run left both to it.
+5. **`import.meta.dirname`.** Every script now reads its directory from
+   `import.meta.dirname`; the last one, `packages/harness/scripts/publish-npm.mjs`,
+   followed on 2026-11-19 (checked with its `--dry-run`). What is left is the
+   bundle banner (`scripts/esm-cjs-globals-banner.mjs`), which rebuilds
+   `__filename` and `__dirname` from `import.meta.url`. It runs inside the
+   packaged desktop and CLI bundles, so that change wants a packaged smoke
+   run.
 
 ## Landed in the 2026-11-16 sweep
 
@@ -52,7 +50,7 @@ another open PR to merge first.
   failed with "Attachment not found" (regression test:
   `src/test-kernel/tools/ExtractFiguresTool.vitest.ts`). A figure two files
   include now enters media once.
-- `describe` in `packages/harness/src/agent/core/tools/toolSchema.ts` groups
+- `describe` in `packages/harness/src/tools/core/toolSchema.ts` groups
   a field's copies with `Map.groupBy` instead of a hand-written loop.
 
 A sweep of `packages/*/src` for the usual hand-written natives
@@ -73,7 +71,7 @@ dedup, chunked `Promise.all`) found none left beyond the above.
 - **`sha256Hex` / `truncatedHexId` at the four app sites that call
   `hash('sha256', …, 'hex')`.** `idHash.ts` is harness-internal; exporting it
   through the SDK surface to replace a one-line Node call is not a gain.
-- **`truncate` in `packages/harness/src/agent/storage/conversationFormat.ts`
+- **`truncate` in `packages/harness/src/shared/transcript/conversationFormat.ts`
   on `truncateWithEllipsis`**: its ASCII `...` is deliberate (its comment says
   why).
 - **`isFields` in `packages/llm/src/api/failureReply.ts` as

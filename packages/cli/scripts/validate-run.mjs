@@ -299,68 +299,84 @@ function validateBinarySmoke() {
     ),
     'agents list NDJSON records should have kind=agent',
   );
+
+  // A reference a run's bind refuses is refused here too, in its words.
+  assertUsageError(
+    run(process.execPath, [
+      binaryPath,
+      'models',
+      'show',
+      'anthropic/claude-opus-5-5@none',
+    ]),
+    'texra models show <model that always thinks>@none',
+    'cannot turn thinking off',
+  );
 }
 
-function validateTeamListAvailability() {
+function validateBundledLeanAgents() {
   const cwd = makeScratch('texra-cli-list-cwd-');
   const home = makeScratch('texra-cli-list-home-');
   try {
-    const listEnv = isolatedCliHomeEnv(home);
-    const runList = (args = []) =>
-      run(
-        process.execPath,
-        [binaryPath, 'team', 'list', '--cwd', cwd, ...args, '--no-color'],
-        {
-          cwd: repoRoot,
-          env: listEnv,
-        },
+    // The Lean agents ship bundled (#13080), so a fresh home lists them
+    // without any sign-in.
+    const ndjson = run(
+      process.execPath,
+      [
+        binaryPath,
+        'agents',
+        'list',
+        '--cwd',
+        cwd,
+        '--output-format',
+        'ndjson',
+        '--no-color',
+      ],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
+    );
+    assertSuccess(ndjson, 'texra agents list NDJSON in a fresh home');
+    const names = parseNdjson(ndjson.stdout, 'agents list NDJSON').map(
+      (record) => record.agent?.name,
+    );
+    for (const lean of [
+      'lean',
+      'leanSearch',
+      'leanSimplifier',
+      'leanBlueprint',
+      'leanOrchestrator',
+    ]) {
+      assert(
+        names.includes(lean),
+        `agents list should include the bundled ${lean} agent without auth\nstdout:\n${ndjson.stdout}`,
       );
+    }
+  } finally {
+    removeScratch(cwd);
+    removeScratch(home);
+  }
+}
 
-    const text = runList();
-    assertSuccess(text, 'texra team list');
-    const leanProjectLine = text.stdout
-      .split('\n')
-      .find((line) => line.includes('\tlean-project\t'));
-    assert(
-      leanProjectLine != null,
-      `team list should include lean-project\nstdout:\n${text.stdout}`,
+/** A list naming an agent that does not exist is a usage error and stores
+ *  nothing: stored, it would leave the workspace only the agents it names. */
+function validateUnknownWorkspaceAgent() {
+  const cwd = makeScratch('texra-cli-agents-cwd-');
+  const home = makeScratch('texra-cli-agents-home-');
+  const configAgents = (...args) =>
+    run(
+      process.execPath,
+      [binaryPath, 'config', 'agents', ...args, '--cwd', cwd, '--no-color'],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
     );
-    // The Lean agents ship bundled (#13080), so the preset is whole without
-    // any sign-in: a full count and no degraded/unavailable marker.
-    assert(
-      leanProjectLine.endsWith('\tagents:7'),
-      `lean-project should show its bundled agents as available without auth\nline:\n${leanProjectLine}`,
+  try {
+    assertUsageError(
+      configAgents('--agents', 'assistant,inherit'),
+      'texra config agents with a name no agent has',
+      'Agent not found: inherit',
     );
-
-    const json = runList(['--output-format', 'json']);
-    assertSuccess(json, 'texra team list JSON');
-    const jsonRecords = JSON.parse(json.stdout);
-    const leanProjectJson = jsonRecords.find(
-      (record) => record.id === 'lean-project',
-    );
-    const leanProjectAvailability = leanProjectJson?.availability;
+    const shown = configAgents();
+    assertSuccess(shown, 'texra config agents after a refused list');
     assert(
-      leanProjectAvailability?.agents?.label != null,
-      `team list JSON should include planned availability\nstdout:\n${json.stdout}`,
-    );
-    const leanProjectAgents = leanProjectAvailability?.agents;
-    assert(
-      leanProjectAvailability?.status === 'available' &&
-        leanProjectAgents?.available === 7 &&
-        leanProjectAgents?.total === 7 &&
-        leanProjectAgents?.missing?.length === 0,
-      `lean-project JSON should report its bundled agents as available without auth\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
-    );
-
-    const ndjson = runList(['--output-format', 'ndjson']);
-    assertSuccess(ndjson, 'texra team list NDJSON');
-    const leanProjectNdjson = parseNdjson(
-      ndjson.stdout,
-      'team list NDJSON',
-    ).find((record) => record.preset?.id === 'lean-project');
-    assert(
-      leanProjectNdjson?.preset?.availability?.agents?.label != null,
-      `team list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
+      shown.stdout.includes('Workspace agents: all'),
+      `a refused list should leave the workspace agents unchanged\nstdout:\n${shown.stdout}`,
     );
   } finally {
     removeScratch(cwd);
@@ -402,18 +418,6 @@ function validateFileFlagMissingValues() {
     ]),
     'texra run missing --instruction-file value',
     'Missing value for --instruction-file',
-  );
-  assertUsageError(
-    run(process.execPath, [
-      binaryPath,
-      'team',
-      'run',
-      'mathematician',
-      '--input',
-      '--print',
-    ]),
-    'texra team run missing --input value',
-    'Missing value for --input',
   );
 }
 
@@ -1675,8 +1679,8 @@ prompt: |
             advance('/ commands', 'asked');
             pty.setTimer(() => pty.write('Run the held command.'), 500);
             pty.setTimer(() => pty.write('\r'), 900);
-          } else if (phase === 'asked' && plain.includes('Run command?')) {
-            advance('Run command?', 'running');
+          } else if (phase === 'asked' && plain.includes('Run a command')) {
+            advance('Run a command', 'running');
             pty.write('y');
             // The command writes its start marker, then waits. The TUI
             // confirms the follow-up was queued before we release it.
@@ -2852,7 +2856,7 @@ prompt: |
     // Auto-approve may land before or after that row.
     const limit = storeRows(
       projectDir(),
-      `SELECT json_extract(e.data, '$.approvalPolicy.limit') AS limit_ FROM event e
+      `SELECT json_extract(e.data, '$.grants.limit') AS limit_ FROM event e
        JOIN event_sequence s ON s.id = e.aggregate
        WHERE s.logical_id = ? AND e.type = 'run.start'`,
       narrowed,
@@ -2972,7 +2976,7 @@ prompt: |
         const steps = [
           ['opening', 'list', '/ commands', ['/tasks', '\r']],
           ['list', 'attach', 'approval_validation', ['\r']],
-          ['attach', 'approved', 'Run command?', ['y']],
+          ['attach', 'approved', 'Run a command', ['y']],
           ['approved', 'sent', 'The approved command ran.', ['Ping', '\r']],
         ];
         const step = steps.find(([at]) => at === phase);
@@ -3059,11 +3063,15 @@ async function validateServiceSharedTask() {
       [binaryPath, 'tasks', 'attach', runId, '--cwd', project.work],
       { cwd: project.work, env: { ...process.env, CI: '1', ...env } },
     );
+    liveChildren.add(child);
     const state = { stdout: '', stderr: '', exit: null };
     child.stdout.on('data', (chunk) => (state.stdout += chunk));
     child.stderr.on('data', (chunk) => (state.stderr += chunk));
     state.exited = new Promise((resolve) =>
-      child.on('close', (code) => resolve((state.exit = code))),
+      child.on('close', (code) => {
+        liveChildren.delete(child);
+        resolve((state.exit = code));
+      }),
     );
     return state;
   };
@@ -3140,6 +3148,44 @@ async function validateServiceSharedTask() {
     assert(
       a.stdout === b.stdout && count(a.stdout, 'Second message') >= 2,
       `both attached terminals should print the same two-turn transcript (artifact: ${artifactA})\nA:\n${a.stdout}\nB:\n${b.stdout}`,
+    );
+    // A task whose service was killed under it has no outcome and nobody
+    // running it: an attach says so and exits, never waits in silence.
+    const orphan = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Orphan message',
+      ],
+      'texra tasks start (orphan)',
+    );
+    const watching = attach(orphan);
+    await waitFor('the attach to print the orphan reply', () =>
+      watching.stdout.includes('Orphan message'),
+    );
+    const { pid } = parseJson(
+      texra(
+        ['service', 'status', '--output-format', 'json'],
+        'texra service status',
+      ),
+      'service status',
+    );
+    process.kill(pid, 'SIGKILL');
+    await watching.exited;
+    const orphaned = attach(orphan);
+    await waitFor(
+      'an attach to a task no service runs to exit',
+      () => orphaned.exit !== null,
+      60_000,
+    );
+    assert(
+      orphaned.exit === 1 &&
+        orphaned.stderr.includes('no TeXRA service is running it'),
+      `an attach to a task no service runs should say so and exit 1 (exit ${orphaned.exit})\n${orphaned.stderr}`,
     );
   } finally {
     run(process.execPath, [binaryPath, 'service', 'stop'], {
@@ -3404,11 +3450,16 @@ prompt: |
       records.every((record) => record.contract === 3),
       'every NDJSON line should carry the version-3 contract stamp',
     );
-    // A progress record carries the session row: its run is the `run`
-    // aggregate key, `["run", <run id>]`.
+    // A progress record carries the session row: its aggregate key is the
+    // run id, or a plugin's own key behind `plugin:`, which no run id spells.
     const runIdOf = (record) => {
-      const [kind, id] = JSON.parse(record.payload.aggregateId);
-      return kind === 'run' ? id : undefined;
+      const id = record.payload.aggregateId;
+      if (id.startsWith('plugin:')) return undefined;
+      assert(
+        /^[0-9a-f][-0-9a-f]{5,}$/i.test(id),
+        `a run's aggregate key should be its run id, got ${JSON.stringify(id)}`,
+      );
+      return id;
     };
     // A run id is opaque: the script's children are the runs whose
     // `run.start` names the headless run as their parent, never names parsed
@@ -3459,118 +3510,6 @@ prompt: |
   }
 }
 
-function validateTeamRunCommand() {
-  const cwd = makeScratch('texra-cli-team-run-');
-  // A preset whose members are all chat agents keeps this check cheap.
-  const validationPreset = 'software-engineer';
-  try {
-    const inputPath = path.join(cwd, 'math-problem.md');
-    const validationFlagPath = path.join(cwd, validationFlagName);
-    writeFileSync(
-      inputPath,
-      'Problem: Prove that if n is odd, then n^2 is congruent to 1 modulo 8.\n',
-    );
-    writeFileSync(validationFlagPath, validationFlagContent);
-
-    const baseArgs = [
-      binaryPath,
-      'team',
-      'run',
-      validationPreset,
-      '--input',
-      'math-problem.md',
-      '--cwd',
-      cwd,
-      '--approval-policy',
-      'never',
-      '--print',
-    ];
-
-    const json = run(
-      process.execPath,
-      [...baseArgs, '--output-format', 'json'],
-      { cwd: repoRoot, validationModel: true, validationFlagPath },
-    );
-    assertSuccess(json, 'texra team run JSON');
-    const jsonResult = JSON.parse(json.stdout);
-    assert(
-      jsonResult.preset?.id === validationPreset,
-      'team JSON output should identify the preset',
-    );
-    assert(
-      typeof jsonResult.rootAgent === 'string' &&
-        jsonResult.rootAgent.length > 0,
-      'team run should select an available preset root agent',
-    );
-    assert(
-      jsonResult.result?.output != null &&
-        jsonResult.result.output.documents === undefined,
-      'team JSON output should serialize the chat result',
-    );
-    assert(
-      String(jsonResult.result?.output?.response ?? '').includes(
-        'Validated CLI Runtime',
-      ),
-      'team run should return the validation model response',
-    );
-
-    const inlineInstruction = run(
-      process.execPath,
-      [
-        binaryPath,
-        'team',
-        'run',
-        validationPreset,
-        '--instruction',
-        'Prove that every odd square is congruent to 1 modulo 8.',
-        '--cwd',
-        cwd,
-        '--approval-policy',
-        'never',
-        '--print',
-        '--output-format',
-        'json',
-      ],
-      { cwd: repoRoot, validationModel: true, validationFlagPath },
-    );
-    assertSuccess(inlineInstruction, 'texra team instruction-only JSON');
-    const inlineJsonResult = JSON.parse(inlineInstruction.stdout);
-    assert(
-      inlineJsonResult.preset?.id === validationPreset,
-      'instruction-only team JSON output should identify the preset',
-    );
-    assert(
-      inlineJsonResult.result?.output != null &&
-        inlineJsonResult.result.output.documents === undefined,
-      'instruction-only team JSON output should serialize the chat result',
-    );
-    assert(
-      String(inlineJsonResult.result?.output?.response ?? '').includes(
-        'Validated CLI Runtime',
-      ),
-      'instruction-only team run should return the validation model response',
-    );
-
-    const ndjson = run(
-      process.execPath,
-      [...baseArgs, '--output-format', 'ndjson'],
-      { cwd: repoRoot, validationModel: true, validationFlagPath },
-    );
-    assertSuccess(ndjson, 'texra team run NDJSON');
-    assert(
-      parseNdjson(ndjson.stdout, 'team run NDJSON').some(
-        (record) =>
-          record.kind === 'team-result' &&
-          record.preset?.id === validationPreset &&
-          record.rootAgent === jsonResult.rootAgent,
-      ),
-      'team run NDJSON should include a preset result record with the selected root agent',
-    );
-  } finally {
-    removeScratch(cwd);
-  }
-}
-
 async function validateCliRunArtifacts(options = {}) {
   if (options.noBuild) {
     preflightExistingValidationBundle();
@@ -3578,7 +3517,8 @@ async function validateCliRunArtifacts(options = {}) {
     buildValidationBundle();
   }
   validateBinarySmoke();
-  validateTeamListAvailability();
+  validateBundledLeanAgents();
+  validateUnknownWorkspaceAgent();
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
   validateRunCommand();
@@ -3602,7 +3542,6 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServicePolicyOwner();
   await validateServiceBuildIdentity();
   validateScriptFanoutRunCommand();
-  validateTeamRunCommand();
   console.log('CLI run validation passed');
 }
 

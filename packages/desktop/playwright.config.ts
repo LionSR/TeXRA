@@ -29,7 +29,7 @@ export default defineConfig({
     { name: 'appearance', testMatch: '**/screenshots.spec.ts' },
     { name: 'development', testMatch: '**/devStartup.spec.ts' },
   ],
-  // The session-database fixture is a ~10 MB esbuild bundle of production
+  // The session-database fixture is a ~15 MB esbuild bundle of production
   // modules (scripts/desktop-package-smoke-environment.mjs), built once per
   // worker. Playwright's loader transpiles every imported file outside
   // node_modules: on that bundle it turned a sub-second import into ten
