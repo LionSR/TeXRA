@@ -484,6 +484,8 @@ body.vscode-high-contrast-light {
      color keywords (Canvas/CanvasText/Highlight/Mark/ButtonFace) so the
      OS palette dictates contrast. */
   --wa-color-text-quiet: GrayText;
+  --wa-color-text-link: LinkText;
+  --wa-color-text-link-active: LinkText;
 
   --wa-color-brand-fill-quiet: Canvas;
   --wa-color-brand-border-quiet: Highlight;
