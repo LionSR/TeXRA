@@ -32,7 +32,7 @@ import {
   runSurface,
   shownRun,
   updateRun,
-  type Draft,
+  type FollowUpDraft,
   type Surface,
   type SurfaceAction,
 } from '@texra/shared/session/surface';
@@ -479,7 +479,7 @@ export function createSessionSurfaces(options: {
     entry: Held,
     request: RuntimeCommand,
     result: Answer<Outcome>,
-    submitted: Draft | undefined,
+    submitted: FollowUpDraft | undefined,
     fromForm: boolean,
   ): void {
     const runId = 'runId' in request ? request.runId : null;
