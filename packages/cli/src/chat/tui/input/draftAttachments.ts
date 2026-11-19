@@ -25,7 +25,7 @@ interface PastedTextEntry {
   readonly content: string;
 }
 
-export interface PastedImageEntry {
+interface PastedImageEntry {
   readonly id: number;
   readonly kind: 'image';
   /** Absolute path to the on-disk image (under the run/chat storage dir). */

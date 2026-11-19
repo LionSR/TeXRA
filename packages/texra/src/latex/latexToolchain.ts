@@ -19,7 +19,7 @@ import { findCommand } from '@texra/utils/system/binaryResolver';
 import { probeTool } from '@texra/utils/system/toolChecks';
 
 /** One catalog tool as this machine has it. */
-export interface LatexToolStatus<T extends LatexToolName> {
+interface LatexToolStatus<T extends LatexToolName> {
   readonly name: T;
   /** It answers its version probe, under its name or an alternate. */
   readonly installed: boolean;
@@ -28,7 +28,7 @@ export interface LatexToolStatus<T extends LatexToolName> {
 }
 
 /** What {@link probeLatexTools} found, in the order the tools were asked. */
-export interface LatexToolchainProbe<T extends LatexToolName> {
+interface LatexToolchainProbe<T extends LatexToolName> {
   readonly tools: readonly LatexToolStatus<T>[];
   readonly installed: ReadonlySet<T>;
 }
@@ -74,7 +74,7 @@ interface LatexToolHealth extends HealthLatexTool {
 }
 
 /** What {@link latexToolchainHealth} found. */
-export interface LatexToolchainHealth {
+interface LatexToolchainHealth {
   /** A compiler `compileLatex2Pdf` can drive answers its probe: the
    *  settings view's TeX Distribution row reads the same set. */
   readonly compiler: boolean;

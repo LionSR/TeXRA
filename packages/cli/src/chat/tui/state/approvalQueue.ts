@@ -93,7 +93,7 @@ export interface PendingApproval {
  *  modal has closed), and the chat's attached host, which
  *  performs the host command a decision names instead (a retry on the
  *  user's own key lands the decision itself once the key is in place). */
-export interface DecisionSurface {
+interface DecisionSurface {
   readonly requests: SessionRequests;
   readonly chat: ScopeRunner;
   readonly performHost: (command: HostCommand) => void;

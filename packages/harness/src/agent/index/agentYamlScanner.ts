@@ -244,7 +244,7 @@ function formatScanFailure(error: unknown): string {
  * applied, the one validation a launch reads, for a file and an inline
  * persona alike. Throws the validation's error.
  */
-export function agentEntryOf(
+function agentEntryOf(
   // As written (a file's tools are parsed, an inline persona's are names).
   definition: typeof AgentDefinitionSchema.Encoded,
   at: Pick<AgentEntry, 'source' | 'path' | 'digest'>,

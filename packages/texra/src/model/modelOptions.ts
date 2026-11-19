@@ -117,7 +117,7 @@ export function modelOptionsFrom(
 }
 
 /** What a launch's model choice decided, over which rows. */
-export interface LaunchModelChoice {
+interface LaunchModelChoice {
   /** `null` when no candidate names a model and none can run. */
   readonly decision: RunModelDecision | null;
   /** The models that can run now, in row order; the first is the default

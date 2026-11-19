@@ -80,9 +80,7 @@ class ArxivSourceTransientError extends Schema.TaggedError<ArxivSourceTransientE
 ) {}
 
 /** The typed failures of an arXiv source download. */
-export type ArxivSourceError =
-  | ArxivSourcePermanentError
-  | ArxivSourceTransientError;
+type ArxivSourceError = ArxivSourcePermanentError | ArxivSourceTransientError;
 
 /** What one download attempt reads: the file it writes and the client. */
 type DownloadServices = FileSystem.FileSystem | HttpClient.HttpClient;

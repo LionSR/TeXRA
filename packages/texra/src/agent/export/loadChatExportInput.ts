@@ -34,7 +34,7 @@ import type { RunId } from '@texra-ai/harness/schemas';
  * unchanged, so a caller's dialog classifies and words what the read
  * produced, exactly as it did when the bare error reached it.
  */
-export class ChatExportInputUnreadable extends Schema.TaggedError<ChatExportInputUnreadable>()(
+class ChatExportInputUnreadable extends Schema.TaggedError<ChatExportInputUnreadable>()(
   'ChatExportInputUnreadable',
   {
     message: Schema.String,

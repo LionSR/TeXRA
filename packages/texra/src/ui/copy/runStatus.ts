@@ -49,7 +49,7 @@ const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
 );
 
 /** One section of a grouped run list: its key, its label and its runs. */
-export interface RunListSection<R> {
+interface RunListSection<R> {
   readonly section: RunSection;
   readonly label: string;
   readonly runs: readonly R[];

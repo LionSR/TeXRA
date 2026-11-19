@@ -81,7 +81,7 @@ interface TuiApprovalStores {
 
 /** The TUI's presentation host, and the host commands it performs for the
  *  chat's decisions while it is attached. */
-export interface TuiHostInteractions extends HostInteractions {
+interface TuiHostInteractions extends HostInteractions {
   readonly performHost: (command: HostCommand) => void;
 }
 

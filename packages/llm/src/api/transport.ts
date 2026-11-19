@@ -200,7 +200,7 @@ export const decodeWireOrFail = <A>(
 // The raw rejection is compared by identity with the primary failure's
 // cause and otherwise raised as a defect, so it must not be wrapped.
 // @effect-diagnostics unknownInEffectCatch:off
-export const rejoin = (
+const rejoin = (
   pending: PromiseLike<unknown>,
   exit: Exit.Exit<unknown, unknown>,
   isExpected: (cause: unknown) => boolean,
