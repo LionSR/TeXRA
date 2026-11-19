@@ -187,11 +187,15 @@ What follows from that, measured:
   each reader decodes again (three sites, two plugins, all in
   `packages/texra/src`).
 
-Recommendation, in order of value: a request declaration beside
-`factKinds` (schema, and a plain-text summary a host with no component can
-show) so that a terminal can list and answer any plugin's request from its
-row's `answers`; the typed fact read is small and can wait for it. This adds
-a capability, so it is the owner's to schedule.
+Decided 2026-11-19: the external inquiry tool is retired. It is the only
+plugin request and the only user of `Plugin.decision`, so with it go the web
+panel, the terminal's filters and the decode in the panel, and
+`UI-inquiry-decode-by-reference` has nothing left to refuse. No request
+declaration is built for a request nobody posts. What remains to decide is
+whether the harness keeps a plugin request (`kind: 'plugin'`,
+`Plugin.decision`) with no consumer in the repo; the PR that retires the
+tool removes it in a commit of its own, so that the owner can drop that
+commit. The typed fact read is small and stays as it is.
 
 ## 6. "Is this a script run" in four spellings
 
@@ -293,4 +297,5 @@ effect 4.1.4 and `main` at `0611897`.
 3. Section 4's rename: a public name, in its own commit.
 4. Section 8 at triage step 5, after #15085 and #15087, which both add an
    entry.
-5. Sections 2 (the table), 5 and 6: a design note or the owner's schedule.
+5. Section 5: the inquiry tool is retired in its own PR.
+6. Sections 2 (the table) and 6: a design note or the owner's schedule.
