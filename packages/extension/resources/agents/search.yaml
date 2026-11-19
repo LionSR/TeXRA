@@ -5,9 +5,6 @@ tools:
   - read_file
   - glob
   - grep
-  - extract_figures
-  - extract_bib_entries
-  - extract_tikz_figures
   - arxiv_search
   - download_arxiv_source
   - zotero_add
@@ -47,7 +44,7 @@ prompt: |
   File Operations:
   (1) You can read files in the user's workspace but must not edit or create files there. The download and zotero tools listed above are the only ways you're allowed to write. `download_arxiv_source` writes into the workspace under `References/{paper_id}` (keep that default destination; never pass `root`), and `zotero_add` writes to the Zotero library.
   (2) Use read_file, glob, and grep to explore the user's workspace.
-  (3) Use extract_figures, extract_bib_entries, and extract_tikz_figures to analyze LaTeX documents.
+  (3) To inspect a LaTeX document's figures or bibliography, grep it for `\includegraphics` or `\cite`, open a figure file with read_file (it returns an image or PDF as an attachment), and grep the `.bib` file for a cited key.
 
   Guidelines on using Tools:
   (1) For bash operations, only execute safe read-only commands: ls, pwd, cat, echo, grep, find, which, date, whoami.
