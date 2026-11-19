@@ -23,7 +23,7 @@ import {
   type ToolFact,
   NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
-import type { ValueFamily } from '@texra-ai/harness/host';
+import type { ValueFamily } from '@texra-ai/harness/plugins';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
 /** The links a person cites beside an answer. */

@@ -12,12 +12,12 @@ import { shownFailureText } from '@ui/copy/modelAccess';
 import { writeNdjsonStdout, writeTextStderr } from '../platform/logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from '../agents';
-import type { Session } from '@texra-ai/harness';
 import type {
-  PresentationEventHandlers,
+  Session,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness';
+import type { PresentationEventHandlers } from '@texra-ai/harness/host';
 import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
 import type { CliContext } from '../platform/cliContext';
 

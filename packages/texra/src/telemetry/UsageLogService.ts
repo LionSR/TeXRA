@@ -20,7 +20,11 @@ import {
   UsageLogEntrySchema,
   type UsageLogEntry,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import {
+  withLogChannel,
+  type AppState,
+  type ConfigProvider,
+} from '@texra-ai/harness/plugins';
 import { envFlag } from '@texra-ai/harness/node';
 import {
   extractErrorMessage,
@@ -30,7 +34,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
-import type { AppState, ConfigProvider } from '@texra-ai/harness/host';
 
 const CHANNEL = 'UsageLogService';
 

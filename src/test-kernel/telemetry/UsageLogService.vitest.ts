@@ -6,7 +6,8 @@ import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
 import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
-import { AppState, UsageLog } from '@texra-ai/harness/host';
+import { AppState } from '@texra-ai/harness/plugins';
+import { UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { usageAgentName } from '@shared/usageLog';

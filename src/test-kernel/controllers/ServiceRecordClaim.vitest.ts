@@ -3,7 +3,7 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, FileSystem, Fiber, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { GlobalValues } from '@texra-ai/harness/host';
+import { GlobalValues } from '@texra-ai/harness/plugins';
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { globalValuesOver } from '@test/support/fsTestUtils';

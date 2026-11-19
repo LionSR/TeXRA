@@ -15,7 +15,7 @@ import { MODEL_CONFIGS } from '@texra-ai/llm';
 import { transcribeAudio } from '@texra-ai/llm/node';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { AppState, ownKeyCredential } from '@texra-ai/harness/host';
+import { ownKeyCredential } from '@texra-ai/harness/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -34,6 +34,7 @@ import {
   Secrets,
   withLogChannel,
   type StorageFs,
+  AppState,
 } from '@texra-ai/harness/plugins';
 import { Cancelled, Rejected } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

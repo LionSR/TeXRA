@@ -21,11 +21,13 @@ import {
 import {
   getEnabledModels,
   setModelEnabled,
-  StateWriteFailed,
-  type StateReadFailed,
   MODEL_SELECTION_KEY,
 } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  type SettingsStores,
+  StateWriteFailed,
+  type StateReadFailed,
+} from '@texra-ai/harness/plugins';
 import { getModelLabel } from '@texra-ai/harness/schemas';
 
 import { resolveKnownCliModelId } from '../platform/cliConfig';

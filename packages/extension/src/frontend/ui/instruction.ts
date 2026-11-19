@@ -6,7 +6,7 @@ import { askUnlessSilenced } from '@texra/controllers/session/windowNotices';
 import { askNotice } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
-import type { StateStore } from '@texra-ai/harness/host';
+import type { StateStore } from '@texra-ai/harness/plugins';
 
 const INSTALL = 'Install';
 

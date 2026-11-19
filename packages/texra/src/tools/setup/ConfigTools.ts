@@ -11,15 +11,15 @@
 
 import { Effect, Schema } from 'effect';
 
-import { ToolContext } from '@texra-ai/harness/plugins';
 import {
+  ToolContext,
   executed,
   nullishWithDefault,
   ToolError,
   defineTool,
   Settings,
+  type ConfigProvider,
 } from '@texra-ai/harness/plugins';
-import { type ConfigProvider } from '@texra-ai/harness/host';
 import { type SettingRow } from '@texra-ai/harness/schemas';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
 

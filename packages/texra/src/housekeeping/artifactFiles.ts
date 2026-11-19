@@ -15,11 +15,13 @@ import {
   relativeToRoot,
   workspaceRelativePath,
 } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import {
+  withLogChannel,
+  type RootedFileSystem,
+} from '@texra-ai/harness/plugins';
 
 import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { CHANNEL } from './constants';
-import type { RootedFileSystem } from '@texra-ai/harness/host';
 
 /**
  * A workspace listing that did not complete. The `glob` package rejects, and

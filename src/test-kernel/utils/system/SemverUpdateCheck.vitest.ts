@@ -5,7 +5,7 @@ import { it as effectIt } from '@effect/vitest';
 import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { FetchHttpClient, type HttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
-import { GlobalValues } from '@texra-ai/harness/host';
+import { GlobalValues } from '@texra-ai/harness/plugins';
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { globalValuesOver } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';

@@ -4,10 +4,15 @@
  * read it; an embedder that runs agents from a program needs none of it.
  *
  * It holds the process layer a host builds once (`processLayer`), the
- * services a host serves its views from (agent catalog, settings, stores,
- * skills, installed plugins, model options, tool availability), the
- * presentation surface a host implements (`HostInteractions`), and the
- * helpers the hosts share for files, errors and logs.
+ * services a host serves its views from (agent catalog, skills, installed
+ * plugins, model options, tool availability, storage maintenance), the
+ * presenters of the root's `HostInteractions`, and the helpers the hosts
+ * share for files, errors and logs.
+ *
+ * No signature on another entry names a type that only this one exports,
+ * with one exception: the requirement unions `RunServices` and
+ * `PlatformServices`, which list the services a host process serves and
+ * which a plugin passes through without naming a member.
  *
  * No stability promise: names move here when they leave the root entry and
  * leave when the hosts stop needing them.
@@ -26,19 +31,10 @@ export {
   activationView,
   type ActivationViewSource,
 } from './effect/runHandle.js';
-export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
 export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@shared/transcript/conversationFormat';
-// What `SessionHost.emit` takes and answers: the notices a session's runs
-// ask a host to present.
-export type {
-  AgentRuntimeEmitOptions,
-  HostPresentation,
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
 // The process the hosts compose: one `processLayer` for every host.
 export type { ProcessLayerOptions } from './effect/processLayer.js';
 export type { ProcessServicesOptions } from '@controllers/session/sessionLayer';
@@ -49,7 +45,7 @@ export {
   type ProcessRuntime,
   type ProcessServices,
 } from './effect/processLayer.js';
-export type { PlatformServices, PluginContext } from '@platform/processRuntime';
+export type { PlatformServices } from '@platform/processRuntime';
 // The run function a host callback starts Effect work with, owned by a scope.
 export { scopedFork, type ScopedFork } from '@platform/processRuntime';
 // What a run's program requires of the process, beneath `ProcessServices`.
@@ -82,17 +78,8 @@ export {
 } from '@agent/index/AgentDirectoryService';
 export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
 export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
-// The process's stores: the global root's current values, each family a
-// host or plugin declares (`ValueFamily`), the per-project settings stores,
-// and storage maintenance under a storage root.
-export { GlobalValues, StateStores } from '@platform/processRuntime';
-export type { ValueFamily } from '@shared/session/valueFamily';
-export {
-  DatabaseWriteFailed,
-  type CurrentValues,
-} from '@shared/session/database';
-export type { DraftBlob } from '@shared/session/historyTurns';
-export type { AppStateStore } from '@platform/interfaces';
+// Storage maintenance under a storage root (the process's stores, which
+// plugins read too, are on `./plugins`).
 export {
   deleteStorageInventory,
   readStorageInventory,
@@ -100,13 +87,12 @@ export {
 } from '@controllers/session/projectDatabase';
 // Follow-up delivery helpers hosts share.
 export { presentFollowUpResult } from '@agent/followUp/ToolUseFollowUp';
-// A host's presentation surface: session and sessionless interactions, the
-// emit handlers (one per event), and a failed run's presentation, with the
-// notice a refused launch carries.
+// A host's presentation of the notices the root entry types
+// (`HostInteractions`, `Notices`): a window's own presenter, the emit
+// handlers (one per event), and a failed run's presentation, with the notice
+// a refused launch carries.
 export {
   presenterOn,
-  type HostInteractions,
-  type Notices,
   presentRunFailure,
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
@@ -120,25 +106,14 @@ export {
   type Hunk,
 } from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-// Which side of a trace event a run wrote.
-export type { TraceRow } from '@shared/session/agentEvent';
-export type { AggregateId, SessionCloseReport } from '@shared/schemas';
-// The agent-directories port and the process services plugins read.
-export {
-  AgentDirectories,
-  AgentDirectoriesFailed,
-  AppState,
-  type AgentDirectoriesPort,
-} from '@platform/interfaces';
-// App-lifecycle signals: the process's hub, which `ProcessServices` serves,
-// and what hosts and the app publish and follow on it.
+// The agent-directories service (its port is the root entry's).
+export { AgentDirectories } from '@platform/interfaces';
+// App-lifecycle signals as hosts and the app follow them (the hub and its
+// signals are on `./plugins`).
 export {
   appSignalStream,
   subscribeAppSignal,
   onAppSignal,
-  type AppSignal,
-  type AppSignalEvent,
-  type AppSignalPayloads,
 } from '@platform/appSignals';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
@@ -178,14 +153,9 @@ export {
   UsageLogEntrySchema,
   type UsageLogEntry,
 } from '@shared/usageLog';
-// The rooted file system a host reads, and the layers of the ones plugins
-// read (`./plugins`) outside a run.
-export {
-  GlobalStorageFs,
-  sessionFsLayer,
-  withSessionFs,
-} from '@platform/rootedFs';
-export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+// The layers of the rooted file systems plugins read (`./plugins`), for a
+// host that reads them outside a run.
+export { sessionFsLayer, withSessionFs } from '@platform/rootedFs';
 // A `FileLocation` by its root: workspace, run storage, external, or relative.
 export {
   createExternalLocation,
@@ -198,11 +168,8 @@ export { readMcpConfig } from '@tools/mcp/mcpConfig';
 export { mcpConfigPathOf } from '@common/plugins/mcpServers';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 // The skills a session's roots discover (the settings inventory, the enabled
-// ones a person activates) with their issues, and a host's skill sources and
-// source options.
+// ones a person activates) with their issues.
 export { Skills, type SkillRoots } from '@skills/runtimeSkills';
-export type { HostSkillOptions } from '@skills/skillSources';
-export type { SkillSourceOptions } from '@skills/skillSources';
 export type {
   SkillIssueCode,
   SkillIssueSeverity,
@@ -261,21 +228,9 @@ export {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-// The tool catalog: enabled built-ins, plugin services and switches.
-export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 // The write path's redaction, for host text shown outside it.
 export {
   formatFatalErrorDetail,
   redactDiagnostics,
   redactSecrets,
 } from '@logger/redaction';
-// The config and state store ports a host implements and their failures
-// (`Settings`, which reads and writes through them, is on `./plugins`).
-export {
-  ConfigWriteFailed,
-  StateReadFailed,
-  StateWriteFailed,
-  type ConfigProvider,
-  type StateStore,
-  type StoredSetting,
-} from '@shared/config/settings';

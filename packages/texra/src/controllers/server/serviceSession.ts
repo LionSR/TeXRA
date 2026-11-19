@@ -38,14 +38,13 @@ import {
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import type { ITool } from '@texra-ai/harness/plugins';
 import {
-  activationView,
+  type ITool,
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
-  replayTrace,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
+import { activationView, replayTrace } from '@texra-ai/harness/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
 import { requestErrorText } from '@ui/copy/requestErrors';
 

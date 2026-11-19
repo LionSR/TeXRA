@@ -10,7 +10,8 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ConfigProvider, ProcessServices } from '@texra-ai/harness/host';
+import type { ConfigProvider } from '@texra-ai/harness/plugins';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 // The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
 // the machine's tools, as the harness's unprobed tool availability does for

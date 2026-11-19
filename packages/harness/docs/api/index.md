@@ -44,6 +44,67 @@ listed below.
   editor, desktop and terminal apps) composes beyond this entry:
   `processLayer`, the agent catalog, and the config and state stores.
 
+## AgentDirectoriesFailed
+
+A host could not resolve one of its agent directories: the configured
+custom directory is not an absolute path, its parent is gone, it cannot be
+created, or the platform refused the filesystem call behind either.
+
+{@link AgentDirectoriesPort}'s readers raise it as the failure of the
+read itself, for the same reason `StateWriteFailed` exists: the reads
+travel with the agent-catalog load beside them, so a caller inside a program
+composes the read rather than adopting a rejection it cannot type.
+
+```ts
+class AgentDirectoriesFailed extends Schema.TaggedError<AgentDirectoriesFailed>()(
+  'AgentDirectoriesFailed',
+  {
+    /** Which of the port's readers failed. */
+    source: AgentSourceSchema,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+)
+```
+
+## AgentDirectoriesPort
+
+Host-provided agent directory paths. All are `Effect`s (not Promises)
+so the readers that can fault — `custom`, which creates the directory it
+resolves, and `customConfigured`, which validates the setting — carry their
+failure into the program that asked instead of rejecting an await that
+cannot name it.
+
+`custom` takes the process's {@link GlobalStorageFs} and the process
+`FileSystem` from context: the default custom-agents directory lives under
+the cross-workspace storage root, and a configured one is an absolute path
+outside every root, so the view that names each is the one the process
+runtime provides.
+
+```ts
+interface AgentDirectoriesPort {
+  custom(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  >;
+  /** Whether `custom` resolves to a directory the user configured, rather
+   *  than falling back to the default one under global storage. */
+  customConfigured(): Effect.Effect<
+    boolean,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
+  >;
+  builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
+  /**
+   * The packaged resources root a host ships its bundled agents under,
+   * the tool plugins' agent directories among them. Absent where none ships:
+   * an embedder's own directories.
+   */
+  readonly resourcesRoot?: string;
+}
+```
+
 ## AgentEvent
 
 Discriminated union of every event the SDK surface emits.
@@ -67,6 +128,19 @@ interface AgentPlatform {
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
+}
+```
+
+## AgentRuntimeEmitOptions
+
+```ts
+interface AgentRuntimeEmitOptions {
+  /**
+   * Shown through `requestShowError` on the same host when presenting this
+   * event throws, live or on replay: for a notice that is a failure's only
+   * surface.
+   */
+  readonly fallbackMessage?: string;
 }
 ```
 
@@ -126,6 +200,17 @@ class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()(
 )
 ```
 
+## DatabaseWriteFailed
+
+A batch was rejected whole: no member or sequence moved.
+
+```ts
+class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>()(
+  'DatabaseWriteFailed',
+  storeFailure,
+)
+```
+
 ## HeldRun
 
 What this process holds of one run ({@link LocalSession.held}): a launch
@@ -153,6 +238,74 @@ rebuilt store renumbers it.
 
 ```ts
 const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_position", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
+```
+
+## HostInteractions
+
+The host's presentation surface for a session: what a host
+can show or do on the runtime's behalf. It answers nothing. Every request a
+run makes of a person is a `request.opened` row the fold lists and a
+`request.decide` command a surface sends, so
+there is no queue behind this port and no method returns a decision.
+
+```ts
+interface HostInteractions {
+  /**
+   * Present a runtime event through the active host attachment. Presentation
+   * is fire-and-forget: a host that cannot render an event logs the cause. A
+   * host may answer with the program that puts the event on screen; nothing
+   * waits on it, and its failure is reported rather than dropped (see
+   * `presentOn`).
+   */
+  emit?<K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+  ): HostPresentation;
+  /**
+   * This host has no channel that can answer an approval prompt (a headless
+   * run, an embedder with no surface): a fact about the host alone. The
+   * session applies its approval policy to it, both when it decides a request
+   * and when it withholds approval-gated tools from a run.
+   */
+  readonly approvalPromptsUnavailable?: boolean;
+  dispose?(): void;
+}
+```
+
+## HostPresentation
+
+What a host answers an `emit` with: the program that presents the notice,
+or nothing when the host already presented it. Presentation is
+fire-and-forget, so the runtime forks that program and reports its
+failure — which is why a host hands it over rather than running a fiber
+of its own.
+
+```ts
+type HostPresentation = Effect.Effect<void, Error> | void;
+```
+
+## HostSkillOptions
+
+A process's skill sources (`ProcessLayerOptions.skills`,
+`Composition.skills`): its bundled resources tree, under which each of its
+tool plugins ships its bundled skills (`plugins/<id>/skills`), the folder
+it keeps in each project, and its process-wide source options (the CLI's
+flags). Discovery reads custom roots, project skills, user skills (the
+storage root's `skills/`) and the bundled ones in that precedence. A
+process given none discovers no skills at all.
+
+```ts
+interface HostSkillOptions {
+  readonly resourcesPath: string;
+  /**
+   * The folder the host keeps in each project, relative to a session's
+   * workspace (TeXRA's `.texra`): its `skills/` holds the project's own
+   * skills. Absent, a project has no skills but those a custom root or the
+   * other agent tools' folders hold.
+   */
+  readonly projectDataDirName?: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
+}
 ```
 
 ## isOutcomeOf
@@ -266,6 +419,21 @@ run's project.
 class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
   '@texra-ai/harness/ModelFetch',
 )
+```
+
+## Notices
+
+What shows a notice: a session's {@link Interactions}, or a window's own
+host ({@link presenterOn}).
+
+```ts
+interface Notices {
+  emit<K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+    options?: AgentRuntimeEmitOptions,
+  ): Effect.Effect<void>;
+}
 ```
 
 ## OpenOptions
@@ -509,6 +677,30 @@ interface RunRecords {
 }
 ```
 
+## RuntimePresentationEvent
+
+```ts
+type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
+```
+
+## RuntimePresentationEventPayloads
+
+The notices the runtime and an embedder's tools show a person through the
+session's host, each named for what it says, never for a screen of one
+application. They are not progress facts and are not stored. Hosts may
+render them, ignore them, or route them to their own presentation channel
+without changing the agent loop. Presentation is fire-and-forget: a host
+that cannot render an event logs the cause itself.
+
+```ts
+interface RuntimePresentationEventPayloads {
+  openFile: OpenFilePayload;
+  requestShowInstruction: RequestShowInstructionPayload;
+  agentNotFound: AgentNotFoundPayload;
+  requestShowError: RequestShowErrorPayload;
+}
+```
+
 ## Session
 
 One workspace's runs, the view of them, its store's records, and the
@@ -595,6 +787,12 @@ interface Session {
 }
 ```
 
+## SessionCloseReport
+
+```ts
+type SessionCloseReport = typeof SessionCloseReportSchema.Type;
+```
+
 ## SessionHost
 
 A host attached to a session ({@link Session.attach}): the presentation
@@ -674,6 +872,14 @@ class Sessions extends Context.Service<
     >;
   }
 >()('@texra-ai/harness/Sessions')
+```
+
+## SkillSourceOptions
+
+```ts
+interface SkillSourceOptions {
+  readonly additionalPaths?: readonly string[];
+}
 ```
 
 ## StartInput

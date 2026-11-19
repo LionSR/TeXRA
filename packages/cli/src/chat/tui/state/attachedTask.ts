@@ -21,7 +21,7 @@ import {
 } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import type { OutcomeOf } from '@texra-ai/harness';
-import type { GlobalValues } from '@texra-ai/harness/host';
+import type { GlobalValues } from '@texra-ai/harness/plugins';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {

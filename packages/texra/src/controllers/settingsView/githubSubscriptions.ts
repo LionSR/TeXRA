@@ -2,8 +2,7 @@
 import { Context, Effect, Option, Result, Schema } from 'effect';
 
 // Local imports - GitHub subscriptions
-import { ToolCatalog } from '@texra-ai/harness/host';
-import type { AppSignals } from '@texra-ai/harness/plugins';
+import { type AppSignals, ToolCatalog } from '@texra-ai/harness/plugins';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
 import {
   SubscriptionTargetPath,

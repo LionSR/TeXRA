@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 
 import { type StartInput } from '@texra-ai/harness';
+import type { StateReadFailed } from '@texra-ai/harness/plugins';
 import {
   AgentCatalog,
-  type StateReadFailed,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
 import {

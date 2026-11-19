@@ -21,8 +21,8 @@ import {
   withLogChannel,
   Settings,
   type SettingsStores,
+  type StateReadFailed,
 } from '@texra-ai/harness/plugins';
-import type { StateReadFailed } from '@texra-ai/harness/host';
 import type { ModelConfig } from '@texra-ai/llm';
 
 import type {

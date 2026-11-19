@@ -11,12 +11,12 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { Plugin } from '@texra-ai/harness/plugins';
 import {
+  type Plugin,
+  ToolRegistry,
   ToolCatalog,
-  type ExternalToolCheckResult,
-} from '@texra-ai/harness/host';
-import { ToolRegistry } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
+import type { ExternalToolCheckResult } from '@texra-ai/harness/host';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type {
   ToolCommandKind,
