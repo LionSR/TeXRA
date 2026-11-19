@@ -87,7 +87,10 @@ import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  HARNESS_APP,
+} from '@test/support/FakePlatform';
 import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
@@ -549,7 +552,11 @@ describe('Sessions owner', () => {
           ),
         );
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
-      }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
+      }).pipe(
+        Effect.provide(
+          Sessions.layer({ platform, plugins: [], client: HARNESS_APP.client }),
+        ),
+      );
     }),
   );
 
@@ -589,7 +596,15 @@ describe('Sessions owner', () => {
         expect(drains).toBe(0);
         yield* sessions.closeAll;
         expect(drains).toBe(1);
-      }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [counted] })));
+      }).pipe(
+        Effect.provide(
+          Sessions.layer({
+            platform,
+            plugins: [counted],
+            client: HARNESS_APP.client,
+          }),
+        ),
+      );
     }),
   );
 });

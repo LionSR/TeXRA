@@ -84,12 +84,16 @@ const unauthorizedFetch: typeof fetch = async () =>
     { status: 401 },
   );
 
+/** The app the requests are sent for: llm names no client of its own. */
+const EXAMPLE_CLIENT = { name: 'Example App', id: 'example-app' };
+
 const program = Effect.gen(function* () {
   // 1. Streamed turn over synthetic SSE
   const okBinding = yield* bindModel({
     model: selected.config,
     route,
     bearer: 'test-key',
+    client: EXAMPLE_CLIENT,
     options: { fetch: mockSseFetch },
   });
   console.log('[01] bound:', okBinding.origin.protocol);
@@ -127,6 +131,7 @@ const program = Effect.gen(function* () {
     model: selected.config,
     route,
     bearer: 'not-a-real-key',
+    client: EXAMPLE_CLIENT,
     options: { fetch: unauthorizedFetch },
   });
   const badTurn = yield* badBinding.model.prepareTurn({

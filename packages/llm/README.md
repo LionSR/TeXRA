@@ -59,10 +59,9 @@ const program = Effect.gen(function* () {
   const binding = yield* bindModel({
     model: selected.config,
     route,
-    credential: {
-      kind: 'api-key',
-      apiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    },
+    bearer: process.env.ANTHROPIC_API_KEY ?? '',
+    // The app the requests are sent for: llm names no client of its own.
+    client: { name: 'Example App', id: 'example-app' },
   });
   const turn = yield* binding.model.prepareTurn({
     messages: [{ role: 'user', content: [{ kind: 'text', text: 'Hello.' }] }],

@@ -183,11 +183,14 @@ export type ModelConfiguration =
       readonly supportsForcedToolChoice: boolean;
       /**
        * `openai` sends OpenAI's full request surface; `chatgpt` sends it with
-       * function tools inside the plan's namespace; `compatible` omits what
+       * function tools inside {@link toolNamespace}; `compatible` omits what
        * the vendor Responses endpoints do not take: the encrypted-reasoning
        * `include`, `strict` on tools, and a `store` that is only the default.
        */
       readonly requestDialect: 'openai' | 'compatible' | 'chatgpt';
+      /** The namespace function tools sit in, or null: a ChatGPT plan's (the
+       *  bind's client id) alone. */
+      readonly toolNamespace: string | null;
       readonly defaults: Omit<
         typeof ResponsesControlsSchema.Type,
         'toolChoice' | 'promptCacheKey'

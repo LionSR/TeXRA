@@ -18,6 +18,7 @@ import { describe, expect } from 'vitest';
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 describe('Sessions.layer', () => {
   it.live("logs through the embedder's own logger", () => {
@@ -38,7 +39,11 @@ describe('Sessions.layer', () => {
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+        Sessions.layer({
+          platform,
+          plugins: harnessBuiltins,
+          client: HARNESS_APP.client,
+        }).pipe(
           Layer.provideMerge(
             Layer.merge(
               Logger.layer([captured]),

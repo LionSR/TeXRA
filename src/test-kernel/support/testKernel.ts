@@ -263,7 +263,7 @@ const composedProcess = ({
         storageRoot: host.roots.storageRoot,
         settings: host.app.settings,
         plugins: [...host.app.plugins(), ...extra],
-        secrets: Secrets.layer(ports.secrets),
+        secrets: Secrets.layer(ports.secrets, host.app.client),
         appState: AppState.layer(ports.appState),
         agentDirectories: Layer.succeed(AgentDirectories)(
           ports.agentDirectories,

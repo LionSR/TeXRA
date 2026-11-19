@@ -39,6 +39,7 @@ import {
 } from '../subscriptionSessionSchema.js';
 import { isRetryableStatus, toErrorMessage } from '../../errors.js';
 import { OPENAI_DEFAULT_ENDPOINT } from '../../providers/providerPlugins.js';
+import type { ClientIdentity } from '../../node.js';
 import type {
   CredentialStore,
   SecretsFailed,
@@ -74,9 +75,6 @@ const CHATGPT_SCOPE = `openid profile email offline_access resource.invoke ${TOK
 
 /** The reserved client id a first sign-in registers through. */
 const REGISTRATION_CLIENT_ID = 'dynamic_agent_client';
-
-/** The name OpenAI shows for the client a first sign-in registers. */
-const AGENT_NAME = 'TeXRA';
 
 /**
  * The loopback callback. Only the port may differ between sign-ins, and the
@@ -309,68 +307,71 @@ const hostId = Effect.fn('chatgpt.hostId')(function* (
  * The ChatGPT sign-in policy for the shared `SubscriptionOAuthCoordinator`.
  * Single-flight refresh, storage races and error mapping live in the shared
  * machine; this names the endpoints, the per-user client and the grant check.
+ * A first sign-in registers its client under `client.name`, the name OpenAI
+ * shows the person.
  */
-export const CHATGPT_POLICY = Object.freeze<
-  SubscriptionOAuthPolicy<ChatgptSession>
->({
-  secretKey: CHATGPT_SESSION_SECRET_KEY,
-  sessionSchema: ChatgptSessionSchema,
-  tokenEndpoint: Object.freeze({
-    tokenUrl: CHATGPT_TOKEN_URL,
-    // Every stored session carries the client it registered; this is only
-    // the registration id the first authorize request names.
-    clientId: REGISTRATION_CLIENT_ID,
-    tokenResponseSchema: SubscriptionTokenResponseSchema,
-    params: Object.freeze({ resource: CHATGPT_RESOURCE }),
-  }),
-  notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
-  loopback: Object.freeze({
-    ports: CHATGPT_CALLBACK_PORTS,
-    callbackPath: CHATGPT_CALLBACK_PATH,
-    displayName: 'ChatGPT',
-  }),
-  authorize: Object.freeze({
-    url: CHATGPT_AUTHORIZE_URL,
-    scope: CHATGPT_SCOPE,
-    redirectUri: (port: number) =>
-      `http://127.0.0.1:${port}${CHATGPT_CALLBACK_PATH}`,
-    params: Object.freeze({ resource: CHATGPT_RESOURCE }),
-  }),
-  // A returning sign-in reauthorizes the registered client and sends no name
-  // hint, which only a registration takes.
-  registration: Effect.fnUntraced(function* (secrets) {
-    const host = yield* hostId(secrets);
-    const registered = yield* storedRegistration(secrets);
-    // The consent page shows again only when asked: OpenAI's recovery for
-    // a declined plan is a reauthorization with `prompt=consent`.
-    const params: Readonly<Record<string, string>> =
-      registered === undefined
-        ? { ext_agent_host_id: host, agent_name_hint: AGENT_NAME }
-        : {
-            ext_agent_host_id: host,
-            ...(registered.planDeclined ? { prompt: 'consent' } : {}),
-          };
-    return {
-      clientId: registered?.clientId ?? REGISTRATION_CLIENT_ID,
-      registering: registered === undefined,
-      params,
-    };
-  }),
-  acceptGrant: acceptChatgptGrant,
-  endSession: revokeSession,
-  buildSession(tokens, refreshToken, nowMs, previous) {
-    const claims = extractChatgptClaims(
-      tokens.id_token ?? undefined,
-      tokens.access_token,
-    );
-    return {
-      accessToken: tokens.access_token,
-      refreshToken,
-      idToken: tokens.id_token ?? previous?.idToken,
-      expiresAtMs: nowMs + tokens.expires_in * 1000,
-      accountId: claims.accountId ?? previous?.accountId,
-      email: claims.email ?? previous?.email,
-      planType: claims.planType ?? previous?.planType,
-    };
-  },
-});
+export const chatgptPolicy = (
+  client: ClientIdentity,
+): SubscriptionOAuthPolicy<ChatgptSession> =>
+  Object.freeze<SubscriptionOAuthPolicy<ChatgptSession>>({
+    secretKey: CHATGPT_SESSION_SECRET_KEY,
+    sessionSchema: ChatgptSessionSchema,
+    tokenEndpoint: Object.freeze({
+      tokenUrl: CHATGPT_TOKEN_URL,
+      // Every stored session carries the client it registered; this is only
+      // the registration id the first authorize request names.
+      clientId: REGISTRATION_CLIENT_ID,
+      tokenResponseSchema: SubscriptionTokenResponseSchema,
+      params: Object.freeze({ resource: CHATGPT_RESOURCE }),
+    }),
+    notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
+    loopback: Object.freeze({
+      ports: CHATGPT_CALLBACK_PORTS,
+      callbackPath: CHATGPT_CALLBACK_PATH,
+      displayName: 'ChatGPT',
+    }),
+    authorize: Object.freeze({
+      url: CHATGPT_AUTHORIZE_URL,
+      scope: CHATGPT_SCOPE,
+      redirectUri: (port: number) =>
+        `http://127.0.0.1:${port}${CHATGPT_CALLBACK_PATH}`,
+      params: Object.freeze({ resource: CHATGPT_RESOURCE }),
+    }),
+    // A returning sign-in reauthorizes the registered client and sends no name
+    // hint, which only a registration takes.
+    registration: Effect.fnUntraced(function* (secrets) {
+      const host = yield* hostId(secrets);
+      const registered = yield* storedRegistration(secrets);
+      // The consent page shows again only when asked: OpenAI's recovery for
+      // a declined plan is a reauthorization with `prompt=consent`.
+      const params: Readonly<Record<string, string>> =
+        registered === undefined
+          ? { ext_agent_host_id: host, agent_name_hint: client.name }
+          : {
+              ext_agent_host_id: host,
+              ...(registered.planDeclined ? { prompt: 'consent' } : {}),
+            };
+      return {
+        clientId: registered?.clientId ?? REGISTRATION_CLIENT_ID,
+        registering: registered === undefined,
+        params,
+      };
+    }),
+    acceptGrant: acceptChatgptGrant,
+    endSession: revokeSession,
+    buildSession(tokens, refreshToken, nowMs, previous) {
+      const claims = extractChatgptClaims(
+        tokens.id_token ?? undefined,
+        tokens.access_token,
+      );
+      return {
+        accessToken: tokens.access_token,
+        refreshToken,
+        idToken: tokens.id_token ?? previous?.idToken,
+        expiresAtMs: nowMs + tokens.expires_in * 1000,
+        accountId: claims.accountId ?? previous?.accountId,
+        email: claims.email ?? previous?.email,
+        planType: claims.planType ?? previous?.planType,
+      };
+    },
+  });

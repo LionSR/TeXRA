@@ -7,6 +7,7 @@
 import { Layer } from 'effect';
 
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
+import { TEXRA_CLIENT } from '@texra/controllers/texraProcessLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { texraPlugins } from '@texra/tools/registry';
 import type { Plugin } from '@tools/plugins';
@@ -16,6 +17,7 @@ import { FakeHost, SessionGraph } from './testKernel';
 
 export const TEXRA_APP: TestApp = Object.freeze({
   settings: TEXRA_SETTINGS.catalog,
+  client: TEXRA_CLIENT,
   plugins: () => texraPlugins({ name: 'vscode' }),
 });
 

@@ -5,7 +5,7 @@ import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import { chatgptPolicy } from '../../src/oauth/chatgpt/chatgptProvider.js';
 import {
   loginWithLoopback,
   LoopbackTransportUnavailableError,
@@ -14,6 +14,9 @@ import { SubscriptionAccounts } from '../../src/oauth/subscriptionAccounts.js';
 import type { ChatgptSession } from '../../src/oauth/chatgpt/chatgptProvider.js';
 import type { CredentialStore } from '../../src/providers/credentials.js';
 import type { SubscriptionAuthorizeRequest } from '../../src/oauth/subscriptionCoordinator.js';
+
+/** The app the sign-in registers as. */
+const CLIENT = { name: 'Synthetic', id: 'synthetic' };
 
 /** The callback path ChatGPT's sign-in returns to. */
 const CALLBACK_PATH = '/auth/callback';
@@ -25,9 +28,10 @@ const login = (
     'loopback'
   >,
 ) =>
-  loginWithLoopback({ ...options, loopback: CHATGPT_POLICY.loopback }).pipe(
-    Effect.provide(FetchHttpClient.layer),
-  );
+  loginWithLoopback({
+    ...options,
+    loopback: chatgptPolicy(CLIENT).loopback,
+  }).pipe(Effect.provide(FetchHttpClient.layer));
 
 // it.live throughout: the flow binds a real loopback socket on the ChatGPT
 // callback port (or any free one), answers real fetches, and its callback
@@ -114,7 +118,7 @@ describe('ChatGPT loopback login', () => {
             secrets.delete(key);
           }),
       };
-      const accounts = yield* SubscriptionAccounts.make(store);
+      const accounts = yield* SubscriptionAccounts.make(store, CLIENT);
       const { signInWithBrowser } = accounts['chatgpt-subscription'];
       const failure = yield* Effect.flip(
         signInWithBrowser(() =>

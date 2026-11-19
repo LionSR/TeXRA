@@ -37,7 +37,7 @@ import {
   type PendingRequest,
 } from '@texra-ai/harness/schemas';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 /** Keeps the conversation's turn open while its goal runs. */
 const holdTurn = defineTool({
@@ -238,6 +238,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, ledgerPlugin],
+      client: EXAMPLE_CLIENT,
     }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
