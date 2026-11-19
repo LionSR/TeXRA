@@ -91,7 +91,9 @@ describe('pull request poll annotation drain', () => {
         );
         expect(
           github.requests.some((request) =>
-            request.url.endsWith('/check-runs/42/annotations?per_page=100&page=1'),
+            request.url.endsWith(
+              '/check-runs/42/annotations?per_page=100&page=1',
+            ),
           ),
         ).toBe(true);
       }).pipe(Effect.provide(githubServices)),
