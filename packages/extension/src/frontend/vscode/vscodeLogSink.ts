@@ -8,7 +8,7 @@
  * the transcript's to render, not a per-run output channel's.
  */
 // Third-party imports
-import { Predicate } from 'effect';
+import { Predicate, Record } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -24,12 +24,10 @@ import {
  * arrives already rendered and bounded by the write path, so this shows them
  * on the entries the user's own channel-level filter let through. */
 function detail(entry: LogEntry): string {
-  const extra = Object.entries(entry.annotations).filter(
-    ([key]) => key !== LOG_CHANNEL,
-  );
+  const extra = Record.remove(entry.annotations, LOG_CHANNEL);
   const parts = [
     entry.cause,
-    extra.length === 0 ? undefined : JSON.stringify(Object.fromEntries(extra)),
+    Record.isEmptyRecord(extra) ? undefined : JSON.stringify(extra),
   ].filter(Predicate.isNotUndefined);
   return parts.length === 0 ? '' : `\n${parts.join('\n')}`;
 }

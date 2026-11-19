@@ -134,6 +134,18 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
         );
     }
   }
+  const { loaded, refused } = plugin.programs;
+  if (loaded.length === 0 && refused.length === 0) lines.push('Programs: none');
+  else {
+    lines.push(
+      'Programs (each is JavaScript the plugin wrote, run in the script sandbox when you or a model starts it by name; it acts only through the tools it lists, which your tool switches and approvals still govern, and the agents it starts are not asked about one by one):',
+    );
+    for (const program of loaded)
+      lines.push(
+        `  ${program.name}: ${program.description} (tools: ${program.tools.join(', ') || 'none'})`,
+      );
+    for (const line of refused) lines.push(`  ${line}`);
+  }
   const { hooks, unsupported } = plugin.hooks;
   if (hooks.length === 0) lines.push('Hooks: none');
   else {
@@ -224,6 +236,8 @@ export interface PluginListing extends InstalledPlugin {
   readonly skillCount: number;
   readonly commandCount: number;
   readonly agentCount: number;
+  /** The programs it carries, by the name each is started by. */
+  readonly programs: readonly string[];
   /** Its MCP servers' names, as its tools carry them. */
   readonly mcpServers: readonly string[];
   /** Whether the user trusts it as it is now. */
@@ -255,6 +269,7 @@ export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
           skillCount,
           commandCount: plugin.commands.length,
           agentCount: plugin.agents.length,
+          programs: plugin.programs.loaded.map(({ name }) => name),
           mcpServers: plugin.mcpServers.map((server) => server.name),
           trusted: trusts(record, key),
           hooks: plugin.hooks.hooks,
@@ -269,6 +284,7 @@ export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
             skillCount: 0,
             commandCount: 0,
             agentCount: 0,
+            programs: [],
             mcpServers: [],
             trusted: false,
             hooks: [],

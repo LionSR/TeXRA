@@ -1,7 +1,7 @@
 /**
- * Shared LaTeX content parsing utilities: comment stripping, citation and
- * bibliography directive matching, and the path resolution the LaTeX
- * dependency extractors share.
+ * Shared LaTeX content parsing utilities: comment stripping, bibliography
+ * directive matching, and the path resolution the LaTeX dependency
+ * extractors share.
  */
 
 import * as path from 'node:path';
@@ -38,42 +38,6 @@ export function ensureExtension(filePath: string, extension: string): string {
     ? filePath
     : `${filePath}${extension}`;
 }
-
-/**
- * Every citation macro TeXRA recognizes, natbib and biblatex alike, in both
- * lowercase and sentence-case (`\Citep`) spellings. One list, read by
- * citation-key extraction (`extractBibliography`) and latexdiff's
- * `--exclude-textcmd` (`latexdiff`), where a macro known to one but not the other means
- * either a citation key silently missed or a bibliography marked up as prose.
- *
- * Sentence-case forms are generated, not listed: the ones no package defines
- * (`\Nocite`) are inert in both consumers, an unmatched regex alternative and
- * an unknown `--exclude-textcmd` entry respectively.
- */
-const CITATION_COMMAND_STEMS = [
-  'cite',
-  'citet',
-  'citep',
-  'citealp',
-  'citealt',
-  'citeauthor',
-  'citeyear',
-  'citeyearpar',
-  'textcite',
-  'parencite',
-  'footcite',
-  'autocite',
-  'supercite',
-  'smartcite',
-  'nocite',
-] as const;
-
-export const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
-  ...CITATION_COMMAND_STEMS,
-  ...CITATION_COMMAND_STEMS.map(
-    (name) => `${name[0].toUpperCase()}${name.slice(1)}`,
-  ),
-]);
 
 /**
  * A comment, or a URL argument to keep whole. A `%` starts a comment unless

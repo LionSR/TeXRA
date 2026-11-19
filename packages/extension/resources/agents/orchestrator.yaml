@@ -13,8 +13,6 @@ tools:
   - bash
   - glob
   - grep
-  - extract_figures
-  - extract_bib_entries
   - codex
   - claude_code
   - github_subscription
