@@ -1,22 +1,17 @@
-import { defineCommand } from 'citty';
+import { Command } from 'effect/cli';
 
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { defineSubscriptionAuthCommand } from './_helpers/subscriptionAuthCommand';
 
 // Every auth verb lives here, one group per subscription provider. There is
 // no TeXRA account to sign in to; a bare `texra auth` lists the groups.
-export const authCommand = defineCommand({
-  meta: {
-    name: 'auth',
-    description: `Sign in with a ${CHATGPT_AUTH.subscriptionLabel} or ${GROK_AUTH.subscriptionLabel}; check status`,
-  },
-  args: {
-    ...GLOBAL_ARGS,
-  },
-  subCommands: {
-    chatgpt: defineSubscriptionAuthCommand({
+export const authCommand = Command.make('auth').pipe(
+  Command.withDescription(
+    `Sign in with a ${CHATGPT_AUTH.subscriptionLabel} or ${GROK_AUTH.subscriptionLabel}; check status`,
+  ),
+  Command.withSubcommands([
+    defineSubscriptionAuthCommand({
       providerId: 'chatgpt',
       rootDescription:
         'Sign in with your ChatGPT subscription to use OpenAI models',
@@ -27,7 +22,7 @@ export const authCommand = defineCommand({
         accountId: account.accountId ?? null,
       }),
     }),
-    grok: defineSubscriptionAuthCommand({
+    defineSubscriptionAuthCommand({
       providerId: 'grok',
       rootDescription:
         'Sign in with your Grok (xAI SuperGrok) account to use xAI models via subscription',
@@ -35,5 +30,5 @@ export const authCommand = defineCommand({
       logoutDescription: 'Sign out of your Grok subscription',
       statusDescription: 'Show Grok subscription sign-in status',
     }),
-  } as const,
-});
+  ]),
+);

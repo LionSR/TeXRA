@@ -1,10 +1,11 @@
 import { Effect } from 'effect';
 
 import { nodeFileServices } from '@texra-ai/harness/node';
-import { buildCliContext } from '@cli/runtime/platform/cliContext';
+import {
+  buildCliContext,
+  type CliGlobalArgs,
+} from '@cli/runtime/platform/cliContext';
 import { writeTextStderr } from '@cli/runtime/platform/logSinks';
-
-import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
 
 /**
  * The CLI's pre-runtime context program. It opens the project and user
@@ -17,12 +18,11 @@ import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
  * (`defineCliCommand`, and `texra doctor` inside its own program).
  */
 export const loadConfigAndWarn = Effect.fn('loadConfigAndWarn')(function* (
-  args: ParsedGlobalArgs,
-  rawArgs: readonly string[] = [],
+  globalArgs: CliGlobalArgs,
   options: { readonly printConfigWarnings?: boolean } = {},
 ) {
   const context = yield* buildCliContext({
-    globalArgs: pickGlobalArgs(args, rawArgs),
+    globalArgs,
   });
   // Degradation reaches stderr even under `--quiet` (#11080).
   const printed = context.quietLogs

@@ -224,6 +224,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^8.0.7
         version: 8.0.7(@babel/core@8.1.0)
+      '@effect/platform-node':
+        specifier: 'catalog:'
+        version: 4.1.4(effect@4.1.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0

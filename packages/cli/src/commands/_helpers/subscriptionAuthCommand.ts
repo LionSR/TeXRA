@@ -1,5 +1,5 @@
-import { defineCommand, type CommandDef } from 'citty';
 import { Cause, Effect } from 'effect';
+import { Command, Flag } from 'effect/cli';
 
 import { CliInvocation } from '@cli/runtime/platform/cliContext';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
@@ -18,8 +18,7 @@ import {
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
-import { defineCliCommand } from './defineCliCommand';
-import { booleanArg, GLOBAL_ARGS } from './globalArgs';
+import { cliCommand } from './cliCommand';
 import { cliProgressWriter, emitCliResult } from './output';
 
 /**
@@ -63,7 +62,7 @@ interface DefineSubscriptionAuthCommandOptions {
  */
 export function defineSubscriptionAuthCommand(
   options: DefineSubscriptionAuthCommandOptions,
-): CommandDef<typeof GLOBAL_ARGS> {
+) {
   const provider = subscriptionProvider(options.providerId);
   /** Registered ndjson discriminator; the status record appends '-status'. */
   const ndjsonKind = `${options.providerId}-auth` as const;
@@ -102,35 +101,30 @@ export function defineSubscriptionAuthCommand(
     });
   }
 
-  const loginCommand = defineCliCommand({
-    meta: {
-      name: 'login',
-      description: options.loginDescription,
-    },
-    args: {
-      device: {
-        type: 'boolean',
-        description:
+  const loginCommand = cliCommand('login', {
+    description: options.loginDescription,
+    config: {
+      device: Flag.Boolean('device').pipe(
+        Flag.withoutNegation,
+        Flag.withDefault(false),
+        Flag.withDescription(
           'For SSH, containers, or any headless shell: sign in with a one-time device code where the provider has one, otherwise print the browser sign-in URL',
-      },
-      'no-browser': {
-        type: 'boolean',
-        description:
+        ),
+      ),
+      noBrowser: Flag.Boolean('no-browser').pipe(
+        Flag.withoutNegation,
+        Flag.withDefault(false),
+        Flag.withDescription(
           'Print the loopback sign-in URL instead of opening a browser',
-      },
+        ),
+      ),
     },
-    run: (_, ctx) =>
-      runLogin({
-        device: ctx.args.device === true,
-        noBrowser: booleanArg(ctx.args, 'no-browser'),
-      }),
+    run: (_, input) => runLogin(input),
   });
 
-  const logoutCommand = defineCliCommand({
-    meta: {
-      name: 'logout',
-      description: options.logoutDescription,
-    },
+  const logoutCommand = cliCommand('logout', {
+    description: options.logoutDescription,
+    config: {},
     run: Effect.fn('subscriptionAuthCommand.run')(function* () {
       const services = yield* cliPlatform;
       const signOutResult = yield* withCliAuthError(
@@ -153,11 +147,8 @@ export function defineSubscriptionAuthCommand(
     }),
   });
 
-  const statusCommand = defineCliCommand({
-    meta: {
-      name: 'status',
-      description: options.statusDescription,
-    },
+  const status = {
+    config: {},
     run: Effect.fn('subscriptionAuthCommand.run')(function* () {
       yield* cliPlatform;
       const statusResult = yield* withCliAuthError(provider.getStatus());
@@ -171,19 +162,17 @@ export function defineSubscriptionAuthCommand(
           : ACCOUNT_OUTCOME.notSignedIn(provider.displayName),
       });
     }),
-  });
+  };
 
-  return defineCommand({
-    meta: {
-      name: options.providerId,
-      description: options.rootDescription,
-    },
-    args: { ...GLOBAL_ARGS },
-    default: 'status',
-    subCommands: {
-      login: loginCommand,
-      logout: logoutCommand,
-      status: statusCommand,
-    } as const,
-  });
+  // A bare `texra auth <provider>` is its `status`.
+  return cliCommand(options.providerId, {
+    description: options.rootDescription,
+    ...status,
+  }).pipe(
+    Command.withSubcommands([
+      loginCommand,
+      logoutCommand,
+      cliCommand('status', { description: options.statusDescription, ...status }),
+    ]),
+  );
 }

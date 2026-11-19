@@ -4,43 +4,29 @@ import {
   type CommandDef,
   type CommandMeta,
 } from 'citty';
-import {
-  Cause,
-  Effect,
-  Exit,
-  type Layer,
-  ManagedRuntime,
-  Result,
-} from 'effect';
+import { Effect, type Layer } from 'effect';
 
-import { setLogSink } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
-import { withForkFailureReporting } from '@texra-ai/harness/transcript';
-import {
-  makeCliProcessRuntime,
-  type CliServices,
-} from '@cli/runtime/platform/cliProcessRuntime';
+import type { CliServices } from '@cli/runtime/platform/cliProcessRuntime';
 import type {
   CliPlatform,
   CliPlatformOptions,
 } from '@cli/runtime/platform/initPlatform';
 import {
-  stderrDiagnosticSink,
-  writeErrorStderr,
-} from '@cli/runtime/platform/logSinks';
-import type { RunChatInit } from '@cli/chat/tui/runChatTui';
-import {
   provideCliInvocation,
   type CliContext,
   type CliInvocation,
 } from '@cli/runtime/platform/cliContext';
-import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 
 import { loadConfigAndWarn } from './loadConfigAndWarn';
 import { setExitCode } from './exitCode';
 import {
+  launchCliCommand,
+  type CliCommandOutcome,
+} from './cliCommand';
+import {
   GLOBAL_ARGS,
   INTERACTIVE_COMMAND_NAMES,
+  pickGlobalArgs,
   INTERACTIVE_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './globalArgs';
@@ -51,16 +37,6 @@ import {
 type CliCommandRunContext<A extends ArgsDef> = Parameters<
   NonNullable<CommandDef<A>['run']>
 >[0];
-
-/**
- * What a command's program finishes with: nothing, which is success, the
- * process exit code, or the chat session it hands the terminal to (`texra
- * setup`'s setup agent, `texra resume`'s tool-use session). The TUI is not
- * part of the program: `runChat` installs Ink, its own SIGINT/SIGTERM pair
- * and the teardown it owns, so it mounts after the program has finished
- * rather than inside a fiber of the runtime it outlives.
- */
-type CliCommandOutcome = number | void | { readonly chat: RunChatInit };
 
 interface DefineCliCommandOptions<A extends ArgsDef, E, R, O> {
   readonly meta: CommandMeta & { readonly name: string };
@@ -161,24 +137,6 @@ export function defineCliCommand<const A extends ArgsDef, E>(
 ): CommandDef<A> {
   const { name } = options.meta;
   const interactive = INTERACTIVE_COMMAND_NAMES.includes(name);
-  function report(cause: Cause.Cause<unknown>): void {
-    // Ctrl-C or SIGTERM: the platform's shutdown interrupted the command,
-    // and its signal handler ends the process with the signal's code. That
-    // is a cancel, not a crash for `bin/texra.ts` to report as a bug.
-    if (Cause.hasInterruptsOnly(cause)) {
-      setExitCode(CliExitCode.Interrupted);
-      return;
-    }
-    const error = Cause.squash(cause);
-    if (options.catchExitCode === undefined) throw error;
-    if (typeof options.catchExitCode === 'function') {
-      setExitCode(options.catchExitCode(error));
-      return;
-    }
-    writeErrorStderr(error);
-    setExitCode(options.catchExitCode);
-  }
-
   return defineCommand<A>({
     meta: options.meta,
     // The global flags parse too; a program reads them through
@@ -198,7 +156,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       // A pre-runtime run: the context program opens the config stores
       // before the command's runtime exists.
       const context = await Effect.runPromise(
-        loadConfigAndWarn(ctx.args, ctx.rawArgs),
+        loadConfigAndWarn(pickGlobalArgs(ctx.args, ctx.rawArgs)),
       );
       // Built before the run below, not inside it: a `CliUsageError` the
       // builder throws is the command refusing its arguments, which `runCli`
@@ -207,44 +165,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       const program = options
         .run(context, ctx)
         .pipe(provideCliInvocation(context));
-      // The command's diagnostic sink for its whole life, at the level the
-      // context decided from argv (`--quiet`, `--verbose`): the runtime
-      // build below, the platform and the command's work all log through
-      // it. Only the chat replaces it, while Ink owns the terminal.
-      setLogSink(stderrDiagnosticSink(context.minimumLogLevel), {
-        trusted: true,
-      });
-      // The command runs on its runtime from plain async code, never from
-      // inside a default-runtime fiber: started from one, a headless run's
-      // Ctrl-C shutdown drain never finished. A runtime that cannot be
-      // built reaches the same report as a failed program.
-      const built = Result.try({
-        try: () =>
-          options.layer === undefined
-            ? makeCliProcessRuntime(context, options.platform)
-            : withForkFailureReporting(
-                ManagedRuntime.make(options.layer(context)),
-              ),
-        catch: ensureError,
-      });
-      if (Result.isFailure(built)) return report(Cause.fail(built.failure));
-      const runtime = built.success;
-      try {
-        const exit = await runtime.runPromiseExit(program);
-        if (Exit.isFailure(exit)) return report(exit.cause);
-        const outcome = exit.value;
-        if (outcome === undefined) return setExitCode(CliExitCode.Success);
-        if (typeof outcome === 'number') return setExitCode(outcome);
-        // The TUI mounts at this Promise edge, after the program has
-        // finished, on the runtime that program ran on: `runChat` owns Ink,
-        // its own signal handlers and its teardown.
-        const { runChat } = await import('@cli/chat/tui/runChatTui');
-        setExitCode((await runChat(runtime, context, outcome.chat)).exitCode);
-      } finally {
-        // The command's one shutdown: its platform's sessions and project,
-        // then the process services, the usage log drained.
-        await runtime.dispose();
-      }
+      setExitCode(await launchCliCommand(context, program, options));
     },
   });
 }

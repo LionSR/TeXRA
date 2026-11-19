@@ -22,7 +22,7 @@ import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { GLOBAL_ARGS, pickGlobalArgs } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/platform/cliContext';
 
 /** The healthy report, on the command's runtime once its platform is up. */
@@ -111,7 +111,7 @@ export const doctorCommand = defineCommand({
     setExitCode(
       await Effect.runPromise(
         Effect.gen(function* () {
-          const context = yield* loadConfigAndWarn(ctx.args, ctx.rawArgs, {
+          const context = yield* loadConfigAndWarn(pickGlobalArgs(ctx.args, ctx.rawArgs), {
             printConfigWarnings: false,
           });
           const report = yield* doctorReport(context);
