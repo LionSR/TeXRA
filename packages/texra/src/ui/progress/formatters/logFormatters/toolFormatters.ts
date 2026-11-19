@@ -20,7 +20,12 @@ import {
   normalizeToolName,
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import { runStatusLabel, statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
+import {
+  runStatusLabel,
+  statusGlyph,
+  TOOL_STATUS,
+  TOOL_USER_FEEDBACK_LABEL,
+} from '@ui/copy/runStatus';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
@@ -119,7 +124,7 @@ export function formatToolUseTemplate(
   if (model.userInstruction) {
     sections.push(
       buildToolUseSection(
-        'User Instruction:',
+        TOOL_USER_FEEDBACK_LABEL,
         wrapInPre(model.userInstruction.full, 'tool-user-feedback'),
       ),
     );
