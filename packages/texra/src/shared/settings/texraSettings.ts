@@ -15,6 +15,7 @@
 
 // Third-party imports
 import { Schema } from 'effect';
+import type { UsageLogEntry } from '@texra-ai/harness/host';
 import {
   decodingDefault,
   GIT_AUTHOR_EMAIL_SETTING,
@@ -243,14 +244,48 @@ export const CUSTOM_REPLACEMENTS_SETTING = Object.freeze({
   description: 'Custom direct text replacements.',
 } as const satisfies SettingRow<Readonly<Record<string, string>>>);
 
+/**
+ * What each field of a usage record is, in the words every surface uses, in
+ * the order the sentence lists them. It is total over the record the sender
+ * queues (`UsageLogEntrySchema`): a field added to the wire does not compile
+ * until it is worded here, and a field that leaves the wire leaves the
+ * sentence.
+ */
+const USAGE_RECORD_WORDING = {
+  agentName: 'agent',
+  model: 'model',
+  provider: 'provider API',
+  usageRoute: 'billing route',
+  inputTokens: 'token counts',
+  outputTokens: 'token counts',
+  cachedInputTokens: 'token counts',
+  reasoningTokens: 'token counts',
+  listCost: 'cost at list prices',
+  responseTimeMs: 'response time',
+  timestamp: 'time of the call',
+  streamId: 'task ID',
+  extensionVersion: 'version',
+  editorType: 'host',
+} as const satisfies Record<keyof UsageLogEntry, string>;
+
+/**
+ * What usage logging sends and what it never does: the one statement the
+ * setting, the first-run notice and `texra doctor` show.
+ * The install ID is the request's header, not a field of the record.
+ */
+export const USAGE_LOGGING_SENDS = `TeXRA sends anonymous usage metadata (${[
+  ...new Set(Object.values(USAGE_RECORD_WORDING)),
+].join(
+  ', ',
+)}) with a random install ID and no account. It never sends prompts, document content, file paths or error text.`;
+
 /** The usage-telemetry opt-in. */
 export const TELEMETRY_ENABLED_SETTING = Object.freeze({
   key: 'telemetry.enabled',
   slot: 'config',
   schema: decodingDefault(Schema.Boolean, true),
   title: 'Share usage telemetry',
-  description:
-    'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
+  description: `${USAGE_LOGGING_SENDS} Turning this off stops all reporting.`,
   category: 'privacy',
   configTarget: 'global',
   projectMayOptOut: true,

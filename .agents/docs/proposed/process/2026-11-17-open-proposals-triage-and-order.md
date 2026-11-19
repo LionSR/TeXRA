@@ -39,7 +39,7 @@ provider key, and about 30 on hold with a stated reopening event. Decisions
 outnumber work: what limits progress is no longer hands.
 
 The notes are stale as a rule. None is right throughout, and more than
-twenty items still marked open are done. One note is finished and can be
+twenty items still marked open are done. One note was finished and is
 deleted: `architecture/2026-11-09-decisions-read-the-log-not-the-view.md`
 (the one decision reader of the view left, `submitFollowUp`, stays by the
 ruling in #14986). Correcting the other notes item by item is step 5 of the
@@ -121,7 +121,8 @@ started, unless listed under "In flight".
 - `edgesOf` keeps a case per kind: its own comment gives the reason.
 - `LabelsRootRuns` stays a `Context.Reference` with a default.
 
-**Do not do it.** Each belongs in `refuted-candidates.json` at step 5.
+**Do not do it.** Each is recorded in `.agents/docs/refuted-candidates.json`
+(2026-11-19), with its symbols and a `ruling` anchor to this section.
 
 - A shared media-capability classifier: the two notes disagree and the
   verification scored it at zero net elements.
@@ -247,8 +248,10 @@ first, as its phase 7).
 4. **Evidence that needs no key**: the `unified-latex` spike, the tar
    stream spike, the `EARLIER_RUNS` scan and the cold-read measurements, the
    packaged smoke before the banner script stops rebuilding `__dirname`.
-5. **Correct the notes**: delete the finished one, mark the stale items,
-   record the items above that are not to be done in `refuted-candidates.json`, fix the ledger's
-   publishing line. Last, because every pull request before it edits notes.
+5. **Correct the notes**: mark the stale items. Last, because every pull
+   request before it edits notes. Done on 2026-11-19: the finished note is
+   deleted, the items above that are not to be done are recorded in
+   `refuted-candidates.json` (whose entries were re-read against the code),
+   and the ledger's publishing line (D11) is fixed.
 6. **The freeze and the first publish**, on the owner's date, after the two
    live routes pass.

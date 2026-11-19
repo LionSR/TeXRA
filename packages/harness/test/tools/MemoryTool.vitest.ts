@@ -12,7 +12,9 @@ import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryLayout';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { outputOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { SessionGraph } from '@test/support/testKernel';
+import { seedEditedFiles } from '@test/support/runRecordSeeds';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
@@ -110,6 +112,59 @@ layer(SessionGraph.hosted)('MemoryTool view with an omitted path', (it) => {
 
       expect(result.status).toBe('executed');
       expect(outputOf(result)).not.toContain('cycle');
+    }),
+  );
+});
+
+layer(SessionGraph.hosted)('MemoryTool line numbers', (it) => {
+  it.effect('insert accepts exactly the lines a view numbered', () =>
+    Effect.gen(function* () {
+      const notePath = `${MEMORY_DISPLAY_ROOT}/note.md`;
+      const written: string[] = [];
+      const storageFs = storageView({
+        root: '/storage',
+        exists: () => Effect.succeed(true),
+        stat: () => Effect.succeed(entryInfo('File', 4)),
+        readFile: () => Effect.succeed(Buffer.from('a\nb\n', 'utf-8')),
+        writeFileAtomic: (_target, bytes) =>
+          Effect.sync(() => {
+            written.push(Buffer.from(bytes).toString('utf-8'));
+          }),
+      });
+      const session = yield* isolatedTestSession();
+      const runId = yield* publishTestRunStart(session);
+      yield* seedEditedFiles(session, runId, [notePath]);
+      const call = (input: Parameters<typeof MemoryTool.call>[0]) =>
+        MemoryTool.call(input).pipe(
+          Effect.provideService(StorageFs, storageFs),
+          Effect.provide(
+            nativeToolTestLayer({ run: { runId, toolPolicy: {}, session } }),
+          ),
+        );
+      const insertAt = (insert_line: number) =>
+        call({
+          command: 'insert',
+          path: notePath,
+          insert_line,
+          insert_text: 'c',
+        });
+
+      // The view numbers two lines: the newline that ends the file is not a
+      // third.
+      const viewed = yield* call({ command: 'view', path: notePath });
+      expect(outputOf(viewed)).toMatch(/2\D+b$/);
+
+      const pastTheEnd = yield* insertAt(3);
+      expect(pastTheEnd).toMatchObject({
+        status: 'error',
+        error: expect.stringContaining('[0, 2]'),
+      });
+
+      const appended = yield* insertAt(2);
+      expect(appended.status).toBe('executed');
+      expect(
+        written.map((file) => file.replace(/^---\n[^]*?---\n/, '')),
+      ).toEqual(['a\nb\nc\n']);
     }),
   );
 });

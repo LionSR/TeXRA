@@ -19,7 +19,10 @@ import {
 import { redactDiagnostics } from '@texra-ai/harness/host';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { latexToolchainHealth } from '@latex/latexToolchain';
-import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
+import {
+  USAGE_LOGGING_ENV_OPT_OUT,
+  type UsageLoggingOptOut,
+} from '@telemetry/UsageLogService';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import {
   installAdvice,
@@ -29,6 +32,7 @@ import { osPlatformOf } from '@texra/shared/osPlatform';
 import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
+  USAGE_LOGGING_SENDS,
 } from '@texra/shared/settings/texraSettings';
 
 // Local file imports
@@ -333,8 +337,8 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         'telemetry',
         'Usage logging',
         'pass',
-        'On: anonymous model, agent, token counts and duration per round, with a random install ID (no account). No prompt, path or document text.',
-        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_STORED_KEY}": false in ~/.texra/v1/global-storage/config.json.`,
+        `On. ${USAGE_LOGGING_SENDS}`,
+        `Turn it off with ${USAGE_LOGGING_ENV_OPT_OUT}, or "${TELEMETRY_STORED_KEY}": false in ~/.texra/v1/global-storage/config.json.`,
       );
     }),
     // A config store that throws reports as this check's failure.
