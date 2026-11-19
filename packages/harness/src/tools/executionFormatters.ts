@@ -116,7 +116,7 @@ export function formatChildLine(child: RunView): string {
  *  running or finished, because one fold answers for both. */
 export function buildSummaryLines(run: RunView): string[] {
   const lines = [
-    `Run: ${run.id}`,
+    `Run ID: ${run.id}`,
     `Agent: ${run.label}`,
     `Category: ${runDisplayCategory(run)}`,
     ...(run.model === null ? [] : [`Model: ${run.model}`]),

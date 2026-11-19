@@ -314,7 +314,12 @@ rather than per finding:
   provider SDK's error result, which has no exit, keeps `failure`.
 - **`childEndReport`** switches on the child's kind (a background script's
   notice, a subagent's envelope) in one function; two delivery formats, one
-  function, where the kind is known at the launch.
+  function, where the kind is known at the launch. Refused on 2026-11-19
+  (`RUNEND-child-report-from-launch`): the kind is known at a launch but
+  not at a resume, which rebuilds the run from its stored configuration,
+  so the switch would move to where the launch is built and gain a field.
+  The second read of the kind, the fallback family in `endRun`, moved
+  into `childEndReport`.
 - Pre-existing, noted: `Context.merge` of the whole captured context in
   `sessionOwnersLayer` (the runs' fork runtimes are built under the
   session's context deliberately; a `Context.pick` would name the services
@@ -323,8 +328,11 @@ rather than per finding:
   Read on 2026-11-17 at `c78e9f9`: `joinOpening`'s read failure is now
   logged at warn before the resume is refused
   (`packages/harness/src/agent/runtime/resumeRun.ts`), so that one has
-  ended; the `Context.merge` and the `Run ID:`/`Run:` pair stand; the
-  `Effect.try` was not found again and is not established either way.
+  ended; the `Context.merge` stands; the
+  `Effect.try` was not found again and is not established either way. The
+  `Run ID:`/`Run:` pair ended on 2026-11-19: everything a model reads says
+  `Run ID:` (the executions summary and the compile fixer's question
+  changed; the five launch receipts already did).
 
 ## 4. Follow-ups
 

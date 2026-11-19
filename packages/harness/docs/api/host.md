@@ -790,7 +790,7 @@ caller holds as data: `undefined` with no folder open, which resolves every
 path as external.
 
 NOT run-storage aware — it can only create workspace or external locations.
-For run-storage awareness, use `sourceLocationUnder` (`storageLayout.ts`).
+For run-storage awareness, use `sourceLocationUnder`.
 
 Path normalization is handled internally - you can pass paths with either
 forward slashes or backslashes. It's safe to pass already-normalized paths

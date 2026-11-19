@@ -336,15 +336,16 @@ counter, kept as a policy decision). TC7's last half landed after it:
 (`absentReason` has no references; the reading is `meansAbsent`) and (l)
 (`copyOrRemoveRunDir` has none) have landed; (a) is one exported
 `ScriptCallStatus` beside `scriptRun.ts`'s own four-value
-`ScriptCallOutcome`, and (g) `Draft` still names two interfaces
-(`packages/cli/src/chat/tui/input/draftAttachments.ts`,
-`packages/texra/src/shared/session/surface.ts`). Of IC6, `ModelInvoker`'s
+`ScriptCallOutcome`; (g) landed on 2026-11-19: the CLI input's draft is
+`InputDraft` (`packages/cli/src/chat/tui/input/draftAttachments.ts`) and
+the progress view's is `FollowUpDraft`
+(`packages/texra/src/shared/session/surface.ts`). Of IC6, `ModelInvoker`'s
 header and `ITool.describe` are gone; `withPerKeyLane`'s doc (16 lines,
 from 29), `fetchAllCheckRuns`'s pagination explanations
-(`packages/texra/src/tools/github/checkRunsClient.ts`) and the API
-reference's internal file names (`storageLayout.ts` in
-`packages/harness/docs/api/host.md`) stay. So 4 are open with no owner:
-IC6's rest, NM10 (a) and (g), and NM1 and NM9 as a rule ("settle" is down
+(`packages/texra/src/tools/github/checkRunsClient.ts`) stay; the API
+reference's internal file name (`storageLayout.ts` in
+`packages/harness/docs/api/host.md`) went on 2026-11-19. So 4 are open
+with no owner: IC6's rest, NM10 (a), and NM1 and NM9 as a rule ("settle" is down
 from 491 to 28 occurrences in `packages/*/src`). GS7 b,
 `StartOptions.continues`, stays the owner's call. The held ids (H9, M4
 and M9 with #14773; S9, W7 and W9's rule; I-C1, I-C4, I-C5 and I-C16;

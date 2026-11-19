@@ -285,10 +285,13 @@ the stop (`runRegistry.ts`). Still open: why a resume is refused
 and `REFUSED` remain; `runRejection`, `earlierBuildRefusal` and
 `namesUnusableCheckpoint` are gone); a stop that also failed
 (`primaryAgentError` and compaction's `hasInterrupts → Effect.interrupt`,
-`run/compaction.ts:172-174`, remain; `runWithLaunchGuard` is gone); defects
-and failures (`defectAsFailure` in `runLifecycle.ts` and `defectsAsErrors` in
-`delegation/childLaunch.ts` remain; no `Effect.die(Cause.squash(…))` is left
-in the harness). The acceptance count is 15 files, not under ten. The open
+`run/compaction.ts:172-174`, remain; `runWithLaunchGuard` is gone). Defects
+and failures ended on 2026-11-19: `defectAsFailure` and `defectsAsErrors`
+are gone, and no `Effect.die(Cause.squash(…))` is left in the harness. A
+registration or an awaited child's launch fails with the typed errors its
+steps raise (`ParentRunClosed`, the store's, a `ToolError`); a defect
+there stays a defect, which the tool boundary reports to the model as a
+failed call and logs as a crash (`defineTool`). The acceptance count is 15 files, not under ten. The open
 stop and resume rows are the same work as §5 of
 [storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md)
 and are done once, from that note._
