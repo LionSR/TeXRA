@@ -205,7 +205,7 @@ export const RUN_RECORDS = Object.freeze({
   readResult: Schema.NullOr(RunResultSchema),
   readWorkspaceFiles: Schema.Array(RunWorkspaceFileSchema),
   readSkills: Schema.Array(Schema.String),
-  readResumable: Schema.Boolean,
+  readContinues: Schema.Boolean,
   /** The run's conversation as every conversation view renders it. */
   readConversation: Schema.Array(ExportNodeSchema),
   /** What the HTML transcript export reads: the run's display rows and its

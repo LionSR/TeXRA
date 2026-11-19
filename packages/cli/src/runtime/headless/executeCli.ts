@@ -363,7 +363,7 @@ export const executeCliConfig: (
         if (
           interrupted &&
           options.recoveryInputIsDurable &&
-          (yield* session.records(launchRunId).readResumable)
+          (yield* session.records(launchRunId).readContinues)
         )
           yield* writeTextStderrAndWait(
             formatInterruptedResumeHint(

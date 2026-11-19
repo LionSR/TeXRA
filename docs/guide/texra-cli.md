@@ -173,7 +173,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 - History records (`history-entry`, `history-detail`) carry the run's
   `outcome` (`completed`, `cancelled`, `failed`, or `null` when none was
   recorded) and, separately, whether `texra resume` continues it
-  (`resumable`).
+  (`continues`).
 
 ## Authentication
 
@@ -407,10 +407,11 @@ Text output prints one tab-separated row per run:
 The NDJSON form is stable for scripts under the version 3 contract above.
 Each line has kind `history-entry` and contains the same run entry object used
 by JSON output, with the terminal `outcome` spelled as `completed`,
-`cancelled`, or `failed` (`null` when none was recorded) and `resumable`
+`cancelled`, or `failed` (`null` when none was recorded) and `continues`
 saying whether `texra resume` continues it. The text form's status column
-reads the same outcome, or `no outcome`, followed by `(resumable)` when it
-applies.
+reads the same outcome, or `no outcome`, followed by `(can continue)` for a
+finished conversation that takes another message, or `(can resume)` for an
+interrupted, failed or cancelled run.
 
 Inspect or delete one run:
 
