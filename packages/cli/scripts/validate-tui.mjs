@@ -35,7 +35,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
@@ -81,9 +80,16 @@ const LONG_BASH_APPROVAL_COMMAND = [
   'EOF',
 ].join('\n');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
-const ASYNC_FORM_SETTLE_MS = 12000;
-// How long a key's `until` text may take to show.
-const KEY_UNTIL_TIMEOUT_MS = 15000;
+// How long one awaited state may take to show before the scenario fails:
+// the first frame, the frame that answers a key or a resize, the expected
+// text. It is a limit on a regression, not a wait.
+const STATE_TIMEOUT_MS = 15000;
+// The harness's state report (`writeFrameReport` in tui-harness.tsx).
+const FRAME_REPORT_START = `${ESC}]7747;`;
+const FRAME_REPORT_END = String.fromCharCode(7);
+// What a width change's repaint starts with: Ink clears the scrollback and
+// redraws from the top.
+const CLEAR_SCROLLBACK = `${ESC}[3J`;
 // `/plugins`: the one plugin list, which replaced `/config` → Tools. The
 // list loads asynchronously; its key hint shows once it has.
 const PLUGINS_FORM_KEYS = ['/plugins', { input: '\r', until: 'switch on/off' }];
@@ -246,7 +252,6 @@ const SCENARIOS = [
     rows: 40,
     cols: 80,
     env: { HARNESS_STREAMING_TOOL_OUTPUT: '1' },
-    keys: [{ input: '', delayMs: 2500 }],
     expect: [
       'Checking the streamed calculation.',
       '● bash (python3 calculation.py)',
@@ -529,7 +534,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/resume', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['/resume', 'Nothing to resume yet.', 'Esc close'],
     unexpect: ['/resume is registered but has no harness action.'],
   },
@@ -596,7 +600,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/login\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       'Account & access',
       '1. ChatGPT subscription',
@@ -631,7 +634,6 @@ const SCENARIOS = [
       HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/', `${ESC}/agent\r`],
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['/agent', 'Agents', 'Choose an agent for this chat.'],
     unexpect: ['//agent', 'Harness received: //agent', '/agent · error'],
   },
@@ -686,7 +688,6 @@ const SCENARIOS = [
       HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Agents',
@@ -721,7 +722,6 @@ const SCENARIOS = [
       HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Agents',
@@ -816,7 +816,6 @@ const SCENARIOS = [
     },
     keys: ['/model', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       'Choose the model for future turns.',
       'Sonnet 5.5',
@@ -859,7 +858,6 @@ const SCENARIOS = [
     },
     keys: ['/model', '\r', '21'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     // The pick reaches `/model`'s own handler, which answers for the
     // harness's stored root.
     expect: ['Resume the task to switch its model.'],
@@ -874,7 +872,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/login', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       'Account & access',
       '1. ChatGPT subscription',
@@ -888,7 +885,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/config', '\r', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Agents',
       'All agents',
@@ -930,7 +926,6 @@ const SCENARIOS = [
       '\r',
     ],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Git and worktrees',
       'Mark agent commits',
@@ -1014,7 +1009,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: PLUGINS_FORM_KEYS,
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/plugins',
       'Switch plugins on or off. Add one: /plugins add <URL or folder>',
@@ -1035,7 +1029,6 @@ const SCENARIOS = [
     },
     keys: [...PLUGINS_FORM_KEYS, 'b'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 2 tools'],
     unexpect: ['Multi-Agent Workflow — off'],
   },
@@ -1044,7 +1037,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
     keys: ['/skills', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/skills',
       'Select a skill to activate it.',
@@ -1067,7 +1059,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
     keys: ['/skills', '\r', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['Harness skill selected: proof-audit.'],
     unexpect: [
       'No skills found',
@@ -1080,7 +1071,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
     keys: ['/skills', '\r', '21'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['Harness skill selected:'],
     unexpect: [
       'No skills found',
@@ -1099,7 +1089,6 @@ const SCENARIOS = [
     },
     keys: ['/agent', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Current: chat (hidden from picker)',
@@ -1221,7 +1210,6 @@ const SCENARIOS = [
     },
     keys: ['/memory', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/memory',
       'Choose a memory to preview.',
@@ -1246,7 +1234,6 @@ const SCENARIOS = [
     },
     keys: ['/memory', '\r'],
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/memory',
       '/memories/a.md',
@@ -1271,7 +1258,6 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: PLUGINS_FORM_KEYS,
     frame: 'viewport',
-    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/plugins · Switch plugins on or off',
       '↑/↓ navigate',
@@ -1363,7 +1349,7 @@ const SCENARIOS = [
     env: { ...WRAPPED_EDIT_APPROVAL_ENV },
     bootExpect: ' Ctrl-C ',
     keys: [
-      { input: UP.repeat(20), delayMs: 200 },
+      UP.repeat(20),
       'n',
       'This rejection note is deliberately long enough to wrap across several terminal rows.',
     ],
@@ -1403,7 +1389,7 @@ const SCENARIOS = [
     cols: 40,
     env: { ...WRAPPED_EDIT_APPROVAL_ENV },
     bootExpect: ' Ctrl-C ',
-    keys: [{ input: UP.repeat(20), delayMs: 200 }, 'n', 'short note', ESC],
+    keys: [UP.repeat(20), 'n', 'short note', ESC],
     frame: 'viewport',
     expect: ['alpha alpha alpha alpha alpha', 'y approve', 'n reject'],
     unexpect: ['-Old acknowledgment.', '+Revised acknowledgment.'],
@@ -1638,8 +1624,13 @@ const SCENARIOS = [
       HARNESS_REPEATED_BASH_APPROVAL: '1',
     },
     bootExpect: ' Ctrl-C ',
-    keys: ['y', { input: 'y', delayMs: 1000 }],
-    settleMs: 6000,
+    // The first answer hides its card at once; the second request, which
+    // reads the same, opens when the harness has the first decision.
+    keys: [
+      { input: 'y', untilGone: 'Run a command' },
+      { input: '', until: 'Run a command' },
+      'y',
+    ],
     frame: 'viewport',
     expect: ['SECOND-BASH-APPROVED', '/ commands'],
     unexpect: ['Run a command', '1 approval'],
@@ -2766,7 +2757,7 @@ const SCENARIOS = [
       RIGHT,
       '\t',
       ...(process.platform === 'darwin'
-        ? [{ input: ESC, delayMs: 80 }, '3']
+        ? [ESC, '3']
         : [`${ESC}3`]),
     ],
     frame: 'viewport',
@@ -3121,6 +3112,22 @@ function exactFrameDifference(actualFrame, expectedFrame, oracleName) {
       ? `0x${bytes[offset].toString(16).padStart(2, '0')}`
       : 'end-of-frame';
   return `rendered frame is not byte-identical to ${oracleName}: first UTF-8 byte difference at ${offset} (${byteAt(actual)} != ${byteAt(expected)}; ${actual.length} != ${expected.length} bytes)`;
+}
+
+// The harness's latest report, when it is the last thing in `output`: then
+// the screen holds whole frames only.
+function frameReportAtEnd(output) {
+  if (!output.endsWith(FRAME_REPORT_END)) return undefined;
+  const start = output.lastIndexOf(FRAME_REPORT_START);
+  if (start < 0) return undefined;
+  const fields = output.slice(start + FRAME_REPORT_START.length, -1);
+  if (fields.includes(ESC)) return undefined;
+  return Object.fromEntries(
+    fields.split(';').map((field) => {
+      const [name, value] = field.split('=');
+      return [name, Number(value)];
+    }),
+  );
 }
 
 function expectedFrameTextVisible(scenario, frame) {
@@ -3538,15 +3545,10 @@ async function runScenario(scenario, index) {
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
   const rows = scenarioRows(scenario);
-  let lastData = Date.now();
   let exited = null;
   let rawOutput = '';
-  // xterm applies writes in order, so an empty write's callback fires once
-  // every earlier chunk has landed in the buffer.
-  const frameSnapshot = async () => {
-    await new Promise((resolve) => term.write('', resolve));
-    return renderFrame(term);
-  };
+  // Called on the next output chunk or on exit.
+  let onActivity = () => {};
   const childEnv = scenarioChildEnv(scenario, cols, rows);
   const workspaceDir = snapshotWorkspaceDir(index, scenario.name);
   if (workspaceDir && childEnv.HARNESS_CWD == null) {
@@ -3592,79 +3594,141 @@ async function runScenario(scenario, index) {
       env: childEnv,
     },
   );
-  child.onExit((e) => (exited = e));
+  child.onExit((e) => {
+    exited = e;
+    onActivity();
+  });
   child.onData((d) => {
-    lastData = Date.now();
     rawOutput += d;
     term.write(d);
+    onActivity();
   });
 
-  // boot: wait for the interactive input/status area to settle. Static
-  // transcript user rows also contain "›", so use the status-bar marker
-  // instead of the prompt glyph as the readiness sentinel. Binding text is
-  // width-adaptive and may omit labels such as /status in narrow terminals.
-  const bootDeadline = Date.now() + 15000;
-  const bootExpect = scenario.bootExpect ?? '◆';
-  let booted = false;
-  while (Date.now() < bootDeadline) {
-    await sleep(150);
-    if (exited) break;
-    if (
-      (await frameSnapshot()).includes(bootExpect) &&
-      Date.now() - lastData > 600
-    ) {
-      booted = true;
-      break;
+  // Every wait below is one of these: `shows` is asked again each time the
+  // harness reports a finished frame, until it answers yes, the harness
+  // exits, or STATE_TIMEOUT_MS passes. It reads the harness's report and the
+  // emulated screen as of that report, never a frame half written.
+  let fullFrame = '';
+  const waitFor = async (shows) => {
+    const deadline = Date.now() + STATE_TIMEOUT_MS;
+    for (;;) {
+      // xterm applies writes in order, so an empty write's callback fires
+      // once every chunk received so far is on the emulated screen.
+      const received = rawOutput.length;
+      await new Promise((resolve) => term.write('', resolve));
+      const report = frameReportAtEnd(rawOutput.slice(0, received));
+      if (report) {
+        fullFrame = renderFrame(term);
+        if (shows(report, scenarioFrame(scenario, fullFrame, rows))) {
+          return true;
+        }
+      }
+      if (rawOutput.length > received) continue;
+      if (exited) return false;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return false;
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, remaining);
+        onActivity = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      onActivity = () => {};
     }
-  }
+  };
+
+  // boot: the interactive input/status area is on screen and the TUI, not
+  // the terminal's line editing, reads the keys. Static transcript user rows
+  // also contain "›", so use the status-bar marker instead of the prompt
+  // glyph as the readiness sentinel. Binding text is width-adaptive and may
+  // omit labels such as /status in narrow terminals.
+  const bootExpect = scenario.bootExpect ?? '◆';
+  let keysDispatched = 0;
+  const booted = await waitFor((report) => {
+    keysDispatched = report.keys;
+    return (
+      report.raw === 1 &&
+      report.settled === 1 &&
+      fullFrame.includes(bootExpect)
+    );
+  });
 
   const checkpointFailures = [];
 
-  // A key that names the frame text it waits `until` ends its wait when the
-  // UI shows it; any other waits its fixed delay.
-  const press = async (key) => {
-    const input = typeof key === 'string' ? key : key.input;
+  // A key waits until the harness reports that Ink read all of it,
+  // dispatched it and wrote the frame it produced. What a key starts and
+  // something else finishes (a form that loads, an approval that is
+  // answered) is not in that frame: such a key names the text it waits
+  // `until`, or the text it waits to see `untilGone`. A key with no input
+  // only waits.
+  let bytesSent = 0;
+  const send = (input, { until, untilGone } = {}) => {
+    const dispatchedBefore = keysDispatched;
+    bytesSent += Buffer.byteLength(input);
     child.write(input);
-    if (key.until === undefined) {
-      await sleep(Number(key.delayMs ?? scenario.keyDelayMs ?? 500));
-      return;
-    }
-    const deadline = Date.now() + KEY_UNTIL_TIMEOUT_MS;
-    while (!(await frameSnapshot()).includes(key.until)) {
-      if (exited || Date.now() > deadline) {
-        checkpointFailures.push(
-          `after key ${JSON.stringify(input)}, the frame never showed ${JSON.stringify(key.until)}`,
-        );
-        return;
-      }
-      await sleep(100);
-    }
+    return waitFor((report, frame) => {
+      keysDispatched = report.keys;
+      return (
+        report.read >= bytesSent &&
+        report.settled === 1 &&
+        (input === '' || report.keys > dispatchedBefore) &&
+        (until === undefined || frame.includes(until)) &&
+        (untilGone === undefined || !frame.includes(untilGone))
+      );
+    });
+  };
+  const press = async (key) => {
+    if (exited) return;
+    const { input, ...awaited } =
+      typeof key === 'string' ? { input: key } : key;
+    if ((await send(input, awaited)) || exited) return;
+    const missing =
+      awaited.until !== undefined
+        ? `showed ${JSON.stringify(awaited.until)}`
+        : awaited.untilGone !== undefined
+          ? `dropped ${JSON.stringify(awaited.untilGone)}`
+          : 'answered it';
+    checkpointFailures.push(
+      `after key ${JSON.stringify(input)}, the frame never ${missing}`,
+    );
   };
   for (const key of scenario.keys ?? []) await press(key);
   for (const resize of scenario.resizes ?? []) {
-    child.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
-    term.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
-    await sleep(Number(resize.delayMs ?? 500));
+    const nextCols = Number(resize.cols ?? cols);
+    const nextRows = Number(resize.rows ?? rows);
+    const outputBefore = rawOutput.length;
+    child.resize(nextCols, nextRows);
+    term.resize(nextCols, nextRows);
+    // Ink redraws a new height in place and a new width from the top; the
+    // report then carries the size that frame was drawn for.
+    const resized = await waitFor(
+      (report) =>
+        report.cols === nextCols &&
+        report.rows === nextRows &&
+        (nextCols === cols ||
+          rawOutput.includes(CLEAR_SCROLLBACK, outputBefore)),
+    );
+    if (!resized && !exited) {
+      checkpointFailures.push(
+        `after the resize to ${nextCols}x${nextRows}, the frame was never redrawn`,
+      );
+    }
   }
   for (const key of scenario.keysAfterResize ?? []) await press(key);
 
-  // Settle after keystrokes. A quiet PTY is not quite enough: under a full
-  // suite, Ink/xterm can occasionally pause between chunks of the final frame,
-  // which used to snapshot partial lines such as a task detail output row
-  // ending at `Ple`. Prefer a frame where the scenario's expected visible text
-  // is present, but still time out with the best frame if the UI regresses.
-  const settleDeadline = Date.now() + Number(scenario.settleMs ?? 4000);
-  let fullFrame = await frameSnapshot();
-  let frame = scenarioFrame(scenario, fullFrame, rows);
-  while (Date.now() < settleDeadline) {
-    const quiet = Date.now() - lastData >= 500;
-    fullFrame = await frameSnapshot();
-    frame = scenarioFrame(scenario, fullFrame, rows);
-    if (quiet && expectedFrameTextVisible(scenario, frame)) break;
-    await sleep(120);
+  // The frame to assert on is the first finished one that shows everything
+  // the scenario expects. When the UI regresses that frame never comes, and
+  // the assertions run on the last one the harness finished.
+  const shown = await waitFor(
+    (report, frame) =>
+      report.settled === 1 && expectedFrameTextVisible(scenario, frame),
+  );
+  if (!shown) {
+    await new Promise((resolve) => term.write('', resolve));
+    fullFrame = renderFrame(term);
   }
-  fullFrame = await frameSnapshot();
-  frame = scenarioFrame(scenario, fullFrame, rows);
+  const frame = scenarioFrame(scenario, fullFrame, rows);
 
   // exit cleanly: Ctrl-C by default (a second one if the first only
   // interrupts a run). Some surfaces, such as the orchestration launcher,
@@ -3672,9 +3736,18 @@ async function runScenario(scenario, index) {
   const exitKeys = scenario.exitKeys ?? [ETX, ETX];
   for (const exitKey of exitKeys) {
     if (exited) break;
-    child.write(exitKey);
-    const exitDeadline = Date.now() + 2500;
-    while (!exited && Date.now() < exitDeadline) await sleep(100);
+    await send(exitKey);
+  }
+  if (!exited) {
+    // The last exit key was answered; the harness is closing its runtime.
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, STATE_TIMEOUT_MS);
+      onActivity = () => {
+        if (!exited) return;
+        clearTimeout(timer);
+        resolve();
+      };
+    });
   }
   const exitedCleanly = exited?.exitCode === 0 && !exited.signal;
   if (!exited) {

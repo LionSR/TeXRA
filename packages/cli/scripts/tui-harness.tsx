@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
-import { render } from 'ink';
+import { render, useInput } from 'ink';
 import {
   Context,
   Effect,
@@ -295,6 +295,69 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   termIsDumb: false,
   version: '0.0.0-harness',
 };
+// What the validator (validate-tui.mjs) waits on instead of the clock. The
+// harness reports its state in one private OSC sequence, which a terminal
+// ignores, written in order with the frame bytes: after each burst of
+// output, after a resize, and after each dispatched key once the frame it
+// produced is written. Whoever reads a report has everything written before
+// it on screen, and knows how much of its input that screen answers.
+const frameReport = {
+  commit: 0,
+  keys: 0,
+  outputPending: false,
+  renderPending: false,
+};
+// Set where the session is opened and where Ink renders, below.
+let sessionSettled = (): boolean => false;
+let renderFlushed = (): Promise<void> => Promise.resolve();
+// A report after the frame now being rendered is written, for a change
+// that may write nothing.
+function reportAfterRender(): void {
+  if (frameReport.renderPending) return;
+  frameReport.renderPending = true;
+  void (async () => {
+    await renderFlushed();
+    frameReport.renderPending = false;
+    writeFrameReport();
+  })();
+}
+const writeTerminal = process.stdout.write.bind(process.stdout);
+function writeFrameReport(): void {
+  frameReport.commit += 1;
+  const fields = {
+    // Reports written so far: a later one means a later frame.
+    commit: frameReport.commit,
+    // Input bytes Ink has taken off stdin, and key events it has dispatched.
+    read: process.stdin.bytesRead - process.stdin.readableLength,
+    keys: frameReport.keys,
+    cols: process.stdout.columns,
+    rows: process.stdout.rows,
+    // Before raw mode the terminal, not the TUI, answers a key.
+    raw: process.stdin.isRaw ? 1 : 0,
+    // Whether the TUI holds everything the session has been sent.
+    settled: sessionSettled() ? 1 : 0,
+  };
+  writeTerminal(
+    `\u001B]7747;${Object.entries(fields)
+      .map(([name, value]) => `${name}=${value}`)
+      .join(';')}\u0007`,
+  );
+}
+function reportAfterOutput(): void {
+  if (frameReport.outputPending) return;
+  frameReport.outputPending = true;
+  // One frame is several writes in one turn of the event loop.
+  setImmediate(() => {
+    frameReport.outputPending = false;
+    writeFrameReport();
+  });
+}
+process.stdout.write = ((...args: Parameters<typeof writeTerminal>) => {
+  reportAfterOutput();
+  return writeTerminal(...args);
+}) as typeof process.stdout.write;
+process.stdout.on('resize', reportAfterOutput);
+
 const HARNESS_STDOUT = tuiOutputStreamForColor(
   process.stdout,
   HARNESS_COLOR_ENABLED,
@@ -484,6 +547,50 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 // The chat's scope and its runner, as `runChat` builds them: what the TUI
 // starts from a key press or a mounted component ends with this scope.
+// What a key or a fixture sends the session reaches the screen in steps:
+// the session writes it and updates its view, the bound signal takes that
+// view, and each run in it gets its transcript. The TUI is settled when
+// all three have happened for everything written so far. Nothing announces
+// a write, so a report that finds a new one asks the session when it is
+// through and reports again then.
+const settledView = {
+  /** The view the TUI is bound to. */
+  current: harnessRunSession.view.current,
+  /** Whether that view's runs get their transcripts from a subscription. */
+  subscribed: true,
+  /** The log position the session last said it was through. */
+  drainedAt: undefined as number | undefined,
+  draining: false,
+};
+sessionSettled = () => {
+  const written = session().log.now();
+  if (written !== settledView.drainedAt) {
+    if (!settledView.draining) {
+      settledView.draining = true;
+      harnessRuntime.runFork(
+        harnessRunSession.drained.pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              settledView.draining = false;
+              settledView.drainedAt = written;
+              reportAfterRender();
+            }),
+          ),
+        ),
+      );
+    }
+    return false;
+  }
+  const shown = sessionView().get();
+  return (
+    shown === settledView.current() &&
+    (!settledView.subscribed ||
+      [...shown.runs.keys()].every((id) => shown.transcriptSeq.has(id)))
+  );
+};
+HARNESS_DISPOSERS.push(
+  subscribeToSignalChanges([sessionView()], reportAfterRender),
+);
 const harnessChatScope = Scope.makeUnsafe();
 HARNESS_DISPOSERS.push(() =>
   harnessRuntime.runFork(Scope.close(harnessChatScope, Exit.void)),
@@ -1894,9 +2001,22 @@ function handleHarnessCtrlC(): void {
   void exitHarness(0);
 }
 
+// Ink hands a key to every `useInput` listener in one synchronous pass, so
+// by the next render flush each listener's update is in the written frame.
+// A key that does nothing writes no frame; the report still says it was
+// dispatched.
+function KeyReport(): null {
+  useInput(() => {
+    frameReport.keys += 1;
+    reportAfterRender();
+  });
+  return null;
+}
+
 function renderHarnessApp(): React.JSX.Element {
   return (
     <SlashContextProvider value={harnessSlashContext}>
+      <KeyReport />
       <ChatProcessProvider
         value={{
           chat: harnessChat,
@@ -1976,6 +2096,11 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       changes: SubscriptionRef.changes(ref),
     }),
   );
+  settledView.current = () => SubscriptionRef.getUnsafe(ref);
+  settledView.subscribed = false;
+  HARNESS_DISPOSERS.push(
+    subscribeToSignalChanges([sessionView()], reportAfterRender),
+  );
   rootRunId.set(interrupted);
   focusRun(PROCESS);
 }
@@ -1989,6 +2114,7 @@ const ink = render(renderHarnessApp(), {
   incrementalRendering: true,
 });
 inkRef.current = ink;
+renderFlushed = () => ink.waitUntilRenderFlush();
 
 if (SHOW_STREAMING_TOOL_OUTPUT) {
   const fiber = harnessRuntime.runFork(
