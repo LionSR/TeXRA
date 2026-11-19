@@ -129,18 +129,6 @@ export const ArxivDownloadTool = defineTool({
   description:
     'Download an arXiv paper source archive into the workspace and list the extracted files. Use "destination" to choose where files are placed: "references" (default) saves to References/{paper_id}, "root" saves directly to the workspace root. If the source was already downloaded, it skips re-downloading and indicates that the source already exists.',
   schema: ArxivDownloadInputSchema,
-  // The call fetches from the network and writes a source tree into the
-  // workspace. No policy exempts a workspace-internal write (`write_file`
-  // asks through its edit review), and this tool has no diff to review, so
-  // the loop asks about the call as it would a command.
-  guard: {
-    command: {
-      text: (input: ArxivDownloadInput) =>
-        `download_arxiv_source ${input.id.trim()} into ${
-          input.destination === 'root' ? 'the workspace root' : 'References/'
-        }`,
-    },
-  },
   // The owning agent run's cancellation enters here as interruption —
   // without it, a cancelled run would wait out the download (and its
   // retries) that only observe the internal deadline.

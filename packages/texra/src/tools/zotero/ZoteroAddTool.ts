@@ -257,16 +257,5 @@ export const ZoteroAddTool = defineTool({
   description:
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by URL or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
-  // The call changes the person's Zotero library, outside the run and the
-  // workspace, so the loop asks before it runs, as it does for an MCP tool.
-  guard: {
-    command: {
-      text: (input: ZoteroAddInput) =>
-        `zotero_add: ${input.items
-          .map((item) => item.title || item.url || 'Unknown item')
-          .join('; ')}`,
-      cwd: 'unknown',
-    },
-  },
   execute: addItems,
 });

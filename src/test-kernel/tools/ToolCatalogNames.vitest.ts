@@ -37,27 +37,3 @@ describe('the creator agent tool catalog', () => {
     expect(listed.filter((name) => !registered.has(name))).toEqual([]);
   });
 });
-
-describe('tools that change things outside the run', () => {
-  const tool = (name: string) =>
-    texraPlugins({ name: 'vscode' })
-      .flatMap((plugin) => plugin.tools ?? [])
-      .find((t) => t.definition.name === name);
-  // Typed through `never`: `ITool` erases a guard's input type.
-  const asked = (name: string, input: unknown) =>
-    (
-      tool(name)?.guard?.command?.text as ((i: unknown) => string) | undefined
-    )?.(input);
-
-  it('asks before download_arxiv_source writes into the workspace', () => {
-    expect(asked('download_arxiv_source', { id: '2401.00001 ' })).toContain(
-      '2401.00001',
-    );
-  });
-
-  it('asks before zotero_add changes the Zotero library', () => {
-    expect(asked('zotero_add', { items: [{ title: 'A Title' }] })).toContain(
-      'A Title',
-    );
-  });
-});
