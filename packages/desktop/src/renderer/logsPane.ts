@@ -4,6 +4,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { Hash, type LogLevel, Result, Schema } from 'effect';
 import { decodingDefault, truncateSummary } from '@texra-ai/harness/schemas';
 import { postToMain } from './messageRoutes';
+import { LOG_LEVEL_LOOK, type LogLevelLook } from '@ui/copy/logLevels';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
@@ -69,7 +70,7 @@ function formatTimestamp(isoTimestamp: string): string {
   return parsed.toISOString().replace('T', ' ').slice(0, 19);
 }
 
-type DesktopLogLevel = 'debug' | 'error' | 'info' | 'warn' | 'unknown';
+type DesktopLogLevel = keyof typeof LOG_LEVEL_LOOK | 'unknown';
 
 /** A log line's level, as the log sink writes it. */
 type EntryLevel = Uppercase<LogLevel.Severity>;
@@ -115,16 +116,9 @@ const LEVEL_PRESENTATION_KEY: Record<EntryLevel, DesktopLogLevel> = {
 const isEntryLevel = (level: string): level is EntryLevel =>
   Object.hasOwn(LEVEL_PRESENTATION_KEY, level);
 const LOG_SUMMARY_MAX_LENGTH = 180;
-const LOG_LEVEL_PRESENTATION = {
-  debug: { icon: 'code', label: 'Debug' },
-  error: { icon: 'circle-xmark', label: 'Error' },
-  info: { icon: 'circle-info', label: 'Info' },
-  unknown: { icon: 'file-lines', label: 'Partial' },
-  warn: { icon: 'triangle-exclamation', label: 'Warning' },
-} as const satisfies Record<
-  DesktopLogLevel,
-  { readonly icon: IconName; readonly label: string }
->;
+/** The shared level looks, plus the partial line the file may end on. */
+const LOG_LEVEL_PRESENTATION: Readonly<Record<DesktopLogLevel, LogLevelLook>> =
+  { ...LOG_LEVEL_LOOK, unknown: { icon: 'file-lines', label: 'Partial' } };
 
 const decodeDesktopLogLine = Schema.decodeUnknownResult(
   Schema.fromJsonString(DesktopLogLineSchema),
