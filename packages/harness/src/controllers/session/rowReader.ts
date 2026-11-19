@@ -167,7 +167,7 @@ const factHeader = (data: unknown) => {
   const header = Schema.decodeUnknownResult(
     Schema.fromJsonString(PluginFactHeaderSchema),
   )(String(data));
-  return Result.isSuccess(header) ? header.success : undefined;
+  return Result.getOrUndefined(header);
 };
 
 /** A statement runner over the reader's connection. */

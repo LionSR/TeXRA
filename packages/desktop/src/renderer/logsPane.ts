@@ -148,7 +148,7 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
   const duplicateIds = new Map<string, number>();
   return lines.map((raw) => {
     const parsed = decodeDesktopLogLine(raw);
-    const line = Result.isSuccess(parsed) ? parsed.success : undefined;
+    const line = Result.getOrUndefined(parsed);
     const message = line ? desktopLogLineText(line) : raw;
 
     // The same log line keeps the same row key across refreshes; a collision

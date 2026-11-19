@@ -80,7 +80,7 @@ export function agentCliReasoning(
       );
       return {
         choice,
-        effort: Result.isSuccess(sent) ? sent.success : undefined,
+        effort: Result.getOrUndefined(sent),
       };
     }),
   );
