@@ -52,7 +52,6 @@ import {
   TRANSCRIPT_EXPORT_PICK,
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import {
   hostFailed,
   hostFailure,
@@ -361,21 +360,11 @@ export const createExtensionHostRequests = Effect.fn(
       openDirectory: revealFileInOS,
     },
     export: {
-      // A refusal to show the pick is worded into the export's tag.
       pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
         title: TRANSCRIPT_EXPORT_PICK.title,
         placeHolder: TRANSCRIPT_EXPORT_PICK.prompt,
         ignoreFocusOut: true,
-      }).pipe(
-        Effect.map((choice) => choice?.format),
-        Effect.mapError(
-          (error) =>
-            new TranscriptExportFailed({
-              message: error.message,
-              cause: error.cause,
-            }),
-        ),
-      ),
+      }).pipe(Effect.map((choice) => choice?.format)),
       openPath: openExportPath,
     },
   };

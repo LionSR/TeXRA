@@ -23,7 +23,7 @@
  * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
-import { Context, Effect, Exit, Schema, type Scope, ScopedRef } from 'effect';
+import { Context, Effect, Exit, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
@@ -35,7 +35,7 @@ import {
   ModelAccess,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { Inbox } from '@agent/followUp/Inbox';
-import { activationRows } from '@agent/storage/runLifecycle';
+import { activationRows, RunOpenRejected } from '@agent/storage/runLifecycle';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   type CommitOrdinal,
@@ -109,13 +109,6 @@ const turnResponse = ({ handedDown, answer }: RunState): string => {
 
 /** What a resume's activation rows read of the session. */
 type ActivationServices = SessionLog | SessionRoots | Approvals;
-
-/** A run that cannot open: a resume with no state to continue from, a
- *  fresh launch onto a run that has some, or a conversation with no task. */
-class RunOpenRejected extends Schema.TaggedError<RunOpenRejected>()(
-  'RunOpenRejected',
-  { message: Schema.String },
-) {}
 
 /** Why a run its rows never opened cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =

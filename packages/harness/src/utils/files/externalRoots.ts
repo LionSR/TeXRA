@@ -149,12 +149,14 @@ function readLinkOrUndefined(entry: string): string | undefined {
 /**
  * Register or replace the external root for the given kind. Calling again
  * with the same kind (e.g. when the custom agents dir changes) replaces
- * the previous entry for that kind in place.
+ * the previous entry for that kind in place. Returns the registration's
+ * removal, which deletes the entry only while it is still this one, so a
+ * caller that must leave the registry as it found it (a test) can.
  */
 export function registerExternalRoot(
   absolutePath: string,
   options: ExternalRootOptions,
-): void {
+): () => void {
   if (!path.isAbsolute(absolutePath)) {
     throw new Error(
       `External root path must be absolute, got: ${absolutePath}`,
@@ -171,15 +173,16 @@ export function registerExternalRoot(
   // Frozen: the registry hands these entries to tool code and to
   // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
   // silently widen the allowlist for every later lookup.
-  roots.set(
-    options.kind,
-    Object.freeze({
-      kind: options.kind,
-      absolutePath: canonicalPath,
-      writable: options.writable,
-      label: options.label,
-    }),
-  );
+  const entry = Object.freeze({
+    kind: options.kind,
+    absolutePath: canonicalPath,
+    writable: options.writable,
+    label: options.label,
+  });
+  roots.set(options.kind, entry);
+  return () => {
+    if (roots.get(options.kind) === entry) roots.delete(options.kind);
+  };
 }
 
 /**

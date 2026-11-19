@@ -71,8 +71,6 @@ function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
       return 'Wants approval for a proposal';
     case 'planApproval':
       return 'Wants approval for a plan';
-    case 'plugin':
-      return 'Wants an answer';
     case 'userQuestion':
       return 'Wants an answer to a question';
     default:

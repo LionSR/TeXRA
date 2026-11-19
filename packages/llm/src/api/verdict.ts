@@ -9,9 +9,14 @@
  * SDK error (a terminal event's own error object) is judged on its message
  * and status alone.
  */
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, Struct } from 'effect';
 
-import { isRetryableStatus, ModelError, type BillingRoute } from '../errors.js';
+import {
+  isRetryableStatus,
+  ModelError,
+  type BillingRoute,
+  type PlanRoute,
+} from '../errors.js';
 import {
   envelopes,
   firstNumber,
@@ -98,16 +103,10 @@ const GLM_PLAN_BUSY: ReadonlySet<string> = new Set(['1302', '1305']);
  * read by phrase and only on their own route. A transient rate limit
  * ("too many requests") matches neither.
  */
-const SHARED_HOST_PLAN_LIMITS = [
-  [
-    'xai-subscription',
-    /usage limit|quota.{0,24}(exceeded|exhausted|reached)|exceeded your (usage|quota)|weekly (usage )?limit|monthly (usage )?limit/i,
-  ],
-  [
-    'kimi-code-subscription',
-    /usage limit for this billing cycle|quota will be refreshed in the next cycle/i,
-  ],
-] as const;
+const XAI_PLAN_LIMIT =
+  /usage limit|quota.{0,24}(exceeded|exhausted|reached)|exceeded your (usage|quota)|weekly (usage )?limit|monthly (usage )?limit/i;
+const KIMI_CODE_PLAN_LIMIT =
+  /usage limit for this billing cycle|quota will be refreshed in the next cycle/i;
 
 const withReset = (
   quota: Omit<Quota, 'resetsInMs'>,
@@ -132,21 +131,21 @@ function chatgptPlanLimit(body: unknown): Quota | undefined {
   );
 }
 
-/** A shared-host plan's limit phrase, on that plan's own route. */
+/** A shared-host plan's limit phrase, read only on that plan's own route. */
 function sharedHostPlanLimit(
-  reply: Reply,
-  route: BillingRoute,
-): Quota | undefined {
-  const limit = SHARED_HOST_PLAN_LIMITS.find(([plan]) => plan === route);
-  const message =
-    firstString(reply.body, 'message') ??
-    (isFields(reply.source) ? stringField(reply.source, 'message') : undefined);
-  if (limit === undefined || message === undefined || !limit[1].test(message))
-    return undefined;
-  return withReset(
-    { plan: limit[0] },
-    firstNumber(reply.body, 'resets_in_seconds'),
-  );
+  plan: 'xai-subscription' | 'kimi-code-subscription',
+  phrase: RegExp,
+): PlanLimit {
+  return (reply, onRoute) => {
+    const message =
+      firstString(reply.body, 'message') ??
+      (isFields(reply.source)
+        ? stringField(reply.source, 'message')
+        : undefined);
+    if (!onRoute || message === undefined || !phrase.test(message))
+      return undefined;
+    return withReset({ plan }, firstNumber(reply.body, 'resets_in_seconds'));
+  };
 }
 
 /** The GLM Coding Plan's quota codes, with the reset its body states. */
@@ -200,12 +199,30 @@ const creditDepleted = (body: unknown): boolean =>
     );
   });
 
+/** How a reply says a plan's quota ran out, given whether the request went
+ *  on that plan's own route. */
+type PlanLimit = (reply: Reply, onRoute: boolean) => Quota | undefined;
+
+/** Each plan's limit reader, in the order a reply is read. ChatGPT's code
+ *  and GLM's are their own, so they are read on any route. */
+const PLAN_LIMITS = Object.freeze({
+  'chatgpt-subscription': (reply) => chatgptPlanLimit(reply.body),
+  'xai-subscription': sharedHostPlanLimit('xai-subscription', XAI_PLAN_LIMIT),
+  'kimi-code-subscription': sharedHostPlanLimit(
+    'kimi-code-subscription',
+    KIMI_CODE_PLAN_LIMIT,
+  ),
+  'glm-coding-plan-subscription': (reply) => glmPlanLimit(reply.body),
+} satisfies Record<PlanRoute, PlanLimit>);
+
 /** The quota a reply says ran out: a plan's first, then the account's credit. */
-const exhaustedQuota = (reply: Reply, route: BillingRoute): Quota | undefined =>
-  chatgptPlanLimit(reply.body) ??
-  sharedHostPlanLimit(reply, route) ??
-  glmPlanLimit(reply.body) ??
-  (creditDepleted(reply.body) ? { plan: null } : undefined);
+function exhaustedQuota(reply: Reply, route: BillingRoute): Quota | undefined {
+  for (const plan of Struct.keys(PLAN_LIMITS)) {
+    const quota = PLAN_LIMITS[plan](reply, plan === route);
+    if (quota !== undefined) return quota;
+  }
+  return creditDepleted(reply.body) ? { plan: null } : undefined;
+}
 
 /** A limit the provider scoped to one model, not the whole credential. */
 const modelScopedLimit = (body: unknown): boolean =>

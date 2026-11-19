@@ -8,7 +8,8 @@ during the work. Measurements and their scripts:
 [evidence](../../evidence/2026-11-14-concurrency-primitives/README.md). This
 note builds on
 [root designs, Effect-native](./2026-11-05-root-designs-effect-native.md) and
-[decisions read the log](./2026-11-09-decisions-read-the-log-not-the-view.md).
+the decisions-read-the-log note of 2026-11-09 (finished and deleted; git
+history keeps it).
 
 ## Summary
 

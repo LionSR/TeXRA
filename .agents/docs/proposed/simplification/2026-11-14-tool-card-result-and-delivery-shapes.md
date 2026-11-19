@@ -124,3 +124,22 @@ case is worth keeping beside the three typed ones, or the typed ones are a
 second spelling of it, is the comparison to make first: if a plugin's case
 must stay generic, typing only the harness's three leaves two designs in one
 schema.
+
+Compared 2026-11-19, and kept as one struct (`refuted-candidates.json`,
+`DELIVERY-union-on-family-and-outcome`):
+
+- The plugin's case must stay generic: its family is open, and the agent-CLI
+  tools set prompt, ids, wall time, response, usage, lines and message, the
+  union of the harness's facts. The three typed cases would be a second
+  spelling of the generic one.
+- `outcome` beside `message` adds a field and removes no state: `message`
+  present already separates the two envelopes, and a report the end turns
+  into an error (`endProcessChild` in `processRun.ts`, on rows the store
+  refused) keeps its response, so the failed case would carry every
+  completed field.
+- `echoedDelivery` is gone (#15017), and the attribute order stays with
+  the builders.
+
+What the bump of that day did instead (`followup.queued` v11): the wall
+time is `wallTimeMs`, the prompt is an attribute its builder cuts, and an
+attribute's value is a string, never `null`.

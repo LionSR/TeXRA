@@ -1,10 +1,10 @@
 # One writer per project file: the desktop save and the service's runs
 
 Date: 2026-11-16
-Status: proposed. The save's code is now the app's
-(`packages/texra/src/controllers/session/workspaceFileRequest.ts`, answered
-by the window's shared request body); both decisions are taken below; the
-forward to the service is the open step.
+Status: implemented. A window whose project the background service holds
+sends the editor's save and the toolbar's accept to the service (`file.save`,
+`file.replace`), which runs them under the write lane its tasks' edits take;
+"Landed" below says what that covers and what it leaves.
 
 Origin: LN-4 of the 2026-11-15 design red-flag audit
 (`../../evidence/2026-11-15-design-red-flags/LN-nonobvious-degradation.md`),
@@ -88,3 +88,38 @@ recovery, and still leaves two writers.
 The comment over the desktop's `writeFile` claimed the lane kept it apart
 from every approved edit. It now says the lane is per process and names the
 case it does not cover.
+
+## Landed
+
+The forward, through the service's one protocol (`protocol.ts`):
+
+- `file.save { workspace, path, contents, base }` is the `workspaceFile`
+  write. The window's request body (`answerWorkspaceFile`) sends it when its
+  session is the service's, and the service answers with the same operation
+  (`writeWorkspaceFile`) over the project's rooted filesystem, so containment
+  is checked where the write happens.
+- `file.replace { target, contents, confirmedAgainst }` is the accept's
+  replace-if-unchanged (`replaceIfUnchanged`,
+  `packages/texra/src/latex/acceptedFileTarget.ts`), which the accept reaches
+  through a port the toolbar's controller binds. The confirmation, the notice
+  and the `workspaceFilesWritten` signal stay in the window.
+- Decision 2's outage path is `writeInService`
+  (`packages/texra/src/controllers/server/serviceSession.ts`): while the link
+  holds no service, or the service does not answer the call, the same write
+  runs in the window's process and a warn names the file. A call the service
+  was cut off in the middle of may have landed there; the local write that
+  follows then finds the file changed and answers `changedOnDisk`.
+- A service of another build never takes these calls: the protocol digest
+  differs, so the link retires it or refuses it before any request.
+
+Left as it is, on purpose:
+
+- An agent definition the editor opened by catalog name is written in the
+  window's process. The window's catalog named the file the editor shows; the
+  service's catalog follows the agent directories with a delay, and a save
+  refused as "no longer available" for a definition created a moment ago
+  would be a new failure. A task that edits the same definition file at the
+  same instant can still be replaced unseen.
+- A file the user edits in VS Code's own editor is saved by VS Code, which
+  no lane of TeXRA's covers.
+- Reads and directory listings stay in the window: they decide nothing.

@@ -253,7 +253,7 @@ function callView(
     needsYou:
       request !== undefined &&
       asking !== undefined &&
-      requestAnswerability(asking, request.payload) === 'answerable',
+      requestAnswerability(asking) === 'answerable',
     talkable:
       agent &&
       asking === undefined &&

@@ -4,7 +4,6 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, vi } from 'vitest';
 
 // Local imports
 import { apiKeyEnvName } from '@texra-ai/llm';
@@ -17,44 +16,11 @@ import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
 // Local file imports
 import { createFakeSetupPlatform, withSetup } from './fixtures';
 
-const mocks = vi.hoisted(() => ({
-  locateTool:
-    vi.fn<
-      (
-        name: string,
-      ) => Effect.Effect<
-        { name: string; installed: boolean; path?: string },
-        unknown
-      >
-    >(),
-}));
-
-vi.mock('@texra/tools/setup/toolProbing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@texra/tools/setup/toolProbing')>()),
-  locateTool: mocks.locateTool,
-}));
-
 /** The process environment a case runs under: it holds a provider key. */
 const ENV = { [apiKeyEnvName('deepseek')]: 'private-test-value' };
 
 /** A host of the test's own. */
 const host = FakeHost.layer();
-
-beforeEach(() => {
-  // The default fake host has no credentials at all, so the aggregate probe
-  // answers false without any stubbing; each test seeds what it needs.
-  mocks.locateTool.mockReset().mockImplementation((name) =>
-    Effect.succeed({
-      name,
-      installed: true,
-      path: '/test/tool',
-    }),
-  );
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 layer(SessionGraph.hosted)('setup credential reporting', (it) => {
   it.layer(host, { buildPerTest: true })((it) => {

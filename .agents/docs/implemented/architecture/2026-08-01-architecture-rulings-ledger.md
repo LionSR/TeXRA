@@ -777,8 +777,8 @@ registry and `PluginModule` are not built until a named plugin cannot be
 MCP + hooks + data. (First-party plugins are code: durable-harness HQ1,
 2026-10-02. D11's "the SDK is not advertised until a consumer is named" was
 reversed by the owner's 2026-10-06 decision 9 and 2026-10-15 direction:
-`@texra-ai/harness` and `@texra-ai/llm` are npm-releasable, and publishing is
-the owner's manual step.)
+`@texra-ai/harness` and `@texra-ai/llm` are npm-releasable, and they publish
+together from an `sdk-v` release the owner cuts.)
 
 **Reopen.** That named plugin exists.
 

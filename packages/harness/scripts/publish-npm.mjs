@@ -13,7 +13,6 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import {
@@ -28,7 +27,7 @@ const { values } = parseArgs({
 });
 const dryRun = values['dry-run'];
 
-const packagesRoot = fileURLToPath(new URL('../..', import.meta.url));
+const packagesRoot = join(import.meta.dirname, '..', '..');
 // In publish order.
 const packages = ['llm', 'harness'].map((dir) => {
   const manifest = JSON.parse(

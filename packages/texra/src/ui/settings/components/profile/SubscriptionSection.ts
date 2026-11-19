@@ -14,7 +14,10 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared auth
 
 // Local imports - shared styles
-import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@texra-ai/harness/schemas';
+import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  type SubscriptionAuthProvider,
+} from '@texra-ai/harness/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
   codexAccountLabel,
@@ -218,13 +221,15 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
   }
 }
 
-/**
- * Experimental "Sign in with ChatGPT". After sign-in, the configured
- * Codex-eligible models run on the user's ChatGPT subscription (when
- * `chatgptCodex.preferSubscription` is enabled) instead of an API key.
- */
-export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
-  Object.freeze({
+/** Each subscription's section, keyed by the provider it signs in to; a
+ *  provider without a row here does not compile. */
+export const SUBSCRIPTION_SECTIONS = Object.freeze({
+  /**
+   * Experimental "Sign in with ChatGPT". After sign-in, the configured
+   * Codex-eligible models run on the user's ChatGPT subscription (when
+   * `chatgptCodex.preferSubscription` is enabled) instead of an API key.
+   */
+  chatgpt: Object.freeze({
     sectionId: 'chatgpt-subscription',
     title: CHATGPT_AUTH.subscriptionLabel,
     description:
@@ -238,15 +243,14 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     signInText: CHATGPT_AUTH.signInLabel,
     providerId: 'chatgpt',
     accountLabel: codexAccountLabel,
-  });
+  }),
 
-/**
- * Experimental "Sign in with Grok". After sign-in, xAI models can run on the
- * user's SuperGrok / xAI account OAuth token when `xaiGrok.preferSubscription`
- * is enabled.
- */
-export const GROK_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
-  Object.freeze({
+  /**
+   * Experimental "Sign in with Grok". After sign-in, xAI models can run on the
+   * user's SuperGrok / xAI account OAuth token when `xaiGrok.preferSubscription`
+   * is enabled.
+   */
+  grok: Object.freeze({
     sectionId: 'grok-subscription',
     title: GROK_AUTH.subscriptionLabel,
     description:
@@ -260,7 +264,12 @@ export const GROK_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     signInText: GROK_AUTH.signInLabel,
     providerId: 'grok',
     accountLabel: xaiAccountLabel,
-  });
+  }),
+} satisfies {
+  readonly [P in SubscriptionAuthProvider]: SubscriptionSectionProvider & {
+    readonly providerId: P;
+  };
+});
 
 declare global {
   interface HTMLElementTagNameMap {

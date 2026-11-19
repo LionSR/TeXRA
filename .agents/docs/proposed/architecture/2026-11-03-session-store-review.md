@@ -45,12 +45,15 @@ Read: `storeSchema.ts`, `rowCodec.ts`, `rowReader.ts`, `rowVersions.ts`,
 `sessionLog.ts`, `sessionOwners.ts`, `sessionLayer.ts`, `storeAside.ts`,
 `deletionCleanup.ts`, `projectDatabase.ts`, `readSessionView.ts`,
 `ownerLiveness.ts`, `goldenStore.vitest.ts`, `rowVersions.vitest.ts`,
-`storedShapeBoundary.vitest.ts`.
+`storedShapeBoundary.vitest.ts` (since deleted).
 
 ### Kept, and worth saying so
 
-- The codec boundary is a ratchet (`storedShapeBoundary.vitest.ts`): no
-  SQL reads a payload field, nothing above the codec sees a version.
+Corrected 2026-11-19: this list named the codec boundary as a ratchet ("no
+SQL reads a payload field"). Its suite is deleted and the rule no longer
+holds: `PRICED_USAGE` (`rowReader.ts`) reads a priced row's usage out of
+`event.data`.
+
 - One publisher, one write path, `STRICT` tables, `BEGIN IMMEDIATE`,
   fiber-side busy retry, the store gate at open and in every write.
 - Content-addressed blobs with reachability collection; incremental vacuum;

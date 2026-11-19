@@ -18,7 +18,6 @@ import {
   ContextStateDataSchema,
   RequestPayloadSchema,
   PluginFactDraftSchema,
-  blocksCaller,
   RunActionSchema,
   RunEndSchema,
   RunIdentitySchema,
@@ -29,7 +28,6 @@ import {
   StageSchema,
   TokenUsageStatsSchema,
   WorktreeInfoSchema,
-  type RequestPayload,
   type RunId,
   FactNameSchema,
   NonNegativeIntSchema,
@@ -309,19 +307,17 @@ export function acceptsFollowUp(run: RunView): boolean {
 }
 
 /**
- * Whether this window can answer a pending request: the one rule the host's
- * attention badge and the request card both read, matching what
- * `SessionRequests.decide` accepts. A request that blocks its caller is
- * answered by the fiber waiting on it, so only while its run waits here; an
- * interrupted run has to be resumed first. One that does not, at any time.
+ * Whether this window can answer a pending request of `run`: the one rule
+ * the host's attention badge and the request card both read, matching what
+ * `SessionRequests.decide` accepts. A request is answered by the call
+ * waiting on it, so only while its run waits here; an interrupted run has
+ * to be resumed first.
  */
 export type RequestAnswerability = 'answerable' | 'resume';
 export function requestAnswerability(
-  run: RunView,
-  payload: RequestPayload,
+  run: Pick<RunView, 'approval'>,
 ): RequestAnswerability {
-  if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
-  return 'resume';
+  return run.approval === 'own' ? 'answerable' : 'resume';
 }
 
 /** A pending request: which run asks, the payload the UI shows and who
@@ -391,10 +387,7 @@ function answerableRequests<View extends SessionView>(
 ): View['requests'][number][] {
   return view.requests.filter((request) => {
     const run = view.runs.get(request.runId);
-    return (
-      run !== undefined &&
-      requestAnswerability(run, request.payload) === 'answerable'
-    );
+    return run !== undefined && requestAnswerability(run) === 'answerable';
   });
 }
 

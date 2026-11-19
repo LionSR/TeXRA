@@ -31,8 +31,6 @@ export class PrivacyTab extends SignalWatcher(LitElement) {
         <section>
           ${renderSettingsSectionHeading({
             title: 'Privacy',
-            description:
-              'Choose whether TeXRA sends anonymous usage metadata (model, agent, token counts, timing) with a random install ID. No prompts, paths or document text.',
             icon: 'shield',
           })}
           <div class="settings-section">
