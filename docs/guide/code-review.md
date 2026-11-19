@@ -141,12 +141,16 @@ The built-in defaults:
 | MiniMax   | `minimaxM27`   |
 | GLM       | `glm51`        |
 
-::: warning xAI users
-The action's xAI default, `grok4`, is retired in the current CLI and cannot be
-selected, so an xAI-only setup fails until the action's default is updated.
-Set `TEXRA_REVIEW_MODEL` to a current model such as `xai/grok-4.7`, or
-set `TEXRA_REVIEW_MODEL_DEFAULTS` to `{"xai":"xai/grok-4.7"}`, and wire the variable
-through as described below.
+::: warning Defaults the current CLI does not accept
+Of these short names the current CLI runs only `gpt55`, `qwenplus`, and
+`minimaxM27`. It reports `deepseekproT`, `opus48T`, `gemini31p`, and `kimi26T`
+as `Model not found`, and `grok4` and `glm51` name retired models that cannot
+be selected. With a DeepSeek, Anthropic, Google, xAI, Moonshot, or GLM key, the
+review fails until the action's defaults are updated. Set `TEXRA_REVIEW_MODEL`
+to a current model such as `deepseek/deepseek-v4-pro`, or set
+`TEXRA_REVIEW_MODEL_DEFAULTS` to a map such as `{"xai":"xai/grok-4.7"}`, and
+wire the variable through as described below. `texra models list --all` prints
+every model id and whether it can run.
 :::
 
 To override, add a repo **variable**: the same place as secrets, but the
@@ -154,9 +158,9 @@ To override, add a repo **variable**: the same place as secrets, but the
 → **New repository variable**). Variables are plain, non-secret settings:
 
 - `TEXRA_REVIEW_MODEL`: pin one model id for every review, regardless of
-  provider. Besides the action's short names, TeXRA now also accepts a
-  `provider/id` model reference here, such as `anthropic/claude-opus-5-5`
-  (optionally with an `@effort` suffix; see [AI models](./models.md)).
+  provider. Use a `provider/id` model reference, such as
+  `anthropic/claude-opus-5-5` (optionally with an `@effort` suffix; see
+  [AI models](./models.md)).
 - `TEXRA_REVIEW_MODEL_DEFAULTS`: JSON map from provider id to default model
   id, used when you want provider-specific defaults. Example:
   `{"deepseek":"deepseek/deepseek-v4-pro","anthropic":"anthropic/claude-opus-5-5"}`. This explicitly opts
