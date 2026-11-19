@@ -32,9 +32,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   dependency banner names as missing); `latexLogging.ts` (the shared channel for
   `texcount.ts`, `formatter/` and the GUI hosts' latexdiff verbs; other
   `latexdiff` callers name their own with `withLogChannel`).
-- **Extraction**: `extractFigure.ts` (figure paths); `extractBibliography.ts`
-  (bibliography references and citation keys from source, then entries from
-  the `.bib` files: two stages with different inputs);
+- **Extraction**: `extractFigure.ts` (figure paths);
   `extractFileDependencies.ts` (`\input`, `\include`, bibliography targets and
   local `.sty` files, for `latexMedia.ts` to mirror);
   `latexParsingUtils.ts` (comment stripping and bibliography-directive

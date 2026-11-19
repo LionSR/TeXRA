@@ -10,8 +10,7 @@ Figures carry a lot of the evidence in theoretical work: a plot that a derivatio
 This page covers attaching media in the VS Code panel. From the [`texra` CLI](./texra-cli.md),
 work with a figure conversationally in `texra chat`, pass it to
 `texra run` with `--input` (which takes supported media files and attaches
-them), or let an agent pull figures out of your documents with the built-in
-extraction tools. (`--context` files are read as text, so they are for `.tex`
+them), or let an agent open the figures your documents include with `read_file`. (`--context` files are read as text, so they are for `.tex`
 and `.bib` sources, not images.)
 :::
 
@@ -97,50 +96,9 @@ A program can attach the figures of its input files itself. An agent switches th
 - `autoExtractTikzFigure`: extracts `tikzpicture` environments as standalone `.tex` files, compiles them and attaches the result.
 - `autoCompileInputPdf`: compiles each input file and attaches its PDF.
 
-## <wa-icon library="texra" name="tools"></wa-icon> Figure extraction tools
+## <wa-icon library="texra" name="tools"></wa-icon> Figures in a chat
 
-Agents can extract figures programmatically. These tools are part of the **LaTeX Extraction** plugin, which is always on (it is listed under **Settings → Plugins** and has no switch). In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
-
-<ToolCallPanel
-  title="research"
-  icon="sparkle"
-  caption="gathering a paper's figures · LaTeX Extraction · this run"
-  :calls="[
-    { state: 'done', verb: 'extract_figures', target: 'paper/main.tex', effect: 'Found 9 \\includegraphics: attached 9 files' },
-    { state: 'done', verb: 'extract_bib_entries', target: 'paper/main.tex', effect: 'Returned BibTeX for every \\cite key' },
-    { state: 'active', verb: 'extract_tikz_figures', target: 'paper/main.tex', effect: 'compile: true → pdflatex renders 7 tikzpicture snippets, attaches 7 PDFs' },
-  ]"
-/>
-
-<p class="hero-caption">The three LaTeX Extraction tools as they appear in a task. Each returns referenced files, BibTeX records, or compiled TikZ PDFs the model can read directly. The raw request form for each is below.</p>
-
-### `extract_figures`
-
-Scans for `\includegraphics` and returns referenced files (up to 20 attachments):
-
-```json
-{
-  "name": "extract_figures",
-  "arguments": { "texPath": "paper/main.tex" }
-}
-```
-
-### `extract_tikz_figures`
-
-Extracts and optionally compiles `tikzpicture` environments (up to 12 PDFs):
-
-```json
-{
-  "name": "extract_tikz_figures",
-  "arguments": { "texPath": "paper/main.tex", "compile": true }
-}
-```
-
-Setting `compile: true` (the default) runs `pdflatex` on each snippet and attaches the resulting PDFs so multimodal models can read them directly.
-
-### `extract_bib_entries`
-
-Retrieves BibTeX records for every citation key found in the document.
+A chat agent has no dedicated extraction tool. It finds the figures a document includes by searching the source for `\includegraphics`, and opens each file with `read_file`, which returns an image or a PDF as an attachment a multimodal model can read. For a `tikzpicture` it compiles the picture in the shell and reads the PDF; for a citation it searches the project's `.bib` files for the key. Ask for it in plain words ("look at Figure 3 and check the caption against it").
 
 ## <wa-icon library="texra" name="eye"></wa-icon> Using media files with models
 

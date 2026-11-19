@@ -134,8 +134,7 @@ export function reportRecipients(
 /**
  * The reads of a run's rows, by what each answers: its input (`Inbox.read`)
  * with the lifecycle that bounds it and the runs it works for, its requests, its
- * lifecycle rows, the plugin facts of an aggregate (a run's, or a plugin's
- * own), its calls' results, a script's calls with their results, and its
+ * lifecycle rows, its plugin facts, its calls' results, a script's calls with their results, and its
  * positions. A store reads one through its type index and folds it
  * (`SessionLog.runRows`), so no reader names a row kind.
  */

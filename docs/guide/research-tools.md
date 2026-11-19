@@ -82,7 +82,7 @@ Add this arXiv paper to my Zotero library.
 <p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
 
 ::: tip Default bibliography path
-Name your project's main `.bib` file once so agents know where to look up citations: they are told its path, and `extract_bib_entries` also reads it unless the agent names another `.bib` file. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
+Name your project's main `.bib` file once so agents know where to look up citations: they are told its path and search it with `grep` or `read_file`. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
 :::
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram
@@ -118,10 +118,10 @@ Specialist research agents are tuned for different stages of the work. Pick one 
       { text: 'web_fetch', variant: 'neutral' },
       { text: 'zotero_search', variant: 'neutral' },
     ] },
-    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification with wolframscript in the shell, plus file edits and figure extraction.', chips: [
+    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification with wolframscript in the shell, plus file edits and reading figures.', chips: [
       { text: 'bash', variant: 'info' },
       { text: 'edit_file', variant: 'neutral' },
-      { text: 'extract_figures', variant: 'neutral' },
+      { text: 'read_file', variant: 'neutral' },
     ] },
     { icon: 'beaker', title: 'lean', desc: 'Formal proof engineering in Lean 4 and Mathlib with live diagnostic verification.', chips: [
       { text: 'lean_diagnostics', variant: 'info' },

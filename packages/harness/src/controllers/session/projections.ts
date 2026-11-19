@@ -24,7 +24,6 @@
 import { Effect, Schema } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateTarget,
   listingKeyOf,
   listingTypeOf,
   pendingKeyOf,
@@ -32,17 +31,13 @@ import {
   SessionRowSchema,
   sumUsageStats,
   TokenUsageStatsSchema,
-  type AggregateId,
+  RunIdSchema,
+  type RunId,
   type SessionRow,
   type TokenUsageStats,
   NonNegativeIntSchema,
 } from '@shared/schemas';
-import {
-  EVENT_COLUMNS,
-  EVENT_FROM,
-  aggregateColumns,
-  aggregateOf,
-} from './rowCodec';
+import { EVENT_COLUMNS, EVENT_FROM, aggregateColumns } from './rowCodec';
 import { AGGREGATE, UNREAD_KEY } from './rowReader';
 import type { RowReader } from './rowReader';
 import type { StoreConnection } from './storeConnection';
@@ -51,7 +46,7 @@ import type { StoreConnection } from './storeConnection';
 type ProjectionOp =
   | {
       readonly table: 'listing_entry';
-      readonly aggregate: AggregateId;
+      readonly aggregate: RunId;
       readonly key: string;
       /** Null deletes the key. */
       readonly commit: number | null;
@@ -60,7 +55,7 @@ type ProjectionOp =
     }
   | {
       readonly table: 'run_usage';
-      readonly aggregate: AggregateId;
+      readonly aggregate: RunId;
       readonly commit: number;
       /** The listing's `usage` row data: the run's spend so far. */
       readonly data: string;
@@ -87,7 +82,7 @@ interface Projector {
    *  `aggregate`) writes; absent, the row is left out, as the wide read that
    *  marks its run damaged leaves it out. */
   readonly unread?: (
-    aggregate: AggregateId,
+    aggregate: RunId,
     commit: number,
     prior: string | undefined,
   ) => readonly ProjectionOp[];
@@ -146,19 +141,16 @@ const PROJECTORS = {
     table: 'listing_entry',
     // A run's first row a catch-up could not read is listed too, so a read
     // of its listing or its record meets the row and never answers without
-    // it. A plugin's own aggregate keeps no record.
-    unread: (aggregate, commit) =>
-      aggregateTarget(aggregate).kind === 'run'
-        ? [
-            {
-              table: 'listing_entry',
-              aggregate,
-              key: UNREAD_KEY,
-              commit,
-              first: true,
-            },
-          ]
-        : [],
+    // it.
+    unread: (aggregate, commit) => [
+      {
+        table: 'listing_entry',
+        aggregate,
+        key: UNREAD_KEY,
+        commit,
+        first: true,
+      },
+    ],
     // Every input has a listing key (`inputs`); the row that closes a
     // request or a follow-up drops its key.
     project: (event) => {
@@ -289,7 +281,7 @@ export function projectionUpkeep(
   /** A projector's prior row of `aggregate`: its stored column, if any. */
   const priorOf = Effect.fnUntraced(function* (
     projector: Projector,
-    aggregate: AggregateId,
+    aggregate: RunId,
   ) {
     if (projector.prior === null) return undefined;
     const row = (yield* exec(
@@ -350,8 +342,12 @@ export function projectionUpkeep(
         const decoded = new Set(events.map((event) => event.commit));
         for (const row of projector.unread === undefined ? [] : rows) {
           const commit = Schema.decodeUnknownSync(Schema.Int)(row.commit);
-          if (decoded.has(commit)) continue;
-          const aggregate = aggregateOf(row.kind, row.logicalId);
+          // A row under another aggregate kind than a run's is an earlier
+          // build's, of no run: there is no listing to record it in.
+          if (decoded.has(commit) || row.kind !== 'run') continue;
+          const aggregate = Schema.decodeUnknownSync(RunIdSchema)(
+            row.logicalId,
+          );
           const prior = yield* priorOf(projector, aggregate);
           for (const op of projector.unread?.(aggregate, commit, prior) ?? [])
             yield* exec(...opStatement(op));
