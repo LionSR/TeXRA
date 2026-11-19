@@ -62,6 +62,12 @@ describe('session view update', () => {
     // The path to the decision is forced open.
     expect(needsUser(runView(withOwner, ROOT), withOwner.runs)).toBe(true);
     expect(withOwner.requests.map((r) => r.requestId)).toStrictEqual(['req-1']);
+    // What a task started is counted by kind, a child's own descendants
+    // included, so a host can call a background command a command and not
+    // one more agent.
+    expect(
+      rollupOf([runView(withOwner, CHILD), runView(withOwner, PROCESS)]).kinds,
+    ).toStrictEqual({ agent: 2, process: 1, script: 0 });
 
     // The same log with nobody holding the owner: every in-flight run is
     // interrupted, never waiting. The phase stays running and the request
@@ -117,6 +123,7 @@ describe('session view update', () => {
       total: 1,
       running: 0,
       finished: 1,
+      kinds: { agent: 1, process: 0, script: 0 },
     });
   });
 

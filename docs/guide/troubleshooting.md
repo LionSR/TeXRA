@@ -60,7 +60,7 @@ it:
       state: 'warn',
       name: 'LaTeX latexdiff',
       message: 'latexdiff was not found on PATH.',
-      hint: 'Install latexdiff or a TeX distribution that provides it.',
+      hint: 'Install latexdiff: sudo apt-get install -y latexdiff',
     },
   ]"
 />
@@ -147,7 +147,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **Verify API keys**:
    - VS Code extension: open **Settings → Models → API keys** and re-enter the key for the affected provider
-   - CLI: set the provider's API-key environment variable (or connect a provider subscription with `texra auth chatgpt login`)
+   - CLI: run `texra setup` to add a provider API key, or set the provider's API-key environment variable (or connect a provider subscription with `texra auth chatgpt login`)
 
 2. **Check API key validity**:
    - Verify your API keys are active in the provider dashboards
@@ -180,7 +180,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 ### Timeouts, context limits, or weak results
 
 - **Rate limits and quota**: Check your provider dashboard if requests fail with quota or billing errors.
-- **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs or raise the model's max output tokens.
+- **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs.
 - **Slow turnaround**: Programs run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or use an interactive chat agent instead.
 - **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). An agent can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
 

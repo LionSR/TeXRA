@@ -14,7 +14,7 @@ import MockupFrame from './MockupFrame.vue';
           ><wa-icon library="texra" name="pencil"></wa-icon> New task</span
         >
         <span class="bt"
-          ><wa-icon library="texra" name="robot"></wa-icon> Progress</span
+          ><wa-icon library="texra" name="robot"></wa-icon> Tasks</span
         >
       </div>
 
@@ -34,9 +34,6 @@ import MockupFrame from './MockupFrame.vue';
                 name="file-code"
               ></wa-icon>
               Input
-              <span class="act" title="Tool configuration options"
-                ><wa-icon library="texra" name="screwdriver-wrench"></wa-icon
-              ></span>
             </span>
             <div class="acts">
               <span class="act" title="Add opened files as input"
@@ -112,9 +109,6 @@ import MockupFrame from './MockupFrame.vue';
             <span class="f-label"
               ><wa-icon class="lbl-ic" library="texra" name="video"></wa-icon>
               Media
-              <span class="act" title="Auto-extract options"
-                ><wa-icon library="texra" name="wand-magic-sparkles"></wa-icon
-              ></span>
             </span>
             <div class="acts">
               <span class="act" title="Add opened files as media"

@@ -9,14 +9,15 @@
 // match (chapter2.tex, appendixA.tex) plus one stray (notes.tex) with no match.
 // Right column: the "Expected outputs" file rows (the selected input filenames).
 // Matched blocks carry a green "matched → saved" pill; the stray carries a
-// muted "no match → skipped" pill.
+// muted "not expected → saved as extra" pill: extraction writes every named
+// block into the revision folder, expected or not.
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
 // (defined on `.mockup` in theme/mockup.css) resolve here and the card flips
 // cleanly between the docs light / dark themes.
 
-// Agent response blocks. `match` true → highlighted + saved; the stray block
-// (match false) is dimmed and skipped.
+// Reply blocks. `match` true → an expected output; the stray block
+// (match false) is dimmed: saved, but not an expected output.
 const blocks = [
   { name: 'chapter2.tex', match: true },
   { name: 'appendixA.tex', match: true },
@@ -94,7 +95,7 @@ const expected = ['chapter2.tex', 'appendixA.tex'];
             name="file"
           ></wa-icon>
           <span class="fi-name mo-fi-name--off">notes.tex</span>
-          <span class="ph-tag">no match → skipped</span>
+          <span class="ph-tag">not expected → saved as extra</span>
         </div>
       </div>
     </div>

@@ -76,6 +76,7 @@ import {
   emptySessionView,
   isInterrupted,
   requireRun,
+  emptyRollup,
   rollupOf,
 } from './sessionView';
 import type { RunRows, SharedRunRows } from './runRowsShape';
@@ -367,7 +368,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     forkPoint: null,
     ancestors: [],
     childIds: [],
-    rollup: { total: 0, running: 0, finished: 0 },
+    rollup: emptyRollup(),
     approval: 'none' as const,
     actions: [],
     usage: emptyUsageStats(),

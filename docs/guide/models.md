@@ -14,7 +14,7 @@ TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moon
 
 **Model references.** A model is named `provider/id`, where `id` is the provider's own API model ID: `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`. Wherever you type a model (an agent's `model`, `--model`, or `.texra/config.json`), you can add:
 
-- `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`); Muse Spark also takes `@minimal`
+- `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`); a few models, such as Muse Spark, also take `@minimal`
 - `@none` to turn thinking off, on models that allow it (for example `deepseek/deepseek-v4-pro@none`)
 - `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-6.1-sol+pro`)
 
@@ -125,7 +125,7 @@ Responses API each region serves at `/api/v1`.
 
 - **International (Z.AI)**: Get your API key at [z.ai](https://z.ai/); endpoint: api.z.ai
 - **China (BigModel)**: Get your API key at [open.bigmodel.cn](https://open.bigmodel.cn/); endpoint: open.bigmodel.cn (default)
-- **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. A Coding Plan key uses the same endpoint as an API key in its region. Turn on the **Coding Plan** toggle on the GLM row of the Models page. [Subscribe to the GLM Coding Plan](https://z.ai/subscribe).
+- **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. A Coding Plan key uses the same endpoint as an API key in its region. Turn on the **GLM Coding Plan** toggle on the GLM row of the Models page. [Subscribe to the GLM Coding Plan](https://z.ai/subscribe).
 
 ## Meta (Muse Spark) models
 
@@ -166,7 +166,7 @@ Using your own provider API key? TeXRA stores keys in `~/.texra/secrets/`, a fol
 
 1.  **Open Settings**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel header, or run **TeXRA: Open Settings** from the Command Palette.
 2.  **Go to the Models page**: The **API keys** list shows every provider with its current key status (`Key set`, `Env`, or `Not set`).
-3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
+3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> button that opens the provider's API key page (for example **Open DeepSeek API key page**; its tooltip reads "Get API key from provider").
 
 The Status column shows `Key set` once the key is stored. To replace a key, set it again; to remove one, select the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
 

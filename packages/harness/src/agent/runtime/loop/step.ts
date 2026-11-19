@@ -240,6 +240,11 @@ const openStep = Effect.fn('Step.open')(function* (
       ...(trusted && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
+    // A plugin whose dependency is missing gives the step no program and no
+    // prompt section, as it gives it no tool.
+    const available = pinned.plugins.filter(
+      ({ id }) => !resolved.unavailable.has(id),
+    );
     // A step held to the record loads the modules it recorded, so a
     // resumed script runs the code it ran with.
     const imported =
@@ -255,7 +260,7 @@ const openStep = Effect.fn('Step.open')(function* (
       Object.keys(imported),
       // Only a run offered `program` can start one.
       resolved.registry.has(PROGRAM_TOOL_NAME)
-        ? pinned.plugins.flatMap(({ programs = {} }) =>
+        ? available.flatMap(({ programs = {} }) =>
             Object.entries(programs).map(([name, { description }]) => ({
               name,
               description,
@@ -264,9 +269,7 @@ const openStep = Effect.fn('Step.open')(function* (
         : [],
     );
     // The plugins whose sections the step's system text renders.
-    const contributing = pinned.plugins.filter(
-      ({ prompt }) => prompt !== undefined,
-    );
+    const contributing = available.filter(({ prompt }) => prompt !== undefined);
     // Only the plugins this step uses hold services: a waiting run keeps up
     // nothing it does not offer.
     const used = new Set([

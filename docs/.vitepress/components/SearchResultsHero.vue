@@ -7,7 +7,7 @@
 //
 // Each row mirrors MemoryHero's .mem-item / .mem-meta vocabulary: a title, a
 // dimmed authors line, then a dot-separated metadata strip carrying the id and
-// a per-row arXiv source badge, plus a Cite action chip.
+// a per-row arXiv source badge.
 import MockCard from './MockCard.vue';
 
 const query = 'efficient self-attention for long documents';
@@ -55,10 +55,6 @@ const results = [
             <span class="sr-id">{{ r.id }}</span>
           </div>
         </div>
-        <button type="button" class="sr-cite">
-          <wa-icon library="texra" name="link"></wa-icon>
-          Cite
-        </button>
       </li>
     </ul>
 
@@ -160,31 +156,6 @@ const results = [
 .sr-src--arxiv {
   color: var(--mk-accent);
   background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
-}
-
-/* Cite action chip */
-.sr-cite {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--mk-space-5);
-  flex-shrink: 0;
-  font-size: var(--mk-fs-72);
-  color: var(--wa-color-text-normal);
-  background: var(--mk-bg-raised);
-  border: 1px solid var(--color-border);
-  border-radius: var(--mk-radius);
-  padding: var(--mk-space-4) var(--mk-space-10);
-  cursor: pointer;
-  transition-property: background-color, color;
-  transition-duration: var(--mk-dur-fast);
-  transition-timing-function: var(--mk-ease);
-}
-.sr-cite:hover {
-  background: var(--mk-border-soft);
-}
-.sr-cite wa-icon {
-  font-size: var(--mk-space-11);
-  color: var(--color-text-secondary);
 }
 
 /* Grounding footer */

@@ -2,7 +2,7 @@
 // Frameless "anatomy of one memory item" card for guide/memory.md →
 // "Managing memories from the Dashboard". The prose enumerates the four parts
 // of a single note (Path · Metadata strip · Contents · Actions) plus the
-// Refresh / Open Folder toolbar; this figure shows ONE expanded `.mem-item`
+// Refresh memories / Open memory folder toolbar; this figure shows ONE expanded `.mem-item`
 // at full width with a dim annotation pill calling out each part, so the
 // metadata-strip vocabulary and the three action icons are unambiguous.
 //
@@ -19,15 +19,15 @@
     role="group"
     aria-label="anatomy of a memory item"
   >
-    <!-- Toolbar above the list (mirrors the Refresh / Open Folder buttons) -->
+    <!-- Toolbar above the list (mirrors the Refresh memories / Open memory folder buttons) -->
     <div class="ma-toolbar">
       <button type="button" class="r-btn">
         <wa-icon library="texra" name="rotate-right"></wa-icon>
-        Refresh
+        Refresh memories
       </button>
       <button type="button" class="r-btn">
         <wa-icon library="texra" name="folder-open"></wa-icon>
-        Open Folder
+        Open memory folder
       </button>
       <span class="ma-note ma-note-tb"
         >reveal <code>memories/</code> on disk</span
@@ -62,11 +62,11 @@
       <div class="mem-meta">
         <span class="pin-badge">Pinned</span>
         <span class="meta-dot">·</span>
-        <span>1.2 KB</span>
+        <span>1.2 KiB</span>
         <span class="meta-dot">·</span>
         <span>34 lines</span>
         <span class="meta-dot">·</span>
-        <span>Updated 5m ago</span>
+        <span>Updated Nov 4, 2025, 02:31 PM</span>
         <span class="meta-dot">·</span>
         <span>by research</span>
         <span class="ma-note ma-note-meta">Metadata strip</span>

@@ -372,8 +372,8 @@ above.
 - `git.markCommits` gates `git.authorName` and `git.authorEmail`
   (`packages/harness/src/utils/system/execUtils.ts:53-64`): a present name is
   the switch.
-- `followUp.receipt` (`packages/harness/src/shared/session/runtimeRequest.ts:122`)
-  has producers only in `packages/harness/example/`; keep it only as public SDK.
+- `followUp.receipt` had producers only in `packages/harness/example/`.
+  Deleted with caller ids by #14943 (2026-11-14).
 - CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:155-193`);
   `config agents` has eight flags for three choices
   (`packages/cli/src/commands/config.ts:111-131,201-232`); `--input`,
@@ -390,7 +390,7 @@ pseudo-types, which it alone sends); `openInstallGuide` carries no `tool`;
 their one reader each; `RegexRuleSet.flags` is required. Checked and kept:
 `latexdiff.changesOnly` has a LaTeX-tab row; `goal.strategy` is the SDK's
 strategy hook, exercised by `packages/harness/example/09-goal-strategies.ts`;
-`followUp.receipt` stays as public SDK. Waiting on the owner: the four
+`followUp.receipt` stayed as public SDK until #14943 deleted it. Waiting on the owner: the four
 replacement presets with their key pairs (a feature reachable from
 `config.json` by hand) and `git.markCommits`, both kept on 2026-11-05._
 

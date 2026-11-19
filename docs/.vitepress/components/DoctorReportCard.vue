@@ -1,8 +1,8 @@
 <script setup>
 // Frameless `texra doctor` report. Mirrors the CLI's environment check: a
-// monospace command line followed by grouped status rows. Status vocabulary
-// matches ApiKeysHero — `found` (green circle-check) / `on-demand`
-// (neutral, "checked when needed") / `missing` (amber). No VS Code window
+// monospace command line followed by grouped status rows, each carrying the
+// word the CLI prints for a passing check (PASS) or a missing optional tool
+// (WARN). The CLI prints one flat list; the groups are the card's. No VS Code window
 // chrome; the root carries `.mockup` so it inherits the --mk-* token block and
 // flips with the docs light/dark theme.
 const groups = [
@@ -24,18 +24,11 @@ const groups = [
     rows: [
       { name: 'Node.js', status: 'found', detail: '22.22.2' },
       {
-        name: 'Models available',
+        name: 'Models',
         status: 'found',
-        detail: 'Anthropic, OpenAI',
+        detail: '24 models available',
       },
-    ],
-  },
-  {
-    label: 'Optional · checked on demand',
-    rows: [
-      { name: 'GraphicsMagick / ImageMagick', status: 'on-demand' },
-      { name: 'Ghostscript', status: 'on-demand' },
-      { name: 'Wolfram', status: 'on-demand' },
+      { name: 'Usage logging', status: 'found', detail: 'On' },
     ],
   },
 ];
@@ -69,18 +62,14 @@ const groups = [
           <span class="dr-name">{{ row.name }}</span>
           <span v-if="row.detail" class="dr-detail">{{ row.detail }}</span>
           <span class="dr-status" :class="`dr-status--${row.status}`">
-            <template v-if="row.status === 'found'">found</template>
+            <template v-if="row.status === 'found'">PASS</template>
             <template v-else-if="row.status === 'on-demand'"
               >checked when needed</template
             >
-            <template v-else>not found</template>
+            <template v-else>WARN</template>
           </span>
         </li>
       </ul>
-    </div>
-
-    <div class="dr-foot">
-      <span class="dr-foot-ok">✓ Core dependencies ready</span>
     </div>
   </div>
 </template>

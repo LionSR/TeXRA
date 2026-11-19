@@ -111,8 +111,9 @@ export interface Plugin {
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /**
    * Present when the plugin has an external dependency: it is probed, and
-   * its tools are withheld while the dependency is missing. Without it the
-   * plugin is built in and always available.
+   * while the dependency is missing a run is offered none of its tools, is
+   * told of none of its programs and reads no prompt section of its.
+   * Without it the plugin is built in and always available.
    */
   readonly availability?: ToolAvailabilityChecks;
   /** The plugin has a user switch, which a fresh install sets to this
@@ -168,14 +169,34 @@ export interface PluginDefinition<ROut> extends Omit<
   readonly availability?: ToolAvailabilityChecks;
 }
 
+/** `value` with every array and object literal it is built of frozen, down
+ *  to the first value of another kind (a schema, a layer, a function), which
+ *  is its own module's to keep. One its owner froze at the top is still
+ *  read through; `seen` ends a cycle. */
+const frozenLiterals = <T>(value: T, seen = new WeakSet<object>()): T => {
+  if (typeof value !== 'object' || value === null || seen.has(value))
+    return value;
+  seen.add(value);
+  const prototype: unknown = Object.getPrototypeOf(value);
+  if (Array.isArray(value) || prototype === Object.prototype) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) frozenLiterals(child, seen);
+  }
+  return value;
+};
+
 /** A plugin value from its definition, its own services erased: the
- *  harness's built-ins and an app's plugins are written the same way. */
+ *  harness's built-ins and an app's plugins are written the same way. The
+ *  value is `plugin` itself, frozen with the arrays and records it is
+ *  written with (its tools, its probe, its programs): every session of the
+ *  process shares the one definition, and none can change it for the
+ *  others. */
 export const definePlugin = <ROut = never>(
   plugin: PluginDefinition<ROut>,
 ): Plugin =>
   // The step that pins the plugin serves its layers' services to its calls.
   // cast: `ROut` is checked by the parameter type and erased here.
-  plugin as unknown as Plugin;
+  frozenLiterals(plugin) as unknown as Plugin;
 
 /**
  * Announce the workspace files a committed row says its run wrote past the

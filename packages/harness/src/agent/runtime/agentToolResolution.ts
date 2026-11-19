@@ -36,6 +36,10 @@
  * What it may do with them is the approval policy's, which reads the launch
  * edge (`resolveBypass`).
  *
+ * The plugins the probe found missing are returned (`unavailable`), so the
+ * step withholds their programs and prompt sections with their tools: this
+ * module is the one reader of the probe's results for a run.
+ *
  * A switched-off plugin is withheld silently: the user chose it. Every other
  * withholding of a declared tool (a missing dependency, a capability the
  * host lacks) is returned as a warning, which
@@ -329,6 +333,9 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     offered,
     warnings,
     withheldForApproval,
+    // What else a step takes from a plugin (its programs, its prompt
+    // section) is withheld with its tools.
+    unavailable: new Set(probedOff.keys()),
   };
 });
 

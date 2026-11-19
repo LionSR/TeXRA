@@ -27,6 +27,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
@@ -165,7 +166,7 @@ const serves = (capabilities: (storage: string) => Iterable<string>) =>
     of: (storage) => new Set(capabilities(storage)),
   });
 
-const latexExtract: TexraPlugin = {
+const latexExtract: TexraPlugin = texraPlugin({
   id: 'latex-extract',
   tools: [
     ExtractLatexFiguresTool,
@@ -182,7 +183,7 @@ const latexExtract: TexraPlugin = {
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
   },
-};
+});
 
 /** The editor's diagnostics, offered while an editor attached for the
  *  session reads them: the plugin serves `HostCapabilities` from the same
@@ -296,7 +297,7 @@ const setup = (
 /** The theorist's programs: the document programs a person or a model
  *  starts by name, the tools they call, and accepting the documents a run
  *  produced into the workspace. */
-const theory: TexraPlugin = {
+const theory: TexraPlugin = texraPlugin({
   id: 'theory',
   icons: { accept_run_files: 'check' },
   prompt: ({ offered }) =>
@@ -337,7 +338,7 @@ const theory: TexraPlugin = {
     DocumentProposeTool,
   ],
   factKinds: APP_FACT_KINDS.theory,
-};
+});
 
 /** TeXRA's plugins, in dashboard order. */
 export const texraPlugins = (host: {
@@ -358,7 +359,7 @@ export const texraPlugins = (host: {
   readonly inquiryPanel?: true;
 }): readonly TexraPlugin[] => {
   const editors = host.editors ?? editorRegistry(() => ({}));
-  return [
+  const plugins: readonly TexraPlugin[] = [
     {
       ...fileOps({ writeFilter: texWriteFilter }),
       icons: {
@@ -442,4 +443,7 @@ export const texraPlugins = (host: {
     setup(host.setup ?? {}, host.name, host.editor),
     theory,
   ];
+  // The entries built here are held for the life of the process as the
+  // module-level ones are, so they are frozen the same way.
+  return plugins.map(texraPlugin);
 };

@@ -61,7 +61,8 @@ texra clone <project> ./project
 
 `texra run` takes a program or an agent. A [program](./built-in-agents.md#programs)
 (`edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`,
-`poster`) revises or creates documents from `--input` files. Run one from a
+`poster`) revises or creates documents from `--input` files; the Lean programs
+`prove` and `blueprint` work on a Lean project's files in place. Run one from a
 project directory:
 
 ```bash
@@ -124,7 +125,8 @@ texra run edit --input 'sections/**/*.tex' --output-dir corrected
 Programs always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in
-run storage.
+run storage. A program that generates no document, such as `prove`, prints its
+final reply instead.
 
 With `--output`, TeXRA also copies the final artifact to the requested
 filesystem destination. JSON and NDJSON output keep `output.documents.outputs[]` as the
@@ -148,7 +150,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 `contract: 3`, the version of this contract. Version 3 is the 1.0 contract:
 
 - `kind: "progress"` records carry a session event verbatim. `event` is the
-  event's `type` (`run.start`, `status`, `run.end`, `usage`, `stage.start`,
+  event's `type` (`run.start`, `run.activate`, `run.end`, `usage`, `stage.start`,
   `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
   the rest of the event under its own field names. A `usage` event is one
   priced model turn, so a run's spend is the sum of its `usage` events. A
@@ -197,8 +199,9 @@ A project's `.env` file is read by every task of that project. A key set
 only in this terminal (`OPENAI_API_KEY=… texra chat`) travels with the
 tasks this terminal starts, wherever they run.
 
-**Use a provider subscription.** ChatGPT, Grok (xAI), Kimi Code, and the GLM
-Coding Plan can serve model calls in place of an API key:
+**Use a provider subscription.** Kimi Code and the GLM Coding Plan are paid
+through the plan's own key, added like any provider key. A ChatGPT or Grok
+(xAI) subscription can serve model calls in place of an API key:
 
 ```bash
 texra auth chatgpt login    # OpenAI models through your ChatGPT plan
@@ -250,7 +253,7 @@ Code extension. Running bare `texra` in a terminal opens this same session.
 
 <CliChatHero />
 
-<p class="hero-caption">A <code>texra chat</code> session streams reasoning and tool calls inline, shows diffs as the agent edits, and lists its slash commands at the bottom.</p>
+<p class="hero-caption">A <code>texra chat</code> session streams reasoning and tool calls inline, shows diffs as the agent edits, and lists its key hints at the bottom.</p>
 
 ```bash
 texra chat                                      # default chat agent and model
@@ -306,8 +309,11 @@ continues it where it left off.
 
 ## Skills
 
-Skills are reusable instruction folders the agent can apply to a request. List
-what's available, and pull in extra skill folders for any agent run:
+Skills are reusable instruction folders the agent can apply to a request.
+Agents receive no skills until you turn on **Enable skills for agents**
+(`skills.enabled`) with `texra config edit`; `texra skills list` says so while
+it is off. List what's available, and pull in extra skill folders for any agent
+run:
 
 ```bash
 texra skills list
@@ -335,6 +341,7 @@ texra plugin install github.com/LionSR/AgenticPublicationProtocol
 texra plugin install github.com/<owner>/<repo>@v1.0.0
 texra plugin install https://example.org/plugins.git --ref main
 texra plugin install ./my-plugin
+texra plugin show paper-protocol
 texra plugin enable paper-protocol
 texra plugin list
 texra plugin update
@@ -358,7 +365,7 @@ Fetched plugins are stored in `~/.texra/v1/global-storage/plugins/<name>/`, pinn
 
 A repository with a marketplace file (`.claude-plugin/marketplace.json` or `.agents/plugins/marketplace.json`) and no plugin manifest installs the plugin it lists; if it lists several, pass `--plugin <name>` (repeatable). <!-- guidance-refs-ignore -->
 
-The CLI, VS Code extension, and desktop app share installed plugins and trust decisions. In the extension and desktop app, manage them under **Settings → Agents → Skills**.
+The CLI, VS Code extension, and desktop app share installed plugins and trust decisions. In the extension and desktop app, manage them under **Settings → Plugins**.
 
 ## Shell completion
 
@@ -397,7 +404,7 @@ Text output prints one tab-separated row per run:
 <id>    <timestamp>    <agent>    <status>    <primary input>
 ```
 
-The NDJSON form is stable for scripts under the version-2 contract above.
+The NDJSON form is stable for scripts under the version 3 contract above.
 Each line has kind `history-entry` and contains the same run entry object used
 by JSON output, with the terminal `outcome` spelled as `completed`,
 `cancelled`, or `failed` (`null` when none was recorded) and `resumable`
@@ -503,7 +510,7 @@ task alone: it narrows the project's, and `yolo` auto-approves the task
 unless the project's policy is `never`. It never changes the project's policy. A service task that asks
 for approval waits for an answer: `texra tasks attach` only watches, so
 answer it from the chat with `/tasks`. With
-`--output-format ndjson`, `attach` writes the task's own rows (not its
+`--output-format ndjson`, `attach` writes the task's own events (not its
 agents') as `progress` records, in the shape `texra run` uses.
 
 Manage the service itself:

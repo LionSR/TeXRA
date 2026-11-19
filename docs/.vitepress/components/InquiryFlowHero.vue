@@ -1,17 +1,15 @@
 <script setup>
 // Frameless figure for the `inquiry` tool's copy-out / paste-back flow
 // (guide/research-tools.md → External Inquiry). The agent prepares a question,
-// you copy it into an external chat subscription (ChatGPT / Claude / Gemini),
+// you copy it into an external chat (the panel links ChatGPT and Gemini),
 // then paste the answer back and the run resumes. Dispatch is non-blocking.
 //
 // Standalone card (no MockupFrame / dash-nav), in the spirit of
-// MemoryCommandsHero — just the focused inquiry modal as it appears in both
-// the webview and the CLI terminal modal. Root carries `.mockup` so the shared
+// MemoryCommandsHero — just the focused inquiry panel of the progress view. Root carries `.mockup` so the shared
 // --mk-* tokens resolve and the card flips with the docs light / dark theme.
 
 const targets = [
   { name: 'ChatGPT', icon: 'comment' },
-  { name: 'Claude', icon: 'sparkle' },
   { name: 'Gemini', icon: 'robot' },
 ];
 </script>
@@ -49,7 +47,7 @@ const targets = [
       <div class="inq-row">
         <button class="inq-btn inq-btn--ghost" type="button">
           <wa-icon library="texra" name="link"></wa-icon>
-          Copy
+          Copy question
         </button>
         <span class="inq-targets">
           <span v-for="t in targets" :key="t.name" class="inq-chip">
@@ -68,12 +66,12 @@ const targets = [
         <code class="inq-tag inq-tag--in">paste back</code>
       </div>
       <div class="inq-prompt inq-prompt--empty">
-        Paste the chat's reply here…<span class="inq-caret"></span>
+        Paste the answer here…<span class="inq-caret"></span>
       </div>
       <div class="inq-row inq-row--end">
         <button class="inq-btn inq-btn--brand" type="button">
           <wa-icon library="texra" name="sparkle"></wa-icon>
-          Resume run
+          Submit
         </button>
       </div>
     </div>

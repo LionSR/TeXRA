@@ -25,6 +25,9 @@ the app's controllers; a row marked _landed_ changed with this note.
 
 ## Open
 
+Checked against `main` on 2026-11-19: all three still stand as written, and
+each waits on the decision its last sentence names. None can land without it.
+
 1. **Which models the launcher's picker lists.** The progress view's
    launcher reads the enabled models alone
    (`packages/texra/src/controllers/session/hostSnapshotSource.ts` passes

@@ -10,11 +10,12 @@ import {
   InquiryRequestSchema,
 } from '@texra/shared/plugins/externalInquiry';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import { ExternalInquiryTool } from './ExternalInquiryTool';
 import { recordInquiryDecision } from './inquiryActions';
 import { inquiryRecordsLayer } from './inquiryRecords';
 
-export const externalInquiry: TexraPlugin = {
+export const externalInquiry: TexraPlugin = texraPlugin({
   id: INQUIRY_REQUEST.plugin,
   tools: [ExternalInquiryTool],
   factKinds: APP_FACT_KINDS['external-inquiry'],
@@ -38,4 +39,4 @@ export const externalInquiry: TexraPlugin = {
       authNote: 'Uses your premium chat subscription',
     },
   },
-};
+});

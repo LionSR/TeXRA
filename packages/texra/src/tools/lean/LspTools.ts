@@ -110,6 +110,74 @@ const leanUnavailableResult = (
 /** What Lean reports on a declaration that a `sorry` stands in for. */
 const SORRY = "declaration uses 'sorry'";
 
+/**
+ * The axioms `source` declares with the `axiom` command, each as its name
+ * and statement on one line (the declaration up to the next line that
+ * starts a command), in order, so an axiom whose statement changed reads as
+ * a different one: a scan of the text outside comments and string literals, since
+ * Lean's server reports nothing about axioms on its own (only a
+ * `#print axioms <name>` command in the file does, one declaration at a
+ * time). So it sees neither an axiom a macro expands to, nor one declared
+ * in a file this one imports, nor a proof that leans on the compiler
+ * (`native_decide`) rather than on a declared axiom. An `axiom` inside a
+ * syntax quotation counts as one: a macro that writes axioms is as much a
+ * way around a proof as an axiom is, so the scan errs towards naming it.
+ */
+function declaredAxioms(source: string): string[] {
+  let code = '';
+  for (let at = 0; at < source.length;) {
+    const raw =
+      source[at] === 'r' ? /^r(#*)"/.exec(source.slice(at, at + 16)) : null;
+    if (source.startsWith('--', at)) {
+      const end = source.indexOf('\n', at);
+      at = end === -1 ? source.length : end;
+    } else if (source.startsWith('/-', at)) {
+      // Block comments nest.
+      let depth = 1;
+      at += 2;
+      while (at < source.length && depth > 0) {
+        const opens = source.startsWith('/-', at);
+        const closes = source.startsWith('-/', at);
+        if (opens) depth += 1;
+        if (closes) depth -= 1;
+        at += opens || closes ? 2 : 1;
+      }
+      code += ' ';
+    } else if (
+      raw !== null &&
+      !/[\p{L}\p{N}_.'!?]/u.test(source[at - 1] ?? '')
+    ) {
+      // A raw string ends at its quote and as many `#` as opened it, and
+      // has no escapes.
+      const close = `"${raw[1]}`;
+      const end = source.indexOf(close, at + raw[0].length);
+      at = end === -1 ? source.length : end + close.length;
+      code += ' ';
+    } else if (source[at] === '"') {
+      at += 1;
+      while (at < source.length && source[at] !== '"')
+        at += source[at] === '\\' ? 2 : 1;
+      at += 1;
+      code += ' ';
+    } else if (source.startsWith(`'"'`, at)) {
+      // The character literal of a double quote opens no string.
+      at += 3;
+    } else if (source.startsWith(`'\\`, at)) {
+      // Nor does an escaped one (`'\"'`): skip to the literal's end.
+      const end = source.indexOf("'", at + 3);
+      at = end === -1 ? source.length : end + 1;
+    } else {
+      code += source[at];
+      at += 1;
+    }
+  }
+  return [
+    ...code.matchAll(
+      /(?<![\p{L}\p{N}_.«'!?])axiom\s+(\S[^\n]*(?:\n[ \t]+[^\n]*)*)/gu,
+    ),
+  ].flatMap(([, declared]) => declared?.replaceAll(/\s+/g, ' ').trim() ?? []);
+}
+
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
 If you expected errors:
@@ -165,7 +233,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
           { summary: 'Failed to open file' },
         );
   }
-  const { complete, diagnostics } = fetched.success;
+  const { complete, diagnostics, text: source } = fetched.success;
   const counts = countBySeverity(diagnostics);
   const output = (text: string, summary: string): ToolResult => ({
     ...executed(text, summary),
@@ -177,6 +245,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
       errors: counts.errors,
       sorries: diagnostics.filter(({ message }) => message.includes(SORRY))
         .length,
+      axioms: declaredAxioms(source),
     },
   });
 
@@ -208,7 +277,7 @@ export const LeanDiagnosticsTool = defineTool({
   name: 'lean_diagnostics',
   replay: 'safe',
   scriptReturns:
-    '{ output: string; summary: string; complete: boolean; errors: number; sorries: number }',
+    '{ output: string; summary: string; complete: boolean; errors: number; sorries: number; axioms: string[] }',
   description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
 
 Commands:
@@ -223,6 +292,7 @@ Returns diagnostics from the Lean 4 language server including:
 
 Tips:
 - If diagnostics seem stale, use lean_file on the file to refresh the Lean server
+- Lean reports nothing about axioms here. In a script, \`axioms\` lists what the file's text declares with \`axiom\`, each as its name and statement; \`#print axioms <name>\` in the file is what makes Lean list what a declaration depends on
 - Import/dependency errors may not surface as diagnostics: check imports manually`,
   schema: LeanDiagnosticsInputSchema,
   execute: executeLeanDiagnosticsTool,

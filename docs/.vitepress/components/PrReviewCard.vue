@@ -1,7 +1,7 @@
 <script setup>
 // Frameless GitHub-PR review card for guide/code-review.md ("What you'll see
 // on a PR"). The TeXRA Code Review GitHub Action posts a SINGLE review from
-// github-actions[bot]: (1) a top-level summary / verdict comment, and (2)
+// texra-ai-bot[bot]: (1) a top-level summary / verdict comment, and (2)
 // inline comments anchored to specific flagged lines. On the next push to the
 // same PR the threads are updated in place rather than re-posted — conveyed
 // here by the "Updated on re-push" badge on the inline thread.
@@ -26,7 +26,7 @@
       </span>
       <div class="pr-head-body">
         <div class="pr-head-line">
-          <span class="pr-actor">github-actions</span>
+          <span class="pr-actor">texra-ai-bot</span>
           <span class="pr-bot">bot</span>
           <span class="pr-action">reviewed</span>
           <span class="pr-time">2 hours ago</span>
@@ -79,7 +79,7 @@
           </span>
           <div class="pr-c-body">
             <div class="pr-c-head">
-              <span class="pr-c-actor">github-actions[bot]</span>
+              <span class="pr-c-actor">texra-ai-bot[bot]</span>
               <span class="pr-c-badge">
                 <wa-icon library="texra" name="rotate-right"></wa-icon>
                 Updated on re-push
