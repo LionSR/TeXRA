@@ -88,7 +88,7 @@ export interface BindSpec {
     readonly fastTier?: boolean;
     /** The caller would serve Responses over its WebSocket. */
     readonly webSocket?: boolean;
-    /** The caller would deliver turns as background work; it wins over the socket. */
+    /** The caller gives up the WebSocket where the route takes background work. */
     readonly background?: boolean;
     /** The fetch every HTTP request goes through. */
     readonly fetch?: typeof fetch;

@@ -11,9 +11,7 @@ import { hash } from 'node:crypto';
 
 import { Effect, Option, type Scope } from 'effect';
 import {
-  BACKEND_PROTOCOLS,
   type ModelConfig,
-  type ModelOrigin,
   type ReasoningRequest,
   selectModel,
 } from '@texra-ai/llm';
@@ -52,22 +50,6 @@ interface BindPlan {
   readonly ask: ReasoningRequest;
   readonly settings: ModelSettings;
   readonly decision: RouteDecision;
-}
-
-/**
- * Whether a binding's turns go out as background work: when the binding can
- * and its turns are text-only, and on Google only while its toggle is on.
- * Decided once, at bind: a toggle flipped mid-run applies at the next bind.
- */
-function backgroundOn(
-  googleBackground: boolean,
-  turn: {
-    readonly protocol: ModelOrigin['protocol'];
-    readonly textOnly: boolean;
-  },
-): boolean {
-  if (!turn.textOnly) return false;
-  return turn.protocol !== 'google-interactions' || googleBackground;
 }
 
 /**
@@ -180,10 +162,6 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
   }
   const credential = yield* routeCredential(route);
   const reasoning = yield* reasoningOf(plan, requested);
-  const turn = {
-    protocol: BACKEND_PROTOCOLS[backend],
-    textOnly: request.textOnly,
-  };
   const bound = yield* bindWireModel({
     model: requested,
     route,
@@ -200,9 +178,11 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
       temperature: request.temperature,
       reasoning,
       ...settings.wire,
-      // Background delivery, where the binding can carry it, wins over the
-      // persistent WebSocket.
-      background: backgroundOn(settings.googleBackground, turn),
+      // A text-only binding gives up the persistent WebSocket where its
+      // route takes background work. This decides nothing else: `packages/llm`
+      // sends every turn of such a route as background work
+      // (`backgroundCapable`), a tool-use turn included.
+      background: request.textOnly,
       fetch: yield* runModelFetch,
     },
   });

@@ -1061,12 +1061,6 @@ waiting run: work continues through a new goal or a new turn.
 const GoalResultSchema: Union<readonly [Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"completed">; }>, Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"paused">; readonly pause: Union<readonly [Struct<{ readonly reason: Literal<"needs_user">; }>, Struct<{ readonly reason: Literal<"round_failed">; readonly error: Struct<{ readonly name: String; readonly message: String; }>; }>, Struct<{ readonly reason: Literal<"no_verdict">; readonly response: String; }>, Struct<{ readonly reason: Literal<"spend_cap">; readonly maxCostUsd: Finite; }>]>; }>]>
 ```
 
-## GOOGLE_BACKGROUND_RESPONSES_SETTING
-
-```ts
-const GOOGLE_BACKGROUND_RESPONSES_SETTING: { readonly key: "model.useGoogleBackgroundResponses"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Google background responses"; readonly description: "Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically."; }
-```
-
 ## GOOGLE_INTERACTIONS_SERVER_STATE_SETTING
 
 ```ts

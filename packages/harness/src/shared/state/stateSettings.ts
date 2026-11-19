@@ -190,16 +190,6 @@ export const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING = {
     "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
 } as const satisfies SettingRow<boolean>;
 
-export const GOOGLE_BACKGROUND_RESPONSES_SETTING = {
-  key: 'model.useGoogleBackgroundResponses',
-  slot: 'config',
-  schema: booleanWithDefault(false),
-  configTarget: 'global',
-  title: 'Google background responses',
-  description:
-    'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-} as const satisfies SettingRow<boolean>;
-
 export const OPENAI_FAST_TIER_SETTING = {
   key: 'model.openaiFastTier',
   slot: 'config',
@@ -515,7 +505,6 @@ const HARNESS_SETTINGS = [
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,
   GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
-  GOOGLE_BACKGROUND_RESPONSES_SETTING,
   OPENAI_FAST_TIER_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
