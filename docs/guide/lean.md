@@ -44,7 +44,7 @@ Open **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>) 
 
 ## Choosing an agent
 
-All the Lean agents ship with TeXRA and need no sign-in. The `lean` agent handles day-to-day proof work. `leanOrchestrator` leads a whole formalization project and delegates to the Lean specialists (`leanSearch`, `leanSimplifier`, `leanBlueprint`).
+All the Lean agents ship with TeXRA and need no sign-in. The `lean` agent handles day-to-day proof work. `leanOrchestrator` leads a whole formalization project and delegates to the other Lean agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`).
 
 | Agent              | Best for                                                                 |
 | ------------------ | ------------------------------------------------------------------------ |
@@ -76,7 +76,7 @@ texra run prove --input Proofs/Basic.lean --instruction "Prove the two lemmas ab
 texra run blueprint --input blueprint/src/content.tex
 ```
 
-In the app, ask an agent for the job (for example "finish the proofs in Proofs/Basic.lean") and it proposes the program.
+Both programs are always registered: `texra run` lists them beside the document programs, with or without Lean installed. `prove` needs `lake` on your `PATH`, since its check is Lean's own diagnostics. In the app, ask an agent that can start programs (`leanOrchestrator`, `orchestrator`, or `assistant`) for the job (for example "finish the proofs in Proofs/Basic.lean") and it proposes the program. The `lean` agent itself does not start programs.
 
 ## What you can do
 
@@ -128,7 +128,7 @@ The `lean_file` tool restarts the language server's state for one file: it close
 Download the Mathlib build cache, then build the project.
 ```
 
-The `lean_project` tool runs project-wide commands without a target file, grouped into server control and build operations:
+The `lean_project` tool runs project-wide commands without a target file, grouped into server control and project operations:
 
 <LeanProjectCommands />
 
