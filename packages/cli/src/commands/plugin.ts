@@ -12,6 +12,7 @@ import {
 
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
+  PLUGINS_PAGE,
   pluginRowProblem,
   pluginRowState,
   pluginRowTrust,
@@ -111,9 +112,12 @@ const askTrust = (review: PluginReview) => {
       ...review.lines.map((line) => `  ${line}`),
     ].join('\n'),
   );
-  return confirmCliQuestion(`Trust ${review.name} and enable it?`, {
-    default: false,
-  }).pipe(
+  return confirmCliQuestion(
+    PLUGINS_PAGE.trustQuestion(review.name, review.version),
+    {
+      default: false,
+    },
+  ).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
         writeTextStderr(`No answer (${error.message}).`);
@@ -302,7 +306,7 @@ const pluginEnableCommand = defineCliCommand({
               result,
               outcome === 'enabled'
                 ? `Enabled ${ctx.args.name}. Open runs load it at their next step.`
-                : `Not enabled: ${ctx.args.name} was not trusted.`,
+                : PLUGINS_PAGE.declined(ctx.args.name),
             ),
           ).pipe(
             Effect.as(

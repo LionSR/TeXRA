@@ -15,15 +15,17 @@ import {
 } from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
 import type { Shell } from '@desktop/renderer/shell';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import {
-  emptySessionView,
+  MESSAGE_TYPES,
+  type RunId,
+  type RunView,
   type SessionView,
-} from '@shared/session/sessionView';
+} from '@texra-ai/harness/schemas';
 import {
   BOARD_NOW,
   buildScenario,
   CHILD,
+  emptyView,
   fanOutView,
   viewOf,
   local,
@@ -33,7 +35,6 @@ import {
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { RunView } from '@texra-ai/harness/schemas';
 
 // ── fixtures: three projects, three folded views ────────────────────────────
 
@@ -319,7 +320,7 @@ function sceneDesktopOneProject(): TemplateResult {
  *  the other projects keep their badges. The running project's row is folded so
  *  its badge shows beside the waiting project's amber one. */
 function sceneDesktopEmptyProject(): TemplateResult {
-  const co = project(CO, emptySessionView(CO.key));
+  const co = project(CO, emptyView(CO.key));
   const projects = [
     co,
     project(CT, runningOnlyView()),

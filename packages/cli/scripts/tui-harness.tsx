@@ -29,8 +29,60 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, ToolCatalog } from '@texra-ai/harness/host';
+import {
+  AgentCatalog,
+  buildDiffHunks,
+  countLineChanges,
+  MODEL_SELECTION_KEY,
+  ToolCatalog,
+  type DraftBlob,
+} from '@texra-ai/harness/host';
+import { nodeFileServices } from '@texra-ai/harness/node';
 import { Secrets } from '@texra-ai/harness/plugins';
+import {
+  acceptsFollowUp,
+  AgentConfigSchema,
+  APPROVAL_POLICY_DEFAULT,
+  descendantRuns,
+  MESSAGE_TYPES,
+  parseApprovalPolicy,
+  RUN_OUTCOME,
+  runBypasses,
+  RunIdSchema,
+  toErrorMessage,
+  toJsonValue,
+  type AgentProposalRequest,
+  type ApprovalPolicy,
+  type LogLevel,
+  type MessageType,
+  type NormalizedToolUse,
+  type PlanApprovalRequest,
+  type RequestDecision,
+  type RequestPayload,
+  type RetryRequest,
+  type RunId,
+  type RunOutcome,
+  type SessionRowDraft,
+  type ToolEditContent,
+  type UserQuestionRequest,
+} from '@texra-ai/harness/schemas';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { CURATED_MODELS } from '@texra/model/curatedModels';
+import {
+  ALL_RUNS,
+  buildScenario,
+  viewOf,
+  local,
+  PROCESS,
+  tail,
+} from '@test/shared/session/fanOutScenario';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { runStatus } from '@ui/copy/runStatus';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+// What no public entry serves: the session's own owners, which the fixtures
+// seed rows through, and the leaves they build rows with (this file is an
+// exemption in oxlint.config.mts).
 import {
   attachInteractions,
   Interactions,
@@ -43,75 +95,29 @@ import {
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
+import {
+  AgentProposalRequestSchema,
+  aggregateTarget,
+  describeRefusal,
+  LOG_LEVELS,
+  TOOL_CALL_STATUS,
+} from '@shared/schemas';
 import {
   RunHistory,
   runStateAppend,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
-import { NO_APPROVAL_GRANTS, runBypasses } from '@shared/approvalBypassKind';
-import { followUpDisplay } from '@shared/subagentFollowup';
-import { CURATED_MODELS } from '@texra/model/curatedModels';
-import {
-  parseApprovalPolicy,
-  APPROVAL_POLICY_DEFAULT,
-  type ApprovalPolicy,
-} from '@shared/approvalPolicy';
-import {
-  AgentProposalRequestSchema,
-  AgentConfigSchema,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  RUN_OUTCOME,
-  TOOL_CALL_STATUS,
-  RunIdSchema,
-  toJsonValue,
-  type LogLevel,
-  type MessageType,
-  type AgentProposalRequest,
-  type NormalizedToolUse,
-  type RequestPayload,
-  type PlanApprovalRequest,
-  type RequestDecision,
-  type RetryRequest,
-  type RunOutcome,
-  type RunId,
-  type SessionRowDraft,
-  type UserQuestionRequest,
-  aggregateTarget,
-  describeRefusal,
-  type ToolEditContent,
-} from '@shared/schemas';
-import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunHistoryDraft } from '@shared/session/runState';
-import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
-import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
-import {
-  ALL_RUNS,
-  buildScenario,
-  viewOf,
-  local,
-  PROCESS,
-  tail,
-} from '@test/shared/session/fanOutScenario';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { subscribeToSignalChanges } from '@texra/shared/signals';
-import {
-  buildDiffHunks,
-  countLineChanges,
-  firstChangedLine,
-} from '@tools/unifiedDiff';
-import { runStatus } from '@ui/copy/runStatus';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { followUpDisplay } from '@shared/subagentFollowup';
+import { firstChangedLine } from '@tools/unifiedDiff';
 import { blobAddress } from '@utils/core/idHash';
-import { nodeFileServices } from '@utils/files/fsDurability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
 import { builtinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';

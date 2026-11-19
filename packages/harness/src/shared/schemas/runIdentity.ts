@@ -57,6 +57,26 @@ export function runIdentityName(id: RunIdentity): string {
   }
 }
 
+/** What a task started, by the kind of its run: the noun a count of them
+ *  takes, in the order a summary lists them. */
+export const NESTED_NOUNS = Object.freeze({
+  agent: 'agent',
+  process: 'command',
+  script: 'script',
+} as const satisfies Record<RunIdentity['kind'], string>);
+
+/** What a run is called on screen and in a rejection: the task the user
+ *  started (or a run the view no longer holds), else what a task started,
+ *  by the kind of its run. */
+export const runNoun = (
+  run:
+    | { readonly parentId: string | null; readonly identity: RunIdentity }
+    | undefined,
+): string =>
+  run == null || run.parentId === null
+    ? 'task'
+    : NESTED_NOUNS[run.identity.kind];
+
 /** UI label for a run identity — strips a known source prefix from agent ids. */
 export function runIdentityDisplayName(id: RunIdentity): string {
   return agentName(runIdentityName(id));

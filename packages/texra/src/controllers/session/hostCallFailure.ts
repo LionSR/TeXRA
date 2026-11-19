@@ -5,6 +5,7 @@
  * host edge rather than at the depth that calls it. A refusal the callee
  * already worded travels as itself; every other rejection is tagged with the
  * member it came from, so the bridge can tell a refusal from a defect.
+ * `openLink` is the one wording of a browser open that failed.
  */
 import { Effect } from 'effect';
 
@@ -14,7 +15,7 @@ import {
   Rejected,
   Unavailable,
 } from '@texra-ai/harness/schemas';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { HostFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
 
 /**
  * How a host's request handler fails: with a tagged error, always. The three
@@ -66,4 +67,16 @@ export function fromHost<A>(
     try: call,
     catch: (cause) => hostFailure(member, cause),
   });
+}
+
+/** A page in the browser through a host's `open`; one the host would not
+ *  open is a rejection in the host's words, so the view shows which address
+ *  did not open. */
+export function openLink(
+  open: ExternalOpener['openExternal'],
+  url: string,
+): Effect.Effect<void, Rejected> {
+  return open(url).pipe(
+    Effect.mapError((failed) => new Rejected({ reason: failed.message })),
+  );
 }

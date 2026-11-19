@@ -93,7 +93,7 @@ export class DependencyBanner extends LitElement {
           }
           ${renderLabeledActionButton({
             id: 'dependencyRecheckButton',
-            icon: 'rotate-right',
+            icon: 'arrows-rotate',
             text: 'Check again',
             onClick: () =>
               this.dispatchEvent(

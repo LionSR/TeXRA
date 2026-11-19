@@ -5,8 +5,9 @@ import {
   fileLocationDisplayPath,
   type RunId,
   type FileLocation,
+  hasExtension,
 } from '@texra-ai/harness/schemas';
-import { hasExtension, createRunStorageLocation } from '@texra-ai/harness/host';
+import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { meansAbsent } from '@texra-ai/harness/node';
 
 // Third-party imports

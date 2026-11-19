@@ -50,7 +50,7 @@ import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import type { Dialogs } from '@texra/hosts/uiHosts';
+import type { Dialogs, ExternalOpener } from '@texra/hosts/uiHosts';
 import type { TexraPlugin } from '@texra/tools/registry';
 import {
   ToolEditApprovalController,
@@ -83,6 +83,7 @@ import {
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { latexdiffVerbs, type LatexdiffHost } from './latexdiffVerbs';
+import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -110,7 +111,10 @@ import {
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
-import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  openLink,
+  type HostCommandFailure,
+} from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
  *  or in the background service), and the link the window attaches
@@ -170,11 +174,9 @@ type HostVerb<A> = Effect.Effect<
 export interface SharedHostCommandBindings {
   /** Open a file of this session's workspace, at a line when one is named. */
   openPath(file: string, line: number | undefined): HostVerb<void>;
-  /** The files the user picked for a launcher field; null when they picked
-   *  none. */
-  pickFiles(
-    fileType: Extract<HostCommand, { kind: 'pickFiles' }>['fileType'],
-  ): HostVerb<readonly string[] | null>;
+  /** The host's native dialog that opens several files, behind the
+   *  launcher's file picker. */
+  readonly openFiles: OpenFilesDialog;
   /** How a generated diff opens and a diff run shows its progress. */
   readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
@@ -183,9 +185,9 @@ export interface SharedHostCommandBindings {
    *  prompt on one host, the Models tab on the other. The caller re-reads
    *  the secret store after this returns. */
   setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
-  /** Open a web address in the browser. */
-  openExternal(url: string): HostVerb<void>;
-  readonly openInstallGuide: HostVerb<void>;
+  /** Open a web address in the browser. A failed open is answered, in the
+   *  body below, as a rejection naming the address. */
+  readonly openExternal: ExternalOpener['openExternal'];
   /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
    *  takes, the two skips write the funnel's flags and Run Setup launches
@@ -501,7 +503,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'pickFiles': {
-          const paths = yield* bindings.pickFiles(request.fileType);
+          const paths = yield* pickLauncherFiles(
+            roots.workspace,
+            request.fileType,
+            bindings.openFiles,
+          );
           if (paths === null) return yield* new Cancelled();
           return { kind: 'files', paths } satisfies HostOutcome;
         }
@@ -664,7 +670,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'apiKeyBanner':
           yield* request.action === 'set'
             ? bindings.setApiKey()
-            : bindings.openExternal(
+            : openLink(
+                bindings.openExternal,
                 texraGuideUrl('installation', 'setting-up-api-keys'),
               );
           return done;
@@ -689,7 +696,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               return done;
             }
             case 'docs':
-              yield* bindings.openExternal(texraGuideUrl('custom-agents'));
+              yield* openLink(
+                bindings.openExternal,
+                texraGuideUrl('custom-agents'),
+              );
               return done;
           }
           return done;
@@ -697,7 +707,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* snapshot.refreshHostBanners;
           return done;
         case 'openInstallGuide':
-          yield* bindings.openInstallGuide;
+          // Every dependency the banner lists installs from the one guide
+          // page.
+          yield* openLink(bindings.openExternal, texraGuideUrl('installation'));
           return done;
         case 'onboarding':
           switch (request.action) {
