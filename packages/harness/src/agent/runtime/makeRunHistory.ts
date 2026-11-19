@@ -245,7 +245,6 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
       if (unsafe !== null)
         return yield* new RunHistoryRefused({
-          reason: 'unsafe-endpoint',
           runId: run,
           detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
         });
@@ -297,7 +296,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     yield* append(beside);
     return written;
   }, Effect.scoped);
-  // A target no longer held open is `not-owner`, nothing written.
+  // A target no longer held open refuses the write, nothing written.
   const committed = yield* (
     within === undefined
       ? sessionLog.transact((tx) => job(tx.append))
