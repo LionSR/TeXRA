@@ -619,8 +619,8 @@ async function validateChatOnboardingPickers() {
   ];
 
   // Both the explicit subcommand and the bare command, because the bare form is
-  // routed by `defaultRootSubcommand` in root.ts rather than by citty's own
-  // dispatch. Only the process boundary can catch the route regressing to help,
+  // routed by the root command's own handler in root.ts (chat on a terminal,
+  // help otherwise). Only the process boundary can catch the route regressing to help,
   // to a removed subcommand, or to a model-resolution failure.
   const onboardingCases = [
     { label: 'texra chat first-run connect panel', args: ['chat'] },

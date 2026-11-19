@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
 import { Effect } from 'effect';
+import { Argument, Command } from 'effect/cli';
 
 import { withSessionFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
@@ -12,7 +12,7 @@ import {
   loadCliMemoryDetail,
 } from '../runtime/memory';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
 const runMemoryList = Effect.fn('runMemoryList')(function* () {
@@ -38,27 +38,27 @@ const runMemoryShow = Effect.fn('runMemoryShow')(function* (inputPath: string) {
   });
 });
 
-const memoryListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List stored memories' },
+const memoryListCommand = cliCommand('list', {
+  description: 'List stored memories',
+  config: {},
   catchExitCode: CliExitCode.AgentError,
-  run: runMemoryList,
+  run: () => runMemoryList(),
 });
 
-const memoryShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one stored memory' },
-  args: {
-    path: {
-      type: 'positional',
-      required: true,
-      description:
+const memoryShowCommand = cliCommand('show', {
+  description: 'Show one stored memory',
+  config: {
+    path: Argument.String('path').pipe(
+      Argument.withDescription(
         'Memory path from `texra memory list` (e.g. memories/<file>)',
-    },
+      ),
+    ),
   },
   catchExitCode: CliExitCode.Usage,
-  run: (_, ctx) => runMemoryShow(ctx.args.path),
+  run: (_, input) => runMemoryShow(input.path),
 });
 
-export const memoryCommand = defineCommand({
-  meta: { name: 'memory', description: 'Inspect stored memories' },
-  subCommands: { list: memoryListCommand, show: memoryShowCommand },
-});
+export const memoryCommand = Command.make('memory').pipe(
+  Command.withDescription('Inspect stored memories'),
+  Command.withSubcommands([memoryListCommand, memoryShowCommand]),
+);
