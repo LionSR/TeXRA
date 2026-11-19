@@ -208,10 +208,11 @@ export type DesktopWorkspaceRequest =
     : never;
 
 /** The commands the main process routes to a project's workspace. */
-export const DESKTOP_WORKSPACE_INBOUND_COMMANDS =
+export const DESKTOP_WORKSPACE_INBOUND_COMMANDS = Object.freeze(
   DesktopWorkspaceInboundMessageSchema.members.map(
     (member) => member.fields.command.literal,
-  );
+  ),
+);
 
 type WorkspaceOutbound =
   | typeof DesktopWorkspaceFilesChangedMessageSchema.Type

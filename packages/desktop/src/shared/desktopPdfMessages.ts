@@ -21,10 +21,10 @@ import { Schema } from 'effect';
 // renderer no failure event, so the main process, which hears it from
 // Chromium, names the URL and the reason as a sentence.
 
-export const DESKTOP_PDF_COMMANDS = {
+export const DESKTOP_PDF_COMMANDS = Object.freeze({
   SHOW_PDF: 'desktop:showPdf',
   LOAD_FAILED: 'desktop:pdfLoadFailed',
-} as const;
+} as const);
 
 const PdfUrlSchema = Schema.String.check(
   Schema.makeFilter(
