@@ -833,19 +833,6 @@
       ]
     },
     {
-      "id": "RF-TT-11-locate-tool-module",
-      "candidate": "Move locateTool into ProbeEnvironmentTool.ts and delete tools/setup/toolProbing.ts (TT-11 item 4, second half, of the 2026-11-15 design red-flag audit)",
-      "why": "toolProbing.ts is the vi.mock target of src/test-kernel/tools/setup/CredentialReporting.vitest.ts, its only stub for locateTool. Folding the function into the tool would make that suite mock lower modules (toolChecks, binaryResolver) instead, a larger and more brittle change than the one-export file it deletes. The other half of the item (the subscription probe beside its one reader) landed.",
-      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/TT-app-tools.md",
-      "symbols": [
-        {
-          "file": "packages/texra/src/tools/setup/toolProbing.ts",
-          "symbol": "locateTool",
-          "signature": "export const locateTool = …"
-        }
-      ]
-    },
-    {
       "id": "RF-TC-11-store-credential-comment",
       "candidate": "Reword storeCredential's comment, which says the CLI, the desktop app and the extension share it, as holding only through SettingsProfileKeyController (TC-11 item f, one sub-item, of the 2026-11-15 design red-flag audit)",
       "why": "The comment is true: the CLI imports storeCredential directly (packages/cli/src/chat/tui/forms/CliConfigForm.tsx), beside the two settings-body importers (settingsGitCommands.ts, providerKeyActions.ts). The report missed the CLI's direct importer.",
