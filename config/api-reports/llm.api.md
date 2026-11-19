@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 100
+Exports: 99
 
 - `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "provider" | "reasoning">, route?: ModelRoute | undefined) => ReasoningEffort[]`
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
@@ -45,8 +45,7 @@ Exports: 100
 - `isAuthFailureStatus` — `const isAuthFailureStatus: (status: number | undefined) => boolean`
 - `isKimiCodeExclusiveModel` — `function isKimiCodeExclusiveModel: (model: Pick<ModelConfig, "baseUrl" | "kimiSubscription" | "provider">) => boolean`
 - `isKimiSubscriptionEligible` — `function isKimiSubscriptionEligible: (model: Pick<ModelConfig, "kimiSubscription" | "provider">) => boolean`
-- `issuesParallelToolCalls` — `function issuesParallelToolCalls: (config: Pick<ModelConfig, "provider">) => boolean`
-- `isUnservedModel` — `function isUnservedModel: (config: Pick<ModelConfig, "openRouterOnly" | "retired">) => boolean`
+- `isUnservedModel` — `function isUnservedModel: (config: Pick<ModelConfig, "capabilities" | "openRouterOnly" | "retired">) => boolean`
 - `JsonObjectSchema` — `const JsonObjectSchema: compose<$Record<String, Codec<Json, Json, never, never>>, Unknown>`
 - `KeyPlanRoute` — `type KeyPlanRoute = { [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key' ? P : never; }[PlanRoute]; ≡ KeyPlanRoute`
 - `listCost` — `function listCost: (model: ModelConfig, usage: { readonly cacheWriteTokens: null | number; readonly cachedInputTokens: null | number; readonly inputTokens: null | number; readonly outputTokens: null | number; readonly providerUsage?: undefined | { readonly cacheCreation1hTokens: null | number; readonly cacheCreation5mTokens: null | number; readonly kind: "anthropic"; readonly uncachedInputTokens: null | number; } | { readonly cacheWrite12hTokens: number; readonly cacheWrite30mTokens: number; readonly kind: "openai"; } | { readonly costInUsdTicks: null | number; readonly kind: "xai"; }; readonly reasoningTokens: null | number; readonly toolUsePromptTokens: null | number; readonly totalTokens: null | number; }, tier?: "fast" | undefined) => number`
