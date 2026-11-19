@@ -37,7 +37,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "effect": "catalog:",
-    "electron": "^45.3.2",
+    "electron": "^45.3.3",
     "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "lit": "^3.3.3",
