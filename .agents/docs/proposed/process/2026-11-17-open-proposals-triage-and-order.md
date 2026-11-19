@@ -59,7 +59,6 @@ before they were corrected, gave about 230. Some are counted twice (see
 | [layer misplacements left open](../simplification/2026-11-15-layer-misplacements-left-open.md)                                       | 4    | 4                   |         |
 | [run-end audit left open](../simplification/2026-11-15-run-end-audit-left-open.md)                                                   | 2    |                     |         |
 | [llm provider wire boundary](../simplification/2026-11-16-llm-provider-wire-boundary.md)                                             |      | 1                   |         |
-| [one writer per project file](../simplification/2026-11-16-one-writer-per-project-file.md)                                           |      | 1                   |         |
 | [SDK readiness audit](../simplification/2026-11-16-sdk-readiness-audit.md)                                                           |      | 1                   |         |
 | [test launches wait on state](../simplification/2026-11-16-test-launches-wait-on-state.md)                                           | 2    |                     |         |
 

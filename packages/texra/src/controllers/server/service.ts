@@ -27,8 +27,10 @@ import {
   toErrorMessage,
   Rejected,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream, sessionFsLayer } from '@texra-ai/harness/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
+import { writeWorkspaceFile } from '@texra/controllers/session/workspaceFileRequest';
+import { replaceIfUnchanged } from '@latex/acceptedFileTarget';
 
 import {
   BUILD_VERSION,
@@ -340,6 +342,31 @@ export const serviceHandlers = (
               Effect.mapError(
                 (error) => new ProjectStateFailed({ message: error.message }),
               ),
+            ),
+          ),
+        // A window's writes of project files, in this process, whose tasks
+        // write them: both take the file's write lane here.
+        'file.save': ({ workspace, ...write }) =>
+          Effect.scoped(
+            projects.open(workspace).pipe(
+              Effect.mapError(
+                (error) => new Rejected({ reason: error.message }),
+              ),
+              Effect.flatMap((session) =>
+                writeWorkspaceFile(write).pipe(
+                  Effect.provide(sessionFsLayer(session.roots)),
+                ),
+              ),
+            ),
+          ),
+        'file.replace': ({ target, contents, confirmedAgainst }) =>
+          replaceIfUnchanged(
+            target,
+            contents,
+            confirmedAgainst ?? undefined,
+          ).pipe(
+            Effect.mapError(
+              (error) => new Rejected({ reason: toErrorMessage(error) }),
             ),
           ),
         'host.focus': ({ attachment }) => hosts.focus(attachment),
