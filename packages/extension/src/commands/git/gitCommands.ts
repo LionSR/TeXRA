@@ -84,7 +84,7 @@ const promptGitMissing = Effect.fnUntraced(function* () {
     hasPackageManager(advice.command.packageManager, (yield* CommandDirs)())
       ? advice.command.command
       : null;
-  const message = `Git not found in PATH.\n\n${advice.guide}`;
+  const message = `${CLONE_COPY.gitMissing}\n\n${advice.guide}`;
 
   const actions = [
     ...(command ? (['Copy Command', 'Run in Terminal'] as const) : []),
@@ -216,7 +216,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
 
     const remote = parseLatexGitUrl(input);
     if (!remote) {
-      yield* showLoggedMessage('Invalid project URL or ID.');
+      yield* showLoggedMessage(CLONE_COPY.invalidProject);
       return;
     }
 
