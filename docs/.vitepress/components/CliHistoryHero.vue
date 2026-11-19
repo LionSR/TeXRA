@@ -5,7 +5,7 @@
 // formatCliHistoryText): id, ISO timestamp, agent, status, primary input —
 // the same runs the ProgressBoard shows as streams. Ids are the compact
 // 12-char hex execution ids; status words are the real set (completed /
-// error / …), then `(can resume)` for an interrupted or failed run and
+// failed / …), then `(can resume)` for an interrupted or failed run and
 // `(can continue)` for a finished chat; `texra resume <id>` takes either and
 // reopens it in the interactive chat TUI.
 //

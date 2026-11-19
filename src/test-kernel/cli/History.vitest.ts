@@ -106,7 +106,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     )((it) => {
       it.layer(TestSession.layer(undefined, { persistent: true }))((it) => {
         it.effect(
-          "carries each run's outcome and resumability, in NDJSON too",
+          "carries each run's outcome and whether it continues, in NDJSON too",
           () =>
             Effect.gen(function* () {
               // The record states the outcome the run ended on (null for

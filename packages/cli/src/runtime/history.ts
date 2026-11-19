@@ -369,7 +369,9 @@ export function formatCliHistoryDetailsText(
     : undefined;
   // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
-    details.continues ? ` (${continueNote(details.outcome)})` : ''
+    details.continues
+      ? ` (${run ? continueNote(details.outcome) : 'can continue'})`
+      : ''
   }`;
   const lines = [
     `Run: ${details.id}`,

@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
   finished conversation included. `texra history` (text, JSON and NDJSON)
   and `/resume` follow: the NDJSON field is `continues`, and the status
   column reads `(can continue)` for a finished conversation and
-  `(can resume)` for an interrupted, failed or cancelled run, where both
+  `(can resume)` for an interrupted, failed or cancelled run, where both previously
   read `(resumable)`. The view's `resume` action, `session.resume(runId)`,
   `texra resume` and `--resume` keep their names.
 
