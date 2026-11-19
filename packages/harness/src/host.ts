@@ -40,7 +40,7 @@ export {
   type ProcessRuntime,
   type ProcessServices,
 } from './effect/processLayer.js';
-export type { PlatformServices, PluginContext } from '@platform/processRuntime';
+export type { PlatformServices } from '@platform/processRuntime';
 // The run function a host callback starts Effect work with, owned by a scope.
 export { scopedFork, type ScopedFork } from '@platform/processRuntime';
 // What a run's program requires of the process, beneath `ProcessServices`.
@@ -73,14 +73,8 @@ export {
 } from '@agent/index/AgentDirectoryService';
 export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
 export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
-// The process's stores: the global root's current values, each family a
-// host or plugin declares (`ValueFamily`), the per-project settings stores,
-// and storage maintenance under a storage root.
-export { GlobalValues, StateStores } from '@platform/processRuntime';
-export type { ValueFamily } from '@shared/session/valueFamily';
-export type { CurrentValues } from '@shared/session/database';
-export type { DraftBlob } from '@shared/session/historyTurns';
-export type { AppStateStore } from '@platform/interfaces';
+// Storage maintenance under a storage root (the process's stores, which
+// plugins read too, are on `./plugins`).
 export {
   deleteStorageInventory,
   readStorageInventory,
@@ -107,18 +101,14 @@ export {
   type Hunk,
 } from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-// The agent-directories service (its port is the root entry's) and the
-// process services plugins read.
-export { AgentDirectories, AppState } from '@platform/interfaces';
-// App-lifecycle signals: the process's hub, which `ProcessServices` serves,
-// and what hosts and the app publish and follow on it.
+// The agent-directories service (its port is the root entry's).
+export { AgentDirectories } from '@platform/interfaces';
+// App-lifecycle signals as hosts and the app follow them (the hub and its
+// signals are on `./plugins`).
 export {
   appSignalStream,
   subscribeAppSignal,
   onAppSignal,
-  type AppSignal,
-  type AppSignalEvent,
-  type AppSignalPayloads,
 } from '@platform/appSignals';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
@@ -158,14 +148,9 @@ export {
   UsageLogEntrySchema,
   type UsageLogEntry,
 } from '@shared/usageLog';
-// The rooted file system a host reads, and the layers of the ones plugins
-// read (`./plugins`) outside a run.
-export {
-  GlobalStorageFs,
-  sessionFsLayer,
-  withSessionFs,
-} from '@platform/rootedFs';
-export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+// The layers of the rooted file systems plugins read (`./plugins`), for a
+// host that reads them outside a run.
+export { sessionFsLayer, withSessionFs } from '@platform/rootedFs';
 // A `FileLocation` by its root: workspace, run storage, external, or relative.
 export {
   createExternalLocation,
@@ -238,21 +223,9 @@ export {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-// The tool catalog: enabled built-ins, plugin services and switches.
-export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 // The write path's redaction, for host text shown outside it.
 export {
   formatFatalErrorDetail,
   redactDiagnostics,
   redactSecrets,
 } from '@logger/redaction';
-// The config and state store ports a host implements and their failures
-// (`Settings`, which reads and writes through them, is on `./plugins`).
-export {
-  ConfigWriteFailed,
-  StateReadFailed,
-  StateWriteFailed,
-  type ConfigProvider,
-  type StateStore,
-  type StoredSetting,
-} from '@shared/config/settings';

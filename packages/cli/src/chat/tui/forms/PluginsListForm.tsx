@@ -8,10 +8,10 @@ import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Effect } from 'effect';
 
+import { ToolCatalog } from '@texra-ai/harness/plugins';
 import {
   InstalledPlugins,
   ToolAvailability,
-  ToolCatalog,
   type PluginReview,
 } from '@texra-ai/harness/host';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';

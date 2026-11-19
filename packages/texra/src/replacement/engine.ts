@@ -5,7 +5,11 @@
 import { Effect, Result } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
+import {
+  Settings,
+  withLogChannel,
+  type ConfigProvider,
+} from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   NonRegexReplacementCategory,
@@ -50,7 +54,6 @@ import {
   PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from './rulesRegex';
-import type { ConfigProvider } from '@texra-ai/harness/host';
 import {
   CUSTOM_REGEX_REPLACEMENTS_SETTING,
   CUSTOM_REPLACEMENTS_SETTING,

@@ -5,8 +5,8 @@ import { describe, expect } from 'vitest';
 import { agentMatchesIdentifier } from '@texra-ai/harness/schemas';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import type { StateStore } from '@texra-ai/harness/plugins';
 import type {
-  StateStore,
   WorkspaceAgentsControllerDeps,
   WorkspaceAgentsEntry,
 } from '@texra-ai/harness/host';

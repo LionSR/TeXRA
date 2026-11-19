@@ -7,11 +7,7 @@ import {
   generateRunId,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import {
-  AppState,
-  mcpConfigPathOf,
-  ValidationModel,
-} from '@texra-ai/harness/host';
+import { mcpConfigPathOf, ValidationModel } from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/recordedRequest';
 import { stepFor } from '@agent/runtime/loop/step';
@@ -45,7 +41,12 @@ import { toolTable } from '@tools/toolTable';
 
 import { testLaunch } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
-import { AppSignals, Secrets, type ITool } from '@texra-ai/harness/plugins';
+import {
+  AppSignals,
+  Secrets,
+  type ITool,
+  AppState,
+} from '@texra-ai/harness/plugins';
 import { HARNESS_APP } from '@test/support/FakePlatform';
 
 function tool(name: string): ITool {

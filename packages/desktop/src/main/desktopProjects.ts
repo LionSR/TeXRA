@@ -18,15 +18,14 @@ import {
 } from 'effect';
 
 import { type Session, Sessions } from '@texra-ai/harness';
-import {
-  AppState,
-  withPerKeyLane,
-  type PerKeyLane,
-  StateStores,
-} from '@texra-ai/harness/host';
+import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import { meansAbsent, canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import {
+  withLogChannel,
+  AppState,
+  StateStores,
+} from '@texra-ai/harness/plugins';
 import {
   projectDisplayOf,
   type ProjectDisplay,

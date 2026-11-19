@@ -48,8 +48,7 @@ import {
   normalizeDocumentName,
   type ExpectedDocuments,
 } from './extraction/filenameHeaders';
-import type { AgentTrace } from '@texra-ai/harness/plugins';
-import type { ConfigProvider } from '@texra-ai/harness/host';
+import type { AgentTrace, ConfigProvider } from '@texra-ai/harness/plugins';
 
 /** What the extraction reads of the run. */
 interface ReplyContext {

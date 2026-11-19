@@ -302,182 +302,6 @@ The names of the tools `entry`'s persona is offered.
 const agentToolNames: (entry: Pick<AgentEntry, "persona">) => readonly string[]
 ```
 
-## AppSignal
-
-The name of one app signal.
-
-```ts
-type AppSignal = keyof AppSignalPayloads;
-```
-
-## AppSignalEvent
-
-One published signal. The key and its payload are correlated by `emit`
-and the subscriptions below, which is where a caller proves the pair; on the
-hub they travel as what every subscription reads, a key and one of the
-declared payloads.
-
-```ts
-interface AppSignalEvent {
-  readonly signal: AppSignal;
-  readonly payload: AppSignalPayloads[AppSignal];
-}
-```
-
-## AppSignalPayloads
-
-Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
-credentials, workspace-file writes). Not for run or session progress:
-that is a run's trace event (`AgentEvent`) or a session row
-(`SessionRow`).
-
-Delivery and error order, which this module owns and no caller may vary:
-
-- Publishing (`emit`, `emitAppSignal`) enqueues and returns. It never runs
-  a subscriber, so a subscriber can neither block nor fail the code that
-  emitted.
-- Each subscriber drains its own `PubSub` subscription on its own fiber,
-  forked at the host's run edge (the fork lives at the host entry, not
-  in the bus, since only a host runs Effects). One subscriber sees the
-  signals it subscribed to in publication order; there is no order *between* subscribers, and a slow
-  one holds up neither the publisher nor another subscriber.
-- A subscriber that throws is logged at `warn` by its own delivery fiber
-  and keeps its subscription: one broken listener never truncates a
-  delivery. This is the one contract the `PubSub` conversion changed — the
-  `EventEmitter` this replaces ran every listener on the emitter's stack
-  and then rethrew the first listener's error into `emit`, so a settings
-  view that failed to repaint could fail the tool call that wrote the
-  file. Nothing depended on that throw; every caller emitted as a
-  statement.
-- A subscriber is live once its forked fiber has reached the `subscribe`
-  below, which is a later scheduler turn than the `runFork` at the host's
-  run edge: `runFork` schedules the fiber and returns, it does not run it.
-  So a signal published in the same synchronous turn that subscribed
-  reaches nobody — the ordinary `PubSub` rule that a subscription only
-  receives what is published after it exists, and the reason the suites
-  here yield once before they publish. A caller that must be subscribed
-  before it continues calls {@link subscribeAppSignal} in its own scope
-  instead.
-
-Every signal below records which hosts consume it and — where a host does
-not — why not. A signal with no such note is the ambiguous middle this file
-exists to prevent: a host that silently never reacts is indistinguishable
-from a host that deliberately doesn't. Keep the note truthful when you add a
-subscriber; "no equivalent surface" is a valid, and common, answer.
-
-```ts
-interface AppSignalPayloads {
-  /**
-   * GitHub rejected the configured token. Frontends can surface the failure
-   * and direct the user to token settings.
-   *
-   * Consumed by: extension (modal error + jump to Git settings), desktop
-   * (an error dialog). Not the CLI: a
-   * poller rejection arrives with no chat turn to attach it to, and the TUI
-   * has no out-of-band notice surface — the rejection is logged instead.
-   */
-  githubTokenInvalid: { message: string };
-
-  /**
-   * A write or removal of one secret-store entry finished. Emitted by the
-   * store itself, so every writer is covered — the settings controllers, the
-   * setup agent's `unset_api_key`, the GitHub token forms — without any of
-   * them remembering to. The one file store emits from its own commit
-   * finalizer, and the process's watch of the directory (`FileSecrets.watch`,
-   * started once by the app's process layer) emits for writes from other
-   * processes. The finalizer runs on every exit of the write, failure and
-   * interruption included, because an interrupted commit may still have
-   * landed; the signal means "re-read this key", never "the value changed".
-   * The same stores hold OAuth tokens and other credentials, so a subscriber filters on `key` and ignores the rest: an
-   * OAuth refresh must not repaint the profile tab.
-   *
-   * Consumed by: extension and desktop (an `apiKey.*` change repaints the
-   * credential-dependent settings surfaces, and any change reloads the
-   * launcher's credential check and model catalog), the CLI chat
-   * TUI (an `apiKey.*` change re-reads the model route and quota its status
-   * bar shows), and the `ToolAvailability` process service on every
-   * host and the agent package (a key a plugin lists in `reprobeOnSecrets`,
-   * such as the GitHub token, re-probes each workspace it holds, which the
-   * next step's tool list reads).
-   */
-  credentialChanged: { key: string };
-
-  /**
-   * A model-access preference was written in this process: a subscription's
-   * preference, the access route picked for a provider, a subscription
-   * sign-out, the enabled models, or a setting whose write re-routes models
-   * (`onWrite.invalidatesModelOptions`). Keyless on purpose: a listener
-   * re-reads the routes it shows.
-   *
-   * Emitted by the app's writers themselves, so no caller announces for
-   * them: a subscription's sign-in, sign-out and preference write, a coding
-   * plan's toggle, and the settings write path for a row that re-routes
-   * models. The enabled-model write is the one still announced by its
-   * caller, the settings view. Consumed by: the CLI chat TUI's status bar,
-   * which re-reads the route and quota it shows, and the extension's and
-   * desktop's launchers, which re-read their credential check and model
-   * catalog.
-   */
-  modelAccessChanged: undefined;
-
-  /**
-   * The active GitHub subscriptions (PR, repo, or issue) or their stream owners
-   * changed. Keyless on purpose: every listener re-reads the full subscription
-   * list, so which kind changed carries no information.
-   *
-   * Consumed by: extension and desktop settings views, both re-reading the
-   * full subscription list for their Git tab. Not the CLI: it lists
-   * subscriptions on demand from a slash command and has no persistent panel
-   * that could go stale.
-   */
-  githubSubscriptionsChanged: undefined;
-
-  /**
-   * The workspace agents changed. Keyless on purpose: every listener
-   * re-reads the agent list, so which agent moved carries no information.
-   *
-   * Emitted, in every process sharing the global store, when the agent
-   * catalog is reloaded after a tool switch, a plugin install or an agent
-   * file's edit (`agentCatalogFollower`, in this process or another). The
-   * settings views' agent writes emit it themselves.
-   *
-   * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list, and their launchers. Not the CLI: it reads the agent list
-   * per command and has no persistent panel that could go stale.
-   */
-  workspaceAgentsChanged: undefined;
-
-  /**
-   * The approval policy was written from a settings view (the shared
-   * settings commands' `updateStateSetting`).
-   *
-   * Consumed by: the extension's status-bar tooltip and the launchers'
-   * approval snapshot, painted outside the
-   * settings webview's round-trip. The settings views repaint their own
-   * approval snapshot inline, and the CLI repaints its session line from the
-   * `/config` form and `/approval` directly. Enforcement reads the config
-   * live, so this signal only repaints.
-   */
-  approvalPolicyChanged: undefined;
-
-  /**
-   * One or more files were written directly to the workspace. Frontends can
-   * badge or refresh those files without routing through a run-scoped channel.
-   * A run's accepted files arrive as its `documents/accepted` fact, announced
-   * in every process that folds the run (the arm's `writes`); a host's own
-   * write (an accepted diff, the progress view's Accept) emits here directly.
-   *
-   * Consumed by: extension (VS Code's `FileDecorationProvider` badges the
-   * written Explorer entries) and desktop (its file tree caches a directory
-   * listing and has no filesystem watcher, so this is the only notice it gets
-   * that a write landed behind its back). Not the CLI: it has no file tree or
-   * decoration surface — accepted paths are printed into the transcript by the
-   * tool row, which is built from the tool result and cannot go stale.
-   */
-  workspaceFilesWritten: { absolutePaths: string[] };
-}
-```
-
 ## appSignalStream
 
 `signal`'s payloads, as a stream for a host to run where it holds the
@@ -490,35 +314,6 @@ announces subscribes in its own scope first ({@link subscribeAppSignal}).
 function appSignalStream<K extends AppSignal>(
   signal: K,
 ): Stream.Stream<AppSignalPayloads[K], never, AppSignals>
-```
-
-## AppState
-
-Global application state, provided by the process's composition layer.
-SQLite hosts acquire their store in the runtime's scope over the global
-database, whose change feed reaches every process sharing it. `layer`
-serves a store a caller supplies, which has none: a reader of it sees a
-change at its next read.
-
-```ts
-class AppState extends Context.Service<AppState, AppStateStore>()(
-  '@texra-ai/harness/platform/AppState',
-)
-```
-
-## AppStateStore
-
-The global state store, and what changes in it.
-
-```ts
-interface AppStateStore extends StateStore {
-  /**
-   * Emits as subscribed, then whenever one of `keys` may have been written,
-   * by this process or by another sharing the store: a reader re-reads the
-   * keys on each. A store with no change feed emits only the first.
-   */
-  changes(keys: readonly string[]): Stream.Stream<void>;
-}
 ```
 
 ## AvailabilityResults
@@ -564,48 +359,6 @@ Why a model call failed: the vendor's verdict, or no route to send it on.
 type CallFailure = ModelError | RouteUnavailable;
 ```
 
-## ConfigProvider
-
-Platform configuration provider interface.
-
-```ts
-interface ConfigProvider {
-  /**
-   * Resolution order an implementation must honor: stored workspace value,
-   * stored global value, then the setting catalog's own default
-   * (`catalog.configDefault`); a key no row owns reads as `undefined` when
-   * absent.
-   *
-   * It is synchronous, and it casts: the value it returns is whatever the
-   * store holds. A reader that needs the value checked reads through
-   * `Settings.get`, which safe-parses the stored value against the row's
-   * schema; a hand-edited `"false"` in a
-   * boolean row is a truthy string here and silently means the opposite.
-   * Nothing may cache what either read returns: a setting the user changes
-   * mid-process is read on the next call.
-   *
-   * Keys are relative to `catalog.namespace` (`memory.enabled`), which the
-   * provider adds to every key it stores.
-   */
-  get<T>(key: string): T;
-  /**
-   * Persist one value to the target's store. The write is an `Effect` so it
-   * composes directly into the caller's program: the store's own write is an
-   * Effect, and a Promise face here could only be an injected runner that
-   * executes that Effect on the caller's behalf.
-   */
-  update<T>(
-    key: string,
-    value: T,
-    target?: ConfigTarget,
-  ): Effect.Effect<void, ConfigWriteFailed>;
-  inspect<T = unknown>(key: string): ConfigInspection<T>;
-  /** The setting rows this provider resolves against: the harness's and
-   *  its host's, built once per composition and carried with the stores. */
-  readonly catalog: SettingsCatalog;
-}
-```
-
 ## ConfiguredHook
 
 One command hook the harness runs: its event, matcher and command as the
@@ -622,29 +375,6 @@ interface ConfiguredHook {
   readonly args: readonly string[] | undefined;
   readonly timeoutSeconds: number;
 }
-```
-
-## ConfigWriteFailed
-
-A configuration write the store refused. Every implementation bottoms out in
-the same `JsonStore` as the secret and state stores, so the reasons are that
-store's: a filesystem error under the config path, or a config file whose
-contents are no longer a JSON object.
-
-{@link ConfigProvider.update} raises it as the failure of the write itself,
-so a caller inside a program composes the write rather than adopting a
-rejection it cannot type.
-
-```ts
-class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
-  'ConfigWriteFailed',
-  {
-    key: Schema.String,
-    target: Schema.Literals(['global', 'workspace', 'local']),
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-)
 ```
 
 ## ConversationFormatOptions
@@ -702,55 +432,6 @@ function createWorkspaceLocation(
 ): WorkspaceFileLocation
 ```
 
-## CurrentValues
-
-A root's current values (`current_value`): one row per family and key,
-replaced in place, outside the event history, so an event-format bump
-leaves them. Every write is one `BEGIN IMMEDIATE`;
-a value decodes with its family's schema where it is read, and a row that
-no longer decodes fails that read.
-
-```ts
-interface CurrentValues {
-  readonly get: <T>(
-    family: ValueFamily<T>,
-    key: string,
-  ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
-  /**
-   * Change the values of `keys` from the ones read under the write lock:
-   * `change` answers with its result and the next value of every key, with
-   * its result alone to write nothing, or refuses and nothing is written. A
-   * next value of `undefined` deletes the row.
-   */
-  readonly modify: <T, K extends string, A, E = never>(
-    family: ValueFamily<T>,
-    keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, T | undefined>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
-      E
-    >,
-  ) => Effect.Effect<A, E | DatabaseWriteFailed>;
-  /** Every row of a family, latest write first. */
-  readonly list: <T>(
-    family: ValueFamily<T>,
-  ) => Effect.Effect<
-    readonly { readonly key: string; readonly value: T }[],
-    DatabaseReadFailed
-  >;
-  /**
-   * Emits as subscribed, then after each value write, by this process or
-   * (on the global store) another, that changed one of `keys`' values. A
-   * read that fails is logged and retried, so no change is missed.
-   */
-  readonly changes: (
-    family: Pick<ValueFamily<unknown>, 'name'>,
-    keys: readonly string[],
-  ) => Stream.Stream<void>;
-}
-```
-
 ## CUSTOM_AGENT_DIR_KEY
 
 The custom agent directory the user configured, trimmed; empty when none is
@@ -792,21 +473,6 @@ naming why the hunks are a whole-file replacement.
 interface DiffHunks {
   readonly hunks: StructuredPatchHunk[];
   readonly timeout: string | undefined;
-}
-```
-
-## DraftBlob
-
-A string a draft stores with its row under its address (`blobAddress`):
-a media part's or a captured attachment's base64, which the row names by
-`digest`. One without `text` is already in the store and is linked to the
-row, so collection keeps it while the row lives. Never part of a
-committed row.
-
-```ts
-interface DraftBlob {
-  readonly digest: string;
-  readonly text?: string;
 }
 ```
 
@@ -900,33 +566,6 @@ own, and each handles `..` its own way on purpose.
 
 ```ts
 function getPathSegments(input: string): string[]
-```
-
-## GlobalStorageFs
-
-The cross-workspace global storage root, shared by every session of the
-process. Process-wide by construction — every host derives it from the one
-storage root it opened — so it is provided once by the process runtime
-({@link globalStorageFsLayer}) rather than per session.
-
-```ts
-class GlobalStorageFs extends Context.Service<
-  GlobalStorageFs,
-  RootedFileSystem
->()('@texra-ai/harness/platform/GlobalStorageFs')
-```
-
-## GlobalValues
-
-The global root's current values: one row per family and key, replaced in
-place by each write. A host or plugin keeps its own application state here
-under a family it declares (`ValueFamily`).
-
-```ts
-class GlobalValues extends Context.Service<
-  GlobalValues,
-  CurrentValues
->()('@texra-ai/harness/GlobalValues')
 ```
 
 ## helperCall
@@ -1225,19 +864,6 @@ type PlatformServices =
   | StateStores
   | UsageLog
   | AppSignals;
-```
-
-## PluginContext
-
-The services a step pinned from its plugins' layers (a plugin's
-`processLayer` and `sessionLayer`), erased: the harness names no plugin's
-service. A plugin's own code requires them by name, which `definePlugin`
-checks against what its layers serve, and reaches them
-only through the step that pinned the plugin, which provides this context
-to the call.
-
-```ts
-type PluginContext = Context.Context<never>;
 ```
 
 ## PluginEnv
@@ -1714,50 +1340,6 @@ function reportDiffTimeout(
 ): Effect.Effect<void>
 ```
 
-## RootedFileSystem
-
-A `FileSystem` whose paths are resolved against — and confined to — one
-root, plus the durability primitives of {@link './fsDurability'} bound to
-that same root.
-
-```ts
-interface RootedFileSystem extends FileSystem.FileSystem {
-  /**
-   * The absolute root every relative path resolves against.
-   *
-   * `undefined` only for the workspace view of a session with no folder
-   * open, where every operation fails with `BadArgument` — the typed form of
-   * the "Workspace path is not available." throw. A consumer
-   * that needs the root as a value (a glob's `cwd`) checks it and does
-   * nothing.
-   */
-  readonly root: string | undefined;
-  /** The confined absolute path of `target`, for the rare operation that
-   *  spans two roots and needs each side vouched for by its own view. */
-  readonly resolve: (
-    target: string,
-  ) => Effect.Effect<string, PlatformError.PlatformError>;
-  /**
-   * Crash-safe replace: stage, fsync, rename over the target. The target's
-   * real path is resolved first, as `write-file-atomic` does, so a symlink
-   * inside the root that points outside it is written through — the reach
-   * this operation has always had, and the reason it is documented as
-   * storage-only, never for workspace files.
-   */
-  readonly writeFileAtomic: (
-    target: string,
-    data: Uint8Array,
-  ) => Effect.Effect<void, PlatformError.PlatformError>;
-  /** Directory entries with the type of each, from one typed listing. */
-  readonly readDirectoryTyped: (
-    target: string,
-  ) => Effect.Effect<
-    ReadonlyArray<readonly [string, FileSystem.File.Type]>,
-    PlatformError.PlatformError
-  >;
-}
-```
-
 ## RouteReasoning
 
 A model's reasoning on its decided route, as data: what the bind's own
@@ -2015,90 +1597,6 @@ installed. Every read answers with the discovery issues beside the skills.
 const Skills: Readonly<{ readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, StateReadFailed, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: SkillLoadIssue[]; }, StateReadFailed, FileSystem>; }>
 ```
 
-## StateReadFailed
-
-An authoritative state read failed; absence is a successful read.
-
-```ts
-class StateReadFailed extends Schema.TaggedError<StateReadFailed>()(
-  'StateReadFailed',
-  {
-    key: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-)
-```
-
-## StateStore
-
-Application state read from its authority when the Effect executes. A read
-answers the stored JSON as `unknown`: the caller decodes it with its key's
-schema (`readState`), which also owns the default of an absent key. Updates
-finish after commit. A change that depends on current values goes through
-`modify`, never a `get` then an `update`: the settings surfaces do not
-serialize their messages, and hosts in separate processes share one store.
-
-```ts
-interface StateStore {
-  get(key: string): Effect.Effect<unknown, StateReadFailed>;
-  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
-  /**
-   * Read-modify-write of `keys` as one step at the store's authority:
-   * `change` sees their stored values and answers its result with the next
-   * value of every key (`undefined` deletes it), with its result alone to
-   * write nothing, or refuses with its own error and nothing is written.
-   */
-  modify<K extends string, A, E = never>(
-    keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, unknown>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
-      E
-    >,
-  ): Effect.Effect<A, E | StateWriteFailed>;
-}
-```
-
-## StateStores
-
-The settings stores a host opens for each project it shows.
-
-```ts
-class StateStores extends Context.Service<
-  StateStores,
-  {
-    /** The project's own settings, in its store at `storage`, held for the
-     *  caller's scope; it records which root the store serves. */
-    readonly project: (
-      storage: string,
-      workspaceRoot: string | undefined,
-    ) => Effect.Effect<AppStateStore, DatabaseOpenFailed, Scope.Scope>;
-    /** The settings every checkout of `workspaceRoot`'s repository shares. */
-    readonly repo: (
-      storage: string,
-      workspaceRoot: string | undefined,
-    ) => Effect.Effect<AppStateStore>;
-  }
->()('@texra-ai/harness/StateStores')
-```
-
-## StateWriteFailed
-
-A host or database refused an application-state write.
-
-```ts
-class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
-  'StateWriteFailed',
-  {
-    key: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-)
-```
-
 ## StorageInventory
 
 What storage maintenance found under a storage root: the workspace stores
@@ -2122,20 +1620,6 @@ interface StorageInventory {
     readonly message: string;
   }[];
 }
-```
-
-## StoredSetting
-
-A stored value classified against its row's schema. `value` is always
-schema-parsed: the stored value when it validates, the row's default when
-the key is absent. A present value that no longer validates is `invalid`
-and carries only the parse failure, never a substitute value, so a caller
-that must not read corruption as the default cannot pick one up by accident.
-
-```ts
-type StoredSetting<T = unknown> =
-  | { readonly kind: 'value'; readonly value: T }
-  | { readonly kind: 'invalid'; readonly cause: string };
 ```
 
 ## subscribeAppSignal
@@ -2195,43 +1679,6 @@ class ToolAvailability extends Context.Service<
     ) => Effect.Effect<void, never, Scope.Scope>;
   }
 >()('@texra-ai/harness/tools/ToolAvailability')
-```
-
-## ToolCatalog
-
-The process's tool catalog's identifier: what a program that reads the
-catalog requires.
-The process's tool catalog.
-
-```ts
-interface ToolCatalog {
-  readonly _: unique symbol;
-}
-```
-
-## ToolCatalogShape
-
-The process's tool catalog as a host, or a plugin's process layer,
-reads it.
-
-```ts
-interface ToolCatalogShape {
-  /** Borrow a plugin's process services for the caller's scope without
-   *  starting them; none while its layer is down. */
-  readonly processServices: (
-    plugin: string,
-  ) => Effect.Effect<Option.Option<PluginContext>, never, Scope.Scope>;
-  /** Switch a plugin that has a switch (`toggle`) on or off in the global
-   *  state store, which every process follows (`AppState.changes`); any
-   *  other id is refused loudly, and an invalid record refuses the write. */
-  readonly setEnabled: (
-    plugin: string,
-    enabled: boolean,
-  ) => Effect.Effect<void, StateReadFailed | StateWriteFailed>;
-  /** The plugin ids switched off in the global state store now; none while
-   *  no switch was written. */
-  readonly disabled: Effect.Effect<ReadonlySet<string>, StateReadFailed>;
-}
 ```
 
 ## toPosixPath
@@ -2332,18 +1779,6 @@ class ValidationModel extends Context.Service<
     };
   }
 >()('@texra-ai/harness/ValidationModel')
-```
-
-## ValueFamily
-
-One family of current values: its stored name and the schema its value
-decodes with. A change that answers `undefined` deletes the row.
-
-```ts
-interface ValueFamily<T> {
-  readonly name: string;
-  readonly schema: Schema.Codec<T, unknown>;
-}
 ```
 
 ## withFileWriteLane

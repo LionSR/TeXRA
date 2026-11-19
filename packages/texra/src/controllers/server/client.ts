@@ -58,7 +58,7 @@ import {
   type ServiceInfo,
   type TaskSummary,
 } from './protocol';
-import type { GlobalValues } from '@texra-ai/harness/host';
+import type { GlobalValues } from '@texra-ai/harness/plugins';
 import type { SocketError } from 'effect/socket/Socket';
 
 /** The procedures as a client calls them. */

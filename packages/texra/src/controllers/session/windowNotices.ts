@@ -11,8 +11,12 @@
 import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
-import { appSignalStream, type StateStore } from '@texra-ai/harness/host';
-import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
+import { appSignalStream } from '@texra-ai/harness/host';
+import {
+  Settings,
+  withLogChannel,
+  type StateStore,
+} from '@texra-ai/harness/plugins';
 import {
   decodingDefault,
   type RequestShowErrorPayload,

@@ -18,10 +18,7 @@ import {
   type SubscriptionOAuthError,
   type SubscriptionSessionStatus,
 } from '@texra-ai/llm/node';
-import {
-  ConfigWriteFailed,
-  SubscriptionPreference,
-} from '@texra-ai/harness/host';
+import { SubscriptionPreference } from '@texra-ai/harness/host';
 import {
   Cancelled,
   SUBSCRIPTION_ROUTES,
@@ -43,6 +40,7 @@ import {
   withLogChannel,
   type AppSignals,
   type SettingsStores,
+  ConfigWriteFailed,
 } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'subscriptionProviders';

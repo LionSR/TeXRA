@@ -21,12 +21,15 @@ import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   type ProcessRuntime,
   type ProcessServices,
-  type GlobalValues,
   type ScopedFork,
   scopedFork,
   withProcessServices,
 } from '@texra-ai/harness/host';
-import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
+import {
+  withLogChannel,
+  Settings,
+  type GlobalValues,
+} from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   canonicalizeWorkspaceRoot,

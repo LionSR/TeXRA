@@ -26,6 +26,8 @@ import {
   Settings,
   type StorageFs,
   emitAppSignal,
+  type AppSignal,
+  type AppSignalPayloads,
 } from '@texra-ai/harness/plugins';
 import {
   DISABLED_SKILLS_SETTING,
@@ -76,11 +78,7 @@ import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  AppSignal,
-  AppSignalPayloads,
-  ProcessServices,
-} from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsHandlers = SettingsViewInboundHandlerRegistry<

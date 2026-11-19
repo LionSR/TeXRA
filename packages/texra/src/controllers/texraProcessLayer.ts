@@ -18,12 +18,11 @@ import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 import {
   AgentDirectories,
   AgentDirectoryService,
-  AppState,
   BUNDLED_AGENTS_DIRECTORY,
   processLayer,
   type ProcessServices,
 } from '@texra-ai/harness/host';
-import { emitAppSignal, Secrets } from '@texra-ai/harness/plugins';
+import { emitAppSignal, Secrets, AppState } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
   FileSecrets,

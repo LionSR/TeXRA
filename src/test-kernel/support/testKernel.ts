@@ -42,21 +42,24 @@ import {
 import {
   AgentCatalog,
   AgentDirectories,
-  AppState,
-  GlobalStorageFs,
-  GlobalValues,
   processLayer,
-  StateStores,
   ToolAvailability,
-  ToolCatalog,
   UsageLog,
   type ProcessRuntime,
-  type StateStore,
   type ProcessServices,
   type ValidationModel,
 } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
-import { AppSignals, Secrets } from '@texra-ai/harness/plugins';
+import {
+  AppSignals,
+  Secrets,
+  AppState,
+  GlobalStorageFs,
+  GlobalValues,
+  StateStores,
+  ToolCatalog,
+  type StateStore,
+} from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
   Interactions,

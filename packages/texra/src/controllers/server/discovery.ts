@@ -28,7 +28,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@texra-ai/harness';
-import { GlobalValues } from '@texra-ai/harness/host';
+import { GlobalValues } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { TEXRA_SERVICE, type ServiceRecord } from './protocol';

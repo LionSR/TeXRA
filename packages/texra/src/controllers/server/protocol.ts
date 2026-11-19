@@ -75,7 +75,7 @@ import {
   HostAttachFrameSchema,
   WindowRpcs,
 } from './hostCalls';
-import type { ValueFamily } from '@texra-ai/harness/host';
+import type { ValueFamily } from '@texra-ai/harness/plugins';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by

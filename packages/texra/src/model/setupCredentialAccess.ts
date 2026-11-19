@@ -1,5 +1,4 @@
 import {
-  StateReadFailed,
   readModelOptions,
   type RunModelCandidate,
 } from '@texra-ai/harness/host';
@@ -10,7 +9,10 @@ import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { decideLaunchModel, modelOptionsFrom } from '@texra/model/modelOptions';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  type SettingsStores,
+  StateReadFailed,
+} from '@texra-ai/harness/plugins';
 
 /**
  * The setup assistant's launch model: the first provider setup model the

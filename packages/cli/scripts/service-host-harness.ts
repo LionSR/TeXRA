@@ -16,7 +16,7 @@ import path from 'node:path';
 
 import { Effect, Layer, Option, Predicate, Schema, Stream } from 'effect';
 
-import { GlobalValues } from '@texra-ai/harness/host';
+import { GlobalValues } from '@texra-ai/harness/plugins';
 import {
   GlobalDatabase,
   nodePlatformServices,

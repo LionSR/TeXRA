@@ -29,11 +29,15 @@ import {
   type StateKey,
 } from '@texra-ai/harness/schemas';
 
-import { Settings, logFailure } from '@texra-ai/harness/plugins';
+import {
+  Settings,
+  logFailure,
+  type StateStore,
+  type StateWriteFailed,
+} from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
-import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = decodingDefault(Schema.Boolean, false);
