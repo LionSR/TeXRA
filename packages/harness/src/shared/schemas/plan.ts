@@ -53,20 +53,6 @@ const GoalPauseSchema = Schema.Union([
   }),
 ]);
 
-/**
- * One requirement of a goal's objective as a judge that did not do the work
- * checked it: `verified` when its check showed the requirement holds,
- * `failed` when it showed it does not, `unverified` when it could not be
- * checked. `check` is what anyone can run again (a command, or a file and
- * what to look for); `observed` is what it showed.
- */
-const GoalClaimSchema = Schema.Struct({
-  requirement: Schema.String,
-  status: Schema.Literals(['verified', 'failed', 'unverified']),
-  check: Schema.String,
-  observed: Schema.String,
-});
-
 /** What every goal result carries, whatever its outcome. */
 const GOAL_RESULT_FIELDS = {
   /** The rounds the goal started, the last one included. */
@@ -77,10 +63,12 @@ const GOAL_RESULT_FIELDS = {
   spent: Schema.Finite,
   /** The latest report a round submitted; empty before the first. */
   report: Schema.String,
-  /** The latest judge's claims, one per requirement of the objective;
-   *  absent when no judge ran (no round claimed `done`, or the strategy
-   *  has no judge). */
-  claims: Schema.optionalKey(Schema.Array(GoalClaimSchema)),
+  /** What the strategy's latest judge answered, in the strategy's own
+   *  shape: the harness stores it and reads nothing in it. The default
+   *  strategy's is a list of claims, each as `claimSchema` in the module
+   *  `builtIn:goal` states. Absent when no judge ran (no round claimed
+   *  `done`, or the strategy has no judge). */
+  claims: Schema.optionalKey(Schema.Json),
 };
 
 /**

@@ -29,8 +29,8 @@ const ROUND_SCHEMA = {
   additionalProperties: false,
 };
 
-/** One claim a judge submits, per requirement (`GoalResultSchema`'s
- *  `claims`). */
+/** One claim a judge submits, per requirement. The shape is this module's
+ *  own: a script may import `claimSchema` or write another. */
 const CLAIM_SCHEMA = {
   type: 'object',
   properties: {

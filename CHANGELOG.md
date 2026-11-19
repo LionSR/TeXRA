@@ -1389,6 +1389,7 @@ All notable changes to this project will be documented in this file.
   SDK: `builtIn:goal` exports `judge(objective, { report })` and
   `claimSchema` beside `goal`, so any script can check work with a judge,
   or several, its own way; `GoalResultSchema` gains the optional `claims`
+  (the strategy's own shape, which the harness stores and does not read)
   and the `judge_failed` pause.
 - **Lean programs: `prove` and `blueprint`.** The Lean plugin registers two
   programs. `prove` completes the proofs in the `.lean` files you pass and

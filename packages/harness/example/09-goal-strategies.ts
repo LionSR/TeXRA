@@ -335,9 +335,13 @@ const program = Effect.gen(function* () {
     sent(10).includes('Pursue goal C.')
   )
     throw new Error('goal C judges did not start fresh on the report');
-  const unchecked = (c.result.claims ?? []).filter(
-    ({ status }) => status !== 'verified',
-  );
+  // The claims' shape is the strategy's, not the harness's: the reader
+  // decodes what it needs of it.
+  const unchecked = Schema.decodeUnknownSync(
+    Schema.Array(
+      Schema.Struct({ requirement: Schema.String, status: Schema.String }),
+    ),
+  )(c.result.claims ?? []).filter(({ status }) => status !== 'verified');
   console.log(
     `[09] judged strategy: ${c.result.outcome} after ${c.result.rounds} rounds and ${c.children.length - c.result.rounds} judges, spent $${c.result.spent.toFixed(6)}; for a person: ${unchecked.map(({ requirement, status }) => `${requirement} (${status})`).join(', ')}`,
   );
