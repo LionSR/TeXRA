@@ -35,7 +35,7 @@ export const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy = 'never';
 
 export function parseApprovalPolicy(input: string): ApprovalPolicy | undefined {
   const parsed = Schema.decodeUnknownResult(ApprovalPolicyInputSchema)(input);
-  return Result.isSuccess(parsed) ? parsed.success : undefined;
+  return Result.getOrUndefined(parsed);
 }
 
 /**

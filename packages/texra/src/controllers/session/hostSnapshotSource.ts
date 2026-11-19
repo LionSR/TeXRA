@@ -39,6 +39,7 @@ import {
 } from '@texra-ai/harness/host';
 import {
   Settings,
+  logFailure,
   withLogChannel,
   type AppSignals,
   type Secrets,
@@ -189,11 +190,8 @@ const keepOnFailure =
   (what: string) =>
   <R>(load: Effect.Effect<void, Error, R>): Effect.Effect<void, never, R> =>
     load.pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`The host snapshot could not read ${what}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
+      Effect.catch(
+        logFailure(CHANNEL, `The host snapshot could not read ${what}`),
       ),
     );
 
@@ -359,11 +357,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Stream.buffer({ capacity: 1, strategy: 'sliding' }),
         Stream.runForEach(() =>
           load.pipe(
-            Effect.catchDefect((defect) =>
-              Effect.logWarning('The host snapshot could not reload').pipe(
-                Effect.annotateLogs({ data: defect }),
-                withLogChannel(CHANNEL),
-              ),
+            Effect.catchDefect(
+              logFailure(CHANNEL, 'The host snapshot could not reload'),
             ),
           ),
         ),
@@ -413,11 +408,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       Stream.filter(Boolean),
       Stream.runForEach(() =>
         setOnboardingDeclined(appState, false).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning('Clearing the onboarding skip failed').pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-            ),
+          Effect.catch(
+            logFailure(CHANNEL, 'Clearing the onboarding skip failed'),
           ),
         ),
       ),

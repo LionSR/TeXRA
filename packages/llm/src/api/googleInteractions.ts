@@ -225,7 +225,7 @@ const INVALID_KEY_REASON = '"API_KEY_INVALID"';
 function sdkFailure(cause: unknown): ModelError {
   // The pinned Interactions SDK does not export its HTTP error constructors.
   const decoded = Schema.decodeUnknownResult(HttpFailureSchema)(cause);
-  const http = Result.isSuccess(decoded) ? decoded.success : undefined;
+  const http = Result.getOrUndefined(decoded);
   return sdkModelError(
     cause,
     http && {

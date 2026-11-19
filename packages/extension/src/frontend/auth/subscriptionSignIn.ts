@@ -11,7 +11,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import {
   subscriptionProvider,
   type SubscriptionAccount,
@@ -35,10 +35,9 @@ function vscodePresenter(
   return {
     presentDeviceCode: Effect.fn('presentDeviceCode')(
       function* (prompt) {
-        const copied = yield* Effect.tryPromise({
-          try: () => vscode.env.clipboard.writeText(prompt.userCode),
-          catch: (cause) => hostFailed('clipboard.writeText', cause),
-        }).pipe(
+        const copied = yield* fromHost('clipboard.writeText', () =>
+          vscode.env.clipboard.writeText(prompt.userCode),
+        ).pipe(
           Effect.as(true),
           Effect.catch((error) =>
             Effect.logWarning(
@@ -80,10 +79,9 @@ function vscodePresenter(
           { modal: true, items: [OPEN_DEFAULT_BROWSER, COPY_SIGN_IN_LINK] },
         );
         if (choice === COPY_SIGN_IN_LINK) {
-          yield* Effect.tryPromise({
-            try: () => vscode.env.clipboard.writeText(url),
-            catch: (cause) => hostFailed('clipboard.writeText', cause),
-          });
+          yield* fromHost('clipboard.writeText', () =>
+            vscode.env.clipboard.writeText(url),
+          );
           yield* showLoggedInfoMessage(
             `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
           );

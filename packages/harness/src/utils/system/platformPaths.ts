@@ -28,6 +28,11 @@ export function existsAtAbsolute(target: string): boolean {
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
 
+/** An environment variable's name as the platform compares it: Windows
+ *  matches names case-insensitively (`Path` is `PATH`), POSIX exactly. */
+export const envNameKey = (name: string): string =>
+  IS_WINDOWS ? name.toUpperCase() : name;
+
 /**
  * The directories an app adds to the PATH a command runs and resolves on:
  * the package-manager and tool installs a GUI-launched process may lack.

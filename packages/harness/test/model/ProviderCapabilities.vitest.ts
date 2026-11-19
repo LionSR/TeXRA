@@ -21,7 +21,7 @@ const CODEX_INPUT_LIMIT = 272_000;
 /** The config a model runs with on the ChatGPT subscription on `host`. */
 const chatgptConfig = (host: HostRecord, config: ModelConfig) =>
   readModelSettings(host.roots).pipe(
-    Effect.provide(Secrets.layer(host.secrets)),
+    Effect.provide(Secrets.layer(host.secrets, host.app.client)),
     Effect.map((settings) =>
       routeConfig(
         config,

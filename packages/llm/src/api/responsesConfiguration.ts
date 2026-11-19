@@ -55,6 +55,7 @@ function vendorRoute(
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
     requestDialect: 'compatible',
+    toolNamespace: null,
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
       temperature: fields.temperature,
@@ -100,6 +101,7 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       // OpenAI documents no `tool_choice` for a namespaced function.
       supportsForcedToolChoice: false,
       requestDialect: 'chatgpt',
+      toolNamespace: spec.client.id,
       defaults: {
         maxOutputTokens: null,
         temperature: null,
@@ -123,6 +125,7 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
     continuationInheritsInstructions: xai,
     supportsForcedToolChoice: true,
     requestDialect: 'openai',
+    toolNamespace: null,
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
       temperature: controls.temperature,

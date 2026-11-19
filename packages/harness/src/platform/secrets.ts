@@ -9,7 +9,7 @@
 import { Context, Effect, Layer } from 'effect';
 import { AppSignals } from '@platform/appSignals';
 import type { CredentialStore, SecretsFailed } from '@texra-ai/llm';
-import { SubscriptionAccounts } from '@texra-ai/llm/node';
+import { type ClientIdentity, SubscriptionAccounts } from '@texra-ai/llm/node';
 
 /**
  * Provider for secure secret storage (API keys, tokens).
@@ -58,8 +58,9 @@ export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
 ) {
   static layer(
     secrets: PlatformSecrets,
+    client: ClientIdentity,
   ): Layer.Layer<Secrets | SubscriptionAccounts> {
-    return withAccounts(Layer.succeed(Secrets)(secrets));
+    return withAccounts(Layer.succeed(Secrets)(secrets), client);
   }
 
   /**
@@ -69,6 +70,7 @@ export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
    */
   static announcing(
     make: (announce: (key: string) => void) => PlatformSecrets,
+    client: ClientIdentity,
   ): Layer.Layer<Secrets | SubscriptionAccounts, never, AppSignals> {
     return withAccounts(
       Layer.effect(
@@ -77,15 +79,20 @@ export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
           make((key) => signals.emit('credentialChanged', { key })),
         ),
       ),
+      client,
     );
   }
 }
 
-/** `store` and the subscription accounts over the store it serves. */
+/** `store` and the subscription accounts over the store it serves, signing
+ *  in as `client`, the app the process runs (llm names none of its own). */
 const withAccounts = <R>(
   store: Layer.Layer<Secrets, never, R>,
+  client: ClientIdentity,
 ): Layer.Layer<Secrets | SubscriptionAccounts, never, R> =>
   Layer.effect(
     SubscriptionAccounts,
-    Effect.flatMap(Secrets, SubscriptionAccounts.make),
+    Effect.flatMap(Secrets, (secrets) =>
+      SubscriptionAccounts.make(secrets, client),
+    ),
   ).pipe(Layer.provideMerge(store));

@@ -171,7 +171,7 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
     context.storageRoot,
     options.startsService === true,
   ).pipe(Scope.provide(scope), Effect.result);
-  const link = Result.isSuccess(service) ? service.success : undefined;
+  const link = Result.getOrUndefined(service);
   // One process, one project: the process roots are the `--cwd` workspace,
   // over the config provider the startup read already opened — the project
   // `.texra/config.json` layered over the user-level

@@ -23,6 +23,7 @@ import {
 import type { Plugin } from '@tools/plugins';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { SecretsFailed } from '@texra-ai/llm';
+import type { ClientIdentity } from '@texra-ai/llm/node';
 
 // The worker's temp home and the directories made in it, kept on the
 // global object so a suite that resets its module registry finds them.
@@ -102,6 +103,8 @@ function fakeGlobalStorage(): string {
  */
 export interface TestApp {
   readonly settings: SettingsCatalog;
+  /** The app its process signs in and sends model requests as. */
+  readonly client: ClientIdentity;
   /** The plugins its process runs, made when the process builds. */
   readonly plugins: () => readonly Plugin[];
 }
@@ -114,6 +117,7 @@ export const HARNESS_APP: TestApp = Object.freeze({
     rows: [],
     curatedModels: ['openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5-5'],
   }),
+  client: Object.freeze({ name: 'Test app', id: 'test-app' }),
   plugins: () => harnessBuiltins,
 });
 

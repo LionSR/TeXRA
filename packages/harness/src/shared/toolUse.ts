@@ -6,7 +6,7 @@
 // runtime tool status. This module is the single entry point for that
 // derivation so hosts don't drift.
 
-import { Number as Num, Predicate } from 'effect';
+import { Number as Num, Predicate, Record as EffectRecord } from 'effect';
 
 import type {
   FinishedToolResult,
@@ -46,10 +46,9 @@ export function resultFields(
 function storedOutput(result: FinishedToolResult): unknown {
   if (result.status === 'executed' && result.output !== undefined)
     return result.output;
-  return Object.fromEntries(
-    Object.entries(resultFields(result)).filter(
-      ([field]) => !TOOL_RESULT_METADATA_FIELDS.has(field),
-    ),
+  return EffectRecord.filter(
+    resultFields(result),
+    (_, field) => !TOOL_RESULT_METADATA_FIELDS.has(field),
   );
 }
 

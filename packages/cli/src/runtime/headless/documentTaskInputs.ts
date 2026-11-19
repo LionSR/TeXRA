@@ -3,7 +3,7 @@ import { text as streamText } from 'node:stream/consumers';
 import { Effect, FileSystem } from 'effect';
 
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import {
   resolveTaskFiles,
   type TaskFileRole,
@@ -50,11 +50,10 @@ function isStdinSpec(spec: string): boolean {
   return spec.trim() === STDIN_INPUT_TOKEN;
 }
 
-const readProcessStdinText = Effect.tryPromise({
-  // With an encoding set the chunks are strings, so a leading BOM is kept.
-  try: () => streamText(process.stdin.setEncoding('utf8')),
-  catch: (cause) => hostFailed('process.stdin', cause),
-});
+// With an encoding set the chunks are strings, so a leading BOM is kept.
+const readProcessStdinText = fromHost('process.stdin', () =>
+  streamText(process.stdin.setEncoding('utf8')),
+);
 
 export function hasMixedStdinDocumentTaskInputSpecs(
   inputSpecs: readonly string[],

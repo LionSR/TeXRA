@@ -9,7 +9,7 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream } from 'effect';
-import { isLive, type RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import type {
   RunView,
@@ -102,16 +102,4 @@ export function resumableRunId(run: RunView | undefined): RunId | undefined {
  *  session view's label below it. */
 export function runLabelOf(run: RunView): string {
   return run.parentId === null ? 'main' : run.label;
-}
-
-/** The direct children of `run` that are live (`isLive`), as the status
- *  bar and `/status` count them. */
-export function runningChildCount(
-  view: SessionView,
-  run: RunView | undefined,
-): number {
-  return (run?.childIds ?? []).filter((id) => {
-    const child = view.runs.get(id);
-    return child !== undefined && isLive(child);
-  }).length;
 }

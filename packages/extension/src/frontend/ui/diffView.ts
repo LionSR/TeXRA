@@ -1,7 +1,7 @@
 import { Effect, Stream } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
 
@@ -43,10 +43,11 @@ export function refreshDiffOnLayoutChange(
     ),
     // Nothing joins this fiber: a listener VS Code would not register is
     // logged here, and the comparison stays as it opened.
-    Effect.catchDefect((defect) =>
-      Effect.logWarning(
+    Effect.catchDefect(
+      logFailure(
+        CHANNEL,
         'Could not register the diff refresh; the comparison will not follow editor moves.',
-      ).pipe(Effect.annotateLogs({ data: defect })),
+      ),
     ),
     withLogChannel(CHANNEL),
   );

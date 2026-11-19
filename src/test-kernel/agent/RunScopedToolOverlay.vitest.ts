@@ -46,6 +46,7 @@ import { toolTable } from '@tools/toolTable';
 import { testLaunch } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
 import { AppSignals, Secrets, type ITool } from '@texra-ai/harness/plugins';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 function tool(name: string): ITool {
   return {
@@ -101,7 +102,7 @@ function runLayer(
     Layer.provideMerge(Layer.succeedContext(session)),
     Layer.provideMerge(noHttpClientLayer),
     // No key is read: every launch here binds the validation model.
-    Layer.provideMerge(Secrets.layer(new FakeSecrets())),
+    Layer.provideMerge(Secrets.layer(new FakeSecrets(), HARNESS_APP.client)),
     Layer.provideMerge(
       pluginCatalogLayer(
         toolTable(texraPlugins({ name: 'vscode' })),

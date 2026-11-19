@@ -20,10 +20,10 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { statusGlyph, type StatusLook } from '@ui/copy/runStatus';
+import { statusGlyph } from '@ui/copy/runStatus';
 import {
   SCRIPT_CALL_STATUS_LABEL,
-  SCRIPT_CALL_STATUS_LOOK,
+  scriptCallLook,
   scriptCallSummary,
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
@@ -247,10 +247,7 @@ export class ScriptStage extends LitElement {
       child === undefined
         ? undefined
         : this.surface.runs.get(child.id)?.rejected;
-    // A call waiting on the user reads as a run waiting on the user does.
-    const look: StatusLook = call.needsYou
-      ? { tone: 'warning' }
-      : SCRIPT_CALL_STATUS_LOOK[call.status];
+    const look = scriptCallLook(call);
     return html`<div
       class=${classMap({
         row: true,

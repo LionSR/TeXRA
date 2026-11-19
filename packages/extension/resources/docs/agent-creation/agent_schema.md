@@ -36,11 +36,9 @@ reader for the old nested `settings:` / `prompts:` format.
 - `temperature` is optional, between 0 and 1, and defaults to 1.0. There is
   no `model` field; the model is chosen at launch.
 - `tools` is optional. An agent with no tools works text-only.
-- `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` works for model-specific
-  instructions. It is the only model gate: there is no variable for any other
-  provider, and an invented one renders as false. It is rendered once, for
-  the model the chat starts on; TeXRA's own model-specific guidance follows
-  a model switch on its own, so an agent rarely needs it.
+- There is no model variable: the prompt is rendered once, for whichever
+  model the chat starts on, and an invented variable renders as false.
+  TeXRA's own model-specific guidance follows a model switch on its own.
 - Agent names: lowercase with underscores or dashes.
 
 ## Choosing tools

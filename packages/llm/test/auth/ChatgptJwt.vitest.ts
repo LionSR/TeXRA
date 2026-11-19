@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import { chatgptPolicy } from '../../src/oauth/chatgpt/chatgptProvider.js';
 
 /** An access token the claim decoder reads as carrying no claims. */
 const OPAQUE_ACCESS_TOKEN = 'opaque-access-token';
@@ -14,7 +14,10 @@ function storedClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
 ) {
-  const { accountId, email, planType } = CHATGPT_POLICY.buildSession(
+  const { accountId, email, planType } = chatgptPolicy({
+    name: 'Synthetic',
+    id: 'synthetic',
+  }).buildSession(
     {
       access_token: accessToken ?? OPAQUE_ACCESS_TOKEN,
       id_token: idToken,

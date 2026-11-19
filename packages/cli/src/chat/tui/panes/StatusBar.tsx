@@ -22,11 +22,9 @@ import {
 import {
   killableRunId,
   resumableRunId,
-  runningChildCount,
   runViewOf,
   sessionView,
 } from '../state/sessionView';
-import { resolveChildListTarget } from '../state/childControls';
 import { canStopRootRun as canStopRootRunSignal } from '../state/sessionRunState';
 import { attentionRequests as attentionRequestsSignal } from '../state/approvalQueue';
 import { modelConnectionNeeded as modelConnectionNeededSignal } from '../modelConnection';
@@ -222,10 +220,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         ? { kind: 'message', text: 'No model connected · /login' }
         : undefined),
     commandName: props.commandName,
-    runningSessions: runningChildCount(
-      view,
-      runViewOf(view, resolveChildListTarget(view, activeRunId)),
-    ),
     approvalDepth: attention.length,
     approvalKind: approvalQueueStatusKind(
       attention.map((request) => request.payload.kind),

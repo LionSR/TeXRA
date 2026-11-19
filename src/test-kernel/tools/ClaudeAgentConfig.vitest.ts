@@ -8,6 +8,7 @@ import { Secrets } from '@texra-ai/harness/plugins';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { buildClaudeAgentEnv } from '@texra/tools/agentCli/claudeAgentConfig';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 /** Build the env over a stored managed API key, with no keychain
  *  credential: every `security` probe exits 1. */
@@ -19,6 +20,7 @@ function buildEnv(): Promise<NodeJS.ProcessEnv> {
         Layer.mergeAll(
           Secrets.layer(
             new FakeSecrets({ [apiKeySecretName('anthropic')]: 'from-secret' }),
+            HARNESS_APP.client,
           ),
           // The live env provider, so the suite's `vi.stubEnv` still governs
           // the API-key fallback read through `envVar`.

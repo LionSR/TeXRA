@@ -10,9 +10,10 @@
 
 What an embedder needs to know, in order:
 
-1. `Sessions.layer({ platform, plugins })` builds the process. `platform`
-   comes from `nodePlatform()` in `./node`; `plugins` is `harnessBuiltins`
-   from `./plugins`, plus any plugin of your own.
+1. `Sessions.layer({ platform, plugins, client })` builds the process.
+   `platform` comes from `nodePlatform()` in `./node`; `plugins` is
+   `harnessBuiltins` from `./plugins`, plus any plugin of your own;
+   `client` names your app to the model providers (`{ name, id }`).
 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
 3. `session.start({ agent, instruction })` gives a {@link Run}: read
    `run.events` for its progress (`run.events.pipe(responseText)` for
@@ -87,14 +88,18 @@ type ApprovalHandler = (
 ## Composition
 
 What an embedder composes the process from: its platform, its plugins
-(the harness's built-ins among them) and its skill sources, without
-which it discovers no skills. The setting rows its plugins read travel
-with the platform's config (`ConfigProvider.catalog`).
+(the harness's built-ins among them), the app it is, and its skill
+sources, without which it discovers no skills. The setting rows its
+plugins read travel with the platform's config (`ConfigProvider.catalog`).
 
 ```ts
 interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  /** The app the process signs in and sends model requests as: OpenAI shows
+   *  its `name` for a ChatGPT sign-in, and its `id` attributes a Grok
+   *  sign-in and namespaces a ChatGPT plan's tools. */
+  readonly client: ClientIdentity;
   readonly skills?: HostSkillOptions;
 }
 ```
