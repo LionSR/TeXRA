@@ -179,7 +179,9 @@ export interface CurrentValues {
   /**
    * Emits as subscribed, then after each value write, by this process or
    * (on the global store) another, that changed one of `keys`' values. A
-   * read that fails is logged and retried, so no change is missed.
+   * read of them that fails is logged and retried for about a minute, then
+   * emits as a change would: no change is missed, and the reader's own read
+   * meets the failure.
    */
   readonly changes: (
     family: Pick<ValueFamily<unknown>, 'name'>,

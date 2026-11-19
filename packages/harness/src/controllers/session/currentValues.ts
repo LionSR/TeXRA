@@ -45,13 +45,40 @@ const VALUE_KIND = JSON.stringify([
   [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION],
 ]);
 
-/** A failed change read's backoff (this feed's and the store's change
- *  poll): 250 ms doubling, at most 30 s. */
-export const READ_RETRY = Schedule.exponential('250 millis').pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+/** A failed change read's backoff: 250 ms doubling, at most 30 s, eight
+ *  times, so it ends after about a minute. */
+const READ_RETRY = {
+  schedule: Schedule.exponential('250 millis').pipe(
+    Schedule.modifyDelay(({ duration }) =>
+      Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+    ),
   ),
-);
+  times: 8,
+};
+
+/**
+ * A read that tells whether something changed (this module's feed, and the
+ * global store's poll for another process's commit), as a value to compare
+ * with the read before it. One that fails is logged and read again on
+ * {@link READ_RETRY}. When the retries end it answers a value equal to no
+ * other: the change it could not rule out is reported, and the reader's
+ * own read of the store then succeeds or fails where that reader handles
+ * it. So a change is never missed and the wait for one always ends.
+ */
+export const changeRead = <E>(
+  read: Effect.Effect<unknown, E>,
+  failed: string,
+): Effect.Effect<unknown> =>
+  read.pipe(
+    Effect.tapError(logFailure('sessionDatabase', `${failed}; retrying.`)),
+    Effect.retry(READ_RETRY),
+    Effect.catch((error) =>
+      logFailure(
+        'sessionDatabase',
+        `${failed} after ${READ_RETRY.times} retries; reporting a change.`,
+      )(error).pipe(Effect.as(Symbol('unread'))),
+    ),
+  );
 
 const decodeString = Schema.decodeUnknownSync(Schema.String);
 
@@ -183,22 +210,16 @@ export function currentValues(
           ),
         ),
       ),
-    /** Each wake reads the keys' rows, and only a changed snapshot emits. A
-     *  failed read is logged and read again, holding the wake until it
-     *  reads (the database poll's own backoff), so no change is missed. */
+    /** Each wake reads the keys' rows, and only a changed snapshot emits; a
+     *  snapshot that cannot be read emits ({@link changeRead}). */
     changes: (family, keys) =>
       SubscriptionRef.changes(written).pipe(
         Stream.mapEffect(() =>
-          execOne(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
-            Effect.map((row) => row?.snapshot),
-            Effect.tapError(
-              logFailure(
-                'sessionDatabase',
-                `Could not read whether ${keys.join(', ')} changed; retrying.`,
-              ),
+          changeRead(
+            execOne(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
+              Effect.map((row) => row?.snapshot),
             ),
-            Effect.retry(READ_RETRY),
-            Effect.orDie,
+            `Could not read whether ${keys.join(', ')} changed`,
           ),
         ),
         Stream.changes,

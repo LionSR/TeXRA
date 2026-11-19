@@ -142,7 +142,7 @@ export const followPendingRequests = Effect.fn('followPendingRequests')(
  * record is recorded again on {@link DECIDE_RETRY}, for as long as the view
  * lists the request (one decided meanwhile, by a grant or another surface,
  * leaves the view, which ends the retries); when the retries end it is
- * logged as an error and the request stays open, to be decided by another
+ * logged and the request stays open, to be decided by another
  * surface or ended with its run. A handler still deciding a request that
  * left the view is interrupted.
  */

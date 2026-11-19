@@ -18,7 +18,6 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { logFailure } from '@logger/effectLog';
 import {
   DatabaseOpenFailed,
   GlobalDatabase,
@@ -26,7 +25,7 @@ import {
   InputHistoryRecordSchema,
 } from '@shared/session/database';
 import { ensureError } from '@utils/errors/errorMessage';
-import { currentValues, READ_RETRY } from './currentValues';
+import { changeRead, currentValues } from './currentValues';
 import { SESSION_DATABASE_FILE, storeFile } from './databaseLayer';
 import { mapDatabaseFailure } from './storeAside';
 import { storeConnection } from './storeConnection';
@@ -78,20 +77,15 @@ export const globalDatabaseLayer = (
        *  another's: what `values.changes` wakes on. */
       const written = yield* SubscriptionRef.make(0);
       // Each change of `data_version` is another process's commit (the first
-      // read, at start, wakes the readers for nothing). A failed read logs
-      // and retries.
+      // read, at start, wakes the readers for nothing). A version that
+      // cannot be read wakes them too (`changeRead`).
       yield* Effect.forkScoped(
         Stream.fromEffectSchedule(
-          query(execOne('PRAGMA data_version', [])).pipe(
-            Effect.map((row) => row?.data_version),
-            Effect.tapError(
-              logFailure(
-                'sessionDatabase',
-                'The global store change poll failed; retrying.',
-              ),
+          changeRead(
+            query(execOne('PRAGMA data_version', [])).pipe(
+              Effect.map((row) => row?.data_version),
             ),
-            Effect.retry(READ_RETRY),
-            Effect.orDie,
+            'The global store change poll failed',
           ),
           Schedule.spaced('250 millis'),
         ).pipe(
