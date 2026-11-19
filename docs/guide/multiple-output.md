@@ -26,11 +26,11 @@ per-file artifacts:
 <CliRunHero
   command="texra run edit --input chapter1.tex --input chapter2.tex --instruction 'Polish the prose' --output-dir polished"
   :rounds="[
-    { label: 'r0: draft revision', state: 'done' },
-    { label: 'r1: review and correct', state: 'done' },
+    { label: 'Revision 1: draft', state: 'done' },
+    { label: 'Revision 2: review and correct', state: 'done' },
   ]"
-  :outputs="['polished/chapter1.tex', 'polished/chapter2.tex']"
-  note="One copied path per output: relative document paths are preserved under the directory."
+  :outputs="['…/polished/chapter1.tex', '…/polished/chapter2.tex']"
+  note="One full copied path per output: relative document paths are preserved under the directory."
 />
 
 _(Read the [file management guide](./file-management.md) for general UI controls.)_
@@ -58,12 +58,12 @@ This is the part that matters for generating multiple distinct files:
    </documents>
    ```
 
-3. **TeXRA extracts:** The TeXRA backend parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the expected output filenames.
-4. **Files saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the response does not include a `<document>` tag with a name matching an expected filename, that file is not created or updated.
+3. **TeXRA extracts:** TeXRA reads each `<document>` block of the reply and saves its content in the revision folder under the block's `name`.
+4. **Missing files are reported:** If the reply has no `<document>` block named for an expected output filename, that file is not written for the revision and the run reports it as missing. With `--output-dir`, the command copies the files it has and then fails, naming the missing ones. A block with a name nobody expected is saved under that name as well.
 
 <MultiOutputMatchHero />
 
-<p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is matched by name against the expected output filenames. Matches are saved; a block with no matching name is skipped.</p>
+<p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is saved under its name and checked against the expected output filenames. An expected file with no block is reported as missing; a block with an unexpected name is saved as an extra file.</p>
 
 ## Next steps
 
