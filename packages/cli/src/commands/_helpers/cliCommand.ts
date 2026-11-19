@@ -215,11 +215,11 @@ function rejectHeadlessOnlyFlags(
  * the parse has finished: it builds the command's runtime, runs its program
  * there and disposes it, outside any fiber of the parse.
  */
-export type CliLaunch = () => Promise<number>;
+type CliLaunch = () => Promise<number>;
 
 /** Where a command's handler leaves its launch, or the exit code of a
  *  command that finished in the parse; the parse answers it. */
-export class CliSelection extends Context.Service<
+class CliSelection extends Context.Service<
   CliSelection,
   Ref.Ref<CliLaunch | number>
 >()('@texra-ai/cli/CliSelection') {}
@@ -235,7 +235,7 @@ export const selectExitCode = (code: number) =>
  * pair and the teardown it owns, so it mounts after the program has finished
  * rather than inside a fiber of the runtime it outlives.
  */
-export type CliCommandOutcome = number | void | { readonly chat: RunChatInit };
+type CliCommandOutcome = number | void | { readonly chat: RunChatInit };
 
 /** The services a command's runtime serves by default. */
 type CliRuntimeServices = CliServices | CliPlatform;
