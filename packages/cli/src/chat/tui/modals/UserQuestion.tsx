@@ -3,7 +3,6 @@ import { Box, Text, useWindowSize } from 'ink';
 
 import {
   parseUserQuestionAnswer,
-  USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from '@cli/runtime/headless/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
@@ -440,7 +439,7 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   const question = questions[index];
 
   function cancel(): void {
-    onDecide({ action: 'skip', feedback: USER_QUESTION_SKIPPED_FEEDBACK });
+    onDecide({ action: 'skip' });
   }
 
   function submitAnswer(answer: string | string[] | undefined): void {
