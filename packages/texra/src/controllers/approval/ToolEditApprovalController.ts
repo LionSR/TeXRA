@@ -206,13 +206,17 @@ const BOM = '\uFEFF';
  * The proposed copy as the user left it, in the proposal's own form: a host
  * reads its copy back with CRLF line ends, and without the leading BOM its
  * file holds (an editor buffer's text and a decoded file string both drop
- * it), so the approved content would lose a BOM the file had.
+ * it), so the approved content would lose a BOM the file had. A copy the
+ * user emptied stays empty: only a proposal that was the BOM alone reads
+ * back as nothing with its BOM still wanted.
  */
 function readBack(preview: ToolEditPreview, proposal: string) {
   return preview.readProposedContent().pipe(
     Effect.map((text) => {
       const content = text.replaceAll('\r\n', '\n');
-      return proposal.startsWith(BOM) && !content.startsWith(BOM)
+      return proposal.startsWith(BOM) &&
+        !content.startsWith(BOM) &&
+        (content !== '' || proposal === BOM)
         ? BOM + content
         : content;
     }),

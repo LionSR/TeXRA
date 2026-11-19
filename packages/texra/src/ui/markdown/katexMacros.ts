@@ -4,7 +4,7 @@
  * Based on patterns from packages/texra/src/replacement/maxRules.ts
  */
 
-export const katexMacros = {
+export const katexMacros = Object.freeze({
   // Calculus shortcuts
   '\\der': '\\partial',
   '\\na': '\\nabla',
@@ -358,4 +358,4 @@ export const katexMacros = {
     context.consumeArg();
     return '';
   },
-};
+});

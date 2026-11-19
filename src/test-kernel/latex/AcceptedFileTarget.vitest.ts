@@ -76,8 +76,12 @@ describe('acceptEditedFileReplace', () => {
         expect(Option.getOrUndefined(accepted)).toBe('new');
         const link = yield* Effect.promise(() => nodeFs.lstat(base));
         expect(link.isSymbolicLink()).toBe(true);
-        const target = yield* Effect.promise(() => nodeFs.stat(shared));
-        expect(target.mode & 0o777).toBe(0o640);
+        // Windows keeps no POSIX mode: `chmod` there only sets the read-only
+        // bit and `stat` reports 0o666 for any writable file.
+        if (process.platform !== 'win32') {
+          const target = yield* Effect.promise(() => nodeFs.stat(shared));
+          expect(target.mode & 0o777).toBe(0o640);
+        }
         expect(
           yield* Effect.promise(() => nodeFs.readFile(shared, 'utf8')),
         ).toBe('new');
