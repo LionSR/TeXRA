@@ -318,16 +318,14 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
 }
 
 /**
- * Development and CI (`TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT`, or under
- * Vitest): read the run back from the store and die, before the prepared
- * turn `sent` goes to the provider, unless its rows rebuild it exactly.
+ * When `TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT` is on (the CLI validation
+ * scripts set it, and the Vitest config sets it for the test suites): read
+ * the run back from the store and die, before the prepared turn `sent` goes
+ * to the provider, unless its rows rebuild it exactly.
  */
 export const checkRecordedRequest = Effect.fn('recordedRequest.check')(
   function* (run: Pick<AgentRunShape, 'runId'>, sent: ResolvedTurn) {
-    const on =
-      (yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT')) ||
-      (yield* envFlag('VITEST'));
-    if (!on) return;
+    if (!(yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT'))) return;
     const runHistory = yield* RunHistory;
     const state = yield* Effect.orDie(runHistory.load(run.runId));
     const problem = Result.merge(
