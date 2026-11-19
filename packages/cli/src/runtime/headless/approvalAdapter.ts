@@ -177,8 +177,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
         // A dismissed retry is the operator stopping the task, not a policy
         // refusal; the note they left goes to stderr beside it.
         const note =
-          (decision.action === 'reject' ? decision.feedback : decision.cause) ??
-          undefined;
+          decision.action === 'reject' ? decision.feedback : decision.cause;
         writeTextStderr(note ? `${summary}\n${note}` : summary);
         return declineDecision('retry', note);
       }

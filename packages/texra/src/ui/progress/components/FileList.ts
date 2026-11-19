@@ -299,9 +299,7 @@ export class FileList extends LitElement {
 
   private openFile(path: string): void {
     if (this.runId === null) return;
-    this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'openFile', path, line: null }),
-    );
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'openFile', path }));
   }
 
   private fileAction(action: typeof FileActionSchema.Type, file: string): void {

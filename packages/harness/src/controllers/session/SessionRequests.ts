@@ -386,7 +386,7 @@ export function sessionRequests(
           from: { kind: 'user' },
         },
         {
-          hold: req.holdUntil ?? undefined,
+          hold: req.holdUntil,
           prepare,
           apiKeys: req.apiKeys,
           ...(skills.length > 0 && { skills }),

@@ -142,11 +142,11 @@ export interface HostRunActions {
     operation: 'pack' | 'clean',
   ): Effect.Effect<void, RequestError | Unavailable>;
   /** A new task holding the run's conversation up to `at` (its latest
-   *  finished point when null), continued here so it takes a message: the
-   *  fork's id. */
+   *  finished point when absent), continued here so it takes a message:
+   *  the fork's id. */
   fork(
     runId: RunId,
-    at: number | null,
+    at: number | undefined,
   ): Effect.Effect<RunId, RequestRefusal, ProcessServices>;
   /** Send `text` to the conversation that launched `runId` (the chat that
    *  called a document task), past any background script it ran under; a

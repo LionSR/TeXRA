@@ -76,17 +76,11 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     case 'skip':
     case 'reject':
       return executed(
-        withDetail(
-          'The user declined to answer',
-          decision.feedback ?? undefined,
-        ),
+        withDetail('The user declined to answer', decision.feedback),
       );
     case 'cancel':
       return executed(
-        withDetail(
-          'The user question was cancelled',
-          decision.cause ?? undefined,
-        ),
+        withDetail('The user question was cancelled', decision.cause),
       );
     case 'deny':
       return executed(

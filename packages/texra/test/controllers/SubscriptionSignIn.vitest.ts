@@ -40,7 +40,7 @@ describe('subscription sign-in', () => {
           }).pipe(
             Effect.map(() => {
               transports.push('device');
-              return { email: 'person@example.com', accountId: null };
+              return { email: 'person@example.com' };
             }),
           ),
       };

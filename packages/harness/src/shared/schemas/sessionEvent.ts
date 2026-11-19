@@ -19,7 +19,7 @@
  */
 import { Schema, Struct, Tuple } from 'effect';
 
-import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
+import { ApprovalGrantsSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
   aggregateTarget,
@@ -187,7 +187,7 @@ const RunStartEventSchema = durable('run.start', {
   /** The run's approval grants at launch, from the session's single
    *  authority. The name is `grants`, the fact it holds: the project's
    *  `approvalPolicy` setting is a separate owner. */
-  grants: ApprovalPolicySnapshotSchema,
+  grants: ApprovalGrantsSchema,
 });
 
 /** The run directories to remove with this lifecycle, derived by the database. */
@@ -293,7 +293,7 @@ const DisplayRowDraftSchema = Schema.Union([
     requestId: Schema.NonEmptyString,
     decision: RequestDecisionSchema,
   }),
-  durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
+  durable('approval.policy', { snapshot: ApprovalGrantsSchema }),
   /**
    * The loop's position: `at`, and its coordinates. The one run-history
    * row renderers read: the fold derives the live phase from it (`waiting`

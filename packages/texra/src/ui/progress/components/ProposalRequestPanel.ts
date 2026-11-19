@@ -368,9 +368,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   };
 
   private openFile(path: string): void {
-    this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'openFile', path, line: null }),
-    );
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'openFile', path }));
   }
 
   // Keyboard activation parity for the clickable file-name spans (Enter/Space),

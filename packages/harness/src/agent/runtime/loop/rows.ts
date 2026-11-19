@@ -51,7 +51,8 @@ export const finalizedRows = (
   ];
 };
 
-/** Where the loop stands; a run's first one opens it. */
+/** Where the loop stands; a run's first one opens it. How a run ended is
+ *  its `run.end` row's. */
 export function positionRow(
   runId: RunId,
   state: Pick<RunState, 'turn'>,

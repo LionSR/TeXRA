@@ -40,11 +40,11 @@ export const resumeRun = (
   );
 
 /** A new task holding `runId`'s conversation up to `at` (its latest finished
- *  point when null): the fork's id, or the refusal that says why not. */
+ *  point when absent): the fork's id, or the refusal that says why not. */
 export const forkRun = (
   session: Session,
   runId: RunId,
-  at: number | null,
+  at?: number,
 ): Effect.Effect<RunId, RequestRefusal> =>
   session.request({ kind: 'run.fork', runId, at }).pipe(
     Effect.mapError((error): RequestRefusal =>

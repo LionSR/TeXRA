@@ -29,6 +29,9 @@ Landed: `outcome` and its filter are gone, `positionRow` is one signature,
 and `run.position` is v7 (an earlier build's `turn.end` carries `outcome` and
 its check requires it, so it reads as `DatabaseRowEarlier`).
 
+Landed 2026-11-19: no `outcome`, no filter, one `positionRow` signature
+(`run.position` v7).
+
 ## 2. `run.start.approvalPolicy` and `worktree` are optional and nullable
 
 `packages/harness/src/shared/schemas/sessionEvent.ts`. The one producer
@@ -48,6 +51,9 @@ Landed: the stored key is `grants`, the fact it holds (the project's
 `packages/cli/scripts/validate-run.mjs` now reads `$.grants.limit`. Every
 producer (`runFacts.registrationDrafts`, `rowReader`, the fixtures and the
 design/CLI harnesses) and both readers name it `grants`.
+
+Landed 2026-11-19: the key is `grants` (`run.start` v6), the schema
+`ApprovalGrantsSchema`, and the script reads `$.grants.limit`.
 
 ## 3. `ToolFileAttachment`'s payload is three optional fields
 
@@ -91,6 +97,9 @@ and the writer states them.
   input typed after the shell exits still reaches `sendInput`. Recently
   changed (#15026), so let it settle first.
 
+`SubscriptionAuthStatus` landed 2026-11-19: `email` and `accountId` are
+plain optional, and the label helpers take the names a session carries.
+
 ## 6. More of the same, found on the sweep branch
 
 Landed beside the findings above, none needing a row version bump since
@@ -99,21 +108,16 @@ no stored row at the current versions holds `null` there:
 a `model.message` append's `input` and `reason`, and a `context.edit`'s
 `input` (plain optional).
 
-Checking each producer of the `AgentConfigSchema`
-(`packages/harness/src/shared/schemas/agentConfig.ts`) nullable optionals
-corrected the finding: it is not a blanket drop.
+Still open: `rootUserInstruction` and the nullable optionals of
+`AgentConfigSchema` (`packages/harness/src/shared/schemas/agentConfig.ts`),
+which `BaseProposalFieldsSchema` and `AgentProposalSchema` restate on
+`request.opened` (`proposalFields.ts`, `requestPayloads.ts`): check each
+producer, then bump `run.config` and `request.opened` once.
 
-- Landed, no bump: `asCaller` (only ever written `true`) and
-  `rootUserInstruction` (only the conditional spread
-  `{ rootUserInstruction: call.instruction }` in `AgentTool`) are now plain
-  `optional`. `AgentProposalSchema`'s own restatement of `rootUserInstruction`
-  on `request.opened` dropped its `NullOr` with it. No producer, past or
-  present, ever wrote `null` for either, so no stored row holds one and
-  neither `run.config` nor `request.opened` needed a bump.
-- Kept nullable, with a producer that writes `null`: `displayInstruction`
-  (`backgroundScript.ts` writes `displayInstruction: null`) and
-  `workingDirectory` (`AgentTool.ts` and `backgroundScript.ts` write
-  `... ?? null`). These are a value or `null`, never absent as the third
-  state, but `null` is live, so they stay `NullOr`.
-- Not yet checked: `agentSource`, `launch`, `delegationAgentScope`,
-  `outputSchema`, `script` — each needs its own producer sweep before a drop.
+Landed 2026-11-19: every optional `AgentConfig` field, and the proposal's
+`rootUserInstruction`, is plain optional (`run.config` v12,
+`request.opened` v16). The background script and `self()` wrote `null` to
+clear fields they spread; they destructure them out instead. The same run
+applied the rule to `RequestDecision` (`request.decided` v3), the
+`RuntimeCommand` and `HostCommand` wire unions, and `RunView.agentScope`
+(required `NullOr`).
