@@ -2,8 +2,8 @@
 // Frameless variant of LatexDiffHero's left sidebar — the LaTeXDiffs section on
 // its own, with the editor / PDF pane dropped so the merge controls read
 // clearly. Mirrors the Merge Workflow: pick a Base File, pick an Edited File,
-// then click Merge in the Edited row (the merge icon is highlighted here as the
-// act-on control). The merge runs on the configured helper model.
+// then click Merge under the Edited selector (highlighted here as the act-on
+// control). The merge runs on the configured helper model.
 //
 // Root carries `.mockup`, so the shared `--mk-*` tokens and the .field/.frow/
 // .select/.acts/.act vocabulary in theme/mockup.css resolve here and flip with
@@ -49,20 +49,6 @@
             ><wa-icon class="lbl-ic" library="texra" name="edit"></wa-icon>
             Edited</span
           >
-          <div class="acts">
-            <span class="act" title="Accept changes"
-              ><wa-icon library="texra" name="check"></wa-icon
-            ></span>
-            <span class="act" title="Compare files"
-              ><wa-icon library="texra" name="diff"></wa-icon
-            ></span>
-            <span class="act act-on" title="Merge edits"
-              ><wa-icon library="texra" name="merge"></wa-icon
-            ></span>
-            <span class="act" title="LaTeXdiff"
-              ><wa-icon library="texra" name="diff-single"></wa-icon
-            ></span>
-          </div>
           <span class="step-n">2</span>
         </div>
         <div class="select">
@@ -72,6 +58,21 @@
             library="texra"
             name="chevron-down"
           ></wa-icon>
+        </div>
+        <div class="dacts">
+          <span class="act"
+            ><wa-icon library="texra" name="diff-single"></wa-icon> Diff vs.
+            edited</span
+          >
+          <span class="act"
+            ><wa-icon library="texra" name="diff"></wa-icon> Compare</span
+          >
+          <span class="act act-on"
+            ><wa-icon library="texra" name="merge"></wa-icon> Merge</span
+          >
+          <span class="act"
+            ><wa-icon library="texra" name="check"></wa-icon> Accept</span
+          >
         </div>
       </div>
     </div>
@@ -115,5 +116,20 @@
   font-size: var(--mk-fs-70);
   font-weight: 700;
   font-family: var(--vp-font-family-base);
+}
+
+/* The labelled action buttons under a selector. */
+.dacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mk-space-4);
+  margin-top: var(--mk-space-6);
+}
+.dacts .act {
+  width: auto;
+  gap: var(--mk-space-5);
+  padding: var(--mk-space-3) var(--mk-space-7);
+  border: 1px solid var(--color-border);
+  font-size: var(--mk-fs-70);
 }
 </style>
