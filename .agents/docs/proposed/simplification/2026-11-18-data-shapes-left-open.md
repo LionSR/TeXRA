@@ -27,6 +27,9 @@ written with its turn. Still open: `outcome`. Dropping it changes the one
 `positionRow` caller in `runLoop.ts` (`turn.end`), and bumps `run.position`,
 since an earlier build's filter requires it on every `turn.end`.
 
+Landed 2026-11-19: no `outcome`, no filter, one `positionRow` signature
+(`run.position` v7).
+
 ## 2. `run.start.approvalPolicy` and `worktree` are optional and nullable
 
 `packages/harness/src/shared/schemas/sessionEvent.ts`. The one producer
@@ -43,6 +46,9 @@ branch). Still open: the stored key is `approvalPolicy`, not `grants`;
 `packages/cli/scripts/validate-run.mjs` reads `$.approvalPolicy.limit`
 from the row, so the rename lands with that script's edit and another
 `run.start` bump.
+
+Landed 2026-11-19: the key is `grants` (`run.start` v6), the schema
+`ApprovalGrantsSchema`, and the script reads `$.grants.limit`.
 
 ## 3. `ToolFileAttachment`'s payload is three optional fields
 
@@ -86,6 +92,9 @@ and the writer states them.
   input typed after the shell exits still reaches `sendInput`. Recently
   changed (#15026), so let it settle first.
 
+`SubscriptionAuthStatus` landed 2026-11-19: `email` and `accountId` are
+plain optional, and the label helpers take the names a session carries.
+
 ## 6. More of the same, found on the sweep branch
 
 Landed beside the findings above, none needing a row version bump since
@@ -99,3 +108,11 @@ Still open: `rootUserInstruction` and the nullable optionals of
 which `BaseProposalFieldsSchema` and `AgentProposalSchema` restate on
 `request.opened` (`proposalFields.ts`, `requestPayloads.ts`): check each
 producer, then bump `run.config` and `request.opened` once.
+
+Landed 2026-11-19: every optional `AgentConfig` field, and the proposal's
+`rootUserInstruction`, is plain optional (`run.config` v12,
+`request.opened` v16). The background script and `self()` wrote `null` to
+clear fields they spread; they destructure them out instead. The same run
+applied the rule to `RequestDecision` (`request.decided` v3), the
+`RuntimeCommand` and `HostCommand` wire unions, and `RunView.agentScope`
+(required `NullOr`).
