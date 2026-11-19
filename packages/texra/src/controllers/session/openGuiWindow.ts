@@ -83,6 +83,7 @@ import {
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { latexdiffVerbs, type LatexdiffHost } from './latexdiffVerbs';
+import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -170,11 +171,9 @@ type HostVerb<A> = Effect.Effect<
 export interface SharedHostCommandBindings {
   /** Open a file of this session's workspace, at a line when one is named. */
   openPath(file: string, line: number | undefined): HostVerb<void>;
-  /** The files the user picked for a launcher field; null when they picked
-   *  none. */
-  pickFiles(
-    fileType: Extract<HostCommand, { kind: 'pickFiles' }>['fileType'],
-  ): HostVerb<readonly string[] | null>;
+  /** The host's native dialog that opens several files, behind the
+   *  launcher's file picker. */
+  readonly openFiles: OpenFilesDialog;
   /** How a generated diff opens and a diff run shows its progress. */
   readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
@@ -501,7 +500,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'pickFiles': {
-          const paths = yield* bindings.pickFiles(request.fileType);
+          const paths = yield* pickLauncherFiles(
+            roots.workspace,
+            request.fileType,
+            bindings.openFiles,
+          );
           if (paths === null) return yield* new Cancelled();
           return { kind: 'files', paths } satisfies HostOutcome;
         }

@@ -272,7 +272,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         host: () =>
           createDesktopHostRequests({
             host: hosts.run,
-            workspaceRoot: project.root,
             openFiles: host.openFileDialog,
             postToRenderer: host.post,
             settings: options.settings,

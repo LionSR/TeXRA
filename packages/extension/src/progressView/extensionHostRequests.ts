@@ -60,7 +60,6 @@ import {
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { pickLauncherFiles } from '@texra/controllers/session/launcherFilePicker';
 import type {
   OwnHostHandlers,
   SharedHostCommandBindings,
@@ -268,8 +267,7 @@ export const createExtensionHostRequests = Effect.fn(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const bindings: SharedHostCommandBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
-    pickFiles: (fileType) =>
-      pickLauncherFiles(roots.workspace, fileType, openFilesDialog),
+    openFiles: openFilesDialog,
     latexdiff: {
       openDiffs: ([first, ...rest]) =>
         first === undefined
