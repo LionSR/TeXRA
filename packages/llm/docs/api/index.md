@@ -469,6 +469,19 @@ function isKimiSubscriptionEligible(
 ): boolean
 ```
 
+## issuesParallelToolCalls
+
+Whether the model issues independent tool calls together in one response
+and handles their results in any order. The prompt tells such a model it
+may batch calls; every other model is told to call one tool at a time.
+Only Anthropic's models are known to; llm-zoo carries no flag for it.
+
+```ts
+function issuesParallelToolCalls(
+  config: Pick<ModelConfig, 'provider'>,
+): boolean
+```
+
 ## isUnservedModel
 
 Whether no route TeXRA reaches serves `config`: llm-zoo retired the model,

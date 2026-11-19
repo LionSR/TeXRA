@@ -46,6 +46,8 @@ const program = Effect.gen(function* () {
     model: selected.config,
     route,
     bearer: process.env.ANTHROPIC_API_KEY ?? '',
+    // The app the requests are sent for: llm names no client of its own.
+    client: { name: 'Example App', id: 'example-app' },
   });
 
   const turn = yield* binding.model.prepareTurn({

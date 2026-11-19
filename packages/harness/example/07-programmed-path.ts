@@ -26,7 +26,11 @@ import {
   defineTool,
 } from '@texra-ai/harness/plugins';
 
-import { makeExampleWorkspace, scriptReturnsOf } from './_support.ts';
+import {
+  EXAMPLE_CLIENT,
+  makeExampleWorkspace,
+  scriptReturnsOf,
+} from './_support.ts';
 
 /** A tool whose result carries a value a script reads directly, and an
  *  output long enough to need a long cell in the history store. */
@@ -217,6 +221,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, latexPlugin],
+      client: EXAMPLE_CLIENT,
     }).pipe(Layer.provideMerge(route.transport)),
   ),
 );

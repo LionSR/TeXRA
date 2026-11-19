@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The `IS_ANTHROPIC_MODEL` prompt variable is removed.** An agent prompt
+  that reads `{% if IS_ANTHROPIC_MODEL %}` now renders that block as false
+  for every model. TeXRA's own tool-call guidance still follows the model
+  the chat is on, step by step.
+
 - **Agent teams are removed.** There are no built-in teams (Lean Project,
   Physicist, Mathematician, Computer Scientist, Software Engineer) and no
   saved custom teams: Settings → Agents has no **Teams** section, the launch

@@ -93,14 +93,14 @@ function successHtml(displayName: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Signed in</title></head>
 <body style="font-family:system-ui;text-align:center;padding-top:4rem">
 <h2>Signed in with ${displayName}</h2>
-<p>You can close this tab and return to TeXRA.</p>
+<p>You can close this tab.</p>
 </body></html>`;
 }
 
 const ERROR_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Sign-in error</title></head>
 <body style="font-family:system-ui;text-align:center;padding-top:4rem">
 <h2>Sign-in error</h2>
-<p>Return to TeXRA and try signing in again.</p>
+<p>Close this tab and try signing in again.</p>
 </body></html>`;
 
 /** One bind attempt; succeeds with undefined when the port is unavailable.

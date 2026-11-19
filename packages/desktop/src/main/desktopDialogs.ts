@@ -166,21 +166,22 @@ export function createDesktopDialogs(
         try: () => import('@texra/controllers/progressView/exportTranscript'),
         catch: exportFailed,
       }).pipe(
-        Effect.flatMap(({ TRANSCRIPT_EXPORT_FORMAT_CHOICES }) =>
-          choose(window, {
-            type: 'question',
-            message: 'Export transcript',
-            detail: 'Choose a format',
-            project,
-            choices: TRANSCRIPT_EXPORT_FORMAT_CHOICES.map(
-              ({ label, format }, index) => ({
-                label,
-                value: format,
-                ...(index === 0 && { default: true as const }),
-              }),
-            ),
-            close: 'Cancel',
-          }).pipe(Effect.mapError(exportFailed)),
+        Effect.flatMap(
+          ({ TRANSCRIPT_EXPORT_FORMAT_CHOICES, TRANSCRIPT_EXPORT_PICK }) =>
+            choose(window, {
+              type: 'question',
+              message: TRANSCRIPT_EXPORT_PICK.title,
+              detail: TRANSCRIPT_EXPORT_PICK.prompt,
+              project,
+              choices: TRANSCRIPT_EXPORT_FORMAT_CHOICES.map(
+                ({ label, format }, index) => ({
+                  label,
+                  value: format,
+                  ...(index === 0 && { default: true as const }),
+                }),
+              ),
+              close: 'Cancel',
+            }).pipe(Effect.mapError(exportFailed)),
         ),
       ),
   };

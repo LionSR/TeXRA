@@ -57,7 +57,11 @@ import {
   writeReport,
   type ScenarioResult,
 } from './_evidence.ts';
-import { makeExampleWorkspace, scriptReturnsOf } from './_support.ts';
+import {
+  EXAMPLE_CLIENT,
+  makeExampleWorkspace,
+  scriptReturnsOf,
+} from './_support.ts';
 
 const MODEL = process.env.TEXRA_EXAMPLE_MODEL?.trim() ?? '';
 const OUT = process.env.TEXRA_ACCEPTANCE_OUT?.trim() ?? '';
@@ -274,6 +278,7 @@ const codemode = (dir: string) =>
         Sessions.layer({
           platform,
           plugins: [...harnessBuiltins, plugin],
+          client: EXAMPLE_CLIENT,
         }).pipe(Layer.provideMerge(route.transport)),
       ),
     );
@@ -358,6 +363,7 @@ const plugin = (dir: string) =>
         Sessions.layer({
           platform,
           plugins: [...harnessBuiltins, acmeNotes],
+          client: EXAMPLE_CLIENT,
         }).pipe(Layer.provideMerge(route.transport)),
       ),
     );
@@ -419,9 +425,11 @@ const crashProgram = (workspace: string) =>
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        Sessions.layer({ platform, plugins: crashPlugins }).pipe(
-          Layer.provideMerge(route.transport),
-        ),
+        Sessions.layer({
+          platform,
+          plugins: crashPlugins,
+          client: EXAMPLE_CLIENT,
+        }).pipe(Layer.provideMerge(route.transport)),
       ),
     );
   });
@@ -581,9 +589,11 @@ const crashResume = (dir: string) =>
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        Sessions.layer({ platform, plugins: crashPlugins }).pipe(
-          Layer.provideMerge(route.transport),
-        ),
+        Sessions.layer({
+          platform,
+          plugins: crashPlugins,
+          client: EXAMPLE_CLIENT,
+        }).pipe(Layer.provideMerge(route.transport)),
       ),
     );
   });

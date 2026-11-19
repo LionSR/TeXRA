@@ -10,7 +10,6 @@
  */
 import { Clock, ConfigProvider, Effect, Layer } from 'effect';
 
-import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -150,7 +149,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   runId: RunId,
   options: ExecuteAgentOptions,
 ) {
-  const { config, persona, modelConfig } = definition;
+  const { config, persona } = definition;
   // The run's working directory is decided here, once: absolute or absent.
   // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
   // and trusts it rather than re-validating.
@@ -171,18 +170,14 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   const opening =
     entry.registration === null
       ? null
-      : yield* buildTemplateInputs(
-          config,
-          modelConfig.provider === ModelProvider.ANTHROPIC,
-          {
-            // The session's own roots, handed to prompt assembly as data, so
-            // the working directory and memories resolve in this project, not
-            // the calling fiber's.
-            workspaceRoot: roots.workspace,
-            workingDirectory,
-            storageRoot: roots.storage,
-          },
-        );
+      : yield* buildTemplateInputs(config, {
+          // The session's own roots, handed to prompt assembly as data, so
+          // the working directory and memories resolve in this project, not
+          // the calling fiber's.
+          workspaceRoot: roots.workspace,
+          workingDirectory,
+          storageRoot: roots.storage,
+        });
 
   const launch: RunLaunch = {
     runId,

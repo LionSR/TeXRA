@@ -16,7 +16,7 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
   (the `agent` tool, [`AGENT_TOOL_NAME`](#agent_tool_name), and the
   `program` tool), and [`web`](#web) for
-  `Sessions.layer({ platform, plugins })`.
+  `Sessions.layer({ platform, plugins, client })`.
 - **Plugin & tool authoring**: [`defineTool`](#definetool),
   [`definePlugin`](#defineplugin) and the
   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),

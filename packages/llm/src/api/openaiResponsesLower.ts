@@ -59,7 +59,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   config: OpenAIResponsesConfiguration,
   documents: DocumentAccess,
 ) {
-  const namespace = toolNamespaceOf(config);
+  const namespace = config.toolNamespace;
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
@@ -213,11 +213,6 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   }
   return input;
 });
-
-/** The namespace function tools must sit in, or null: a ChatGPT plan's alone. */
-export const toolNamespaceOf = (
-  config: OpenAIResponsesConfiguration,
-): string | null => (config.requestDialect === 'chatgpt' ? 'texra' : null);
 
 const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
 

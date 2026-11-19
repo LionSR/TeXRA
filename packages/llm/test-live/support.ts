@@ -266,6 +266,7 @@ function configure(
       model: selected.config,
       route: { ...decided, endpoint: route.endpoint },
       bearer,
+      client: { name: 'TeXRA live tests', id: 'texra' },
       options: {
         maxOutputTokens: 2048,
         temperature: 0,

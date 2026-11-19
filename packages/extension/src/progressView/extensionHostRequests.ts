@@ -49,6 +49,7 @@ import type {
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+  TRANSCRIPT_EXPORT_PICK,
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
@@ -362,8 +363,8 @@ export const createExtensionHostRequests = Effect.fn(
     export: {
       // A refusal to show the pick is worded into the export's tag.
       pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
-        title: 'Export transcript',
-        placeHolder: 'Choose a format',
+        title: TRANSCRIPT_EXPORT_PICK.title,
+        placeHolder: TRANSCRIPT_EXPORT_PICK.prompt,
         ignoreFocusOut: true,
       }).pipe(
         Effect.map((choice) => choice?.format),
