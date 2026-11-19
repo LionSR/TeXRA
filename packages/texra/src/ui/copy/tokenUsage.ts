@@ -23,7 +23,7 @@ const TOKEN_USAGE_STATS = Object.freeze([
   Object.freeze({
     key: 'cacheWriteTokens',
     label: 'Cache creation tokens',
-    note: '1.25× cost',
+    note: 'billed above input',
   }),
   Object.freeze({ key: 'outputTokens', label: 'Output tokens', always: true }),
   Object.freeze({ key: 'reasoningTokens', label: 'Reasoning tokens' }),

@@ -17,6 +17,7 @@ import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
 import { GitHubMalformedBodyError } from '@texra/tools/github/githubClient';
 import type { GhCheckAnnotation } from '@texra/tools/github/prTypes';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   ghGet: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
  * the host root provides in production.
  */
 const secretsLayer = Layer.merge(
-  Secrets.layer(new FakeSecrets()),
+  Secrets.layer(new FakeSecrets(), HARNESS_APP.client),
   noHttpClientLayer,
 );
 

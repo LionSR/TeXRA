@@ -183,7 +183,7 @@ consistent" for `enhance`. A typical loop is `annotate`, then `apply`.
 ### Starting a program
 
 - **In the app**: ask an agent in plain words, for example "polish section 2
-  of main.tex" to the default `orchestrator` (or to `assistant`). The agent
+  of main.tex" to the default `assistant` (or to `orchestrator`). The agent
   proposes a `program` run; the proposal card shows the program, the
   instruction and the files, and you can edit them before you approve.
 - **From the terminal**: `texra run <program> --input <file>`, with an

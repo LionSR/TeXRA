@@ -20,6 +20,9 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   account, keyed by its route
   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
   browser and (Grok's) device-code sign-in.
+- **Provider endpoints outside a turn**: [`fetchPlanUsage`](#fetchplanusage)
+  reads a coding plan's quota windows, and
+  [`transcribeAudio`](#transcribeaudio) a recording's text.
 
 ## Binding
 
@@ -73,6 +76,8 @@ interface BindSpec {
    * plan's request rules apply is the route's `plan`.
    */
   readonly bearer: string | SessionToken;
+  /** The app the requests are sent for (a ChatGPT plan's tools sit in its namespace). */
+  readonly client: ClientIdentity;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
     /** The output ceiling, before the model's own rules; the catalog's by default. */
@@ -103,6 +108,39 @@ A stored ChatGPT session.
 type ChatgptSession = typeof ChatgptSessionSchema.Type;
 ```
 
+## ClientIdentity
+
+The app llm signs in and sends for, as the providers name it. llm has no
+default: the app supplies its own.
+
+```ts
+interface ClientIdentity {
+  /** What OpenAI shows the person for the client a ChatGPT sign-in registers. */
+  readonly name: string;
+  /**
+   * A lowercase token: xAI's sign-in referrer, and the namespace a ChatGPT
+   * plan's function tools sit in.
+   */
+  readonly id: string;
+}
+```
+
+## fetchPlanUsage
+
+Fetch and read a plan's usage with its API key. The GLM quota endpoint is
+on the same host as the region's Responses endpoint.
+
+```ts
+function fetchPlanUsage(
+  request: PlanUsageRequest,
+  apiKey: Redacted.Redacted<string>,
+): Effect.Effect<
+  PlanUsage,
+  HttpClientError.HttpClientError | Cause.TimeoutError,
+  HttpClient.HttpClient
+>
+```
+
 ## LoopbackTransportUnavailableError
 
 The loopback route could never be established — the registered callback
@@ -115,6 +153,43 @@ class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTrans
   'LoopbackTransportUnavailableError',
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 )
+```
+
+## PlanUsage
+
+A plan's reported usage. No window means the body named none it reads.
+
+```ts
+interface PlanUsage {
+  /** The plan's tier as the provider names it, when the body says. */
+  readonly planName?: string;
+  readonly windows: readonly PlanUsageWindow[];
+}
+```
+
+## PlanUsageRequest
+
+Which plan to ask, and for GLM which platform its key belongs to.
+
+```ts
+type PlanUsageRequest =
+  | { readonly plan: 'kimiCode' }
+  | { readonly plan: 'glm'; readonly region: 'china' | 'international' };
+```
+
+## PlanUsageWindow
+
+One quota window of a plan, as a share of its limit.
+
+```ts
+interface PlanUsageWindow {
+  /** The provider's own name for the window (`five_hour`, `glm-4.6:weekly`). */
+  readonly name: string;
+  readonly percentUsed: number;
+  readonly percentRemaining: number;
+  /** When the window resets, in epoch milliseconds. */
+  readonly resetAt?: number;
+}
 ```
 
 ## SessionToken
@@ -138,7 +213,8 @@ Each subscription's account (its stored session: status, refresh, sign-in
 and sign-out), named by the route that bills it. Built once over the store
 that holds the sessions, so every caller of one session shares its lock and
 a rotated refresh token is spent once; another store is another set of
-accounts, built with it.
+accounts, built with it. They sign in as `client`, the app they are built
+for, which the binding of a subscription route reads too.
 
 ```ts
 class SubscriptionAccounts extends Context.Service<
@@ -146,6 +222,8 @@ class SubscriptionAccounts extends Context.Service<
   {
     readonly 'chatgpt-subscription': SubscriptionCoordinator<ChatgptSession>;
     readonly 'xai-subscription': SubscriptionCoordinator<XaiSession>;
+    /** The app the accounts sign in as. */
+    readonly client: ClientIdentity;
   }
 >()('@texra-ai/llm/SubscriptionAccounts')
 ```
@@ -256,6 +334,15 @@ interface SubscriptionSessionStatus {
   email?: string;
   accountId?: string;
 }
+```
+
+## transcribeAudio
+
+The text of an audio file, from OpenAI's transcription model with an
+OpenAI key at `endpoint`. The SDK loads on the first call.
+
+```ts
+const transcribeAudio: (audioPath: string, credential: { readonly bearer: string; readonly endpoint: string; }) => Effect<string, ModelError, never>
 ```
 
 ## XaiSession

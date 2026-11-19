@@ -18,7 +18,7 @@ import {
   type RunToolCall,
 } from '@agent/runtime/RunCall';
 import { goalGrant } from '@agent/runtime/runApprovalQueue';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
   NO_APPROVAL_GRANTS,
@@ -121,7 +121,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   const issued = (yield* (yield* RunHistory).load(runId))?.calls ?? {};
   const { results } = yield* (yield* SessionLog).runRows(runId, 'results');
   const { runs } = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
-  const live = yield* Runs;
+  const live = yield* RunRegistry;
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
   const stillRunning = (id: RunId): boolean => {
@@ -255,7 +255,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
 
   switch (result.action) {
     case 'cancel':
-      return yield* denialResult('cancelled', result.cause ?? undefined);
+      return yield* denialResult('cancelled', result.cause);
     case 'deny':
       return yield* denialResult('denied', result.reason);
     case 'reject': {

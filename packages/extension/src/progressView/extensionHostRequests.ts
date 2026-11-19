@@ -14,28 +14,16 @@ import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-  pathToLocationIn,
-} from '@texra-ai/harness/host';
+import { type ProcessServices, pathToLocationIn } from '@texra-ai/harness/host';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
-import {
-  toErrorMessage,
-  type AgentConfig,
-  Rejected,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import {
-  openGuidePage,
-  vscodeOpener,
-} from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -61,6 +49,7 @@ import type {
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+  TRANSCRIPT_EXPORT_PICK,
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
@@ -69,9 +58,7 @@ import {
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { pickLauncherFiles } from '@texra/controllers/session/launcherFilePicker';
 import type {
-  GuiWindowHost,
   OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
@@ -97,16 +84,9 @@ export interface ExtensionHostRequestsOptions {
   /** The window's bridge and snapshot. */
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
-  /** The runtime's notices this window presents its own way. */
-  readonly notices: GuiWindowHost['notices'];
-  /** What this window's editor does for its project's runs. */
-  readonly window: GuiWindowHost['window'];
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
-  /** The process runtime the extension root holds; every request handler
-   *  that runs an Effect runs it here. */
-  readonly runtime: ProcessRuntime;
   /** The settings view at a target (`texra.showDashboard`). */
   openSettings(
     target: SettingsTarget | undefined,
@@ -116,11 +96,6 @@ export interface ExtensionHostRequestsOptions {
   signInSubscription(
     providerId: SubscriptionProviderId,
   ): Effect.Effect<void, Error, ProcessServices>;
-  /** Reveal the task list (`texra.showProgressView`). */
-  showProgressView(): Effect.Effect<void, Error>;
-  /** Reveal the task list for a run this window just started, or name the
-   *  run in a toast when it cannot (the run actions' `revealProgress`). */
-  readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
@@ -183,17 +158,12 @@ const openExportPath = (
 export const createExtensionHostRequests = Effect.fn(
   'createExtensionHostRequests',
 )(function* (options: ExtensionHostRequestsOptions) {
-  const { snapshot, runtime, roots } = options;
+  const { snapshot, roots } = options;
 
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
   const diffRefresh = yield* FiberHandle.make();
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
-  // A file-action port's handler; the process services come from the runtime.
-  const runFileAction = <A, E>(
-    command: string,
-    handler: Effect.Effect<A, E, ProcessServices>,
-  ) => withProcessServices(runtime, runHandler(command, handler));
 
   function getOpenedFiles(): Effect.Effect<string[]> {
     const workspaceRoot = roots.workspace;
@@ -295,8 +265,7 @@ export const createExtensionHostRequests = Effect.fn(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const bindings: SharedHostCommandBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
-    pickFiles: (fileType) =>
-      pickLauncherFiles(roots.workspace, fileType, openFilesDialog),
+    openFiles: openFilesDialog,
     latexdiff: {
       openDiffs: ([first, ...rest]) =>
         first === undefined
@@ -323,18 +292,7 @@ export const createExtensionHostRequests = Effect.fn(
     // launcher's credential check and catalogs follow.
     setApiKey: (provider) =>
       runHandler('setApiKey', setApiKey(roots, provider)),
-    // A link VS Code declines or cannot open is answered as a rejection, so
-    // the view shows which URL did not open.
-    openExternal: (url) =>
-      vscodeOpener
-        .openExternal(url)
-        .pipe(
-          Effect.mapError((failed) => new Rejected({ reason: failed.message })),
-        ),
-    // The banner refresh probes the dependencies again; the banner shows
-    // what is missing.
-    // Every dependency the banner lists installs from the one guide page.
-    openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
+    openExternal: (url) => vscodeOpener.openExternal(url),
     onboarding: {
       signInChatGpt: runHandler(
         'signInChatGpt',
@@ -387,20 +345,14 @@ export const createExtensionHostRequests = Effect.fn(
   return {
     bindings,
     own,
-    notices: options.notices,
-    window: options.window,
     // The host's members read `this`, so they cross the boundary bound.
     notify: (level: NoticeLevel, message: string) =>
       vscodeUi.notify(level, message),
-    runs: {
-      revealProgress: options.revealProgress,
-      openFinalOutput: previewFinalOutput,
-      showRunView: options.showProgressView,
-    },
+    openFinalOutput: previewFinalOutput,
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {
       openDiff: (base: string, edited: string, title: string) =>
-        runFileAction(
+        runHandler(
           'compare',
           handleCompare(at(base), at(edited), title, diffRefresh),
         ),
@@ -411,8 +363,8 @@ export const createExtensionHostRequests = Effect.fn(
     export: {
       // A refusal to show the pick is worded into the export's tag.
       pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
-        title: 'Export transcript',
-        placeHolder: 'Choose a format',
+        title: TRANSCRIPT_EXPORT_PICK.title,
+        placeHolder: TRANSCRIPT_EXPORT_PICK.prompt,
         ignoreFocusOut: true,
       }).pipe(
         Effect.map((choice) => choice?.format),

@@ -91,9 +91,11 @@ tier; the tier is not a target to opt into.
 `packages/llm` carries a separate project, `packages/llm/vitest.live.config.mjs`:
 one suite per HTTP route (a vendor endpoint and the credential it takes), run
 against the real provider (`npm run test:live`). It is never part of `npm test`
-because it spends money and needs the network; each suite gates itself on its
-route's key, and CI runs it only on the `live-llm` label
-(`.github/workflows/live-llm.yml`). `packages/cli/scripts/validate-journeys.mjs`
+because it spends money and needs the network; each suite gates its keyed cases
+on its route's key, and CI runs it only on the `live-llm` label
+(`.github/workflows/live-llm.yml`). Under `LLM_RECORD=1` it writes scrubbed
+cassettes that `packages/llm/test/api/WireContract.vitest.ts` replays in the
+pure tier (`packages/llm/README.md`). `packages/cli/scripts/validate-journeys.mjs`
 is the end-to-end sibling: the polish, latexFixer, latexdiff and citations
 journeys, and the prove journey over a Lake project, run through the real `texra run` NDJSON on each cheap model the script lists. It runs
 only by hand, never in CI or `npm test`, and skips a model whose key is not set and a journey whose binary (`lake`) is missing.

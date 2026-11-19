@@ -1,7 +1,7 @@
 # 会话各层手写机制的审查：已改的、待定的、核实后不做的
 
 Date: 2026-11-10
-Status: proposed — 一次审查的记录。大部分候选已在同一分支落地，剩下的写明需要谁决定什么。
+Status: proposed — 一次审查的记录。大部分候选已落地，现在都在 `main` 上（2026-11-17 在 `c78e9f9` 核对：`TxMode`、`sameAsFirst`、`PHASE_AT` 已无引用，`ownCopy` 在用）；剩下的写明需要谁决定什么。
 
 范围是 harness 的会话存储和运行数据的各层：SQLite store 内核、发布和读取通道（`SessionEvents`、`SessionLog`、视图的输入）、行的归约函数（运行状态、会话视图、记录），以及 run loop 的调用和输入路径。问的是：哪些机制是手写的，而 Effect v4、SQLite 或现有的形状已经提供；哪些事实被决定了两次。四个只读审查分别覆盖一层，每条候选都先对照 `.agents/docs/refuted-candidates.json` 和已有的审计记录去重，用到的 Effect API 都在 `node_modules/effect`（4.1.2）的类型和源码里核对过；落地前我又逐条对照代码复核了一遍。
 
@@ -22,7 +22,7 @@ Status: proposed — 一次审查的记录。大部分候选已在同一分支�
 
 ## 待定：需要先做一个决定
 
-1. **`run.steps` 改成 `ScopedRef`。** 它现在是 `SynchronizedRef` 加手写的“开新 scope、换值、关旧 scope”（`agent/runtime/run/AgentRun.ts`、`agent/runtime/loop/step.ts`），正是 `ScopedRef.set` 做的事，`run.model` 已经这样改过（#14781）。要先定三件事：v4 的 `set` 整个在 `uninterruptible` 下跑，acquire 也是，要传 `Effect.interruptible(acquire)`，否则停止要等插件启动完；`set` 不返回值，`warnings`、`listed`、`contributing` 要放进存的值里；旧的一代在换值之前关闭，关闭期间别的读者（比如后台启动的 `offeredBy`）读到的是旧的 step。约 −5 行。
+1. **`run.steps` 改成 `ScopedRef`。** 它现在是 `Ref`（2026-11-17 核对时已不是 `SynchronizedRef`）加手写的“开新 scope、换值、关旧 scope”（`agent/runtime/run/AgentRun.ts:140`、`agent/runtime/loop/step.ts:360-371`），正是 `ScopedRef.set` 做的事，`run.model` 已经这样改过（#14781）。要先定三件事：v4 的 `set` 整个在 `uninterruptible` 下跑，acquire 也是，要传 `Effect.interruptible(acquire)`，否则停止要等插件启动完；`set` 不返回值，`warnings`、`listed`、`contributing` 要放进存的值里；旧的一代在换值之前关闭，关闭期间别的读者（比如后台启动的 `offeredBy`）读到的是旧的 step。约 −5 行。
 2. **`RunCell.commit` 把一批行归约两次。** 先按临时 commit 归约一次（`agent/runtime/makeRunHistory.ts` 的 `candidates`），发布后按真实 commit 再归约一次，第二次才看见注册行。可以只在 job 里、`runStateAppend` 之后归约一次：失败的 job 回滚，什么都不发布。要定的是：拒绝从此发生在 store 的 job 里面。唯一的 `within` 调用方（`agent/storage/runLifecycle.ts`）已经会在那时让它的事务失败。约 −18 行。
 3. **`edgesOf` 的 34 个空分支。** 37 种行里只有 3 种有聚合边；`referencedAggregates` 把这三条边又写了一遍。换成 `default` 加从 `edgesOf` 推出 `referencedAggregates` 约 −38 行，代价是“新加一种行不写边就编译不过”这条检查（一次审计说它好）。单做“推出 `referencedAggregates`”这一半（约 4 行）没有代价。
 4. **SQLite 的磁盘满不算 `disk-full`。** 核对事务那一条时看到：`isDiskFullError`（`common/errors/errorPredicates.ts`）只认原因链里的 `code: 'ENOSPC'`，而 `node:sqlite` 报磁盘满是 `errcode` 13（`SQLITE_FULL`）。所以写库时磁盘满，`run.end` 的错误大概率记成 `unexpected`。没有端到端验证；修之前要先用一个写满的库复现。

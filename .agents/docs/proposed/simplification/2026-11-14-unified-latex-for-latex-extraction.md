@@ -8,14 +8,15 @@ taking the dependency for the rest.
 
 ## What is hand-written today
 
-Five modules read LaTeX source with regular expressions or a character scan:
+Five modules read LaTeX source with regular expressions or a character scan
+(line counts at `c78e9f9`, 2026-11-17):
 
 | Module                                                | Lines | Reads                                                               |
 | ----------------------------------------------------- | ----- | ------------------------------------------------------------------- |
-| `packages/texra/src/latex/latexParsingUtils.ts`       | 192   | comments, `\bibliography` and `\addbibresource`, comma lists        |
-| `packages/texra/src/latex/extractBibliography.ts`     | 226   | citation commands and their keys                                    |
-| `packages/texra/src/latex/extractFileDependencies.ts` | 124   | `\input`, `\include` and the other file-naming commands             |
-| `packages/texra/src/latex/extractFigure.ts`           | 108   | `\includegraphics` and its path                                     |
+| `packages/texra/src/latex/latexParsingUtils.ts`       | 234   | comments, `\bibliography` and `\addbibresource`, comma lists        |
+| `packages/texra/src/latex/extractBibliography.ts`     | 228   | citation commands and their keys                                    |
+| `packages/texra/src/latex/extractFileDependencies.ts` | 119   | `\input`, `\include` and the other file-naming commands             |
+| `packages/texra/src/latex/extractFigure.ts`           | 109   | `\includegraphics` and its path                                     |
 | `packages/texra/src/utils/text/braceBalancedMacro.ts` | 93    | `\macro{a}{b}{c}` with nested braces, for criticism and replacement |
 
 Only part of each file is parsing: the bibliography module also resolves
@@ -76,10 +77,13 @@ Two separate questions.
 **Does anything webview-reachable need it?** No. Every importer of the five
 modules runs in a host process:
 
-- `packages/texra/src/latex/LatexMediaManager.ts`,
-  `packages/texra/src/latex/latexdiff.ts` and
-  `packages/texra/src/tools/latex/ExtractFiguresTool.ts` (the three
-  extractors), which already use `node:path` and the Effect `FileSystem`;
+- `packages/texra/src/latex/latexMedia.ts`,
+  `packages/texra/src/latex/latexdiff.ts`,
+  `packages/texra/src/tools/latex/ExtractFiguresTool.ts`,
+  `packages/texra/src/tools/latex/ExtractBibliographyTool.ts` and
+  `packages/texra/src/agent/output/fileMapping.ts` (the three
+  extractors and `latexParsingUtils.ts`), which already use `node:path` and
+  the Effect `FileSystem`;
 - `packages/texra/src/replacement/advanced.ts` and
   `packages/texra/src/latex/criticismParser.ts` (the brace
   scanner), neither imported by a webview.
@@ -149,7 +153,7 @@ answer without a spike.
 The stronger candidate is `braceBalancedMacro.ts`'s two callers, where
 nested arguments are the whole job and a wrong span corrupts the user's
 text. A spike worth an afternoon: parse the fixtures of
-`packages/extension/test/latex/CriticismParser.vitest.ts` and a handful of
+`packages/texra/test/latex/CriticismParser.vitest.ts` and a handful of
 deliberately broken drafts, compare spans with the scanner's, and measure
 the extension-host bundle before and after. Adopt for all five modules
 together if the spike shows byte-exact spans and usable results on broken

@@ -35,7 +35,7 @@ import {
   createWorkbenchController,
   type PaneKind,
 } from './workbenchController';
-import { agentDocumentIdentity } from '../shared/desktopAgentDocument';
+import { agentDocumentIdentity } from '@texra/shared/agentDocumentTarget';
 
 const FILE_REQUEST_TIMEOUT_MS = 60_000;
 
@@ -98,12 +98,7 @@ export function createProjectWorkbench(options: {
   ) =>
     surfaces
       .answer(
-        {
-          kind: 'host.request',
-          session,
-          requestId: crypto.randomUUID(),
-          request: { kind: 'workspaceFile', action },
-        },
+        { session, request: { kind: 'workspaceFile', action } },
         action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
       )
       .pipe(
@@ -209,12 +204,7 @@ export function createProjectWorkbench(options: {
     openExternally: (path) =>
       void Effect.runFork(
         Effect.exit(
-          surfaces.answer({
-            kind: 'host.request',
-            session,
-            requestId: crypto.randomUUID(),
-            request: { kind: 'openFile', path },
-          }),
+          surfaces.answer({ session, request: { kind: 'openFile', path } }),
         ),
       ),
   });

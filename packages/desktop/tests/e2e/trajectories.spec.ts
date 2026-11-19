@@ -123,7 +123,7 @@ test('approval menu shows the current policy and keeps selection marks inside it
   await page.locator('#composer-agent').click();
   const selectedAgent = page
     .locator('session-composer')
-    .getByRole('menuitemcheckbox', { name: 'orchestrator', exact: true });
+    .getByRole('menuitemcheckbox', { name: 'assistant', exact: true });
   await expect(selectedAgent).toBeVisible();
   await expect(selectedAgent).toHaveJSProperty('checked', true);
   expect(

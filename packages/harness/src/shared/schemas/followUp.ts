@@ -71,10 +71,8 @@ const ChildRunDeliverySchema = Schema.Struct({
    *  `(no response)`. */
   response: Schema.optional(Schema.String),
   usage: Schema.optional(
-    Schema.NullOr(
-      TokenUsageStatsSchema.mapFields(
-        Struct.pick(['inputTokens', 'outputTokens']),
-      ),
+    TokenUsageStatsSchema.mapFields(
+      Struct.pick(['inputTokens', 'outputTokens']),
     ),
   ),
   /** A background script's summary: its calls, what they wrote and cost. */
@@ -100,7 +98,7 @@ export type ChildRunDelivery = typeof ChildRunDeliverySchema.Type;
 const FollowUpMessageSchema = Schema.Struct({
   text: Schema.String,
   /** What the transcript and the queued list show instead of `text`. */
-  displayText: Schema.optional(Schema.NullOr(Schema.String)),
+  displayText: Schema.optional(Schema.String),
   /** Media a user follow-up attached (e.g. pasted images), by address:
    *  the row links the blobs, so they live as long as it does. */
   media: Schema.optional(Schema.Array(StoredMediaSchema)),

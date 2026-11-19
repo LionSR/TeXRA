@@ -235,10 +235,9 @@ export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 export type { ProviderError } from '@shared/schemas';
-// Platform path containment, segments, POSIX form, case-free extension check.
+// Platform path containment, segments, POSIX form.
 export {
   getPathSegments,
-  hasExtension,
   isPathWithin,
   isStrictlyWithin,
   toPosixPath,
@@ -265,7 +264,11 @@ export {
 // The tool catalog: enabled built-ins, plugin services and switches.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 // The write path's redaction, for host text shown outside it.
-export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
+export {
+  formatFatalErrorDetail,
+  redactDiagnostics,
+  redactSecrets,
+} from '@logger/redaction';
 // The config and state store ports a host implements and their failures
 // (`Settings`, which reads and writes through them, is on `./plugins`).
 export {

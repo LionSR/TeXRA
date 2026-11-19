@@ -14,6 +14,7 @@ import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { GitHubRateLimitError } from '@texra/tools/github/githubClient';
 import type { GhCheckRun } from '@texra/tools/github/prTypes';
 import { pollPull, type PullState } from '@texra/tools/github/pullPoller';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   fetchAnnotations: vi.fn(),
@@ -37,7 +38,7 @@ vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
 
 /** The services the GitHub client requires; the client itself is mocked. */
 const githubServices = Layer.merge(
-  Secrets.layer(new FakeSecrets()),
+  Secrets.layer(new FakeSecrets(), HARNESS_APP.client),
   noHttpClientLayer,
 );
 

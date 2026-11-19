@@ -124,7 +124,13 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // earlier build's child end would deliver to a call that reads it.
     // v4: whether the run takes a message is a boolean (`takesFollowUps`),
     // not `userFollowUpSupport`; an earlier build's row names neither.
-    'run.start': Object.freeze({ version: 4, listing: 'lifecycle' }),
+    // v5: `approvalPolicy` (the run's grants at launch) is always written and
+    // `worktree` is null, never absent, for a run in the workspace (an
+    // earlier build's row without them would fail as damaged).
+    // v6: that field is `grants`, the fact it holds, not `approvalPolicy`
+    // (an earlier build's row names `approvalPolicy`, not the required
+    // `grants`, so it would fail as damaged).
+    'run.start': Object.freeze({ version: 6, listing: 'lifecycle' }),
     'run.activate': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a recipe's script names its block and options; `toolConfig` is gone
     // (an earlier build's v1 row refuses its run as written by that build,
@@ -148,7 +154,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v11: the skills the user activated are named (`skills`) beside the
     // instruction as typed, no longer written into it (an earlier build's
     // instruction would carry the blocks and its rerun would activate none).
-    'run.config': Object.freeze({ version: 11, listing: 'own' }),
+    // v12: an optional field is absent when unset, never `null` (an earlier
+    // build's `null` would fail as damaged).
+    'run.config': Object.freeze({ version: 12, listing: 'own' }),
     // v2: no `shutdown` reason: a process that exits writes nothing for its
     // runs (an earlier build's shutdown stop would fail as damaged).
     'run.stop': Object.freeze({ version: 2, listing: 'own' }),
@@ -203,7 +211,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // information only, would read as an instruction).
     // v9: a user's message names the skills it activates (`skills`), no
     // longer only in its text (a v8 row's activations would read as none).
-    'followup.queued': Object.freeze({ version: 9, listing: 'followup' }),
+    // v10: a delivery with no usage leaves `usage` out, never `null`, and a
+    // message's `displayText` is never `null` (an earlier build's agent-CLI
+    // delivery without usage would fail as damaged).
+    'followup.queued': Object.freeze({ version: 10, listing: 'followup' }),
     // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
     // it and fails to decode.
     // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
@@ -239,10 +250,14 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // turns before it (`earlierTurns`); an earlier build's would not render.
     // v15: a proposal names its agent's source as `run.config` v10 does: an
     // inline agent's persona inside `agentSource`, no `persona` beside it.
-    'request.opened': Object.freeze({ version: 15, listing: 'request' }),
+    // v16: a proposal's agent source, working directory and root instruction
+    // are absent when unset, never `null`, as `run.config` v12.
+    'request.opened': Object.freeze({ version: 16, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
-    'request.decided': Object.freeze({ version: 2, listing: 'request' }),
+    // v3: a decision's optional fields are absent when unset, never `null`
+    // (an earlier build's `null` feedback would fail as damaged).
+    'request.decided': Object.freeze({ version: 3, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
     // its check).
@@ -256,7 +271,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v6: no `response.ready` or `results.ready`: the run state reads them off
     // the `response` row and the delivering `append` (an earlier build's row
     // would fail as damaged).
-    'run.position': Object.freeze({ version: 6, listing: 'own' }),
+    // v7: no `turn.end` `outcome`: how a turn ended is a loop fact and the
+    // run's own end is its `run.end` row, so nothing read it (an earlier
+    // build's `turn.end` would have its `outcome` silently stripped).
+    'run.position': Object.freeze({ version: 7, listing: 'own' }),
     // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
     // holds both.
     // v3: a user message names its attached media by blob address (`media`),
@@ -381,7 +399,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // damaged without them).
     // v21: a completed turn has no `finishEvidence` or `refusalEvidence`,
     // which nothing read (an earlier build's would be silently stripped).
-    'model.message': Object.freeze({ version: 21, listing: 'none' }),
+    // v22: an OpenAI turn's usage carries its cache writes split by lifetime
+    // (`providerUsage` kind `openai`), which an earlier build fails to read.
+    'model.message': Object.freeze({ version: 22, listing: 'none' }),
     // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
     // of another cause would fail its run as damaged rather than read as that
     // build's).

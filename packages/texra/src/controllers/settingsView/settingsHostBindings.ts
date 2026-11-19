@@ -69,8 +69,6 @@ export interface SettingsHostBindings {
    *  recommended settings and LaTeX Workshop, and a plugin card offers to
    *  install the extension it names. */
   readonly editor?: EditorIntegrationShape;
-  /** A workspace-target config write needs an open folder (the extension). */
-  readonly requiresOpenWorkspace?: () => boolean;
 }
 
 /**

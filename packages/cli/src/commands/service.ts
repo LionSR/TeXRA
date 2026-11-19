@@ -4,7 +4,6 @@ import { Deferred, Effect, Exit, References } from 'effect';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
-import { stopService } from '@texra/controllers/server/client';
 import {
   SERVICE_SUBCOMMAND,
   servicePaths,
@@ -19,12 +18,12 @@ import {
   CliUsageError,
   type CliContext,
 } from '../runtime/platform/cliContext';
+import { linkCliService } from '../runtime/platform/cliService';
 import {
-  CliServiceFailed,
-  isLinked,
-  linkCliService,
-} from '../runtime/platform/cliService';
-import { probeRecordedService } from '@texra/controllers/server/client';
+  linkedClient,
+  probeRecordedService,
+  stopRunningService,
+} from '@texra/controllers/server/client';
 import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
@@ -34,8 +33,6 @@ import { cliResult, emitCliResult } from './_helpers/output';
 
 /** How long a service with no project open stays up. */
 const DEFAULT_IDLE_SECONDS = 600;
-/** How long `stop` waits for the service to go. */
-const STOP_TIMEOUT = '30 seconds';
 
 function parseIdleSeconds(value: unknown): number {
   if (value === undefined) return DEFAULT_IDLE_SECONDS;
@@ -170,47 +167,6 @@ const emitStatus = (info: ServiceInfo | null) =>
     );
   });
 
-/** Ask the service to stop and wait until it is gone, within
- *  `STOP_TIMEOUT`: its socket closes as it exits. Answers what was stopped,
- *  or `null` when none ran. */
-const stopRunningService = Effect.gen(function* () {
-  // A service this build cannot speak to still takes the stop, the one
-  // procedure every build keeps; its socket is all this build knows of it.
-  const target:
-    | (Pick<ServiceInfo, 'socket'> & { readonly pid?: number })
-    | null = yield* probeRecordedService.pipe(
-    Effect.catch((error) => {
-      const { failure } = error;
-      return failure.kind === 'unreadable'
-        ? Effect.succeed({ socket: failure.socket })
-        : Effect.fail(error);
-    }),
-  );
-  if (target === null) return null;
-  const service =
-    target.pid === undefined
-      ? 'the TeXRA service'
-      : `the TeXRA service (pid ${target.pid})`;
-  yield* stopService(target.socket, false).pipe(
-    Effect.timeoutOrElse({
-      duration: STOP_TIMEOUT,
-      orElse: () =>
-        Effect.fail(
-          new CliServiceFailed({
-            message: `it did not exit within ${STOP_TIMEOUT}`,
-          }),
-        ),
-    }),
-    Effect.mapError(
-      (failure) =>
-        new CliServiceFailed({
-          message: `Could not stop ${service}: ${failure.message}`,
-        }),
-    ),
-  );
-  return service;
-});
-
 const statusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show whether the TeXRA service runs' },
   layer: cliProcessLayer,
@@ -236,7 +192,9 @@ const stopCommand = defineCliCommand({
         writeTextStderr(
           stopped === null
             ? 'No TeXRA service was running.'
-            : `Stopped ${stopped}.`,
+            : stopped.pid === undefined
+              ? 'Stopped the TeXRA service.'
+              : `Stopped the TeXRA service (pid ${stopped.pid}).`,
         );
       }),
     ),
@@ -252,13 +210,7 @@ const restartCommand = defineCliCommand({
     const info = yield* Effect.scoped(
       Effect.gen(function* () {
         const link = yield* linkCliService(context.storageRoot, true);
-        if (!isLinked(link))
-          return yield* new CliServiceFailed({ message: link.none });
-        const client = yield* link.client.get;
-        if (client === null)
-          return yield* new CliServiceFailed({
-            message: 'The TeXRA service is not linked.',
-          });
+        const client = yield* linkedClient(link);
         return yield* client['service.hello']({ protocol: PROTOCOL.digest });
       }),
     );

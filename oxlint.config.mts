@@ -111,22 +111,18 @@ const APP: ImportBan[] = [
   { regex: '(?:^|/)packages/texra/', message: HARNESS_NO_APP },
 ];
 
-const BROWSER_SAFE_ENTRIES =
-  'Browser bundle: use @texra-ai/harness/schemas or /transcript.';
+const HARNESS_ENTRIES =
+  'Outside the harness, import @texra-ai/harness or its public subpaths (/host, /node, /plugins, /schemas, /transcript), never a harness internal.';
+/** The aliases into the harness's sources, and a path into them. */
+const HARNESS_INTERNALS: ImportBan[] = [
+  { group: aliasPatterns(['packages/harness']), message: HARNESS_ENTRIES },
+  { regex: '(?:^|/)harness/src/', message: HARNESS_ENTRIES },
+];
+
 const BROWSER_BUNDLE: ImportBan[] = [
   {
-    group: ['@common', '@common/**', '@tools', '@tools/**'],
-    allowTypeImports: true,
-    message: 'Browser bundle: runtime values come from browser-safe modules.',
-  },
-  {
-    group: ['@utils', '@utils/**'],
-    allowTypeImports: true,
-    message: BROWSER_SAFE_ENTRIES,
-  },
-  {
     regex: '^@texra-ai/harness(/host|/node|/plugins)?$',
-    message: BROWSER_SAFE_ENTRIES,
+    message: 'Browser bundle: use @texra-ai/harness/schemas or /transcript.',
   },
 ];
 
@@ -245,12 +241,36 @@ const CORE = [
   'packages/harness/src/transcriptEntry.ts',
 ];
 
+/** Every package but the harness: sources, suites, scripts and tooling. */
+const HARNESS_CONSUMERS = [
+  'packages/cli',
+  'packages/desktop',
+  'packages/extension',
+  'packages/llm',
+  'packages/texra',
+  'packages/trace-viewer',
+];
+
+/**
+ * The validators' stand-ins for a session's own internals, which no public
+ * entry serves: the TUI harness seeds a session's rows through its owners,
+ * and the editor-less window opens the global store without a process
+ * runtime.
+ */
+const VALIDATOR_HARNESSES = [
+  'packages/cli/scripts/tui-harness.tsx',
+  'packages/cli/scripts/service-host-harness.ts',
+];
+
 /** The runtime entries outside the hosts: the files that may run an Effect. */
 const RUNTIME_ENTRIES = [
   'packages/harness/src/platform/processRuntime.ts',
   'packages/harness/src/agent/codeSandbox/worker.ts',
   'packages/texra/src/ui/progress/sessionTransport.ts',
   'packages/texra/src/shared/signals.ts',
+  // The trace page's stand-in host: it serves the shell before any bundle
+  // runtime exists.
+  'packages/trace-viewer/src/traceHostBridge.ts',
 ];
 
 /** The llm protocol code, which may load Node built-ins and vendor SDKs. */
@@ -280,6 +300,11 @@ const IMPORT_ZONES: Zone<ImportBan>[] = [
   { bans: VSCODE, in: VSCODE_FREE },
   { bans: HOST_LAYER, in: ['packages/harness/src', 'packages/texra/src'] },
   { bans: APP, in: ['packages/harness/src'] },
+  {
+    bans: HARNESS_INTERNALS,
+    in: HARNESS_CONSUMERS,
+    except: VALIDATOR_HARNESSES,
+  },
   { bans: BROWSER_BUNDLE, in: BROWSER_BUNDLES },
   { bans: VSCODE_OR_ELECTRON, in: ['packages/cli/src'] },
   { bans: REPO_MODULES, in: ['packages/llm/src'] },

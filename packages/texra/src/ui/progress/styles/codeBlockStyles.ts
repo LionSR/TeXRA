@@ -1,6 +1,9 @@
 // Third-party imports
 import { css } from 'lit';
 
+// Local imports - shared styles
+import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+
 /**
  * Code block styles for syntax highlighted code with language badge and copy button.
  * Used by buildCodeBlock() in htmlBuilders.
@@ -9,7 +12,7 @@ export const codeBlockStyles = css`
   .code-block {
     position: relative;
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
+    border-radius: var(--border-radius-medium);
     overflow: hidden;
     max-width: 100%;
     min-width: 0;
@@ -26,10 +29,7 @@ export const codeBlockStyles = css`
   }
 
   .code-block-language {
-    color: var(--wa-color-text-quiet);
-    text-transform: uppercase;
-    letter-spacing: var(--letter-spacing-caps);
-    font-weight: var(--font-weight-medium);
+    ${overlineDeclarations}
   }
 
   .code-block pre {

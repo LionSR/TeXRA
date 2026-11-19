@@ -14,7 +14,7 @@ import {
   type SubscriptionSignInPresenter,
   type SubscriptionSignOutResult,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import { ACCOUNT_OUTCOME, SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
@@ -73,20 +73,24 @@ export const signInCliSubscription = Effect.fn(
   options: CliSubscriptionLoginOptions,
 ) {
   const provider = subscriptionProvider(providerId);
-  const { displayName } = provider;
+  const { displayName, sessionName } = provider;
   // The presenter port runs with nothing in context, so the spawner this
   // program holds is handed to the browser launch.
   const spawner = yield* ChildProcessSpawner;
   const present: SubscriptionSignInPresenter = {
-    presentDeviceCode: ({
-      userCode,
-      verificationUrl,
-      verificationUrlComplete,
-    }) =>
+    presentDeviceCode: (prompt) =>
       Effect.sync(() => {
-        const openUrl = verificationUrlComplete ?? verificationUrl;
+        const steps = SIGN_IN_PROMPT.deviceCodeSteps(
+          displayName,
+          {
+            ...prompt,
+            verificationUrl:
+              prompt.verificationUrlComplete ?? prompt.verificationUrl,
+          },
+          false,
+        );
         options.writeProgress(
-          `To sign in with ${displayName}:\n  1. Open ${openUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
+          `${steps}\nWaiting for approval... (Ctrl-C cancels)`,
           { copyable: true },
         );
       }),
@@ -97,6 +101,7 @@ export const signInCliSubscription = Effect.fn(
       presentCliSignInUrl({
         writeProgress: options.writeProgress,
         displayName,
+        sessionName,
         url,
         noBrowser: init.noBrowser || init.device,
       }).pipe(Effect.provideService(ChildProcessSpawner, spawner)),

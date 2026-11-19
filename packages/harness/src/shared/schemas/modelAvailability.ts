@@ -58,10 +58,7 @@ Object.freeze(MODEL_AVAILABILITY_STATUS);
  * resolved when the options were read; this only reads that verdict.
  */
 export function isModelOptionAvailable(model: {
-  readonly availability?: ModelAvailabilityKind;
+  readonly availability: ModelAvailabilityKind;
 }): boolean {
-  return (
-    model.availability === undefined ||
-    MODEL_AVAILABILITY_STATUS[model.availability].available
-  );
+  return MODEL_AVAILABILITY_STATUS[model.availability].available;
 }

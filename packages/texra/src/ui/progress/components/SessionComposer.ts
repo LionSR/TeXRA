@@ -33,7 +33,6 @@ import {
   type Surface,
 } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { appendClipboardImageChips } from '@texra/shared/utils/clipboard';
 import {
   clipboardImageFiles,
   getExtensionFromMimeType,
@@ -42,6 +41,7 @@ import {
 } from '@texra/shared/utils/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -86,9 +86,7 @@ export class SessionComposer extends LitElement {
       }
       .routing .routing-target {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
       .routing .routing-parent,
       .routing .routing-parent::part(base) {
@@ -110,7 +108,7 @@ export class SessionComposer extends LitElement {
       /* The shared field focus (selectStyles.ts), at card radius. */
       .composer:focus-within {
         border-color: var(--wa-color-focus);
-        box-shadow: 0 0 0 1px var(--wa-color-focus);
+        box-shadow: var(--field-focus-halo);
       }
       /* Follow-ups keep a writing area above the same action row as launch.
          Controls never move into the text line or appear only on focus. */
@@ -217,9 +215,7 @@ export class SessionComposer extends LitElement {
       .chip-label {
         display: block;
         max-width: 14ch;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
       .recording::part(base) {
         color: var(--color-error);
@@ -383,10 +379,15 @@ export class SessionComposer extends LitElement {
     }
     // The paste was taken over above, so its text goes in even when every
     // image failed: otherwise the failure would also cost the typed text.
-    const insert = appendClipboardImageChips(
-      pastedText,
-      added.map(({ fileName }) => fileName),
-    );
+    const chips = added.map(({ fileName }) => `[${fileName}]`).join(' ');
+    const boundary =
+      chips !== '' &&
+      pastedText &&
+      !pastedText.endsWith(' ') &&
+      !pastedText.endsWith('\n')
+        ? ' '
+        : '';
+    const insert = `${pastedText}${boundary}${chips}`;
     // The draft holds each chip's name now and its stored path once the
     // host answers (`sessionSurfaces.applyHostOutcome`).
     const pending = added.map(({ fileName }) => ({ fileName, media: null }));

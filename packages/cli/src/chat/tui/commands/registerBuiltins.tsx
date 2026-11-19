@@ -6,10 +6,11 @@ import { Effect, Result } from 'effect';
 import { type RunId, runBypasses } from '@texra-ai/harness/schemas';
 import { InstalledPlugins } from '@texra-ai/harness/host';
 import { parseCliHistoryId } from '@cli/runtime/history';
+import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
-import { PLUGINS_TUI } from '@ui/copy/plugins';
 
+import { PLUGINS_TUI } from './pluginsCopy';
 import { AgentListForm } from '../forms/AgentListForm';
 import {
   ApprovalPolicyForm,
@@ -62,7 +63,6 @@ import {
   type SlashFormProps,
 } from './slashRegistry';
 import { openRegisteredCliSlashForm } from './slashForms';
-import { SlashCommandFailed } from './handleSlashCommand';
 import { modelAccessContribution } from './modelAccessContribution';
 
 /** The built-in slash commands, with the two forms the chat opens itself:
@@ -250,7 +250,7 @@ export function builtinSlashCommands(options: {
     const [, source, pick] =
       /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
     if (verb?.toLowerCase() !== 'add' || !source)
-      return yield* new SlashCommandFailed({ message: PLUGINS_TUI.addUsage });
+      return yield* new CliUsageError({ message: PLUGINS_TUI.addUsage });
     const { roots } = context.runSession;
     const origin = InstalledPlugins.origin(
       source,
@@ -382,7 +382,7 @@ export function builtinSlashCommands(options: {
               return yield* resumeInterruptedTasks(context.resumeTask);
             const id = parseCliHistoryId(remainder);
             if (!id)
-              return yield* new SlashCommandFailed({
+              return yield* new CliUsageError({
                 message: `Invalid task id: ${remainder}`,
               });
             yield* context.resumeRun(id);

@@ -24,6 +24,7 @@ import {
   type RunId,
   generateRunId,
   factName,
+  runNoun,
   type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
@@ -34,7 +35,6 @@ import {
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { descriptionRow } from '@shared/session/runFacts';
 import { factRow } from '@tools/plugins';
@@ -65,13 +65,6 @@ const isAtTurnBoundary = (state: RunState): boolean =>
 
 const refused = (reason: string) => new Rejected({ reason });
 
-/** A run's noun in a refusal, one of the two the product uses: an agent is a
- *  run another run started, any other run is a task. */
-export const runNoun = (
-  view: Pick<SessionViewAccessShape, 'run'>,
-  runId: RunId,
-): 'task' | 'agent' => (view.run(runId)?.parentId == null ? 'task' : 'agent');
-
 /** What a fork reads and writes of its session. */
 type ForkServices =
   | ToolRegistry
@@ -101,7 +94,7 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
   const facts = yield* log.facts(from);
   const start = facts?.start;
   if (start == null) {
-    const noun = runNoun(yield* SessionViewAccess, from);
+    const noun = runNoun((yield* SessionViewAccess).run(from));
     return yield* refused(`The ${noun} ${from} has no recorded start.`);
   }
   // The cut is a position row: a turn boundary of the source, not any seq.

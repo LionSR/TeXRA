@@ -299,10 +299,9 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
     .toHaveLength(1);
   const decided = rowAt(rowsOf<Decided>(asking.runId, 'request.decided'), 0);
   expect(decided.requestId).toBe(opened.requestId);
-  expect(decided.decision).toMatchObject({
+  // The agent and model are the proposal's, so the decision names neither.
+  expect(decided.decision).toStrictEqual({
     action: 'approve',
-    agent: null,
-    model: null,
     instruction: EDITED,
     inputFiles: ['draft.tex'],
     contextFiles: ['macros.tex'],

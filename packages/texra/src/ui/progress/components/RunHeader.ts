@@ -21,6 +21,7 @@ import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import {
   renderIconActionButton,
@@ -91,9 +92,7 @@ export class RunHeader extends LitElement {
         flex: 0 1 auto;
         min-width: 6ch;
         margin: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         color: var(--wa-color-text-normal);
         font-size: var(--font-size);
         font-weight: var(--font-weight-semibold);
@@ -125,9 +124,7 @@ export class RunHeader extends LitElement {
         color: var(--color-text-link);
       }
       .forked-from {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         font-size: var(--font-size-xs);
       }
 
@@ -142,9 +139,6 @@ export class RunHeader extends LitElement {
       }
 
       .status-indicator {
-        flex: 0 0 auto;
-        width: 7px;
-        height: 7px;
         margin: 0 var(--wa-space-3xs);
       }
 
@@ -181,9 +175,7 @@ export class RunHeader extends LitElement {
         font-size: var(--font-size-sm);
       }
       .ancestor-label {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
         min-width: 0;
       }
       .ancestor-separator {

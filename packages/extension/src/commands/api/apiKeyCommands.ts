@@ -18,7 +18,10 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
+import {
+  commitProviderKey,
+  removeProviderKey,
+} from '@texra/controllers/settingsView/providerKeyActions';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { credentialOriginLabel } from '@ui/copy/credentials';
 
@@ -26,17 +29,6 @@ const CHANNEL = 'ApiKeyCommands';
 
 interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
   provider: ApiKeyProviderId;
-}
-
-/**
- * Delegates the write/delete/confirm/notify sequence to the same controller
- * settingsView's Profile tab uses, so the two surfaces can't drift apart on
- * confirmation prompts or messaging (see SettingsProfileKeyController).
- */
-function createProfileKeyController(
-  stores: SettingsStores,
-): SettingsProfileKeyController {
-  return new SettingsProfileKeyController({ dialogs: vscodeUi, stores });
 }
 
 /**
@@ -135,13 +127,13 @@ export const setApiKey = Effect.fn('setApiKey')(function* (
   const apiKey = yield* promptForApiKey(target, keyUrl);
   if (!apiKey) return;
 
-  yield* createProfileKeyController(stores)
-    .commitProviderKey(target, apiKey)
-    .pipe(
-      Effect.catchTag('ProviderKeyActionFailed', (error) =>
-        showLoggedErrorMessage(error.message, error.cause),
-      ),
-    );
+  // The same write the settings view's Profile tab makes, so the two
+  // surfaces cannot drift apart on messaging.
+  yield* commitProviderKey(vscodeUi, stores, target, apiKey).pipe(
+    Effect.catchTag('ProviderKeyActionFailed', (error) =>
+      showLoggedErrorMessage(error.message, error.cause),
+    ),
+  );
 }, withLogChannel(CHANNEL));
 
 /** Remove an API key after a confirmation prompt. */
@@ -157,11 +149,9 @@ export const removeApiKey = Effect.fn('removeApiKey')(function* (
     return;
   }
 
-  yield* createProfileKeyController(stores)
-    .removeProviderKey(provider)
-    .pipe(
-      Effect.catchTag('ProviderKeyActionFailed', (error) =>
-        showLoggedErrorMessage(error.message, error.cause),
-      ),
-    );
+  yield* removeProviderKey(vscodeUi, stores, provider).pipe(
+    Effect.catchTag('ProviderKeyActionFailed', (error) =>
+      showLoggedErrorMessage(error.message, error.cause),
+    ),
+  );
 }, withLogChannel(CHANNEL));

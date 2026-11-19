@@ -1,88 +1,51 @@
 /**
- * The webview's Effect graphs:
- * one per session key, in a `LayerMap`, built on the one `ManagedRuntime`
- * a webview entry makes with `installWebviewRuntime`. SessionInputs is fed
- * directly by the ordered frames; the harness's `RemoteSessionView` applies
- * them in the sidebar, editor tab, and Electron renderer. SessionFrames
- * carries the host snapshot separately from the view.
+ * A session's view where its store is not: the webviews, the Electron
+ * renderer, and a window or `texra run` reading the background service. The
+ * caller hands `remoteSessionView` the read its transport answers (the
+ * session channel's `session.frames`, the service's `task.watch`); the view
+ * calls it again for every transcript set, from where it stands, and
+ * interrupts the read it replaces.
  *
- * The shell opens a session with `WebviewSessions.open(key)`, begins a
- * generation on its frames right before it posts the `Subscribe` up, and
- * feeds every frame the bridge delivers to `frames.feed` in arrival order. The transport
- * that installed the runtime disposes it, once, on the shutdown path its
- * entry drives.
+ * A webview entry makes its one Effect runtime with `installWebviewRuntime`;
+ * the transport that installed it disposes it, once, on the shutdown path
+ * its entry drives.
  */
-import { Context, Effect, Layer, LayerMap, ManagedRuntime } from 'effect';
+import { Context, Effect, Layer, ManagedRuntime, type Scope } from 'effect';
 
-// The browser entry, not the harness root: this layer runs in the webview,
-// which must not evaluate the Node process composition.
+// The browser entry, not the harness root: this runs in the webview, which
+// must not evaluate the Node process composition.
 import {
   RemoteSessionView,
   SessionInputs,
   viewDiagnosticsLayer,
   withForkFailureReporting,
 } from '@texra-ai/harness/transcript';
-import { SessionFrames } from '@texra/shared/session/sessionFrames';
 
-/** The graph of one session key. `Layer.fresh` for the same reason as the
- *  runtime's: static layers memoize by reference across the map. */
-const webviewSessionLayer = (key: string) =>
-  Layer.fresh(
+/** The view of the session `key` over `read`, for the caller's scope. */
+export const remoteSessionView = (
+  key: string,
+  read: Context.Service.Shape<typeof SessionInputs>['read'],
+): Effect.Effect<
+  Context.Service.Shape<typeof RemoteSessionView>,
+  never,
+  Scope.Scope
+> =>
+  Layer.build(
     RemoteSessionView.layer(key).pipe(
-      Layer.provide(
-        Layer.effect(
-          SessionInputs,
-          // The frames are the runtime reader's own batches, cut for this
-          // webview's `Subscribe`: the arguments are the subscribe's.
-          Effect.map(SessionFrames, (frames) => ({
-            read: () => frames.inputs(),
-          })),
-        ),
-      ),
-      Layer.provideMerge(SessionFrames.layer),
+      Layer.provide(Layer.succeed(SessionInputs)({ read })),
     ),
-  );
-
-/** One open session of a webview: the services its shell drives, under
- *  the scope `open` was run in. */
-interface WebviewSession {
-  readonly frames: Context.Service.Shape<typeof SessionFrames>;
-  /** The shell is the view's one subscribing port. */
-  readonly view: Context.Service.Shape<typeof RemoteSessionView>;
-}
-
-export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
-  '@texra-ai/texra/session/WebviewSessions',
-  { lookup: webviewSessionLayer },
-) {
-  /** The session of a key, built on first open and shared until the last
-   *  scope holding it closes. */
-  static open(key: string) {
-    return WebviewSessions.contextEffect(key).pipe(
-      Effect.map((context): WebviewSession => ({
-        frames: Context.get(context, SessionFrames),
-        view: Context.get(context, RemoteSessionView),
-      })),
-    );
-  }
-}
-
-type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
+  ).pipe(Effect.map((context) => Context.get(context, RemoteSessionView)));
 
 /**
- * Make the one Effect runtime of this webview over its session family:
- * called by the webview transport exactly once per module evaluation
- * and disposed by it, on the one shutdown path the entry drives. Fork
- * reporting applies here as it does to the process runtime; the logger
- * layer is the harness's view logger (the redacting sink), not the
- * default console logger.
+ * Make the one Effect runtime of this webview: called by the webview
+ * transport exactly once per module evaluation and disposed by it, on the
+ * one shutdown path the entry drives. Fork reporting applies here as it
+ * does to the process runtime; the logger layer is the harness's view
+ * logger (the redacting sink), not the default console logger.
  */
-export function installWebviewRuntime(): WebviewRuntime {
-  return withForkFailureReporting(
-    ManagedRuntime.make(
-      WebviewSessions.layerNoDeps.pipe(
-        Layer.provideMerge(viewDiagnosticsLayer),
-      ),
-    ),
-  );
+export function installWebviewRuntime(): ManagedRuntime.ManagedRuntime<
+  never,
+  never
+> {
+  return withForkFailureReporting(ManagedRuntime.make(viewDiagnosticsLayer));
 }

@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 
 import { withProcessServices } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -17,20 +17,13 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { pruneStorage } from '../runtime/pruneStorage';
 
-import { getCliModelAccessList } from '../runtime/models/modelAccess';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/platform/cliContext';
-
-/** The command's runtime could not be built; the report says so in its
- *  platform row. */
-class CliRuntimeBuildFailed extends Schema.TaggedError<CliRuntimeBuildFailed>()(
-  'CliRuntimeBuildFailed',
-  { message: Schema.String, cause: Schema.Defect() },
-) {}
 
 /** The healthy report, on the command's runtime once its platform is up. */
 const readyReport = (context: CliContext) =>
@@ -39,7 +32,7 @@ const readyReport = (context: CliContext) =>
       kind: 'ready',
       modelAccessList: withProcessServices(
         services.runtime,
-        getCliModelAccessList({ stores: services }),
+        loadModelOptions(services),
       ),
       // Consent is read from the workspace configuration the platform
       // opened.
@@ -60,15 +53,13 @@ const readyReport = (context: CliContext) =>
  * logs through Effect.
  */
 const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
-  Effect.try({
-    try: () => {
-      // The report is the whole output and names every failure, so the
-      // runtime's log lines go nowhere from its build on.
-      setLogSink(silentLogSink, { trusted: true });
-      return makeCliProcessRuntime(context);
-    },
-    catch: (cause) =>
-      new CliRuntimeBuildFailed({ message: ensureError(cause).message, cause }),
+  // A build that throws needs no failure of its own: it dies here, and the
+  // report below is made from the whole cause.
+  Effect.sync(() => {
+    // The report is the whole output and names every failure, so the
+    // runtime's log lines go nowhere from its build on.
+    setLogSink(silentLogSink, { trusted: true });
+    return makeCliProcessRuntime(context);
   }).pipe(
     Effect.flatMap((runtime) =>
       Effect.promise(() => runtime.runPromiseExit(readyReport(context))).pipe(

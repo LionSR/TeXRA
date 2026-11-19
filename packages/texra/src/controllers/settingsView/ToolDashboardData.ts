@@ -90,7 +90,7 @@ function settingRows(card: PluginCard): Pick<ToolDashboardItem, 'settings'> {
  * the process lists them. A plugin without a card is not shown and cannot
  * be installed, authed or toggled from it.
  */
-export function visibleToolPlugins(
+function visibleToolPlugins(
   plugins: ReadonlyMap<string, Plugin>,
 ): readonly { readonly card: PluginCard; readonly plugin: Plugin }[] {
   return [...plugins.values()].flatMap((plugin) => {
@@ -123,6 +123,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         status: 'available' as const,
         installActions: [],
         requiresSetup: false,
+        switch: 'always-on' as const,
         ...settingRows(card),
       }));
 
@@ -180,8 +181,12 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         configNotes,
         statusDetail,
         authNote,
-        toggleable: plugin.toggle !== undefined,
-        enabled: !disabledIds.has(plugin.id),
+        switch:
+          plugin.toggle === undefined
+            ? 'always-on'
+            : disabledIds.has(plugin.id)
+              ? 'off'
+              : 'on',
         ...settingRows(card),
       });
     }

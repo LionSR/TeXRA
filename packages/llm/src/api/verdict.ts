@@ -162,14 +162,38 @@ function glmPlanLimit(body: unknown): Quota | undefined {
   );
 }
 
-/** The account itself is out of credit: OpenAI's `insufficient_quota`, DeepSeek's `insufficient_balance_error`, Anthropic's low balance. */
+/**
+ * Anthropic's codes for an account its billing stops: a spend cap reached
+ * (the tier's or a contract's, a 429 typed as a rate limit that waiting
+ * does not clear), a linked organization's billing, or a user profile not
+ * allowed to bill. A ramp limit (`ramp_limit_exceeded`) is a transient 429
+ * and is not here.
+ */
+const ANTHROPIC_BILLING_STOPPED: ReadonlySet<string> = new Set([
+  'enforced_spend_limit_reached',
+  'contract_spend_limit_reached',
+  'linked_organization_spend_limit_reached',
+  'linked_organization_billing_unavailable',
+  'user_profile_billing_not_authorized',
+]);
+
+/**
+ * The account itself is out of credit: OpenAI's `insufficient_quota`,
+ * DeepSeek's `insufficient_balance_error`, Anthropic's billing codes
+ * (`error.details.error_code`) and its low balance, which has no code.
+ */
 const creditDepleted = (body: unknown): boolean =>
   envelopes(body).some((candidate) => {
     const type = stringField(candidate, 'type');
     const message = stringField(candidate, 'message')?.toLowerCase() ?? '';
+    const { details } = candidate;
     return (
       [stringField(candidate, 'code'), type].includes('insufficient_quota') ||
       type === 'insufficient_balance_error' ||
+      (isFields(details) &&
+        ANTHROPIC_BILLING_STOPPED.has(
+          stringField(details, 'error_code') ?? '',
+        )) ||
       (type === 'invalid_request_error' &&
         message.includes('credit balance is too low')) ||
       message.includes('exceeded your current quota')

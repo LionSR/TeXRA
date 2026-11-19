@@ -9,7 +9,7 @@ import type {
   ChatgptSession,
   SubscriptionCoordinator,
 } from '@texra-ai/llm/node';
-import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import { chatgptPolicy } from '../../src/oauth/chatgpt/chatgptProvider.js';
 import { SubscriptionOAuthCoordinator } from '../../src/oauth/SubscriptionOAuthCoordinator.js';
 import type { SubscriptionTokenResponse } from '../../src/oauth/subscriptionCoordinator.js';
 import { jsonResponse } from '@test/support/fetchTestUtils';
@@ -148,7 +148,7 @@ function makeCoordinator(
 ): Effect.Effect<SubscriptionCoordinator<ChatgptSession>> {
   grants = endpointGrants;
   return SubscriptionOAuthCoordinator.make(storage, {
-    ...CHATGPT_POLICY,
+    ...chatgptPolicy({ name: 'Synthetic', id: 'synthetic' }),
     deviceGrant: () => Effect.succeed(signInTokens),
   });
 }

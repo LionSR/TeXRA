@@ -21,7 +21,7 @@ import {
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
 
-import { RunRegistry, Runs } from './runRegistry';
+import { RunRegistry } from './runRegistry';
 import { Interactions } from './HostInteractions';
 import { ProjectTools } from './loop/step';
 import { SessionRequests, workAutoApproved } from './requests';
@@ -108,7 +108,6 @@ export interface ChildRunsShape {
 export const sessionServices = Effect.map(
   Effect.context<SessionServices>(),
   Context.pick(
-    Runs,
     RunRegistry,
     SessionLog,
     SessionViewAccess,

@@ -44,9 +44,7 @@ const EMPTY_DRAFT: InquiryDraft = Object.freeze({
 /** The distinct session links the earlier answers cite, most recent first,
  *  so the person can continue the same outside conversation. */
 function knownSessionLinks(turns: readonly AnsweredInquiryTurn[]): string[] {
-  return [
-    ...new Set(turns.toReversed().flatMap((turn) => turn.sessionLinks ?? [])),
-  ];
+  return [...new Set(turns.toReversed().flatMap((turn) => turn.sessionLinks))];
 }
 
 interface ValidatableTextarea extends HTMLElement {
@@ -142,7 +140,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
       ${this.renderQuestion(turn.question)}
       ${turn.suggestSearch ? this.renderSearchHint() : nothing}
       ${
-        turn.attachFiles?.length
+        turn.attachFiles.length > 0
           ? this.renderAttachFiles(turn.attachFiles)
           : nothing
       }
@@ -205,7 +203,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
           ${turn.answer}
         </div>
         ${
-          turn.sessionLinks?.length
+          turn.sessionLinks.length > 0
             ? html`
                 <ul class="external-inquiry-request__transcript-links">
                   ${turn.sessionLinks.map(

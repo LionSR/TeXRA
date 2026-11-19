@@ -119,9 +119,9 @@ export const NO_FACTS: RunFacts = Object.freeze({
  *  last, and a `null` instruction returns to the launch's. */
 export function withInput(
   input: RunFacts['input'],
-  recorded: RunInput | null | undefined,
+  recorded: RunInput | undefined,
 ): RunFacts['input'] {
-  if (recorded == null) return input;
+  if (recorded === undefined) return input;
   const { instruction: was, ...kept } = input;
   const { instruction, system, activated, memoryMisses } = recorded;
   const next = instruction === undefined ? was : (instruction ?? undefined);
@@ -208,11 +208,10 @@ export const boundsLifecycle = (
 
 /** What a run is registered with: the facts its `run.start` carries. */
 export interface RegisterRunOptions {
-  /** The launching run: the whole parent edge, stamped on `run.start`. */
-  readonly parentId?: RunId;
-  /** The parent's call that launched it, which owns this run until it
-   *  detaches, and that call's tool card. */
-  readonly parentCall?: NonNullable<RunParent['call']>;
+  /** The parent edge `run.start` records: the launching run, and its call
+   *  that launched this one (null: no call did). The database stamps the
+   *  parent's `uid`. */
+  readonly parent?: Omit<RunParent, 'uid'>;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
@@ -276,13 +275,10 @@ export function registrationDrafts(
     aggregateId: target,
     identity: options.identity,
     takesFollowUps: options.takesFollowUps ?? false,
-    worktree: worktree ? { workingDirectory: worktree } : undefined,
-    parent:
-      options.parentId === undefined
-        ? null
-        : { id: options.parentId, call: options.parentCall ?? null },
+    worktree: worktree ? { workingDirectory: worktree } : null,
+    parent: options.parent ?? null,
     provenance: options.provenance ?? null,
-    approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
+    grants: options.grants ?? NO_APPROVAL_GRANTS,
   };
   const rows: SessionRowDraft[] = [
     ...(ended === null ? [start] : []),

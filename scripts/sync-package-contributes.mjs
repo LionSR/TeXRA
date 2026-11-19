@@ -12,7 +12,8 @@ import { build } from 'esbuild';
 
 // Code-generate the catalog-derived parts of the VS Code manifest
 // (`contributes.commands`, `contributes.keybindings`,
-// `contributes.menus.commandPalette`) from the command catalog
+// `contributes.menus.commandPalette`) from the command catalog and the
+// extension's presentation of it (`packages/extension/src/commandManifest.ts`)
 // and `contributes.chatSkills` from the bundled skills on disk, so the
 // manifest never has to be hand-edited; `contributes.configuration` is
 // forbidden outright (native settings view). In `--check` mode this is the CI
@@ -24,12 +25,12 @@ const require = createRequire(import.meta.url);
 const bundleDir = await mkdtemp(
   path.join(tmpdir(), 'texra-package-contributes-'),
 );
-let commandCatalog;
+let commandManifest;
 try {
   await build({
     absWorkingDir: rootDir,
     entryPoints: {
-      commandCatalog: 'packages/texra/src/shared/commands/catalog.ts',
+      commandManifest: 'packages/extension/src/commandManifest.ts',
     },
     bundle: true,
     format: 'cjs',
@@ -38,7 +39,7 @@ try {
     outdir: bundleDir,
     tsconfig: 'tsconfig.json',
   });
-  commandCatalog = require(path.join(bundleDir, 'commandCatalog.js'));
+  commandManifest = require(path.join(bundleDir, 'commandManifest.js'));
 } finally {
   await rm(bundleDir, { recursive: true, force: true });
 }
@@ -46,7 +47,7 @@ const {
   packageCommandContributions,
   packageCommandPalette,
   commandKeybindings,
-} = commandCatalog;
+} = commandManifest;
 
 // One chat skill per bundled `SKILL.md`: the core `resources/skills/<name>/`
 // and each tool plugin's `resources/plugins/<id>/skills/<name>/`. The runtime

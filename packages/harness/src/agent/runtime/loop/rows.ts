@@ -18,7 +18,6 @@ import {
   type RunBinding,
   type RunId,
   type RunInput,
-  type RunOutcome,
   SCRIPT_TOOL_NAME,
   type RunRecord,
 } from '@shared/schemas';
@@ -52,33 +51,17 @@ export const finalizedRows = (
   ];
 };
 
-/** Where the loop stands; a run's first one opens it. A turn's end says
- *  how the turn ended. */
-export function positionRow(
-  runId: RunId,
-  state: Pick<RunState, 'turn'>,
-  at: Exclude<PositionAt, 'turn.end'>,
-): RunHistoryDraft;
-export function positionRow(
-  runId: RunId,
-  state: Pick<RunState, 'turn'>,
-  at: 'turn.end',
-  outcome: Exclude<RunOutcome, 'cancelled'>,
-): RunHistoryDraft;
+/** Where the loop stands; a run's first one opens it. How a run ended is
+ *  its `run.end` row's. */
 export function positionRow(
   runId: RunId,
   state: Pick<RunState, 'turn'>,
   at: PositionAt,
-  outcome?: RunOutcome,
 ): RunHistoryDraft {
   return {
     type: 'run.position',
     aggregateId: runId,
-    payload: {
-      at,
-      turn: state.turn,
-      ...(outcome !== undefined && { outcome }),
-    },
+    payload: { at, turn: state.turn },
   };
 }
 

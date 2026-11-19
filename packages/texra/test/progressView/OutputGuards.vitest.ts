@@ -5,11 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { CliUsageError } from '@cli/runtime/platform/cliContext';
-import {
-  assertOutputDirAvailable,
-  assertOutputFileAvailable,
-} from '@cli/runtime/headless/documentTaskOutput';
+import { checkOutputDestination } from '@texra/controllers/progressView/documentTaskOutputs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -20,7 +16,7 @@ const tempDirs = useTempDirs();
 // than a help.
 describe('dangling output symlinks', () => {
   it.live(
-    'keeps a dangling --output symlink writable and rejects a dangling --output-dir before run',
+    'keeps a dangling file destination symlink writable and rejects a dangling directory destination before run',
     (context) =>
       Effect.gen(function* () {
         const root = yield* Effect.promise(() =>
@@ -30,23 +26,19 @@ describe('dangling output symlinks', () => {
         const fileLink = join(root, 'file-link.tex');
         const directoryReferent = join(root, 'absent-directory');
         const directoryLink = join(root, 'directory-link');
-        const linkError = yield* Effect.match(
-          Effect.tryPromise({
-            try: async () => {
-              await symlink(fileReferent, fileLink, 'file');
-              await symlink(
-                directoryReferent,
-                directoryLink,
-                process.platform === 'win32' ? 'junction' : 'dir',
-              );
-            },
-            catch: (error: unknown) => error,
-          }),
-          {
-            onSuccess: () => undefined,
-            onFailure: (error: unknown) => error,
-          },
-        );
+        const linkError = yield* Effect.promise(async (): Promise<unknown> => {
+          try {
+            await symlink(fileReferent, fileLink, 'file');
+            await symlink(
+              directoryReferent,
+              directoryLink,
+              process.platform === 'win32' ? 'junction' : 'dir',
+            );
+            return undefined;
+          } catch (error) {
+            return error;
+          }
+        });
         if (linkError !== undefined) {
           const code =
             linkError instanceof Error && 'code' in linkError
@@ -63,19 +55,25 @@ describe('dangling output symlinks', () => {
         }
 
         expect(
-          yield* assertOutputFileAvailable(fileLink, root),
+          yield* checkOutputDestination({ kind: 'file', path: fileLink }, root),
         ).toBeUndefined();
 
         const dirError = yield* Effect.flip(
-          assertOutputDirAvailable(directoryLink, root),
+          checkOutputDestination(
+            { kind: 'directory', path: directoryLink },
+            root,
+          ),
         );
-        expect(dirError).toBeInstanceOf(CliUsageError);
+        expect(dirError).toMatchObject({
+          _tag: 'OutputDeliveryRejected',
+          reason: { _tag: 'Destination', destination: 'directory' },
+        });
 
-        const statError = yield* Effect.flip(
-          Effect.tryPromise({
-            try: () => stat(directoryReferent),
-            catch: (error: unknown) => error,
-          }),
+        const statError = yield* Effect.promise(() =>
+          stat(directoryReferent).then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
         );
         expect(statError).toMatchObject({ code: 'ENOENT' });
       }).pipe(Effect.provide(nodePlatformLayer)),

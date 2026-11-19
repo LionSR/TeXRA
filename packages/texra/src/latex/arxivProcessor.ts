@@ -31,8 +31,7 @@ import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import { hasExtension } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { LatexProgress } from './progress';
 import {
@@ -80,9 +79,7 @@ class ArxivSourceTransientError extends Schema.TaggedError<ArxivSourceTransientE
 ) {}
 
 /** The typed failures of an arXiv source download. */
-export type ArxivSourceError =
-  | ArxivSourcePermanentError
-  | ArxivSourceTransientError;
+type ArxivSourceError = ArxivSourcePermanentError | ArxivSourceTransientError;
 
 /** What one download attempt reads: the file it writes and the client. */
 type DownloadServices = FileSystem.FileSystem | HttpClient.HttpClient;

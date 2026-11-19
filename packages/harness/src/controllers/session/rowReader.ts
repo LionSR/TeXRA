@@ -11,6 +11,7 @@ import { zstdDecompressSync } from 'node:zlib';
 
 import { Effect, Result, Schema, Struct } from 'effect';
 
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { withLogChannel } from '@logger/effectLog';
 import {
   DISPLAY_ROW_TYPES,
@@ -166,7 +167,7 @@ const factHeader = (data: unknown) => {
   const header = Schema.decodeUnknownResult(
     Schema.fromJsonString(PluginFactHeaderSchema),
   )(String(data));
-  return Result.isSuccess(header) ? header.success : undefined;
+  return Result.getOrUndefined(header);
 };
 
 /** A statement runner over the reader's connection. */
@@ -381,6 +382,8 @@ function bareStart(input: SqlRow): SessionRow | null {
     takesFollowUps: false,
     parent: null,
     provenance: null,
+    worktree: null,
+    grants: NO_APPROVAL_GRANTS,
   };
 }
 

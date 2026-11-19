@@ -63,7 +63,7 @@ const CLAUDE_CODE_MODEL_RULE: AgentCliModelRule = {
 };
 
 /** What one Claude Code session runs: the SDK's model, effort and thinking. */
-export interface ClaudeCodeRun {
+interface ClaudeCodeRun {
   /** The model's llm-zoo reference, the run's model label. */
   readonly ref: string;
   /** The API model ID the SDK takes. */

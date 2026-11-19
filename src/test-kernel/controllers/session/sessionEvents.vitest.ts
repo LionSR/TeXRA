@@ -37,6 +37,7 @@ import {
   Fiber,
   type FileSystem,
   Layer,
+  PlatformError,
   Result,
   Scheduler,
   Schema,
@@ -44,7 +45,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform, nodePlatformServices } from '@texra-ai/harness/node';
@@ -86,7 +87,10 @@ import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  HARNESS_APP,
+} from '@test/support/FakePlatform';
 import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
@@ -126,7 +130,8 @@ const [storage, run] = process.argv.slice(2);
 const append = Effect.flatMap(Database, (db) =>
   db.appendAll([{ type: 'run.start', aggregateId: run,
     identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
-    parent: null, provenance: null }]));
+    worktree: null, parent: null, provenance: null,
+    grants: { own: {}, goal: [] } }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
   Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
@@ -192,7 +197,7 @@ const runStartRow = runStart(RUN);
 const waiting: SessionRowDraft = {
   type: 'run.position',
   aggregateId: RUN,
-  payload: { at: 'waiting' },
+  payload: { at: 'waiting', turn: 0 },
 };
 
 const requested: SessionRowDraft = {
@@ -547,7 +552,11 @@ describe('Sessions owner', () => {
           ),
         );
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
-      }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
+      }).pipe(
+        Effect.provide(
+          Sessions.layer({ platform, plugins: [], client: HARNESS_APP.client }),
+        ),
+      );
     }),
   );
 
@@ -587,7 +596,15 @@ describe('Sessions owner', () => {
         expect(drains).toBe(0);
         yield* sessions.closeAll;
         expect(drains).toBe(1);
-      }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [counted] })));
+      }).pipe(
+        Effect.provide(
+          Sessions.layer({
+            platform,
+            plugins: [counted],
+            client: HARNESS_APP.client,
+          }),
+        ),
+      );
     }),
   );
 });
@@ -1080,7 +1097,7 @@ describe('the session event table and its one publisher', () => {
         thread({ turnCount: 3 }),
       ]);
       const initialCommit = initial[0]?.commit;
-      if (initialCommit === undefined) throw new Error('nothing appended');
+      assert(initialCommit !== undefined, 'nothing appended');
       expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(root);
       // The thread's writer checks its rows in its job (`ownFactsChecked`):
       // a row under a run that is not open is its rejection, and one the
@@ -1150,10 +1167,14 @@ describe('the session event table and its one publisher', () => {
       ).toHaveLength(1);
       expect(yield* first.currentCommit).toBe(8);
       const tombstone = committed.at(-1);
-      const cleanupError = new Error(
-        'The generated directory is not writable.',
-      );
-      if (tombstone?.type !== 'run.removed') throw new Error('no tombstone');
+      assert(tombstone?.type === 'run.removed', 'no tombstone');
+      // What removing a run directory raises when the directory refuses it.
+      const cleanupError = PlatformError.systemError({
+        _tag: 'PermissionDenied',
+        module: 'FileSystem',
+        method: 'remove',
+        description: 'The generated directory is not writable.',
+      });
       // A failed cleanup keeps the tombstone for the next pass.
       expect(
         yield* Effect.flip(
@@ -1248,10 +1269,10 @@ describe('the session event table and its one publisher', () => {
           under(grandchild, child),
           under(deletedFirst, parent),
         ]);
-        if (started === undefined) throw new Error('nothing appended');
+        assert(started !== undefined, 'nothing appended');
         // A child deleted on its own first, its collection still pending.
         const [childStart] = yield* store.aggregateState([deletedFirst]);
-        if (childStart?.startCommit == null) throw new Error('no child start');
+        assert(childStart?.startCommit != null, 'no child start');
         const [childRemoved] = yield* store.runRemoval(
           deletedFirst,
           childStart.startCommit,
@@ -1267,11 +1288,11 @@ describe('the session event table and its one publisher', () => {
             (state) => state.closed,
           ),
         ).toEqual([true, true]);
-        if (
-          childRemoved?.type !== 'run.removed' ||
-          removed?.type !== 'run.removed'
-        )
-          throw new Error('no deletion markers');
+        assert(
+          childRemoved?.type === 'run.removed' &&
+            removed?.type === 'run.removed',
+          'no deletion markers',
+        );
         // The parent's collection first leaves the earlier marker's run to
         // that marker, which still collects it.
         const cleaned: (readonly RunId[])[] = [];

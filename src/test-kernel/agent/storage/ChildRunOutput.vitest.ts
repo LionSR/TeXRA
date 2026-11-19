@@ -156,9 +156,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
 
           const error = yield* Effect.flip(
-            resolveChildRunOutput(parentRunId, absolutePath)
-              .pipe(Effect.provide(resolveLayer))
-              .pipe(Effect.provide(session)),
+            resolveChildRunOutput(parentRunId, absolutePath).pipe(
+              Effect.provide(resolveLayer),
+              Effect.provide(session),
+            ),
           );
           expect(error.message).toContain('is not a direct child');
         }),
@@ -186,9 +187,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 Effect.provide(
                   nativeToolTestLayer({
                     run: { runId: parentRunId, toolPolicy: {}, session },
-                  }),
+                  }).pipe(Layer.provideMerge(resolveLayer)),
                 ),
-                Effect.provide(resolveLayer),
                 Effect.provide(session),
               );
             expect(errorOf(result)).toContain('is not a direct child');
@@ -246,9 +246,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                       callId,
                       run: { runId: parentRunId, toolPolicy: {}, session },
                       origin: { script },
-                    }),
+                    }).pipe(Layer.provideMerge(resolveLayer)),
                   ),
-                  Effect.provide(resolveLayer),
                   Effect.provide(session),
                 );
 
@@ -266,9 +265,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           const session = yield* processSession;
           const host = yield* FakeHost;
           const error = yield* Effect.flip(
-            resolveChildRunOutput(parentRunId, host.path('workspace/draft.tex'))
-              .pipe(Effect.provide(resolveLayer))
-              .pipe(Effect.provide(session)),
+            resolveChildRunOutput(
+              parentRunId,
+              host.path('workspace/draft.tex'),
+            ).pipe(Effect.provide(resolveLayer), Effect.provide(session)),
           );
           expect(error.message).toContain('not inside run storage');
         }),

@@ -18,7 +18,7 @@ import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type {
   HostOutcome,
-  UpMessage,
+  SessionWire,
 } from '@texra/shared/session/sessionFrames';
 import {
   applySurfaceAction,
@@ -139,7 +139,7 @@ function withPickedPaths(
 
 export function createSessionSurfaces(options: {
   readonly storage: KeyValueStore;
-  readonly post: (message: UpMessage) => void;
+  readonly post: (message: SessionWire) => void;
 }): SessionSurfaces {
   const transport = installWebviewTransport(options.post);
   interface Held extends SessionSurface {
@@ -153,10 +153,6 @@ export function createSessionSurfaces(options: {
   const notify = () => {
     for (const listener of [...listeners]) listener();
   };
-
-  function requestId(): string {
-    return crypto.randomUUID();
-  }
 
   /** The transcript subscription follows the shown run. */
   function transcriptTier(entry: Held): {
@@ -174,12 +170,12 @@ export function createSessionSurfaces(options: {
     };
   }
 
-  /** A new generation over the tier: on every open, then whenever the
-   *  tier moves. */
+  /** Name the tier's transcripts to the session's view whenever the tier
+   *  moves; a session opens naming none. */
   function subscribeTranscript(entry: Held): void {
     const { transcript, aggregates } = transcriptTier(entry);
     entry.subscribedTranscript = transcript;
-    transport.subscribe(entry.session, aggregates);
+    transport.subscribe(entry.key, aggregates);
   }
 
   function setSurface(entry: Held, next: Surface): void {
@@ -232,7 +228,6 @@ export function createSessionSurfaces(options: {
       },
     );
     held.set(key, entry);
-    subscribeTranscript(entry);
   }
 
   /** An asynchronous operation keeps the draft that started it, even if
@@ -401,14 +396,7 @@ export function createSessionSurfaces(options: {
     // Built when it runs: a click that finds the stream busy sends nothing.
     const exchange = Effect.flatMap(
       Effect.suspend(() =>
-        Effect.result(
-          transport.hostRequest({
-            kind: 'host.request',
-            session: entry.key,
-            requestId: requestId(),
-            request,
-          }),
-        ),
+        Effect.result(transport.hostRequest({ session: entry.key, request })),
       ),
       (result) =>
         Effect.sync(() => applyHostAnswer(entry, request, origin, result)),
@@ -467,14 +455,7 @@ export function createSessionSurfaces(options: {
         applyRuntimeAnswer(entry, request, result, submitted, fromForm),
       );
     const exchange = Effect.flatMap(
-      Effect.result(
-        transport.runtimeRequest({
-          kind: 'runtime.request',
-          session: key,
-          requestId: requestId(),
-          request,
-        }),
-      ),
+      Effect.result(transport.runtimeRequest({ session: key, request })),
       answered,
     );
     transport.run(
@@ -572,7 +553,7 @@ export function createSessionSurfaces(options: {
         kind: 'followUp.send',
         runId,
         text: text === '' ? '(image)' : text,
-        media: media.length > 0 ? media : null,
+        ...(media.length > 0 && { media }),
       });
       return;
     }

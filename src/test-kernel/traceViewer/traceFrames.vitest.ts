@@ -16,10 +16,7 @@ const AGGREGATE = RUN_ID;
 /** The view the trace's rows build, with the run's transcript
  *  subscribed. */
 function foldTrace(trace: TraceDocument) {
-  const frame = traceFrame(trace, 'trace', {
-    kind: 'subscribe',
-    session: 'trace',
-    generation: 1,
+  const frame = traceFrame(trace, {
     debug: false,
     cursor: 0,
     aggregates: [{ id: AGGREGATE, fromSeq: 0 }],
@@ -56,6 +53,7 @@ function runStart(): Record<string, unknown> {
     worktree: null,
     parent: null,
     provenance: null,
+    grants: { own: {}, goal: [] },
   };
 }
 

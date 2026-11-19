@@ -23,7 +23,6 @@ import {
   type AgentTrace,
   sourceLocationUnder,
 } from '@texra-ai/harness/plugins';
-import { hasExtension } from '@texra-ai/harness/host';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -31,6 +30,7 @@ import {
   toErrorMessage,
   type FileLocation,
   NonNegativeIntSchema,
+  hasExtension,
 } from '@texra-ai/harness/schemas';
 import replacementEngine, {
   logReplacementDiagnostics,

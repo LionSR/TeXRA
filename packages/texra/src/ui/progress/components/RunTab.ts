@@ -7,6 +7,7 @@ import {
   getBasename,
   formatResultCount,
   joinFacts,
+  runNoun,
 } from '@texra-ai/harness/schemas';
 import {
   LitElement,
@@ -51,7 +52,6 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   NESTED_AGENT,
   nestedRollupLabel,
-  runNoun,
   TASK_ACTIONS,
 } from '@ui/copy/nestedRuns';
 import { formatRelativeTime } from '@ui/copy/format';
@@ -291,7 +291,7 @@ export class RunTab extends LitElement {
               ${
                 this.unseen
                   ? html`<span
-                      class="tab-unseen"
+                      class="status-indicator tab-unseen"
                       role="img"
                       aria-label="Finished since you last looked"
                     ></span>`

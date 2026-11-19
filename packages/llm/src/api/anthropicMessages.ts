@@ -39,6 +39,7 @@ import {
   decodeWireOrFail,
   parseOutboundToolArguments,
   refuseAmbientHeaders,
+  refuseUnknownEvent,
   sdkStream,
   wireFail as fail,
 } from './transport.js';
@@ -49,6 +50,7 @@ import {
 } from './uploadCache.js';
 import {
   BlockSchema,
+  EVENT_TYPES,
   EventSchema,
   StopSchema,
   UsageSchema,
@@ -372,9 +374,10 @@ function anthropicWire() {
   const parts = Effect.fnUntraced(function* (
     raw: unknown,
   ): Effect.fn.Return<PartEvent[], ModelError> {
+    yield* refuseUnknownEvent('Anthropic', 'type', EVENT_TYPES, raw);
     const event = yield* decodeWireOrFail(
       EventSchema,
-      'Anthropic returned an unsupported or malformed stream event.',
+      'Anthropic returned a malformed stream event.',
       raw,
     );
     if (event.type === 'message_start') {

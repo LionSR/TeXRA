@@ -15,6 +15,17 @@ export const ResponsesUsageSchema = Schema.Struct({
     Schema.NullOr(
       Schema.Struct({
         cached_tokens: Schema.optional(Schema.NullOr(CountSchema)),
+        cache_write_tokens: Schema.optional(Schema.NullOr(CountSchema)),
+        // The writes by the cache lifetime requested; what each lifetime
+        // costs is the catalog's (llm-zoo `cacheWriteFactors`).
+        cache_write_tokens_details: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              ttl_30m_tokens: CountSchema,
+              ttl_12h_tokens: CountSchema,
+            }),
+          ),
+        ),
       }),
     ),
   ),
@@ -32,17 +43,19 @@ export const ResponsesUsageSchema = Schema.Struct({
 
 /**
  * The canonical usage of one receipt. A receipt carrying xAI's cost keeps it
- * as `xai` provider evidence.
+ * as `xai` provider evidence, and one splitting its cache writes by lifetime
+ * keeps the split as `openai` evidence.
  */
 export function responsesUsage(
   usage: typeof ResponsesUsageSchema.Type,
 ): NonNullable<TurnResult['usage']> {
+  const writes = usage.input_tokens_details?.cache_write_tokens_details;
   return {
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
     totalTokens: usage.total_tokens ?? null,
     cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? null,
-    cacheWriteTokens: null,
+    cacheWriteTokens: usage.input_tokens_details?.cache_write_tokens ?? null,
     reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? null,
     toolUsePromptTokens: null,
     ...(usage.cost_in_usd_ticks !== undefined
@@ -52,6 +65,14 @@ export function responsesUsage(
             costInUsdTicks: usage.cost_in_usd_ticks,
           },
         }
-      : {}),
+      : writes != null
+        ? {
+            providerUsage: {
+              kind: 'openai',
+              cacheWrite30mTokens: writes.ttl_30m_tokens,
+              cacheWrite12hTokens: writes.ttl_12h_tokens,
+            },
+          }
+        : {}),
   };
 }

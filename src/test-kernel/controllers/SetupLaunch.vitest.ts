@@ -8,6 +8,7 @@ import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { withEnv } from '@test/support/testEnv';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
+import { HARNESS_APP } from '@test/support/FakePlatform';
 
 /** A key store whose Anthropic key cannot be read; every other key is absent. */
 class UnreadableAnthropicKey extends FakeSecrets {
@@ -33,7 +34,9 @@ describe('resolveSetupLaunchModel', () => {
       Effect.gen(function* () {
         const error = yield* Effect.flip(
           resolveSetupLaunchModel(makeFakeSettingsStores().stores).pipe(
-            Effect.provide(Secrets.layer(new UnreadableAnthropicKey())),
+            Effect.provide(
+              Secrets.layer(new UnreadableAnthropicKey(), HARNESS_APP.client),
+            ),
           ),
         );
 

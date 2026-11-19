@@ -17,15 +17,21 @@ import path from 'node:path';
 import { Effect, Layer, Option, Predicate, Schema, Stream } from 'effect';
 
 import { GlobalValues } from '@texra-ai/harness/host';
-import { nodePlatformServices } from '@texra-ai/harness/node';
+import {
+  GlobalDatabase,
+  nodePlatformServices,
+  resolveGlobalStoragePath,
+} from '@texra-ai/harness/node';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
+// No public entry opens the global store outside a process runtime, which
+// this window stands without (this file is an exemption in
+// oxlint.config.mts).
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import { GlobalDatabase } from '@shared/session/database';
 import {
   linkService,
   requestOnService,
   type ServiceLink,
+  ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 
@@ -34,12 +40,6 @@ if (storageRoot === undefined || workspace === undefined)
   throw new Error(
     'usage: service-host-harness <storageRoot> <workspace> <answer|hang|approve>',
   );
-
-/** No service answered, and the harness starts none. */
-class ServiceNotRunning extends Schema.TaggedError<ServiceNotRunning>()(
-  'ServiceNotRunning',
-  { message: Schema.String },
-) {}
 
 /** The storage root's global values, where the service's record is. */
 const globalValues = Layer.effect(
@@ -87,16 +87,17 @@ const approve = (link: ServiceLink) => {
 await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
+      // The harness starts no service: it attaches to the one running.
       const link = yield* linkService(
         {
           storageRoot,
           start: Effect.fail(
-            new ServiceNotRunning({
-              message: 'The harness attaches to a running service only.',
+            new ServiceUnavailable({
+              reason: 'The harness attaches to a running service only.',
             }),
           ),
         },
-        Effect.logWarning,
+        { startsService: false, waiting: Effect.logWarning },
       );
       if (mode === 'approve') return yield* approve(link);
       yield* Effect.forkScoped(

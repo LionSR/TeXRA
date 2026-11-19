@@ -6,7 +6,7 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { TEXRA_SITE_URL } from '@ui/copy/guide';
-import { ONBOARDING_CARD_TITLE } from '@ui/copy/onboarding';
+import { ONBOARDING_CARD_TITLE, TEXRA_TAGLINE } from '@ui/copy/onboarding';
 
 /**
  * No-workspace provider for `texra.mainView`. Keeping the same view id across
@@ -112,11 +112,7 @@ function renderWelcomeHtml(): string {
 </head>
 <body>
   <h1>Welcome to TeXRA</h1>
-  <p>
-    TeXRA coordinates
-    specialized agents to edit manuscripts, derive results, draw figures,
-    and verify proofs.
-  </p>
+  <p>${TEXRA_TAGLINE}</p>
   <ol>
     <li>Open a single-folder workspace containing your LaTeX project, or start with the sample project.</li>
     <li>${ONBOARDING_CARD_TITLE}: the TeXRA panel asks once the folder is open.</li>

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import {
   HostFailed,
   type ConfirmQuestion,
@@ -160,15 +160,13 @@ class VscodeUiHost implements Dialogs {
           ? { title: item }
           : { title: item.label, isCloseAffordance: item.isCloseAffordance },
     );
-    return Effect.tryPromise({
-      try: async () =>
-        SHOW_OF_LEVEL[level](
-          message,
-          { detail: options.detail, modal: options.modal },
-          ...items,
-        ),
-      catch: (cause) => hostFailed(`window.show ${level} message`, cause),
-    }).pipe(
+    return fromHost(`window.show ${level} message`, async () =>
+      SHOW_OF_LEVEL[level](
+        message,
+        { detail: options.detail, modal: options.modal },
+        ...items,
+      ),
+    ).pipe(
       Effect.map(
         (selected) =>
           items.find((item) => item.title === selected?.title)?.title,

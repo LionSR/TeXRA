@@ -21,14 +21,13 @@ export class ToolTimer extends LitElement {
     :host {
       display: inline;
     }
+    /* Metadata is secondary text, not faded text: an opacity over the
+       secondary token falls under the normal-text contrast floor. */
     .timer {
       font-size: var(--font-size-sm);
-      opacity: var(--opacity-normal);
+      color: var(--color-text-secondary);
       margin-inline-start: var(--wa-space-xs);
       font-variant-numeric: tabular-nums;
-    }
-    .timer-limit {
-      opacity: var(--opacity-subtle);
     }
   `;
 
@@ -50,7 +49,7 @@ export class ToolTimer extends LitElement {
     const limit =
       this.timeoutMs > 0 ? formatCompactDuration(this.timeoutMs) : null;
     // prettier-ignore
-    return html`<span class="timer" role="timer" aria-live="off" aria-label=${`Elapsed time: ${elapsed}${limit === null ? '' : ` of ${limit}`}`} dir="ltr">${elapsed}${limit === null ? nothing : html`<span class="timer-limit"> / ${limit}</span>`}</span>`;
+    return html`<span class="timer" role="timer" aria-live="off" aria-label=${`Elapsed time: ${elapsed}${limit === null ? '' : ` of ${limit}`}`} dir="ltr">${elapsed}${limit === null ? nothing : ` / ${limit}`}</span>`;
   }
 }
 

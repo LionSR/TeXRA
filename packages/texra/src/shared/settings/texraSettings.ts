@@ -393,7 +393,7 @@ function isSettingsViewRow(row: TexraSettingRow): row is SettingsViewRow {
  * The catalog TeXRA's hosts hand the harness, and the lookups TeXRA's settings
  * UIs read: every list is a filter over the placed rows, never hand-maintained.
  */
-export const TEXRA_SETTINGS = {
+export const TEXRA_SETTINGS = Object.freeze({
   catalog,
   /** Look up a row the settings view's unified write path owns. */
   settingsViewByKey: (key: string): SettingsViewRow | undefined => {
@@ -413,7 +413,9 @@ export const TEXRA_SETTINGS = {
       (row): row is SettingsViewRow => row.surfaces.settingsView === snapshot,
     ),
   /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
-  cliRows: placedRows.filter((row) => row.surfaces.cliConfig === true),
+  cliRows: Object.freeze(
+    placedRows.filter((row) => row.surfaces.cliConfig === true),
+  ),
   /** Look up a row the CLI `/config` panel lists, and so may write. */
   cliByKey: (key: string): TexraSettingRow | undefined => {
     const row = placedByKey.get(key);
@@ -437,4 +439,4 @@ export const TEXRA_SETTINGS = {
           },
         })),
     ),
-};
+});

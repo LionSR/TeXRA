@@ -14,6 +14,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { designTokens } from '@ui/styles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -53,9 +54,7 @@ export class LaunchAttachments extends LitElement {
         color: var(--color-text-secondary);
       }
       .name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        ${truncateDeclarations}
       }
     `,
   ];

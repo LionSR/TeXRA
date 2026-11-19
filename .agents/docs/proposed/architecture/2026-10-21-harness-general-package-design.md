@@ -104,7 +104,8 @@ rows go. No new test file is needed.
   400 lines of the same composition: 125 lines are byte-identical, and the rest
   make the same calls with host-specific ports. Three hosts repeat the
   agent-directories layer and the service reach. In total about 1,400 lines can
-  go. The CLI TUI synthesizes transcript rows with `Date.now()`
+  go. (Lane 7 has since landed: one request body, one agent-directories
+  layer.) The CLI TUI synthesizes transcript rows with `Date.now()`
   (`packages/cli/src/chat/tui/state/transcript.ts:78`).
 - **llm.** The package is pure as claimed, except for TeXRA branding in five
   places (`originator: 'texra'`, `X-Title: 'TeXRA.ai'`, OAuth referrers). Twelve
@@ -138,9 +139,10 @@ cannot.
 The thirteen nouns of the core-concepts note keep their owners. The process
 owner is `processLayer` in `effect/processLayer.ts`, which stays there (the 1.0 PRD's layout recommendation A keeps the ten directories). The
 foundation order the code follows is declared in `packages/harness/AGENTS.md`
-("Layer order") and ratcheted by `src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts`:
+("Layer order"):
 `logger < utils < shared < common < platform < …`, with `controllers` and `effect`
-on top.
+on top. At `c78e9f9` (2026-11-17) no check holds that order: the edge ratchet
+(`subsystemEdgeRatchet.vitest.ts`) is gone with the other architecture tests.
 
 ### Layout
 
@@ -276,17 +278,17 @@ lanes table below keep it as the refused option.
 
 ## Deletion ledger
 
-| What goes                                         | Count                                       |
-| ------------------------------------------------- | ------------------------------------------- |
-| Root exports                                      | 246 → 59 (what public signatures need)      |
-| `export *` in `shared/schemas/index.ts`           | kept (re-check below)                       |
-| `harness-deep-import-baseline.json` and its suite | kept as a guard; every host list is empty   |
-| `architecture-edges` rows                         | 67 → ~45, harness only                      |
-| `forgotten-exports` rows                          | 277 → 0, held at zero with no baseline file |
-| Same-basename pairs                               | 6 → 0                                       |
-| TeXRA code leaving the harness                    | ~1,650 lines                                |
-| Duplicated host code                              | ~1,400 lines                                |
-| OAuth `.catch` in llm                             | 12 → 0 (done)                               |
+| What goes                                         | Count                                                                   |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| Root exports                                      | 246 → 59 (what public signatures need)                                  |
+| `export *` in `shared/schemas/index.ts`           | kept (re-check below)                                                   |
+| `harness-deep-import-baseline.json` and its suite | gone at `c78e9f9` with every ratchet baseline; the rule is a convention |
+| `architecture-edges` rows                         | 67 → ~45, harness only; at `c78e9f9` no edge baseline exists            |
+| `forgotten-exports` rows                          | 277 → 0, held at zero with no baseline file                             |
+| Same-basename pairs                               | 6 → 0                                                                   |
+| TeXRA code leaving the harness                    | ~1,650 lines                                                            |
+| Duplicated host code                              | ~1,400 lines                                                            |
+| OAuth `.catch` in llm                             | 12 → 0 (done)                                                           |
 
 ## Lanes
 
@@ -295,19 +297,19 @@ the timed follow-up's `notBefore`, in lane 5, which the 1.0 PRD left out of the
 format batch (decided 2026-10-30): a `remind` tool adds it as
 `followup.queued` v+1.
 
-| #   | Lane                                                                                                                                                                                                                                                                         | Effort | Files moved |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
-| 1   | Doors: the root holds what public signatures need (59 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done; left: alias scoping. `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)                                     | L      | 8           |
-| 2   | Foundation order, done another way: `logger/` and `types/` stay layer 1 of the harness AGENTS.md layer order, there is no `eventBus/`, and the run-storage leaves went to `common/storage/` (#14550); the `@common/webview` alias removed (done, #14682)                     | M      | 11          |
-| 2b  | Session merge, with the history lint zone: not for 1.0 (the release PRD's layout comparison: a `session/` directory removes no layer edge)                                                                                                                                   | M      | ~55         |
-| 3   | Vocabulary as data: done (#14364, #14369), except llm branding as bind facts (the xAI referrer, the ChatGPT agent name and the Responses tool namespace)                                                                                                                     | M      | 9           |
-| 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                                                                                                  | —      | 0           |
-| 4b  | Built-ins fence, measured and redesigned as one tool contract in [the tool layer note](../../implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md) (the fence itself is its decision 4)                                                                    | S      | 0           |
-| 5   | The timed follow-up with its first consumer tool (not in the 1.0 format batch, decided 2026-10-30); `defineTool({ deferred: true })` when tool counts need it; the storage port only for a named second driver                                                               | M      | 0           |
-| 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                                                                                                               | S      | 0           |
-| 7   | Host dedup: the GUI hosts share one request body over `SharedHostRequestBindings` (`packages/texra/src/controllers/session/openGuiWindow.ts`), and `processLayer` builds the agent-directories layer from options; the CLI notices through `LocalSession.emit` are not built | L      | 0           |
-| 8   | `./promise`: not built; the 2026-09-21 ruling holds                                                                                                                                                                                                                          | S      | 0           |
-| 9   | Publish (the owner's `releasing` step); `docs/spec.md` and the numbered examples ladder are done (`packages/harness/docs/spec.md`, `packages/harness/example/`)                                                                                                              | M      | 0           |
+| #   | Lane                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Effort | Files moved |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
+| 1   | Doors: done. The root holds what public signatures need (59 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done; alias scoping is the `HARNESS_INTERNALS` import zone in `oxlint.config.mts`, over every other package's sources, suites, scripts and tooling, with the two CLI validator harnesses as its named exemption (re-check below). `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)                                                                                                                                                                                                                                    | L      | 8           |
+| 2   | Foundation order, done another way: `logger/` and `types/` stay layer 1 of the harness AGENTS.md layer order, there is no `eventBus/`, and the run-storage leaves went to `common/storage/` (#14550); the `@common/webview` alias removed (done, #14682)                                                                                                                                                                                                                                                                                                                                                                                                                                 | M      | 11          |
+| 2b  | Session merge, with the history lint zone: not for 1.0 (the release PRD's layout comparison: a `session/` directory removes no layer edge)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | M      | ~55         |
+| 3   | Vocabulary as data: done (#14364, #14369); the llm branding is one `ClientIdentity` (`@texra-ai/llm/node`) the app supplies at composition (`Secrets.layer`, `Secrets.announcing`, `Composition.client`), with no default in llm: the xAI referrer, the ChatGPT agent name and the Responses tool namespace (`toolNamespace`, from `BindSpec.client`). TeXRA's is `TEXRA_CLIENT` (`packages/texra/src/controllers/texraProcessLayer.ts`)                                                                                                                                                                                                                                                 | M      | 9           |
+| 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —      | 0           |
+| 4b  | Built-ins fence, measured and redesigned as one tool contract in [the tool layer note](../../implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md) (the fence itself is its decision 4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | S      | 0           |
+| 5   | The timed follow-up with its first consumer tool (not in the 1.0 format batch, decided 2026-10-30); `defineTool({ deferred: true })` when tool counts need it; the storage port only for a named second driver                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | M      | 0           |
+| 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | S      | 0           |
+| 7   | Host dedup, done: the GUI hosts answer through one request body over `SharedHostCommandBindings` (`packages/texra/src/controllers/session/openGuiWindow.ts`), and each binds only its native verb (the launcher picker, a link's rejection and the install-guide link moved into the body, 2026-11-19); the three hosts pass facts to `texraProcessLayer` (`packages/texra/src/controllers/texraProcessLayer.ts`), which builds the agent-directories layer once, so `processLayer` keeps taking a layer, a port for `Sessions.layer` and the test kernel. Left: the export format choices, one table over two native dialogs. The CLI notices through `LocalSession.emit` are not built | L      | 0           |
+| 8   | `./promise`: not built; the 2026-09-21 ruling holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | S      | 0           |
+| 9   | Publish (the owner's `releasing` step); `docs/spec.md` and the numbered examples ladder are done (`packages/harness/docs/spec.md`, `packages/harness/example/`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | M      | 0           |
 
 ### Lane 4 re-check (2026-10-21, at `6e5b262`)
 
@@ -409,6 +411,23 @@ re-read the surface and the ports. Where it changes this design:
   and `searchTools` already exist; marking a tool deferred is about seven lines
   and changes no row, so it can follow the freeze.
 
+### Re-check (2026-11-19): the doors closed
+
+Lane 1's five tooling and test files, and a sixth the 2026-10-28 list missed
+(`packages/texra/test/tools/RoundDirOwnership.vitest.ts`), import from the
+public entries where those serve the name. Two files still need what no
+entry serves, by design: `packages/cli/scripts/tui-harness.tsx` seeds a
+session's rows through its owners (`SessionLog`, `RunHistory`,
+`RunRegistry`, `SessionOwner`), and
+`packages/cli/scripts/service-host-harness.ts` opens the global store with
+`globalDatabaseLayer` outside a process runtime. Exporting either for one
+tool grows the surface the 1.0 PRD shrinks, and moving the TUI harness into
+`src/test-kernel/` fails because the repository root cannot resolve `ink` or
+`react`. So the lint zone names them as its exemption. Repo-root
+`src/test-kernel/` (the suites that compose several packages) and
+`scripts/fixtures/sessionDatabase.ts` (the desktop e2e fixture bundle) reach
+internals and stay outside the zone.
+
 ### Sequencing with work in flight
 
 On 2026-10-21 the owner set this order:
@@ -474,7 +493,7 @@ both call. No shared preamble is left to fold: the bash guard decides in the loo
 
 Still open after this design: about 350 lines of duplicated lowering across the
 llm adapters; `sessionViewUpdate.ts` at 1,169
-lines; the CLI approval stack versus the webview request panels; and four
+lines (1,074 at `c78e9f9`); the CLI approval stack versus the webview request panels; and four
 CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 `Date.now()`, and silent degradation outside the harness and llm).
 

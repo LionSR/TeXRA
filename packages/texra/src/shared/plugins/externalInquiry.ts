@@ -44,14 +44,15 @@ export const InquiryThreadIdSchema = Schema.String.check(
 );
 export type InquiryThreadId = typeof InquiryThreadIdSchema.Type;
 
-/** One turn of a thread, as its full record keeps it. */
+/** One turn of a thread, as its full record keeps it. The writer states
+ *  `suggestSearch` and the lists on every turn, `false` or `[]` for none. */
 const InquiryTurnBaseShape = {
   turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
   timestamp: Schema.NonEmptyString,
   question: Schema.String,
-  context: Schema.optional(Schema.NullOr(Schema.String)),
-  suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
-  attachFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  context: Schema.optional(Schema.String),
+  suggestSearch: Schema.Boolean,
+  attachFiles: Schema.Array(Schema.String),
 };
 
 /** A turn awaiting the person's answer. Panel drafts belong to view state. */
@@ -67,7 +68,7 @@ const AnsweredInquiryTurnSchema = Schema.Struct({
   kind: Schema.Literal('answered'),
   answer: Schema.String,
   answeredAt: Schema.NonEmptyString,
-  sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
+  sessionLinks: InquirySessionLinksSchema,
 });
 export type AnsweredInquiryTurn = typeof AnsweredInquiryTurnSchema.Type;
 
@@ -150,10 +151,10 @@ export type InquiryTurnOutcome =
 /** The thread records, in the global database's current values and keyed by
  *  thread id, so a follow-up from another project still reaches its thread.
  *  Named as the plugin's own row kind is (`external-inquiry/thread`). */
-export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = {
+export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = Object.freeze({
   name: 'external-inquiry/thread',
   schema: InquiryThreadRecordSchema,
-};
+});
 
 /** The row's value: the summary less its asking run, which is the row's
  *  `parent` edge and has no second copy. */
@@ -295,7 +296,7 @@ export class InquiryRecords extends Context.Service<
       threadId: InquiryThreadId;
       turnIndex: number;
       answer: string;
-      sessionLinks?: readonly string[] | null;
+      sessionLinks?: readonly string[];
     }) => Effect.Effect<InquiryTurnOutcome, Error>;
     /** Drop the thread at its open turn `turnIndex`. A drop that arrives
      *  after an answer changes nothing: an `answered` thread stays so. */

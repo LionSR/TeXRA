@@ -1,8 +1,10 @@
 /**
- * A window's side of the service: connect over the socket, say hello, and
- * start the service when none answers. Starting is the host's (each host
- * runs the service entry with its own Node), so {@link ensureService}
- * takes it as a program. One service serves a storage root at a time: a
+ * A client's side of the service, for every host: connect over the socket,
+ * say hello, and start the service when none answers. Starting is the
+ * host's (each host runs the service entry with its own Node), so
+ * {@link linkService} takes it as a program. No service is possible where
+ * `TEXRA_NO_SERVICE` is set or on Windows, which the link answers as it
+ * answers none running for a caller that starts none. One service serves a storage root at a time: a
  * service of an older build, or of another protocol and no newer build, is
  * retired (it drains its running tasks and exits), and the caller waits
  * for its socket to close before starting its own; one already draining
@@ -40,7 +42,7 @@ import {
   Rejected,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { nodeFileServices } from '@texra-ai/harness/node';
+import { envFlag, nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,
@@ -54,6 +56,7 @@ import {
   PROTOCOL,
   TexraRpcs,
   type ServiceInfo,
+  type TaskSummary,
 } from './protocol';
 import type { GlobalValues } from '@texra-ai/harness/host';
 import type { SocketError } from 'effect/socket/Socket';
@@ -105,6 +108,26 @@ export const requestOnService = <R extends RuntimeCommand>(
     ),
   );
 
+/**
+ * The task `id` names among every task the service holds: its full id, or
+ * a prefix only one task has. Answers that task, or else every task the
+ * prefix matches: none, or more than one.
+ */
+export const findTask = (
+  client: ServiceClient,
+  id: string,
+): Effect.Effect<
+  { readonly task: TaskSummary } | { readonly matches: readonly TaskSummary[] },
+  RpcClientError.RpcClientError
+> =>
+  Effect.map(client['tasks.list']({ all: true }), (tasks) => {
+    const exact = tasks.find((task) => task.runId === id);
+    const matches = exact
+      ? [exact]
+      : tasks.filter((task) => task.runId.startsWith(id));
+    return matches.length === 1 ? { task: matches[0] } : { matches };
+  });
+
 /** A connected client and the service it reached. */
 export interface ServiceConnection {
   readonly client: ServiceClient;
@@ -115,6 +138,10 @@ export interface ServiceConnection {
  *  `failed` for every other reason, which a caller only reports. */
 const ServiceFailureSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('failed') }),
+  /** No service for this process, and nothing failed: none is possible
+   *  here (`TEXRA_NO_SERVICE`, Windows), or none runs and the caller starts
+   *  none. A caller that works in process has nothing more to say. */
+  Schema.Struct({ kind: Schema.Literal('none') }),
   /** The running service is a newer build speaking another protocol: it
    *  stays until it exits, so waiting does not bring this client back. */
   Schema.Struct({ kind: Schema.Literal('newer') }),
@@ -154,6 +181,13 @@ export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()
 export const WINDOWS_UNSUPPORTED =
   'The TeXRA service does not run on Windows yet.';
 
+/** `TEXRA_NO_SERVICE=1`: this process uses no background service, and
+ *  runs its tasks itself, as where the service cannot run. */
+const NO_SERVICE = 'TEXRA_NO_SERVICE';
+
+/** Why a caller that starts no service holds none. */
+const NONE_RUNNING = 'no TeXRA service is running';
+
 /** How long a started service has to answer its first hello: it loads the
  *  agent catalog first, which a loaded machine makes slow. */
 const START_TIMEOUT = '60 seconds';
@@ -188,7 +222,7 @@ const isNewer = (info: ServiceInfo): boolean =>
 /** A service the caller should retire: an older build, or one of another
  *  protocol that is not a newer build (a development build restarts the
  *  service it cannot speak to). */
-export const isOlder = (info: ServiceInfo): boolean =>
+const isOlder = (info: ServiceInfo): boolean =>
   builds(info, SemVer.isLessThan) || (!compatible(info) && !isNewer(info));
 
 /** A client over `socket`, held for the caller's scope. `onDisconnect`
@@ -389,7 +423,7 @@ export const reachBundledService = (
           ELECTRON_RUN_AS_NODE: '1',
         },
       ),
-      Effect.logWarning,
+      { startsService: true, waiting: Effect.logWarning },
     );
   });
 
@@ -416,6 +450,58 @@ export const stopService = (
     }),
   ).pipe(Effect.catchIf(nobodyListens, () => Effect.void));
 
+/** How long {@link stopRunningService} waits for the service to go. */
+const STOP_TIMEOUT = '30 seconds';
+
+/**
+ * Stop the storage root's service and wait until it is gone, within
+ * {@link STOP_TIMEOUT}: its running tasks stop, and can be resumed. A
+ * service this build cannot speak to still takes the stop, the one
+ * procedure every build keeps. Answers the stopped service's pid (absent
+ * when this build could not read its hello), or null when none ran.
+ */
+export const stopRunningService: Effect.Effect<
+  { readonly pid?: number } | null,
+  ServiceUnavailable,
+  GlobalValues
+> = Effect.gen(function* () {
+  // A service this build cannot speak to: its socket is all this build
+  // knows of it.
+  const target:
+    | (Pick<ServiceInfo, 'socket'> & { readonly pid?: number })
+    | null = yield* probeRecordedService.pipe(
+    Effect.catch((error) => {
+      const { failure } = error;
+      return failure.kind === 'unreadable'
+        ? Effect.succeed({ socket: failure.socket })
+        : Effect.fail(error);
+    }),
+  );
+  if (target === null) return null;
+  const service =
+    target.pid === undefined
+      ? 'the TeXRA service'
+      : `the TeXRA service (pid ${target.pid})`;
+  yield* stopService(target.socket, false).pipe(
+    Effect.timeoutOrElse({
+      duration: STOP_TIMEOUT,
+      orElse: () =>
+        Effect.fail(
+          new ServiceUnavailable({
+            reason: `it did not exit within ${STOP_TIMEOUT}`,
+          }),
+        ),
+    }),
+    Effect.mapError(
+      (failure) =>
+        new ServiceUnavailable({
+          reason: `Could not stop ${service}: ${failure.message}`,
+        }),
+    ),
+  );
+  return target.pid === undefined ? {} : { pid: target.pid };
+});
+
 /** The refusal of a running service of a newer build that speaks another
  *  protocol. */
 const newerService = (info: ServiceInfo) =>
@@ -424,61 +510,71 @@ const newerService = (info: ServiceInfo) =>
     failure: { kind: 'newer' },
   });
 
+/** How a caller links: whether it starts a service when none runs (a
+ *  window, or a command that runs or lists tasks), and how it tells its
+ *  user that the link waits on an older or draining service. */
+interface LinkPolicy {
+  readonly startsService: boolean;
+  /** Told, once, when an older or draining service must exit first: the
+   *  wait lasts until its running tasks end. */
+  readonly waiting: (message: string) => Effect.Effect<void>;
+}
+
 /**
  * Connect to the service of `start`'s storage root, starting it with
- * `start` when none answers. One that speaks an older protocol or runs an
- * older build than this one is retired first, and one already draining
- * waited for: either exits once its tasks end, and its socket's close is
- * the signal to start.
+ * `start` when none answers and the caller `startsService`. One that speaks
+ * an older protocol or runs an older build than this one is retired first,
+ * and one already draining waited for: either exits once its tasks end, and
+ * its socket's close is the signal to start. An older build's service holds
+ * the projects it serves, and a project store is held by one process, so a
+ * client that retires one starts its own in its place whether or not it
+ * `startsService`.
  */
-export const ensureService = Effect.fn('server.ensureService')(function* (
+const ensureService = Effect.fn('server.ensureService')(function* (
   { storageRoot, start }: ServiceStart,
-  options: {
-    /** Runs whenever the connection ends (see {@link connectService}). */
-    readonly onDisconnect?: Effect.Effect<void>;
-    /** Told, once, when an older or draining service must exit first: the
-     *  wait lasts until its running tasks end. */
-    readonly waiting: (message: string) => Effect.Effect<void>;
-  },
+  { startsService, waiting }: LinkPolicy,
+  /** Runs whenever the connection ends (see {@link connectService}). */
+  onDisconnect: Effect.Effect<void>,
 ): Effect.fn.Return<
   ServiceConnection,
   ServiceUnavailable,
   Scope.Scope | GlobalValues
 > {
-  if (process.platform === 'win32')
-    return yield* new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED });
   // A service from before the digest cannot read this hello: it is older
   // by construction, and `service.stop` is the one procedure it shares.
-  let info = yield* probeRecordedService.pipe(
+  const probed = yield* probeRecordedService.pipe(
+    Effect.map((found) => ({ found, replaced: false })),
     Effect.catch((error) => {
       const { failure } = error;
       return failure.kind !== 'unreadable'
         ? Effect.fail(error)
-        : options
-            .waiting(
-              "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
-            )
-            .pipe(
-              Effect.andThen(
-                stopService(failure.socket, true).pipe(
-                  Effect.mapError(
-                    (stopFailure) =>
-                      new ServiceUnavailable({
-                        reason: `The older TeXRA service could not be asked to retire: ${stopFailure.message}`,
-                      }),
-                  ),
+        : waiting(
+            "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
+          ).pipe(
+            Effect.andThen(
+              stopService(failure.socket, true).pipe(
+                Effect.mapError(
+                  (stopFailure) =>
+                    new ServiceUnavailable({
+                      reason: `The older TeXRA service could not be asked to retire: ${stopFailure.message}`,
+                    }),
                 ),
               ),
-              Effect.as(null),
-            );
+            ),
+            Effect.as({ found: null, replaced: true }),
+          );
     }),
   );
+  let info: ServiceInfo | null = probed.found;
+  // Whether this client retired an older service, and so starts its own.
+  let { replaced } = probed;
   if (info !== null && isNewer(info)) return yield* newerService(info);
   if (info !== null && (isOlder(info) || info.draining)) {
     const leaving = info;
+    replaced = isOlder(leaving);
     const tasks = formatResultCount(leaving.running, 'running task');
     // With no task running it exits at once: nothing to wait for.
-    yield* (leaving.running > 0 ? options.waiting : Effect.logInfo)(
+    yield* (leaving.running > 0 ? waiting : Effect.logInfo)(
       leaving.draining
         ? `The TeXRA service ${leaving.version} (pid ${leaving.pid}) is finishing its ${tasks} before it exits; waiting for it.`
         : `Retiring the TeXRA service ${leaving.version} (protocol ${leaving.protocol}): it finishes its ${tasks} and exits, then this build's starts.`,
@@ -493,6 +589,11 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
     info = null;
   }
+  if (info === null && !replaced && !startsService)
+    return yield* new ServiceUnavailable({
+      reason: NONE_RUNNING,
+      failure: { kind: 'none' },
+    });
   if (info === null) {
     yield* start.pipe(
       Effect.mapError(
@@ -546,7 +647,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
   }
   const { socket } = info;
-  const client = yield* connectService(socket, options.onDisconnect).pipe(
+  const client = yield* connectService(socket, onDisconnect).pipe(
     Effect.mapError(
       (error) =>
         new ServiceUnavailable({
@@ -649,38 +750,53 @@ const RECONNECT = Schedule.min([
 ]);
 
 /**
- * Hold this storage root's service for the caller's scope, as
- * {@link ensureService} reaches it. When the service goes away (a newer
- * build retired it, or it died), the link goes null, which a window shows
- * as offline, and reaches the service again the same way, starting one
- * when none answers, until it is back. A first reach that must wait for an
- * older service to finish its tasks says so through `waiting`, the host's
- * way to tell its user; a later one says it as the link's `away`.
+ * The one door to this storage root's service, for every host: held for
+ * the caller's scope, as {@link ensureService} reaches it, or the
+ * {@link ServiceUnavailable} that says why there is none. Where no service
+ * is possible (`TEXRA_NO_SERVICE`, Windows), or none runs and the caller
+ * starts none, it fails `none`: the caller works in process and has nothing
+ * to report. When the service goes away (a newer build retired it, or it
+ * died), the link goes null, which a window shows as offline, and reaches
+ * the service again the same way until it is back. A first reach that must
+ * wait for an older service to finish its tasks says so through `waiting`,
+ * the host's way to tell its user; a later one says it as the link's
+ * `away`.
  */
 export const linkService = Effect.fn('server.linkService')(function* (
   start: ServiceStart,
-  waiting: (message: string) => Effect.Effect<void>,
+  policy: LinkPolicy,
 ): Effect.fn.Return<
   ServiceLink,
   ServiceUnavailable,
   Scope.Scope | GlobalValues
 > {
+  if (yield* envFlag(NO_SERVICE))
+    return yield* new ServiceUnavailable({
+      reason: `${NO_SERVICE} is set`,
+      failure: { kind: 'none' },
+    });
+  if (process.platform === 'win32')
+    return yield* new ServiceUnavailable({
+      reason: WINDOWS_UNSUPPORTED,
+      failure: { kind: 'none' },
+    });
   const connect = Effect.fn('connect')(function* (
     begin: ServiceStart,
-    told: (message: string) => Effect.Effect<void>,
+    beginPolicy: LinkPolicy,
   ) {
     const scope = yield* Scope.make();
     const lost = yield* Deferred.make<void>();
-    const connection = yield* ensureService(begin, {
-      onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
-      waiting: told,
-    }).pipe(
+    const connection = yield* ensureService(
+      begin,
+      beginPolicy,
+      Effect.asVoid(Deferred.succeed(lost, undefined)),
+    ).pipe(
       Scope.provide(scope),
       Effect.onError(() => Scope.close(scope, Exit.void)),
     );
     return { connection, lost, scope };
   });
-  let current = yield* connect(start, waiting);
+  let current = yield* connect(start, policy);
   const state = yield* SubscriptionRef.make<Linked<ServiceClient>>({
     client: current.connection.client,
   });
@@ -710,9 +826,11 @@ export const linkService = Effect.fn('server.linkService')(function* (
         let told = '';
         current = yield* connect(
           { storageRoot: start.storageRoot, start: Effect.void },
-          awayWaiting,
+          { startsService: true, waiting: awayWaiting },
         ).pipe(
-          Effect.catch(() => connect(start, awayWaiting)),
+          Effect.catch(() =>
+            connect(start, { ...policy, waiting: awayWaiting }),
+          ),
           // Said once per reason: a newer protocol's service stays until it
           // exits, and the link keeps trying meanwhile.
           Effect.tapError((error) =>

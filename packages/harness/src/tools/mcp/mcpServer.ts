@@ -33,7 +33,7 @@ import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
+import { envNameKey, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendTail } from '@utils/text/appendTail';
@@ -125,7 +125,7 @@ function mcpToolName(server: string, tool: string): string {
   return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 
-const isPathName = (n: string) => (IS_WINDOWS ? n.toUpperCase() : n) === 'PATH';
+const isPathName = (name: string) => envNameKey(name) === 'PATH';
 /** The process's environment with the project's `.env` over it, minus
  *  credential-shaped names, plus the entry's, on the extended process PATH
  *  its command is pinned on (`externalFiles`), so the pinned binary runs. */

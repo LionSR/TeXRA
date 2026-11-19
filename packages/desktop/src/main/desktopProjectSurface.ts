@@ -16,11 +16,11 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
-import { agentDocumentForPath } from './desktopAgentDocuments.js';
-import { DesktopCommandFailed } from './desktopIpcTypes.js';
+import { agentDocumentForPath } from '@texra/controllers/session/workspaceFileRequest';
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
-import type { DesktopPromptController } from './desktopPromptController.js';
+import type { makeDesktopPrompts } from './desktopPromptController.js';
 import type {
   DesktopProject,
   DesktopProjectRegistry,
@@ -50,7 +50,9 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly runtime: ProcessRuntime;
     readonly projects: DesktopProjectRegistry;
     readonly bindings: ProjectBindings;
-    readonly promptController: DesktopPromptController;
+    readonly promptController: Effect.Success<
+      ReturnType<typeof makeDesktopPrompts>
+    >;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
     const { host, runtime, projects, bindings } = options;
     const windowScope = yield* Scope.Scope;
@@ -128,7 +130,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           openAgentDocument(
             filePath,
             Effect.fail(
-              new DesktopCommandFailed({
+              new SettingsRequestFailed({
                 message:
                   'This agent definition is no longer in the catalog. Refresh Settings and try again.',
               }),
@@ -137,7 +139,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         pickFolder: (title) =>
           host.pickFolder(
             title,
-            projects.active().root ?? app.getPath('home'),
+            projects.active().roots.workspace ?? app.getPath('home'),
             ['openDirectory', 'createDirectory'],
           ),
         // The run verbs of the project these settings belong to, even while
@@ -179,7 +181,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           ),
         },
         roots: project.roots,
-        spawn: desktopSpawner(runtime, owner, project.root),
+        spawn: desktopSpawner(runtime, owner, project.roots.workspace),
       }).pipe(
         Effect.tap(() => installDesktopWindowTitle(host.window, project)),
         Scope.provide(owner),

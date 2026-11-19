@@ -24,8 +24,8 @@ export function createProjectNavigation(options: {
   /** Open a folder as a project and show it. */
   const open = Effect.fn('desktop.openProjectAt')(function* (path: string) {
     const project = yield* projects.open(path);
-    if (project.root !== undefined && project !== projects.active())
-      yield* projects.activate(project.root);
+    if (project.roots.workspace !== undefined && project !== projects.active())
+      yield* projects.activate(project.roots.workspace);
   });
 
   return {
@@ -35,11 +35,11 @@ export function createProjectNavigation(options: {
         const project = projectByKey(key);
         if (
           !project ||
-          project.root === undefined ||
+          project.roots.workspace === undefined ||
           project === projects.active()
         )
           return Effect.void;
-        return projects.activate(project.root);
+        return projects.activate(project.roots.workspace);
       }),
     /** Show a run of a project, whichever project the window is showing. */
     reveal(key: string, runId: RunId) {
@@ -51,7 +51,7 @@ export function createProjectNavigation(options: {
       spawn(
         host.reported(
           projects
-            .activate(project.root)
+            .activate(project.roots.workspace)
             .pipe(
               Effect.andThen(
                 Effect.sync(() =>
@@ -69,15 +69,16 @@ export function createProjectNavigation(options: {
     close: (key: string, hasUnsavedChanges: boolean) =>
       Effect.suspend(() => {
         const project = projectByKey(key);
-        if (!project || project.root === undefined) return Effect.void;
+        if (!project || project.roots.workspace === undefined)
+          return Effect.void;
         if (hasUnsavedChanges && host.showDiscardDialog() !== 1)
           return Effect.void;
-        return projects.close(project.root);
+        return projects.close(project.roots.workspace);
       }),
     openFolder: Effect.fn('desktop.openWorkspaceFolder')(function* () {
       const selectedPath = yield* host.pickFolder(
         'Open Workspace Folder',
-        projects.active().root ?? app.getPath('home'),
+        projects.active().roots.workspace ?? app.getPath('home'),
         ['openDirectory'],
       );
       if (!selectedPath) return;

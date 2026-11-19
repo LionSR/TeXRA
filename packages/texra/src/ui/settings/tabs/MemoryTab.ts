@@ -52,7 +52,7 @@ export class MemoryTab extends SignalWatcher(LitElement) {
           aria-label="Saved memory actions"
         >
           ${renderLabeledActionButton({
-            icon: 'rotate-right',
+            icon: 'arrows-rotate',
             text: 'Refresh memories',
             kind: 'secondary',
             appearance: 'outlined',

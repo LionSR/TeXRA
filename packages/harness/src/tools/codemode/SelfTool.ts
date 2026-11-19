@@ -148,15 +148,14 @@ const runSelf = Effect.fn('self.call')(function* (
         instruction: task,
         displayInstruction: input.prompt,
         outputFiles: [],
-        launch: null,
+        launch: undefined,
       };
       return yield* executeSubagentInBand({
         runId,
         parentId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
           ...record,
-          script: null,
-          outputSchema: outputSchema ?? null,
+          outputSchema,
           asCaller: true,
         }),
         ...(forked !== null && { seed: forked.seed }),

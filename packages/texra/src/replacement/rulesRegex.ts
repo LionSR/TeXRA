@@ -300,15 +300,24 @@ function difCommandMarker(cmd: string): string {
   return `%DIF${cmd.slice(3).toUpperCase()}CMD`;
 }
 
+/**
+ * The blank lines latexdiff leaves before the closing brace of an `align` or
+ * `aligned`, starred or not, however many and whitespace-only ones included:
+ * `\n\n}\end{align*}%DIFAUXCMD` -> `\n}\end{align*}%DIFAUXCMD`. The
+ * `latexdiff` category, enabled with the plain-rule categories.
+ */
+export const LATEXDIFF_REPLACEMENTS: RegexRuleSet = Object.freeze({
+  flags: 'g',
+  patterns: Object.freeze({
+    '\n(?:[ \t]*\n)+[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
+      '\n}\\end{$1$2}%DIFAUXCMD',
+  }),
+});
+
 // Latexdiff markup fixes using regex
 export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'gs',
   patterns: Object.freeze({
-    // Collapse redundant blank lines / spaces between a closing brace and \end{...}%DIFAUXCMD
-    // Matches: newline + spaces/tabs + newline + spaces/tabs + }\end{align*}%DIFAUXCMD
-    '\n[ \t]*\n[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
-      '\n}\\end{$1$2}%DIFAUXCMD',
-
     // Subscript/superscript fragment fixes from DIF_MATH_FRAGMENT_FIXES: all
     // del rows first (in table order), then the add rows for the 'both'
     // fragments, preserving the previous insertion order of this map (the

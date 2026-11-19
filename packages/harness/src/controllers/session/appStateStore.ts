@@ -156,7 +156,7 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
           Effect.catch((error) =>
             logFailure(
               'sessionDatabase',
-              `Could not record that ${storage} serves ${workspaceRoot}; \`texra doctor --prune-storage\` will not list it as an orphan.`,
+              `Could not record that ${storage} serves ${workspaceRoot}; a storage prune will not know that store's project, so it will not offer to delete the store once that folder is gone.`,
             )(error),
           ),
         );

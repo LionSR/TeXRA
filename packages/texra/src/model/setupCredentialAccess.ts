@@ -1,8 +1,14 @@
-import { StateReadFailed, readModelOptions } from '@texra-ai/harness/host';
-import { Effect } from 'effect';
+import {
+  StateReadFailed,
+  readModelOptions,
+  type RunModelCandidate,
+} from '@texra-ai/harness/host';
+import { Effect, Result } from 'effect';
 
+import { modelConfig } from '@texra-ai/llm';
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
-import { modelOptionsFrom } from '@texra/model/modelOptions';
+import { decideLaunchModel, modelOptionsFrom } from '@texra/model/modelOptions';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 
@@ -52,6 +58,64 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
 export const hasUsableSetupCredential = (stores: SettingsStores) =>
   resolveSetupLaunchModel(stores).pipe(Effect.map((model) => model !== null));
 
-/** The picker's model options as the follow-up controls list them, read live. */
-export const loadModelOptions = (stores: SettingsStores) =>
-  readModelOptions(stores).pipe(Effect.map(modelOptionsFrom));
+/**
+ * The picker's rows, read live: every visible model's (the harness's default
+ * list), or those of `models`, one each, in order. Each row carries its
+ * availability verdict, which every host words itself.
+ */
+export const loadModelOptions = (
+  stores: SettingsStores,
+  models?: readonly string[],
+) => readModelOptions(stores, models).pipe(Effect.map(modelOptionsFrom));
+
+/**
+ * The model a launch takes from its candidates, over what this user can run
+ * now: the picker's rows, plus a row for each candidate the catalog
+ * describes but the picker does not list, since a model need not be enabled
+ * to run. Each such row is read on its own, and a read that fails fails the
+ * choice only when the decision lands on that candidate, so a sibling's
+ * failure never refuses a launch that does not need it.
+ */
+export const chooseLaunchModel = Effect.fn('chooseLaunchModel')(function* (
+  stores: SettingsStores,
+  candidates: readonly RunModelCandidate[],
+) {
+  const listed = yield* loadModelOptions(stores);
+  const unlisted = [
+    ...new Set(
+      candidates.flatMap(({ model }) => {
+        const id = model?.trim();
+        return id &&
+          modelConfig(id) !== undefined &&
+          !listed.some((row) => row.value === id)
+          ? [id]
+          : [];
+      }),
+    ),
+  ];
+  const reads = yield* Effect.forEach(
+    unlisted,
+    (id) => Effect.result(loadModelOptions(stores, [id])),
+    { concurrency: 'unbounded' },
+  );
+  const rows: ModelOptionData[] = [...listed];
+  const failed = new Map<
+    string,
+    Effect.Error<ReturnType<typeof loadModelOptions>>
+  >();
+  for (const [index, read] of reads.entries()) {
+    const id = unlisted[index];
+    if (id === undefined) continue;
+    if (Result.isFailure(read)) failed.set(id, read.failure);
+    else rows.push(...read.success);
+  }
+  const choice = decideLaunchModel(rows, candidates);
+  const { decision } = choice;
+  // The candidate the decision could not run: why is in its row, so a row
+  // that could not be read is the failure itself.
+  const refused =
+    decision?._tag === 'Fallback' ? decision.from.model : decision?.model;
+  const failure = refused === undefined ? undefined : failed.get(refused);
+  if (failure !== undefined) return yield* failure;
+  return { ...choice, rows };
+});

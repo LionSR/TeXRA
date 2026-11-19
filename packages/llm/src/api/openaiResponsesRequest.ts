@@ -12,7 +12,7 @@ import {
 import { boundTurn, resolveTurn } from './turnInput.js';
 import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import { ModelError } from '../errors.js';
-import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
+import { responseInput } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
 import type { SessionToken } from '../node.js';
@@ -128,7 +128,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       ...(turn.tools.length > 0
         ? {
             tools: groupedTools(
-              toolNamespaceOf(config),
+              config.toolNamespace,
               turn.tools.map((tool): OpenAI.Responses.FunctionTool => {
                 if (config.requestDialect !== 'compatible')
                   return { type: 'function', ...tool, strict: false };

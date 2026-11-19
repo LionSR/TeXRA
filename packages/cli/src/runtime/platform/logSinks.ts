@@ -154,11 +154,19 @@ export function writeErrorStderr(error: unknown): void {
   writeTextStderr(cliErrorMessage(error));
 }
 
-/** A question on stdin got no answer: the input ended, or readline failed. */
-class CliQuestionUnanswered extends Schema.TaggedError<CliQuestionUnanswered>()(
-  'CliQuestionUnanswered',
+/**
+ * A prompt on the terminal got no answer: the input ended, readline failed,
+ * or the code that prepares the terminal for it, or renders or parses what
+ * it shows, threw.
+ */
+export class CliPromptFailed extends Schema.TaggedError<CliPromptFailed>()(
+  'CliPromptFailed',
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
-) {}
+) {
+  /** What prompt code threw, under its own message. */
+  static readonly from = (cause: unknown) =>
+    new CliPromptFailed({ message: ensureError(cause).message, cause });
+}
 
 /**
  * Ask one question on stdin. The readline interface is the foreign edge and is
@@ -173,7 +181,7 @@ export function askCliQuestion(
      *  the question is written straight to stderr instead. */
     readonly hidden?: boolean;
   } = {},
-): Effect.Effect<string, CliQuestionUnanswered> {
+): Effect.Effect<string, CliPromptFailed> {
   return Effect.acquireUseRelease(
     Effect.sync(() => {
       // When stdin is a file it has no `ref`.
@@ -198,19 +206,15 @@ export function askCliQuestion(
       Effect.raceFirst(
         Effect.tryPromise({
           try: () => prompt.question(options.hidden ? '' : question),
-          catch: (cause) =>
-            new CliQuestionUnanswered({
-              message: ensureError(cause).message,
-              cause,
-            }),
+          catch: CliPromptFailed.from,
         }),
         // readline leaves a pending question unanswered for good when its
         // input ends (Ctrl-D, a closed pipe); its `close` is the answer.
-        Effect.callback<never, CliQuestionUnanswered>((resume) => {
+        Effect.callback<never, CliPromptFailed>((resume) => {
           prompt.once('close', () =>
             resume(
               Effect.fail(
-                new CliQuestionUnanswered({
+                new CliPromptFailed({
                   message: 'The input ended before an answer.',
                 }),
               ),
@@ -234,7 +238,7 @@ export function askCliQuestion(
 export function confirmCliQuestion(
   question: string,
   options: { readonly default: boolean },
-): Effect.Effect<boolean, CliQuestionUnanswered> {
+): Effect.Effect<boolean, CliPromptFailed> {
   return askCliQuestion(
     `${question} ${options.default ? '[Y/n]' : '[y/N]'} `,
   ).pipe(

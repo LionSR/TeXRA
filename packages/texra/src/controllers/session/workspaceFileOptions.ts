@@ -35,11 +35,12 @@ export const findLabelInWorkspace = Effect.fn(
   const [inputs, contexts] = yield* listWorkspaceFiles({
     root: workspaceRoot,
     configs: [getFileListConfig('input'), getFileListConfig('context')],
+    links: 'follow',
   });
   const workspaceFs = yield* WorkspaceFs;
   return yield* openFirstLabelMatch(
     label,
-    new Set([...inputs, ...contexts]),
+    new Set([...inputs.files, ...contexts.files]),
     (file) => readNormalizedFile(workspaceFs, file),
     (file, line) =>
       workspaceFs
@@ -57,9 +58,10 @@ export const workspaceFileOptions = Effect.fn(
   if (!workspaceRoot) {
     return { baseFile: [], editedFile: [], commit: ['HEAD'] };
   }
-  const [baseFile, editedFile] = yield* listWorkspaceFiles({
+  const [base, edited] = yield* listWorkspaceFiles({
     root: workspaceRoot,
     configs: [getFileListConfig('input'), getFileListConfig('edited')],
+    links: 'follow',
   });
-  return { baseFile, editedFile, commit: ['HEAD'] };
+  return { baseFile: base.files, editedFile: edited.files, commit: ['HEAD'] };
 });

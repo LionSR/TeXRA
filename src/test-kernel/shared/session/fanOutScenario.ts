@@ -17,6 +17,7 @@ import {
   RunIdSchema,
   type SessionView,
 } from '@texra-ai/harness/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { emptyRunEndOutput, type RunParent } from '@shared/schemas';
 import {
   makeSessionViewUpdater,
@@ -162,6 +163,10 @@ export function local(state: Partial<LocalRuntimeState>): SessionViewInput {
   return { _tag: 'local', local: { runsHere: [], ...state } };
 }
 
+/** Session `key`'s view before any input. */
+export const emptyView = (key: string): SessionView =>
+  makeSessionViewUpdater(key).current();
+
 /** `updater`'s view (by default a fresh one of session `paper`) after
  *  `inputs`, each applied in its own call, as frames of one. */
 export function viewOf(
@@ -186,7 +191,7 @@ export function buildScenario({ proposal = false } = {}) {
     parent: null,
     provenance: null,
     takesFollowUps: false,
-    approvalPolicy: ROOT_POLICY,
+    grants: ROOT_POLICY,
   });
   log.emit(ROOT, T.root, {
     type: 'run.activate',
@@ -226,6 +231,8 @@ export function buildScenario({ proposal = false } = {}) {
     },
     provenance: null,
     takesFollowUps: true,
+    worktree: null,
+    grants: NO_APPROVAL_GRANTS,
   });
   log.emit(CHILD, T.child, {
     type: 'run.config',
@@ -277,6 +284,8 @@ export function buildScenario({ proposal = false } = {}) {
     takesFollowUps: false,
     parent: log.parent(CHILD),
     provenance: null,
+    worktree: null,
+    grants: NO_APPROVAL_GRANTS,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.activate',
@@ -332,6 +341,8 @@ export function buildScenario({ proposal = false } = {}) {
     parent: null,
     provenance: null,
     takesFollowUps: false,
+    worktree: null,
+    grants: NO_APPROVAL_GRANTS,
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',

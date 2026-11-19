@@ -1,7 +1,7 @@
 /**
  * Example 02 — Sessions, inline personas, typed launch refusals, and `run.events`.
  *
- * Composes `Sessions.layer({ platform, plugins: harnessBuiltins })`, opens a
+ * Composes `Sessions.layer({ platform, plugins: harnessBuiltins, client })`, opens a
  * session, checks an `InlinePersonaSchema` definition, handles a `LaunchRefused`
  * refusal on a missing agent, and runs an inline persona while streaming its
  * `run.events` (through `responseText`) and awaiting `run.result` (`RunEnd`),
@@ -12,7 +12,7 @@ import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import { InlinePersonaSchema } from '@texra-ai/harness/schemas';
 
-import { makeExampleWorkspace } from './_support.ts';
+import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
 const { platform, route } = await makeExampleWorkspace([
   {
@@ -82,9 +82,11 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provideMerge(route.transport),
-    ),
+    Sessions.layer({
+      platform,
+      plugins: harnessBuiltins,
+      client: EXAMPLE_CLIENT,
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 

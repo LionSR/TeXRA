@@ -47,7 +47,7 @@ Surface at `7547ab0`, non-test source, 1339 files:
 | `Effect.uninterruptible`, `uninterruptibleMask`            | 50    | durable terminals and row 5 only (45 on 2026-11-18)         |
 | Hand-made `Deferred` and `Latch`                           | 34    | rows 3 and 16                                               |
 | `Effect.forkDetach`                                        | 25    | 0                                                           |
-| `Queue.unbounded`, `PubSub.unbounded`                      | 15    | 0 (row 20; 6 on 2026-11-18)                                 |
+| `Queue.unbounded`, `PubSub.unbounded`                      | 15    | 0 (row 20; 2 on 2026-11-18)                                 |
 
 ## Rulings this note follows
 
@@ -120,7 +120,7 @@ Paths are under `packages/`. "Stays" names what remains hand-written and why.
 | 13  | A host callback that starts Effect work            | `FiberSet.makeRuntime` in the owner's scope (`FiberHandle` for latest-wins, `FiberMap` by key)                                                                                | about 54 `runtime.runFork` sites                                                                                                                     | each host's root entry                                                                                                                                   |
 | 14  | A notice nobody waits for                          | the host runs the wait in its own `FiberSet`; `notify` returns once shown                                                                                                     | about 11 `forkDetach` at callers; the other 14 become scoped forks                                                                                   | none                                                                                                                                                     |
 | 15  | One fact, many readers                             | one `SubscriptionRef` holding a union; readers take `changes` through `Stream.changes`                                                                                        | the link's three refs and five derivations; "a task is at work" computed two ways                                                                    | none                                                                                                                                                     |
-| 16  | A request and its answer, between TeXRA's own ends | `rpc`, with a `Protocol` over `postMessage` where the transport is a frame                                                                                                    | the tables in `texra/src/ui/progress/sessionTransport.ts`, `SessionBridge.ts`, `desktop/src/main/desktopPromptController.ts`                         | `harness/src/tools/jsonRpc.ts` (LSP: the peer also asks); `hostWindows.ts` `ask` (the direction `rpc` lacks)                                             |
+| 16  | A request and its answer, between TeXRA's own ends | `rpc`, with a `Protocol` over `postMessage` where the transport is a frame                                                                                                    | the tables in `texra/src/ui/progress/sessionTransport.ts`, `SessionBridge.ts`, `desktop/src/main/desktopPromptController.ts`, `hostWindows.ts`       | `harness/src/tools/jsonRpc.ts` (LSP: the peer also asks)                                                                                                 |
 | 17  | A line from the terminal                           | the one readline wrapper, racing readline's `close`                                                                                                                           | the question that stayed pending when its input ended                                                                                                | readline: `Terminal.readLine` hides no input and prompts on stdout                                                                                       |
 | 18  | A WebSocket                                        | `Socket.fromWebSocket(ws, { openTimeout })`                                                                                                                                   | the iterator, `rejoin` and the open wait in `llm/src/api/openaiResponsesWebSocket.ts`                                                                | reading the handshake's status; the read that waits between turns (data with no turn makes the connection unusable); the ping                            |
 | 19  | A wait on something outside the process            | `Effect.timeoutOrElse`; a retry is a `Schedule` with an end                                                                                                                   | the untimed Lean request, TUI exit, `texra service stop` across builds; `READ_RETRY` without a bound; "retry on the next view"                       | a wait on a person, which ends with their window                                                                                                         |
@@ -242,11 +242,13 @@ open requests with the same decision a person's cancel writes. That work
 also read `effect/workflow`, `effect/eventlog` and the `effect/sql` models
 against the run loop and the store and refused each with evidence
 (`EFF-ADOPT-workflow-run-loop`, `EFF-ADOPT-eventlog-session-store`,
-`EFF-ADOPT-sql-schema-resolver-model`, on its own branch).
+`EFF-ADOPT-sql-schema-resolver-model`, now entries of
+`.agents/docs/refuted-candidates.json`).
 
 ## Progress
 
-Done, on the branch after PR 14927:
+Done, on `main` after PR 14927 (checked 2026-11-17: `withFileWriteLane`,
+`runsAtWork`, `RouteAnswered` and `scopedFork` are all in the tree):
 
 - Row 4 and row 6: the registry's launch, hold and stop are one
   `acquireUseRelease` each, the three stop paths are one, and a stop asked
@@ -417,6 +419,65 @@ Done, on the branch after PR 14927:
   - bounded by its own deadline: a session's close (`sessionLayer.ts`).
 - Checks: `check-fact-spread.mjs` holds `Effect.forkDetach`,
   `Queue.unbounded`, `PubSub.unbounded` and `SynchronizedRef` shrink-only.
+- Row 16, on 2026-11-18: every request between TeXRA's own ends that had a
+  hand-written table is `rpc`. `texra/src/shared/rpcOverMessages.ts` turns
+  a send and the arriving messages into either end's `Protocol` (JSON
+  codecs, acks on); each channel wraps `rpc`'s messages in its own
+  envelope.
+  - The session channel (the extension's two webviews, the desktop
+    renderer, the trace viewer): `SessionRpcs` in
+    `texra/src/shared/session/sessionFrames.ts` (`session.frames`,
+    `session.host`, `session.actions`, `session.request`,
+    `host.request`), one `RpcServer` per port in `SessionBridge.ts`, one
+    `RpcClient` per open session in `sessionTransport.ts`, and the trace
+    viewer's stand-in host an `RpcServer` over the trace. Gone: the
+    transport's pending table and inbox, the request ids
+    `sessionSurfaces.ts` and `projectWorkbench.ts` minted,
+    `RESPONSE_KIND`, the request envelope, the held-action list, the
+    generation echo, and the `SessionFrames` queue with the
+    `WebviewSessions` map: a remote view's `SessionInputs.read` is the
+    transport's own call (`remoteSessionView`), so the view's `switchMap`
+    interrupts the read it replaces, for a webview, a service window
+    (`serviceSession.ts`, whose resubscribe lane goes) and
+    `texra tasks attach` alike. What the generation guarded, a superseded
+    replay and a reloaded webview reusing its port, is `rpc`'s request
+    ids plus the envelope's `client`: a page names itself once per load,
+    and the server retires a port's previous client when a new one
+    speaks. A frame is `{ cursor, inputs }`.
+  - The three gaps the measurement named: a handler's defect is caught in
+    the bridge and answered `Internal` (rpc would send its text, and a
+    stream's defect would end every call of the connection, so a served
+    stream ends logged instead); a call whose port closed waits until its
+    own scope ends, which is the session's close, as before; the host
+    asking the surface is a group the surface serves.
+  - The reverse direction. The service asking a window (`hostWindows.ts`):
+    the window serves `WindowRpcs` (`hostCalls.ts`) and the service holds
+    one client per attachment; `host.attach` frames carry its messages and
+    `host.answer` the replies, so the calls map, the per-call ids and
+    `Deferred`s, the result table and the detach loop are gone, and a
+    cancelled call now reaches the window. The desktop's prompts: the
+    renderer serves `DesktopPromptRpcs`, main holds the client, and the
+    two prompt commands carry the messages; the pending map and its ids
+    are gone.
+  - Learned. A view whose read is the transport's call ends with that
+    call unless the read ends itself on an interruption: a service window
+    that moved to a newer service stopped updating its own view (the
+    desktop E2E's tool-edit test caught it). `rpc`'s request ids are a
+    module counter, so they repeat after a reload; the envelope's
+    `client` is what tells two page loads apart. The bundles grew by
+    +14.8 kB (progress webview), +24.4 kB (trace viewer, which carries a
+    server too) and +23.2 kB (desktop renderer), before gzip.
+  - The service protocol's digest moved twice (the frame's fields, then
+    `host.attach` and `host.answer`, whose window procedures now count in
+    it); `service.hello` and `service.stop` keep their pinned shapes.
+- Row 20, the three buffers in row 16's files: the transport's inbox and
+  the `SessionFrames` queue are gone (`rpc`'s stream reads at the
+  reader's pace, the server at most 32 chunks ahead); the window table's
+  frame queue is `bounded(64)` (a run calling past 64 unread calls waits).
+  Two new ones are stated where they are made: a port's held surface
+  actions are `sliding(64)` (a surface that has not read 64 is not
+  showing, and the newest are the ones meant), and a server's
+  retirement queue is `bounded(1)` (one reload at a time is outstanding).
 
 Left, with the reason:
 
@@ -460,9 +521,7 @@ Left, with the reason:
   is rows a live reader never sees. A bound needs each reader to notice a
   gap (`through` jumps) and read the missing commits from the store, as a
   reader that subscribes late already does; that is the next step there.
-  `sessionFrames.ts`, `hostWindows.ts` and the frontend's
-  `sessionTransport.ts` are row 16's files (`rpc` replaces their queues)
-  and were not touched.
+  The three in row 16's files are resolved above.
 - The uninterruptible regions that hold across a wait not bounded here:
   the chat's send waiting on its forked send (`chatSessionController.ts`
   905: where the message ends, sent or back in the input, is known only
@@ -474,9 +533,8 @@ Left, with the reason:
   scope deletes the files they read, so its close waits for them) and its
   approval, a session request.
 
-Open: the frames on `rpc` (row 16), the remaining buffers (row 20: the
-session events' gap read, and the three in row 16's files), and slice 7.
-What the passes learned:
+Open: the remaining buffers (row 20: the session events' gap read) and
+slice 7. What the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
   opening removed the `opening` state and the detached scope but not
@@ -503,32 +561,9 @@ What the passes learned:
   a run that does not unwind. No such run was reproduced, and a bounded
   closer would be hand-written, so it is left until one is observed.
 - Row 16: `rpc` does the job, measured over a postMessage-shaped pair
-  (`rpcFrames.mjs` in the evidence directory): a stream keeps its order and
-  the server runs at most 32 chunks ahead of a slow reader; a reader that
-  stops interrupts the server's stream; a typed error arrives as its
-  class; a closed port or an interrupted call interrupts the handler,
-  while work the handler forked into a set the bridge owns finishes, which
-  is how a `stop` sent as a tab closes still completes. Three things the
-  move must do that `rpc` does not: a defect arrives with its message
-  text, so the bridge keeps answering `Internal`; a client whose port
-  closed waits until its own scope ends, so a session's close stays what
-  ends its calls; and the host asking the surface (`desktopPromptController.ts`,
-  `hostWindows.ts`'s `ask`) needs a second group served by the surface.
-  Not landed because the move is one change across every end at once:
-  every message carries its session key, so the wire becomes a session
-  envelope around `rpc`'s own messages; `SessionBridge.ts` becomes one
-  `RpcServer` per port (subscribe as a stream merging the host snapshot,
-  the two requests, the surface actions as a stream that holds what the
-  host sent before the surface listened); `sessionTransport.ts` and
-  `SessionFrames` become one `RpcClient` per open session, deleting the
-  pending table, the request ids `sessionSurfaces.ts` and
-  `projectWorkbench.ts` mint, the generation echo and the inbox queue; and
-  the trace viewer's stand-in host (`traceHostBridge.ts`) becomes a server
-  over the trace. Half of it would leave two protocols on one channel.
-  Next step: that change as its own PR, driven in the desktop app and the
-  trace viewer, with the VS Code webview checked by hand. The service's
-  wire is untouched by it: `task.watch` keeps `EventsFrameSchema`, so
-  `PROTOCOL`'s digest does not move unless the frame's fields do.
+  (`rpcFrames.mjs` in the evidence directory) and landed as one change
+  across every end (see "Progress"); the VS Code webview was not driven
+  here.
 - Rows 9 and 10 at the remaining lanes: a reopen must wait for a close and
   nothing shipped does that, so the session and desktop project lanes
   stay. The Codex probe keeps its lane and its map: it caches only what a
@@ -600,6 +635,7 @@ What the passes learned:
 - The surface counts: a script over `packages/*/src` at `7547ab0`.
 - Not verified: the registry on `TxHashMap` under the real stop cascade;
   whether any of the sixteen lanes needs call order; provider behaviour for
-  single-use refresh tokens; `rpc` over `postMessage` in the three frames
-  (measured only over a postMessage-shaped pair in Node); the model
-  socket against the live provider.
+  single-use refresh tokens; `rpc` over the VS Code webview's
+  `postMessage` (driven in the trace viewer under headless Chromium and
+  in the desktop app's E2E under xvfb; VS Code's download is refused
+  here); the model socket against the live provider.

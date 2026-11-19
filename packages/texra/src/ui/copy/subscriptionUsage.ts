@@ -15,21 +15,10 @@ import { formatRelativeTime } from '@ui/copy/format';
 
 const STALE_AFTER_MS = 2 * 60_000;
 
-function formatWindowDuration(seconds: number): string | undefined {
-  if (seconds % 86_400 === 0) return `${seconds / 86_400}-day`;
-  if (seconds % 3600 === 0) return `${seconds / 3600}-hour`;
-  return undefined;
-}
-
 /** Convert provider wire names into compact, stable labels. */
 export function subscriptionUsageWindowLabel(
   window: SubscriptionUsageWindow,
 ): string {
-  const duration = window.limitWindowSeconds
-    ? formatWindowDuration(window.limitWindowSeconds)
-    : undefined;
-  if (duration) return duration;
-
   const separator = window.name.lastIndexOf(':');
   const prefix =
     separator >= 0 ? `${window.name.slice(0, separator + 1)} ` : '';

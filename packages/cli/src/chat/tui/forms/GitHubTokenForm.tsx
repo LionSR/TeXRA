@@ -4,7 +4,10 @@ import { useState } from 'react';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { tryOpenBrowser } from '@cli/runtime/models/browser';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
-import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
+import {
+  GITHUB_TOKEN_CREATE_URL,
+  GITHUB_TOKEN_ENV_VARS,
+} from '@texra/tools/github/githubAuth';
 import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
@@ -16,12 +19,10 @@ import type { Secrets } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
 import { useChatProcess } from '../chatProcess';
 
-/** Which source backs the GitHub token, as `resolveGitHubTokenSource`
- *  reports it. */
-type GitHubTokenStatus = CredentialOrigin;
-
 export interface GitHubTokenStatusView {
-  readonly status?: GitHubTokenStatus;
+  /** Which source backs the GitHub token, as `resolveGitHubTokenSource`
+   *  reports it. */
+  readonly status?: CredentialOrigin;
   readonly loading: boolean;
   readonly error: boolean;
 }
@@ -39,7 +40,7 @@ export function formatGitHubTokenSummary(view: GitHubTokenStatusView): string {
 }
 
 function buildGitHubTokenActionItems(
-  status: GitHubTokenStatus,
+  status: CredentialOrigin,
 ): Array<{ value: GitHubTokenAction; label: string; description?: string }> {
   return [
     {
@@ -65,11 +66,11 @@ function buildGitHubTokenActionItems(
   ];
 }
 
-function statusHint(status: GitHubTokenStatus | undefined): string {
+function statusHint(status: CredentialOrigin | undefined): string {
   if (status === 'env') {
-    return 'A token is already available from GH_TOKEN or GITHUB_TOKEN. Setting one here overrides it.';
+    return `A token is already available from ${GITHUB_TOKEN_ENV_VARS.join(' or ')}. Setting one here overrides it.`;
   }
-  return 'Needs repo for private repos, public_repo for public. Or export GH_TOKEN / GITHUB_TOKEN.';
+  return `Needs repo for private repos, public_repo for public. Or export ${GITHUB_TOKEN_ENV_VARS.join(' / ')}.`;
 }
 
 interface GitHubTokenFormProps {
@@ -110,7 +111,7 @@ export function GitHubTokenForm(
         title="Set GitHub token"
         helper={<Text dimColor>Get a token: {GITHUB_TOKEN_CREATE_URL}</Text>}
         placeholder="enter your GitHub token (hidden)"
-        hint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
+        hint={`Stored in TeXRA secrets on Enter — or set ${GITHUB_TOKEN_ENV_VARS.join(' / ')}.`}
         error={error}
         saving={saving}
         onCancel={() => {

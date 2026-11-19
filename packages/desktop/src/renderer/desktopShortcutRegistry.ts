@@ -1,30 +1,27 @@
-import { commandCatalogById } from '@texra/shared/commands/catalog';
 import { toElectronAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
+  DESKTOP_COMMAND_PALETTE_ID,
+  desktopCommandEntry,
   dispatchDesktopCommand,
   paletteEntries,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface';
 
-export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
-
 /**
- * The command palette has no menu entry, so its catalog row is read here
- * rather than coming from `paletteEntries`. Sole owner of that
- * read: the shell's accelerator hints call it too, before this registry
- * exists (a bootstrap failure leaves no registry at all).
+ * The command palette has no menu entry, so its row is read here rather
+ * than coming from `paletteEntries`. Sole owner of that read: the shell's
+ * accelerator hints call it too, before this registry exists (a bootstrap
+ * failure leaves no registry at all).
  */
 export function desktopCommandPaletteShortcut(platform: OsPlatform): {
   readonly id: typeof DESKTOP_COMMAND_PALETTE_ID;
   readonly label: string;
   readonly accelerator: string;
 } {
-  const entry = commandCatalogById.get(DESKTOP_COMMAND_PALETTE_ID);
-  if (!entry?.keybinding) {
-    throw new Error(
-      `Missing command catalog entry: ${DESKTOP_COMMAND_PALETTE_ID}`,
-    );
+  const entry = desktopCommandEntry(DESKTOP_COMMAND_PALETTE_ID);
+  if (!entry.keybinding) {
+    throw new Error(`No shortcut for ${DESKTOP_COMMAND_PALETTE_ID}`);
   }
   return {
     id: DESKTOP_COMMAND_PALETTE_ID,

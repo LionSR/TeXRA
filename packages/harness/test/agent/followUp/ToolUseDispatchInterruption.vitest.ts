@@ -55,12 +55,12 @@ const settledIds = (state: RunState | null | undefined): string[] =>
   );
 
 function loopLayer(init: HarnessInit) {
-  return Layer.mergeAll(
-    scriptedInvokerLayer,
-    nativeToolTestLayer({
-      run: { runId: init.runId, session: init.session, toolPolicy: {} },
-    }),
-  ).pipe(
+  return scriptedInvokerLayer.pipe(
+    Layer.provideMerge(
+      nativeToolTestLayer({
+        run: { runId: init.runId, session: init.session, toolPolicy: {} },
+      }),
+    ),
     Layer.provideMerge(
       agentRunTestLayer({
         ...init,
@@ -142,9 +142,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           };
 
           const fiber = yield* Effect.forkDetach(
-            Effect.flatMap(openToolUse({ resume: false }), (opened) =>
-              runToolUse({ resume: false }, opened),
-            ).pipe(
+            Effect.flatMap(openToolUse(), runToolUse).pipe(
               Effect.provide(
                 loopLayer({
                   runId,
@@ -177,13 +175,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ]);
           expect(settledIds(interrupted)).toEqual(['call-a']);
 
-          const resumed = yield* Effect.flatMap(
-            openToolUse({ resume: true }),
-            (opened) => runToolUse({ resume: true }, opened),
-          ).pipe(
+          const resumed = yield* Effect.flatMap(openToolUse(), runToolUse).pipe(
             Effect.provide(
               loopLayer({
                 runId,
+                resume: true,
                 session,
                 tools,
                 turns: [textTurn('All three calls are accounted for.')],
@@ -245,11 +241,16 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           },
         };
         const run = (resume: boolean, turns: readonly TurnResult[]) =>
-          Effect.flatMap(openToolUse({ resume }), (opened) =>
-            runToolUse({ resume }, opened),
-          ).pipe(
+          Effect.flatMap(openToolUse(), runToolUse).pipe(
             Effect.provide(
-              loopLayer({ runId, session, tools, turns, stopAfterCycle: true }),
+              loopLayer({
+                runId,
+                session,
+                tools,
+                turns,
+                stopAfterCycle: true,
+                resume,
+              }),
             ),
           );
         const issued = [toolCallTurn([{ id: 'call-b', name: 'toolB' }])];
@@ -308,8 +309,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               });
               yield* publishTestRunStart(session, runId);
               const done = yield* Effect.flatMap(
-                openToolUse({ resume: false }),
-                (opened) => runToolUse({ resume: false }, opened),
+                openToolUse(),
+                runToolUse,
               ).pipe(
                 Effect.provide(
                   loopLayer({
@@ -336,13 +337,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             storage: cut,
           });
           const model = scriptedModel([textTurn('Asked again.')]);
-          const resumed = yield* Effect.flatMap(
-            openToolUse({ resume: true }),
-            (opened) => runToolUse({ resume: true }, opened),
-          ).pipe(
+          const resumed = yield* Effect.flatMap(openToolUse(), runToolUse).pipe(
             Effect.provide(
               loopLayer({
                 runId,
+                resume: true,
                 session,
                 tools,
                 turns: [],

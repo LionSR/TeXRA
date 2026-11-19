@@ -15,7 +15,7 @@ import { describe, expect } from 'vitest';
 // Local imports - package API under test
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   emptySessionView,
   type SessionView as RuntimeSessionView,
@@ -121,7 +121,7 @@ const contextOf = (fake: FakeSession) =>
     // cast: the fake view serves only the ref, changes and inputs a run reads.
     Context.add(SessionViewAccess, fake.view as never),
     // cast: the fake registry serves only the `get` a run's view reads.
-    Context.add(Runs, fake.runs as never),
+    Context.add(RunRegistry, fake.runs as never),
     // cast: the fake answers only the `request` a run's view sends.
     Context.add(SessionRequests, fake.requests as never),
   ) as never;

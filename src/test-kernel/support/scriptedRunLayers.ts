@@ -261,11 +261,23 @@ const testConfig = () =>
     instruction: TEST_INSTRUCTION,
   });
 
-/** A launch's entry with no parent, registration or opening trace. */
-const testEntry = (): RunLaunch['entry'] => ({
+/** A launch's entry with no parent or opening trace. A fresh one registers
+ *  nothing more, since a fixture publishes its run's start itself; a
+ *  `resume` has no registration, which is how the loop knows it is one. */
+const testEntry = (
+  runId: RunId,
+  config: RunLaunch['config'],
+  resume = false,
+): RunLaunch['entry'] => ({
   parent: null,
   awaited: false,
-  registration: null,
+  registration: resume
+    ? null
+    : {
+        rows: [],
+        start: null,
+        config: { type: 'run.config', aggregateId: runId, config },
+      },
   enter: (commit) => Effect.uninterruptible(commit(Effect.succeed([]))),
 });
 
@@ -289,7 +301,6 @@ export function testLaunch(
     toolPolicy: {},
     opening: {
       inputs: {
-        IS_ANTHROPIC_MODEL: false,
         CWD: '.',
         BUILTIN_AGENTS_DIR: '',
         CUSTOM_AGENTS_DIR: '',
@@ -299,7 +310,7 @@ export function testLaunch(
       attachedMemories: null,
       attachedMemoryMisses: [],
     },
-    entry: testEntry(),
+    entry: testEntry(runId, config),
     ...over,
   };
 }
@@ -344,6 +355,8 @@ export interface ScriptedRunInit {
   readonly mediaFiles?: readonly string[];
   /** A script run: what it runs is its call, not a prompt. */
   readonly scriptCall?: (typeof AgentConfigSchema.Encoded)['script'];
+  /** The launch resumes the run its rows hold. */
+  readonly resume?: boolean;
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
@@ -357,21 +370,25 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const logger = init.logger ?? new TraceEmitter(() => {});
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
+      const config = Schema.decodeUnknownSync(AgentConfigSchema)({
+        ...testConfig(),
+        ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
+        ...(init.scriptCall ? { script: init.scriptCall } : {}),
+      });
       return testAgentRun(
         { runId: init.runId, logger, model, scope },
         {
-          config: Schema.decodeUnknownSync(AgentConfigSchema)({
-            ...testConfig(),
-            ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
-            ...(init.scriptCall ? { script: init.scriptCall } : {}),
-          }),
+          config,
           persona: Schema.decodeUnknownSync(PersonaSchema)({
             tools: Object.keys(tools).map((name) => ({ name })),
           }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,
-          entry: { ...testEntry(), parent: init.parentId ?? null },
+          entry: {
+            ...testEntry(init.runId, config, init.resume),
+            parent: init.parentId ?? null,
+          },
         },
       );
     }),

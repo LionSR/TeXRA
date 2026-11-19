@@ -24,7 +24,10 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import { sectionCountLabel } from '@ui/copy/runStatus';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import {
+  fromHost,
+  hostFailed,
+} from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   EXTENSION_CATEGORIES,
@@ -36,14 +39,12 @@ import {
   type ManualCriticismEntry,
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
-import type { DownWire } from '@texra/shared/session/sessionFrames';
-import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
+import type { SessionWire } from '@texra/shared/session/sessionFrames';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   openGuiWindow,
   type GuiSession,
-  type GuiWindowSettingsRuns,
 } from '@texra/controllers/session/openGuiWindow';
 import type {
   AttachedPort,
@@ -104,14 +105,13 @@ interface Surfaces {
   editor?: Surface<vscode.WebviewPanel>;
 }
 
+/** The window a view is opened on, as `openGuiWindow` answers it. */
+type GuiWindow = Effect.Success<ReturnType<typeof openGuiWindow>>;
+
 /** What the view is built over: its window's parts and the scope it lives
  *  in. */
 interface ViewParts {
-  readonly bridge: SessionBridge;
-  readonly snapshot: HostSnapshotSource;
-  readonly runValidated: HostRunActions['runValidated'];
-  readonly runSetup: Effect.Effect<void, never, ProcessServices>;
-  readonly settingsRuns: GuiWindowSettingsRuns;
+  readonly window: GuiWindow;
   /** Where this window's runs run: the service's session, or this one. */
   readonly runSession: Session;
   /** The view's scope: each surface's scope is a child of it, so the
@@ -251,25 +251,28 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ...parts,
             roots,
             showBuilt,
-            notices: createAgentPresentationHost(roots, runtime, showBuilt),
-            window: editor,
-            runtime,
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
             ...settings,
-            showProgressView: () => onView((view) => view.showProgressView()),
-            revealProgress: (config) =>
-              onView((view) => view.revealProgress(config)),
             popOutToEditor: () => onView((view) => view.popOutToEditor()),
             showInSidebar: () => showInSidebar,
-          }),
+          }).pipe(
+            Effect.map(({ openFinalOutput, ...requests }) => ({
+              ...requests,
+              notices: createAgentPresentationHost(roots, runtime, showBuilt),
+              window: editor,
+              runs: {
+                openFinalOutput,
+                showRunView: () => onView((view) => view.showProgressView()),
+                // Or name the run in a toast when the list cannot be shown.
+                revealProgress: (config: AgentConfig) =>
+                  onView((view) => view.revealProgress(config)),
+              },
+            })),
+          ),
       });
       const view = new ProgressViewProvider({
-        bridge: gui.bridge,
-        snapshot: gui.snapshot,
-        runValidated: gui.runValidated,
-        runSetup: gui.runSetup,
-        settingsRuns: gui.settingsRuns,
+        window: gui,
         runSession,
         scope,
         contentProvider,
@@ -301,15 +304,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** The sidebar while VS Code holds one resolved, and the popped-out tab;
    *  an entry leaves when its surface's scope closes. */
   private readonly surfaces: Surfaces = {};
-  /** Whether a usable credential exists, as each check answers: the setup
-   *  pill follows the answer the "Connect a model" card reads. */
-  public readonly credentialUsable: Stream.Stream<boolean>;
-  /** The window's launcher (`HostRunActions.runValidated`). */
-  public readonly runValidated: HostRunActions['runValidated'];
-  /** The window's setup verb, for the command and the status pill. */
-  public readonly runSetup: Effect.Effect<void, never, ProcessServices>;
-  /** The settings view's verbs on this window's runs. */
-  public readonly settingsRuns: GuiWindowSettingsRuns;
+  /** The window this view shows: its launcher and setup verb for the
+   *  commands, the settings view's verbs on its runs, and the snapshot the
+   *  setup pill follows. */
+  public readonly window: GuiWindow;
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
 
@@ -319,14 +317,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly runtime: ProcessRuntime;
   private readonly fork: ScopedFork<ProcessServices>;
   private constructor(parts: ViewParts) {
-    this.bridge = parts.bridge;
-    this.snapshot = parts.snapshot;
+    this.window = parts.window;
+    this.bridge = parts.window.bridge;
+    this.snapshot = parts.window.snapshot;
     this.scope = parts.scope;
     this.contentProvider = parts.contentProvider;
-    this.credentialUsable = parts.snapshot.credentialUsable;
-    this.runValidated = parts.runValidated;
-    this.runSetup = parts.runSetup;
-    this.settingsRuns = parts.settingsRuns;
     this.runSession = parts.runSession;
     this.runtime = parts.runtime;
     this.fork = parts.fork;
@@ -407,26 +402,29 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     function* (
       id: keyof Surfaces,
       view: vscode.WebviewView | vscode.WebviewPanel,
-    ): Effect.fn.Return<void, HostFailed, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      void,
+      HostFailed,
+      FileSystem.FileSystem | ProcessServices
+    > {
       this.closeSurface(this.surfaces[id]);
       // The post starts synchronously inside the fork, so sends keep their
       // order.
-      const send = (message: DownWire): void => {
+      const send = (message: SessionWire): void => {
         this.fork(
-          Effect.tryPromise({
-            try: () => view.webview.postMessage(message),
-            catch: (cause) => hostFailed('webview.postMessage', cause),
-          }).pipe(
+          fromHost('webview.postMessage', () =>
+            view.webview.postMessage(message),
+          ).pipe(
             Effect.flatMap((delivered) =>
               delivered
                 ? Effect.void
                 : Effect.logWarning(
-                    `A ${message.kind} message was not delivered to ${id}`,
+                    `A ${message.message._tag} message was not delivered to ${id}`,
                   ),
             ),
             Effect.catch((error) =>
               Effect.logWarning(
-                `Posting a ${message.kind} message to ${id} failed: ${error.message}`,
+                `Posting a ${message.message._tag} message to ${id} failed: ${error.message}`,
               ),
             ),
             withLogChannel(CHANNEL),

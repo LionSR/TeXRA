@@ -134,34 +134,38 @@ export type SettingsViewRow = TexraSettingRow & {
 
 type Surfaces = Pick<Placement, 'surfaces' | 'openForm'>;
 
-const AGENTS_AND_CLI: Surfaces = {
-  surfaces: { settingsView: 'agents', cliConfig: true },
-};
-const APPROVAL_AND_CLI: Surfaces = {
-  surfaces: { settingsView: 'approval', cliConfig: true },
-};
-const GIT_AUTHOR_AND_CLI: Surfaces = {
-  surfaces: { settingsView: 'git-author', cliConfig: true },
-};
-const SKILLS_FORM: Surfaces = {
+const AGENTS_AND_CLI: Surfaces = Object.freeze({
+  surfaces: Object.freeze({ settingsView: 'agents', cliConfig: true }),
+});
+const APPROVAL_AND_CLI: Surfaces = Object.freeze({
+  surfaces: Object.freeze({ settingsView: 'approval', cliConfig: true }),
+});
+const GIT_AUTHOR_AND_CLI: Surfaces = Object.freeze({
+  surfaces: Object.freeze({ settingsView: 'git-author', cliConfig: true }),
+});
+const SKILLS_FORM: Surfaces = Object.freeze({
   openForm: 'skills',
-  surfaces: { settingsView: 'skills', cliConfig: true },
-};
-const PROVIDER_ENDPOINT: Placement = {
+  surfaces: Object.freeze({ settingsView: 'skills', cliConfig: true }),
+});
+const PROVIDER_ENDPOINT: Placement = Object.freeze({
   category: 'model',
-  surfaces: { settingsView: 'profile', cliConfig: true },
-};
+  surfaces: Object.freeze({ settingsView: 'profile', cliConfig: true }),
+});
 
 /** A provider toggle on the profile page, in `/config` and in the Models tab. */
 function providerToggle(
   model: ModelsTabSurface,
   onWrite?: SettingWriteEffects,
 ): Placement {
-  return {
+  return Object.freeze({
     category: 'model',
-    ...(onWrite && { onWrite }),
-    surfaces: { settingsView: 'profile', cliConfig: true, models: [model] },
-  };
+    ...(onWrite && { onWrite: Object.freeze({ ...onWrite }) }),
+    surfaces: Object.freeze({
+      settingsView: 'profile',
+      cliConfig: true,
+      models: Object.freeze([Object.freeze({ ...model })]),
+    }),
+  });
 }
 
 /**
@@ -171,75 +175,90 @@ function providerToggle(
  */
 export const HARNESS_ROW_SURFACES: Readonly<
   Record<HarnessRowKey, Placement | null>
-> = {
+> = Object.freeze({
   // --- Config-file-backed rows ---------------------------------------------
-  [CHILD_RUN_CONCURRENCY_BUDGET_SETTING.key]: {
+  [CHILD_RUN_CONCURRENCY_BUDGET_SETTING.key]: Object.freeze({
     category: 'agents',
     ...AGENTS_AND_CLI,
-  },
-  [GOAL_MAX_COST_SETTING.key]: { category: 'tools', ...APPROVAL_AND_CLI },
+  }),
+  [GOAL_MAX_COST_SETTING.key]: Object.freeze({
+    category: 'tools',
+    ...APPROVAL_AND_CLI,
+  }),
   // Set in the global `config.json`, as the cap it checks is.
   [GOAL_STRATEGY_SETTING.key]: null,
-  [GOOGLE_INTERACTIONS_SERVER_STATE_SETTING.key]: {
+  [GOOGLE_INTERACTIONS_SERVER_STATE_SETTING.key]: Object.freeze({
     category: 'model',
-    surfaces: {
+    surfaces: Object.freeze({
       settingsView: 'profile',
-      models: [{ provider: 'google' }],
-    },
-  },
+      models: Object.freeze([Object.freeze({ provider: 'google' })]),
+    }),
+  }),
   // A transport knob, set in the global `config.json`.
   [GOOGLE_BACKGROUND_RESPONSES_SETTING.key]: null,
   [OPENAI_FAST_TIER_SETTING.key]: providerToggle({ provider: 'openai' }),
-  [MODEL_COMPACTION_THRESHOLD_SETTING.key]: {
+  [MODEL_COMPACTION_THRESHOLD_SETTING.key]: Object.freeze({
     category: 'model',
     ...AGENTS_AND_CLI,
-  },
-  [MODEL_RETRY_MAX_ATTEMPTS_SETTING.key]: {
+  }),
+  [MODEL_RETRY_MAX_ATTEMPTS_SETTING.key]: Object.freeze({
     category: 'model',
     ...AGENTS_AND_CLI,
-  },
+  }),
   // The subscription switches have their own controls on the Models page.
   [CHATGPT_PREFER_SUBSCRIPTION_SETTING.key]: null,
   [XAI_PREFER_SUBSCRIPTION_SETTING.key]: null,
   // The `agents` snapshot controls rebroadcast routing, not tab placement; the
   // Subscriptions control reuses it because no subscriptions snapshot exists.
-  [CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.key]: {
+  [CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.key]: Object.freeze({
     category: 'model',
     ...AGENTS_AND_CLI,
-    onWrite: { invalidatesModelOptions: true },
-  },
+    onWrite: Object.freeze({ invalidatesModelOptions: true }),
+  }),
   // Written by the setup assistant's `update_config`, read by their tools.
   [MAX_IMAGE_DIMENSION_SETTING.key]: null,
   // Debugging switches, set in `config.json`.
   [DEBUG_MODE_SETTING.key]: null,
   [SAVE_MODEL_IO_SETTING.key]: null,
-  [AGENT_SKILLS_ENABLED_SETTING.key]: {
+  [AGENT_SKILLS_ENABLED_SETTING.key]: Object.freeze({
     category: 'tools',
-    surfaces: { settingsView: 'skills', cliConfig: true },
-  },
-  [APPROVAL_POLICY_SETTING.key]: { category: 'tools', ...APPROVAL_AND_CLI },
+    surfaces: Object.freeze({ settingsView: 'skills', cliConfig: true }),
+  }),
+  [APPROVAL_POLICY_SETTING.key]: Object.freeze({
+    category: 'tools',
+    ...APPROVAL_AND_CLI,
+  }),
 
   // --- Git ------------------------------------------------------------------
-  [GIT_MARK_COMMITS_SETTING.key]: { category: 'git', ...GIT_AUTHOR_AND_CLI },
-  [GIT_AUTHOR_NAME_SETTING.key]: { category: 'git', ...GIT_AUTHOR_AND_CLI },
-  [GIT_AUTHOR_EMAIL_SETTING.key]: { category: 'git', ...GIT_AUTHOR_AND_CLI },
-  [GIT_WORKTREE_SUPPORT_SETTING.key]: {
+  [GIT_MARK_COMMITS_SETTING.key]: Object.freeze({
     category: 'git',
     ...GIT_AUTHOR_AND_CLI,
-  },
+  }),
+  [GIT_AUTHOR_NAME_SETTING.key]: Object.freeze({
+    category: 'git',
+    ...GIT_AUTHOR_AND_CLI,
+  }),
+  [GIT_AUTHOR_EMAIL_SETTING.key]: Object.freeze({
+    category: 'git',
+    ...GIT_AUTHOR_AND_CLI,
+  }),
+  [GIT_WORKTREE_SUPPORT_SETTING.key]: Object.freeze({
+    category: 'git',
+    ...GIT_AUTHOR_AND_CLI,
+  }),
 
   // --- Agent coordination -----------------------------------------------------
-  [ALLOW_ORCHESTRATOR_KILL_SETTING.key]: {
+  [ALLOW_ORCHESTRATOR_KILL_SETTING.key]: Object.freeze({
     category: 'agents',
     ...AGENTS_AND_CLI,
-  },
+  }),
 
   // --- Memory and code mode --------------------------------------------------
   // Memory has no `/config` row.
-  [MEMORY_ENABLED_SETTING.key]: {
+  [MEMORY_ENABLED_SETTING.key]: Object.freeze({
     category: 'tools',
-    surfaces: { settingsView: 'memory' },
-  },
+    surfaces: Object.freeze({ settingsView: 'memory' }),
+  }),
 
   // --- Providers --------------------------------------------------------------
   [WEBSOCKET_OPENAI_SETTING.key]: providerToggle({
@@ -258,10 +277,10 @@ export const HARNESS_ROW_SURFACES: Readonly<
   'endpoint.minimax': PROVIDER_ENDPOINT,
   [GLM_ENDPOINT_SETTING.key]: PROVIDER_ENDPOINT,
   'endpoint.meta': PROVIDER_ENDPOINT,
-  [HELPER_MODEL_SETTING.key]: {
+  [HELPER_MODEL_SETTING.key]: Object.freeze({
     category: 'model',
-    surfaces: { settingsView: 'models' },
-  },
+    surfaces: Object.freeze({ settingsView: 'models' }),
+  }),
   [KIMI_CODE_PREFER_SETTING.key]: providerToggle(
     { provider: 'kimiCode' },
     { invalidatesModelOptions: true },
@@ -296,10 +315,16 @@ export const HARNESS_ROW_SURFACES: Readonly<
   ),
 
   // --- Skills and tool paths ---------------------------------------------------
-  [DISABLED_SKILLS_SETTING.key]: { category: 'tools', ...SKILLS_FORM },
-  [DISABLED_SKILL_SOURCES_SETTING.key]: { category: 'tools', ...SKILLS_FORM },
-  [TOOL_PATH_PROTECTION_SETTING.key]: {
+  [DISABLED_SKILLS_SETTING.key]: Object.freeze({
+    category: 'tools',
+    ...SKILLS_FORM,
+  }),
+  [DISABLED_SKILL_SOURCES_SETTING.key]: Object.freeze({
+    category: 'tools',
+    ...SKILLS_FORM,
+  }),
+  [TOOL_PATH_PROTECTION_SETTING.key]: Object.freeze({
     category: 'tools',
     ...APPROVAL_AND_CLI,
-  },
-};
+  }),
+});

@@ -16,6 +16,7 @@ import {
 import { modelRefOf } from '@texra-ai/llm';
 import type { AgentOptionData } from '@texra/shared/pickerOptions';
 import { isAgentOption } from '@texra/shared/pickerOptions';
+import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -40,19 +41,24 @@ export interface ChipMenu {
 
 type Launch = Surface['launch'];
 
-/** The launcher's agent in the catalog. The default and imported selections
- *  can be bare names; catalog options are source-qualified. A bare name
- *  matches against the effective catalog, while an explicitly chosen source
- *  stays exact. A selection naming no option (an agent hidden or removed
- *  since it was chosen) is no agent, and the host's launch keeps to the same
- *  options (`buildLaunchConfig`): it refuses an agent hidden since. */
+/** The launcher's agent in the catalog. No selection (empty) is the default
+ *  of the listed agents, the one the host's launch starts
+ *  (`prepareSurfaceLaunch`). Imported selections can be bare names; catalog
+ *  options are source-qualified. A bare name matches against the effective
+ *  catalog, while an explicitly chosen source stays exact. A selection
+ *  naming no option (an agent hidden or removed since it was chosen) is no
+ *  agent, and the host's launch keeps to the same options: it refuses an
+ *  agent hidden since. */
 function launchAgentOption(
   launch: Launch,
   host: HostSnapshot,
 ): AgentOptionData | undefined {
-  return host.agentOptions.find((option) =>
-    isAgentOption(option.value, launch.agent),
-  );
+  const agent =
+    launch.agent ||
+    pickDefaultToolUseAgent(
+      host.agentOptions.map(({ label }) => ({ name: label })),
+    );
+  return host.agentOptions.find((option) => isAgentOption(option.value, agent));
 }
 
 /**
@@ -68,8 +74,13 @@ export function modelMenu(
   const listed = host.modelOptions.find((option) => option.value === selected);
   const ref = modelRefOf(selected) ?? selected;
   const modifiers = selected.slice(ref.length).replace(/^[@+]/, '');
+  const hostOptions = host.modelOptions.map((option) => ({
+    value: option.value,
+    label: option.label,
+    disabled: !isModelOptionAvailable(option),
+  }));
   const options = listed
-    ? host.modelOptions
+    ? hostOptions
     : [
         {
           value: selected,
@@ -77,8 +88,9 @@ export function modelMenu(
             modifiers === ''
               ? getModelLabel(selected)
               : `${getModelLabel(selected)} (${modifiers})`,
+          disabled: false,
         },
-        ...host.modelOptions,
+        ...hostOptions,
       ];
   return {
     label: listed?.label ?? options[0].label,
@@ -90,7 +102,7 @@ export function modelMenu(
           value=${`model:${option.value}`}
           type="checkbox"
           .checked=${live(option.value === selected)}
-          ?disabled=${!isModelOptionAvailable(option)}
+          ?disabled=${option.disabled}
           >${option.label}</wa-dropdown-item
         >`,
     )}`,

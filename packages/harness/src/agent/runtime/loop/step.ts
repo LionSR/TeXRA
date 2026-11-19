@@ -42,7 +42,7 @@ import {
   ScopedRef,
   Ref,
 } from 'effect';
-import { ModelProvider } from '@texra-ai/llm';
+import { issuesParallelToolCalls } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
@@ -473,7 +473,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
         isChild: run.entry.parent !== null,
         config: roots.config,
       },
-      model.config.provider === ModelProvider.ANTHROPIC,
+      issuesParallelToolCalls(model.config),
     ),
     ...(delegation && { delegation }),
   };

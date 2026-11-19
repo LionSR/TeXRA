@@ -18,7 +18,6 @@ import { Schema } from 'effect';
 
 import { ModelFailureSchema } from './errors';
 import { Sha256Schema } from './identifiers';
-import { RunOutcomeSchema } from './run';
 import { RunInputSchema } from './runInput';
 import { DeclinableUsageRouteSchema, NormalizedUsageSchema } from './usage';
 import {
@@ -90,19 +89,13 @@ export type PositionAt = typeof PositionAtSchema.Type;
 /** Where the loop stands (`at`, not "step": a step is one model call) and
  *  the turn it stands in, at each point no other row marks: the run state
  *  reads it as `RunState.at` (inside a turn, the `response` and the
- *  delivering `append` move it on), and the view as `RunView.position`. */
+ *  delivering `append` move it on), and the view as `RunView.position`. How a
+ *  `turn.end`'s turn ended is not here: a turn's outcome is a loop fact, and
+ *  the run's own end is its `run.end` row. */
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
-  turn: Schema.optional(Schema.NullOr(NonNegativeIntSchema)),
-  /** A `turn.end`'s: how the turn ended, `completed` with its answer or
-   *  `failed` without one. The run's own end is its `run.end` row. */
-  outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
-}).check(
-  Schema.makeFilter((p) => (p.at === 'turn.end') === (p.outcome != null), {
-    message:
-      'Only a turn.end position carries an outcome, and it always carries one.',
-  }),
-);
+  turn: NonNegativeIntSchema,
+});
 
 /* ---------------------------------------------------------- model.message */
 
@@ -216,9 +209,9 @@ export const ModelMessagePayloadSchema = Schema.Union([
     kind: Schema.Literal('append'),
     messages: Schema.Array(StoredMessageSchema).check(Schema.isMinLength(1)),
     sourceResponse: Schema.NullOr(ResponseIdSchema),
-    input: Schema.optional(Schema.NullOr(RunInputSchema)),
+    input: Schema.optional(RunInputSchema),
     reason: Schema.optional(
-      Schema.NullOr(Schema.Literals(['blank-continuation', 'final-tool'])),
+      Schema.Literals(['blank-continuation', 'final-tool']),
     ),
   }),
 ]).check(
@@ -297,7 +290,7 @@ export const ContextEditPayloadSchema = Schema.Struct({
   }),
   messages: Schema.Array(StoredMessageSchema),
   usage: Schema.NullOr(NormalizedUsageSchema),
-  input: Schema.optional(Schema.NullOr(RunInputSchema)),
+  input: Schema.optional(RunInputSchema),
 })
   .check(
     Schema.makeFilter(({ range }) => range.from <= range.to, {

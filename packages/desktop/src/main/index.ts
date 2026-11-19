@@ -172,7 +172,7 @@ export const startDesktop = (mainDir: string): void => {
               ),
             { discard: true },
           );
-          yield* registry.activate(registry.list().at(-1)?.root);
+          yield* registry.activate(registry.list().at(-1)?.roots.workspace);
 
           installContentSecurityPolicy();
           const windows = createDesktopWindows({

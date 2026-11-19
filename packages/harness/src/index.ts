@@ -7,9 +7,10 @@
  *
  * What an embedder needs to know, in order:
  *
- * 1. `Sessions.layer({ platform, plugins })` builds the process. `platform`
- *    comes from `nodePlatform()` in `./node`; `plugins` is `harnessBuiltins`
- *    from `./plugins`, plus any plugin of your own.
+ * 1. `Sessions.layer({ platform, plugins, client })` builds the process.
+ *    `platform` comes from `nodePlatform()` in `./node`; `plugins` is
+ *    `harnessBuiltins` from `./plugins`, plus any plugin of your own;
+ *    `client` names your app to the model providers (`{ name, id }`).
  * 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
  * 3. `session.start({ agent, instruction })` gives a {@link Run}: read
  *    `run.events` for its progress (`run.events.pipe(responseText)` for

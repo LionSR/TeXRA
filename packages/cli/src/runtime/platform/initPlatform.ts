@@ -6,6 +6,7 @@ import {
   Exit,
   Layer,
   Record as Rec,
+  Result,
   Scope,
 } from 'effect';
 
@@ -30,6 +31,10 @@ import {
   serviceProjectState,
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
+import type {
+  ServiceLink,
+  ServiceUnavailable,
+} from '@texra/controllers/server/client';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 // Local file imports
@@ -37,7 +42,7 @@ import type { CliProcessRuntime } from './cliProcessRuntime';
 import { flush, writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import { SIGNAL_EXIT_CODE } from './exitCodes';
 import { holdSignals, type SignalPolicy } from './processSignals';
-import { isLinked, linkCliService, type CliServiceLink } from './cliService';
+import { linkCliService } from './cliService';
 import type { CliContext } from './cliContext';
 
 /** What a command decides about the platform it brings up, beyond its
@@ -81,7 +86,7 @@ export type CliPlatformServices = SettingsStores & {
    *  answered (or was started, `startsService`); the project's state and
    *  runs are then its ({@link runSession}), and this process opens no store
    *  of the project. Else why none, which the caller says. */
-  readonly service: CliServiceLink;
+  readonly service: Result.Result<ServiceLink, ServiceUnavailable>;
   /** Where the chat's runs and requests land, and the project's stored
    *  runs are read: the service's session when one holds the project, else
    *  {@link session}. */
@@ -165,8 +170,8 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
   const service = yield* linkCliService(
     context.storageRoot,
     options.startsService === true,
-  ).pipe(Scope.provide(scope));
-  const link = isLinked(service) ? service : undefined;
+  ).pipe(Scope.provide(scope), Effect.result);
+  const link = Result.getOrUndefined(service);
   // One process, one project: the process roots are the `--cwd` workspace,
   // over the config provider the startup read already opened — the project
   // `.texra/config.json` layered over the user-level

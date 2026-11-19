@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Effect, Latch, Result, Schema } from 'effect';
 
-import { hasExtension } from '@texra-ai/harness/host';
+import { hasExtension } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -13,7 +13,7 @@ import { selectFolder } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
@@ -37,11 +37,8 @@ function postToWebview(
   webview: vscode.Webview,
   message: SettingsViewOutboundMessage,
 ): Effect.Effect<void, HostFailed> {
-  return Effect.tryPromise({
-    try: async () => {
-      await webview.postMessage(message);
-    },
-    catch: (cause) => hostFailed('webview.postMessage', cause),
+  return fromHost('webview.postMessage', async () => {
+    await webview.postMessage(message);
   });
 }
 
@@ -49,13 +46,10 @@ function postToWebview(
 const showDocument = (
   document: () => Thenable<vscode.TextDocument>,
 ): Effect.Effect<void, HostFailed> =>
-  Effect.tryPromise({
-    try: async () => {
-      await vscode.window.showTextDocument(await document(), {
-        preview: false,
-      });
-    },
-    catch: (cause) => hostFailed('showTextDocument', cause),
+  fromHost('showTextDocument', async () => {
+    await vscode.window.showTextDocument(await document(), {
+      preview: false,
+    });
   });
 
 const CHANNEL = 'SettingsViewProvider';
@@ -138,7 +132,7 @@ export class SettingsViewProvider {
               selectFolder({ title, openLabel: 'Select Folder' }),
               (selected) => selected ?? undefined,
             ),
-          ...progressView.settingsRuns,
+          ...progressView.window.settingsRuns,
           signInSubscription: (providerId) =>
             signInWithSubscription(roots, providerId),
           runInTerminal: (name, command) =>
@@ -148,7 +142,6 @@ export class SettingsViewProvider {
               terminal.sendText(command);
             }),
           editor: vscodeEditorIntegration,
-          requiresOpenWorkspace: () => !roots.workspace,
         },
       }),
     );

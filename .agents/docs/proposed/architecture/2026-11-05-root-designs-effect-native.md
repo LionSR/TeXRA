@@ -706,6 +706,88 @@ script door's `Deferred` maps (E10, measured attempt only), the fold's typed
 read table (C10), deletion's three entry points (B9), the module-level
 singletons in the CLI runtime (F7).
 
+### State on 2026-11-17
+
+Read at `c78e9f9`. A name counts as gone when a whole-word search of
+`packages`, `src`, `scripts` and `.github` finds nothing; the search finds a
+deleted name and is not a review of a design. The 2026-11-07 status in the
+round 2 note said R6, R10's hosts' half and R8's second half were not
+started; that is no longer so for R6 and for part of R10.
+
+- **R1 to R5, R7, R8's first half:** in `main` since PR 14769, with the
+  compromises in
+  [PR 1's record](./2026-11-06-root-designs-pr1-compromises.md). Gone:
+  `PublisherJob`, `foldedRead`, `tailEnded`, `observedCommit`,
+  `OwnersUnproven`, `markDamaged` (R1); `StopCause`, `markStopped`,
+  `stopCause`, `onAdmitted`, `activationIfOpened`, `RootRunClaim` (R2);
+  `RunAttempt`, `decideResume`, `resumeQueuedToolUse`, `restsWith` (R3);
+  `finalizeRun`, `failedEnd`, `endWith`, `endActivation`,
+  `haltedPositionRow`, `birthRows` (R4);
+  `agent/runtime/childRunLoop.ts`, `agent/runtime/runLaunchGuard.ts`,
+  `tools/executions/waitCoordination.ts`, `ChildRunTurns`,
+  `ChildRunBoundary`, `ChildRunPause`, `ChildRunPort`, `ChildLoop` (R5);
+  `AskOptions`, `QueuedApproval`, `approvePendingUnderBypass`,
+  `approvalDenied`, `agent/runtime/loop/commandApproval.ts` (R7);
+  `SessionStoreParts`, `SessionHostInteractions` (R8).
+- **Names on those delete lists that are still referenced**, so the items
+  that name them stay open unless PR 1's record says why they were kept:
+  `afterCommit` (`controllers/session/currentValues.ts`,
+  `controllers/session/databaseLayer.ts`), `InPublisherJob`,
+  `NO_LOCAL_STATE` (R1; the per-write store gate is gone for a project
+  store, whose gate runs at open, and stays on the global store, whose
+  other processes can be newer builds: `transact` in
+  `controllers/session/databaseLayer.ts`); `RunControls`,
+  `LiveRun`, `awaitDrained`, `attachControls`, and `isResumableIdle` in the
+  CLI (R2); `openResume`, `wakeRun`, `ResumeHandOff`, `viaControls`,
+  `agent/storage/resumability.ts` (R3); `endVerdict`, `endIn`,
+  `registrationDrafts`, `activationDrafts`, `runEndDraft`, `RunOpening`
+  (R4); `markDecided`, `reopenRequest`, `stagePresentation`,
+  `dropPresentation`, `presentedOrder`, `createHeadlessCliHostInteractions`
+  (R7; the TUI's own approval surface was kept on purpose, see PR 1's record
+  §4); `PresentationProgram` (R8).
+- **R6: in the tree.** `RunView` carries `position`, `outcome` and `holder`
+  (`shared/session/sessionView.ts`), and `RUN_PHASE`, `RunLifecycleStatus`,
+  `RUN_LIFECYCLE_READY`, `durableOutcome`, `isTerminalOutcomePhase`,
+  `isInFlightPhase`, `RUN_STATUS_TONE_OF`, `PHASE_AT`,
+  `decidedSinceActivation`, `RUN_SUBSTATE`, `HISTORY_RUN_STATUS` and
+  `cliRunStanding` have no reference. Still open from its list: the listing
+  entry's `resumable` and `resumeBlocked` (`shared/schemas/runRecords.ts`),
+  C7's `RunRowVerdict` and `RowRejection` (`shared/session/runRows.ts`,
+  `shared/session/inFlight.ts`), and a `statusKey` the CLI and the service's
+  task list still carry (`packages/cli/src/runtime/history.ts`,
+  `packages/texra/src/controllers/server/taskList.ts`).
+- **R8's second half:** ended or rejected on 2026-11-07, as PR 1's record
+  §1.5 says.
+- **R9: in the tree, less two items.** `InvocationDriver`, `Asker`,
+  `InvocationPurpose`, `ProviderErrorClassificationSchema`,
+  `classificationOf`, `swapModel`, `subscriptionToken`, `HelperRequest`,
+  `credentialRenewal`, `SharedAttempt`, `SerializedWrites`,
+  `sessionGeneration` and `readGoogleBackground` have no reference, and
+  `packages/llm/src/oauth/sharedAttempt.ts` is gone.
+  `agent/runtime/run/modelCall.ts` still exists although R9's list names
+  the file: the root `AGENTS.md` now gives it as where a call off the rows
+  retries. Still open: `attemptStarts`, the `WeakMap` of D8
+  (`agent/runtime/ModelInvoker.ts`), and `backgroundOn` of D3
+  (`agent/runtime/modelAccess/binding.ts`).
+- **R10: the session half and the drainer are in the tree; the exit code is
+  open.** `CliRunReads`, `localRunReads`, `serviceRunReads`,
+  `serviceRecords`, `runEnded`, `admitLaunch`, `reportRunFailure`,
+  `settleIfDrained`, `childrenPending` and `registerCliStateResetHook` have
+  no reference, and the CLI chat calls `createHostRunActions`
+  (`packages/cli/src/chat/chatSessionController.ts`). Still open:
+  `packages/cli/src/commands/_helpers/exitCode.ts` and its `setExitCode`
+  (15 references), with no `exitCodeOf`; `launchRootRun` in the chat
+  controller; the `GuiSession` name (12 references), `useCurrentFile` in the
+  extension and `runningTasks` in the service, none of which was read
+  further.
+- **Second-order:** F7's hook is gone (`registerCliStateResetHook`). E4's
+  trust half is gone (`isTrustedScript`); `handedDown` is still read at seven
+  places in `agent/runtime/loop/runLoop.ts`. E3's `staleHook` is gone; the
+  rest of E3 was not established. E10 was measured and left in #14788
+  (`DISPATCH-script-lanes-semaphore` in
+  `.agents/docs/refuted-candidates.json`). E6, E9, C10 and B9 were not
+  established and stand as written.
+
 ## Acceptance
 
 - Every root lists its deletions; a PR cites the root and deletes everything

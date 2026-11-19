@@ -19,6 +19,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { runHistoryRows, storedDraft } from '@agent/runtime/providerMessages';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { SessionRowSchema } from '@shared/schemas';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 
@@ -97,6 +98,8 @@ describe('session view update', () => {
       parent: null,
       provenance: null,
       takesFollowUps: true,
+      worktree: null,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });
     log.emit(ROOT, T.root + 1, {
@@ -125,6 +128,8 @@ describe('session view update', () => {
       parent: null,
       provenance: null,
       takesFollowUps: true,
+      worktree: null,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });
     log.emit(ROOT, T.root + 1, {
@@ -225,7 +230,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     payload: {
       at: 'turn.end',
       turn: 1,
-      outcome: 'completed',
     },
   },
 ].map((draft, index) => runHistoryRow(index + 1, draft));

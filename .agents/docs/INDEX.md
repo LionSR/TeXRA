@@ -37,6 +37,7 @@ ruling and argues against it explicitly.
 | The red flags left, ordered by unknown unknowns first; round-3 packages | [red flags round 3, the plan](./proposed/architecture/2026-11-07-red-flags-round-3-plan.md)                                          |
 | Run-to-run messaging, subagent reports                                  | [session messaging](./implemented/architecture/2026-09-25-session-messaging.md)                                                      |
 | Child-run concurrency                                                   | [child run concurrency budget](./implemented/architecture/2026-08-15-child-run-concurrency-budget.md)                                |
+| Subscriptions: a plan is a credential                                   | [a subscription is a credential](./proposed/feature/2026-11-17-subscriptions-as-credentials.md)                                      |
 | Claude plan as a model route (gated)                                    | [Claude Agent model route](./proposed/feature/2026-10-31-claude-agent-model-route.md)                                                |
 | GitHub Copilot (removed; options parked)                                | [Copilot possibilities](./proposed/feature/2026-10-26-copilot-possibilities.md)                                                      |
 | `packages/llm`                                                          | [`packages/llm/README.md`](../../packages/llm/README.md)                                                                             |
@@ -50,6 +51,7 @@ ruling and argues against it explicitly.
 | Desktop and extension UX: open work                                     | [UX principles and work order](./proposed/feature/2026-09-26-desktop-and-extension-ux-roadmap.md)                                    |
 | What the repo owes an autonomous agent                                  | [agent-refactorability gates](./implemented/process/2026-09-20-agent-refactorability-gates.md)                                       |
 | Runtime performance budgets                                             | [runtime performance measurement record](./proposed/process/2026-09-21-runtime-performance-measurement-record.md)                    |
+| Open proposals: what is left, who decides, the order                    | [open proposals: triage and order](./proposed/process/2026-11-17-open-proposals-triage-and-order.md)                                 |
 
 A topic missing from this table has no owner yet: the tree and `git log` are
 the index for everything else, as they always were. Adding a row is how a note

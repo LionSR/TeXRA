@@ -1,6 +1,7 @@
 /** Component-scoped styles for {@link FileList} (generated-files listing). */
 
 import { css, type CSSResult } from 'lit';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 
 export const fileListStyles: CSSResult = css`
   :host {
@@ -54,9 +55,7 @@ export const fileListStyles: CSSResult = css`
   }
 
   .file-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateDeclarations}
     flex: 1;
     min-width: 200px;
   }

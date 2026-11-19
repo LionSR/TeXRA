@@ -71,20 +71,23 @@ export const ONBOARDING_SETUP_HANDOFF =
   "You're starting with the setup assistant: it checks your environment and helps you run your first task.";
 
 /** Button label and leading icon for each getting-started banner action. */
-export const GETTING_STARTED_ACTION_PRESENTATION = {
-  createSampleProject: {
+export const GETTING_STARTED_ACTION_PRESENTATION = Object.freeze({
+  createSampleProject: Object.freeze({
     label: 'Create sample project',
     icon: 'file-circle-plus',
-  },
-  cloneOverleaf: { label: 'Import Overleaf', icon: 'cloud-arrow-down' },
-  downloadArxiv: { label: 'Import arXiv', icon: 'download' },
+  }),
+  cloneOverleaf: Object.freeze({
+    label: 'Import Overleaf',
+    icon: 'cloud-arrow-down',
+  }),
+  downloadArxiv: Object.freeze({ label: 'Import arXiv', icon: 'download' }),
 } as const satisfies Record<
   GettingStartedAction,
   { readonly label: string; readonly icon: IconName }
->;
+>);
 
 /** The welcome card's link to the host's getting-started guide. */
-export const ONBOARDING_OPEN_WALKTHROUGH = {
+export const ONBOARDING_OPEN_WALKTHROUGH = Object.freeze({
   label: 'Open walkthrough',
   icon: 'book',
-} as const satisfies { readonly label: string; readonly icon: IconName };
+} as const satisfies { readonly label: string; readonly icon: IconName });

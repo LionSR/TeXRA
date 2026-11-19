@@ -81,7 +81,7 @@ class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
 /** The services the session captured for its run work before its
  *  registry existed: every service a run reads but the registry, which
  *  the registry gives each piece of that work itself. */
-type CapturedServices = Exclude<AgentRunServices, Runs | RunRegistry>;
+type CapturedServices = Exclude<AgentRunServices, RunRegistry>;
 
 /** What the session hands its runs. They read a run's parent from the
  *  session's log and keep no copy of their own. */
@@ -201,8 +201,7 @@ export interface Launch<A, E, B, C> {
 type LaunchRefusal = RunLive | RunAdmissionClosed | RunStopped;
 
 /** Session-owned registry of runs: one per session, built by the session
- *  layer in that session's scope and provided as {@link Runs} and, with
- *  its members past {@link RunsShape}, as {@link RunRegistry}. */
+ *  layer in that session's scope and provided as {@link RunRegistry}. */
 export class SessionRunRegistry implements RunsShape {
   /** Each run id's state here. */
   private readonly entries = new Map<RunId, RunEntry>();
@@ -235,10 +234,7 @@ export class SessionRunRegistry implements RunsShape {
   private provided<A, E>(
     effect: Effect.Effect<A, E, AgentRunServices>,
   ): Effect.Effect<A, E, CapturedServices> {
-    return effect.pipe(
-      Effect.provideService(Runs, this),
-      Effect.provideService(RunRegistry, this),
-    );
+    return Effect.provideService(effect, RunRegistry, this);
   }
 
   /** The runs held here: each one's fiber, opening or running. */
@@ -856,20 +852,13 @@ export class SessionRunRegistry implements RunsShape {
 }
 
 /**
- * The session's runs ({@link RunsShape}). Built by the session layer in the
- * session's scope and disposed when that scope closes (`sessionLayer.ts`);
- * its runs, its requests and a host that holds the session take it from
- * context.
- */
-export class Runs extends Context.Service<Runs, RunsShape>()(
-  '@texra-ai/harness/session/Runs',
-) {}
-
-/**
- * The registry behind a session's {@link Runs}, whole: the launch door,
- * the stops and the steps on an inactive run, a loop's controls. Harness
- * internals take it from context, served by the session layer beside
- * `Runs` on the same registry; a host holds `Runs`.
+ * A session's run registry: the launch door, the stops and the steps on an
+ * inactive run, a loop's controls. Built by the session layer in the
+ * session's scope and disposed when that scope closes (`sessionOwners.ts`);
+ * the session's runs, its requests and the SDK's reads of it take it from
+ * context. It never leaves the harness: a host holds a `LocalSession`. Code
+ * that only stops runs or reads what is held here takes it as a
+ * {@link RunsShape}.
  */
 export class RunRegistry extends Context.Service<
   RunRegistry,

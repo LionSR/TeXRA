@@ -58,7 +58,9 @@ const UIFileFieldsSchema = FileFieldsSchema.mapFields(
 export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
   Struct.assign({
     workingDirectory: decodingDefault(Schema.String, ''),
-    agent: decodingDefault(Schema.String, 'orchestrator'),
+    /** Empty until the person chooses one: the launch starts the default
+     *  of the agents the form lists (`pickDefaultToolUseAgent`). */
+    agent: decodingDefault(Schema.String, ''),
     model: decodingDefault(Schema.String, DEFAULT_AGENT_MODEL),
     commit: decodingDefault(Schema.String, 'HEAD'),
     instruction: decodingDefault(Schema.String, ''),

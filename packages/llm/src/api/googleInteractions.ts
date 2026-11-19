@@ -16,6 +16,8 @@ import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
+  CONTINUATION_STATUS,
+  EVENT_TYPES,
   IN_FLIGHT_STATUSES,
   WireCompletedStepSchema,
   WireEventSchema,
@@ -40,6 +42,7 @@ import {
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
+  refuseUnknownEvent,
   wireFail as fail,
 } from './transport.js';
 import type { InputPart, Part, PartEvent } from './parts.js';
@@ -209,14 +212,26 @@ const HttpFailureSchema = Schema.Struct({
   status: Schema.Int.check(Schema.isBetween({ minimum: 400, maximum: 599 })),
   // The reply's headers, so a 429's `retry-after` reaches the retry gate.
   headers: Schema.optional(Schema.instanceOf(Headers)),
+  // The raw reply the SDK keeps; it names a refused key, which is a 400.
+  body: Schema.optional(Schema.String),
 });
+
+/**
+ * Google's reason for a key it does not accept (`google.rpc.ErrorInfo`),
+ * sent with a 400 rather than a 401.
+ */
+const INVALID_KEY_REASON = '"API_KEY_INVALID"';
 
 function sdkFailure(cause: unknown): ModelError {
   // The pinned Interactions SDK does not export its HTTP error constructors.
   const decoded = Schema.decodeUnknownResult(HttpFailureSchema)(cause);
+  const http = Result.getOrUndefined(decoded);
   return sdkModelError(
     cause,
-    Result.isSuccess(decoded) ? decoded.success : undefined,
+    http && {
+      ...http,
+      credentialRejected: http.body?.includes(INVALID_KEY_REASON) ?? false,
+    },
     'The Google transport failed.',
   );
 }
@@ -437,9 +452,10 @@ function googleWire() {
   let done = false;
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
+      yield* refuseUnknownEvent('Google', 'event_type', EVENT_TYPES, raw);
       const event = yield* decodeWireOrFail(
         WireEventSchema,
-        'Google returned malformed or unsupported stream data.',
+        'Google returned malformed stream data.',
         raw,
       );
       if (done)
@@ -466,6 +482,16 @@ function googleWire() {
               ...usageParts(interaction.usage),
             ];
           done = true;
+          // Finishing needs another billed request carrying the
+          // continuation token, which this one-request turn does not send;
+          // the same request resent would stop at the same limit.
+          if (event.interaction.status === CONTINUATION_STATUS)
+            return yield* new ModelError({
+              kind: 'provider-rejection',
+              retryable: false,
+              message:
+                'Google stopped the response at its per-request decode limit; continuing it is not supported.',
+            });
           if (!COMPLETED_STATUSES.includes(event.interaction.status))
             return yield* fail(
               'Google ended without an authoritative completed turn.',

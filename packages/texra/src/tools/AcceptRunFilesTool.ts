@@ -122,11 +122,11 @@ function summarizeRejections(
     .join('\n');
   switch (action) {
     case 'cancel':
-      return { path, decision: { action, cause: text || null } };
+      return { path, decision: { action, ...(text && { cause: text }) } };
     case 'deny':
       return { path, decision: { action, reason: text } };
     case 'reject':
-      return { path, decision: { action, feedback: text || null } };
+      return { path, decision: { action, ...(text && { feedback: text }) } };
   }
 }
 

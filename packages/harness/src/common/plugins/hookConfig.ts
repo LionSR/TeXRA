@@ -4,7 +4,7 @@
 // hook reads and prints is `./hookProtocol`'s.
 
 // Third-party imports
-import { Predicate, Schema } from 'effect';
+import { Predicate, Record as EffectRecord, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
@@ -186,9 +186,7 @@ const renamed = (fields: Readonly<Record<string, string>>): Translation => ({
     ),
   back: (rewritten, issued) => ({
     ...issued,
-    ...Object.fromEntries(
-      Object.entries(fields).map(([ours, theirs]) => [ours, rewritten[theirs]]),
-    ),
+    ...EffectRecord.map(fields, (theirs) => rewritten[theirs]),
   }),
 });
 
@@ -260,15 +258,16 @@ const CLAUDE_TOOLS: Readonly<
   web_search: { name: 'WebSearch', ...same('query') },
 };
 
-const TEXRA_TOOL_OF_CLAUDE_TOOL = new Map<string, string>([
+const TEXRA_TOOL_OF_CLAUDE_TOOL: ReadonlyMap<string, string> = new Map([
   ...Object.entries(CLAUDE_TOOLS).map(
     ([texra, { name }]) => [name, texra] as const,
   ),
   ['MultiEdit', 'edit_file'],
 ]);
 
-/** The harness tool that does what Claude Code's tool `name` does (a
- *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. */
+/** The harness tool that does what one of Claude Code's tools does (a
+ *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. A
+ *  function, so the table itself never leaves this module to be changed. */
 export const texraToolOfClaudeTool = (name: string): string | undefined =>
   TEXRA_TOOL_OF_CLAUDE_TOOL.get(name);
 
@@ -301,10 +300,9 @@ export function claudeToolCall(
   const issued = input as Fields;
   return {
     toolName: tool.name,
-    toolInput: Object.fromEntries(
-      Object.entries(tool.input(issued, abs)).filter(
-        ([, value]) => value != null,
-      ),
+    toolInput: EffectRecord.filter(
+      tool.input(issued, abs),
+      Predicate.isNotNullish,
     ),
     fromHook: (rewritten) => tool.back(rewritten, issued),
   };

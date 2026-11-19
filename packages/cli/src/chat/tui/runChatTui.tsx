@@ -6,10 +6,11 @@
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
 import {
+  Cause,
   Effect,
   Exit,
   FiberHandle,
-  Schema,
+  Result,
   Scope,
   Stream,
   SubscriptionRef,
@@ -33,10 +34,8 @@ import {
   projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
-import { isLinked } from '@cli/runtime/platform/cliService';
 import { linkedClient } from '@texra/controllers/server/client';
 
-import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
@@ -49,7 +48,6 @@ import {
   acquireTuiTerminal,
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
-import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -109,12 +107,6 @@ interface ChatResult {
   exitCode: number;
 }
 
-/** The session's rows were not all written before the chat's exit deadline. */
-class SessionRowsNotWritten extends Schema.TaggedError<SessionRowsNotWritten>()(
-  'SessionRowsNotWritten',
-  { message: Schema.String },
-) {}
-
 /** A change of a run's approval grants (`policy.set`). */
 type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
 
@@ -151,7 +143,7 @@ export async function runChat(
       // platform could not link runs here, and says so once.
       const services = yield* cliPlatform;
       const { service } = services;
-      const link = isLinked(service) ? service : undefined;
+      const link = Result.getOrUndefined(service);
       const served = link !== undefined;
       // Where this chat's runs run: the service's session, or this one.
       const runSession = yield* services.runSession;
@@ -165,7 +157,7 @@ export async function runChat(
         projectApprovalPolicy(services.roots.config),
       );
       if (refused !== undefined) startupNotices.push(refused);
-      if (!isLinked(service)) {
+      if (Result.isFailure(service)) {
         // A store this process moved aside at open is said in the
         // transcript, not on stderr before Ink mounts, where it would sit
         // above the header.
@@ -175,7 +167,7 @@ export async function runChat(
             sessionStoreMovedAsideMessage(local.storeMovedAside),
           );
         startupNotices.push(
-          `This chat runs here only, so other terminals and windows will not see it: ${service.none}`,
+          `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
         );
       }
       // Without a usable credential the chat still opens: the "Connect a
@@ -184,13 +176,6 @@ export async function runChat(
       const credential = yield* checkModelConnection(services);
       if (credential.notice) startupNotices.push(credential.notice);
       const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
-      // The setup-agent handoff belongs to the moment a first credential
-      // lands, which is after startup when the chat opened without one.
-      const firstRunSetupAgent = firstRunSetupAgentOverride({
-        onboardingConfigured: true,
-        firstRunDone: yield* getFirstRunDone(services.globalState),
-        pinnedAgent: explicitAgent ?? context.envAgent,
-      });
       const defaults = resolveChatDefaults({
         stores: services,
         agentOverride: explicitAgent,
@@ -260,7 +245,6 @@ export async function runChat(
         link,
         runsElsewhere: served,
         defaults,
-        firstRunSetupAgent,
         inputHistory,
         terminalCaps,
       };
@@ -521,14 +505,7 @@ export async function runChat(
     },
     getModelSwitchDisabledReason,
     onAccountChanged: () =>
-      connectChatModel(
-        slashContext,
-        {
-          modelSource: defaults.modelSource,
-          firstRunSetupAgent: startup.firstRunSetupAgent,
-        },
-        modelConnection,
-      ),
+      connectChatModel(slashContext, defaults.modelSource, modelConnection),
   };
 
   // Ink owns the terminal from here: a diagnostic line would land inside
@@ -622,13 +599,15 @@ export async function runChat(
       ? Effect.void
       : Effect.flatMap(services.session, (local) => local.drained)
     ).pipe(
-      Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
-      Effect.mapError(
-        () =>
-          new SessionRowsNotWritten({
-            message: `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
-          }),
-      ),
+      Effect.timeoutOrElse({
+        duration: SESSION_CLOSE_DEADLINE_MS,
+        orElse: () =>
+          Effect.fail(
+            new Cause.TimeoutError(
+              `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+            ),
+          ),
+      }),
     ),
     repaintAfterTerminalResume: scrollback.restart,
     interruptActive: () => chatController.stop(),

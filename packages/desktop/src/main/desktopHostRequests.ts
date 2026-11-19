@@ -12,11 +12,9 @@ import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   hostFailed,
   hostFailure,
+  openLink,
 } from '@texra/controllers/session/hostCallFailure';
-import {
-  pickLauncherFiles,
-  type OpenFilesDialog,
-} from '@texra/controllers/session/launcherFilePicker';
+import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import type {
   GuiWindowHost,
   OwnHostHandlers,
@@ -30,14 +28,10 @@ import {
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
-  /** The project's folder; undefined for the window with no folder. */
-  workspaceRoot: string | undefined;
   openFiles: OpenFilesDialog;
-  workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   postToRenderer(message: DesktopPush): void;
   /** The window's settings surface, absent while the window switches
    *  projects; the onboarding card's sign-in goes through it. */
@@ -65,8 +59,7 @@ export const createDesktopHostRequests = (
      *  view, and the project's launch path. */
     const bindings: SharedHostCommandBindings = {
       openPath: (file, line) => host.openPath(file, line),
-      pickFiles: (fileType) =>
-        pickLauncherFiles(options.workspaceRoot, fileType, options.openFiles),
+      openFiles: options.openFiles,
       latexdiff: {
         // Each diff opens in the PDF tab through the build display, as a
         // run's outputs do.
@@ -96,9 +89,6 @@ export const createDesktopHostRequests = (
           postDesktopSettingsView(options.postToRenderer, 'models/keys'),
         ),
       openExternal: (url) => options.openExternalUrl(url),
-      openInstallGuide: Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'plugins'),
-      ),
       onboarding: {
         signInChatGpt: Effect.suspend(() => {
           const settings = options.settings();
@@ -117,19 +107,17 @@ export const createDesktopHostRequests = (
               );
         }),
         // The desktop has no walkthrough of its own: the card's "Open
-        // walkthrough" opens the desktop docs.
+        // walkthrough" opens the desktop docs, as the other links open.
         openGettingStarted: Effect.suspend(() =>
-          options.openExternalUrl(DESKTOP_DOCS_URL),
+          openLink(options.openExternalUrl, DESKTOP_DOCS_URL),
         ),
       },
     };
 
-    /** The requests this window performs its own way. A capability's failure
-     *  is named through `hostFailure`, so the failure channel is the value
-     *  the request failed with. */
-    const own: OwnHostHandlers = {
-      workspaceFile: (request) => options.workspaceFile(request.action),
-    };
+    /** The requests a host performs its own way: the desktop has none (no
+     *  pop-out, no editor current file, no getting-started walkthrough), so
+     *  the shared router refuses each. */
+    const own: OwnHostHandlers = {};
 
     return {
       bindings,
@@ -164,12 +152,9 @@ export const createDesktopHostRequests = (
       export: {
         pickFormat: host.pickTranscriptExportFormat(),
         // The window has already shown the failure (the run host's
-        // `openPath` is `presented`); the port's tag carries its wording out
-        // unchanged.
-        openPath: (filePath: string) =>
-          host
-            .openPath(filePath)
-            .pipe(Effect.mapError((cause) => hostFailed('openPath', cause))),
+        // `openPath` is `presented`); its `HostFailed` carries the wording
+        // out unchanged.
+        openPath: (filePath: string) => host.openPath(filePath),
       },
     };
   });

@@ -15,7 +15,8 @@ import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import type { RunsShape } from '@agent/runtime/runs';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { ToolError, type RunId } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
@@ -28,7 +29,7 @@ import { previewLabel } from '@utils/text/stringUtils';
  * has no rows, but it is no unknown run).
  */
 export const missingRun = (
-  runs: Runs['Service'],
+  runs: RunsShape,
   runId: RunId,
   notFound: string,
 ): ToolError =>
@@ -57,7 +58,7 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
   const recipient = view.runs.get(target);
   if (!recipient)
     return yield* missingRun(
-      yield* Runs,
+      yield* RunRegistry,
       target,
       `Run '${target}' not found. Use the executions tool to list runs.`,
     );

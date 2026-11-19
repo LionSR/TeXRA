@@ -14,6 +14,7 @@
 // `--print`) path has no input and never creates a placeholder, so piped
 // output stays byte-identical.
 
+import { Array as Arr } from 'effect';
 import { ACTIVATED_SKILLS_MAX } from '@texra-ai/harness/schemas';
 
 /** Collapse a paste into a chip when it exceeds either bound. */
@@ -25,7 +26,7 @@ interface PastedTextEntry {
   readonly content: string;
 }
 
-export interface PastedImageEntry {
+interface PastedImageEntry {
   readonly id: number;
   readonly kind: 'image';
   /** Absolute path to the on-disk image (under the run/chat storage dir). */
@@ -221,7 +222,7 @@ export function restoreDraft(current: Draft, returned: Draft): Draft {
     ...current,
     skills: [
       ...current.skills,
-      ...returned.skills.filter((skill) => !current.skills.includes(skill)),
+      ...Arr.difference(returned.skills, current.skills),
     ].slice(-ACTIVATED_SKILLS_MAX),
   };
   if (returned.text.length === 0) return next;

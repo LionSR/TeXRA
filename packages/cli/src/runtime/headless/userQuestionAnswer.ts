@@ -4,18 +4,14 @@ import type {
   UserQuestionPrompt,
 } from '@texra-ai/harness/schemas';
 
-/**
- * Feedback the agent receives when a user question ends with no answers —
- * one wording for both the TUI modal and the headless prompt adapter.
- */
-export const USER_QUESTION_SKIPPED_FEEDBACK = 'User question skipped by user.';
-
-/** An empty answer set skips the question; otherwise it submits the answers. */
+/** An empty answer set skips the question; otherwise it submits the answers.
+ *  A plain skip carries no feedback: the tool's own "The user declined to
+ *  answer" is the one wording, the same text the webview's skip produces. */
 export function userQuestionDecision(
   answers: UserQuestionAnswers,
 ): RequestDecision {
   if (Object.keys(answers).length === 0) {
-    return { action: 'skip', feedback: USER_QUESTION_SKIPPED_FEEDBACK };
+    return { action: 'skip' };
   }
   return { action: 'submit', answers };
 }

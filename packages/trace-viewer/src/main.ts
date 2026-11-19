@@ -1,4 +1,5 @@
 import './themeTokens.css';
+import '@desktop/renderer/designTokens';
 import './shell.css';
 
 // The page-local host installs at module evaluation, before the progress
@@ -8,10 +9,12 @@ import './shell.css';
 // are). The shell then mounts on the `<progress-app data-session>` the HTML
 // carries, as in every host. This page owns the mount (rather than the
 // bundle's entry) because the scrubber remounts it: a fresh shell is a fresh
-// generation, and the bridge answers that generation at the new cut.
+// client, and the bridge answers it at the new cut.
 import './traceHostBridge';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { render } from 'lit';
 import '@ui/wa';
+import { renderEmptyState } from '@ui/wa/emptyState';
 import 'katex/dist/katex.min.css';
 import { mountProgressWebview } from '@ui/progress/progressWebview';
 import { ProgressApp } from '@ui/progress/ProgressApp';
@@ -35,11 +38,15 @@ function renderLoadError(err: unknown): void {
   const errorRegion = document.createElement('div');
   errorRegion.className = 'trace-viewer-error';
   errorRegion.setAttribute('role', 'alert');
-  const heading = document.createElement('h1');
-  heading.textContent = 'Unable to load trace';
-  const detail = document.createElement('p');
-  detail.textContent = toErrorMessage(err);
-  errorRegion.append(heading, detail);
+  render(
+    renderEmptyState({
+      icon: 'triangle-exclamation',
+      title: 'Unable to load trace',
+      body: toErrorMessage(err),
+      headingTag: 'h1',
+    }),
+    errorRegion,
+  );
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
 
@@ -88,7 +95,7 @@ if (!(app instanceof ProgressApp))
   throw new Error('The trace viewer HTML carries no <progress-app>');
 let mounted = { app, unmount: mountProgressWebview(app) };
 
-/** Replace the shell with a fresh one: a new graph, generation, and session view. */
+/** Replace the shell with a fresh one: a new client and session view. */
 function remount(): void {
   mounted.unmount();
   const fresh = mounted.app.cloneNode(false);

@@ -2,17 +2,6 @@ import { Effect, Result, Schema } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 
-/**
- * A renderer command, or the host call behind it, that could not be done:
- * `message` is the whole sentence the renderer shows, never a prefix over
- * another message, and `cause` the failure behind it when there is one.
- * The router reports it by its message; nothing branches on why.
- */
-export class DesktopCommandFailed extends Schema.TaggedError<DesktopCommandFailed>()(
-  'DesktopCommandFailed',
-  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
-) {}
-
 /** A renderer command: a named command and whatever fields it carries. */
 export const DesktopCommandMessageSchema = Schema.StructWithRest(
   Schema.Struct({ command: Schema.String }),

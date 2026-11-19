@@ -14,7 +14,7 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { Effect, FileSystem } from 'effect';
+import { Array as Arr, Effect, FileSystem } from 'effect';
 
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
@@ -148,10 +148,7 @@ function withMissingExpected(
         : `All ${expected.length} expected outputs written in round ${currRound}`,
       { data: lacking },
     );
-  return [
-    ...new Set(missing.filter((entry) => !expected.includes(entry))),
-    ...lacking,
-  ];
+  return [...new Set(Arr.difference(missing, expected)), ...lacking];
 }
 
 /**

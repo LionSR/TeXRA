@@ -1,11 +1,9 @@
-import type { Dialogs, DiffViewHost } from '@texra/hosts/uiHosts';
+import type { Dialogs, DiffViewHost, HostFailed } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 import type { windowNotices } from '@texra/controllers/session/windowNotices';
 import type { Effect } from 'effect';
-
-import type { DesktopCommandFailed } from './desktopIpcTypes.js';
 
 /** Required desktop capabilities used throughout an agent run. */
 export interface DesktopAgentRunHost {
@@ -22,10 +20,7 @@ export interface DesktopAgentRunHost {
   >;
   /** `line` is carried for the hosts that can reveal one; the desktop hands
    *  the path to the OS. */
-  openPath(
-    filePath: string,
-    line?: number,
-  ): Effect.Effect<void, DesktopCommandFailed>;
+  openPath(filePath: string, line?: number): Effect.Effect<void, HostFailed>;
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
   confirm: Dialogs['confirm'];

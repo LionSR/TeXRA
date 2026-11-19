@@ -21,6 +21,7 @@ import {
   type PluginReview,
 } from '@texra-ai/harness/host';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
 
 // Local imports - this module's neighbours
 import type {
@@ -41,16 +42,15 @@ export function settingsPluginCommands(ports: {
 
   const confirmTrust = (review: PluginReview) =>
     bindings.dialogs.confirm({
-      message: `Trust ${review.name}${review.version ? ` ${review.version}` : ''} and enable it?`,
-      action: 'Trust and enable',
+      message: PLUGINS_PAGE.trustQuestion(review.name, review.version),
+      action: PLUGINS_PAGE.trustAction,
       detail: review.lines.join('\n'),
     });
 
   const install = Effect.gen(function* () {
     const source = (yield* bindings.dialogs.input({
-      prompt:
-        'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
-      placeholder: 'github.com/owner/repo',
+      prompt: PLUGINS_PAGE.addPrompt,
+      placeholder: PLUGINS_PAGE.addPlaceholder,
     }))?.trim();
     if (!source) return;
     const origin = InstalledPlugins.origin(
@@ -60,9 +60,7 @@ export function settingsPluginCommands(ports: {
     );
     if (Result.isFailure(origin)) return yield* origin.failure;
     const added = yield* InstalledPlugins.install(origin.success, [], roots);
-    yield* present.notice(
-      `Installed ${added.map(({ name }) => name).join(', ')}. Switch it on to review what it declares and trust it.`,
-    );
+    yield* present.notice(PLUGINS_PAGE.added(added.map(({ name }) => name)));
   });
 
   /** The file is the one editor of the servers: a missing one is named,
@@ -96,7 +94,7 @@ export function settingsPluginCommands(ports: {
           InstalledPlugins.enable(name, roots, confirmTrust),
           (outcome) =>
             outcome === 'declined'
-              ? present.notice(`${name} was not trusted, so it stays off.`)
+              ? present.notice(PLUGINS_PAGE.declined(name))
               : Effect.void,
         );
       case 'disable':

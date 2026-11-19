@@ -18,6 +18,7 @@ import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@texra-ai/harness/schemas'
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
   codexAccountLabel,
+  type SubscriptionAccountNames,
   type SubscriptionAuthStatus,
   xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
@@ -68,7 +69,7 @@ interface SubscriptionSectionProvider {
   /** The provider the section's sign-in, sign-out and preference commands address. */
   readonly providerId: SubscriptionAuthStatus['provider'];
   /** Human-readable account name for the signed-in row. */
-  readonly accountLabel: (auth: SubscriptionAuthStatus | null) => string;
+  readonly accountLabel: (account: SubscriptionAccountNames) => string;
   /** Optional advanced input-budget control for this subscription route. */
   readonly contextWindowSetting?: typeof CHATGPT_CODEX_CONTEXT_WINDOW_SETTING;
 }
@@ -81,6 +82,20 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
     css`
       :host {
         display: block;
+      }
+
+      /* Quiet limitation note under a keyless (subscription-backed) source. */
+      .keyless-source__limit {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--wa-space-xs);
+        margin: 0 0 var(--wa-space-xs);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+      }
+      .keyless-source__limit wa-icon {
+        flex: 0 0 auto;
+        margin-top: var(--wa-space-3xs);
       }
     `,
   ];
@@ -104,7 +119,7 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
     const contextWindowSetting = provider.contextWindowSetting;
     const signedIn = this.auth?.signedIn ?? false;
     const preferSubscription = this.auth?.preferSubscription ?? false;
-    const account = provider.accountLabel(this.auth);
+    const account = provider.accountLabel(this.auth ?? {});
     return html`
       <section id=${provider.sectionId} aria-labelledby=${headingId}>
         ${renderSettingsSectionHeading({

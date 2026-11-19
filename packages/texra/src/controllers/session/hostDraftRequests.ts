@@ -12,6 +12,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { MODEL_CONFIGS } from '@texra-ai/llm';
+import { transcribeAudio } from '@texra-ai/llm/node';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { AppState, ownKeyCredential } from '@texra-ai/harness/host';
@@ -23,7 +24,6 @@ import {
   recordingsDir,
   startRecording,
   validateRecordingFile,
-  transcribeRecording,
 } from '@texra/controllers/session/audio';
 import {
   savePastedImageBuffer,
@@ -245,10 +245,9 @@ export class HostDraftRequests {
       const recordingPath = yield* validateRecordingFile(capturedPath).pipe(
         Effect.mapError((error) => new Rejected({ reason: error.message })),
       );
-      // The transcription endpoint is an OpenAI SDK operation the llm
-      // package does not model, so it calls OpenAI directly:
-      // `gpt-4o-transcribe` is an OpenAI-only endpoint model. The take holds no session frame to enter — its
-      // roots travel with each call — so the endpoint read runs in the
+      // Transcription takes an OpenAI key, read here as a pinned OpenAI
+      // model's own-key route. The take holds no session frame to enter —
+      // its roots travel with each call — so the endpoint read runs in the
       // calling frame, and the resolved credential reaches the
       // transcription as data.
       const postStop = Effect.gen(function* () {
@@ -258,7 +257,10 @@ export class HostDraftRequests {
         ).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
-        const text = yield* transcribeRecording(recordingPath, credential).pipe(
+        const text = yield* transcribeAudio(recordingPath, credential).pipe(
+          Effect.tapError((error) =>
+            Effect.logError(`Transcription failed: ${error.message}`),
+          ),
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         // The sweep is rooted by the take's storage root, as data, rather

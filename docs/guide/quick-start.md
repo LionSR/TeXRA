@@ -76,8 +76,9 @@ Open the TeXRA panel from the TeXRA icon in the Secondary Side Bar, or run **TeX
 
 The dropdown menus at the bottom of the instruction box pick the agent and the
 model (e.g. `anthropic/claude-sonnet-5-5`). The agent menu lists each agent
-once, then your teams. Every agent chats; the default, `orchestrator`, is the
-one to ask for a document edit.
+once, then your teams, the default first. Every agent chats; the default,
+`assistant`, can be asked for a document edit, and `orchestrator` splits a
+larger job across other agents.
 
 Then say what you want, and on which file, in the text area:
 

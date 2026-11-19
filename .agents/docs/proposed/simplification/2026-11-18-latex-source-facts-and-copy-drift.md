@@ -1,7 +1,7 @@
 # LaTeX source facts with two owners, and copy the CLI restates
 
 Date: 2026-11-18
-Status: proposed (five findings landed with this note; the rest are open)
+Status: proposed (the LaTeX findings have landed; the terminal copy is open)
 Origin: the 2026-11-18 scheduled responsibility audit on `main` at
 `a90f320`. Two read-only surveys (the LaTeX, housekeeping, replacement and
 output modules; the terminal client against `@ui/copy` and the transcript
@@ -34,26 +34,49 @@ helpers), each finding checked against the code and against
    `MATH_SYMBOL_SPELLINGS`; this closes app fact 1 of
    `2026-11-15-host-rules-and-app-facts-with-two-owners.md`.
 
-## Open: LaTeX
+## Landed in the follow-up (LaTeX)
 
-1. **The latexdiff blank-line fix runs in two categories.**
-   `LATEXDIFF_REPLACEMENTS` (`packages/texra/src/replacement/rules.ts`) and
-   the first rule of `LATEXDIFF_MARKUP_REPLACEMENTS`
-   (`packages/texra/src/replacement/rulesRegex.ts`) both collapse the blank
-   line before `}\end{align*}%DIFAUXCMD`; the regex is a superset. Deleting
-   the `latexdiff` category removes a literal saved configs accept
-   (`packages/texra/src/shared/constants/replacementCategories.ts`), and
-   `config.json` is additive-only. Decision: keep the name with the regex
-   rule moved under it, or retire it with a clear rejection.
-2. **Three workspace walks.** `indentDirectory.ts` walks by hand (descends
-   hidden folders, skips links, folds case), `buildDirectories.ts` globs
-   (case-sensitive on Linux, though the managed-directory rule says names
-   compare case-insensitively), and `listWorkspaceFiles` is the general
-   walker. Decision: the symlink policy, which `indentDirectory.ts` chose on
-   purpose.
-3. **"Remove each path, log failures".** Four copies
-   (`buildDirectories.ts`, `acceptedFileTarget.ts`, `latexindentpt.ts`,
-   `packLatexdiffvc.ts`); the last fails fast, which may be intended. Weak.
+The three open LaTeX findings, with their decisions, landed together.
+
+1. **The latexdiff blank-line fix runs in two categories.** The name was
+   kept, since `config.json` is additive-only and saved configs enable it.
+   The regex rule, a superset of the literal one, moved out of
+   `LATEXDIFF_MARKUP_REPLACEMENTS` to be `LATEXDIFF_REPLACEMENTS`
+   (`packages/texra/src/replacement/rulesRegex.ts`), and the literal copy is
+   gone. `latexdiff` is still enabled in the plain-rule setting, and the
+   engine runs its rule in the regex pass, in the slot the duplicate held
+   (`packages/texra/src/replacement/engine.ts`). With `latexdiff_markup` off
+   and `latexdiff` on, the fix now also covers unstarred environments and
+   any whitespace. With `latexdiff` off, it no longer runs at all.
+2. **Three workspace walks.** `listWorkspaceFiles`
+   (`packages/texra/src/common/files/workspaceFileListing.ts`) is the one
+   walker. It now also reports the directories it entered, and takes
+   `links: 'follow' | 'skip'`, the one policy its callers really differ on.
+   The file pickers follow links. Bulk formatting and Clean Build skip them,
+   because they rewrite or delete what they find. Every walk skips hidden
+   entries and compares excluded directory names case-insensitively. Clean
+   now finds a `Build/`, and arXiv formatting no longer descends hidden
+   folders.
+3. **"Remove each path, log failures".** One owner, `removeBestEffort`
+   (`packages/texra/src/common/files/removeBestEffort.ts`), serves the
+   build-folder removal, both stale-diff cleanups, latexindent's backups and
+   `indent.log`, the LaTeX preview's temp files and the approval diff's
+   temp files. `runPackLatexdiffvc` keeps failing fast: its result has no
+   failure list, so continuing would report "cleaned" over a file it could
+   not delete.
+4. **The History and Diffs folder names.** The managed-directory list said
+   `'history'` and `'diffs'`, while the packs wrote to `HISTORY_DIR` and a
+   `'Diffs'` literal. These are now `PACKED_RUNS_DIRECTORY` and
+   `PACKED_DIFFS_DIRECTORY` in
+   `packages/texra/src/common/files/fileHandlingRules.ts`, and the managed
+   list derives from them.
+
+Still open on the LaTeX side: `collectFilesFromPatterns`
+(`packages/texra/src/housekeeping/artifactFiles.ts`) looks for build files
+in `<dir>/build`, but `perInputBuildDirectory` compiles into
+`<dir>/build/<stem>`. The latexdiff round build in
+`packages/texra/src/agent/output/revisionLatexdiffs.ts` shares one `build/`
+across a round's diffs. Which layout is right needs a decision first.
 
 ## Open: copy the terminal restates
 

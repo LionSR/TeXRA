@@ -43,6 +43,16 @@ export interface RegionalBaseUrl {
 }
 
 /**
+ * GLM's two platforms. Both serve Responses at /api/v1, for API and Coding
+ * Plan keys alike (BigModel and Z.AI Codex guides), and a Coding Plan's quota
+ * endpoint is on the same host (`planUsage.ts`).
+ */
+export const GLM_BASE_URLS = Object.freeze({
+  china: 'https://open.bigmodel.cn/api/v1',
+  international: 'https://api.z.ai/api/v1',
+} as const satisfies RegionalBaseUrl);
+
+/**
  * One model provider plugin, by what TeXRA does with it:
  * - `backend`: an llm-zoo provider a run binds to, over its own HTTP
  *   endpoint (a default base URL, or a China/international pair the region
@@ -129,12 +139,7 @@ const MANIFEST = [
     id: 'glm',
     displayName: 'GLM',
     kind: 'backend',
-    // Both regions serve Responses at /api/v1, for API and Coding Plan keys
-    // alike (BigModel and Z.AI Codex guides).
-    baseUrl: {
-      china: 'https://open.bigmodel.cn/api/v1',
-      international: 'https://api.z.ai/api/v1',
-    },
+    baseUrl: GLM_BASE_URLS,
   },
   {
     id: 'meta',

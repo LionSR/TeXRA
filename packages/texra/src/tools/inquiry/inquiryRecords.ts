@@ -78,18 +78,12 @@ function inquiryOperations(
   }): InquiryTurnOutcome =>
     written === null ? { unchanged: before } : { changed: written };
 
-  function normalizeSessionLinks(
-    links?: readonly string[] | null,
-  ): string[] | undefined {
-    if (!links?.length) return undefined;
-
-    const normalized = [
+  function normalizeSessionLinks(links: readonly string[] = []): string[] {
+    return [
       ...new Set(
         links.map((link) => link.trim()).filter((link) => link.length > 0),
       ),
     ];
-
-    return normalized.length ? normalized : undefined;
   }
 
   // ============================================================================
@@ -154,10 +148,8 @@ function inquiryOperations(
           question: params.question,
           context: trimmedContext,
           kind: 'open',
-          suggestSearch: params.suggestSearch ?? undefined,
-          attachFiles: params.attachFiles?.length
-            ? params.attachFiles
-            : undefined,
+          suggestSearch: params.suggestSearch ?? false,
+          attachFiles: params.attachFiles ?? [],
         };
 
         const nextManifest: InquiryThreadRecord = {

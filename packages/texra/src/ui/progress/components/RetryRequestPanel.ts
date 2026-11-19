@@ -84,7 +84,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
 
   /** The run decided the offer; the card only renders it. */
   private canUseOwnApiKey(): boolean {
-    return this.permission.data.credentialSwitch != null;
+    return this.permission.data.credentialSwitch !== null;
   }
 
   private formatRetryDetails(failure: RetryRequest['failure']): string | null {

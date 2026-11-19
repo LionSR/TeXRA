@@ -19,6 +19,10 @@ describe('findBuildDirectories', () => {
           await mkdir(path.join(workspace, 'paper', 'build'), {
             recursive: true,
           });
+          // A managed directory name compares case-insensitively.
+          await mkdir(path.join(workspace, 'thesis', 'Build'), {
+            recursive: true,
+          });
         });
 
         const found = yield* findBuildDirectories.pipe(
@@ -31,7 +35,7 @@ describe('findBuildDirectories', () => {
           ),
         );
 
-        expect(found).toEqual(['paper/build']);
+        expect(found).toEqual(['paper/build', 'thesis/Build']);
       }),
     ),
   );

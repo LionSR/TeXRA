@@ -12,10 +12,8 @@ import {
   type CliWorkspaceAgentsRecord,
 } from '@cli/runtime/workspaceAgents';
 
-import {
-  CliSettingUpdateFailed,
-  setWorkspaceCliChatAgent,
-} from '@cli/runtime/platform/cliConfig';
+import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { TICK } from '@cli/tui/ui/glyphs';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import type { SelectItem } from '@cli/tui/ui/Select';
@@ -189,7 +187,7 @@ export function WorkspaceAgentsForm(
             cwd
               ? setWorkspaceCliChatAgent(roots, value || undefined)
               : Effect.fail(
-                  new CliSettingUpdateFailed({
+                  new SettingsRequestFailed({
                     message:
                       'Default chat-agent selection requires a workspace.',
                   }),

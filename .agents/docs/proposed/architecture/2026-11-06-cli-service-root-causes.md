@@ -14,7 +14,11 @@ read-only reviews (lifecycle; the wire and `serviceSession.ts`; windows and
 attach). R10 of the root designs
 (`2026-11-05-root-designs-effect-native.md`, PR 14766) already covers the
 hosts' verbs and the client's three sessions; this note is the service side
-R10 does not reach, and names what in R10 this reading changes.
+R10 does not reach, and names what in R10 this reading changes. Since that
+read the two CLI files moved to `packages/cli/src/runtime/platform/cliService.ts`
+and `packages/cli/src/runtime/platform/initPlatform.ts`, and the service's
+handlers are in `packages/texra/src/controllers/server/service.ts`
+(`handlers.ts` no longer exists).
 
 ## 1. What the service is today
 
@@ -502,6 +506,24 @@ have since moved to `packages/texra/src/controllers/server/`):
   `removeDeadSockets` whose socket file may be removed, which a starting
   service racing another's listen needs (the socket per pid stays for
   the same reason).
+
+### 2026-11-18: one link for every host
+
+The one door of §2.4 was the CLI's `linkCliService`, beside the GUI
+hosts' `reachBundledService`, each deciding part of the same policy. It
+is now the app's `linkService` (`packages/texra/src/controllers/server/client.ts`)
+for every host: it decides `TEXRA_NO_SERVICE` (which the GUI hosts now
+honor too), Windows, and whether a caller starts a service when none
+runs (`startsService`; one that retires an older build's service starts
+its own whatever it says). No service is a failure, `ServiceUnavailable`
+of kind `none`, not a value: the GUI hosts already held the link as a
+`Result`, `openProjectSession` reads one, and the CLI's
+`ServiceLink | { none }` union with its `isLinked` guard went. A host
+binds only its spawn and how it words a wait or a failure to reach the
+service. Beside it moved `stopRunningService`, `findTask` (the task, or
+every task an id prefix matched) and, into `serviceSession.ts`,
+`watchTask`; `texra tasks start` starts through the project's `Session`
+as a window does.
 
 ## 2026-11-17: two windows on one project, and who can ask
 

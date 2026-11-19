@@ -1,29 +1,22 @@
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   type RequestDecision,
   type RequestPayload,
-  ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { requestPrimaryLabel } from '@ui/copy/requestCards';
 
 import { CliInvocation } from '../platform/cliContext';
-import { askCliQuestion, writeTextStderr } from '../platform/logSinks';
+import {
+  askCliQuestion,
+  CliPromptFailed,
+  writeTextStderr,
+} from '../platform/logSinks';
 import { safeTerminalText } from '../terminal/terminalText';
 
 const CHANNEL = 'cli.approval';
-
-/** Caller-supplied prompt code threw: the terminal hook, or the rendering or
- *  parsing of a request's content. */
-export class ApprovalPromptFailed extends Schema.TaggedError<ApprovalPromptFailed>()(
-  'ApprovalPromptFailed',
-  { message: Schema.String, cause: Schema.Defect() },
-) {
-  static readonly from = (cause: unknown) =>
-    new ApprovalPromptFailed({ message: ensureError(cause).message, cause });
-}
 
 export interface CliApprovalPromptHooks {
   /** Called as a prompt opens, before anything is written for it; what it
@@ -42,11 +35,11 @@ export interface CliApprovalPromptHooks {
 export const whilePrompting = <A, E, R>(
   hooks: CliApprovalPromptHooks,
   ask: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | ApprovalPromptFailed, R> =>
+): Effect.Effect<A, E | CliPromptFailed, R> =>
   Effect.acquireUseRelease(
     Effect.try({
       try: () => hooks.prompting?.(),
-      catch: ApprovalPromptFailed.from,
+      catch: CliPromptFailed.from,
     }),
     () => ask,
     (release) => Effect.sync(() => release?.()),
@@ -153,7 +146,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         }
         yield* Effect.try({
           try: () => writeTextStderr(safeTerminalText(details())),
-          catch: ApprovalPromptFailed.from,
+          catch: CliPromptFailed.from,
         });
       }
 
@@ -172,7 +165,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
 
       const decision: RequestDecision = parsed.accepted
         ? { action: 'approve' }
-        : { action: 'reject', feedback: feedback ?? null };
+        : { action: 'reject', ...(feedback !== undefined && { feedback }) };
       return decision;
     }),
   ).pipe(

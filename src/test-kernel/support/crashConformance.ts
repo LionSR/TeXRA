@@ -91,7 +91,7 @@ import {
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
 import { decideRequest, SessionRequests } from '@agent/runtime/requests';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   AgentConfigSchema,
   aggregateTarget,
@@ -457,7 +457,7 @@ const userSteps = (
     // row is committed is the resumed run's to apply.
     if (!requested(yield* liveRows(storage), root, 'model')) {
       yield* until(storage, (rows) => waitingAfter(rows, root, 1));
-      const controls = Context.get(session, Runs).get(root)?.controls;
+      const controls = Context.get(session, RunRegistry).get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the waiting run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
@@ -479,7 +479,6 @@ const userSteps = (
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.fork',
         runId: root,
-        at: null,
       });
     }
     if (bashBypassOf(yield* liveRows(storage), root) !== 'off') {
@@ -1109,12 +1108,10 @@ export function crashConformanceSuite(
                       interactive: true,
                     }).pipe(Effect.provide(session)),
                   () =>
-                    Effect.gen(function* () {
-                      yield* until(
-                        roots.storage,
-                        (rows) => settled(rows).length === 3 && allRead(rows),
-                      );
-                    }),
+                    until(
+                      roots.storage,
+                      (rows) => settled(rows).length === 3 && allRead(rows),
+                    ),
                 );
                 const cleanRows = rowsOf(roots.storage);
                 // The child's turn, the script and the command each reported, and

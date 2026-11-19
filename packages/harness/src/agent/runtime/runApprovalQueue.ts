@@ -10,7 +10,7 @@
  * a parent reaches every descendant without a row of theirs. One value per
  * session, served as its `Approvals`.
  */
-import { Effect, SubscriptionRef } from 'effect';
+import { Array as Arr, Effect, SubscriptionRef } from 'effect';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   APPROVAL_BYPASS_KINDS,
@@ -248,7 +248,7 @@ export const humanGrant =
         kinds.map((kind) => [kind, enabled ? 'on' : 'off']),
       ),
     },
-    goal: grants.goal.filter((kind) => !kinds.includes(kind)),
+    goal: Arr.difference(grants.goal, kinds),
   });
 
 /** Exactly the kinds a run's autonomous goal grants it; empty ends the

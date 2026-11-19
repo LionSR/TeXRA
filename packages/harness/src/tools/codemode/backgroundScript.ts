@@ -71,16 +71,15 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       ...run.config,
       model: bound.modelId,
       instruction: '',
-      displayInstruction: null,
+      displayInstruction: undefined,
       inputFiles: [],
       contextFiles: [],
       mediaFiles: [],
       outputFiles: [],
       memories: [],
-      outputSchema: null,
-      launch: null,
-      workingDirectory: workingDirectory ?? null,
-      delegationAgentScope: run.config.delegationAgentScope ?? null,
+      outputSchema: undefined,
+      launch: undefined,
+      workingDirectory,
       script: {
         code: input.code,
         title,
@@ -98,8 +97,10 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   // that fails before it fails this call.
   yield* startChildRun(runId, definition, {
     identity: { kind: 'script', title },
-    parentId,
-    parentCall: { callId: call.callId, card: call.logId, awaited: false },
+    parent: {
+      id: parentId,
+      call: { callId: call.callId, card: call.logId, awaited: false },
+    },
     description: title,
     ...(grants !== undefined && { grants }),
   });

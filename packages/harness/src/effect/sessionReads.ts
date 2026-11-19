@@ -9,8 +9,8 @@ import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
-import { Runs } from '@agent/runtime/runRegistry';
-import type { LiveRun } from '@agent/runtime/runs';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import type { LiveRun, RunsShape } from '@agent/runtime/runs';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { deriveResumability } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
@@ -103,7 +103,7 @@ const heldRun = (run: LiveRun): HeldRun => ({
 });
 
 /** The runs `runs` holds here: one, or all. */
-function heldRuns(runs: Runs['Service']): LocalSession['held'] {
+function heldRuns(runs: RunsShape): LocalSession['held'] {
   function held(runId: RunId): HeldRun | undefined;
   function held(): readonly HeldRun[];
   function held(runId?: RunId): HeldRun | undefined | readonly HeldRun[] {
@@ -223,7 +223,7 @@ export function sessionReads(
       };
     },
     listRuns: read(listRuns()),
-    held: heldRuns(Context.get(session, Runs)),
+    held: heldRuns(Context.get(session, RunRegistry)),
     deleteRuns: deleteRuns(session),
     emit: interactions.emit,
     drained: log.drained,

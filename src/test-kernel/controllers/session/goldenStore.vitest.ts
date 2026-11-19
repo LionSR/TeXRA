@@ -46,7 +46,7 @@ import {
   SubscriptionRef,
   Context,
 } from 'effect';
-import { afterAll, describe, expect, vi } from 'vitest';
+import { afterAll, assert, describe, expect, vi } from 'vitest';
 
 import {
   type RunId,
@@ -512,12 +512,7 @@ describe('the golden 1.0 store', () => {
       return Effect.gen(function* () {
         expect(
           yield* Effect.flip(
-            Effect.provide(
-              Effect.gen(function* () {
-                yield* Database;
-              }),
-              substrate(storage),
-            ),
+            Effect.provide(Effect.asVoid(Database), substrate(storage)),
           ),
         ).toMatchObject({
           _tag: 'DatabaseOpenFailed',
@@ -610,7 +605,7 @@ describe('the golden run killed after its effect', () => {
         () =>
           Effect.gen(function* () {
             const { storage, workspace } = (yield* FakeHost).roots;
-            if (workspace === undefined) throw new Error('no test workspace');
+            assert(workspace !== undefined, 'no test workspace');
             // The resume, in a session that closes before the store is read.
             yield* Effect.scoped(
               Effect.gen(function* () {
@@ -618,8 +613,7 @@ describe('the golden run killed after its effect', () => {
                 const result = yield* resumeRun(KILLED, {}).pipe(
                   Effect.provide(session),
                 );
-                if (!('activation' in result))
-                  throw new Error('resume refused');
+                assert('activation' in result, 'resume refused');
                 // The resumed activation rests, or ends.
                 yield* Stream.runHead(
                   Stream.filter(

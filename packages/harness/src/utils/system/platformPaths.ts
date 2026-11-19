@@ -28,6 +28,11 @@ export function existsAtAbsolute(target: string): boolean {
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
 
+/** An environment variable's name as the platform compares it: Windows
+ *  matches names case-insensitively (`Path` is `PATH`), POSIX exactly. */
+export const envNameKey = (name: string): string =>
+  IS_WINDOWS ? name.toUpperCase() : name;
+
 /**
  * The directories an app adds to the PATH a command runs and resolves on:
  * the package-manager and tool installs a GUI-launched process may lack.
@@ -75,7 +80,7 @@ export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
 /**
  * Extend PATH with the `appDirs` (`CommandDirs`) that are missing, checked
  * on every call: a directory the user creates mid-session (installing git on
- * the advice of our own "Git not found in PATH" message) is on the next
+ * the advice of our own "Git is not installed" message) is on the next
  * command's PATH. The check is a few `stat`s, microseconds beside the spawn
  * it precedes.
  */

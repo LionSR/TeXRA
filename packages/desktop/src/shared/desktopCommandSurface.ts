@@ -3,6 +3,7 @@ import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   commandCatalogById,
   settingsTabByCommand,
+  type CommandCatalogEntry,
   type CommandId,
   type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
@@ -14,7 +15,7 @@ import type { OsPlatform } from '@texra/shared/osPlatform';
 import { DESKTOP_SHELL_COMMANDS } from './desktopShellMessages.js';
 import type { DesktopPush } from './desktopOutboundMessages.js';
 
-export const DESKTOP_LOCAL_COMMANDS = {
+export const DESKTOP_LOCAL_COMMANDS = Object.freeze({
   SHOW_LOGS: 'texra.desktop.showLogs',
   SHOW_BROWSER: 'texra.desktop.showBrowser',
   TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
@@ -24,12 +25,94 @@ export const DESKTOP_LOCAL_COMMANDS = {
   SAVE_FILE: 'texra.desktop.saveFile',
   SWITCH_PROJECT: 'texra.desktop.switchProject',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
-} as const;
+} as const);
+
+/** The command palette's own command: its shortcut opens the palette, which
+ *  neither lists it nor has a menu entry for it. */
+export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
 
 export const DESKTOP_DOCS_URL = texraGuideUrl('desktop');
 
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
+
+type DesktopOnlyCommandId =
+  | DesktopLocalCommandId
+  | typeof DESKTOP_COMMAND_PALETTE_ID;
+
+/** A command as the palette, the menus and the shortcuts read it. */
+interface DesktopCommandEntry extends Omit<CommandCatalogEntry, 'id'> {
+  /** The palette group. */
+  readonly category: string;
+}
+
+/** The palette group of TeXRA's own commands, as in the extension. */
+const TEXRA_COMMAND_CATEGORY = 'TeXRA';
+
+/** What each desktop-only command is, keyed by the ids above so each is
+ *  spelled once. TeXRA's own commands are the app's catalog. */
+const DESKTOP_ONLY_COMMANDS = {
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: {
+    title: 'Show Logs',
+    category: TEXRA_COMMAND_CATEGORY,
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: {
+    title: 'Open Logs Folder',
+    category: TEXRA_COMMAND_CATEGORY,
+  },
+  [DESKTOP_COMMAND_PALETTE_ID]: {
+    title: 'Show Commands',
+    shortTitle: 'Commands',
+    category: TEXRA_COMMAND_CATEGORY,
+    keybinding: { key: 'ctrl+k', mac: 'cmd+k' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: {
+    title: 'Show Terminal',
+    category: 'View',
+    keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: {
+    title: 'Show Files',
+    category: 'View',
+    keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: {
+    title: 'Show Browser',
+    category: 'View',
+  },
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: {
+    title: 'Save',
+    category: 'File',
+    keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: {
+    title: 'Open Folder',
+    category: 'File',
+    keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.SWITCH_PROJECT]: {
+    title: 'Switch Project',
+    category: 'File',
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: {
+    title: 'Desktop Documentation',
+    category: 'Help',
+  },
+} as const satisfies Record<DesktopOnlyCommandId, DesktopCommandEntry>;
+
+/** Command `id` as the palette, the menus and the shortcuts read it. */
+export function desktopCommandEntry(
+  id: DesktopOnlyCommandId | CommandId,
+): DesktopCommandEntry {
+  if (isDesktopOnlyCommand(id)) return DESKTOP_ONLY_COMMANDS[id];
+  const entry = commandCatalogById.get(id);
+  if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
+  return { ...entry, category: TEXRA_COMMAND_CATEGORY };
+}
+
+function isDesktopOnlyCommand(id: string): id is DesktopOnlyCommandId {
+  return Object.hasOwn(DESKTOP_ONLY_COMMANDS, id);
+}
 
 /** Every command the palette lists and the shortcuts reach, in palette
  *  order. The native menu places its items by hand. */
@@ -51,7 +134,7 @@ const DESKTOP_PALETTE_COMMANDS = [
   'texra.showMemory',
   'texra.showGitSettings',
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly CommandId[];
+] as const satisfies readonly (DesktopLocalCommandId | CommandId)[];
 
 export type DesktopCommandId = (typeof DESKTOP_PALETTE_COMMANDS)[number];
 
@@ -61,11 +144,11 @@ export type DesktopCommandId = (typeof DESKTOP_PALETTE_COMMANDS)[number];
  * main process posts every other command to the renderer as
  * `desktop:runCommand`.
  */
-export const DESKTOP_MAIN_COMMANDS = [
+export const DESKTOP_MAIN_COMMANDS = Object.freeze([
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly DesktopLocalCommandId[];
+] as const satisfies readonly DesktopLocalCommandId[]);
 
 export type DesktopMainCommandId = (typeof DESKTOP_MAIN_COMMANDS)[number];
 
@@ -139,9 +222,7 @@ export interface DesktopCommandActions {
 
 export function paletteEntries(platform: OsPlatform): DesktopPaletteEntry[] {
   return DESKTOP_PALETTE_COMMANDS.map((id) => {
-    const entry = commandCatalogById.get(id);
-    if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
-
+    const entry = desktopCommandEntry(id);
     const accelerator =
       entry.keybinding == null
         ? undefined
@@ -184,7 +265,7 @@ export function dispatchDesktopCommand(
   else DESKTOP_COMMAND_HANDLERS[id](actions);
 }
 
-function isSettingsCommand(id: CommandId): id is SettingsTabCommandId {
+function isSettingsCommand(id: string): id is SettingsTabCommandId {
   return Object.hasOwn(settingsTabByCommand, id);
 }
 

@@ -1,7 +1,8 @@
 /**
  * The model picker's rows: each model's option (`readModelOptions`, the
  * harness's), worded for display — label, source, context window, prices,
- * tooltip, reasoning column and route badge. Pure.
+ * tooltip, reasoning column and route badge — and the model a launch takes
+ * over them. Pure.
  */
 
 import {
@@ -19,10 +20,16 @@ import {
   REASONING_LEVEL_LABELS,
 } from '@texra/shared/model/modelPicker';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
-import type { ModelVerdict } from '@texra-ai/harness/host';
+import {
+  decideRunModel,
+  type ModelVerdict,
+  type RunModelCandidate,
+  type RunModelDecision,
+} from '@texra-ai/harness/host';
 import {
   formatCompactTokenCount,
   formatCostUsd,
+  isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
 
 /** Format per-million input and output prices for display. */
@@ -107,4 +114,31 @@ export function modelOptionsFrom(
   options: readonly ModelVerdict[],
 ): ModelOptionData[] {
   return options.map(optionRow);
+}
+
+/** What a launch's model choice decided, over which rows. */
+interface LaunchModelChoice {
+  /** `null` when no candidate names a model and none can run. */
+  readonly decision: RunModelDecision | null;
+  /** The models that can run now, in row order; the first is the default
+   *  a candidate that cannot run falls back to. */
+  readonly runnable: readonly string[];
+}
+
+/**
+ * The model a launch takes from its candidates, over rows that say what can
+ * run now: the highest-precedence candidate if its row can run, else what
+ * its reason allows (`decideRunModel`), with the first runnable row as the
+ * fallback. A candidate matches a row by its exact value.
+ */
+export function decideLaunchModel(
+  rows: readonly Pick<ModelOptionData, 'value' | 'availability'>[],
+  candidates: readonly RunModelCandidate[],
+): LaunchModelChoice {
+  const runnable = rows.filter(isModelOptionAvailable).map((row) => row.value);
+  const decision = decideRunModel(
+    [...candidates, { model: runnable[0], reason: 'access-list-default' }],
+    (model) => runnable.includes(model),
+  );
+  return { decision, runnable };
 }

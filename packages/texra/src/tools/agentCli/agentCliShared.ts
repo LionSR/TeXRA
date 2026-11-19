@@ -294,7 +294,7 @@ function childTurn(params: {
         attributes: turn.attributes,
         wallTime,
         response: turn.response,
-        usage: turn.usage,
+        ...(turn.usage !== null && { usage: turn.usage }),
         lines: turn.lines,
       },
     };

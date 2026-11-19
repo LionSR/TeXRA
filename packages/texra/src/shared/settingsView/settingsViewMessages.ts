@@ -270,8 +270,8 @@ const ToolDashboardItemSchema = Schema.Struct({
   configNotes: Schema.optional(Schema.String),
   statusDetail: Schema.optional(Schema.String),
   authNote: Schema.optional(Schema.String),
-  toggleable: Schema.optional(Schema.Boolean),
-  enabled: Schema.optional(Schema.Boolean),
+  /** A built-in plugin is always on; one with a toggle is on or off. */
+  switch: Schema.Literals(['always-on', 'on', 'off']),
   settings: Schema.optional(
     Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
   ),
@@ -386,25 +386,27 @@ const LatexSettingsStatusSchema = Schema.Struct({
 export type LatexSettingsStatus = typeof LatexSettingsStatusSchema.Type;
 
 /** Shared default — used by SettingsApp and LaTeXTab before backend data arrives. */
-export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
-  editor: null,
-  installed: {
-    compiler: false,
-    latexdiff: false,
-    latexindent: false,
-    texcount: false,
-    image: false,
+export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = Object.freeze(
+  {
+    editor: null,
+    installed: Object.freeze({
+      compiler: false,
+      latexdiff: false,
+      latexindent: false,
+      texcount: false,
+      image: false,
+    }),
+    platform: 'linux',
+    pdflatexPath: null,
+    latexmkPath: null,
+    latexdiffPath: null,
+    latexindentPath: null,
+    texcountPath: null,
+    ghostscriptPath: null,
+    graphicsmagickPath: null,
+    packageManager: null,
   },
-  platform: 'linux',
-  pdflatexPath: null,
-  latexmkPath: null,
-  latexdiffPath: null,
-  latexindentPath: null,
-  texcountPath: null,
-  ghostscriptPath: null,
-  graphicsmagickPath: null,
-  packageManager: null,
-};
+);
 
 /** Outbound: backend → frontend LaTeX settings status */
 const LatexStatusPageSchema = Schema.Struct({

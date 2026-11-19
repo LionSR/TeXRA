@@ -14,7 +14,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Array as Arr, Effect } from 'effect';
 
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
@@ -153,8 +153,8 @@ function namesChange(
   told: readonly string[],
   now: readonly string[],
 ): string | null {
-  const added = now.filter((name) => !told.includes(name));
-  const removed = told.filter((name) => !now.includes(name));
+  const added = Arr.difference(now, told);
+  const removed = Arr.difference(told, now);
   const parts = [
     ...(added.length > 0 ? [`now available: ${added.join(', ')}`] : []),
     ...(removed.length > 0

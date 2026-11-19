@@ -59,7 +59,7 @@ import {
   openProjectSurface,
   type ProjectSurface,
 } from './desktopProjectSurface.js';
-import { DesktopPromptController } from './desktopPromptController.js';
+import { makeDesktopPrompts } from './desktopPromptController.js';
 import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
 import { createDesktopShellCommands } from './desktopShellIpc.js';
 import type { DesktopLayout } from './platform/paths.js';
@@ -162,10 +162,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   });
   const host = createDesktopWindowHost({ window, runtime, spawn, bridge });
   const { previewHost } = host;
-  const promptController = yield* Effect.acquireRelease(
-    Effect.sync(() => new DesktopPromptController(host.post)),
-    (controller) => Effect.sync(() => controller.dispose()),
-  );
+  const promptController = yield* makeDesktopPrompts(host.post);
   attachRendererConsoleLog(window.webContents);
   // A rejected GitHub token is told in this window, whose Git settings
   // replace it; the window's close ends the follower and its notices.
@@ -233,7 +230,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     } = SubscriptionRef.getUnsafe(projects.state);
     host.post({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      open: open.flatMap(({ key, root }) => (root === undefined ? [] : [key])),
+      open: open.flatMap(({ key, roots }) =>
+        roots.workspace === undefined ? [] : [key],
+      ),
       activeKey,
       recent,
     });
@@ -276,7 +275,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
    *  answers undefined) and recording ownership: new ports, same sessions. */
   const resetForNewDocument = reconcileLane.withPermits(1)(
     Effect.gen(function* () {
-      promptController.dispose();
+      yield* promptController.reset;
       yield* bindings.releaseAll;
       yield* bindings.sync;
       yield* surface.reattach();
@@ -370,7 +369,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     },
     createDesktopLogIpc(host.post, {
       readLog: () =>
-        readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
+        readDesktopLogSnapshot({
+          workspaceRoot: projects.active().roots.workspace,
+        }),
       logFile: getDesktopLogFilePath,
       following: logFollowing,
       copyLog: (text) => clipboard.writeText(text),

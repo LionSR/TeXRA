@@ -22,12 +22,7 @@ import {
   sessionMeta,
   setTransientNotice,
 } from '@cli/chat/tui/state/cliState';
-import {
-  currentView,
-  runningChildCount,
-  runViewOf,
-} from '@cli/chat/tui/state/sessionView';
-import { resolveChildListTarget } from '@cli/chat/tui/state/childControls';
+import { currentView, runViewOf } from '@cli/chat/tui/state/sessionView';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
   appendLocalErrorTranscript,
@@ -80,11 +75,6 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const view = currentView();
     const activeRunId = selectedRunIdSignal.get();
     const run = runViewOf(view, activeRunId);
-    // The children the status bar counts: the child list's target.
-    const activeChildSessions = runningChildCount(
-      view,
-      runViewOf(view, resolveChildListTarget(view, activeRunId)),
-    );
     const model = run?.model ?? meta.model;
     // The skills the run's latest step lists, read from its rows.
     const activeSkills =
@@ -104,7 +94,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
             ? undefined
             : runBypasses(view, activeRunId),
         statusLabel: run && runStatus(run).word,
-        activeChildSessions,
+        activeChildSessions: run?.rollup.running,
         activeSkills,
         sessionId: run ? rootRunId.get() : undefined,
         commandName: context.cliContext.commandName,
@@ -226,9 +216,7 @@ const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
     const source = runViewOf(currentView(), runId);
     // Cut before this chat lets go of the source, so the fork reads it as
     // it stands now.
-    const forked = yield* Effect.result(
-      forkRun(context.runSession, runId, null),
-    );
+    const forked = yield* Effect.result(forkRun(context.runSession, runId));
     if (Result.isFailure(forked)) {
       appendLocalRequestRefusal(forked.failure, runId);
       return;

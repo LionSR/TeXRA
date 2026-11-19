@@ -3,6 +3,7 @@
  * the interaction snapshot a GET returns, its steps and its usage.
  * `googleInteractions.ts` decodes these into canonical parts.
  */
+import type { Interactions } from '@google/genai';
 import { Schema, SchemaGetter, Struct } from 'effect';
 
 import { CountSchema, JsonObjectSchema } from '../protocol.js';
@@ -84,16 +85,25 @@ export const WireStreamInteractionSchema = WireInteractionSchema.mapFields(
     id: Schema.optional(Schema.String),
   }),
 );
+/**
+ * The interaction statuses the SDK names. Its type also admits any string,
+ * dropped here so a misspelled status fails to compile.
+ */
+type InteractionStatus<S = Interactions.Interaction['status']> =
+  S extends string ? (string extends S ? never : S) : never;
 /** The statuses of an interaction still running. */
 export const IN_FLIGHT_STATUSES: readonly string[] = Object.freeze([
   'queued',
   'in_progress',
-]);
+] satisfies InteractionStatus[]);
 /** The statuses of an interaction that produced its output. */
 export const COMPLETED_STATUSES: readonly string[] = Object.freeze([
   'completed',
   'requires_action',
-]);
+] satisfies InteractionStatus[]);
+/** The status of an interaction stopped at its per-request decode limit. */
+export const CONTINUATION_STATUS: string =
+  'requires_continuation' satisfies InteractionStatus;
 /** One event of a streamed interaction. */
 export const WireEventSchema = Schema.Union([
   Schema.Struct({
@@ -117,6 +127,8 @@ export const WireEventSchema = Schema.Union([
   Schema.Struct({
     event_type: Schema.Literal('step.stop'),
     index: CountSchema,
+    // The interaction's running total, which replaces the last receipt;
+    // `step_usage` counts this step alone.
     usage: Schema.optional(WireUsageSchema),
   }),
   Schema.Struct({
@@ -143,3 +155,33 @@ export const WireEventSchema = Schema.Union([
   }),
   Schema.Struct({ event_type: Schema.Literal('error'), error: Schema.Unknown }),
 ]);
+/** The event types `WireEventSchema` decodes; the record's key type keeps them in step. */
+export const EVENT_TYPES: ReadonlySet<string> = new Set(
+  Object.keys({
+    'interaction.created': true,
+    'interaction.completed': true,
+    'interaction.status_update': true,
+    'step.start': true,
+    'step.stop': true,
+    'step.delta': true,
+    error: true,
+  } satisfies Record<(typeof WireEventSchema.Type)['event_type'], true>),
+);
+
+type Assignable<T extends U, U> = T;
+// The schemas that restate an SDK shape decode into it, so an SDK release
+// that renames or retypes one of these fields fails to compile. The others
+// differ on purpose: a stateless stream's events carry no id, the created
+// event no status, and the step schemas take only the steps this codec
+// decodes, as readonly arrays.
+type _UsageIsTheSdks = Assignable<
+  typeof WireUsageSchema.Type,
+  Interactions.Usage
+>;
+type _StepEventsAreTheSdks = Assignable<
+  Extract<
+    typeof WireEventSchema.Type,
+    { event_type: 'step.stop' | 'step.delta' }
+  >,
+  Interactions.InteractionSSEEvent
+>;

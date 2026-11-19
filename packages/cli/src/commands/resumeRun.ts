@@ -3,7 +3,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { pathExists } from '@texra-ai/harness/node';
-import { ensureError, programOf, type RunId } from '@texra-ai/harness/schemas';
+import { programOf, type RunId } from '@texra-ai/harness/schemas';
+import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -13,14 +14,11 @@ import {
   formatResumeCommand,
   oneShotResumeNotice,
 } from '../chat/tui/state/resumeHint';
-import { isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
 import {
-  assertOutputDirAvailable,
-  assertOutputFileAvailable,
-  DocumentTaskOutputFailed,
+  assertOutputDestinationAvailable,
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
@@ -35,14 +33,11 @@ function loadFailureMessage(id: RunId, error: unknown): string {
 }
 
 /** What a stored-destination reader threw: its own usage error, or the
- *  failure to read the recorded launch at all. */
-const storedDestinationFailure = (cause: unknown) =>
+ *  failure to read the run's recorded launch at all. */
+const storedDestinationFailure = (runId: RunId) => (cause: unknown) =>
   cause instanceof CliUsageError
     ? cause
-    : new DocumentTaskOutputFailed({
-        message: ensureError(cause).message,
-        cause,
-      });
+    : new TaskRecordsFailed({ runId, message: cliErrorMessage(cause) });
 
 /** Report a failed resume step: a usage refusal names itself, any other
  *  failure reads as a session that could not load. */
@@ -100,8 +95,8 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // headless, in this process; a service this process holds none of is
   // said, since nothing after this would say it.
   const stores = yield* cliPlatform;
-  if (!isLinked(stores.service))
-    writeTextStderr(`This task runs here: ${stores.service.none}`);
+  if (Result.isFailure(stores.service))
+    writeTextStderr(`This task runs here: ${stores.service.failure.message}`);
   const runSession = yield* stores.runSession;
   const configResult = yield* Effect.result(runSession.records(id).readConfig);
   if (Result.isFailure(configResult)) {
@@ -134,7 +129,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       );
       return CliExitCode.Usage;
     }
-    const forked = yield* Effect.result(forkRun(runSession, id, null));
+    const forked = yield* Effect.result(forkRun(runSession, id));
     if (Result.isFailure(forked)) {
       writeTextStderr(requestErrorText(forked.failure));
       return CliExitCode.Usage;
@@ -212,14 +207,18 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     Effect.gen(function* () {
       const outputFile = yield* Effect.try({
         try: () => resumeDocumentTaskOutputFile(config),
-        catch: storedDestinationFailure,
+        catch: storedDestinationFailure(id),
       });
-      yield* assertOutputFileAvailable(outputFile, context.cwd);
+      yield* assertOutputDestinationAvailable('file', outputFile, context.cwd);
       const outputDirectory = yield* Effect.try({
         try: () => resumeDocumentTaskOutputDirectory(config),
-        catch: storedDestinationFailure,
+        catch: storedDestinationFailure(id),
       });
-      yield* assertOutputDirAvailable(outputDirectory, context.cwd);
+      yield* assertOutputDestinationAvailable(
+        'directory',
+        outputDirectory,
+        context.cwd,
+      );
       const recoveryInputIsDurable =
         yield* documentTaskRecoveryInputsAreDurable(config, context.cwd);
       // The run continues through the session's resume, inside the

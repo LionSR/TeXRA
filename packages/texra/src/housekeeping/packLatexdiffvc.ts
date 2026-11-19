@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 
 import { versionControlDiffStem } from '@latex/latexdiff/diffFileNameManager';
+import { PACKED_DIFFS_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 import {
@@ -96,7 +97,7 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
 
     const outputFolder = path.join(
       inputDir,
-      'Diffs',
+      PACKED_DIFFS_DIRECTORY,
       `${yield* fileNameTimestamp}_${baseName}_${commitHash}`,
     );
 
