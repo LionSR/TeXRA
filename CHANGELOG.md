@@ -1311,9 +1311,10 @@ All notable changes to this project will be documented in this file.
   `conversationPreview` field is gone; `conversation.scope` says whether it
   holds the whole `transcript` or a `preview`.
 - **The chat's exit line spells out its token counts.** `texra chat` ends
-  with `Token usage: N input tokens, N cache read tokens, N output tokens, N
-  reasoning tokens` where it printed `Token usage: total=…`; a script that
-  reads the line needs updating.
+  with a line such as `Token usage: 1,204 input tokens, 318 output tokens`
+  where it printed `Token usage: total=…`. Input and output are always
+  listed; cache and reasoning counts appear only when they are not zero. A
+  script that reads the line needs updating.
 
 ### Features
 
