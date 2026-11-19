@@ -144,6 +144,9 @@ export function commandDirs(): readonly string[] {
         // Git for Windows installed per-user (the default when the installer
         // runs without admin rights).
         path.join(localAppData, 'Programs', 'Git', 'cmd'),
+        // The Codex CLI's Windows installer. It adds this directory to the
+        // user PATH, which a process already running does not see.
+        path.join(localAppData, 'Programs', 'OpenAI', 'Codex', 'bin'),
       );
     }
 

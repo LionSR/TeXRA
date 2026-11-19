@@ -45,7 +45,7 @@ Each integration's options live on its row and are scoped to the current workspa
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
 ::: warning Windows
-TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe`, not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in terminal** offers there. For Codex, **Install in terminal** on Windows runs `wsl --install` to set up WSL2, and the Codex CLI is then installed inside WSL. TeXRA looks for Codex in the environment it runs in, so it finds that install only when TeXRA itself runs inside WSL (the **WSL Remote** case below), not from a native Windows window.
+TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe`, not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in terminal** offers there. For Codex, **Install in terminal** on Windows runs OpenAI's PowerShell installer (`irm https://chatgpt.com/codex/install.ps1 | iex`), which installs a native `codex.exe` that TeXRA finds without a restart. TeXRA looks for each CLI in the environment it runs in, so an install inside WSL is found only when TeXRA itself runs inside WSL (the **WSL Remote** case below), not from a native Windows window.
 
 - **WSL Remote**: open TeXRA inside the WSL window before installing.
 - **Native Windows**: install the CLI on Windows so the real binary is on PATH.
@@ -55,7 +55,7 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 ### Install and authenticate
 
-- **Install** with `npm install -g @openai/codex`, or `brew install codex` (macOS), or the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli). **Install in terminal** picks Homebrew automatically when you have it, so the button works without a Node install; on Windows it runs `wsl --install` instead (see the Windows note above).
+- **Install** with `npm install -g @openai/codex`, or `brew install codex` (macOS), or the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli). **Install in terminal** picks Homebrew automatically when you have it, so the button works without a Node install; on Windows it runs OpenAI's PowerShell installer instead (see the Windows note above).
 - **Sign in** with `codex login` to use ChatGPT Plus / Pro, or set `OPENAI_API_KEY` in the shell you launch VS Code from to bill against an API account.
 
 ### Settings
