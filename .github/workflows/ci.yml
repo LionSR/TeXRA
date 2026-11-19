@@ -8,14 +8,6 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
-    # TEMPORARY, removed before this branch merges: lets a dispatch exercise
-    # the `nightly issue` job without the heavy jobs.
-    inputs:
-      nightly_issue_test:
-        description: 'Temporary: run only the nightly issue path, failing or passing'
-        type: choice
-        default: ''
-        options: ['', fail, pass]
 
 concurrency:
   # Nightly `schedule` runs use github.ref == refs/heads/main, the same ref a
@@ -57,11 +49,6 @@ jobs:
       - name: Detect non-docs changes
         id: detect
         run: |
-          # TEMPORARY: the nightly issue test runs none of the heavy jobs.
-          if [ -n "${{ inputs.nightly_issue_test }}" ]; then
-            for name in code desktop vscode packages; do echo "$name=false" >> "$GITHUB_OUTPUT"; done
-            exit 0
-          fi
           # Heavy validation (typecheck/lint/tests/build) only runs when a PR touches
           # something other than docs. Docs-only PRs fall through to the
           # lightweight docs-build job below, keeping CI spend down. Pushes to
@@ -260,11 +247,6 @@ jobs:
       # it, is gated off on code-only PRs and pushes to main).
       - name: Check guidance, proposals and the docs root
         run: npm run gate:docs
-
-      # TEMPORARY: the deliberately failing step of the nightly issue test.
-      - name: Fail for the nightly issue test
-        if: inputs.nightly_issue_test == 'fail'
-        run: exit 1
 
   test:
     # Keep the pre-existing `linux` / `windows` labels rather than the raw
@@ -492,7 +474,7 @@ jobs:
     name: runtime validation (linux)
     # Runs on the nightly schedule (whose whole purpose is this timing run)
     # and manual dispatch; never on PRs or pushes, where it never failed.
-    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.nightly_issue_test == ''
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -619,7 +601,7 @@ jobs:
     # A cancelled run says nothing about the tree, so it neither opens nor
     # closes the issue.
     if: >-
-      always() && (github.event_name == 'schedule' && github.ref == 'refs/heads/main' || inputs.nightly_issue_test != '') &&
+      always() && github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
       (needs.validate-status.result == 'success' || needs.validate-status.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
