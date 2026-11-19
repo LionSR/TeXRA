@@ -96,9 +96,22 @@ const ESC_CHORD_WINDOW_MS = 700;
 // What a width change's repaint starts with: Ink clears the scrollback and
 // redraws from the top.
 const CLEAR_SCROLLBACK = `${ESC}[3J`;
-// `/plugins`: the one plugin list, which replaced `/config` → Tools. The
-// list loads asynchronously; its key hint shows once it has.
+// Open a `/` form whose list loads asynchronously, and wait for its loaded
+// rows. A key that reaches the form before its list shows is dropped (the
+// test-launches note), so a scenario that answers the list opens it with
+// one of these; one that only asserts the list need not.
+// `/plugins`: the one plugin list, which replaced `/config` → Tools.
 const PLUGINS_FORM_KEYS = ['/plugins', { input: '\r', until: 'switch on/off' }];
+const CONFIG_FORM_KEYS = [
+  '/config',
+  { input: '\r', until: 'Agents — workspace agents' },
+];
+const SKILLS_FORM_KEYS = ['/skills', { input: '\r', until: 'Enter activate' }];
+// The `/model` picker over TWO_OPENAI_MODELS, with switching allowed.
+const MODEL_PICKER_KEYS = [
+  '/model',
+  { input: '\r', until: '1-2/Enter select' },
+];
 const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_ENTRIES: '4',
   HARNESS_EDIT_APPROVAL: '1',
@@ -836,7 +849,7 @@ const SCENARIOS = [
       HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
-    keys: ['/model', '\r', '\r'],
+    keys: [...MODEL_PICKER_KEYS, '\r'],
     frame: 'viewport',
     // The pick reaches `/model`'s own handler, which answers for the
     // harness's stored root.
@@ -855,10 +868,7 @@ const SCENARIOS = [
       HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
-    // The hotkey goes in once the list has loaded, which the fixed delay
-    // this replaced always waited for. Typed while the list is still
-    // loading, it is dropped in most tries (the test-launches note).
-    keys: ['/model', { input: '\r', until: '1-2/Enter select' }, '21'],
+    keys: [...MODEL_PICKER_KEYS, '21'],
     frame: 'viewport',
     // The pick reaches `/model`'s own handler, which answers for the
     // harness's stored root.
@@ -885,7 +895,7 @@ const SCENARIOS = [
   {
     name: 'config-form',
     env: { HARNESS_ENTRIES: '4' },
-    keys: ['/config', '\r', '\r'],
+    keys: [...CONFIG_FORM_KEYS, '\r'],
     frame: 'viewport',
     expect: [
       '/config · Agents',
@@ -915,9 +925,8 @@ const SCENARIOS = [
     // the list with ↑/↓ so the scenario does not depend on which hotkey a row
     // happens to get.
     keys: [
-      '/config',
-      '\r',
-      '\r',
+      ...CONFIG_FORM_KEYS,
+      { input: '\r', until: 'All agents' },
       ESC,
       DOWN,
       DOWN,
@@ -1059,7 +1068,7 @@ const SCENARIOS = [
   {
     name: 'skills-form-select-submit',
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
-    keys: ['/skills', '\r', '\r'],
+    keys: [...SKILLS_FORM_KEYS, '\r'],
     frame: 'viewport',
     expect: ['Harness skill selected: proof-audit.'],
     unexpect: [
@@ -1071,10 +1080,7 @@ const SCENARIOS = [
   {
     name: 'skills-form-buffered-hotkey',
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
-    // The hotkey goes in once the list has loaded, which the fixed delay
-    // this replaced always waited for. Typed while the list is still
-    // loading, it is dropped in most tries (the test-launches note).
-    keys: ['/skills', { input: '\r', until: 'Enter activate' }, '21'],
+    keys: [...SKILLS_FORM_KEYS, '21'],
     frame: 'viewport',
     expect: ['Harness skill selected:'],
     unexpect: [
