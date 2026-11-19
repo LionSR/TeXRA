@@ -142,7 +142,8 @@ export const followPendingRequests = Effect.fn('followPendingRequests')(
  * record is recorded again on {@link DECIDE_RETRY}, for as long as the view
  * lists the request (one decided meanwhile, by a grant or another surface,
  * leaves the view, which ends the retries); when the retries end it is
- * logged and the request stays open, to be decided by another
+ * logged, the person is told (the host's error notice), and the request
+ * stays open, to be decided by another
  * surface or ended with its run. A handler still deciding a request that
  * left the view is interrupted.
  */
@@ -178,15 +179,19 @@ const answerRequests = (
               Effect.retry({ schedule: DECIDE_RETRY, times: DECIDE_RETRIES }),
             ),
         ),
-        // An interrupt is a withdrawal; a decision the retries did not
-        // record is said, once.
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : logFailure(
-                CHANNEL,
-                `The decision on request ${pending.requestId} was not recorded after ${DECIDE_RETRIES} retries; the request stays open`,
-              )(cause),
+        // A decision the retries did not record is logged and told to the
+        // person who gave it, once. An interrupt, a withdrawal, passes.
+        Effect.catch((error) =>
+          logFailure(
+            CHANNEL,
+            `The decision on request ${pending.requestId} was not recorded after ${DECIDE_RETRIES} retries; the request stays open`,
+          )(error).pipe(
+            Effect.andThen(
+              Context.get(session, Interactions).emit('requestShowError', {
+                message: `Your answer to a request of run ${pending.runId} could not be recorded (${toErrorMessage(error)}). The request is still open, and is not asked again here: stop the run if nothing else can answer it.`,
+              }),
+            ),
+          ),
         ),
         // The request is held until the view drops it, so the handler is
         // never asked twice: a recorded decision while the view catches

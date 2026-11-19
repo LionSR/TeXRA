@@ -543,7 +543,8 @@ Left, with the reason:
   input reader (`sessionInputsLayer.ts`, the same `readInputBatch` as the
   stretch it starts behind). A gap read that fails fails `all` as its first
   read does; it ends the store's two feeds as a logged defect (the presenter's
-  end fails `log.drained`). `appSignals.ts` is the one `PubSub.unbounded`
+  end fails `log.drained`), and the session's owner tells the person through
+  the host's error notice (`SessionStore.feedStopped`). `appSignals.ts` is the one `PubSub.unbounded`
   left, for the reason above.
 - Row 19, on 2026-11-19. `READ_RETRY` ends after eight tries, about a
   minute (`currentValues.ts`): a change read that still fails then answers
@@ -553,8 +554,9 @@ Left, with the reason:
   its handler once and records the decision again on one schedule, twelve
   times in about two minutes, while the view lists the request
   (`requestAnswerer.ts`, `DECIDE_RETRY`); "the next view" is no longer what
-  a retry waits for. When the retries end the failure is logged and the
-  request stays open for another surface or its run's end.
+  a retry waits for. When the retries end the failure is logged, the person is told
+  through the host's error notice, and the request stays open for another
+  surface or its run's end.
 
 Open: slice 7. What the passes learned:
 
