@@ -30,11 +30,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { attentionOf } from '@shared/session/sessionView';
 import { SessionViewAccess } from '@shared/session/runHistory';
-import {
-  answerMismatch,
-  blocksCaller,
-  type RequestDecision,
-} from '@shared/schemas';
+import { answerMismatch, type RequestDecision } from '@shared/schemas';
 import type { PendingRequest, SessionView } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -153,10 +149,7 @@ const answerRequests = (
 ): Effect.Effect<void, never, Scope.Scope> =>
   followPendingRequests(
     Context.get(session, SessionViewAccess),
-    (view) =>
-      attentionOf(view).requests.filter((pending) =>
-        blocksCaller(pending.payload),
-      ),
+    (view) => attentionOf(view).requests,
     (pending) =>
       decisionOf(host, pending).pipe(
         Effect.flatMap((decision) =>

@@ -144,7 +144,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ManagedRuntime.make(
       texraProcessLayer({
         name: 'vscode',
-        inquiryPanel: true,
         inlineComments,
         // The editor's commands and terminal, for the setup tools.
         setup: vscodeSetupPlatform,

@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty';
+import type { SubscriptionAuthProvider } from '@texra-ai/harness/schemas';
 
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 
@@ -35,5 +36,5 @@ export const authCommand = defineCommand({
       logoutDescription: 'Sign out of your Grok subscription',
       statusDescription: 'Show Grok subscription sign-in status',
     }),
-  } as const,
+  } as const satisfies Record<SubscriptionAuthProvider, unknown>,
 });

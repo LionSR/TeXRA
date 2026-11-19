@@ -16,6 +16,19 @@ that adds this note:
 
 The findings below each need a decision or a check this run could not make.
 
+Landed since:
+
+- **The memory tool counts lines one way.** `insert` and the listing
+  `str_replace` returns read the file through `splitContentLines`, as `view`
+  does, so `insert_line` takes exactly the lines a view numbered. Insert puts
+  the file's final newline back after the join. Line endings were never the
+  difference: `readMemoryFile` normalizes CRLF before either split.
+- **One `runCliEntry` for both CLI entries**
+  (`packages/cli/src/runtime/platform/logSinks.ts`): it installs the stderr
+  sink and the pipe handlers, runs the entry's body for its exit code, and
+  words a crash under the entry's label. `texra` also passes the
+  crash-report line; `CliEntryCrashed` is file-local.
+
 ## Open
 
 1. **Warnings with no channel of their own.** Some sites write
@@ -30,14 +43,7 @@ The findings below each need a decision or a check this run could not make.
    inherited channel. Decide whether each file names its own channel. If it
    does, these become `logFailure` calls.
 
-2. **The memory tool counts lines two ways.**
-   `packages/harness/src/tools/memory/MemoryTool.ts` views a file through
-   `splitContentLines`, which drops the empty entry after a trailing
-   newline. It edits and inserts through a raw `split('\n')`, which keeps it.
-   So for a file that ends in a newline, the view shows N lines and
-   `insert_line` accepts N + 1. Insert may need the raw split to keep the
-   trailing newline. Confirm what a model sees before changing either.
-3. **A setting's default read by decoding `undefined`.** Three app sites
+2. **A setting's default read by decoding `undefined`.** Three app sites
    write `Schema.decodeUnknownSync(row.schema)(undefined)`:
    - `packages/texra/src/ui/settings/tabs/GitTab.ts`
    - `packages/texra/src/ui/settings/settingsState.ts`
@@ -48,7 +54,7 @@ The findings below each need a decision or a check this run could not make.
    is a `repoState` row. A slot-agnostic `rowDefault(row)` would serve all
    three. It is a new SDK export, so it needs the owner's call.
 
-4. **`:host { display: block; }` in 28 Lit components.** The block is
+3. **`:host { display: block; }` in 28 Lit components.** The block is
    repeated across `packages/texra/src/ui/progress/components/` and
    `packages/texra/src/ui/settings/`. Twenty settings components also open
    their styles with the same `designTokens, commonViewStyles` pair.
@@ -57,16 +63,6 @@ The findings below each need a decision or a check this run could not make.
    - A shared `hostBlock` (or a settings-tab styles array) in
      `packages/texra/src/ui/styles/litStyles.ts` would hold it once.
    - It needs a visual check of both webviews, which this run could not do.
-5. **The two CLI entry points share a crash wrapper.**
-   `packages/cli/src/bin/texra.ts` and `packages/cli/src/bin/texraServe.ts`
-   each do the same three things:
-   - install the stderr log sink;
-   - run their body under `Effect.tryPromise` with `CliEntryCrashed`;
-   - word the crash and set the exit code.
-
-   They differ in the label and the crash-report line. One `runCliEntry` in
-   `packages/cli/src/runtime/platform/logSinks.ts` would serve both. These
-   are runtime entries, so the change wants a packaged CLI smoke run.
 
 ## Checked and declined
 

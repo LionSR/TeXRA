@@ -154,7 +154,7 @@ layer(texraHosted, { excludeTestServices: true })(
 
             const archived = yield* readCompletedRunConversationEffect(
               runId,
-              Context.get(session, SessionRoots).config,
+              Context.get(session, SessionRoots),
             ).pipe(Effect.provide(session));
             expect(archived).toEqual([
               {

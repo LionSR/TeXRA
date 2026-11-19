@@ -304,8 +304,8 @@ class FileSecrets implements PlatformSecrets
 ## GlobalDatabase
 
 The process's one handle on the global storage root, held for the process
-runtime's life: every application record of that root (settings, inquiry
-threads, the update check, input history, remembered projects) goes through
+runtime's life: every application record of that root (settings, the
+update check, input history, remembered projects) goes through
 it, so its `data_version` poll is forked once and no single-row read opens
 a connection. Current values and input history only: no event rows.
 
@@ -354,7 +354,7 @@ provider whose key a child agent CLI authenticates with itself. Windows
 matches variable names case-insensitively, as its environment does.
 
 ```ts
-const inheritedEnv: (keep?: "xai" | "anthropic" | "openai" | "google" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
+const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
 ```
 
 ## INPUT_HISTORY_LIMIT

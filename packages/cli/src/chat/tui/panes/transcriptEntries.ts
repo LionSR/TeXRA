@@ -14,8 +14,6 @@ import { errorRowText } from '@ui/copy/modelAccess';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 
-const INQUIRY_CONTINUATION_RE =
-  /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
 const INVISIBLE_TRANSCRIPT_CHARS = new Set([
   '\u200B',
   '\u200C',
@@ -33,10 +31,6 @@ function terminalVisibleTranscriptText(text: string): string {
     if (!isInvisibleTranscriptChar(char)) out += char;
   }
   return out;
-}
-
-export function isInquiryContinuationText(text: string): boolean {
-  return INQUIRY_CONTINUATION_RE.test(text);
 }
 
 function trimAssistantTranscriptLead(text: string): string {
@@ -158,13 +152,7 @@ function userPromptAwaitsLiveContinuation(
   working: boolean,
 ): boolean {
   const row = rows[index];
-  if (
-    row?.kind !== 'user' ||
-    isInquiryContinuationText(transcriptRowHeadline(row)) ||
-    !working
-  ) {
-    return false;
-  }
+  if (row?.kind !== 'user' || !working) return false;
   return !rows.some(
     (later, laterIndex) =>
       laterIndex > index && isRenderableTranscriptEntry(later),

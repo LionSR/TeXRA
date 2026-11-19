@@ -324,8 +324,8 @@ export class Database extends Context.Service<
 >()('@texra-ai/harness/session/Database') {}
 
 /** The process's one handle on the global storage root, held for the process
- *  runtime's life: every application record of that root (settings, inquiry
- *  threads, the update check, input history, remembered projects) goes through
+ *  runtime's life: every application record of that root (settings, the
+ *  update check, input history, remembered projects) goes through
  *  it, so its `data_version` poll is forked once and no single-row read opens
  *  a connection. Current values and input history only: no event rows. */
 export class GlobalDatabase extends Context.Service<

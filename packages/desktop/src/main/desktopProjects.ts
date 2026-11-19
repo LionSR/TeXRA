@@ -17,7 +17,7 @@ import {
   type Path,
 } from 'effect';
 
-import { type Session, Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/harness';
 import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import { meansAbsent, canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -32,7 +32,6 @@ import {
 } from '@texra/shared/session/hostSnapshot';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
-import type { WindowClient } from '@texra/controllers/server/windowHost';
 import {
   openProjectRoots,
   openProjectSession,
@@ -60,14 +59,7 @@ interface DesktopProjectFacts {
 
 /** An open project: its session opened here, or the service's, which
  *  this process holds no store, run or claim of. */
-export type DesktopProject = DesktopProjectFacts & {
-  readonly session: Session;
-  /** What the window attaches through: this process's windows, or the
-   *  service. */
-  readonly link: ServiceLink<WindowClient>;
-  /** Where its runs run (`GuiSession.where`). */
-  readonly where: GuiSession['where'];
-};
+export type DesktopProject = DesktopProjectFacts & GuiSession;
 
 /** What the window shows and offers, as one value its surfaces follow. */
 export interface DesktopProjectsState {

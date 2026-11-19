@@ -43,6 +43,7 @@ import {
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 import { activationView, replayTrace } from '@texra-ai/harness/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
@@ -100,6 +101,34 @@ const callService = <A, E, F>(
 /** A failure to reach an answer: the link holds no service, or the
  *  service did not answer. */
 const failedCall = (reason: string) => new ServiceUnavailable({ reason });
+
+/**
+ * A window's read-decide-write of the project file `file`, run in the
+ * service, where the project's tasks write: the write and a task's edit of
+ * the file then take one write lane, which is one per process. `local` is
+ * the same write in this process, which runs instead while the link holds
+ * no service or the service does not answer, so a save never waits on the
+ * link. The file has two writers until the link is back, which is said at
+ * warn here and by the window's offline banner.
+ */
+export const writeInService = <A, E, R>(
+  link: ServiceLink,
+  file: string,
+  forward: (
+    client: ServiceClient,
+  ) => Effect.Effect<A, E | RpcClientError.RpcClientError>,
+  local: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  callService(link, failedCall, forward).pipe(
+    Effect.catchIf(
+      (error): error is ServiceUnavailable =>
+        error instanceof ServiceUnavailable,
+      (away) =>
+        Effect.logWarning(
+          `Writing ${file} in this window's process, where an edit of it by a task in the TeXRA service is not seen: ${away.message}`,
+        ).pipe(withLogChannel('serviceSession'), Effect.andThen(local)),
+    ),
+  );
 
 /** How many times a change to project state keys is tried again while
  *  another writer moves one between its read and its write. */

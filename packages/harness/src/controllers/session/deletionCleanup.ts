@@ -20,12 +20,7 @@ import {
 import { RunLive, type RunRegistry } from '@agent/runtime/runRegistry';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { logFailure, withLogChannel } from '@logger/effectLog';
-import {
-  SessionRoots,
-  StorageFs,
-  WorkspaceFs,
-  withSessionFs,
-} from '@platform/rootedFs';
+import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { type RunId, runNoun, type SessionRow } from '@shared/schemas';
 import {
   DatabaseAggregateClosed,
@@ -295,9 +290,8 @@ export const runFiles = Effect.fn('runFiles')(function* (
 ): Effect.fn.Return<
   OutcomeOf<'run.files'>,
   RequestError,
-  RunFilesServices | SessionRoots
+  RunFilesServices | WorkspaceFs | StorageFs
 > {
-  const roots = yield* SessionRoots;
   return yield* runs
     .withInactiveRun(
       req.runId,
@@ -333,7 +327,6 @@ export const runFiles = Effect.fn('runFiles')(function* (
             }),
       ),
       Effect.map((result) => ({ kind: 'runFiles', result }) as const),
-      (program) => withSessionFs(roots, program),
       withLogChannel('runFiles'),
     );
 });

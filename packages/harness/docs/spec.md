@@ -247,7 +247,7 @@ reader (`controllers/session/rowCodec.ts#decodeRow`):
   checked, with `unavailable` saying why; the row is unchanged, and
   a run holding one is refused resume as `pluginUnavailable`, naming the plugin
   (`controllers/session/rowCodec.ts#unavailableFactReason`,
-  `agent/storage/resumability.ts#'pluginUnavailable'`); a retired built-in kind
+  `agent/storage/continuation.ts#'pluginUnavailable'`); a retired built-in kind
   (`RETIRED_PLUGIN_FACTS`) is an earlier build's (`DatabaseRowEarlier`) instead
   (`controllers/session/rowCodec.ts#factKindOf`)
 
@@ -274,7 +274,7 @@ unavailable and passes the gate
 cannot be opened or resumed: a resume of it, and a message to it, is refused as
 `earlierBuild` for an earlier build's row and as `unusableCheckpoint` for a
 corrupt one, never as a read to retry (`shared/session/runHistory.ts#runReadRefusal`,
-`agent/storage/resumability.ts#deriveResumability`,
+`agent/storage/continuation.ts#deriveContinuation`,
 `agent/runtime/resumeRun.ts#refusalFor`).
 
 ## 3. Row kinds
@@ -769,11 +769,10 @@ resume a wake took follows it itself, whoever opened it,
 `effect/sessionPrograms.ts#redirectedFrom`).
 
 The activation is one transaction: it folds the stored rows and commits a
-`request.decided` `cancel` for every request the previous process left open
-that blocks its caller, then the activation rows
+`request.decided` `cancel` for every request the previous process left open,
+then the activation rows
 (`agent/runtime/makeRunHistory.ts#activate`). What was in flight counts as not
-done: the call or turn that asked asks again under a new id. A request that
-does not block its caller stays open.
+done: the call or turn that asked asks again under a new id.
 
 ### 7.3 Refusals
 
@@ -790,28 +789,27 @@ run a launch here holds that would need the run stopped first is refused as
 
 ### 8.1 Kinds
 
-The request kinds are the harness's own six and one plugin case
-(`shared/schemas/request.ts#RequestPayloadSchema`):
+The request kinds are a closed set the harness declares
+(`shared/schemas/request.ts#RequestPayloadSchema`), each with the answers it
+takes besides the three refusals (`shared/schemas/request.ts#REQUEST_ANSWERS`):
 
-| Kind           | Asks                                    | Blocks its caller |
-| -------------- | --------------------------------------- | ----------------- |
-| `toolEdit`     | approval of a file edit                 | yes               |
-| `bash`         | approval of a command                   | yes               |
-| `retry`        | whether to retry a failed model attempt | yes               |
-| `proposal`     | approval of a proposed agent run        | yes               |
-| `planApproval` | approval of a plan                      | yes               |
-| `userQuestion` | answers to questions                    | yes               |
-| `plugin`       | whatever its plugin asks, in its `data` | as declared       |
+| Kind           | Asks                                    | Answered with                 |
+| -------------- | --------------------------------------- | ----------------------------- |
+| `toolEdit`     | approval of a file edit                 | `approve`                     |
+| `bash`         | approval of a command                   | `approve`                     |
+| `retry`        | whether to retry a failed model attempt | `retry`                       |
+| `proposal`     | approval of a proposed agent run        | `approve`                     |
+| `planApproval` | approval of a plan                      | `approve`, `approve_and_goal` |
+| `userQuestion` | answers to questions                    | `submit`, `skip`              |
 
-Every own kind blocks its caller (the tool call that opened it, or for
-`retry` the model invocation). A plugin's request declares whether it does
-(`blocksCaller`) and which actions answer it (`answers`); its plugin's
-decision hook records each answer (`shared/schemas/request.ts#blocksCaller`).
+Every request blocks its caller (the tool call that opened it, or for
+`retry` the model invocation), and one decision answers it and lets that
+one waiting call go on.
 
 ### 8.2 Decisions
 
-A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
-`skip`, `retry`, `reject`, `deny` and `cancel`
+A decision is one of `approve`, `approve_and_goal`, `submit`, `skip`,
+`retry`, `reject`, `deny` and `cancel`
 (`shared/schemas/request.ts#RequestDecisionSchema`).
 
 ### 8.3 Protocol
@@ -829,7 +827,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
 - Who answers a request is decided once, as it opens, and stored as its
   `answeredBy`: a person when a `PreToolUse` hook asked or the request asks
-  about no operation (a question, a retry, a plugin's request), else the grant
+  about no operation (a question or a retry), else the grant
   its operation takes (`agent/runtime/requests.ts#answererOf`, `#OPERATIONS`).
   The policy's answer at open and a grant turned on while it waits both read
   it, so a grant answers a waiting request exactly when it would have approved
@@ -846,20 +844,13 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#'The run ended.'`);
   one a dead process left is the next resume's to cancel. Both cancel the
-  same requests, the open ones that block their caller
+  same requests, every open one
   (`shared/session/runState.ts#cancelRequestRows`).
 - A request is a row, so it outlives its process. A resume cancels every open
-  one that blocks its caller (section 7.2), and the call that asked asks again
-  (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not
-  block its caller is not cancelled: it
-  stays open until its `request.decided` commits, or until `run.removed`
-  closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#accept`). Its plugin's decision
-  hook records an answer outside the store first, idempotently; the decision,
-  the facts the hook returns and the input it sends a run (the external
-  inquiry's follow-up) then commit in one checked transaction, after which
-  that run is woken (`agent/runtime/requests.ts#decideRequest`,
-  `controllers/session/SessionRequests.ts#wakeIfOwed`).
+  one (section 7.2), and the call that asked asks again
+  (`shared/session/inFlight.ts#resumedAttempt`). A decision is accepted only
+  while the run that asked waits here: its call is the one that takes it
+  (`controllers/session/SessionRequests.ts#is no longer running`).
 
 ## 9. Crash guarantees
 
@@ -943,7 +934,7 @@ What survives at each commit point follows from sections 2 to 8:
   if unbound (section 7.2).
 - `run.end`: The lifecycle is over. A program's run stays finished, and a
   resume answers `finished`
-  (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
+  (`agent/storage/continuation.ts#deriveContinuation`); a loop-driven
   conversation continues on a resume in a new lifecycle
   (`shared/session/runActions.ts#continuesFromRows`), from where its
   rows left the loop (`shared/session/runState.ts#LoopAt`).

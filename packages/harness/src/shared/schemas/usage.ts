@@ -1,22 +1,19 @@
 import { Schema, Struct, type Types } from 'effect';
+import { PLAN_ROUTES } from '@texra-ai/llm';
 
 import { StoredProtocolSchema } from './storedTurn';
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /**
- * The subscription routes a run can decline: storage's spelling of llm's
- * `PLAN_ROUTES`, which the route decision converts both ways, so a plan in
- * one list only fails to compile. A retry the user answered with their own
+ * The subscription routes a run can decline: llm's `PLAN_ROUTES`, whose
+ * keys are stored spellings. A retry the user answered with their own
  * API key declines the route that ran out of quota, for that run only: the
  * choice is a fact of the run, not of the user's settings, so no preference
  * is rewritten and two concurrent runs cannot cancel each other's fallback.
  */
-export const DeclinableUsageRouteSchema = Schema.Literals([
-  'chatgpt-subscription',
-  'xai-subscription',
-  'kimi-code-subscription',
-  'glm-coding-plan-subscription',
-]);
+export const DeclinableUsageRouteSchema = Schema.Literals(
+  Struct.keys(PLAN_ROUTES),
+);
 
 export type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
 

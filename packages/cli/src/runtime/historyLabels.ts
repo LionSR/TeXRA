@@ -1,4 +1,9 @@
-import { collapseWhitespace } from '@texra-ai/harness/schemas';
+import { Predicate } from 'effect';
+
+import {
+  collapseWhitespace,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 import type { CliHistoryEntry } from './history';
 
 /**
@@ -15,4 +20,24 @@ export function formatCliHistorySubject(
   return (
     (entry.description && collapseWhitespace(entry.description)) || noInputLabel
   );
+}
+
+/** What `texra history delete --all` did: the tasks it deleted, then the
+ *  active ones it kept and the ones it could not delete, when there are any. */
+export function formatCliHistoryDeletionSummary(counts: {
+  readonly deleted: number;
+  readonly active: number;
+  readonly failed: number;
+}): string {
+  return [
+    `Deleted ${formatResultCount(counts.deleted, 'stored task')}.`,
+    counts.active > 0
+      ? `Retained ${formatResultCount(counts.active, 'active task')}.`
+      : undefined,
+    counts.failed > 0
+      ? `Failed to delete ${formatResultCount(counts.failed, 'task')}.`
+      : undefined,
+  ]
+    .filter(Predicate.isNotNullish)
+    .join(' ');
 }
