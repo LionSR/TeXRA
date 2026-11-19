@@ -12,7 +12,7 @@
  * its media is read once, as it is sent, and stored by address). Nothing
  * drops an attachment silently.
  */
-import { Effect, Exit, FileSystem, Schema } from 'effect';
+import { Effect, Exit, FileSystem } from 'effect';
 
 import { pathToLocationIn } from '@common/storage/fileLocation';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -32,7 +32,11 @@ import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getBasename, getExtensionLowercase } from '@utils/core/pathBasics';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { getBase64EncodedMedia, rasterizePdfPages } from './img';
+import {
+  getBase64EncodedMedia,
+  MediaConversionFailed,
+  rasterizePdfPages,
+} from './img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { InputPart } from '@texra-ai/llm';
 
@@ -41,13 +45,6 @@ interface MediaCapabilities {
   readonly supportsNativePdf: boolean;
   readonly supportsNativeAudio: boolean;
 }
-
-/** A file that cannot be made model input: of no medium a model takes, or
- *  a PDF whose pages did not render. */
-class MediaInputFailed extends Schema.TaggedError<MediaInputFailed>()(
-  'MediaInputFailed',
-  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
-) {}
 
 interface MediaInputParts {
   readonly parts: readonly InputPart[];
@@ -71,7 +68,7 @@ const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
   const { pages, pageCount } = yield* rasterizePdfPages(path).pipe(
     Effect.mapError(
       (cause) =>
-        new MediaInputFailed({
+        new MediaConversionFailed({
           message: `Failed to process PDF file as image: ${display}: ${cause.message}`,
           cause,
         }),
@@ -148,7 +145,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     return { parts: [{ kind: 'audio', mimeType, base64 }], kinds: [] };
   }
   if (!isImageMimeType(mimeType) || mimeType === null) {
-    return yield* new MediaInputFailed({
+    return yield* new MediaConversionFailed({
       message: `Unsupported media file: ${display} (${ext || 'no extension'})`,
     });
   }
@@ -208,7 +205,7 @@ export const attachedMedia = Effect.fn('mediaInput.attached')(
         const path = pathToLocationIn(roots.workspace, entry).absolutePath;
         const mimeType = getMimeType(path);
         if (mimeType === null || !storedMediaPart(mimeType, '', ANY_MODEL))
-          return yield* new MediaInputFailed({
+          return yield* new MediaConversionFailed({
             message: `Unsupported media file: ${entry}`,
           });
         const base64 = yield* getBase64EncodedMedia(path, roots.config);

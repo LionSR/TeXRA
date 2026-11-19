@@ -50,9 +50,11 @@ import type { AgentRunShape } from './AgentRun';
  * which is what the provider receives (the adapter owns normalization, such
  * as a Responses route trimming its instructions or filling required blank
  * ones), less its history and continuation, which the rows below its
- * attempt hold.
+ * attempt hold. Its shape, the controls of each protocol's prepared turn
+ * included, is the `context.blob` kind's: a change to it is that kind's
+ * new version.
  */
-const RecordedRequestSchema = Schema.Struct({
+export const RecordedRequestSchema = Schema.Struct({
   mode: Schema.Literals(['foreground', 'background']),
   system: Schema.NullOr(Sha256Schema),
   tools: Schema.Array(Sha256Schema),

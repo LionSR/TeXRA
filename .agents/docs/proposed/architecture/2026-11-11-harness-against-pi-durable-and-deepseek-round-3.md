@@ -411,7 +411,10 @@ response only (`dsh:packages/core/tools/src/batch.ts`).
 
 ### The design
 
-Two choices; the owner picks one.
+Two choices; the owner picks one. The first landed in #15024, checked
+2026-11-19: the description says calls start in the order issued, names the
+declared tools that run alongside the calls around them, and says the rest
+wait. The second stays the owner's.
 
 - **Say what happens.** The description names the tools whose calls run
   together and says the rest run in the order issued. No behavior

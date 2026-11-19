@@ -1758,8 +1758,8 @@ interface ProgramResult<R = unknown> {
 
 ## PromptRenderFailed
 
-A prompt that did not render: the template's own error, or `nunjucks`
-failing to load.
+A prompt that did not render: the template's own error, `nunjucks`
+failing to load, or an `AGENTS.md` that is there and could not be read.
 
 ```ts
 class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(

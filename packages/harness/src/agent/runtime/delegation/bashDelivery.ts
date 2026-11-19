@@ -101,7 +101,7 @@ export function bashResultDelivery(
     runId,
     attributes: callAttributes(call),
     exit,
-    wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+    wallTimeMs,
     lines,
   };
 }

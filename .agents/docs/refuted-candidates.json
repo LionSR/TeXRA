@@ -898,6 +898,25 @@
           "signature": "const foreignProtocol = ( runId: RunId, state: RunState, bound: Pick<BoundModel, 'backend' | 'origin'>, ): RunHistoryRefused | null => {…};"
         }
       ]
+    },
+    {
+      "id": "DELIVERY-union-on-family-and-outcome",
+      "candidate": "ChildRunDelivery as a union on family and outcome: typed background, script and subagent cases with an outcome discriminant in place of the optional `message`, beside one generic case for a plugin's family (tool card note, section 3)",
+      "why": "A plugin's case must stay generic: its family is open (DELIVERY_FAMILY_PATTERN) and the agent-CLI tools set prompt, ids, wall time, response, usage, lines and message, which is the union of the harness's facts, so the three typed cases would be a second spelling of the generic one. An `outcome` field beside `message` removes no state: `message` present already decides the envelope tag in formatDelivery and the summary in deliverySummary, and endProcessChild turns a returned report into an error by adding `message` while keeping its response, so a failed case would carry every completed field. What landed instead (2026-11-19, followup.queued v11): the wall time stored as `wallTimeMs`, the prompt as an attribute its builder cuts, and attribute values that are strings, never null.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-14-tool-card-result-and-delivery-shapes.md#3-childrundelivery-a-union-on-family-and-outcome",
+      "reopenWhen": "When a plugin's delivery no longer needs a generic case, or a reader branches on a fact the struct cannot state.",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/deliveryEnvelope.ts",
+          "symbol": "formatDelivery",
+          "signature": "export function formatDelivery(delivery: ChildRunDelivery): string {…}"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/processRun.ts",
+          "symbol": "endProcessChild",
+          "signature": "const endProcessChild = ( runId: RunId, { logger, turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.Effect<void, Error, AgentRunServices> => {…};"
+        }
+      ]
     }
   ]
 }

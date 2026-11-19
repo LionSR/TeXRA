@@ -132,6 +132,7 @@ examples can be neutral, which changes the tool descriptions a run records.
   (`toolDigests`). Lowering it in llm would make the recorded schema differ
   from what the model saw.
 - **App settings rows that repeat provider console URLs**
-  (`settingSurfaces.ts` against `KEY_PAGES`), and the coding-plan catalog's
-  `apiProvider` against `PLAN_ROUTES`. Both are small. They belong with
-  open question 1 of the 2026-11-18 model-access note.
+  (`settingSurfaces.ts` against `KEY_PAGES`): landed 2026-11-19, the
+  toggles read `KEY_PAGES` from `packages/texra/src/shared/model/keyPages.ts`.
+  The coding-plan catalog's `apiProvider` against `PLAN_ROUTES` is small and
+  belongs with open question 1 of the 2026-11-18 model-access note.
