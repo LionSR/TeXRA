@@ -1,5 +1,5 @@
 import './themeTokens.css';
-import '../../desktop/src/renderer/designTokens';
+import '@desktop/renderer/designTokens';
 import './shell.css';
 
 // The page-local host installs at module evaluation, before the progress
