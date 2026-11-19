@@ -99,7 +99,7 @@ function presentCloneOutcome(
       return CliExitCode.Usage;
     case 'GitMissing':
       writeTextStderr(
-        `${CLONE_COPY.gitMissing}\n\n${
+        `Git is not installed or is not on PATH.\n\n${
           installAdvice('Git', ['git'], osPlatformOf(process.platform)).guide
         }`,
       );
@@ -156,7 +156,8 @@ export const cloneCommand = withUsageSections(
       const remote = parseLatexGitUrl(ctx.args.project);
       if (!remote) {
         throw new CliUsageError({
-          message: CLONE_COPY.invalidProject,
+          message:
+            'Invalid Overleaf/ShareLaTeX project. Pass a project URL, git URL, or 24-character project ID.',
         });
       }
 

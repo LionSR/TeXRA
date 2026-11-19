@@ -21,9 +21,4 @@ export const CLONE_COPY = Object.freeze({
   failed: 'Clone failed. Check credentials and connection.',
   /** `AuthFailure`, before the host's next step for its credential. */
   authFailed: 'Clone failed: authentication error.',
-  /** `GitMissing`, before the platform's install guide. */
-  gitMissing: 'Git is not installed or is not on PATH.',
-  /** The project argument names no Overleaf or ShareLaTeX project. */
-  invalidProject:
-    'Invalid Overleaf/ShareLaTeX project. Give a project URL, git URL, or 24-character project ID.',
 });
