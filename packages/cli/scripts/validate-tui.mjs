@@ -2764,9 +2764,7 @@ const SCENARIOS = [
       '\t',
       RIGHT,
       '\t',
-      ...(process.platform === 'darwin'
-        ? [ESC, '3']
-        : [`${ESC}3`]),
+      ...(process.platform === 'darwin' ? [ESC, '3'] : [`${ESC}3`]),
     ],
     frame: 'viewport',
     expect: ['Idle', 'root active', 'Tab agents'],
@@ -3614,8 +3612,9 @@ async function runScenario(scenario, index) {
 
   // Every wait below is one of these: `shows` is asked again each time the
   // harness reports a finished frame, until it answers yes, the harness
-  // exits, or STATE_TIMEOUT_MS passes. It reads the harness's report and the
-  // emulated screen as of that report, never a frame half written.
+  // exits, or STATE_TIMEOUT_MS passes. It reads the harness's report, the
+  // emulated screen as of that report (never a frame half written) and the
+  // output that drew it.
   let fullFrame = '';
   const waitFor = async (shows) => {
     const deadline = Date.now() + STATE_TIMEOUT_MS;
@@ -3624,12 +3623,12 @@ async function runScenario(scenario, index) {
       // once every chunk received so far is on the emulated screen.
       const received = rawOutput.length;
       await new Promise((resolve) => term.write('', resolve));
-      const report = frameReportAtEnd(rawOutput.slice(0, received));
+      const output = rawOutput.slice(0, received);
+      const report = frameReportAtEnd(output);
       if (report) {
         fullFrame = renderFrame(term);
-        if (shows(report, scenarioFrame(scenario, fullFrame, rows))) {
-          return true;
-        }
+        const frame = scenarioFrame(scenario, fullFrame, rows);
+        if (shows(report, frame, output)) return true;
       }
       if (rawOutput.length > received) continue;
       if (exited) return false;
@@ -3657,7 +3656,7 @@ async function runScenario(scenario, index) {
     keysDispatched = report.keys;
     return (
       report.raw === 1 &&
-      report.settled === 1 &&
+      report.caughtUp === 1 &&
       fullFrame.includes(bootExpect)
     );
   });
@@ -3667,9 +3666,9 @@ async function runScenario(scenario, index) {
   // A key waits until the harness reports that Ink read all of it,
   // dispatched it and wrote the frame it produced. What a key starts and
   // something else finishes (a form that loads, an approval that is
-  // answered) is not in that frame: such a key names the text it waits
-  // `until`, or the text it waits to see `untilGone`. A key with no input
-  // only waits.
+  // answered) is in that frame when it ran without waiting on anything, and
+  // when the session wrote it (`caughtUp`). A key whose answer waits on I/O
+  // or a timer names the text it waits `until`, or waits to see `untilGone`.
   let bytesSent = 0;
   const send = (input, { until, untilGone } = {}) => {
     const dispatchedBefore = keysDispatched;
@@ -3679,8 +3678,8 @@ async function runScenario(scenario, index) {
       keysDispatched = report.keys;
       return (
         report.read >= bytesSent &&
-        report.settled === 1 &&
-        (input === '' || report.keys > dispatchedBefore) &&
+        report.caughtUp === 1 &&
+        report.keys > dispatchedBefore &&
         (until === undefined || frame.includes(until)) &&
         (untilGone === undefined || !frame.includes(untilGone))
       );
@@ -3704,20 +3703,22 @@ async function runScenario(scenario, index) {
     );
   };
   for (const key of scenario.keys ?? []) await press(key);
+  let currentCols = cols;
   for (const resize of scenario.resizes ?? []) {
     const nextCols = Number(resize.cols ?? cols);
     const nextRows = Number(resize.rows ?? rows);
+    const widthChanged = nextCols !== currentCols;
+    currentCols = nextCols;
     const outputBefore = rawOutput.length;
     child.resize(nextCols, nextRows);
     term.resize(nextCols, nextRows);
     // Ink redraws a new height in place and a new width from the top; the
     // report then carries the size that frame was drawn for.
     const resized = await waitFor(
-      (report) =>
+      (report, _frame, output) =>
         report.cols === nextCols &&
         report.rows === nextRows &&
-        (nextCols === cols ||
-          rawOutput.includes(CLEAR_SCROLLBACK, outputBefore)),
+        (!widthChanged || output.includes(CLEAR_SCROLLBACK, outputBefore)),
     );
     if (!resized && !exited) {
       checkpointFailures.push(
@@ -3732,7 +3733,7 @@ async function runScenario(scenario, index) {
   // the assertions run on the last one the harness finished.
   const shown = await waitFor(
     (report, frame) =>
-      report.settled === 1 && expectedFrameTextVisible(scenario, frame),
+      report.caughtUp === 1 && expectedFrameTextVisible(scenario, frame),
   );
   if (!shown) {
     await new Promise((resolve) => term.write('', resolve));

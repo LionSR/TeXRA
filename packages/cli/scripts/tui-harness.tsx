@@ -314,7 +314,7 @@ const frameReport = {
   closed: false,
 };
 // Set where the session is opened and where Ink renders, below.
-let sessionSettled = (): boolean => false;
+let tuiCaughtUp = (): boolean => false;
 let renderFlushed = (): Promise<void> => Promise.resolve();
 // A report once what was just started has run and its frame is written,
 // for a change that may write nothing. A key's handlers update React at
@@ -361,7 +361,7 @@ function writeFrameReport(): void {
     // Before raw mode the terminal, not the TUI, answers a key.
     raw: process.stdin.isRaw ? 1 : 0,
     // Whether the TUI holds everything the session has been sent.
-    settled: sessionSettled() ? 1 : 0,
+    caughtUp: tuiCaughtUp() ? 1 : 0,
   };
   writeTerminal(
     `\u001B]7747;${Object.entries(fields)
@@ -575,11 +575,11 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 // starts from a key press or a mounted component ends with this scope.
 // What a key or a fixture sends the session reaches the screen in steps:
 // the session writes it and updates its view, the bound signal takes that
-// view, and each run in it gets its transcript. The TUI is settled when
+// view, and each run in it gets its transcript. The TUI has caught up when
 // all three have happened for everything written so far. Nothing announces
 // a write, so a report that finds a new one asks the session when it is
 // through and reports again then.
-const settledView = {
+const sessionCatchUp = {
   /** The view the TUI is bound to. */
   current: harnessRunSession.view.current,
   /** Whether that view's runs get their transcripts from a subscription. */
@@ -588,17 +588,17 @@ const settledView = {
   drainedAt: undefined as number | undefined,
   draining: false,
 };
-sessionSettled = () => {
+tuiCaughtUp = () => {
   const written = session().log.now();
-  if (written !== settledView.drainedAt) {
-    if (!settledView.draining) {
-      settledView.draining = true;
+  if (written !== sessionCatchUp.drainedAt) {
+    if (!sessionCatchUp.draining) {
+      sessionCatchUp.draining = true;
       harnessRuntime.runFork(
         harnessRunSession.drained.pipe(
           Effect.andThen(
             Effect.sync(() => {
-              settledView.draining = false;
-              settledView.drainedAt = written;
+              sessionCatchUp.draining = false;
+              sessionCatchUp.drainedAt = written;
               reportAfterRender();
             }),
           ),
@@ -609,8 +609,8 @@ sessionSettled = () => {
   }
   const shown = sessionView().get();
   return (
-    shown === settledView.current() &&
-    (!settledView.subscribed ||
+    shown === sessionCatchUp.current() &&
+    (!sessionCatchUp.subscribed ||
       [...shown.runs.keys()].every((id) => shown.transcriptSeq.has(id)))
   );
 };
@@ -2023,10 +2023,9 @@ function handleHarnessCtrlC(): void {
   void exitHarness(0);
 }
 
-// Ink hands a key to every `useInput` listener in one synchronous pass, so
-// by the next render flush each listener's update is in the written frame.
-// A key that does nothing writes no frame; the report still says it was
-// dispatched.
+// Counts each key Ink dispatches and asks for a report once it is rendered.
+// A key that does nothing writes no frame; the report still says the key
+// was answered.
 function KeyReport(): null {
   useInput(() => {
     frameReport.keysDispatched += 1;
@@ -2118,8 +2117,8 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       changes: SubscriptionRef.changes(ref),
     }),
   );
-  settledView.current = () => SubscriptionRef.getUnsafe(ref);
-  settledView.subscribed = false;
+  sessionCatchUp.current = () => SubscriptionRef.getUnsafe(ref);
+  sessionCatchUp.subscribed = false;
   HARNESS_DISPOSERS.push(
     subscribeToSignalChanges([sessionView()], reportAfterRender),
   );
