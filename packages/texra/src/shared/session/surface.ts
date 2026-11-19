@@ -132,19 +132,19 @@ interface DraftImage {
 }
 
 /** A follow-up in progress for one stream. Only `text` persists. */
-export interface Draft {
+export interface FollowUpDraft {
   readonly text: string;
   readonly images: readonly DraftImage[];
 }
 
-export const EMPTY_DRAFT: Draft = Object.freeze({
+export const EMPTY_DRAFT: FollowUpDraft = Object.freeze({
   text: '',
   images: Object.freeze([]),
 });
 
 /** What this surface keeps for one run. */
 export interface RunSurface {
-  readonly draft: Draft;
+  readonly draft: FollowUpDraft;
   /** The user's expansion choice in the tree, absent until they make one;
    *  a run that needs the user (`needsUser`) outranks it. */
   readonly expanded: boolean | undefined;
@@ -484,7 +484,7 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
  * whether its composer shows), the draft must not be empty, and every pasted
  * image must already be stored by the host.
  */
-export function canSendFollowUp(run: RunView, draft: Draft): boolean {
+export function canSendFollowUp(run: RunView, draft: FollowUpDraft): boolean {
   if (!acceptsFollowUp(run)) return false;
   if (draft.images.some((image) => image.media === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
@@ -516,7 +516,7 @@ export type SurfaceAction =
   | {
       readonly kind: 'draft';
       readonly runId: RunId;
-      readonly patch: Partial<Draft>;
+      readonly patch: Partial<FollowUpDraft>;
     }
   | { readonly kind: 'launch'; readonly patch: LaunchPatch }
   /** A proposal card's Edit: the launch form opens on the proposal, filled
