@@ -20,9 +20,10 @@ import {
 import { assembleTrace } from '@agent/storage/traceAssembler';
 import { parseTraceData } from '../../../../packages/trace-viewer/src/traceDataSchema';
 
-// The block's host owns its temp root and removes it on release, after the
-// graph over it has closed the global store: Windows refuses to delete a
-// database file that is still open.
+// The block's graph keeps the global store open until the block ends, so
+// the store lies under the default host's storage, which outlasts the block.
+// A directory removed after each test would still hold the open database
+// file, and Windows refuses to delete one.
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'assembleTrace',
   (it) => {
