@@ -81,6 +81,12 @@ requests that do not block their run. The web row reads `run.approval`
 `packages/texra/src/ui/copy/requestCards.ts`, and the badge should read
 `run.approval`. Decision needed: should a non-blocking request mark the row?
 
+Landed 2026-11-19: the nouns are one table, `REQUEST_NOUN` in
+`packages/texra/src/ui/copy/requestCards.ts`, total over
+`RequestPayload['kind']`; the terminal child list and the script-stage call
+line read it. Every renderer already used the same word, so nothing a person
+reads changed. The badge's source is still the open decision.
+
 ## 6. Copy the hosts word separately
 
 These need a decision on which wording wins:

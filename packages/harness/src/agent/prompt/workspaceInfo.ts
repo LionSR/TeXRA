@@ -17,6 +17,15 @@ import { envVar } from '@utils/system/envFlags';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { runsInWsl } from '@utils/system/wslDetect';
 
+/** The tools the external directories are listed for, as the list names them. */
+const EXTERNAL_ROOT_TOOLS = [
+  'read_file',
+  'write_file',
+  'grep',
+  'glob',
+  'edit_file',
+] as const;
+
 interface GitInfo {
   branch: string | null;
   dirty: boolean;
@@ -79,9 +88,12 @@ const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
  * that help the LLM understand the user's workspace context.
  *
  * @param wsPath - The run's workspace root, or undefined when no folder is open.
+ * @param offered - The tools the run offers, by name: the external
+ *   directories are listed only for a run offered a tool that reads them.
  */
 export const buildWorkspaceInfoBlock = Effect.fn(function* (
   wsPath: string | undefined,
+  offered: readonly string[],
 ) {
   const platform = getPlatformLabel();
   const shell = yield* detectShell;
@@ -113,11 +125,15 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     );
   }
 
-  const externalRoots = listExternalRoots();
+  const externalRoots = EXTERNAL_ROOT_TOOLS.some((name) =>
+    offered.includes(name),
+  )
+    ? listExternalRoots()
+    : [];
   if (externalRoots.length > 0) {
     lines.push('');
     lines.push(
-      'Accessible external directories (absolute paths; use read_file, write_file, grep, glob, edit_file):',
+      `Accessible external directories (absolute paths; use ${EXTERNAL_ROOT_TOOLS.join(', ')}):`,
     );
     for (const root of externalRoots) {
       const rw = root.writable ? 'writable' : 'read-only';
