@@ -168,7 +168,8 @@ design today. By owner:
   listing's `actions`. R14, one `HostFailed`. R22, the headless denial
   notice. Drop "one view tag" from R8's second half: the refusal
   `SESSION-one-view-service` still holds.
-- **B:** R15, the diff title as one string; R16, the desktop window as one
+- **B:** R15, the diff title as one string (landed, #14799:
+  `toolEditDiffLabel` in `packages/texra/src/ui/copy/toolEditPreview.ts`); R16, the desktop window as one
   state value; R17, one preview host; R18, N8 then J3, J4 and J2; R19, G7's
   request mask. All are in the window and bridge files 3.3 opens.
 - **C:** R6, the user's edit recorded on the task's own revision record;

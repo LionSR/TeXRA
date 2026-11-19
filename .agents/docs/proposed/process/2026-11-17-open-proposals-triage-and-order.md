@@ -101,6 +101,25 @@ started, unless listed under "In flight".
 | The file-tool text leaves the prompt of a run without file tools (I-C16)                           | the earlier triage's "safe at any time"; review as the resolved prompt                                                                                             | S    |
 | R17 gets one kernel case that interrupts inside its handoff window                                 | the evidence of 2026-11-19 (`release-acceptance-rows`) covers either side and says the window itself is hit by no check; a small check is better than a waived one | S    |
 
+The earlier version's list of work "safe at any time", read again on
+2026-11-19:
+
+- Landed in one pull request: `RunCell.commit` applies its batch once,
+  inside the store's job; the key-pages links read `KEY_PAGES` from
+  `packages/texra/src/shared/model/keyPages.ts`; the rejected-token notice
+  is worded at its one follower; R6-T7 b, by correcting the store review
+  (its codec ratchet is gone and SQL reads a payload field).
+- Already on `main`: the tool-edit diff title (`toolEditDiffLabel`), the
+  one symbol table (`MATH_SYMBOL_SPELLINGS`), the `script` tool's
+  description (#15024), and the `model.useGoogleBackgroundResponses`
+  deletion (#15081).
+- Waiting for open pull requests on their files: store debts A6 and A8
+  (`controllers/session/`) and deriving `referencedAggregates`
+  (`shared/schemas/sessionEvent.ts`).
+- Not to be done: the media classifier (below). Left to whoever owns the
+  bundled prompts: I-C4, and I-C16 as ruled above. Left to the UI work:
+  tooltip ids carried by the data.
+
 **Keep what the code does; close the item.**
 
 - A stop of a run no fiber drives commits its `run.end` with the stop
