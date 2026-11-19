@@ -1,7 +1,8 @@
 /**
  * Failure modes: cancellation pending at COMMIT leaves a durable setting
  * without a change notification; a nested write notifies before its outer
- * transaction rolls back.
+ * transaction rolls back; a change read that keeps failing leaves its
+ * reader waiting for good.
  */
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -18,14 +19,12 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { TestClock } from 'effect/testing';
 import { expect } from 'vitest';
 
 // Local imports - store boundary
 import { currentValues } from '@controllers/session/currentValues';
-import {
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { storeConnection } from '@controllers/session/storeConnection';
 
 it.live(
   'notifies committed settings despite cancellation, never rolled-back ones',
@@ -86,28 +85,17 @@ it.live(
           ),
       });
       const written = yield* SubscriptionRef.make(0);
-      const exec = (statement: string, params?: readonly unknown[]) =>
-        sql.unsafe<Record<string, unknown>>(statement, params);
-      const store = {
-        exec,
-        execOne: (statement: string, params?: readonly unknown[]) =>
-          Effect.map(exec(statement, params), (rows) => rows.at(0)),
-        transact: <A, E>(body: Effect.Effect<A, E>) =>
-          transaction(body).pipe(
-            Effect.mapError(
-              (cause) => new DatabaseWriteFailed({ path: ':memory:', cause }),
-            ),
-          ),
-        query: <A, E>(read: Effect.Effect<A, E>) =>
-          read.pipe(
-            Effect.mapError(
-              (cause) => new DatabaseReadFailed({ path: ':memory:', cause }),
-            ),
-          ),
-        afterCommit: sql.afterCommit,
-        written,
-      };
-      const values = currentValues(store);
+      // The connection over the held commit above.
+      const store = storeConnection(
+        {
+          unsafe: (statement, params) => sql.unsafe(statement, params),
+          withTransaction: transaction,
+          afterCommit: sql.afterCommit,
+        },
+        ':memory:',
+        { shared: false, factKinds: {} },
+      );
+      const values = currentValues(store, written);
       const family = { name: 'settings', schema: Schema.Boolean };
       const ready = yield* Deferred.make<void>();
       const changed = yield* Deferred.make<boolean>();
@@ -151,4 +139,32 @@ it.live(
       expect(yield* values.get(family, 'enabled')).toBe(true);
       expect(yield* SubscriptionRef.get(written)).toBe(1);
     }).pipe(Effect.provide(Reactivity.layer)),
+);
+
+it.effect('reports a change when it cannot read whether one happened', () =>
+  Effect.gen(function* () {
+    const sql = yield* SqliteClient.make({
+      filename: ':memory:',
+      disableWAL: true,
+    });
+    yield* sql.unsafe(
+      'CREATE TABLE stored_kind (type TEXT PRIMARY KEY, version INTEGER)',
+    );
+    // No `current_value` table: every snapshot read fails.
+    const values = currentValues(
+      storeConnection(sql, ':memory:', { shared: false, factKinds: {} }),
+      yield* SubscriptionRef.make(0),
+    );
+    const woken = yield* Deferred.make<void>();
+    yield* values.changes({ name: 'settings' }, ['enabled']).pipe(
+      Stream.runForEach(() => Deferred.succeed(woken, undefined)),
+      Effect.forkScoped,
+    );
+    yield* TestClock.adjust('2 minutes');
+    expect(yield* Deferred.isDone(woken)).toBe(true);
+    const read = yield* values
+      .get({ name: 'settings', schema: Schema.Boolean }, 'enabled')
+      .pipe(Effect.flip);
+    expect(read._tag).toBe('DatabaseReadFailed');
+  }).pipe(Effect.provide(Reactivity.layer)),
 );

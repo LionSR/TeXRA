@@ -17,12 +17,24 @@ import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * Instructions appended to an agent-with-tools prompt at open. What depends on
- * the model or the settings is rendered by each step (`stepInstructions`).
+ * Instructions appended to an agent-with-tools prompt at open, led by the
+ * working-directory sentences of the tools its first step offers. What
+ * depends on the model or the settings is rendered by each step
+ * (`stepInstructions`).
  */
-const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
-Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
-Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
+const toolUseInstructions = (offered: readonly string[]) => {
+  const offers = (...names: string[]) =>
+    names.some((name) => offered.includes(name));
+  const workingDirectory = [
+    offers('bash') &&
+      'Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., `ls src/`, `cat README.md`).',
+    offers('bash', 'glob', 'grep') &&
+      'Scope file searches to `.` or a subdirectory, or use the glob/grep tools.',
+  ].filter(Boolean);
+  const lead =
+    workingDirectory.length > 0 ? `${workingDirectory.join(' ')}\n` : '';
+  return `<tool_use_instructions>
+${lead}Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
 
 Prefer using tools over asking the user to take manual actions.
 Do not ask for permission in chat before editing a file or running a command: when the user's approval settings require confirmation, the harness asks before the call runs.
@@ -32,6 +44,7 @@ When this run carries out an approved plan or a goal's round, work toward it end
 In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
 Never mention tool names when speaking to the user.
 </tool_use_instructions>`;
+};
 
 /**
  * The tool-call mechanics are provider-gated: OpenAI-compatible providers
@@ -137,6 +150,9 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
       roots: WorkspaceRoots;
       /** A persona that declares no tools: no tool-use suffix. */
       textOnly: boolean;
+      /** The tools the run's first step offers, by name: the suffix names
+       *  only those. */
+      offered: readonly string[];
     },
   ): Effect.fn.Return<
     string,
@@ -151,7 +167,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
         loadAgentsMd(roots.workspace, roots.storageRoot),
         options.textOnly
           ? Effect.succeed('')
-          : buildWorkspaceInfoBlock(roots.workspace),
+          : buildWorkspaceInfoBlock(roots.workspace, options.offered),
       ],
       { concurrency: 'unbounded' },
     );
@@ -161,7 +177,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     ].join('\n');
     if (options.textOnly) return systemPrompt;
     const suffix = yield* renderPrompt(
-      [TOOL_USE_INSTRUCTIONS, workspaceInfo].join('\n'),
+      [toolUseInstructions(options.offered), workspaceInfo].join('\n'),
       inputs,
     );
     return [systemPrompt, suffix].filter(Boolean).join('\n');
