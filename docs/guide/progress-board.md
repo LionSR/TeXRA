@@ -5,12 +5,12 @@ import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
 import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
 </script>
 
-# ProgressBoard
+# Tasks view
 
-The ProgressBoard is TeXRA's live view in VS Code for watching running tasks, inspecting tool calls and reasoning, reviewing generated files, and resuming or forking past runs.
+The Tasks view is TeXRA's live view in VS Code for watching running tasks, inspecting tool calls and reasoning, reviewing generated files, and resuming or forking past runs.
 
 ::: tip CLI
-The ProgressBoard is the VS Code extension's live view. The CLI shows the same
+The Tasks view is the VS Code extension's live view. The CLI shows the same
 streaming reasoning, tool calls, and diffs in its `texra chat` terminal UI. Past
 tasks are shared across surfaces. Browse them with `texra history list` in the terminal, or with the **Tasks**
 button of the TeXRA view in VS Code.
@@ -29,21 +29,21 @@ start, the window runs its tasks itself and says so once.
 
 <p class="hero-caption">The board's tasks, from a terminal: one tab-separated row each. <code>texra resume</code> picks a stored task back up.</p>
 
-## Opening the ProgressBoard
+## Opening the Tasks view
 
-The ProgressBoard shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Tasks** button at the top left of the panel lists every task, and **+** starts a new task.
+The Tasks view shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Tasks** button at the top left of the panel lists every task, and **+** starts a new task.
 
 - **Automatic**: It usually opens when you execute an agent.
 - **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Tasks**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS). From the New task screen this opens the newest task.
-- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open tasks in editor** from the panel's **⋯** menu, to open the ProgressBoard as a full editor tab.
+- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open tasks in editor** from the panel's **⋯** menu, to open the Tasks view as a full editor tab.
 
 <GuideIntroHero />
 
-<p class="hero-caption">The ProgressBoard: stream header and live log on the left, the run's output files on the right.</p>
+<p class="hero-caption">The Tasks view: stream header and live log on the left, the run's output files on the right.</p>
 
 ## Layout overview
 
-The ProgressBoard has two parts:
+The Tasks view has two parts:
 
 1.  **Task list**: In the sidebar, the **Tasks** button opens it as a drawer; in the editor tab it is docked beside the task.
 2.  **Content Area**: The header and log details for the selected task.

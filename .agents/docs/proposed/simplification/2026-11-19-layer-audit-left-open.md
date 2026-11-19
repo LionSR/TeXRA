@@ -18,30 +18,29 @@ a tool card's feedback has one label. The context-management row now carries
 only the event the run writes. Two host strings are read from the app (the clone copy is left to #15055). What
 follows is left open, in the order worth taking.
 
-## 1. The Google background toggle reaches nothing (a defect)
+## 1. Tool-use turns go out as background work (a behaviour question)
 
-`backgroundOn` (`packages/harness/src/agent/runtime/modelAccess/binding.ts`)
-feeds the bind option `background`, which `packages/llm` reads in one place,
-`servesWebSocket` (`packages/llm/src/api/configuration.ts`). Whether a turn
-goes out as background work is decided differently: `ModelInvoker` sends it
-in the background whenever the bound model carries a `background` member, and
-a protocol model carries one exactly when `backgroundCapable(configuration)`
-holds (`packages/llm/src/turn.ts`). That is a GPT-family Responses route, or
-Google with server-side state on. So:
+The setting that reached nothing is deleted:
+`model.useGoogleBackgroundResponses`, its reader and the harness's
+`backgroundOn` are gone, and nothing sent to a provider changed. What is left
+is the behaviour the old comment denied.
 
-- `model.useGoogleBackgroundResponses` changes nothing. Google turns go out
-  as background Interactions whenever server-side state is on, the toggle off
-  by default notwithstanding.
-- The text-only condition (`turn.textOnly`) changes nothing either, so
-  tool-use turns on those routes go out as background work too, against the
-  harness comment that says they don't.
+The bind option `background` (`request.textOnly`, in
+`packages/harness/src/agent/runtime/modelAccess/binding.ts`) is read in one
+place in `packages/llm`, `servesWebSocket`
+(`packages/llm/src/api/configuration.ts`): it only gives up the persistent
+WebSocket. Whether a turn goes out as background work is decided separately:
+`ModelInvoker` sends it in the background whenever the bound model carries a
+`background` member, and a protocol model carries one exactly when
+`backgroundCapable(configuration)` holds (`packages/llm/src/turn.ts`). That is
+a GPT-family Responses route, or Google with server-side state on. So every
+turn on those routes goes out as background work, a tool-use turn included.
 
-The fix is in `packages/llm`. A protocol model carries `background` only when
-the bind asked for it and the route can carry it. Google's toggle becomes a
-bind option beside `serverState`, read in `CONFIGURE['google-interactions']`,
-so the harness passes `background: request.textOnly` and stops testing
-`turn.protocol`. It changes when GPT tool-use turns stream in the foreground,
-so it needs a live check before it lands.
+The open question: should a tool-use turn stream in the foreground instead?
+If so, the change is in `packages/llm`: a protocol model carries `background`
+only when the bind asked for it and the route can carry it, and the harness
+keeps passing `background: request.textOnly`. It changes what is sent to
+OpenAI and Google, so it needs a live run with a key before it lands.
 
 ## 2. Image size limits are one provider's, applied to all
 

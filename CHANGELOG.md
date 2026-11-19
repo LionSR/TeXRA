@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The `model.useGoogleBackgroundResponses` setting is removed.** It
+  changed nothing: no request read it. A value left in `config.json` is
+  reported as an unknown key. SDK: `GOOGLE_BACKGROUND_RESPONSES_SETTING` is
+  gone from `@texra-ai/harness/schemas`.
+
 - **The `IS_ANTHROPIC_MODEL` prompt variable is removed.** An agent prompt
   that reads `{% if IS_ANTHROPIC_MODEL %}` now renders that block as false
   for every model. TeXRA's own tool-call guidance still follows the model
@@ -1879,6 +1884,34 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Codex on Windows installs where TeXRA looks for it.** **Install in
+  terminal** ran `wsl --install`, but TeXRA looks for a native `codex.exe`,
+  so a native Windows window never found the result. Windows now gets
+  OpenAI's PowerShell installer, and TeXRA finds the installed `codex.exe`
+  without a restart.
+- **`texra tasks attach` no longer waits forever on a task nothing runs.**
+  Attached to a task that has not ended and whose service stopped under it,
+  it printed nothing and never returned. It now prints what the task has,
+  says that no service is running it and that `texra tasks send` continues
+  it, and exits 1.
+- **`texra models show` rejects a model reference a run would reject.**
+  `texra models show anthropic/claude-opus-5-5@none` printed the model though
+  a run refuses that reference; it now prints the run's reason and exits 2.
+- **Product text that was wrong is corrected.** A missing LaTeX tool's
+  install advice ends with that tool's own version check in a new terminal,
+  where every tool of a TeX distribution said "restart VS Code" and
+  `pdflatex --version`, in `texra doctor` too. `texra run --help` names its
+  argument `<TARGET>` (a program or an agent), and the root example carries
+  the instruction an agent needs. `--device` on
+  `texra auth <provider> login` says it prints the browser sign-in URL where
+  the provider has no device code (ChatGPT). The Multi-Agent Workflow card
+  says its switch removes the `agent` and `program` tools. The `lean`
+  agent's description no longer promises a VS Code integration and a CLI
+  fallback. The setup assistant calls the task surface the Tasks view. The
+  External Inquiry panel links ChatGPT, Claude, Gemini and Grok, as its card
+  names them. The GLM Coding Plan switch no longer claims a coding-specific
+  endpoint. The LaTeXDiffs **Edited** tooltip covers Diff, Compare and
+  Accept as well as Merge.
 - **A background service that cannot start is no longer restarted
   forever.** When the service died and then failed every start, an open
   window started it again every couple of minutes without end, said only

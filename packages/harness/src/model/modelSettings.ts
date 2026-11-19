@@ -43,7 +43,6 @@ import { SubscriptionPreference } from './subscriptionAccess';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   GLM_CODING_PLAN_SETTING,
-  GOOGLE_BACKGROUND_RESPONSES_SETTING,
   KIMI_CODE_PREFER_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   WEBSOCKET_OPENAI_SETTING,
@@ -90,8 +89,6 @@ export interface ModelSettings {
   readonly reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   /** Automatic retries after a failed attempt. */
   readonly automaticRetries: number;
-  /** Google text-only turns go out as background Interactions. */
-  readonly googleBackground: boolean;
   /** The vendor knobs a binding sends. */
   readonly wire: {
     readonly serverState: boolean;
@@ -229,12 +226,6 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
       ),
       Effect.all({
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
-        // Whether Google text-only turns go out as background Interactions; a
-        // Responses turn goes out so whenever its route can.
-        googleBackground: Settings.get(
-          stores,
-          GOOGLE_BACKGROUND_RESPONSES_SETTING,
-        ),
         automaticRetries: Settings.get(
           stores,
           MODEL_RETRY_MAX_ATTEMPTS_SETTING,

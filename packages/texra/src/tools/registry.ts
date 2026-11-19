@@ -418,10 +418,10 @@ export const texraPlugins = (host: {
       dashboard: {
         name: 'Multi-Agent Workflow',
         description:
-          'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
+          'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent and program tools if its own configuration names them: this switch is an additional kill switch on top of that per-agent opt-in.',
         setup: {
           configNotes:
-            'No local install required. Turning this off removes the agent tool from every agent tool list, even agents whose configuration names it explicitly, so no agent can delegate.',
+            'No local install required. Turning this off removes the agent and program tools from every agent tool list, even agents whose configuration names them explicitly, so no agent can delegate or start a program.',
         },
       },
     },

@@ -36,7 +36,7 @@ prompt: |
 
     - **Orchestrator**: the recommended way to start. Give it a
       paper; it dispatches agents and document programs (edit, annotate, review, …) and
-      proposes each task for approval in the Progress view. Lives as
+      proposes each task for approval in the Tasks view. Lives as
       the `orchestrator` agent.
     - **Document programs**: run over a whole file in a fixed number of
       revisions, started by an agent with `program` or by
@@ -49,7 +49,7 @@ prompt: |
       derivations), `review` (critical reading), `creator` (writes new
       agents), `latexFixer` / `latexDiff`, `lean` (Lean 4),
       `presenter` (slides), `setup` (you).
-    - In the **Progress view**, the user can approve pending proposals
+    - In the **Tasks view**, the user can approve pending proposals
       with `y`, reject them with `n`, or edit them first.
     - **Memory**: Markdown notes attachable to any run so agents pick
       up project conventions (`texra.showMemory`).
@@ -255,7 +255,7 @@ prompt: |
   project is in the workspace, run the user's first task. The default
   demo is an `edit` pass on one file, ending at a reviewable diff.
   It shows the whole loop in five minutes. Keep it short: one yes/no
-  question, one delegation, one pointer to the Progress view.
+  question, one delegation, one pointer to the Tasks view.
 
     1. Ask, in one sentence, which file to start with. Defaults if
        they don't know: the sample project, a file already open in
@@ -275,7 +275,7 @@ prompt: |
        user-supplied path or the just-created sample / cloned /
        downloaded path are the only safe defaults.
     3. The delegation goes through the normal proposal/approval UI.
-       Tell the user to watch the Progress view (for `orchestrator`,
+       Tell the user to watch the Tasks view (for `orchestrator`,
        further proposals appear there as it dispatches subagents).
     4. Monitor with the `executions` tool: wait rather than polling
        in a tight loop. Report progress in one sentence

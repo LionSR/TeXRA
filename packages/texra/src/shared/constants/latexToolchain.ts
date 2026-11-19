@@ -102,17 +102,10 @@ const TEX_DISTRIBUTION_INSTALL: InstallRecord = {
     darwin:
       'Alternatives:\n' +
       '  brew install --cask mactex-no-gui   (MacTeX without GUI apps)\n' +
-      '  brew install --cask mactex          (full MacTeX, ~4 GB)\n\n' +
-      'After installing, restart VS Code and verify by running\n' +
-      '"pdflatex --version" in Terminal.',
-    linux:
-      'After installing, restart VS Code and verify by running\n' +
-      '"pdflatex --version" in a terminal.',
+      '  brew install --cask mactex          (full MacTeX, ~4 GB)',
     win32:
       'MiKTeX: choose "Install missing packages on the fly" when prompted.\n' +
-      'Or TeX Live: https://tug.org/texlive/\n\n' +
-      'After installing, restart VS Code and verify by running\n' +
-      '"pdflatex --version" in Command Prompt.',
+      'Or TeX Live: https://tug.org/texlive/',
   },
 };
 
@@ -664,7 +657,9 @@ export interface InstallAdvice {
 /**
  * How to install `tools` together on `platform`, titled `label`: one command
  * over their packages for the platform's package manager, then each tool's
- * other ways in and notes.
+ * other ways in and notes, then the command that checks each one. The check
+ * names the tools asked about and a new terminal, which every host has: an
+ * installer's PATH change does not reach a shell already open.
  */
 export function installAdvice(
   label: string,
@@ -710,6 +705,15 @@ export function installAdvice(
     const notes = record.notes?.[platform];
     if (notes) sections.push(notes);
   }
+  const checks = tools.map((tool) => {
+    const { alternates, versionArgs } = LATEX_TOOL_ENTRIES[tool];
+    // Ghostscript's Windows builds do not ship as `gs`.
+    const binary = platform === 'win32' ? (alternates?.[0] ?? tool) : tool;
+    return `  ${binary} ${(versionArgs ?? ['--version']).join(' ')}`;
+  });
+  sections.push(
+    `After installing, verify in a new terminal:\n${checks.join('\n')}`,
+  );
   return Object.freeze({ guide: sections.join('\n\n'), command });
 }
 

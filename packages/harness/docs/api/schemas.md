@@ -1031,7 +1031,7 @@ const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; reado
 ## GLM_CODING_PLAN_SETTING
 
 ```ts
-const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits."; }
+const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; TeXRA shows the plan's quota and reports its limits as plan limits. Ignored while a custom GLM endpoint is set."; }
 ```
 
 ## GLM_ENDPOINT_SETTING
@@ -1081,12 +1081,6 @@ waiting run: work continues through a new goal or a new turn.
 
 ```ts
 const GoalResultSchema: Union<readonly [Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"completed">; }>, Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"paused">; readonly pause: Union<readonly [Struct<{ readonly reason: Literal<"needs_user">; }>, Struct<{ readonly reason: Literal<"round_failed">; readonly error: Struct<{ readonly name: String; readonly message: String; }>; }>, Struct<{ readonly reason: Literal<"no_verdict">; readonly response: String; }>, Struct<{ readonly reason: Literal<"spend_cap">; readonly maxCostUsd: Finite; }>]>; }>]>
-```
-
-## GOOGLE_BACKGROUND_RESPONSES_SETTING
-
-```ts
-const GOOGLE_BACKGROUND_RESPONSES_SETTING: { readonly key: "model.useGoogleBackgroundResponses"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Google background responses"; readonly description: "Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically."; }
 ```
 
 ## GOOGLE_INTERACTIONS_SERVER_STATE_SETTING

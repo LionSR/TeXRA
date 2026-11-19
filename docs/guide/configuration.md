@@ -36,8 +36,8 @@ Commands such as **TeXRA: Agent Settings** or **TeXRA: Git Settings**
 open their page on the matching sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
-A few provider transport knobs, such as Google background responses, keep
-their defaults unless you set them in the user-wide `config.json`. File-handling rules and other internal
+A few settings with no control, such as the maximum image size and the debug
+switches, keep their defaults unless you set them in `config.json`. File-handling rules and other internal
 implementation constants are not exposed as configuration.
 
 ## Where settings live

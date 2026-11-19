@@ -46,7 +46,6 @@ import {
   DEBUG_MODE_SETTING,
   GLM_ENDPOINT_SETTING,
   GOAL_STRATEGY_SETTING,
-  GOOGLE_BACKGROUND_RESPONSES_SETTING,
   MAX_IMAGE_DIMENSION_SETTING,
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
@@ -194,8 +193,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
       models: Object.freeze([Object.freeze({ provider: 'google' })]),
     }),
   }),
-  // A transport knob, set in the global `config.json`.
-  [GOOGLE_BACKGROUND_RESPONSES_SETTING.key]: null,
   [OPENAI_FAST_TIER_SETTING.key]: providerToggle({ provider: 'openai' }),
   [MODEL_COMPACTION_THRESHOLD_SETTING.key]: Object.freeze({
     category: 'model',

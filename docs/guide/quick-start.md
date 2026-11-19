@@ -120,23 +120,23 @@ For advanced debugging, enable the `texra.debug.saveModelIO` setting in `.texra/
 
 ### Start the task and watch it
 
-Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The ProgressBoard opens in the TeXRA view and streams the run live. Read the [ProgressBoard guide](./progress-board.md) for help interpreting the logs.
+Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The Tasks view opens in the TeXRA view and streams the run live. Read the [Tasks view guide](./progress-board.md) for help interpreting the logs.
 
 <GuideIntroHero />
 
-<p class="hero-caption">The ProgressBoard streams the run live (delegated subagents and the tool calls) with the output files alongside.</p>
+<p class="hero-caption">The Tasks view streams the run live (delegated subagents and the tool calls) with the output files alongside.</p>
 
 ### Review results
 
 1. When the program's run completes, VS Code opens the final revision from the run folder (for `edit`, `r1/draft.tex`, keeping your input filename).
 2. Inspect the proposed edits; the scientific judgment stays yours. Compare the original and modified versions with either tool:
-   - **ProgressBoard Diff**: Under **Generated files**, select a file's <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** button to compare the original file against the generated run-storage output.
+   - **Tasks view diff**: Under **Generated files**, select a file's <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** button to compare the original file against the generated run-storage output.
 
      <CompareHero />
 
      <p class="hero-caption">VS Code's diff editor opens with the first revision (<code>r0/draft.tex</code>) on the left and your original on the right: improved text in green, removed text in red.</p>
 
-     You can accept reviewed outputs from the ProgressBoard after comparing the changes.
+     You can accept reviewed outputs from the Tasks view after comparing the changes.
 
    - **TeXRA's LaTeXdiff feature**: Use a file's latexdiff button, or **LaTeXDiffs…** in the panel's **⋯** menu, for a compiled, visual comparison. It creates a PDF with additions highlighted in blue and deletions in red.
 
@@ -199,7 +199,7 @@ you own.
 <p class="hero-caption">What a one-shot run looks like: revisions stream as progress, then the full path to the revised document prints on stdout.</p>
 
 Run history is shared with VS Code, so a run started in the CLI shows up in the
-extension's ProgressBoard (and vice versa). Read the [TeXRA CLI guide](./texra-cli.md) for
+extension's Tasks view (and vice versa). Read the [TeXRA CLI guide](./texra-cli.md) for
 sign-in, workspace defaults, and headless output formats.
 
 <style>

@@ -190,16 +190,6 @@ export const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING = {
     "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
 } as const satisfies SettingRow<boolean>;
 
-export const GOOGLE_BACKGROUND_RESPONSES_SETTING = {
-  key: 'model.useGoogleBackgroundResponses',
-  slot: 'config',
-  schema: booleanWithDefault(false),
-  configTarget: 'global',
-  title: 'Google background responses',
-  description:
-    'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-} as const satisfies SettingRow<boolean>;
-
 export const OPENAI_FAST_TIER_SETTING = {
   key: 'model.openaiFastTier',
   slot: 'config',
@@ -489,7 +479,7 @@ export const GLM_CODING_PLAN_SETTING = {
   schema: booleanWithDefault(false),
   title: 'GLM Coding Plan',
   description:
-    'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+    "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; TeXRA shows the plan's quota and reports its limits as plan limits. Ignored while a custom GLM endpoint is set.",
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -515,7 +505,6 @@ const HARNESS_SETTINGS = [
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,
   GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
-  GOOGLE_BACKGROUND_RESPONSES_SETTING,
   OPENAI_FAST_TIER_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,

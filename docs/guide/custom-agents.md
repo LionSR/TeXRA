@@ -103,7 +103,7 @@ prompt: |
   [Define the agent's role and how it should use its tools]
 ```
 
-The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs every tool call and its result, so you can always see what the agent is doing.
+The Tasks view (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs every tool call and its result, so you can always see what the agent is doing.
 
 ### <wa-icon library="texra" name="save"></wa-icon> Step 4: save and run
 
