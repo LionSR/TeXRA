@@ -119,7 +119,9 @@ const SORRY = "declaration uses 'sorry'";
  * `#print axioms <name>` command in the file does, one declaration at a
  * time). So it sees neither an axiom a macro expands to, nor one declared
  * in a file this one imports, nor a proof that leans on the compiler
- * (`native_decide`) rather than on a declared axiom.
+ * (`native_decide`) rather than on a declared axiom. An `axiom` inside a
+ * syntax quotation counts as one: a macro that writes axioms is as much a
+ * way around a proof as an axiom is, so the scan errs towards naming it.
  */
 function declaredAxioms(source: string): string[] {
   let code = '';
