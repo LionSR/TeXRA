@@ -6,7 +6,6 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   createRunStorageLocation,
-  hasExtension,
   isPathWithin,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
@@ -15,6 +14,7 @@ import {
   normalizeFilePath,
   fileLocationDisplayPath,
   type FileLocation,
+  hasExtension,
 } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,

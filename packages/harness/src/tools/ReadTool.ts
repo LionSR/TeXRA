@@ -16,7 +16,7 @@ import {
 import { formatFileView, LineRangeSchema } from '@tools/formatting';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import { splitContentLines } from '@utils/text/stringUtils';
-import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
+import { hasExtension, getExtensionLowercase } from '@utils/core/pathBasics';
 import {
   getMimeType,
   isImageMimeType,

@@ -71,22 +71,3 @@ export function isStrictlyWithin(base: string, target: string): boolean {
     !path.isAbsolute(relativePath)
   );
 }
-
-/** Get the file extension in lowercase (e.g. `'.tex'` for `'Paper.TEX'`). */
-export function getExtensionLowercase(filePath: string): string {
-  if (!filePath) return '';
-  return path.extname(filePath).toLowerCase();
-}
-
-/**
- * Check if a file path has a specific extension (case-insensitive).
- * Consolidates scattered `.toLowerCase().endsWith('.ext')` patterns.
- *
- * @example
- * hasExtension('notes.md', '.md') // true
- * hasExtension('Notes.MD', '.md') // true
- * hasExtension('notes.pdf', '.md') // false
- */
-export function hasExtension(filePath: string, extension: string): boolean {
-  return getExtensionLowercase(filePath) === extension.toLowerCase();
-}
