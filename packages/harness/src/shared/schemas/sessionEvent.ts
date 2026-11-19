@@ -372,13 +372,13 @@ export type SessionRow = typeof SessionRowSchema.Type;
  */
 export type SessionRowDraft = typeof SessionRowDraftSchema.Type;
 
-/** Aggregate identities introduced by a fact and its declared lifecycle edges. */
+/** Aggregate identities introduced by a fact and its declared lifecycle
+ *  edges ({@link edgesOf}): its own and the parent it names. */
 export function referencedAggregates(event: SessionRow): AggregateId[] {
+  const { parent, reparent = null } = edgesOf(event);
   const ids = [event.aggregateId];
-  if (event.type === 'run.start' && event.parent !== null)
-    ids.push(event.parent.id);
-  if (event.type === 'plugin.fact' && event.parent !== null)
-    ids.push(event.parent);
+  if (parent !== null) ids.push(parent);
+  if (reparent !== null) ids.push(reparent);
   return ids;
 }
 
@@ -387,7 +387,7 @@ export function referencedAggregates(event: SessionRow): AggregateId[] {
  * transaction that appends it: the parent a `run.start` stamps, the
  * aggregate a row hangs its target under (a plugin's aggregate under its
  * `parent` run, or none), and the closure a deletion marker makes.
- * {@link referencedAggregates} reads the same edges off committed rows.
+ * {@link referencedAggregates} reads them off committed rows too.
  * Every kind has a case, so a new kind does not compile until its edges are
  * decided here.
  */

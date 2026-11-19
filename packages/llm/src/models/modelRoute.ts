@@ -21,7 +21,7 @@
  * platform as the region setting defaults. A GLM Coding Plan key takes its
  * region's Responses endpoint, the same one an API key does.
  *
- * Kimi Code has two eligibility shapes:
+ * Kimi Code has two eligibility shapes ({@link kimiCodeServing}):
  *  - **exclusive** models (`kimi-for-coding`, `kimi-for-coding-highspeed`)
  *    are served ONLY by the coding endpoint (llm-zoo pins their `baseUrl` to
  *    it), so they take the `kimiCode` key whatever the toggles say;
@@ -173,35 +173,29 @@ export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {
 }
 
 /**
- * Whether the Kimi Code coding endpoint serves `model`: the llm-zoo
- * `kimiSubscription` flag on a Moonshot model. Serving status is a fact about
- * the Kimi Code backend, not derivable from other model fields.
+ * How the Kimi Code coding endpoint serves `model`: `only` it (llm-zoo pins
+ * the model's `baseUrl` there, so no open-platform route exists),
+ * `with-plan` beside the Moonshot open platform (the coding endpoint takes it
+ * only with the plan on), or `undefined` when it does not serve it. Serving
+ * status is the llm-zoo `kimiSubscription` flag on a Moonshot model: a fact
+ * about the Kimi Code backend, not derivable from other model fields.
  */
-export function isKimiSubscriptionEligible(
-  model: Pick<ModelConfig, 'provider' | 'kimiSubscription'>,
-): boolean {
-  return (
-    model.provider === ModelProvider.MOONSHOT && model.kimiSubscription === true
-  );
-}
-
-/**
- * Whether the coding endpoint ALONE serves `model`: llm-zoo pins its `baseUrl`
- * there, so no open-platform route exists.
- */
-export function isKimiCodeExclusiveModel(
+export function kimiCodeServing(
   model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): boolean {
-  return (
-    isKimiSubscriptionEligible(model) && model.baseUrl === KIMI_CODE_BASE_URL
-  );
+): 'only' | 'with-plan' | undefined {
+  if (
+    model.provider !== ModelProvider.MOONSHOT ||
+    model.kimiSubscription !== true
+  )
+    return undefined;
+  return model.baseUrl === KIMI_CODE_BASE_URL ? 'only' : 'with-plan';
 }
 
 /** Product-facing model source; direct managed services own their own group. */
 export function resolveModelSource(
   config: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): string {
-  return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
+  return kimiCodeServing(config) === 'only' ? 'kimiCode' : config.provider;
 }
 
 /**
@@ -277,17 +271,19 @@ const PLAN_DECISIONS = Object.freeze({
         }
       : undefined,
   // An exclusive model takes the plan whatever the toggles say.
-  'kimi-code-subscription': (config, facts) =>
-    isKimiCodeExclusiveModel(config) ||
-    (isKimiSubscriptionEligible(config) &&
-      facts.plans.includes('kimi-code-subscription'))
+  'kimi-code-subscription': (config, facts) => {
+    const serving = kimiCodeServing(config);
+    return serving === 'only' ||
+      (serving === 'with-plan' &&
+        facts.plans.includes('kimi-code-subscription'))
       ? {
           kind: 'api-key',
           endpoint: config.baseUrl ?? KIMI_CODE_BASE_URL,
           provider: PLAN_ROUTES['kimi-code-subscription'].provider,
           plan: 'kimi-code-subscription',
         }
-      : undefined,
+      : undefined;
+  },
   // A per-model base URL outranks the plan's path; the plan's key takes the
   // endpoint an API key does.
   'glm-coding-plan-subscription': (config, facts) => {
@@ -379,7 +375,7 @@ export function routeConfig(
       };
     }
     case 'kimi-code-subscription': {
-      if (isKimiCodeExclusiveModel(config))
+      if (kimiCodeServing(config) === 'only')
         return { ...config, ...zeroCostAccessOverrides(config.contextWindow) };
       const wireId = KIMI_CODE_WIRE_MODEL_IDS[config.id] ?? config.id;
       return {
