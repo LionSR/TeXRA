@@ -14,7 +14,7 @@ import { Duration, Effect, Schema } from 'effect';
 import { HttpBody, HttpClient, HttpClientRequest } from 'effect/http';
 
 // Local imports
-import { toErrorMessage } from '../errors.js';
+import { isAuthFailureStatus, toErrorMessage } from '../errors.js';
 import {
   SubscriptionOAuthErrorKindSchema,
   type SubscriptionOAuthErrorKind,
@@ -51,13 +51,12 @@ export type OAuthRequestError =
   | OAuthHttpError
   | OAuthUnexpectedResponse;
 
-/** 4xx grant rejections are the session's end; everything else may pass. */
+/** A grant rejection (a 400, or a rejected credential) is the session's
+ *  end; everything else may pass. */
 export function oauthTokenErrorKind(
   status: number,
 ): SubscriptionOAuthErrorKind {
-  return status === 400 || status === 401 || status === 403
-    ? 'fatal'
-    : 'transient';
+  return status === 400 || isAuthFailureStatus(status) ? 'fatal' : 'transient';
 }
 
 /** A fully read response: status and the body text. */

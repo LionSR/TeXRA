@@ -1,6 +1,6 @@
 /**
- * The persistence substrate: the connection, its transactions, the run
- * history's one write path, the aggregate lifecycle, deletion and
+ * The persistence substrate: the run history's one write path (on the
+ * connection `storeConnection.ts` builds), the aggregate lifecycle, deletion and
  * collection, and the reads. One database per session root
  * (`SessionWorkspace`), never a process singleton; a project store is held
  * exclusively by the one process that opened it (`locking_mode =
@@ -25,7 +25,6 @@ import {
   type FileSystem,
   Layer,
   Option,
-  Scheduler,
   Schema,
   Stream,
   SubscriptionRef,
@@ -54,8 +53,6 @@ import {
   Database,
   DatabaseOpenFailed,
   DatabaseAggregateClosed,
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
   RunChanged,
 } from '@shared/session/database';
 import { ToolRegistry } from '@tools/toolTable';
@@ -70,7 +67,6 @@ import {
   encodeDraft,
   pluginKind,
   prepareEventDraft,
-  storeGate,
   UPSERT_KINDS,
   type EncodedRow,
   type SqlRow,
@@ -85,6 +81,7 @@ import {
   rowReader,
 } from './rowReader';
 import { isBusy, isDamaged, mapDatabaseFailure } from './storeAside';
+import { storeConnection } from './storeConnection';
 import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a storage root, beside the stores it replaces. */
 export const SESSION_DATABASE_FILE = 'texra.db';
@@ -249,22 +246,19 @@ export const databaseLayer = (
         row === undefined
           ? 0
           : Schema.decodeUnknownSync(EventSeqSchema)(row.seq);
-      const writeFailed = (cause: unknown): DatabaseWriteFailed =>
-        new DatabaseWriteFailed({ path, cause });
-      const readFailed = (cause: unknown): DatabaseReadFailed =>
-        new DatabaseReadFailed({ path, cause });
-      const query = <A, E>(
-        read: Effect.Effect<A, E>,
-      ): Effect.Effect<A, DatabaseReadFailed> =>
-        read.pipe(mapDatabaseFailure(readFailed));
-      /** One statement's rows, untyped until the caller parses them. */
-      const exec = (statement: string, params?: readonly unknown[]) =>
-        sql.unsafe<Record<string, unknown>>(statement, params);
-      /** The first row a statement returns, if any. */
-      const execOne = (statement: string, params?: readonly unknown[]) =>
-        exec(statement, params).pipe(Effect.map((rows) => rows.at(0)));
       const { factKinds } = yield* ToolRegistry;
-      const reader = rowReader(path, factKinds, exec);
+      const store = storeConnection(sql, path, { shared: false, factKinds });
+      const {
+        exec,
+        execOne,
+        own,
+        transaction,
+        transact,
+        query,
+        snapshot,
+        writeFailed,
+      } = store;
+      const reader = rowReader(store, factKinds);
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
@@ -278,7 +272,7 @@ export const databaseLayer = (
       );
       // The store gate, run once: this process is the store's one writer,
       // so what the store holds cannot change under it.
-      yield* storeGate(exec, factKinds).pipe(mapDatabaseFailure(openFailed));
+      yield* store.gate.pipe(mapDatabaseFailure(openFailed));
       // An aggregate and its open descendants. A descendant an earlier
       // deletion closed belongs to that deletion's marker alone, which
       // names its files and collects it.
@@ -330,39 +324,6 @@ export const databaseLayer = (
           WHERE e.aggregate IN (${AGGREGATE_LIST})
             AND e.type NOT IN (SELECT value FROM json_each(?))`,
       );
-      // Every body is database-only. It runs in the client's own transaction,
-      // which on this writable connection begins `BEGIN IMMEDIATE` (holding
-      // the write lock from its first statement), skips a ROLLBACK SQLite
-      // already made and gives a failed COMMIT back typed; inside a caller's
-      // transaction it is a savepoint. It never meets a busy lock: this
-      // connection holds the store's lock, or the store is in memory.
-      //
-      // The driver is synchronous and a body awaits nothing, so the only way
-      // another fiber could run between BEGIN and COMMIT is the scheduler
-      // taking the fiber off after its step budget. With that off, a
-      // transaction is one uninterrupted turn: transactions on this
-      // connection run in the order they are called, and none waits for
-      // another.
-      const own = <A, E>(body: Effect.Effect<A, E>) =>
-        Effect.provideService(
-          sql.withTransaction(body),
-          Scheduler.PreventSchedulerYield,
-          true,
-        );
-      const transaction = <A, E, EBody>(
-        body: Effect.Effect<A, EBody>,
-        failed: (cause: unknown) => E,
-      ) => own(body).pipe(mapDatabaseFailure(failed));
-      /** A write transaction. A closed-aggregate rejection the body raised
-       *  leaves as itself, as it does from `job`; any other failure is the
-       *  write's. */
-      const transact = <A, E>(body: Effect.Effect<A, E>) =>
-        transaction(body, (cause) =>
-          cause instanceof DatabaseAggregateClosed
-            ? // cast: only a body raises it, so it is one of its errors.
-              (cause as Extract<E, DatabaseAggregateClosed>)
-            : writeFailed(cause),
-        );
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND closed_by IS NULL`;
       // A closed aggregate's sequence row, collected with its dependents
@@ -388,10 +349,7 @@ export const databaseLayer = (
         if (held === undefined) return yield* invariant(`${absent}: ${id}`);
         return yield* new DatabaseAggregateClosed({ aggregateId: id });
       });
-      const upkeep = projectionUpkeep(exec, reader.read, path);
-      /** A read of several statements, as one snapshot. */
-      const snapshot = <A, E>(read: Effect.Effect<A, E>) =>
-        transaction(read, readFailed);
+      const upkeep = projectionUpkeep(store, reader.read);
       const appendRows = Effect.fn('appendRows')(function* (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
@@ -580,14 +538,7 @@ export const databaseLayer = (
               },
             ),
           ),
-        values: currentValues({
-          exec,
-          execOne,
-          transact,
-          query,
-          afterCommit: sql.afterCommit,
-          written: valuesWritten,
-        }),
+        values: currentValues(store, valuesWritten),
         readAggregate: (id, fromSeq, types, toSeq = Number.MAX_SAFE_INTEGER) =>
           query(
             decodedRows(

@@ -36,6 +36,17 @@ export function requestDeclineLabel(kind: RequestPayload['kind']): string {
   return DECLINE_LABEL[REQUEST_ACTIONS[kind].n];
 }
 
+/** The noun each request kind goes by where a row names what waits on the
+ *  user: the terminal's child list and the script-stage call lines. */
+export const REQUEST_NOUN = Object.freeze({
+  bash: 'bash',
+  toolEdit: 'edit',
+  planApproval: 'plan',
+  proposal: 'proposal',
+  retry: 'retry',
+  userQuestion: 'question',
+} as const satisfies Record<RequestPayload['kind'], string>);
+
 /** The label of the directory a command or a proposed agent runs in. */
 export const WORKING_DIRECTORY_LABEL = 'Working directory';
 
