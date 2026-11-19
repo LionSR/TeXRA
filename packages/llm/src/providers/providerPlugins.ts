@@ -47,10 +47,10 @@ export interface RegionalBaseUrl {
  * Plan keys alike (BigModel and Z.AI Codex guides), and a Coding Plan's quota
  * endpoint is on the same host (`planUsage.ts`).
  */
-export const GLM_BASE_URLS = {
+export const GLM_BASE_URLS = Object.freeze({
   china: 'https://open.bigmodel.cn/api/v1',
   international: 'https://api.z.ai/api/v1',
-} as const satisfies RegionalBaseUrl;
+} as const satisfies RegionalBaseUrl);
 
 /**
  * One model provider plugin, by what TeXRA does with it:

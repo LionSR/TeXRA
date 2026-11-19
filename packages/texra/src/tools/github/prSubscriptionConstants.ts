@@ -10,4 +10,4 @@ export const COALESCE_THRESHOLD = 3;
 /** How many targets of each kind one process polls at once. */
 export const MAX_SUBSCRIPTIONS: Readonly<
   Record<SubscriptionTarget['_tag'], number>
-> = { pull: 25, issue: 10, repo: 3 };
+> = Object.freeze({ pull: 25, issue: 10, repo: 3 });
