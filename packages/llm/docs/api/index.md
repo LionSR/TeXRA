@@ -448,9 +448,12 @@ function isApiProvider(provider: string): provider is ApiKeyProviderId
 
 ## isAuthFailureStatus
 
-Whether an HTTP status rejects the credential the request carried: 401 or
-403. The one reading of that status fact, for a model provider, an OAuth
-token endpoint and any other HTTP API a TeXRA package calls.
+Whether an HTTP status is 401 or 403, the statuses an API answers a
+credential it refuses with. The one reading of that status test, for a
+model provider, an OAuth token endpoint and any other HTTP API a TeXRA
+package calls. A caller whose API gives a 403 another meaning refines it
+first: GitHub answers a valid token over its rate limit with a 403 and
+rate-limit headers.
 
 ```ts
 const isAuthFailureStatus: (status: number | undefined) => boolean
