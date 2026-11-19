@@ -9,8 +9,9 @@ import { choose } from './desktopDialogs.js';
 /** What the dialogs name: the provider and its browser session's account. */
 type SignInNames = Pick<SubscriptionProvider, 'displayName' | 'sessionName'>;
 
-/** A synchronous clipboard throw is a typed failure, so it reaches the
- *  presenter's `onError` and the failure dialog instead of skipping both. */
+/** A synchronous clipboard throw is a typed failure. Copying the sign-in
+ *  link lets it reach the presenter's `onError` and the failure dialog; the
+ *  device-code dialog logs it and still shows the code. */
 const copyToClipboard = (text: string) =>
   Effect.try({
     try: () => clipboard.writeText(text),
