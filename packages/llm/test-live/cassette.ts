@@ -23,6 +23,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { NodeHttpServer, NodeSocket } from '@effect/platform-node';
@@ -70,7 +71,7 @@ const RESPONSE_HEADERS = [
 
 /** Where the cassette of one route's case lives. */
 export const cassettePath = (route: string, caseId: string): string =>
-  new URL(`cassettes/${route}/${caseId}.json`, import.meta.url).pathname;
+  fileURLToPath(new URL(`cassettes/${route}/${caseId}.json`, import.meta.url));
 
 const refuseSecrets = (text: string, path: string): void => {
   if (LEAKED_SECRET.test(text))
