@@ -214,7 +214,7 @@ const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
   return {
     response: responseParts.join('\n\n'),
     usage,
-    attributes: [{ name: 'session-id', value: sessionId || null }],
+    attributes: sessionId ? [{ name: 'session-id', value: sessionId }] : [],
     ...(typeof totalCostUsd === 'number' &&
       totalCostUsd > 0 && {
         lines: [`<cost-usd>${totalCostUsd.toFixed(4)}</cost-usd>`],

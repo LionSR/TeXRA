@@ -144,9 +144,9 @@ by hand is a smaller surface than a second release script.
 3. Update D11's parenthetical in the rulings ledger to say the pair publishes
    from an `sdk-v` release the owner cuts.
 
-None of the three is finished as of 2026-11-17: `npm view` still answers 404
-for both names, both manifests are still `0.1.0`, and the ledger still says
-"publishing is the owner's manual step".
+Steps 1 and 2 are not finished as of 2026-11-17: `npm view` still answers
+404 for both names and both manifests are still `0.1.0`. Step 3 is done
+(2026-11-19): D11 now says the pair publishes from an `sdk-v` release.
 
 ## Risks
 
@@ -165,8 +165,8 @@ for both names, both manifests are still `0.1.0`, and the ledger still says
 
 1. Accept the change to D11 (CI uploads; the owner still decides by cutting
    the release)? Answered in effect: the `publish-sdk` job is on `main` and
-   root `AGENTS.md` states the `sdk-v` release. Only the ledger's wording
-   (setup step 3) is left.
+   root `AGENTS.md` states the `sdk-v` release, and the ledger's wording
+   (setup step 3) says so since 2026-11-19.
 2. Accept one version for both packages? Answered in effect: the script on
    `main` refuses two versions, and the skill says "One version for both".
 3. Should the SDK get its own changelog section (or file) for the `sdk-v`

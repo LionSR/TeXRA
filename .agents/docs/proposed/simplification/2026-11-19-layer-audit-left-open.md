@@ -65,15 +65,12 @@ defaults, so llm cannot tell a dashboard URL from a default. The fix is a
 ## 4. A user row does not say who sent it
 
 `logFollowUps` (`packages/harness/src/agent/runtime/FollowUps.ts`) has the
-input's `from` but logs only the text. As a result:
+input's `from` but logs only the text. As a result the web labels every
+user row "You", including a child's delivery and a host notice
+(`UserMessage.ts`). (The terminal's guess at an inquiry continuation from
+its wording went with the external inquiry on 2026-11-19.)
 
-- The terminal guesses an inquiry continuation from its wording
-  (`INQUIRY_CONTINUATION_RE`, `packages/cli/src/chat/tui/panes/transcriptEntries.ts`).
-- The web labels every user row "You", including a child's delivery and a
-  host notice (`UserMessage.ts`).
-
-The fix is a sender on `UserRow`, so both renderers branch on it and the
-regex goes. It changes a stored payload, so it needs a row-version decision.
+The fix is a sender on `UserRow`, so the renderers branch on it. It changes a stored payload, so it needs a row-version decision.
 
 ## 5. Request nouns and the "waiting on you" source differ per renderer
 
@@ -92,15 +89,19 @@ These need a decision on which wording wins:
   `desktopSignInPresenters.ts` and `subscriptionLogin.ts` / `signInUrl.ts`
   (CLI) each word the device-code steps and the open-elsewhere hint. The
   extension names the provider's session; the others don't.
-- **What usage logging sends.** `doctor.ts` (CLI), `telemetryNotice.ts`, the
-  setting's description and `PrivacyTab.ts` disagree on whether host, version
-  and error text are covered. The doctor also hard-codes the opt-out variables
-  that `TELEMETRY_OPT_OUT_ENV_VARS` holds.
 - **Queued follow-ups.** The count reads "N unread messages" (web tab),
   "Queued messages (N)" (composer), `queued N` in the warning colour
   (terminal bar) and "queued messages: N" (`/status`).
 - **Why an ended run takes no message.** The web words it in
   `BaseRunContent.ts`; the terminal hides the input and says nothing.
+
+Landed since: **what usage logging sends** is one sentence,
+`USAGE_LOGGING_SENDS` in `packages/texra/src/shared/settings/texraSettings.ts`,
+built from a wording table that is total over the fields of the usage record
+(`UsageLogEntrySchema`). The setting, the first-run notice and
+`texra doctor` show it, and the last two take the opt-out variables from
+`TELEMETRY_OPT_OUT_ENV_VARS`. The Privacy section's heading no longer words
+it a second time above the setting's row.
 
 ## 7. Two launcher requests only the extension answers
 
@@ -131,6 +132,7 @@ examples can be neutral, which changes the tool descriptions a run records.
   (`toolDigests`). Lowering it in llm would make the recorded schema differ
   from what the model saw.
 - **App settings rows that repeat provider console URLs**
-  (`settingSurfaces.ts` against `KEY_PAGES`), and the coding-plan catalog's
-  `apiProvider` against `PLAN_ROUTES`. Both are small. They belong with
-  open question 1 of the 2026-11-18 model-access note.
+  (`settingSurfaces.ts` against `KEY_PAGES`): landed 2026-11-19, the
+  toggles read `KEY_PAGES` from `packages/texra/src/shared/model/keyPages.ts`.
+  The coding-plan catalog's `apiProvider` against `PLAN_ROUTES` is small and
+  belongs with open question 1 of the 2026-11-18 model-access note.

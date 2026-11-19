@@ -4,38 +4,13 @@
 // (`ELECTRON_RUN_AS_NODE=1`); the CLI starts its full entry with `serve`.
 import { Effect } from 'effect';
 
-import { setLogSink } from '@texra-ai/harness/node';
-
 import { runCommandForExitCode } from '../commands/_helpers/exitCode';
 import { serveCommand } from '../commands/service';
 import { readCliArgv } from '../runtime/platform/cliContext';
-import { CliExitCode } from '../runtime/platform/exitCodes';
-import {
-  CliEntryCrashed,
-  cliErrorMessage,
-  installCliPipeErrorHandlers,
-  stderrDiagnosticSink,
-  writeTextStderr,
-} from '../runtime/platform/logSinks';
-
-setLogSink(stderrDiagnosticSink('Warn'), { trusted: true });
+import { runCliEntry } from '../runtime/platform/logSinks';
 
 await Effect.runPromise(
-  Effect.tryPromise({
-    try: async () => {
-      installCliPipeErrorHandlers();
-      process.exitCode = await runCommandForExitCode(
-        serveCommand,
-        readCliArgv(),
-      );
-    },
-    catch: (cause) => new CliEntryCrashed({ cause }),
-  }).pipe(
-    Effect.catch(({ cause: error }) =>
-      Effect.sync(() => {
-        writeTextStderr(`TeXRA service failed: ${cliErrorMessage(error)}`);
-        process.exitCode = CliExitCode.AgentError;
-      }),
-    ),
+  runCliEntry('TeXRA service', () =>
+    runCommandForExitCode(serveCommand, readCliArgv()),
   ),
 );

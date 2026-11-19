@@ -5,7 +5,11 @@ import * as path from 'node:path';
 import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
-import { WorkspaceFs, Settings } from '@texra-ai/harness/plugins';
+import {
+  WorkspaceFs,
+  Settings,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -15,7 +19,6 @@ import {
 import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
@@ -180,13 +183,13 @@ export function perInputBuildDirectory(texPath: string): string {
  * The compiler runs in the session's workspace root and, when
  * `texra.latex.includeWorkspaceInTexinputs` is on, searches it: the root is
  * the {@link WorkspaceFs} in context, and the two LaTeX settings come from
- * `roots`, that same session's setting slots held as data, so a compile
+ * `stores`, that same session's setting slots held as data, so a compile
  * never reads whichever roots the calling fiber happens to carry. The build
  * directory and the engine log are absolute paths (run storage, a build
  * folder, an external file) and go through the process `FileSystem`.
  *
  * @param latexLocation FileLocation for the LaTeX file
- * @param roots The session's setting slots
+ * @param stores The session's setting slots
  * @param options Compilation options; its lines take the caller's log channel
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
  * absolute path of a non-empty PDF where the engine writes (an earlier
@@ -197,7 +200,7 @@ export function perInputBuildDirectory(texPath: string): string {
  */
 export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   latexLocation: FileLocation,
-  roots: WorkspaceRoots,
+  stores: SettingsStores,
   options: LaTeXCompileOptions = {},
 ): Effect.fn.Return<
   CompileLatex2PdfResult,
@@ -235,11 +238,11 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     const documentDir = path.dirname(latexFile);
 
     const tikzInputDirectory = yield* Settings.get(
-      roots,
+      stores,
       TIKZ_INPUT_DIRECTORY_SETTING,
     );
     const includeWorkspace = yield* Settings.get(
-      roots,
+      stores,
       INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
     );
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({

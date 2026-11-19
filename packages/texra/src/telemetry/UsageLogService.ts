@@ -113,6 +113,12 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
   'DO_NOT_TRACK',
 ] as const;
 
+/** The opt-out variables as a person sets them, for the surfaces that say
+ *  how to turn usage logging off. */
+export const USAGE_LOGGING_ENV_OPT_OUT = TELEMETRY_OPT_OUT_ENV_VARS.map(
+  (name) => `${name}=1`,
+).join(' or ');
+
 /** The variable that opts usage logging out, in the process's environment
  *  or in the recording run's (its project's `.env` over the process's):
  *  either one opting out suffices, so a project can never turn it back on.

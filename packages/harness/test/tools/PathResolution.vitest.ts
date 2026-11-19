@@ -79,8 +79,6 @@ layer(FakeHost.layer({ workspaceRoot }), { buildPerTest: true })(
         }),
     );
 
-    // Last in the file on purpose: the registry has no unregister, so the
-    // registration lives until the module registry is torn down with the file.
     it.effect(
       'keeps a read-only external root that sits inside the workspace non-writable',
       () =>
@@ -93,11 +91,12 @@ layer(FakeHost.layer({ workspaceRoot }), { buildPerTest: true })(
             'resources',
             'agents',
           );
-          registerExternalRoot(packagedAgents, {
+          const unregister = registerExternalRoot(packagedAgents, {
             kind: 'builtIn',
             writable: false,
             label: 'Packaged agents',
           });
+          yield* Effect.addFinalizer(() => Effect.sync(unregister));
 
           const targetPath = 'packages/extension/resources/agents/proof.yaml';
           const resolved = yield* resolveToolPath({ roots }, targetPath);

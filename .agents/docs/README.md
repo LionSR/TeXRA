@@ -20,7 +20,7 @@ directory named after the note, at the same level.
 
 A note that is rejected, superseded or fully settled is deleted, not filed:
 version-control history keeps it, and a ruling worth keeping as a constraint
-goes in the rulings ledger or `config/ratchets/refuted-candidates.json`.
+goes in the rulings ledger or [`refuted-candidates.json`](./refuted-candidates.json).
 
 ## Classes
 

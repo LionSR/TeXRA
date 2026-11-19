@@ -12,54 +12,64 @@ import {
   KIMI_CODE_PREFER_SETTING,
   type SettingRow,
 } from '@texra-ai/harness/schemas';
-import type { KeyPlanRoute } from '@texra-ai/llm';
+import { type KeyPlanRoute, PLAN_ROUTES } from '@texra-ai/llm';
 import type { SubscriptionUsageProvider } from './subscriptionUsage';
 
-/** One coding plan's identity and presentation, keyed by its usage route.
- *  The key that pays for it is `apiProvider`'s, so that provider's name and
- *  key page (`providerDisplayName`, `providerKeyUrl`) are the credential's. */
-interface CodingPlanSubscriptionDescriptor {
+/** One coding plan's identity and presentation, as the catalog writes it.
+ *  Its route is its key, and the key that pays for it is that route's
+ *  provider (`PLAN_ROUTES`), so that provider's name and key page
+ *  (`providerDisplayName`, `providerKeyUrl`) are the credential's. */
+interface CodingPlanRow {
   /** Also the key its usage is reported and cached under. */
   readonly id: SubscriptionUsageProvider;
-  readonly apiProvider: 'glm' | 'kimiCode';
   readonly exclusiveCredential: boolean;
-  readonly usageRoute: KeyPlanRoute;
   readonly displayName: string;
   /** The switch that routes the provider's models through the plan. */
   readonly preference: SettingRow<boolean>;
   readonly modelFamily: string;
 }
 
-/** Canonical catalog of coding-plan providers supported by every host. */
-export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
-  Object.freeze({
+/** A catalog row with the two facts the route already holds: the route
+ *  itself and the provider whose key pays for it. */
+function codingPlan<R extends KeyPlanRoute, const T extends CodingPlanRow>(
+  usageRoute: R,
+  row: T,
+) {
+  return Object.freeze({
+    ...row,
+    usageRoute,
+    apiProvider: PLAN_ROUTES[usageRoute].provider,
+  });
+}
+
+/** Every coding plan, keyed by the route that bills through it: a key plan
+ *  added to llm without a row here does not compile. */
+const CODING_PLANS = Object.freeze({
+  'kimi-code-subscription': codingPlan('kimi-code-subscription', {
     id: 'kimiCode',
-    apiProvider: 'kimiCode',
     exclusiveCredential: true,
-    usageRoute: 'kimi-code-subscription',
     displayName: 'Kimi Code',
     preference: KIMI_CODE_PREFER_SETTING,
     modelFamily: 'Kimi models',
   }),
-  Object.freeze({
+  'glm-coding-plan-subscription': codingPlan('glm-coding-plan-subscription', {
     id: 'glmCodingPlan',
-    apiProvider: 'glm',
     exclusiveCredential: false,
-    usageRoute: 'glm-coding-plan-subscription',
     displayName: 'GLM Coding Plan',
     preference: GLM_CODING_PLAN_SETTING,
     modelFamily: 'GLM models',
   }),
-] as const satisfies readonly CodingPlanSubscriptionDescriptor[]);
+} satisfies { readonly [R in KeyPlanRoute]: { readonly usageRoute: R } });
+
+/** Canonical catalog of coding-plan providers supported by every host. */
+export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze(
+  Object.values(CODING_PLANS),
+);
 
 /** One coding plan of the catalog. */
 export type CodingPlanSubscription = (typeof CODING_PLAN_SUBSCRIPTIONS)[number];
 /** The id of a coding plan. */
 export type CodingPlanSubscriptionId = CodingPlanSubscription['id'];
-
-const CODING_PLAN_BY_USAGE_ROUTE = new Map<string, CodingPlanSubscription>(
-  CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.usageRoute, plan]),
-);
 
 /** The coding plan whose credential an API provider owns, by provider. */
 export const CODING_PLAN_BY_API_PROVIDER: ReadonlyMap<
@@ -67,18 +77,15 @@ export const CODING_PLAN_BY_API_PROVIDER: ReadonlyMap<
   CodingPlanSubscription
 > = new Map(CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.apiProvider, plan]));
 
-/** Resolve a coding plan from the route stamped on completed usage. A
- *  plan's own route always resolves: the lookup is built from the catalog. */
-export function codingPlanForUsageRoute(
-  route: CodingPlanSubscription['usageRoute'],
-): CodingPlanSubscription;
+/** Resolve a coding plan from the route stamped on completed usage. */
+export function codingPlanForUsageRoute<R extends KeyPlanRoute>(
+  route: R,
+): (typeof CODING_PLANS)[R];
 export function codingPlanForUsageRoute(
   route: string | undefined,
 ): CodingPlanSubscription | undefined;
 export function codingPlanForUsageRoute(
   route: string | undefined,
 ): CodingPlanSubscription | undefined {
-  return route === undefined
-    ? undefined
-    : CODING_PLAN_BY_USAGE_ROUTE.get(route);
+  return CODING_PLAN_SUBSCRIPTIONS.find((plan) => plan.usageRoute === route);
 }
