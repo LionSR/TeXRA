@@ -391,20 +391,13 @@ const SCENARIOS = [
       HARNESS_QUEUED_DELIVERIES: JSON.stringify({
         family: 'subagent',
         runId: 'child-q',
-        attributes: [
-          { name: 'agent', value: 'review' },
-          { name: 'retryable', value: 'true' },
-        ],
+        attributes: [{ name: 'agent', value: 'review' }],
         message: 'rate limit',
       }),
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
-    expect: [
-      'Queued message (1)',
-      '1. ✗ review failed (retryable)',
-      'queued 1',
-    ],
+    expect: ['Queued message (1)', '1. ✗ review failed', 'queued 1'],
     unexpect: ['<subagent-error'],
   },
   {
@@ -435,9 +428,9 @@ const SCENARIOS = [
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
     expect: [
-      '✓ leanSolver completed · 2min, 3sec',
+      '✓ leanSolver completed · 123.0s',
       'Proved </response> is escaped & visible.',
-      '✗ reviewer failed (retryable)',
+      '✗ reviewer failed',
       'rate limit: <tokens> & retries exhausted',
     ],
     unexpect: ['<subagent-result', '<subagent-error'],

@@ -3,7 +3,7 @@
  * format on their own endpoints (DeepSeek, Kimi, GLM, DashScope, MiniMax),
  * OpenAI and xAI on theirs, and the ChatGPT subscription's Codex backend.
  */
-import { Number as Num } from 'effect';
+import { absurd, Number as Num } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 
 import { codexBackendModelId } from '../models/modelRoute.js';
@@ -82,34 +82,44 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
     config.reasoning === undefined
       ? null
       : { effort, mode: options.reasoning.mode, summary: 'auto' as const };
-  if (route.plan === 'chatgpt-subscription') {
-    // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
-    // rules. A request is stateless and streamed (`store: false`, no
-    // `previous_response_id`), takes no temperature or output limit, has no
-    // background mode and no WebSocket (OpenAI documents its requests as HTTP
-    // streams), and takes function tools only inside a namespace; the plan's
-    // token reaches no Files API either.
-    return {
-      ...base,
-      requestedModel: codexBackendModelId(config),
-      protocol: 'openai-responses',
-      background: false,
-      // The plan's backend takes no input files.
-      supportsDocumentInput: false,
-      allowedReasoningEfforts: facts.acceptedEfforts,
-      continuationInheritsInstructions: false,
-      // OpenAI documents no `tool_choice` for a namespaced function.
-      supportsForcedToolChoice: false,
-      requestDialect: 'chatgpt',
-      toolNamespace: spec.client.id,
-      defaults: {
-        maxOutputTokens: null,
-        temperature: null,
-        store: false,
-        reasoning,
-        serviceTier: null,
-      },
-    };
+  switch (route.plan) {
+    case 'chatgpt-subscription': {
+      // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
+      // rules. A request is stateless and streamed (`store: false`, no
+      // `previous_response_id`), takes no temperature or output limit, has no
+      // background mode and no WebSocket (OpenAI documents its requests as HTTP
+      // streams), and takes function tools only inside a namespace; the plan's
+      // token reaches no Files API either.
+      return {
+        ...base,
+        requestedModel: codexBackendModelId(config),
+        protocol: 'openai-responses',
+        background: false,
+        // The plan's backend takes no input files.
+        supportsDocumentInput: false,
+        allowedReasoningEfforts: facts.acceptedEfforts,
+        continuationInheritsInstructions: false,
+        // OpenAI documents no `tool_choice` for a namespaced function.
+        supportsForcedToolChoice: false,
+        requestDialect: 'chatgpt',
+        toolNamespace: spec.client.id,
+        defaults: {
+          maxOutputTokens: null,
+          temperature: null,
+          store: false,
+          reasoning,
+          serviceTier: null,
+        },
+      };
+    }
+    // The other plans bill the provider's own API, whose request this is.
+    case 'xai-subscription':
+    case 'kimi-code-subscription':
+    case 'glm-coding-plan-subscription':
+    case null:
+      break;
+    default:
+      return absurd(route);
   }
   // xAI stores and chains too, but has no background mode or summary
   // control; a chained request reuses the stored instructions.

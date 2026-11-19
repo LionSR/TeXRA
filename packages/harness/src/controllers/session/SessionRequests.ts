@@ -5,7 +5,7 @@
 import { Context, Effect, FileSystem, Path } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { submitFollowUp, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import {
   narrows,
@@ -15,7 +15,6 @@ import {
 } from '@agent/runtime/runApprovalQueue';
 import { forkRun } from '@agent/runtime/forkRun';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
-import { decideRequest } from '@agent/runtime/requests';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionRequestsShape } from '@agent/runtime/SessionHandle';
 import { sessionServices } from '@agent/runtime/ToolServices';
@@ -23,7 +22,6 @@ import { GlobalValues } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   answerMismatch,
-  blocksCaller,
   readToolEditContent,
   type RunAction,
   type RunId,
@@ -42,7 +40,6 @@ import { SessionLog, type SessionViewAccess } from '@shared/session/runHistory';
 import { runActionRefusal } from '@shared/session/runActions';
 import { descriptionRow } from '@shared/session/runFacts';
 import { HostSkillSources, skillActivationText } from '@skills/runtimeSkills';
-import { factRows } from '@tools/plugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -182,70 +179,17 @@ const decideSurfaceRequest = (
   ) {
     const pending = yield* pendingOf(deps, req.runId, req.requestId);
     if (pending === undefined) return yield* notPending(req.runId);
-    // A request that blocks its caller is answered by the fiber waiting on it,
-    // and that fiber died with the owner this decision takes over from:
-    // recording a decision would clear the panel without doing what it says.
-    // Resuming the run cancels this request; the call asks again and is
-    // answered then.
-    if (!heldHere && blocksCaller(pending.payload)) {
+    // A request is answered by the call waiting on it, and that call died
+    // with the owner this decision takes over from: recording a decision
+    // would clear the panel without doing what it says. Resuming the run
+    // cancels this request; the call asks again and is answered then.
+    if (!heldHere) {
       return yield* new Unavailable({
         runId: req.runId,
         reason: `The ${runNoun(deps.view.run(req.runId))} that asked is no longer running: resume it to answer this request.`,
       });
     }
-    const { payload } = pending;
-    if (payload.kind !== 'plugin') {
-      if (!(yield* write)) return yield* notPending(req.runId);
-      return done;
-    }
-    // A plugin's request: the plugin's record outside the session's store
-    // first (`Plugin.decision`, idempotent), then one checked transaction
-    // holding the decision, the facts the plugin states, checked in the
-    // job, and the input it sends a run, accepted in the job. None of them
-    // lands without the decision, and a request decided meanwhile commits
-    // none of them. The run is woken for that input once it committed.
-    const plugin =
-      deps.plugins.entries.get(payload.plugin) ??
-      (yield* new Unavailable({
-        runId: req.runId,
-        reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
-      }));
-    const recorded =
-      plugin.decision === undefined
-        ? { facts: [] }
-        : yield* Effect.orDie(
-            plugin.decision.record({ payload, decision: req.decision }),
-          );
-    const { followUp } = recorded;
-    const inbox = yield* Inbox;
-    const log = deps.sessionLog;
-    const beside = Effect.gen(function* () {
-      const facts = yield* factRows(recorded.facts, req.runId, plugin, log);
-      if (followUp === undefined) return facts;
-      const accepted = yield* inbox.acceptance(
-        followUp.runId,
-        followUp.item,
-        {},
-      );
-      if (accepted.sent.kind === 'refused')
-        yield* Effect.logWarning(
-          `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId}: its input is closed.`,
-        );
-      return [...facts, ...accepted.rows];
-    }).pipe(Effect.scoped);
-    const landed = yield* decideRequest(
-      req.runId,
-      req.requestId,
-      req.decision,
-      beside,
-    ).pipe(
-      Effect.provideService(SessionLog, log),
-      Effect.mapError(
-        writeRejection(req.runId, 'The decision could not be recorded'),
-      ),
-    );
-    if (!landed) return yield* notPending(req.runId);
-    if (followUp !== undefined) yield* wakeIfOwed(followUp.runId);
+    if (!(yield* write)) return yield* notPending(req.runId);
     return done;
   });
   // An answer the request does not take is refused before its grant.

@@ -119,7 +119,7 @@ A row counts once under each flag it names.
   save does while the service link is reconnecting: (a) refuse and keep the
   buffer dirty, (b) write in the window's own process with a warning, (c)
   queue it. The owner recommends (b). Design note:
-  `.agents/docs/proposed/simplification/2026-11-16-one-writer-per-project-file.md`
+  `.agents/docs/implemented/simplification/2026-11-16-one-writer-per-project-file.md`
   (merges with #14976).
 - **RT-8's remainder (#14977): run the full `validate:tui` in CI** once every
   key waits on state, at least nightly. A CI-cost decision; see the root
@@ -295,7 +295,7 @@ landed, 1 refused (HS-3) and 1 held (LN-4).
 
 - **#14976 (desktop).** DT-1 to DT-8, LI-3 and LI-5 landed. LN-4 is held;
   see "Held for the owner". Its design note,
-  `.agents/docs/proposed/simplification/2026-11-16-one-writer-per-project-file.md`,
+  `.agents/docs/implemented/simplification/2026-11-16-one-writer-per-project-file.md`,
   merged with the PR.
 - **#14986 (harness follow-up).** The four harness sub-items:
   - HR-4: `SCRATCHPAD` and its dead row kind are deleted, with no version

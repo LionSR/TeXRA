@@ -58,7 +58,6 @@ import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { githubActivity } from './github/plugin';
-import { externalInquiry } from './inquiry/plugin';
 import { lean4 } from './lean/plugin';
 import { LeanLoogleTool } from './lean/LoogleTool';
 import { OpenPdfTool } from './OpenPdfTool';
@@ -104,7 +103,6 @@ import {
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
-import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -354,9 +352,6 @@ export const texraPlugins = (host: {
   /** What the composition's windows offer the editor tools (its window
    *  table's `editors`); none offered when absent. */
   readonly editors?: EditorRegistry;
-  /** The host shows external inquiries (VS Code, desktop): the `inquiry`
-   *  tool is offered only there. */
-  readonly inquiryPanel?: true;
 }): readonly TexraPlugin[] => {
   const editors = host.editors ?? editorRegistry(() => ({}));
   const plugins: readonly TexraPlugin[] = [
@@ -426,16 +421,6 @@ export const texraPlugins = (host: {
       },
     },
     githubActivity,
-    host.inquiryPanel
-      ? {
-          ...externalInquiry,
-          processLayer: {
-            layer: serves(() => [
-              'inquiry-panel' satisfies InquiryPanelCapability,
-            ]),
-          },
-        }
-      : externalInquiry,
     codex,
     claudeAgent,
     core(editors, host.inlineComments),

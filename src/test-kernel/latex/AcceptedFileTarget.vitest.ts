@@ -7,7 +7,10 @@ import { describe, expect } from 'vitest';
 
 import { createWorkspaceLocation } from '@texra-ai/harness/host';
 import { AppSignals } from '@texra-ai/harness/plugins';
-import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
+import {
+  acceptEditedFileReplace,
+  replaceIfUnchanged,
+} from '@latex/acceptedFileTarget';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -37,6 +40,7 @@ describe('acceptEditedFileReplace', () => {
           {
             confirm: () => Effect.succeed(true),
             showInfo: () => Effect.void,
+            replace: replaceIfUnchanged,
           },
         ).pipe(Effect.provide([nodePlatformLayer, AppSignals.layer]));
 
@@ -70,6 +74,7 @@ describe('acceptEditedFileReplace', () => {
           {
             confirm: () => Effect.succeed(true),
             showInfo: () => Effect.void,
+            replace: replaceIfUnchanged,
           },
         ).pipe(Effect.provide([nodePlatformLayer, AppSignals.layer]));
 

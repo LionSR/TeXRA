@@ -140,6 +140,18 @@ function buildAccountAccessFormItems(
   return [...toggleItems, ...accountItems, API_KEY_ITEM];
 }
 
+/** Each subscription's first-run row, by the provider it signs in to. */
+const CONNECT_CHOICES = Object.freeze({
+  chatgpt: ONBOARDING_CHOICE_CHATGPT,
+  grok: {
+    label: 'Use Grok subscription',
+    description: 'Grok models through SuperGrok; no API key needed',
+  },
+} satisfies Record<
+  SubscriptionProviderId,
+  { readonly label: string; readonly description: string }
+>);
+
 /**
  * The first-run panel: only what can connect a model, worded as what it does.
  * Nothing is signed in yet (that is why the panel is open), so each
@@ -147,28 +159,13 @@ function buildAccountAccessFormItems(
  * runs; account management (sign-out) stays in `/login`.
  */
 const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
-  {
-    value: {
-      kind: 'access',
-      selection: {
-        provider: 'chatgpt',
-        state: 'on',
-      },
-    },
-    label: ONBOARDING_CHOICE_CHATGPT.label,
-    description: ONBOARDING_CHOICE_CHATGPT.description,
-  },
-  {
-    value: {
-      kind: 'access',
-      selection: {
-        provider: 'grok',
-        state: 'on',
-      },
-    },
-    label: 'Use Grok subscription',
-    description: 'Grok models through SuperGrok; no API key needed',
-  },
+  ...SUBSCRIPTION_AUTH_PROVIDERS.map(
+    (provider): SelectItem<AccountAccessFormValue> => ({
+      value: { kind: 'access', selection: { provider, state: 'on' } },
+      label: CONNECT_CHOICES[provider].label,
+      description: CONNECT_CHOICES[provider].description,
+    }),
+  ),
   {
     value: { kind: 'key' },
     label: 'Add a provider API key',

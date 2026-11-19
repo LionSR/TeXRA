@@ -20,11 +20,11 @@ import { getRunRecords } from '@agent/storage/runOwnership';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import type { SessionRoots } from '@platform/rootedFs';
 import {
-  blocksCaller,
   type RunId,
   generateRunId,
   factName,
   runNoun,
+  runsScript,
   type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
@@ -44,15 +44,12 @@ import { configRow, positionRow } from './loop/rows';
 import { addressedMessages } from './providerMessages';
 
 /** Whether nothing is in flight: no invocation, response or undecided
- *  request its caller waits on (one it does not wait on stands across
- *  turns). A turn's beginning is quiet (its input is in,
+ *  request. A turn's beginning is quiet (its input is in,
  *  nothing answered it yet), so a child can be forked there. */
 const isQuiet = (state: RunState): boolean =>
   state.invocation === null &&
   state.pendingResponse === null &&
-  Object.values(state.requests).every(
-    (request) => request.decision !== null || !blocksCaller(request.payload),
-  );
+  Object.values(state.requests).every((request) => request.decision !== null);
 
 /**
  * Whether the run stands at a finished position: at a turn boundary,
@@ -87,7 +84,7 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
   const runHistory = yield* RunHistory;
   const records = getRunRecords(from);
   const config = yield* records.readConfig();
-  if (config === null || config.script != null) {
+  if (config === null || runsScript(config)) {
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = from;

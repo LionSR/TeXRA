@@ -1069,16 +1069,13 @@ function seedSubagentFollowupTranscript(): void {
         { name: 'agent', value: 'leanSolver' },
         { name: 'status', value: 'completed' },
       ],
-      wallTime: '2min, 3sec',
+      wallTimeMs: 123_000,
       response: 'Proved </response> is escaped & visible.',
     },
     {
       family: 'subagent',
       runId: 'child-c',
-      attributes: [
-        { name: 'agent', value: 'reviewer' },
-        { name: 'retryable', value: 'true' },
-      ],
+      attributes: [{ name: 'agent', value: 'reviewer' }],
       message: 'rate limit: <tokens> & retries exhausted',
     },
   ];

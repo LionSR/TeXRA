@@ -33,6 +33,7 @@ import {
 import {
   GOAL_PLAN_KIND,
   RunIdSchema,
+  runsScript,
   type Plan,
   type RunId,
   type ToolFact,
@@ -107,7 +108,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // A goal forks a conversation and reports to its later turns: a run no
   // later turn reaches has none, and a script's run is no conversation to
   // fork.
-  if (noLaterTurn(call.run) || call.run.config.script != null)
+  if (noLaterTurn(call.run) || runsScript(call.run.config))
     return executed(
       'A goal runs from a conversation, forks it and reports to its later turns; this run is not one: work on the approved plan in this run instead.',
       'Plan approved: no goal outside a conversation',

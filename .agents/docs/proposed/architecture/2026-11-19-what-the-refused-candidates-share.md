@@ -197,6 +197,13 @@ whether the harness keeps a plugin request (`kind: 'plugin'`,
 tool removes it in a commit of its own, so that the owner can drop that
 commit. The typed fact read is small and stays as it is.
 
+Done in that PR, at the owner's word, in commits of their own after the
+tool's removal: the `plugin` case, `blocksCaller`, `CallRequests.post`,
+`Plugin.decision`, the `answer` decision, the panels' plugin branch and the
+terminal's filters are gone, and `request.opened` (v17) and
+`request.decided` (v4) moved, so an earlier build's request row reads as an
+earlier build's.
+
 ## 6. "Is this a script run" in four spellings
 
 Entries: `RUN-handed-down-as-general-turn-end`,
@@ -216,8 +223,12 @@ What remains is that 27 sites in 21 files ask about it in four spellings
 questions: is it trusted, does it end with its script, does it have a
 conversation to fork or follow up. `forkRun` and `PlanTool` test the raw
 field. `.agents/docs/proposed/architecture/2026-11-06-programs-not-agents.md`
-already plans the three named facts; it changes `run.config`, so it rides
-with phase 5.
+plans the three named facts. They landed without a `run.config` change:
+`runsScript`, `backgroundScriptOf` and `programOf` in
+`packages/harness/src/shared/schemas/runRecords.ts`, which every site now
+reads. What rides with phase 5 is the run shape's two program-only reads
+(children's spend in `runOwnership.ts`, no resume after an end in
+`continuesFromRows`).
 
 ## 7. One project named twice
 
@@ -288,6 +299,11 @@ already state a condition in prose: `EFF-ADOPT-mcp-client`,
 `EFF-ADOPT-workflow-run-loop`, `UI-inquiry-decode-by-reference`,
 `ROW-followup-closed-as-run-removed`). None of those four conditions holds on
 effect 4.1.4 and `main` at `0611897`.
+
+Done on 2026-11-19, except for the entries other open pull requests were
+editing, which they update: every other entry was re-read against the code,
+the three that reject nothing are deleted, the six rulings are recorded, and
+the entries that state a condition carry a `reopenWhen`.
 
 ## Order
 
