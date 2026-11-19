@@ -12,7 +12,7 @@ import { Effect, Result, Schema } from 'effect';
 
 import { REFUSED } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
-import { checkpointRefusal } from '@agent/storage/resumability';
+import { checkpointRefusal } from '@agent/storage/continuation';
 import {
   getRunRecords,
   owningCall,

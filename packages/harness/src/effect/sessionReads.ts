@@ -12,7 +12,7 @@ import { SessionRequests } from '@agent/runtime/requests';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { LiveRun, RunsShape } from '@agent/runtime/runs';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { deriveResumability } from '@agent/storage/resumability';
+import { deriveContinuation } from '@agent/storage/continuation';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
@@ -64,7 +64,7 @@ export interface RunRecords {
   readonly readSkills: Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: Effect.Effect<boolean, Error>;
+  readonly readContinues: Effect.Effect<boolean, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
@@ -209,8 +209,8 @@ export function sessionReads(
           read,
         ),
         readSkills: read(stored.readSkills()),
-        readResumable: Effect.map(
-          read(deriveResumability(runId)),
+        readContinues: Effect.map(
+          read(deriveContinuation(runId)),
           (decision) => decision.kind === 'checkpoint',
         ),
         readConversation: read(

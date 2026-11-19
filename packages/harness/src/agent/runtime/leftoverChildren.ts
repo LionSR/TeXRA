@@ -9,7 +9,7 @@
  */
 import { Effect } from 'effect';
 
-import { checkpointRefusal } from '@agent/storage/resumability';
+import { checkpointRefusal } from '@agent/storage/continuation';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
