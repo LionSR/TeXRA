@@ -134,7 +134,7 @@ Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The
 
      <CompareHero />
 
-     <p class="hero-caption">VS Code's diff editor opens with your original on the left and the first revision (<code>r0/draft.tex</code>) on the right: removed text in red, improved text in green.</p>
+     <p class="hero-caption">VS Code's diff editor opens with the first revision (<code>r0/draft.tex</code>) on the left and your original on the right: improved text in green, removed text in red.</p>
 
      You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
