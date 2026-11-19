@@ -4,8 +4,7 @@
  * `BEGIN IMMEDIATE`, and decodes with its family's
  * schema where it is read; a row that no longer decodes fails that read.
  * The store (a project's `Database`, or the global one) hands it its
- * connection's statements and transaction, and the counter of value writes
- * its change feed wakes on: this module moves it for its own writes, the
+ * connection and the counter of value writes its change feed wakes on: this module moves it for its own writes, the
  * global store's poll for another process's.
  */
 import {
@@ -18,19 +17,13 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import type { SqlClient } from 'effect/sql/SqlClient';
 import { logFailure } from '@logger/effectLog';
 import { CURRENT_VALUE_VERSION } from '@shared/schemas';
-import type {
-  CurrentValues,
-  DatabaseAggregateClosed,
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import type { CurrentValues } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
 import { CURRENT_VALUE_KIND, UPSERT_KINDS, type SqlRow } from './rowCodec';
 import { StoreCheckFailed } from './storeAside';
-import type { SqlError } from 'effect/sql/SqlError';
+import type { StoreConnection } from './storeConnection';
 
 /** Replace one current value in place. The version values are written at
  *  is the store's (`stored_kind`), which the store gate reads. */
@@ -52,13 +45,40 @@ const VALUE_KIND = JSON.stringify([
   [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION],
 ]);
 
-/** A failed change read's backoff (this feed's and the store's change
- *  poll): 250 ms doubling, at most 30 s. */
-export const READ_RETRY = Schedule.exponential('250 millis').pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+/** A failed change read's backoff: 250 ms doubling, at most 30 s, eight
+ *  times, so it ends after about a minute. */
+const READ_RETRY = {
+  schedule: Schedule.exponential('250 millis').pipe(
+    Schedule.modifyDelay(({ duration }) =>
+      Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+    ),
   ),
-);
+  times: 8,
+};
+
+/**
+ * A read that tells whether something changed (this module's feed, and the
+ * global store's poll for another process's commit), as a value to compare
+ * with the read before it. One that fails is logged and read again on
+ * {@link READ_RETRY}. When the retries end it answers a value equal to no
+ * other: the change it could not rule out is reported, and the reader's
+ * own read of the store then succeeds or fails where that reader handles
+ * it. So a change is never missed and the wait for one always ends.
+ */
+export const changeRead = <E>(
+  read: Effect.Effect<unknown, E>,
+  failed: string,
+): Effect.Effect<unknown> =>
+  read.pipe(
+    Effect.tapError(logFailure('sessionDatabase', `${failed}; retrying.`)),
+    Effect.retry(READ_RETRY),
+    Effect.catch((error) =>
+      logFailure(
+        'sessionDatabase',
+        `${failed} after ${READ_RETRY.times} retries; reporting a change.`,
+      )(error).pipe(Effect.as(Symbol('unread'))),
+    ),
+  );
 
 const decodeString = Schema.decodeUnknownSync(Schema.String);
 
@@ -82,31 +102,24 @@ function decodeValue<T>(
       );
 }
 
-export function currentValues(store: {
-  readonly exec: (
-    statement: string,
-    params?: readonly unknown[],
-  ) => Effect.Effect<readonly SqlRow[], SqlError>;
-  readonly execOne: (
-    statement: string,
-    params?: readonly unknown[],
-  ) => Effect.Effect<SqlRow | undefined, SqlError>;
-  /** A write transaction; an ownership rejection the body raised leaves
-   *  as itself. */
-  readonly transact: <A, E>(
-    body: Effect.Effect<A, E>,
-  ) => Effect.Effect<
-    A,
-    Extract<E, DatabaseAggregateClosed> | DatabaseWriteFailed
-  >;
-  readonly query: <A, E>(
-    read: Effect.Effect<A, E>,
-  ) => Effect.Effect<A, DatabaseReadFailed>;
-  readonly afterCommit: SqlClient['afterCommit'];
+/** A next value as the JSON text its row stores. This is the one check of
+ *  a written value: one its family's schema does not encode fails the
+ *  write naming itself, and nothing of the write is stored. */
+const encodeValue = <T>(family: ValueFamily<T>, key: string, value: T) =>
+  Schema.encodeEffect(Schema.fromJsonString(family.schema))(value).pipe(
+    Effect.mapError(
+      (issue) =>
+        new StoreCheckFailed({
+          message: `The ${family.name} value ${key} does not match its schema: ${issue.message}`,
+        }),
+    ),
+  );
+
+export function currentValues(
+  { exec, execOne, transact, query, afterCommit }: StoreConnection,
   /** Moved once per committed value write. */
-  readonly written: SubscriptionRef.SubscriptionRef<number>;
-}): CurrentValues {
-  const { exec, execOne, transact, query, afterCommit, written } = store;
+  written: SubscriptionRef.SubscriptionRef<number>,
+): CurrentValues {
   const notifyWritten = afterCommit(
     SubscriptionRef.update(written, (count) => count + 1),
   );
@@ -163,9 +176,7 @@ export function currentValues(store: {
               deleted = true;
               continue;
             }
-            const value = yield* Schema.encodeEffect(
-              Schema.fromJsonString(family.schema),
-            )(nextValue);
+            const value = yield* encodeValue(family, key, nextValue);
             if (row?.value === value) continue;
             yield* exec(UPSERT_VALUE, [
               family.name,
@@ -199,22 +210,16 @@ export function currentValues(store: {
           ),
         ),
       ),
-    /** Each wake reads the keys' rows, and only a changed snapshot emits. A
-     *  failed read is logged and read again, holding the wake until it
-     *  reads (the database poll's own backoff), so no change is missed. */
+    /** Each wake reads the keys' rows, and only a changed snapshot emits; a
+     *  snapshot that cannot be read emits ({@link changeRead}). */
     changes: (family, keys) =>
       SubscriptionRef.changes(written).pipe(
         Stream.mapEffect(() =>
-          execOne(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
-            Effect.map((row) => row?.snapshot),
-            Effect.tapError(
-              logFailure(
-                'sessionDatabase',
-                `Could not read whether ${keys.join(', ')} changed; retrying.`,
-              ),
+          changeRead(
+            execOne(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
+              Effect.map((row) => row?.snapshot),
             ),
-            Effect.retry(READ_RETRY),
-            Effect.orDie,
+            `Could not read whether ${keys.join(', ')} changed`,
           ),
         ),
         Stream.changes,

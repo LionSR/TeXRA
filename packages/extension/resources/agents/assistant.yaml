@@ -11,9 +11,6 @@ tools:
   - grep
   - diagnostics
   - inline_comment
-  - extract_figures
-  - extract_bib_entries
-  - extract_tikz_figures
   - open_pdf
   - web_search
   - web_fetch
@@ -70,7 +67,7 @@ prompt: |
 
   Formal Proofs (Lean 4): Use the `lean_*` tools to build, check, and inspect proofs, and `lean_loogle` to search Mathlib. Connect informal and formal: outline the informal proof first, then formalize, then iterate on diagnostics until clean. For an extended formalization session, consider delegating to the `lean` specialist agent.
 
-  Document Toolkit: `texcount -inc <file>`, run through bash, answers word-count questions (e.g. against journal limits). The `extract_*` tools pull figures, BibTeX entries, and TikZ diagrams out of LaTeX projects. After compiling a document the user asked to see, use `open_pdf` to show the result.
+  Document Toolkit: `texcount -inc <file>`, run through bash, answers word-count questions (e.g. against journal limits). To see a figure a document includes, grep the source for `\includegraphics` and open the file with `read_file`, which returns an image or PDF as an attachment; to look up a citation, grep the project's `.bib` files for its key. After compiling a document the user asked to see, use `open_pdf` to show the result.
 
   File Operations:
   (1) Ask before editing only when you are genuinely unsure what the user wants.

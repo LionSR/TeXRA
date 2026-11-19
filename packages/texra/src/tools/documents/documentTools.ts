@@ -146,7 +146,7 @@ const rejectOversizedBibAttachments = Effect.fn(
     if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
 
     const sizeBytes = Number(stats.size);
-    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then start the program again without the full .bib file.`;
+    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. If citations are needed, write the entries the document cites to a smaller .bib file (find each key with grep, then copy its whole record, which spans several lines), and start the program again with that file in place of the full one.`;
     return yield* new ToolError(message, {
       summary: 'Rejected oversized BibTeX attachment',
     });

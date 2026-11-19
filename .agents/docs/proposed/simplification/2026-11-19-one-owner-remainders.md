@@ -20,6 +20,16 @@ the reason given, in the order worth taking.
 
 ## 1. The app-state write validates JSON twice, but one owner needs an error route
 
+_Landed the same day. The pre-check is gone; `currentValues.modify` encodes
+each next value once (`encodeValue`), and a value its family's schema
+refuses fails the write as a `StoreCheckFailed` naming the family and key,
+which reaches the settings store's caller inside the `StateWriteFailed` it
+already raised for a `DatabaseWriteFailed`. The type question below was
+answered at the families: `APP_STATE` and `REPO_STATE` are
+`ValueFamily<unknown>` (a settings store hands on what its caller gave it;
+the schema, `Schema.Json`, is what the write checks), so no cast was needed.
+The rest of this section is the finding as written._
+
 `appStateStoreFromDatabase`
 (`packages/harness/src/controllers/session/appStateStore.ts:51-63`) runs
 `Schema.decodeUnknownResult(Schema.Json)` over every value before handing it
@@ -56,28 +66,18 @@ mechanical drop; it belongs with whoever next edits `currentValues`.
 
 ## 2. The LaTeX tool roster is restated as seven `*Path` fields
 
-The set of probed LaTeX tools and each tool's detected path is stated five
-times: the catalog owner (`PROBED_LATEX_TOOLS`,
-`packages/texra/src/shared/constants/latexToolchain.ts:454`), the seven
-`*Path` fields on `LatexSettingsStatusSchema`
-(`packages/texra/src/shared/settingsView/settingsViewMessages.ts:376-382`),
-their seven defaults (`:400-406`), the seven `pathOf('<tool>')` assignments
-in `detectLatexSettingsStatus`
-(`packages/texra/src/controllers/settingsView/LatexToolingController.ts:74-80`),
-and `DEPENDENCIES.pathKeys` in the view
-(`packages/texra/src/ui/settings/tabs/LaTeXTab.ts`). The catalog already
-owns the roster; the status should carry one record keyed by it, e.g.
-`paths: Schema.Record(Schema.Literals(PROBED_LATEX_TOOLS), Schema.NullOr(Schema.String))`,
-built once from the probe result.
-
-Deferred: it is not a pure 1:1 restatement, so the collapse moves a display
-decision that must be verified in the UI, which an autonomous run cannot do.
-`graphicsmagickPath` merges two catalog tools (`pathOf('gm') ?? pathOf('magick')`)
-and `ghostscriptPath` renames `gs`; those groupings are display policy and
-must move into `LaTeXTab`, not be lost. It is a webview-message shape change
-(acceptable pre-1.0) plus a settings-tab change, so it needs the settings
-suites and a visual check of the LaTeX tab before it lands. Verified net
-≈ −11 lines.
+Landed 2026-11-19. `LatexSettingsStatusSchema`
+(`packages/texra/src/shared/settingsView/settingsViewMessages.ts`) carries
+`paths`, one record keyed by `PROBED_LATEX_TOOLS`, built once from the probe
+result by `probedToolPaths`; the seven fields, their seven defaults and the
+seven `pathOf('<tool>')` assignments are gone. The display policy the fields
+encoded (pdflatex and latexmk on the compiler card, no path for perl, `gm`
+or else `magick` as the image card's second line) moved into the tab as
+`DEPENDENCIES.pathLines` (`packages/texra/src/ui/settings/tabs/LaTeXTab.ts`),
+unchanged: screenshots of the desktop app's LaTeX tab before and after, with
+every tool present and with latexmk, latexindent and gm absent, are
+byte-identical. Whether those three rules should change is still item 3 of
+`2026-11-15-data-shapes-left-after-the-audit.md`.
 
 ## 3. The model media-acceptance rule, split in two (decision-gated, a wash)
 

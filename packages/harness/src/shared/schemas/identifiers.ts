@@ -22,30 +22,6 @@ export function generateRunId(): RunId {
   return crypto.randomUUID().replaceAll('-', '').slice(0, 12) as RunId;
 }
 
-// The aggregate key every durable session event rides on: the lifecycle it
-// belongs to. A run's is its run id; one a plugin owns is the plugin's own
-// key behind `plugin:`, which no run id can spell.
-
-const PLUGIN_AGGREGATE_PREFIX = 'plugin:';
-const PluginAggregateIdSchema = Schema.String.check(
-  Schema.isPattern(/^plugin:[^]+$/),
-).pipe(Schema.brand('PluginAggregateId'));
-
-/** The key one lifecycle's events ride on in the event table: a run id, or
- *  a plugin's key ({@link pluginAggregateId}). */
-export const AggregateIdSchema = Schema.Union([
-  RunIdSchema,
-  PluginAggregateIdSchema,
-]);
-/** {@link AggregateIdSchema}'s value. */
-export type AggregateId = typeof AggregateIdSchema.Type;
-
-/** The aggregate a plugin owns under `key` (`<plugin>:<key>`). */
-export const pluginAggregateId = (key: string): AggregateId =>
-  Schema.decodeUnknownSync(PluginAggregateIdSchema)(
-    `${PLUGIN_AGGREGATE_PREFIX}${key}`,
-  );
-
 /**
  * A plugin fact's name, `plugin/kind`: the key of every map of a run's facts
  * (`RunView.facts`, its rows' `facts`, the plugins' fact kinds). Built only
@@ -62,19 +38,6 @@ export const factName = (fact: {
   readonly kind: string;
 }): FactName =>
   Schema.decodeUnknownSync(FactNameSchema)(`${fact.plugin}/${fact.kind}`);
-
-/** What an aggregate key names: a run by its id, or a plugin's own key. */
-type AggregateTarget =
-  | { readonly kind: 'run'; readonly id: RunId }
-  | { readonly kind: 'plugin'; readonly id: string };
-
-/** The kind and logical id of an aggregate key: its two columns in the
- *  event table. */
-export function aggregateTarget(key: AggregateId): AggregateTarget {
-  return isRunId(key)
-    ? { kind: 'run', id: key }
-    : { kind: 'plugin', id: key.slice(PLUGIN_AGGREGATE_PREFIX.length) };
-}
 
 /** A content address: the sha256 of a value's canonical JSON. */
 export const Sha256Schema = Schema.String.check(
