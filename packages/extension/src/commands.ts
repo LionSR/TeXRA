@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Schema, Struct } from 'effect';
+import { Effect, Record as EffectRecord, Schema, Struct } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -150,13 +150,10 @@ export function registerCommands(
     progressViewProvider,
   );
 
-  // cast: one row per key of `settingsTabByCommand`, exactly `SettingsTabCommandId`.
-  const settingsTabHandlers = Object.fromEntries(
-    Object.entries(settingsTabByCommand).map(([id, tab]) => [
-      id,
-      () => settingsViewProvider.showSettingsView(tab),
-    ]),
-  ) as Record<SettingsTabCommandId, () => CommandProgram>;
+  const settingsTabHandlers = EffectRecord.map(
+    settingsTabByCommand,
+    (tab) => (): CommandProgram => settingsViewProvider.showSettingsView(tab),
+  );
 
   const handlers = {
     ...settingsTabHandlers,

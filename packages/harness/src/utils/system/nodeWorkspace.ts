@@ -5,7 +5,7 @@
  */
 import * as path from 'node:path';
 
-import { Context, Effect, String as Str } from 'effect';
+import { Context, Effect, Record as EffectRecord, String as Str } from 'effect';
 
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -75,9 +75,7 @@ export const environment: Effect.Effect<
     process.platform === 'win32' ? name.toUpperCase() : name;
   const named = new Set(Object.keys(project).map(fold));
   return {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(([name]) => !named.has(fold(name))),
-    ),
+    ...EffectRecord.filter(process.env, (_, name) => !named.has(fold(name))),
     ...project,
   };
 });

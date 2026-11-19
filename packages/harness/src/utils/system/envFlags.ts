@@ -20,7 +20,7 @@
  * `TEXRA_NO_UPDATE_CHECK=0` disabled update checks in one host and not in
  * another. A user who writes `=0` means off in all of them.
  */
-import { Config, Effect, Option } from 'effect';
+import { Config, Effect, Option, Record as EffectRecord } from 'effect';
 
 import {
   API_KEY_ENV_NAMES,
@@ -93,10 +93,9 @@ export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
       APPROVAL_POLICY_ENV,
     ].map(fold),
   );
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== undefined && !withheld.has(fold(entry[0])),
-    ),
+  return EffectRecord.filter(
+    env,
+    (value, name): value is string =>
+      value !== undefined && !withheld.has(fold(name)),
   );
 });

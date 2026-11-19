@@ -81,6 +81,7 @@ import {
   Option,
   type Path,
   Predicate,
+  Record as EffectRecord,
   Schema,
   Scope,
 } from 'effect';
@@ -377,11 +378,7 @@ export const workspaceEnvironmentLayer = (
     ),
     Effect.map((text): Record<string, string> =>
       // `FOO=` stays an empty value, which overrides the process's.
-      Object.fromEntries(
-        Object.entries(parseEnv(text)).filter(
-          (entry): entry is [string, string] => entry[1] !== undefined,
-        ),
-      ),
+      EffectRecord.filter(parseEnv(text), Predicate.isNotUndefined),
     ),
   );
   return Layer.unwrap(
