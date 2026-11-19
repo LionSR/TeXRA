@@ -41,7 +41,7 @@ For deeper analysis, ask to download the LaTeX source of a paper:
 Download the source files for arxiv:2401.12345 so I can see how they made their figures.
 ```
 
-This uses the `download_arxiv_source` tool and places the files in your workspace. Because it writes to your workspace, TeXRA asks for your approval before the download runs, like any other command.
+This uses the `download_arxiv_source` tool and places the files in your workspace. Because it writes to your workspace, TeXRA asks for your approval before the download runs, as it does for any tool that changes your workspace.
 
 ### <wa-icon library="texra" name="globe"></wa-icon> Search the web
 
