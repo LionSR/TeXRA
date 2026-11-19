@@ -176,7 +176,8 @@ function expandRootShortcuts(argv: readonly string[]): readonly string[] {
   // An index loop: a global flag's value is skipped with its flag.
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === undefined || !arg.startsWith('-')) return argv;
+    // A command name or the end of options: no shortcut after it.
+    if (arg === undefined || arg === '--' || !arg.startsWith('-')) return argv;
     const before = argv.slice(0, index);
     const after = argv.slice(index + 1);
     if (arg === '-v') return [...before, 'version', ...after];

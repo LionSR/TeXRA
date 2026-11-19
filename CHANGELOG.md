@@ -15,7 +15,9 @@ All notable changes to this project will be documented in this file.
   exited 2. `texra --version` prints `texra v<version>`; `texra version`
   and `-v` still print the bare version (and JSON with `--output-format
   json`). A flag that takes one value, given twice (`--output a --output
-  b`), is a usage error, where the last one won. `--source` is accepted
+  b`), is a usage error, where the last one won. `-V` is no longer a
+  version shortcut. A flag that is off by default no longer takes a
+  `--no-` form (`--no-all`, `--no-yes`, `--no-force`). `--source` is accepted
   only by `chat`, `run`, `resume`, `skills list` and bare `texra`, after
   the command name. A mistyped flag now gets a "Did you mean" suggestion,
   `texra history -n 5` works like `texra history list -n 5`, and a global

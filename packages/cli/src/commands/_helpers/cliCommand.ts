@@ -419,7 +419,9 @@ const selectCommandLine = Effect.fn('selectCommandLine')(function* <
   const selection = yield* Ref.make<CliLaunch | number>(CliExitCode.Success);
   const colors =
     readCliAmbientState().stdoutColorEnabled === true &&
-    !argv.includes('--no-color');
+    !argv
+      .slice(0, argv.includes('--') ? argv.indexOf('--') : argv.length)
+      .includes('--no-color');
   return yield* Command.runWith(command, { version: readCliVersion() })(
     argv,
   ).pipe(
