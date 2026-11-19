@@ -52,8 +52,7 @@ All notable changes to this project will be documented in this file.
   no request of its own. The `plugin` request kind (`PluginRequest`),
   `CallRequests.post`, `Plugin.decision` (`RequestDecisionHook`,
   `RequestDecisionRecord`) and the `answer` decision are removed; every
-  request blocks the call that opened it, and `requestAnswerability` takes
-  the run alone.
+  request blocks the call that opened it.
 
 - **A session row's aggregate is its run.** SDK: a plugin's fact is about
   the run whose call states it; `ToolFact.aggregate`, `FactKind.accepts`,
@@ -1967,6 +1966,21 @@ All notable changes to this project will be documented in this file.
   Compilation, Indent, TeX Count and Compile TikZ took only `.tex`.
 
 ### Bug Fixes
+
+- **Answering a request of a task that is not running continues the task.**
+  An approval, a plan or a question left pending by a task whose process
+  exited used to refuse the answer with "resume it to answer this request",
+  and its card showed a Resume button in place of its actions. The answer now
+  resumes the task, and the tool that asked takes it without asking again; if
+  the task cannot be resumed, the answer is refused with that reason. SDK:
+  `requestAnswerability` and `RequestAnswerability` are gone from
+  `@texra-ai/harness/schemas`; every pending request can be answered.
+
+- **A run's message to a run you stopped is refused, not silently queued.**
+  `executions send` to a run its user stopped used to answer "Queued" while
+  nothing would read the message until you continued that run yourself. The
+  sender is now told the run was stopped by its user. A child's report to a
+  stopped parent is still kept for when you continue the parent.
 
 - **Codex on Windows installs where TeXRA looks for it.** **Install in
   terminal** ran `wsl --install`, but TeXRA looks for a native `codex.exe`,

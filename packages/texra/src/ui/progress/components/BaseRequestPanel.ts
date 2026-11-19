@@ -56,9 +56,8 @@ import {
 import {
   offeredGrant,
   type AnsweredBy,
-  type RequestAnswerability,
   type RequestPayload,
-  type RunId,
+  type RunView,
   type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 import {
@@ -69,11 +68,6 @@ import {
   requestDeclineLabel,
   requestPrimaryLabel,
 } from '@ui/copy/requestCards';
-
-/** What a card this window cannot answer says in place of its actions. */
-const UNANSWERABLE_NOTE = {
-  resume: 'The task stopped before this was answered. Resume it to answer.',
-} as const;
 
 /** A run-scoped grant the primary's ▾ menu offers: approve this request and
  *  stop asking about its kind for the rest of the run. */
@@ -115,22 +109,8 @@ export abstract class BaseRequestPanel<
    *  the grant the primary's ▾ menu offers, none for a person's. */
   @property({ attribute: false }) answeredBy: AnsweredBy = 'person';
 
-  /**
-   * Whether this window can answer the request (`requestAnswerability`, the
-   * rule the host's attention badge reads too). Anything but `answerable`
-   * says why in place of the action row, and the single chokepoint every
-   * action and keyboard shortcut calls through (`emitAction`) no-ops.
-   */
-  @property({ attribute: false })
-  answerability: RequestAnswerability = 'answerable';
-
-  /** The asking run, while a resume is what lets the card be answered:
-   *  the card carries the Resume, beside the question it unblocks. */
-  @property({ attribute: false }) resumeRunId: RunId | null = null;
-
-  protected get readOnly(): boolean {
-    return this.answerability !== 'answerable';
-  }
+  /** The asking run, as the view holds it. */
+  @property({ attribute: false }) run: RunView | null = null;
 
   /** The surface whose `requestDrafts` keeps what is entered on this card
    *  and not yet sent, so a run switch does not lose it. */
@@ -144,10 +124,8 @@ export abstract class BaseRequestPanel<
     );
   }
 
-  /** Store the card's draft; an empty one is none. A read-only card owns
-   *  no draft. */
+  /** Store the card's draft; an empty one is none. */
   protected writeDraft(draft: RequestDraft): void {
-    if (this.readOnly) return;
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'requestDraft',
@@ -189,12 +167,14 @@ export abstract class BaseRequestPanel<
   }
 
   /** The run-scoped grant on the primary's ▾ menu: the one that answers the
-   *  request (`offeredGrant`), none when a person answers it. The
-   *  delegated-work grant's scope names the edits and commands it also
-   *  turns on. */
+   *  request (`offeredGrant`), none when a person answers it or the run
+   *  takes no grant now (`RunView.actions`: a run no process holds, which
+   *  the answer resumes). The delegated-work grant's scope names the edits
+   *  and commands it also turns on. */
   protected get grant(): RunGrant | null {
     const kind = offeredGrant(this);
-    if (kind === null) return null;
+    if (kind === null || this.run?.actions.includes('grant') !== true)
+      return null;
     return {
       label: runGrantLabel(kind),
       ...(kind === 'superYolo' && {
@@ -215,7 +195,6 @@ export abstract class BaseRequestPanel<
   /** Send a decision. The draft stays until the runtime accepts it
    *  (`applyRuntimeAnswer`), so a send that fails can be sent again. */
   protected emitAction(decision: SurfaceDecision): void {
-    if (this.readOnly) return;
     const delivery = approvalDecisionDelivery(
       { payload: this.permission, answeredBy: this.answeredBy },
       decision,
@@ -241,7 +220,6 @@ export abstract class BaseRequestPanel<
 
   /** Handle a keyboard shortcut routed from the container. True if handled. */
   handleKeyboardShortcut(key: string): boolean {
-    if (this.readOnly) return false;
     switch (key) {
       case 'y':
         this.submitPrimary();
@@ -329,39 +307,16 @@ export abstract class BaseRequestPanel<
             ? nothing
             : html`<div class="request-card__details">${details}</div>`
         }
-        ${
-          this.answerability === 'answerable'
-            ? html`<div class="request-card__actions">
-                  ${this.renderPrimary()} ${secondary} ${this.renderDecline()}
-                </div>
-                ${this.renderNote()}`
-            : html`<p class="request-card__meta">
-                  ${UNANSWERABLE_NOTE[this.answerability]}
-                </p>
-                ${this.renderResume()}`
-        }
+        <div class="request-card__actions">
+          ${this.renderPrimary()} ${secondary} ${this.renderDecline()}
+        </div>
+        ${this.renderNote()}
       </div>
     `;
   }
 
-  private renderResume(): TemplateResult | typeof nothing {
-    const runId = this.resumeRunId;
-    if (this.answerability !== 'resume' || runId === null) return nothing;
-    return html`<div class="request-card__actions">
-      ${renderLabeledActionButton({
-        icon: 'forward-step',
-        text: 'Resume',
-        title: 'Resume',
-        action: 'resume',
-        kind: 'primary',
-        onClick: () =>
-          this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', runId })),
-      })}
-    </div>`;
-  }
-
   private renderPrimary(): TemplateResult {
-    const grant = this.readOnly || this.noteOpen ? null : this.grant;
+    const grant = this.noteOpen ? null : this.grant;
     // A native title, not a wa-tooltip: a new card focuses this button, and
     // a focus-shown tooltip would cover the evidence above it.
     const primaryLabel = requestPrimaryLabel(this.permission.kind);
@@ -370,7 +325,6 @@ export abstract class BaseRequestPanel<
       text: primaryLabel,
       title: `${primaryLabel} (y)`,
       action: 'primary',
-      disabled: this.readOnly,
       onClick: () => this.submitPrimary(),
     };
     if (!grant)
@@ -418,11 +372,10 @@ export abstract class BaseRequestPanel<
         text: label,
         title: `${label} (n)`,
         action: 'decline',
-        disabled: this.readOnly,
         onClick: () => this.sendDecline(),
       })}
       ${
-        takesNote && !this.noteOpen && !this.readOnly
+        takesNote && !this.noteOpen
           ? renderLabeledActionButton({
               text: 'Add a note…',
               kind: 'link',

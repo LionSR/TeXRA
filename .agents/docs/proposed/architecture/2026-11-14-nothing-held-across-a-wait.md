@@ -577,10 +577,10 @@ Open: slice 7. What the passes learned:
   completing fiber's step, so a launcher woken by the answer ran before
   the run reached its loop and found no controls (`crashConformanceResume`
   3 and 4: a model switch right after a resume); the launcher yields once,
-  uninterruptibly, after the answer. Still left in this path: the wake's
-  `forkDetach` (`wakeIfOwed`, row 14's list): it now only waits for the
-  resume's answer to log a refusal, and moving it to the session's
-  `FiberSet` is that row's work.
+  uninterruptibly, after the answer. The wake's `forkDetach` (`wakeIfOwed`,
+  row 14's list) is gone since 2026-11-19: a wake runs on the session's own
+  `FiberSet` (`RunRegistry.background`), which the session's close
+  interrupts.
 - Row 21, the close deadline: the step with no bound is
   `Fiber.interruptAll` in the run `FiberMap`'s finalizer, which waits for
   a run that does not unwind. No such run was reproduced, and a bounded

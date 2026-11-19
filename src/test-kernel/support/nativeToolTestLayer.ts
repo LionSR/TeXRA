@@ -147,7 +147,7 @@ export function nativeToolTestLayer(
             session,
             commit: cell.append,
             at: { responseId: runCall.responseId, callId },
-            entered: { attempt: 1, raised: 0 },
+            entered: { attempt: 1, raised: 0, answer: null },
           }),
       );
       return Layer.mergeAll(

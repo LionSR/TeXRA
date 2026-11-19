@@ -1,9 +1,10 @@
 /**
  * The session's follow-up inbox: a run's input is its `followup.queued` rows
- * less its `followup.consumed` ones, read inside the job acting on them, by
- * one reader per run (its generation here); the publisher's one job at a
- * time is the only lock, and when a row may be read is data on it
- * (`holdUntil`, `FollowUpReader`).
+ * less its `followup.consumed` ones, read inside the job acting on them. The
+ * publisher's one job at a time is the only lock; whether a send is queued
+ * (`sendVerdict`) and when its row may be read (`holdUntil`) are decided
+ * from those rows (`FollowUpReader`). The inbox keeps no record of who
+ * reads: the run its session's registry holds reads its own rows.
  */
 import { Context, Effect, Result, type Scope } from 'effect';
 
@@ -20,25 +21,29 @@ import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
-import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type {
   LogWriteError,
   SessionLogShape,
 } from '@shared/session/sessionLog';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
-import { FollowUpReader, needsWake } from './FollowUpReader';
+import {
+  FollowUpReader,
+  needsWake,
+  sendVerdict,
+  type SendVerdict,
+} from './FollowUpReader';
 import { queuedRow } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
-const CLOSED = Object.freeze({ kind: 'refused' } as const);
 /** The session doors the inbox works through (the session layer wires them). */
 interface InboxPort {
   /** The session's log: a send is one transaction. */
   readonly log: Pick<
     SessionLogShape,
-    'transact' | 'runRows' | 'history' | 'drained'
+    'transact' | 'runRows' | 'drained' | 'tail' | 'now'
   >;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
@@ -65,14 +70,6 @@ export type InboxItem = (
   readonly control?: QueuedFollowUp['control'];
 };
 
-/** How a send landed: queued for the run (a reader here takes it, or its
- *  resume does), a replay of a row already queued, or refused, writing
- *  nothing: the run's input is closed. */
-export type Sent =
-  | { readonly kind: 'duplicate' }
-  | { readonly kind: 'queued' }
-  | { readonly kind: 'refused' };
-
 /** What a send asks of the row and of the run. */
 interface SendOptions {
   /** When the row may be read (`readableMessages`). Absent: at once, or at
@@ -83,8 +80,9 @@ interface SendOptions {
   readonly skills?: readonly string[];
 }
 
-/** A send decided inside a job: its rows, and how it landed. */
-type Acceptance = { rows: readonly RunInputDraft[]; sent: Sent };
+/** A send decided inside a job: the row it queues, if any, and the verdict
+ *  that decided it. */
+type Acceptance = { rows: readonly RunInputDraft[]; sent: SendVerdict };
 
 /** What observers hear: a run takes no more input, or the inbox closed. */
 type InboxClosed =
@@ -93,11 +91,9 @@ type InboxClosed =
 
 /** The session's follow-up inbox; see the module comment. */
 export class SessionInbox {
-  private readonly readers = new Map<RunId, FollowUpReader>();
   /** Each run's sends, accepted one at a time in call order. */
   readonly sendLanes = new Map<RunId, PerKeyLane>();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
-  private disposed = false;
 
   private readonly port: InboxPort;
 
@@ -105,68 +101,64 @@ export class SessionInbox {
     this.port = port;
   }
 
-  /** Append one message to the run's input in one job: refused, writing
-   *  nothing, when the input is closed with no reader here; a replay writes
-   *  nothing. A row no reader here takes is the sender's to wake the run
-   *  for, when {@link owesResume}. */
+  /** Append one message to the run's input in one job, as its rows decide
+   *  (`sendVerdict`): a refused send and a replay write nothing. A queued
+   *  row is read by the run a fiber here drives, or by its next resume,
+   *  which the sender starts when the row obliges one ({@link owesResume}). */
   send(
     runId: RunId,
     item: InboxItem,
     options: SendOptions = {},
-  ): Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> {
-    if (this.disposed) return Effect.succeed(CLOSED);
+  ): Effect.Effect<SendVerdict, LogWriteError | DatabaseReadFailed> {
     return this.port.log.transact((tx) =>
-      this.accept(runId, item, options, tx.append),
-    );
-  }
-
-  /** Open the run's reader for the generation running it (the caller's
-   *  scope); the registry accepts one at a time, so a second is a defect. */
-  open(runId: RunId): Effect.Effect<FollowUpReader, never, Scope.Scope> {
-    return Effect.acquireRelease(
-      Effect.suspend(() => {
-        if (this.readers.has(runId))
-          return Effect.die(new Error(`Run ${runId} already has a reader`));
-        const input = new FollowUpReader(
-          this.read(runId).pipe(
-            Effect.map(({ followUps }) => followUps),
-            Effect.orDie,
-          ),
-        );
-        if (this.disposed) input.end();
-        else this.readers.set(runId, input);
-        return Effect.succeed(input);
+      Effect.gen({ self: this }, function* () {
+        const { rows, sent } = yield* this.acceptance(runId, item, options);
+        if (rows.length > 0) yield* tx.append(rows);
+        return sent;
       }),
-      (input) => Effect.sync(() => this.release(runId, input, false)),
     );
   }
 
-  /** End the run's reader `input`; `terminal`: the observers hear the run
-   *  takes no more input here, on the publisher after the sends already
-   *  accepted, and only if none left a row queued. Idempotent. */
-  release(runId: RunId, input: FollowUpReader, terminal: boolean): void {
-    if (this.readers.get(runId) !== input) return;
-    this.readers.delete(runId);
-    input.end();
-    if (!terminal) return;
+  /** The run's reader over the session's log, for the caller's scope:
+   *  ended when the run takes no more input ({@link forget},
+   *  {@link dispose}). */
+  reader(runId: RunId): Effect.Effect<FollowUpReader, never, Scope.Scope> {
+    return Effect.map(
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          const reader = new FollowUpReader(runId, this.port.log);
+          const detach = this.onClosed((closed) => {
+            if (closed.kind === 'session' || closed.runId === runId)
+              reader.end();
+          });
+          return { reader, detach };
+        }),
+        ({ detach }) => Effect.sync(detach),
+      ),
+      ({ reader }) => reader,
+    );
+  }
+
+  /** A run whose loop ended and takes no more input here: the observers
+   *  hear it, on the publisher after the sends already accepted, and only
+   *  if none left a message queued. */
+  ended(runId: RunId): void {
     this.port.detach(
       Effect.fnUntraced({ self: this }, function* () {
-        if (this.readers.has(runId) || queued(yield* this.read(runId))) return;
+        if (queued(yield* this.read(runId))) return;
         this.notify({ kind: 'run', runId });
       }),
     );
   }
 
-  /** Whether the run is owed a resume: its input obliges one
-   *  (`needsWake`) and no reader here takes it, read once the publisher
-   *  finished. Undefined only if the input could not be read (`wakeRun`'s
-   *  caller resumes it). */
+  /** Whether the run's input obliges a resume (`needsWake`), read once the
+   *  publisher finished; a run a fiber here drives reads its input itself,
+   *  which the caller checks. Undefined only if the input could not be
+   *  read. */
   owesResume(runId: RunId): Effect.Effect<boolean | undefined> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.drained;
-      if (this.disposed || this.readers.has(runId)) return false;
-      const input = yield* this.read(runId);
-      return !input.inputClosed && needsWake(input);
+      return needsWake(yield* this.read(runId));
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
@@ -183,7 +175,6 @@ export class SessionInbox {
   /** Close the run's input (`followup.closed`), unless a message is queued,
    *  read in the same transaction; a failure is logged. */
   closeInput(runId: RunId): Effect.Effect<void> {
-    if (this.disposed) return Effect.void;
     const run = runId;
     return this.port.log
       .transact((tx) =>
@@ -204,7 +195,7 @@ export class SessionInbox {
         }),
       )
       .pipe(
-        // Only a closed input that committed ends the reader.
+        // Only a closed input that committed is told.
         Effect.tap((closed) => Effect.sync(() => closed && this.forget(runId))),
         Effect.asVoid,
         Effect.catch(
@@ -214,89 +205,37 @@ export class SessionInbox {
   }
 
   /** A run that takes no more input (deleted: its `run.removed` row closes
-   *  its input; or closed): its reader ends and the observers hear it. */
+   *  its input; or closed): the observers hear it, its reader among them. */
   forget(runId: RunId): void {
-    if (this.disposed) return;
-    this.readers.get(runId)?.end();
-    this.readers.delete(runId);
     this.notify({ kind: 'run', runId });
   }
 
   /** Hear each run that takes no more input, and the inbox's own close. */
   onClosed(observer: (closed: InboxClosed) => void): () => void {
-    if (this.disposed) return () => {};
     this.observers.add(observer);
     return () => this.observers.delete(observer);
   }
 
-  /** End every reader and refuse every later send. */
+  /** The session closes: the observers hear it once. */
   dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    for (const input of this.readers.values()) input.end();
-    this.readers.clear();
     this.notify({ kind: 'session' });
     this.observers.clear();
   }
 
-  private readonly accept: (
-    runId: RunId,
-    item: InboxItem,
-    options: SendOptions,
-    append: Append,
-  ) => Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> = Effect.fn(
-    'SessionInbox.accept',
-  )(
-    { self: this },
-    function* (
-      runId: RunId,
-      item: InboxItem,
-      options: SendOptions,
-      append: Append,
-    ) {
-      const { rows, sent } = yield* this.acceptance(runId, item, options);
-      if (rows.length > 0) yield* append(rows);
-      return sent;
-    },
-  );
-
-  /** One send decided in the caller's job: the row the job appends with
-   *  its own, and how it landed (see {@link send}). */
+  /** One send decided in the caller's job: the verdict of the run's input
+   *  rows on it, and the row the job appends with its own when the verdict
+   *  queues it (see {@link send}). */
   acceptance(
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
   ): Effect.Effect<Acceptance, DatabaseReadFailed> {
-    const closed = (input: RunRowsRead<'input'>) =>
-      this.disposed || (!this.readers.has(runId) && input.inputClosed);
-    const only = (sent: Sent): Acceptance => ({ rows: [], sent });
-    // The reader hears the row: it reads committed rows, so a wake ahead
-    // of the commit costs it one empty read.
-    const landed = (replay: boolean) =>
-      Effect.sync((): Sent => {
-        const reader = this.readers.get(runId);
-        reader?.notify();
-        return replay ? { kind: 'duplicate' } : { kind: 'queued' };
-      });
-    return Effect.gen({ self: this }, function* () {
-      const input = yield* this.read(runId);
-      if (closed(input)) return only(CLOSED);
+    return Effect.map(this.read(runId), (input) => {
       const row = queuedRow(item, options.hold, options.skills);
-      const queuedStill = input.followUps.some(
-        (f) => f.followUpId === row.followUpId,
-      );
-      if (!queuedStill && !input.taken.has(row.followUpId)) {
-        const aggregate = runId;
-        const queued = { type: 'followup.queued', ...row } as const;
-        return {
-          rows: [{ ...queued, aggregateId: aggregate }],
-          sent: yield* landed(false),
-        };
-      }
-      // A delivery repeated under its id: still queued, or already taken.
-      return queuedStill
-        ? { rows: [], sent: yield* landed(true) }
-        : only({ kind: 'duplicate' });
+      const sent = sendVerdict(input, row);
+      if (sent.kind !== 'queue') return { rows: [], sent };
+      const queued = { type: 'followup.queued', ...row } as const;
+      return { rows: [{ ...queued, aggregateId: runId }], sent };
     });
   }
 
@@ -325,8 +264,8 @@ const queued = (input: RunRowsRead<'input'>): boolean =>
   input.followUps.some(isMessage);
 
 /** The session's follow-up inbox ({@link SessionInbox}): every run's input,
- *  one reader each, which every message to a run is accepted through.
- *  Built by the session layer and disposed with the session. */
+ *  which every message to a run is accepted through. Built by the session
+ *  layer and disposed with the session. */
 export class Inbox extends Context.Service<Inbox, SessionInbox>()(
   '@texra-ai/harness/session/Inbox',
 ) {}

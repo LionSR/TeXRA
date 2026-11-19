@@ -75,7 +75,7 @@ Where a run stands is three facts on its `RunView`, decided once by the reducer:
 ### Pure view queries (`@texra-ai/harness/schemas`)
 
 - **[`sessionActivity(view)`](./harness/schemas#sessionactivity)**: returns `'approval' | 'running' | 'idle'` for window titles and status indicators.
-- **[`attentionOf(view, previous?)`](./harness/schemas#attentionof)**: returns answerable [`PendingRequest`](./harness/schemas#pendingrequest)s (`requests`) and, since `previous`, newly arrived requests (`arrived`) and runs that ended (`finished`).
+- **[`attentionOf(view, previous?)`](./harness/schemas#attentionof)**: returns the pending [`PendingRequest`](./harness/schemas#pendingrequest)s (`requests`) and, since `previous`, newly arrived requests (`arrived`) and runs that ended (`finished`).
 - **[`acceptsFollowUp(runView)`](./harness/schemas#acceptsfollowup)**: returns whether a composer should allow `followUp.send` on `runView` (true for active/waiting runs and stopped top-level interactive runs that can resume from history).
 - **[`descendantRuns(view, rootRunId, { includeRoot })`](./harness/schemas#descendantruns)** and **[`rollupOf(children)`](./harness/schemas#rollupof)**: walk a parent run's child tree.
 

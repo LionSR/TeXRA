@@ -115,7 +115,9 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
     return yield* unavailable(
       config.retired === true
         ? `${config.label} is retired and no longer available from its provider. Choose another model.`
-        : `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
+        : config.openRouterOnly === true
+          ? `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`
+          : `${config.label} cannot call tools, which every run needs. Choose another model.`,
     );
   }
   const served = servingBackend(config);

@@ -91,11 +91,9 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
       text: 'Open diff',
       tooltip: 'Open diff (d)',
       action: 'openDiff',
-      disabled: this.readOnly,
       onClick: this.handleDiffAction,
     });
-    if (!isLatexFile(this.permission.data.path) || this.readOnly)
-      return openDiff;
+    if (!isLatexFile(this.permission.data.path)) return openDiff;
 
     const menu = actionMenu([
       {

@@ -304,20 +304,6 @@ export function acceptsFollowUp(run: RunView): boolean {
   );
 }
 
-/**
- * Whether this window can answer a pending request of `run`: the one rule
- * the host's attention badge and the request card both read, matching what
- * `SessionRequests.decide` accepts. A request is answered by the call
- * waiting on it, so only while its run waits here; an interrupted run has
- * to be resumed first.
- */
-export type RequestAnswerability = 'answerable' | 'resume';
-export function requestAnswerability(
-  run: Pick<RunView, 'approval'>,
-): RequestAnswerability {
-  return run.approval === 'own' ? 'answerable' : 'resume';
-}
-
 /** A pending request: which run asks, the payload the UI shows and who
  *  answers it. The list is a set keyed by `requestId`: opened without
  *  decided. */
@@ -379,28 +365,27 @@ export interface Attention<Request> {
   readonly finished: readonly RunView[];
 }
 
-function answerableRequests<View extends SessionView>(
+/** The pending requests of the runs the view holds: each one a person can
+ *  answer here, whether or not a process holds its run (an answer to a run
+ *  nobody holds resumes it). */
+function pendingRequests<View extends SessionView>(
   view: View,
 ): View['requests'][number][] {
-  return view.requests.filter((request) => {
-    const run = view.runs.get(request.runId);
-    return run !== undefined && requestAnswerability(run) === 'answerable';
-  });
+  return view.requests.filter((request) => view.runs.has(request.runId));
 }
 
 /**
  * The one attention rule every host reads (the extension's badge, reveal and
- * chime, the desktop's dock badge, notifications, and rail): a request wants
- * the user when this window can answer it (not one on a run another process
- * holds or waiting for its run's resume), and a run when its outcome lands.
+ * chime, the desktop's dock badge, notifications, and rail): a pending
+ * request wants the user, and a run when its outcome lands.
  */
 export function attentionOf<View extends SessionView>(
   view: View,
   previous?: SessionView,
 ): Attention<View['requests'][number]> {
-  const requests = answerableRequests(view);
+  const requests = pendingRequests(view);
   if (previous === undefined) return { requests, arrived: [], finished: [] };
-  const known = new Set(answerableRequests(previous).map((r) => r.requestId));
+  const known = new Set(pendingRequests(previous).map((r) => r.requestId));
   return {
     requests,
     arrived: requests.filter((request) => !known.has(request.requestId)),
@@ -415,11 +400,11 @@ export function attentionOf<View extends SessionView>(
 export type SessionTitleState = 'idle' | 'running' | 'approval';
 /**
  * The project-level activity every title and status pill shows, read from the
- * view and nothing else: a request this window can answer outranks a run
- * working right now; a conversation waiting on its user is idle.
+ * view and nothing else: a pending request outranks a run working right
+ * now; a conversation waiting on its user is idle.
  */
 export function sessionActivity(view: SessionView): SessionTitleState {
-  if (answerableRequests(view).length > 0) return 'approval';
+  if (pendingRequests(view).length > 0) return 'approval';
   for (const run of view.runs.values()) if (isWorking(run)) return 'running';
   return 'idle';
 }

@@ -40,10 +40,13 @@ export interface SessionApprovals {
   /** Update grants in one transaction, returning once durable and applied.
    *  An unchanged grant writes nothing. A grant turned on answers every
    *  open request it covers in that transaction, unless the request says
-   *  only a person answers it. */
+   *  only a person answers it, or it is `except`: a request of `runId`
+   *  whose decision commits elsewhere (a person's answer that run's next
+   *  activation commits). */
   change(
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
+    except?: string,
   ): Effect.Effect<
     void,
     DatabaseAggregateClosed | DatabaseReadFailed | DatabaseWriteFailed
