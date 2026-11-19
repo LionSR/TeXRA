@@ -42,6 +42,7 @@ import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
+import { runNoun } from '@ui/copy/nestedRuns';
 
 function shortenCwd(cwd: string): string {
   let home: string;
@@ -69,7 +70,7 @@ function childHeaderFor(
   return {
     label: child.label,
     modelLabel: child.modelLabel,
-    childKind: child.identity.kind === 'script' ? 'script' : 'subagent',
+    noun: runNoun(child),
     parentLabel: parent === undefined ? 'main' : runLabelOf(parent),
   };
 }

@@ -2344,7 +2344,7 @@ const SCENARIOS = [
       'y approve',
     ],
     unexpect: [
-      'subagent: strategy · parent: main',
+      'agent: strategy · parent: main',
       'signal read during notification phase',
       'ERROR',
     ],
