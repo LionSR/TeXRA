@@ -113,7 +113,63 @@ function buildAcceptSuccessMessage(
  */
 interface CommitAcceptedFilePorts<E = never> {
   showInfo: (message: string) => Effect.Effect<void, E>;
+  /** {@link replaceIfUnchanged}, run in the process that holds the
+   *  project's session, where its tasks write. */
+  replace: (
+    ...write: Parameters<typeof replaceIfUnchanged>
+  ) => Effect.Effect<
+    boolean,
+    E | PlatformError.PlatformError,
+    FileSystem.FileSystem
+  >;
 }
+
+/**
+ * Replace the file at `targetPath` with `contents` while it still holds
+ * `confirmedAgainst` (`undefined` for no file); answers whether it did.
+ * The confirmation was given to the target as it was when the dialog
+ * opened, and the dialog can stay open for minutes: a save to the target
+ * meanwhile (the user's editor, a run) is not replaced on that answer. The
+ * check and the write hold the file's write lane, shared with every other
+ * writer in this process that reads, decides and writes it (an approved
+ * edit, the editor's save). The new content is staged beside the file and
+ * renamed over it, so a write that fails partway leaves the user's file as
+ * it was. An existing target is replaced where a symlink points, with the
+ * mode it had.
+ */
+export const replaceIfUnchanged = Effect.fn('replaceIfUnchanged')(function* (
+  targetPath: string,
+  contents: string,
+  confirmedAgainst: string | undefined,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* Effect.gen(function* () {
+    const current = yield* contentOrMissing(fs, targetPath);
+    if (current !== confirmedAgainst) return false;
+    const real =
+      current === undefined ? targetPath : yield* fs.realPath(targetPath);
+    const mode =
+      current === undefined ? undefined : (yield* fs.stat(real)).mode & 0o7777;
+    const staged = path.join(
+      path.dirname(real),
+      `.${path.basename(real)}.${randomUUID()}.tmp`,
+    );
+    yield* fs.writeFileString(staged, contents).pipe(
+      Effect.andThen(mode === undefined ? Effect.void : fs.chmod(staged, mode)),
+      Effect.andThen(fs.rename(staged, real)),
+      Effect.onError(() =>
+        fs.remove(staged, { force: true }).pipe(
+          Effect.ignore({
+            log: 'Warn',
+            message: `A staged accept file stays behind: ${staged}`,
+          }),
+        ),
+      ),
+      Effect.uninterruptible,
+    );
+    return true;
+  }).pipe(withFileWriteLane(targetPath));
+});
 
 /**
  * Host capabilities the accept-edited replace flow reaches through, so the
@@ -162,41 +218,11 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   const editedPath = editedLocation.absolutePath;
 
   const editedContent = yield* readNormalizedFile(fs, editedPath);
-  // The confirmation was given to the target as it was when the dialog
-  // opened; the dialog can stay open for minutes. A save to the target
-  // meanwhile (the user's editor, a run) is not replaced on that answer.
-  // The check and the write hold the file's write lane, shared with every
-  // other writer that reads, decides and writes it (an approved edit, the
-  // desktop editor's save). The new content is staged beside the file and
-  // renamed over it, so a write that fails partway leaves the user's file as
-  // it was. An existing target is replaced where a symlink points, with the
-  // mode it had.
-  const written = yield* Effect.gen(function* () {
-    const current = yield* contentOrMissing(fs, targetPath);
-    if (current !== confirmedAgainst) return false;
-    const real =
-      current === undefined ? targetPath : yield* fs.realPath(targetPath);
-    const mode =
-      current === undefined ? undefined : (yield* fs.stat(real)).mode & 0o7777;
-    const staged = path.join(
-      path.dirname(real),
-      `.${path.basename(real)}.${randomUUID()}.tmp`,
-    );
-    yield* fs.writeFileString(staged, editedContent).pipe(
-      Effect.andThen(mode === undefined ? Effect.void : fs.chmod(staged, mode)),
-      Effect.andThen(fs.rename(staged, real)),
-      Effect.onError(() =>
-        fs.remove(staged, { force: true }).pipe(
-          Effect.ignore({
-            log: 'Warn',
-            message: `A staged accept file stays behind: ${staged}`,
-          }),
-        ),
-      ),
-      Effect.uninterruptible,
-    );
-    return true;
-  }).pipe(withFileWriteLane(targetPath));
+  const written = yield* ports.replace(
+    targetPath,
+    editedContent,
+    confirmedAgainst,
+  );
   if (!written) {
     yield* ports.showInfo(
       `${targetFileName} changed while the confirmation was open; nothing was written. Accept again to replace the current content.`,

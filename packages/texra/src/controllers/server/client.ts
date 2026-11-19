@@ -454,7 +454,10 @@ export const reachBundledService = (
  * with `drain`) and wait until it is gone. The answer is the socket closing
  * under this connection: the service exits ahead of any response, so the
  * ask is sent without awaiting one (`discard`: it completes as the handler
- * starts). A socket nobody accepts on is a service already gone.
+ * starts). The service closes its socket after it has released every
+ * project store (`serve`), so its process may still be exiting, but the
+ * next opener of a project is not refused. A socket nobody accepts on is a
+ * service already gone.
  */
 export const stopService = (
   socket: string,
