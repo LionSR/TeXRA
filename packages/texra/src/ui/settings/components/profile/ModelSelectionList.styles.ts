@@ -12,10 +12,6 @@ export const modelSelectionListStyles: CSSResult = css`
     margin-top: var(--wa-space-l);
   }
 
-  .model-selection-section h2 {
-    margin-top: 0;
-  }
-
   .helper-model-row {
     display: flex;
     align-items: center;

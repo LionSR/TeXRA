@@ -233,10 +233,6 @@ export const runTabStyles = css`
     align-self: center;
   }
 
-  .tab-container.is-read-only .tab-title {
-    color: var(--color-text-secondary);
-  }
-
   .nested-run-icon {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
