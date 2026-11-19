@@ -1,7 +1,8 @@
 # A plugin's own aggregates: no writer since the external inquiry went
 
 Date: 2026-11-19
-Status: proposed (needs a storage decision)
+Status: implemented, by option 2 (no schema stamp bump). "Landed" below
+says what went and what an earlier store does now.
 Origin: the PR that retired the external inquiry and the plugin request
 (`feat!: retire the external inquiry tool`). Its threads were the one user
 of a plugin's own aggregate, and the PR stops short of removing that
@@ -46,3 +47,23 @@ the kind turns those stores into a defect at read. Two ways out:
    build retires.
 
 Recommended: 2, with the write side and the view in the same PR.
+
+## Landed
+
+Option 2, with the write side and the view, in the PR
+`refactor!: a session row's aggregate is its run`. Gone: the `plugin`
+aggregate kind (`pluginAggregateId`, `aggregateTarget`, `AggregateId` and
+`AggregateIdSchema`, whose one member left is `RunId`), `aggregateOf`,
+`ToolFact.aggregate`, a `plugin.fact` row's `parent` field and edge,
+`ownFactsChecked` with `FactKind.accepts`, `FactKind.supersedes` and
+`PluginFactRow`, and `SessionView.pluginFacts` with its updates. The store
+keeps its `kind` column and its stamp: every aggregate this build writes is
+`run`. A row under any other kind is an earlier build's
+(`DatabaseRowEarlier`, `decodeRow` in
+`packages/harness/src/controllers/session/rowCodec.ts`), left out of the
+listing and the tail with one warning, and the run it hangs under reads as
+an earlier build's, read-only (`EARLIER_AGGREGATE_PARENTS`, scanned with the
+earlier runs by `rowReader`). Deleting that run still collects the
+aggregate with it. Checked by the golden chat's resume
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts`), over a copy
+of the golden store with an inquiry thread hung under the chat.

@@ -61,7 +61,6 @@ export {
   type FactKinds,
   type Plugin,
   type PluginDefinition,
-  type PluginFactRow,
 } from '@tools/plugins';
 export type { WriteFilter } from '@tools/WriteTool';
 export {

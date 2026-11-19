@@ -16,7 +16,6 @@ import {
 } from '@shared/session/runHistory';
 import {
   isTranscriptEvent,
-  type AggregateId,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -118,7 +117,7 @@ export const queuedFollowUps = (
 export function createTestRunTrace(runId: RunId) {
   // Fixture run ids need not be well-formed; the reducer only stamps them.
   // cast: the key's shape is canonical, only its run id may be a fixture's.
-  const aggregateId = JSON.stringify(['run', runId]) as AggregateId;
+  const aggregateId = JSON.stringify(['run', runId]) as RunId;
   const rows: object[] = [
     { type: 'run.start', identity: { kind: 'agent', agent: 'test' } },
   ];

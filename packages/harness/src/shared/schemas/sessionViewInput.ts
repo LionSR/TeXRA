@@ -7,7 +7,6 @@
 import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
-import { AggregateIdSchema } from './identifiers';
 import {
   CommitOrdinalSchema,
   DisplayRowSchema,
@@ -81,7 +80,7 @@ export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;
  * its transcript.
  */
 export const TranscriptSubscriptionSchema = Schema.Struct({
-  id: AggregateIdSchema,
+  id: RunIdSchema,
   fromSeq: NonNegativeIntSchema,
 });
 export type TranscriptSubscription =
@@ -93,8 +92,8 @@ export type TranscriptSubscription =
  * runs the same read found this build cannot open.
  */
 const ExistenceReconciliationSchema = Schema.Struct({
-  checkedAggregateIds: Schema.Array(AggregateIdSchema),
-  present: Schema.Array(AggregateIdSchema),
+  checkedAggregateIds: Schema.Array(RunIdSchema),
+  present: Schema.Array(RunIdSchema),
   unreadable: Schema.Array(UnreadableRunSchema),
 });
 export type ExistenceReconciliation =
