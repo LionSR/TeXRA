@@ -104,7 +104,7 @@ on (`controllers/session/storeSchema.ts#prepareStore`). Every transaction the
 store runs MUST begin with `BEGIN IMMEDIATE`, so it holds the write lock from its
 first statement and never upgrades a read lock: it is the SQLite client's own
 transaction, which begins that way on a writable connection
-(`controllers/session/databaseLayer.ts#sql.withTransaction`). File maintenance
+(`controllers/session/storeConnection.ts#sql.withTransaction`). File maintenance
 runs outside these: the one-time `VACUUM` at setup and page reclaim in
 autocommit `incremental_vacuum` steps, neither of which writes a row
 (`controllers/session/storeSchema.ts#incrementalVacuum`, `#reclaimFreePages`).
@@ -144,7 +144,7 @@ is one SQLite transaction followed by the publication of its rows, and it
 SHALL run where it is called as one uninterrupted turn: the driver is
 synchronous, the job awaits nothing, and the scheduler does not take the
 fiber off between its steps (`agent/runtime/sessionEventsLayer.ts#commit`,
-`controllers/session/databaseLayer.ts#PreventSchedulerYield`). So jobs run one
+`controllers/session/storeConnection.ts#PreventSchedulerYield`). So jobs run one
 at a time, the table's commit order is the order of the calls, and a job's
 appends commit together or not at all
 (`controllers/session/databaseLayer.ts#job`).
@@ -174,12 +174,19 @@ given after close is a defect; a detached one is logged and dropped
 Once a job's transaction commits, the publisher SHALL publish what the job
 wrote, from memory, to the session's subscribers, one batch per job in commit
 order: the batch's display rows as a display read of the same commits returns
-them, and the commit it reached (`agent/runtime/sessionEventsLayer.ts#publish`,
+them, the commit before it and the commit it reached
+(`agent/runtime/sessionEventsLayer.ts#publish`,
 `controllers/session/databaseLayer.ts#displayRows`). Nothing in the session reads
-its own writes back to learn what it committed. A tail reads from the store only
-the rows it starts behind the publisher's last published commit, then follows
-the batches (`agent/runtime/sessionEventsLayer.ts#all`); the session's view takes its
-rows the same way (`controllers/session/sessionInputsLayer.ts#sessionInputsLayer`).
+its own writes back to learn what it committed. The publisher MUST NOT wait
+for a subscriber: it keeps a bounded number of batches for one that is behind
+and drops the oldest past that (`agent/runtime/sessionEventsLayer.ts#KEPT_BATCHES`).
+A reader MUST NOT lose a row to that: a batch whose commit before is past the
+last commit the reader saw shows the gap, and the reader reads the commits
+between from the store. So a tail reads from the store only the rows it starts
+behind the publisher's last published commit and any stretch it fell too far
+behind to be handed, and otherwise follows the batches
+(`agent/runtime/sessionEventsLayer.ts#batches`); the session's view takes its
+rows the same way (`controllers/session/sessionInputsLayer.ts#dropped`).
 Every projection is caught up when the store opens, and each append keeps it
 current in its own transaction, so a read never checks it
 (`controllers/session/databaseLayer.ts#upkeep.catchUp`,
@@ -212,7 +219,7 @@ known kind at a version above the one this build reads
 build lacks passes the gate; its rows read as written, marked unavailable
 (below). The
 gate MUST run at open, so no build opens a store holding core rows it cannot
-read, or writes beside them (`controllers/session/databaseLayer.ts#storeGate`); a
+read, or writes beside them (`controllers/session/databaseLayer.ts#store.gate`); a
 project store's one writer is the process that opened it (section 7), so what
 the store holds cannot change under it. A core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts#readableVersion`). Kinds a build deleted are
@@ -719,7 +726,11 @@ another process makes to it is seen through a 250 ms poll of SQLite's
 `data_version`
 (`controllers/session/globalDatabaseLayer.ts#'PRAGMA data_version'`), and
 since that process can be a newer build, the store gate runs again in each
-of its writes (`#Effect.andThen(gate, body)`). A project store runs no poll: its holder learns what it committed from its own
+of its writes (`controllers/session/storeConnection.ts#Effect.andThen(gate, body)`).
+A read of whether something changed (that poll, a values change feed) that
+keeps failing is retried for about a minute and then reported as a change,
+so its reader's own read meets the failure
+(`controllers/session/currentValues.ts#changeRead`). A project store runs no poll: its holder learns what it committed from its own
 publisher.
 
 ### 7.1 Aggregates
