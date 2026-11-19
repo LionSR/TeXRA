@@ -8,6 +8,7 @@ import { Clock, Effect, Option } from 'effect';
 import { definePlugin } from '@texra-ai/harness/plugins';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import { directLeanLanguageServices } from './direct/leanServerPool';
 import { LeanLanguageServices } from './leanLanguageServices';
@@ -27,7 +28,7 @@ import {
  * pool needs. Its programs, `prove` and `blueprint`, check each round of
  * their child's work with its tools.
  */
-export const lean4: TexraPlugin = {
+export const lean4: TexraPlugin = texraPlugin({
   ...definePlugin<LeanLanguageServices>({
     id: 'lean4',
     tools: [
@@ -103,4 +104,4 @@ export const lean4: TexraPlugin = {
         'Requires `lake` on PATH in every build; each Lake project can have its own language server, which stops when the last run using it ends, surfaced below.',
     },
   },
-};
+});

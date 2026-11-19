@@ -1,11 +1,12 @@
 /**
- * What a child's end tells its parent: its delivery, built once at the
- * child's terminal (`endRun`) from the run's report, kept rendered as the
- * run's `run.report` and queued typed on the parent's input by the end
- * transaction (`endIn`). A subagent delivers its reply or its failure; a
- * background script its calls' summary, its failure, or, stopped by a
- * person, a notice naming the run to resume; a stopped subagent delivers
- * nothing.
+ * What a run's end tells the runs it worked for (a child's parent, and any
+ * run whose message it took): its delivery, built once at the run's
+ * terminal (`endRun`) from the run's report, kept rendered as the run's
+ * `run.report` and queued typed on each recipient's input by the end
+ * transaction (`endIn`). A subagent, or a root another run asked, delivers
+ * its reply or its failure; a background script its calls' summary, its
+ * failure, or, stopped by a person, a notice naming the run to resume; a
+ * stopped subagent delivers nothing.
  */
 import { Effect } from 'effect';
 
@@ -53,8 +54,8 @@ function contextLines(
 }
 
 /**
- * The delivery a child's end makes, or null when it delivers nothing
- * (a stopped subagent, a script its awaiting call released).
+ * The delivery a run's end makes, or null when it delivers nothing
+ * (a stopped agent run, a script its awaiting call released).
  * `report` is the run's own, its outcome resolved by its end; `record` is
  * what its rows say before the end (its stop, an earlier report).
  */

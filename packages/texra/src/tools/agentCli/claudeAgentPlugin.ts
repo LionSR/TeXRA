@@ -28,6 +28,7 @@ import {
   importClaudeAgentSdk,
 } from './claudeAgentImport';
 import type { TexraPlugin } from '../registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 
 const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
 
@@ -39,7 +40,7 @@ const CLAUDE_CODE_INSTALL: InstallCommands = {
   default: 'npm install -g @anthropic-ai/claude-code',
 };
 
-export const claudeAgent: TexraPlugin = {
+export const claudeAgent: TexraPlugin = texraPlugin({
   ...definePlugin<ClaudeAgentSessions>({
     // ID kept as `claude-agent` for back-compat with persisted disabled-tool
     // preferences. The user-facing name has been rebranded to "Claude Code CLI"
@@ -140,4 +141,4 @@ export const claudeAgent: TexraPlugin = {
       authNote: 'OAuth, OAuth token, or API key',
     },
   },
-};
+});

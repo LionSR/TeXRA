@@ -417,7 +417,11 @@ type DefinedTool<T, R = never, Name extends string = string> = Omit<
 ## definePlugin
 
 A plugin value from its definition, its own services erased: the
-harness's built-ins and an app's plugins are written the same way.
+harness's built-ins and an app's plugins are written the same way. The
+value is `plugin` itself, frozen with the arrays and records it is
+written with (its tools, its probe, its programs): every session of the
+process shares the one definition, and none can change it for the
+others.
 
 ```ts
 const definePlugin: <ROut = never>(plugin: PluginDefinition<ROut>) => Plugin
