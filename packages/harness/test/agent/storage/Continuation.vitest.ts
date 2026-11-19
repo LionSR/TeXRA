@@ -9,7 +9,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { emptyRunEndOutput } from '@shared/schemas';
-import { deriveResumability } from '@agent/storage/resumability';
+import { deriveContinuation } from '@agent/storage/continuation';
 import { positionRow } from '@agent/runtime/loop/rows';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
@@ -53,7 +53,7 @@ const fail = (session: Session, runId: RunId) =>
   ]);
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
-  'deriveResumability',
+  'deriveContinuation',
   (it) => {
     it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
       buildPerTest: true,
@@ -67,7 +67,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* open(session, runId);
 
           expect(
-            yield* deriveResumability(runId).pipe(Effect.provide(session)),
+            yield* deriveContinuation(runId).pipe(Effect.provide(session)),
           ).toMatchObject({
             kind: 'checkpoint',
           });
@@ -94,7 +94,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* fail(session, runId);
 
             expect(
-              yield* deriveResumability(runId).pipe(Effect.provide(session)),
+              yield* deriveContinuation(runId).pipe(Effect.provide(session)),
             ).toEqual({
               kind: 'finished',
             });

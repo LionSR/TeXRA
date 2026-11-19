@@ -1,5 +1,5 @@
 {
-  "semantics": "Refactor candidates that were investigated, costed and refused, as data rather than prose. The format is section 2 of .agents/docs/implemented/process/2026-09-20-agent-refactorability-gates.md; the ratchet suite that note describes has since been removed. Each candidate carries an `id`, the `symbols` that carry its shape, and a `ruling` anchor holding the evidence. Each symbol's `signature` records the declaration as it stood when the candidate was refused (bodies elided as `{…}`, comments stripped, whitespace collapsed). No test checks it: a symbol whose shape has since changed is a cue to re-read the ruling, and the PR that changes the shape updates the entry. Citing the candidate's `id` in the PR body is a convention, not checked. Re-proposing a refused candidate as originally specified is the failure this exists to stop; landing a candidate on NEW evidence is legal, and that PR cites the id, states what changed, and deletes or rewrites the entry.",
+  "semantics": "Refactor candidates that were investigated, costed and refused, as data rather than prose, so that nobody re-proposes them. The format is section 2 of .agents/docs/implemented/process/2026-09-20-agent-refactorability-gates.md; the ratchet suite that note describes has been removed, and nothing replaces it. Each candidate carries an `id`, the `candidate` refused, `why` it was refused, a `ruling` anchor holding the evidence, and the `symbols` whose shape the refusal reasons about. Each symbol's `signature` records the declaration as it stood when the entry was last checked against the code (bodies elided as `{…}`, comments stripped, whitespace collapsed); every entry was re-read against main on 2026-11-19. An optional `reopenWhen` states, in one sentence, the condition under which the refusal no longer holds and the candidate may be proposed again; an entry without one is refused on its reasons alone. An entry refuses a change: one that only records that an audit misread the code does not belong here. No test checks the file: a symbol whose shape has since changed is a cue to re-read the ruling, and the PR that changes the shape or removes a reason updates the entry, deleting it when no reason remains. Citing the candidate's `id` in the PR body is a convention, not checked. Re-proposing a refused candidate as originally specified is the failure this exists to stop; landing a candidate on NEW evidence is legal, and that PR cites the id, states what changed, and deletes or rewrites the entry.",
   "candidates": [
     {
       "id": "EFF-ADOPT-config-provider",
@@ -35,26 +35,13 @@
     {
       "id": "EFF-ADOPT-retry-gate-circuit-breaker",
       "candidate": "ModelRetryGate onto the effect/persistence CircuitBreaker, with Effect.retry on its rejections behind the unchanged withRoutes",
-      "why": "The breaker cannot keep the gate's backoff rule. Its opening count survives a close and resets only by time, once the circuit has stayed closed as long as it was last open (node_modules/effect/src/persistence/CircuitBreaker.ts:15-16, :1143-1146, :1195, effect 4.1.0); a success while closed clears only the trip streak (:1204), and the next opening counts from the count the failing call started under (:480). The gate ends its streak on the first clean round-trip of a healthy route and never on a probe success (`settle` in packages/harness/src/agent/runtime/ModelRetryGate.ts, from #9078 and kept by #14781), so a released herd that fails at once grows the backoff while a route failing between successes stays at the base. Measured with one clean success between each recovery and the next failure: the gate cooled 1000 ms seven times; the breaker (jittered exponential from 1 s, capped at 5 min, midpoint jitter) opened for 1000, 2000, 4000, 8000, 16000, 32000 and 64000 ms. Every 5xx, 408 and 429 not scoped to the model cools the whole wire route (packages/llm/src/errors.ts:155-156), so an intermittently overloaded provider would stall every run on that credential toward the 5-minute cap; a constant openDuration brings back the herd re-failing at the base backoff that #9078 fixed. The breaker also never waits (CircuitBreaker.ts:18-21, :1149-1162) and withRoutes cannot add an error, so it would poll for as long as the probe runs, a whole billed turn (`ModelInvoker.invoke`), where a cooling route's callers wait out the backoff, one goes through as the probe, and the rest go with it once the route opens (`through` in ModelRetryGate.ts). classify has seen whether the call is the probe since effect 4.1.1 ({ probe }), which answers none of the reasons above; openDuration is fixed per breaker (:452-457) where baseBackoffMs is per call; the module is @stability experimental (:121).",
-      "ruling": "packages/harness/src/agent/runtime/ModelRetryGate.ts#settle",
+      "why": "The breaker cannot keep the gate's backoff rule. Its opening count survives a close and resets only by time, once the circuit has stayed closed as long as it was last open (node_modules/effect/src/persistence/CircuitBreaker.ts:15-16, :1047-1051, :1208-1209, effect 4.1.4); a success while closed clears only the trip streak (:1269), and the next opening counts from the count the failing call started under (:522). The gate ends its streak on the first clean round-trip of a healthy route and never on a probe success (`recordExit` in packages/harness/src/agent/runtime/ModelRetryGate.ts, from #9078 and kept by #14781), so a released herd that fails at once grows the backoff while a route failing between successes stays at the base. Measured with one clean success between each recovery and the next failure: the gate cooled 1000 ms seven times; the breaker (jittered exponential from 1 s, capped at 5 min, midpoint jitter) opened for 1000, 2000, 4000, 8000, 16000, 32000 and 64000 ms. Every 5xx, 408, 409 and 429 not scoped to the model cools the whole wire route (packages/llm/src/errors.ts:146-147, :189-193), so an intermittently overloaded provider would stall every run on that credential toward the 5-minute cap; a constant openDuration brings back the herd re-failing at the base backoff that #9078 fixed. The breaker also never waits (CircuitBreaker.ts:21-22, :1213-1228) and withRoutes cannot add an error, so it would poll for as long as the probe runs, a whole billed turn (`ModelInvoker.invoke`), where a cooling route's callers wait out the backoff, one goes through as the probe, and the rest go with it once the route opens (`through` in ModelRetryGate.ts). classify has seen whether the call is the probe since effect 4.1.1 ({ probe }), which answers none of the reasons above; the module is @stability experimental (:154). The gate's base backoff is now one constant (RETRY_BACKOFF_MS) rather than a per-call baseBackoffMs, so a per-breaker openDuration is no longer a reason.",
+      "ruling": "packages/harness/src/agent/runtime/ModelRetryGate.ts#recordExit",
       "symbols": [
         {
           "file": "packages/harness/src/agent/runtime/ModelRetryGate.ts",
           "symbol": "ModelRetryGate",
           "signature": "export interface ModelRetryGate { readonly withRoutes: ( routes: readonly [RoutePolicy, ...RoutePolicy[]], ) => <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>; }"
-        }
-      ]
-    },
-    {
-      "id": "EFF-ADOPT-timeouts-already-effect",
-      "candidate": "packages/harness/src/tools/timeouts.ts onto Effect timeouts and Schedule",
-      "why": "Already Effect.timeoutOrElse and Schedule. The one real item in this area is the duplicated [1, 2) backoff spelling, which moves to a host-neutral module; the module itself is not the candidate.",
-      "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
-      "symbols": [
-        {
-          "file": "packages/harness/src/tools/timeouts.ts",
-          "symbol": "retryTransientFetch",
-          "signature": "export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')( <T, E extends Error, R>( request: Effect.Effect<T, E, R | Scope.Scope>, options: RetryTransientFetchOptions<E>, ) => {…}, );"
         }
       ]
     },
@@ -65,7 +52,7 @@
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#2-changes",
       "symbols": [
         {
-          "file": "packages/harness/src/utils/core/index.ts",
+          "file": "packages/harness/src/utils/core/backoffSchedule.ts",
           "symbol": "jitteredExponentialBackoffMs",
           "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, unitRandom: number, ): number {…}"
         }
@@ -74,8 +61,9 @@
     {
       "id": "EFF-ADOPT-mcp-client",
       "candidate": "The stdio MCP client (mcpServer.ts over jsonRpc.ts newline framing) onto effect/ai McpClient.stdio",
-      "why": "effect 4.1.0's McpClient (@stability experimental) speaks one protocol revision per client and fails any other answer: its ProtocolVersion is 2025-11-25 | 2026-07-28 (node_modules/effect/src/ai/McpClient.ts:66, :541-545), it sends initialize once (:283-290), and a server answering another revision fails with UnsupportedError (:305-308). A server that does not speak the requested revision answers with its own latest (@modelcontextprotocol/sdk 1.30.0 dist/esm/server/index.js:259-263), so every stdio server still on 2025-06-18, 2025-03-26 or 2024-11-05 would start with no tools; ours asks for 2025-06-18 and accepts whatever the server answers (packages/harness/src/tools/mcp/mcpServer.ts:50, :334-342). Its decoding also rejects shapes ours accepts: a null optional field or a tool without inputSchema.type fails the whole tools/list (ai/internal/mcpSchema/v2024_11_05.ts:23-31, v2025_06_18.ts:218-234), and an unknown content block fails the call (v2025_06_18.ts:243-248). Adoption would delete about 135 lines and bring notifications/cancelled on interrupt (McpClient.ts:655-661); mcpConfig.ts has no counterpart. Revisit when McpClient accepts an older revision in the server's answer.",
+      "why": "effect 4.1.4's McpClient (@stability experimental) speaks one protocol revision per client and fails any other answer: its ProtocolVersion is 2025-11-25 | 2026-07-28 (node_modules/effect/src/ai/McpClient.ts:70, :839, :860), it sends initialize once (:381-387), and a server answering another revision fails with UnsupportedError (:402-407). McpProtocol ships adapters for 2024-11-05, 2025-03-26 and 2025-06-18 (McpProtocol.ts:229-254), but the client takes only an adapter of its own two revisions. A server that does not speak the requested revision answers with its own latest (@modelcontextprotocol/sdk 1.30.0 dist/esm/server/index.js:259-263), so every stdio server still on 2025-06-18, 2025-03-26 or 2024-11-05 would start with no tools; ours asks for 2025-06-18 and accepts whatever the server answers (packages/harness/src/tools/mcp/mcpServer.ts:49, :327-335). Its decoding also rejects shapes ours accepts: a null optional field or a tool without inputSchema.type fails the whole tools/list (ai/internal/mcpSchema/v2024_11_05.ts:21-29, v2025_06_18.ts:215-235), and an unknown content block fails the call (v2025_06_18.ts:155-161, :241-245). Adoption would delete about 135 lines and bring notifications/cancelled on interrupt (McpClient.ts:976, :1396-1400); mcpConfig.ts has no counterpart. Revisit when McpClient accepts an older revision in the server's answer.",
       "ruling": "packages/harness/src/tools/mcp/mcpServer.ts#PROTOCOL_VERSION",
+      "reopenWhen": "When effect's McpClient accepts a server answering an older protocol revision (2025-06-18 or earlier) than the one it asked for.",
       "symbols": [
         {
           "file": "packages/harness/src/tools/mcp/mcpServer.ts",
@@ -87,7 +75,7 @@
     {
       "id": "RT-execute-command-lift",
       "candidate": "executeCommand as one lifted round trip",
-      "why": "It is a program reached from 56 files, not a lane with a single foreign edge.",
+      "why": "It is a program imported by 14 source files across the harness, the app and the CLI, not a lane with a single foreign edge.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-candidates-do-not-re-mine",
       "symbols": [
         {
@@ -111,19 +99,6 @@
       ]
     },
     {
-      "id": "RT-desktop-pty-host-effect",
-      "candidate": "The desktop PTY host as an Effect",
-      "why": "Built, measured, reverted: the file would become a runtime effect importer whose catch sites two of five are irreducibly synchronous, so it needs Effect.runSync in a module holding no runtime. Measured +21 LoC for one lift removed.",
-      "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "packages/desktop/src/main/desktopPtyHost.ts",
-          "symbol": "createDesktopPtyHost",
-          "signature": "export function createDesktopPtyHost( options: DesktopPtyHostOptions, ): DesktopPtyHost {…}"
-        }
-      ]
-    },
-    {
       "id": "SCOPE-external-roots-standalone-service",
       "candidate": "ExternalRoots as a standalone service",
       "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today; recorded as a hazard on #12071.",
@@ -139,13 +114,13 @@
     {
       "id": "LLM-subscription-credential-facade",
       "candidate": "a subscriptionCredential(route, secrets) call in @texra-ai/llm over the ChatGPT and Grok session coordinators, replacing the harness's two route branches in routeCredential",
-      "why": "Built and closed unmerged: the coordinators keep consumers in two packages (the harness, and the app's subscriptionProviders.ts), so both stay exported and the call hides nothing. The harness's two branches are 32 lines; the facade is 58 plus two new exports, net +26, a layer that deletes nothing it replaces. The coordinators have since become the SubscriptionAccounts service in llm, built with the store Secrets.layer provides and read by route in both packages, which deleted the per-store memo and the two status pass-throughs and added no call; the facade over it is still refused for the same reason.",
+      "why": "Built and closed unmerged: the coordinators keep consumers in two packages (the harness, and the app's subscriptionProviders.ts), so both stay exported and the call hides nothing. The harness's two branches were 32 lines; the facade was 58 plus two new exports, net +26, a layer that deletes nothing it replaces. The coordinators have since become the SubscriptionAccounts service in llm, built with the store Secrets.layer provides and the client identity, and read by route in both packages, which deleted the per-store memo and the two status pass-throughs and added no call; the harness now reads both routes through one file-local subscriptionCredential in credentials.ts. The facade over the service is still refused for the same reason.",
       "ruling": "https://github.com/LionSR/TeXRA/pull/14504",
       "symbols": [
         {
           "file": "packages/llm/src/oauth/subscriptionAccounts.ts",
           "symbol": "SubscriptionAccounts",
-          "signature": "export class SubscriptionAccounts extends Context.Service< SubscriptionAccounts, { readonly 'chatgpt-subscription': SubscriptionCoordinator<ChatgptSession>; readonly 'xai-subscription': SubscriptionCoordinator<XaiSession>; } >()('@texra-ai/llm/SubscriptionAccounts') { static make( secrets: CredentialStore, ): Effect.Effect<SubscriptionAccounts['Service']> {…} }"
+          "signature": "export class SubscriptionAccounts extends Context.Service< SubscriptionAccounts, { readonly 'chatgpt-subscription': SubscriptionCoordinator<ChatgptSession>; readonly 'xai-subscription': SubscriptionCoordinator<XaiSession>; readonly client: ClientIdentity; } >()('@texra-ai/llm/SubscriptionAccounts') { static make( secrets: CredentialStore, client: ClientIdentity, ): Effect.Effect<SubscriptionAccounts['Service']> {…} }"
         },
         {
           "file": "packages/harness/src/agent/runtime/modelAccess/credentials.ts",
@@ -157,18 +132,18 @@
     {
       "id": "SESSION-one-view-service",
       "candidate": "merge SessionViewService (the view updater's ref and changes) into SessionViewAccess, so a session has one view service",
-      "why": "Two layers, not two copies. SessionViewService is the view updater: the session's own view and the cross-process RemoteSessionView (which has no store) are both built on it. SessionViewAccess is the session's view as runs and readers take it: local state, transcript subscriptions, marks, gated by the store's doors-shut flag. The store (folded is derived from ref) and ownerLiveness read the updater because they are built before the access. One service would need the doors-shut flag owned below the store as a new tag (one tag deleted, one added, no element removed) and would hand RemoteSessionView a store dependency it does not use. Measured on main e0ba9992b0 after #14546.",
+      "why": "Two layers, not two copies. SessionViewService is the view updater: the session's own view and the cross-process RemoteSessionView (which has no store) are both built on it (packages/harness/src/shared/session/sessionViewService.ts). SessionViewAccess is the session's view as runs and readers take it: the view, a read rebuilt from the log, the transport inputs and the transcript subscriptions, the subscriptions gated by the store's doors-shut flag (`closed`). The store reads the updater because it is built before the access: a transaction returns once the updater's changes show its commit applied. One service would need the doors-shut flag owned below the store as a new tag (one tag deleted, one added, no element removed) and would hand RemoteSessionView a store dependency it does not use. Measured on main e0ba9992b0 after #14546; since then ownerLiveness is gone and the access no longer carries marks or local runtime state, which leaves the store as the one reader built before it.",
       "ruling": "https://github.com/LionSR/TeXRA/pull/14559",
       "symbols": [
         {
-          "file": "packages/harness/src/controllers/session/SessionView.ts",
+          "file": "packages/harness/src/shared/session/sessionViewService.ts",
           "symbol": "SessionViewService",
           "signature": "export class SessionViewService extends Context.Service< SessionViewService, { readonly ref: SubscriptionRef.SubscriptionRef<SessionView>; readonly changes: Stream.Stream<SessionView>; } >()('@texra-ai/harness/session/SessionView') { static readonly layer = Layer.effect( SessionViewService, Effect.gen(function* () {…}), ); }"
         },
         {
-          "file": "packages/harness/src/controllers/session/SessionView.ts",
+          "file": "packages/harness/src/shared/session/sessionViewService.ts",
           "symbol": "makeSessionViewAccess",
-          "signature": "export const makeSessionViewAccess = Effect.fn( 'SessionView.makeSessionViewAccess', )(function* ( storage: string, closed: () => boolean, ): Effect.fn.Return< SessionViewAccessShape, DatabaseReadFailed, | Scope.Scope | SessionViewService | SessionInputs | TranscriptSubscriptions | LocalRuntimeSource > {…});"
+          "signature": "export const makeSessionViewAccess = Effect.fn( 'SessionView.makeSessionViewAccess', )(function* ( storage: string, closed: () => boolean, ): Effect.fn.Return< SessionViewAccessShape, DatabaseReadFailed, Scope.Scope | SessionViewService | SessionInputs | TranscriptSubscriptions > {…});"
         }
       ]
     },
@@ -184,9 +159,9 @@
           "signature": "export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* ( keep?: ApiKeyProviderId, ): Effect.fn.Return<Record<string, string>> {…});"
         },
         {
-          "file": "packages/harness/src/utils/system/gitEnv.ts",
-          "symbol": "makeMachineGitEnv",
-          "signature": "export const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv> = Effect.suspend(() => {…});"
+          "file": "packages/harness/src/utils/system/git.ts",
+          "symbol": "machineGitEnv",
+          "signature": "const machineGitEnv: Effect.Effect<NodeJS.ProcessEnv> = Effect.suspend(() => {…});"
         },
         {
           "file": "packages/harness/src/tools/mcp/mcpServer.ts",
@@ -198,18 +173,18 @@
     {
       "id": "RT-tool-edit-staging-one-owner",
       "candidate": "the tool-edit approval's staging in the controller, with each host reduced to its diff verbs",
-      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters; the diff's title is one label in ui/copy/toolEditPreview.ts.",
+      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters; the diff's title is one label in packages/texra/src/ui/copy/toolEditPreview.ts.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
       "symbols": [
         {
           "file": "packages/desktop/src/main/desktopToolEditApproval.ts",
           "symbol": "DesktopToolEditApprovalHost",
-          "signature": "export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {…}"
+          "signature": "export class DesktopToolEditApprovalHost implements ToolEditApprovalHost { private readonly options: DesktopToolEditApprovalHostOptions; constructor(options: DesktopToolEditApprovalHostOptions) {…} get openBuildDisplay(): BuildDisplayFn {…} focused(): boolean {…} stagePreview( request: ToolEditPreviewRequest, ): Effect.Effect<ToolEditPreview, HostCommandFailure, FileSystem.FileSystem> {…} reportError(message: string): void {…} private show(dialog: Effect.Effect<void>): void {…} }"
         },
         {
           "file": "packages/extension/src/frontend/approval/VscodeToolEditApprovalHost.ts",
           "symbol": "VscodeToolEditApprovalHost",
-          "signature": "export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {…}"
+          "signature": "export class VscodeToolEditApprovalHost implements ToolEditApprovalHost { private readonly diffViewHost = new VscodeDiffViewHost(); readonly openBuildDisplay: BuildDisplayFn; private readonly storageDirectory: string; private readonly fork: ScopedFork<never>; constructor( storageDirectory: string, fork: ScopedFork<never>, showBuilt: ShowBuilt, ) {…} focused(): boolean {…} stagePreview( request: ToolEditPreviewRequest, ): Effect.Effect<ToolEditPreview, HostCommandFailure, FileSystem.FileSystem> {…} reportError(message: string): void {…} private readonly warn = (message: string): void => {…}; }"
         }
       ]
     },
@@ -235,14 +210,14 @@
         {
           "file": "packages/texra/src/tools/github/subscriptionsLayer.ts",
           "symbol": "gitHubSubscriptionsLayer",
-          "signature": "export const gitHubSubscriptionsLayer: Layer.Layer< GitHubSubscriptions, never, AppSignals > = Layer.effect(…);"
+          "signature": "export const gitHubSubscriptionsLayer: Layer.Layer< GitHubSubscriptions, never, AppSignals > = Layer.effect( GitHubSubscriptions, Effect.gen(function* () {…}), ).pipe( Layer.provide( RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory)), ), );"
         }
       ]
     },
     {
       "id": "RT-desktop-window-fiberhandle",
       "candidate": "the desktop window as one FiberHandle: open as FiberHandle.run with onlyIfMissing, the closed event as FiberHandle.clear, the shutdown as awaitEmpty, the quit's resume as a Deferred",
-      "why": "FiberHandle.run with onlyIfMissing returns an already-interrupted fiber while the handle still holds the closing window's fiber (FiberHandle.js runImpl), and clear holds it there until the window's scope has released. A reopen asked for during a close (the macOS dock click right after closing) would be dropped instead of waiting for the release and opening, which the current open does with `releasing`. awaitEmpty before run cannot replace it: on an open window it never returns, so open would need the closing state again. The quit's resume must also stay on setImmediate: a quit requested from inside `closed` lands before Electron removes the window and is abandoned. The three optionals are one state value instead (closed, open, closing), not a different primitive.",
+      "why": "FiberHandle.run with onlyIfMissing returns an already-interrupted fiber while the handle still holds the closing window's fiber (FiberHandle.js runImpl), and clear holds it there until the window's scope has released. A reopen asked for during a close (the macOS dock click right after closing) would be dropped instead of waiting for the release and opening, which the current open does by waiting on the `closing` state's `release`. awaitEmpty before run cannot replace it: on an open window it never returns, so open would need the closing state again. The quit's resume must also stay on setImmediate: a quit requested from inside `closed` lands before Electron removes the window and is abandoned. The three optionals are one state value instead (closed, open, closing), not a different primitive.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
       "symbols": [
         {
@@ -254,8 +229,8 @@
     },
     {
       "id": "RT-listing-entry-actions",
-      "candidate": "the run listing entry carries RunView.actions (runActions) in place of resumable/resumeBlocked, so listRuns stops calling deriveResumability",
-      "why": "The two answer different questions. The listing's resumable is deriveResumability's checkpoint: a run that continues from its rows whatever its outcome, so a completed conversation is listed resumable and the CLI resume list enables it, and resumeBlocked carries why rows cannot be continued here (an earlier build, damaged rows, a plugin this process does not load). runActions offers resume only on an interrupted loop-driven run or an unfinished script, and reads the view, which holds no plugin facts, so the listing would disable every finished conversation and lose the blocked reason (packages/harness/example/10-external-plugin.ts asserts it). continuesFromRows is the shared rule both read on purpose, not a second decider.",
+      "candidate": "the run listing entry carries RunView.actions (runActions) in place of continues/continueBlocked, so listRuns stops calling deriveContinuation",
+      "why": "The two answer different questions. The listing's continues is deriveContinuation's checkpoint: a run that continues from its rows whatever its outcome, so a completed conversation is listed as continuing and the CLI resume list enables it, and continueBlocked carries why rows cannot be continued here (an earlier build, damaged rows, a plugin this process does not load). runActions offers resume only on an interrupted loop-driven run or an unfinished script, and reads the view, which holds no plugin facts, so the listing would disable every finished conversation and lose the blocked reason (packages/harness/example/10-external-plugin.ts asserts it). continuesFromRows is the shared rule both read on purpose, not a second decider.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
       "symbols": [
         {
@@ -267,26 +242,26 @@
     },
     {
       "id": "DOC-user-edit-on-task-run",
-      "candidate": "the user's Accept-time edit recorded on the document task's own run: the revision record gains `userEdit: { round, diff } | null`, written by the progress view's Accept (ProgressWorkflowFileActionsController.userEdit), and document_context reads it into the next revision's prompt",
-      "why": "No supported write reaches the run's documents fact from the host's Accept path. A run's `plugin.fact` rows are committed only by the run's own tool calls (`ToolResult.facts`, in the call's `tool.result` batch); the one other plugin write, `RequestDecisionHook.commit`, runs only while a pending plugin request of the run is being decided and commits facts about the plugin's own aggregate (`ownFactRow` hangs them under the run as `plugin:<aggregate>`), which `RunView.facts` and `documentRoundsOf` never read. A host-side append to an ended run would be a new session-store write path in the harness. It would also have no reader: Accept acts on outputs the task already proposed, a completed recipe does not run another revision on resume, a fork drops the documents fact (`fork: 'drop'`), and Run again is a new run with fresh documents. An Accept while the task still runs would race the recipe's whole-list commit (`withRound`), which drops the other writer's change. The launcher note #14713 sends (`followUpLauncher`) is the reader that exists; a task with no launcher has no later turn to read the edit.",
+      "candidate": "the user's Accept-time edit recorded on the document task's own run: the revision record gains `userEdit: { round, diff } | null`, written by the progress view's Accept (ProgressDocumentTaskFileActionsController.userEdit), and document_context reads it into the next revision's prompt",
+      "why": "No supported write reaches the run's documents fact from the host's Accept path. A run's `plugin.fact` rows are committed only by the run's own tool calls (`ToolResult.facts`, in the call's `tool.result` batch); the one other plugin write, `RequestDecisionHook.record`, runs only while a pending plugin request of the run is being decided and commits facts about the plugin's own aggregate (`factRow` hangs a fact that names an `aggregate` under the run as `plugin:<aggregate>`), which `RunView.facts` and `documentRoundsOf` never read. A host-side append to an ended run would be a new session-store write path in the harness. It would also have no reader: Accept acts on outputs the task already proposed, a completed program does not run another revision on resume, a fork drops the documents fact (`fork: 'drop'`), and Run again is a new run with fresh documents. An Accept while the task still runs would race the program's whole-list commit (`withRound`), which drops the other writer's change. The launcher note #14713 sends (`followUpLauncher`) is the reader that exists; a task with no launcher has no later turn to read the edit.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#c-plugins",
       "symbols": [
         {
           "file": "packages/texra/src/shared/plugins/documents.ts",
           "symbol": "documentsOutputFact",
-          "signature": "export function documentsOutputFact( rounds: readonly RoundOutput[], diffs: DocumentDiffs = {}, ): ToolFact {…}"
+          "signature": "export function documentsOutputFact( task: DocumentTaskSpec, rounds: readonly RoundOutput[], diffs: DocumentDiffs = {}, ): ToolFact {…}"
         },
         {
           "file": "packages/harness/src/tools/plugins.ts",
-          "symbol": "ownFactRow",
-          "signature": "export const ownFactRow = ( { aggregate, ...fact }: ToolFact & { readonly aggregate: string }, runId: RunId, ): OwnFactRow => ({…});"
+          "symbol": "factRow",
+          "signature": "export const factRow = ( { aggregate, ...fact }: ToolFact, runId: RunId, ): FactRow => aggregate === undefined ? {…} : {…};"
         }
       ]
     },
     {
       "id": "LLM-one-no-completed-turn-check",
       "candidate": "one \"no completed turn\" check: assembleTurn's terminal check alone, deleting the public completedTurn fold's and the harness invoker's empty-stream failures (storage-errors note §6, round-3 audit V R13), with the codec layout move (input lowering into each *Codec.ts) beside it",
-      "why": "The three checks guard three boundaries of the Model interface, not one fact said three times. assembleTurn ends llm's own codecs' streams; completedTurn folds any Model's streamTurn, an embedder's included, which the package does not assemble; and ModelInvoker.finishAttempt reads any bound Model, the canned validation model among them, which emits its own events. A Model that ends its stream without a completed event is outside llm's codecs, so deleting either outer check turns that into a silent null turn. The abnormal-end kinds the note named have already converged (Google's live and background non-completed statuses and OpenAI's failed/cancelled are all provider-rejection) and the SyntaxError pre-checks are gone, so the remaining three checks are the boundary guards. The codec layout move is a file move with no fact behind it and was left with them.",
+      "why": "The three checks guard three boundaries of the Model interface, not one fact said three times. assembleTurn ends llm's own codecs' streams; completedTurn folds any Model's streamTurn, an embedder's included, which the package does not assemble; and ModelInvoker.consume reads any bound Model, the canned validation model among them, which emits its own events. A Model that ends its stream without a completed event is outside llm's codecs, so deleting either outer check turns that into a silent null turn. The abnormal-end kinds the note named have already converged (Google's live and background non-completed statuses and OpenAI's failed/cancelled are all provider-rejection) and the SyntaxError pre-checks are gone, so the remaining three checks are the boundary guards. The codec layout move is a file move with no fact behind it and was left with them.",
       "ruling": ".agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md#6-the-model-call-failure-path",
       "symbols": [
         {
@@ -312,7 +287,7 @@
     {
       "id": "SESSION-roots-carry-rooted-fs",
       "candidate": "WorkspaceFs and StorageFs as fields of one SessionRoots value instead of context tags",
-      "why": "Eleven host boundaries run a program over a project's files with no session (withSessionFs over a WorkspaceRoots or a Pick of it: the settings view, VS Code commands, the CLI memory commands, the clipboard image). As fields of SessionRoots each would build the whole session roots value to hand a LaTeX helper or the memory store one rooted view, and every such program would require the session's roots: two tags deleted, the builder renamed, wider requirements, no element removed. The controllers' WorkspaceRoots tag is the storage key of a session graph, provided as { storage } alone by the read-only and remote views, which hold no roots.",
+      "why": "Ten call sites run a program over a project's files with no session of their own (withSessionFs over a WorkspaceRoots or a Pick of it: the settings view, the LaTeX preview, VS Code commands, the CLI memory commands and memory list form, the clipboard image, a run's file deletion). As fields of SessionRoots each would build the whole session roots value to hand a LaTeX helper or the memory store one rooted view, and every such program would require the session's roots: two tags deleted, the builder renamed, wider requirements, no element removed. The SessionWorkspace tag (packages/harness/src/shared/session/sessionWorkspace.ts) is the storage key of a session graph, provided as { storage } alone by the webview's session view, the read-only session reader and the project database, which hold no roots.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#r8s-second-half-and-m8-what-landed-and-what-was-refused",
       "symbols": [
         {
@@ -338,20 +313,25 @@
     {
       "id": "MCP-failed-start-rcmap-lookup",
       "candidate": "the MCP pool's failed start held as a failing RcMap lookup, with the failed-key Set deleted",
-      "why": "RcMap has no read that does not acquire: RcMap.has only reports that a key is present, and getOption retains the entry and waits on a start still in flight (RcMap.d.ts, effect 4.1.2). A root run's sweep over the keys would wait up to the start timeout on starts in flight and renew every idle server's lifetime. The rule that a task waits on a dead start only once needs the Set. Found as M2 (round 2, M-harness-tools.md); refused in #14786; re-checked by round 3's V (S9).",
+      "why": "RcMap has no read that does not acquire: RcMap.has only reports that a key is present, and getOption retains the entry and waits on a start still in flight (RcMap.d.ts, effect 4.1.4). A root run's sweep over the keys would wait up to the start timeout on starts in flight and renew every idle server's lifetime; the sweep in `projectServers`'s `hold` reads only the keys in the failed-start Set, whose starts have finished. The rule that a task waits on a dead start only once needs the Set. Found as M2 (round 2, M-harness-tools.md); refused in #14786; re-checked by round 3's V (S9).",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#f-small-items-this-session",
       "symbols": [
         {
-          "file": "packages/harness/src/tools/sessionTools.ts",
-          "symbol": "(module header)",
-          "signature": "the failed-start Set beside the RcMap of servers"
+          "file": "packages/harness/src/tools/mcp/mcpConfig.ts",
+          "symbol": "projectServers",
+          "signature": "export const projectServers = Effect.fnUntraced(function* ( spawner: ChildProcessSpawner['Service'], loader: PluginLoader, ) {…});"
+        },
+        {
+          "file": "packages/harness/src/tools/mcp/mcpConfig.ts",
+          "symbol": "projectServers.failed",
+          "signature": "const failed = new Set<ServerKey>();"
         }
       ]
     },
     {
       "id": "DISPATCH-script-lanes-semaphore",
       "candidate": "the script door's per-call Deferred maps (handed, places) replaced by a Semaphore whose permits order the calls",
-      "why": "Semaphore.take(n) lets a smaller later request overtake a larger one queued ahead of it (Semaphore.d.ts:116-117, effect 4.1.2), so a one-permit call would pass the barrier the maps hold; the maps release calls strictly in the order they finished. Found as E10 (round 1, E-loop-tools.md); measured and left in #14788; re-checked by round 3's V (S10).",
+      "why": "Semaphore.take(n) lets a smaller later request overtake a larger one queued ahead of it (Semaphore.d.ts:115-118, effect 4.1.4), so a one-permit call would pass the barrier the maps hold; the maps release calls strictly in order: `places` in issue order (`seq`), `handed` in the order the replayed calls finished. Found as E10 (round 1, E-loop-tools.md); measured and left in #14788; re-checked by round 3's V (S10).",
       "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-3/V-compromises.md#still-right",
       "symbols": [
         {
@@ -375,33 +355,20 @@
       ]
     },
     {
-      "id": "DOCS-task-file-snapshots-weakmap-stays",
-      "candidate": "the documents plugin's taskFileSnapshots WeakMap replaced by Effect.cached on the run opening, or by a Cache.make({ lookup: taskFileVars, capacity }) served from the plugin's layer",
-      "why": "The opening is built in the harness run runtime (agent/runtime), which knows nothing of a document task's template files; carrying an Effect.cached of an app read on it puts the app's vocabulary in the harness. A Cache in the plugin's layer is keyed the same way (by the opening's identity) but holds every key strongly until its capacity evicts it, and an eviction mid-run re-reads the template files, so an edit made mid-run would reach the run's later revisions, which the snapshot exists to prevent. A WeakMap keyed by the opening is exactly a memo whose lifetime is the opening's: file-local, never returned, nothing to reset between tests (each test builds its own opening). Found as I12 (round 2); refused in package C's follow-up.",
-      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/I-latex-documents.md#finding-12-batched-smaller-flags-each-one-pr",
-      "symbols": [
-        {
-          "file": "packages/texra/src/tools/documents/documentState.ts",
-          "symbol": "taskFileSnapshots",
-          "signature": "const taskFileSnapshots = new WeakMap< NonNullable<ToolRun['opening']>, Effect.Success<ReturnType<typeof taskFileVars>> >();"
-        }
-      ]
-    },
-    {
       "id": "DOCS-prepare-run-workspace-per-call-stays",
       "candidate": "the documents plugin's per-tool-call prepareRunWorkspace moved into document_context's first-revision step, so later calls of a revision skip it",
-      "why": "A later call cannot skip it: RunFileService is built per activation, so after a resume the first call to reach the documents may be any revision's, and every call reads the snapshot list (computeOutputDiffStats's diff base). The repeat call is already one field read (preparedBaseFiles); what it re-does is supportFiles, pure path math over the config's file lists with no I/O, and the catalog lookup, a map read the call needs anyway for the task block. Moving the snapshot to the first revision would make a resumed run's diff base depend on which tool it called first. Found as I12 (round 2); refused in package C's follow-up.",
+      "why": "A later call cannot skip it: RunWorkspace is built per activation (runWorkspaceOf keys it by the activation's scope), so after a resume the first call to reach the documents may be any revision's, and every call reads the snapshot list (computeOutputDiffStats's diff base). The repeat call is already one field read (preparedBaseFiles); what openDocuments re-does around it is supportFiles and the source locations, pure path math over the config's file lists with no I/O, and the run's documents fact read (`ChildRuns.fact`), which the call needs anyway for its task and rounds. Moving the snapshot to the first revision would make a resumed run's diff base depend on which tool it called first. Found as I12 (round 2); refused in package C's follow-up.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/I-latex-documents.md#finding-12-batched-smaller-flags-each-one-pr",
       "symbols": [
         {
           "file": "packages/texra/src/tools/documents/documentState.ts",
           "symbol": "openDocuments",
-          "signature": "export const openDocuments = Effect.fn('documents.open')(function* ({ run, env: { roots }, requests, }: DocumentCall) {…});"
+          "signature": "export const openDocuments = Effect.fn('documents.open')(function* ( { env: { roots, run }, requests }: DocumentCall, described?: DocumentTaskSpec, ) {…});"
         },
         {
-          "file": "packages/harness/src/common/storage/runStorage.ts",
-          "symbol": "RunFileService.prepareRunWorkspace",
-          "signature": "public readonly prepareRunWorkspace = Effect.fn( 'RunFileService.prepareRunWorkspace', )( { self: this }, function* ( baseFiles: FileLocation[], options: { linkFiles?: FileLocation[]; } = {}, ): Effect.fn.Return<FileLocation[], Error, FileSystem.FileSystem> {…}, );"
+          "file": "packages/texra/src/tools/documents/runWorkspace.ts",
+          "symbol": "RunWorkspace.prepareRunWorkspace",
+          "signature": "readonly prepareRunWorkspace = Effect.fn('RunWorkspace.prepare')( { self: this }, function* ( baseFiles: FileLocation[], options: { linkFiles?: FileLocation[]; } = {}, ): Effect.fn.Return< FileLocation[], SnapshotCaptureFailed | PlatformError.PlatformError, FileSystem.FileSystem > {…}, );"
         }
       ]
     },
@@ -414,14 +381,14 @@
         {
           "file": "packages/desktop/src/main/desktopProjects.ts",
           "symbol": "openDesktopProjectRegistry",
-          "signature": "export const openDesktopProjectRegistry: ( options: DesktopProjectRegistryOptions, ) => Effect.Effect< DesktopProjectRegistry, Error, DesktopProjectRecords | StateStores | Sessions | HostWindows > = Effect.fn('openDesktopProjectRegistry')(…);"
+          "signature": "export const openDesktopProjectRegistry: ( options: DesktopProjectRegistryOptions, ) => Effect.Effect< DesktopProjectRegistry, Error, DesktopProjectRecords | StateStores | AppState | Sessions | HostWindows > = Effect.fn('openDesktopProjectRegistry')(…);"
         }
       ]
     },
     {
       "id": "G11d-launch-config-schema-without-defaults",
       "candidate": "a LaunchConfigSchema without defaults for the launcher's launches, deleting prepareSurfaceLaunch's missing agent/model pre-check",
-      "why": "The pre-check does not exist because AgentConfigSchema fills agent and model: buildLaunchConfig always passes both, so the row schema's withDecodingDefault (which fills an absent key only) never applies to a launch. What it rejects is the empty string the form sends while nothing is selected, which Schema.String accepts. A schema without defaults would still accept it; one with isMinLength(1) would turn \"Choose an agent and a model first.\" into decodeLaunchConfig's generic first-issue rejection. The launch surface's own defaults (LaunchSurfaceSchema's agent and model) fill an absent key at the wire boundary, a separate fact. The false comment that named the row schema was corrected, and the hand-made Result in buildLaunchConfig's catalog lookup removed, in the same change.",
+      "why": "The pre-check is not there for a default to replace: AgentConfigSchema's agent and model carry no default (both Schema.String), and prepareSurfaceLaunch always passes both to decodeLaunchConfig. What it rejects is the empty model the form sends while nothing is selected, which Schema.String accepts. A schema without defaults would still accept it; one with isMinLength(1) would turn \"Choose an agent and a model first.\" into decodeLaunchConfig's generic first-issue rejection. The launch surface's own defaults (LaunchSurfaceSchema's agent and model) fill an absent key at the wire boundary, a separate fact. Since the refusal the row schema lost its agent and model defaults and an empty agent launches the default of the listed agents (pickDefaultToolUseAgent), so the pre-check covers the model alone. The false comment that named the row schema was corrected, and the hand-made Result in buildLaunchConfig's catalog lookup removed, in the same change.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
       "symbols": [
         {
@@ -433,14 +400,14 @@
     },
     {
       "id": "G11f-subscription-descriptor-columns",
-      "candidate": "delete SubscriptionProvider.sessionName and .copyTarget as unread columns, and capture each binding directly instead of calling through a lambda",
-      "why": "Both columns are read: the extension's vscodePresenter destructures them (`const { displayName, sessionName, copyTarget } = provider`, packages/extension/src/frontend/auth/subscriptionSignIn.ts) for the loopback prompt (\"If your … session is in a different browser\") and the copy-link toast (\"Paste it into the browser where you use …\"); a search for `.sessionName` misses a destructuring read. Both differ from displayName for Grok ('xAI', 'Grok / xAI'), so neither is constant across the rows. The call-through lambdas are what let packages/texra/test/tools/setup/DefaultSetupPlatform.vitest.ts spy on `@texra-ai/llm/node`'s getChatgptStatus, the suite that checks a ChatGPT account's email and id never reach the setup tools; capturing the import at module load would bypass the spy and drop that check.",
+      "candidate": "delete SubscriptionProvider.sessionName and .copyTarget as unread columns",
+      "why": "Both columns are read: the extension's vscodePresenter destructures them (`const { displayName, sessionName, copyTarget } = provider`, packages/extension/src/frontend/auth/subscriptionSignIn.ts) for the loopback prompt (\"If your … session is in another browser\") and the copy-link toast (\"Paste it into the browser where you use …\"); a search for `.sessionName` misses a destructuring read. Both differ from displayName for Grok ('xAI', 'Grok / xAI' against 'Grok'), so neither is constant across the rows. The binding half no longer applies: the provider's methods no longer call through to a module import (each reads its account from SubscriptionAccounts), and the spy suite that needed them is gone.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
       "symbols": [
         {
           "file": "packages/texra/src/controllers/modelAccess/subscriptionProviders.ts",
           "symbol": "SubscriptionProvider",
-          "signature": "export interface SubscriptionProvider { readonly id: SubscriptionProviderId; readonly displayName: string; readonly sessionName: string; readonly copyTarget: string; readonly modelFamily: string; signIn( options: SubscriptionSignInOptions, ): Effect.Effect<SubscriptionAccount, Error, HttpClient.HttpClient | Secrets>; … }"
+          "signature": "export interface SubscriptionProvider { readonly id: SubscriptionProviderId; readonly displayName: string; readonly sessionName: string; readonly copyTarget: string; readonly modelFamily: string; signIn( options: SubscriptionSignInOptions, ): Effect.Effect< SubscriptionAccount, Error, HttpClient.HttpClient | SubscriptionAccounts | AppSignals >; … }"
         }
       ]
     },
@@ -473,7 +440,7 @@
     {
       "id": "UI-signal-watcher-as-streams",
       "candidate": "subscribeToSignalChanges replaced by Streams over the SubscriptionRefs behind the signals it watches",
-      "why": "Three of its four consumers are the terminal client's: React's useSyncExternalStore over a signal (useSignal), the terminal title over a computed signal, and the approval announcer over a computed signal. None has a SubscriptionRef behind it, so the watcher stays as the one signal-to-callback bridge (the inverse of toSignal). Moving the fourth, the progress view's surface reconciliation over view$, surface$ and host$, onto Streams would add a second mechanism beside it and delete nothing. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "why": "Six of its seven call sites are the terminal client's. Four watch signals with no SubscriptionRef behind them: React's useSyncExternalStore over a signal (useSignal), the terminal title over a computed signal, the approval announcer over a computed signal, and the transcript subscriptions over the computed paintedRunIds, so the watcher stays as the one signal-to-callback bridge (the inverse of toSignal). The other two terminal ones (the finished bell in runChatTui.tsx and chatSessionController's shownHeld) watch sessionView(), a toSignal over the session view's change stream, and so does the seventh, the progress view's surface reconciliation over view$, surface$ and host$. Moving those onto Streams would add a second mechanism beside the watcher and delete nothing. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
       "symbols": [
         {
@@ -552,21 +519,26 @@
     },
     {
       "id": "G11g-usage-region-out-of-cache-key",
-      "candidate": "SubscriptionUsageService reads the GLM region inside the adapter's fetch and keys its cache by provider alone, deleting the optional resolveVariant member and the region column of UsageCacheKey",
-      "why": "The region is part of which request a usage read makes, and the cache key is read from the current setting on every lookup, so a region change misses the cache whichever path wrote it: the settings view, the CLI's /config, or a hand edit of config.json. With the region read inside fetch, the snapshot fetched from the old region's endpoint is served for up to the 30-second TTL after the user fixes the region. Avoiding that would need an `invalidatesUsage` write effect on the region row, which covers only the settings view's write path and is an option for one row. The forceRefresh half of G11g landed in #14824. Found in round 2 (G-app-controllers.md, finding 11g); refused in round 3, package G.",
+      "candidate": "SubscriptionUsageService reads the GLM region inside fetchUsage and keys its cache by provider alone, deleting the region member of UsageCacheKey",
+      "why": "The region is part of which request a usage read makes, and getUsage reads the cache key from the current setting on every lookup, so a region change misses the cache whichever path wrote it: the settings view, the CLI's /config, or a hand edit of config.json. With the region read inside fetchUsage, the snapshot fetched from the old region's endpoint is served for up to the 30-second TTL after the user fixes the region. Avoiding that would need an `invalidatesUsage` write effect on the region row, which covers only the settings view's write path and is an option for one row. The forceRefresh half of G11g landed in #14824 (the settings view's forceRefresh calls invalidateAll). Found in round 2 (G-app-controllers.md, finding 11g); refused in round 3, package G.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
       "symbols": [
         {
           "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
-          "symbol": "SubscriptionUsageAdapter",
-          "signature": "interface SubscriptionUsageAdapter { readonly resolveVariant?: () => Effect.Effect<boolean, Error>; readonly fetch: ( variant: boolean | undefined, ) => Effect.Effect< ParsedSubscriptionUsage | null, Error, HttpClient.HttpClient | Secrets >; }"
+          "symbol": "UsageCacheKey",
+          "signature": "type UsageCacheKey = | readonly ['kimiCode'] | readonly ['glmCodingPlan', 'china' | 'international'];"
+        },
+        {
+          "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
+          "symbol": "SubscriptionUsageService.getUsage",
+          "signature": "getUsage( provider: SubscriptionUsageProvider, ): Effect.Effect< SubscriptionUsageSnapshot, never, HttpClient.HttpClient | Secrets > {…}"
         }
       ]
     },
     {
       "id": "CLI-tui-bell-from-attention",
       "candidate": "the chat TUI's \"agent finished\" bell reads attentionOf's finished list instead of its own four conditions over the root run's position and outcome",
-      "why": "attentionOf is the attention rule of the extension's chime and the desktop's notifications: a run is news when its outcome lands, whoever stopped it. The terminal's bell is a turn end for the one conversation on screen: a conversation's turn ends at waiting with no outcome (the chat's cue to type), a run that ends after waiting was already announced, and a stop the person pressed in this terminal is not news. Moving either rule into attentionOf would change what the desktop and the extension announce; giving attentionOf a mode for the terminal is an option for one caller. The bell's conditions read the session view and nothing else, which is the design (hosts read the view). Found in round 2 (K-cli.md, finding 11); refused by package A in its TUI lifecycle PR.",
+      "why": "attentionOf is the attention rule of the extension's chime and the desktop's notifications: a run is news when its outcome lands, whoever stopped it. The terminal's bell is a turn end for the one conversation on screen: a conversation's turn ends at waiting with no outcome (the chat's cue to type), a run that ends after waiting was already announced, and a stop (a cancelled outcome) is not news. Moving either rule into attentionOf would change what the desktop and the extension announce; giving attentionOf a mode for the terminal is an option for one caller. The bell's conditions read the session view and nothing else, which is the design (hosts read the view). Found in round 2 (K-cli.md, finding 11); refused by package A in its TUI lifecycle PR.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/K-cli.md#finding-11-batched-smaller-findings-in-the-same-species",
       "symbols": [
         {
@@ -592,13 +564,13 @@
     {
       "id": "STORE-context-blob-as-brought-blob",
       "candidate": "a run's context.blob rows as brought blobs in the blob table, the context.blob row kind retired (execution) and its readers reading the blob by the digest a model.message names",
-      "why": "context.blob is not one request's JSON: it is the run state's content table (RunState.contents), which the run state folds from rows and the loop reads synchronously on every step (contextAt and stored for the system text, the run context and the shown tool declarations, blobRows for what the run already holds, forkRun for what a fork copies, recordedTurn for the request check). As brought blobs the content leaves the state: each of those readers becomes a store read at every step, and 'what the run holds' must be derived again from the rows that link each digest. A brought blob is never inflated on read (the media scheme), so requests would need a read path of their own: a fourth behavior, not one scheme fewer. The 'second digest' stores nothing twice: a long canonical value is one zstd copy in the blob table under its inline digest, the row holding the reference (INSERT_BLOB is ON CONFLICT DO NOTHING). And store review F14's cost (an additive change to request JSON regenerates the golden store) stays, because the golden store holds the blob table too. Refused by round 6 area T's PR 2 after re-verification on main at e10c592.",
+      "why": "context.blob is not one request's JSON: it is the run state's content table (RunState.contents), which the run state folds from rows and the loop reads synchronously on every step (systemTextAt and stored for the system text, the run context and the shown tool declarations, blobRows for what the run already holds, forkRun for what a fork copies, recordedTurn for the request check). As brought blobs the content leaves the state: each of those readers becomes a store read at every step, and 'what the run holds' must be derived again from the rows that link each digest. A brought blob is never inflated on read (the media scheme), so requests would need a read path of their own: a fourth behavior, not one scheme fewer. The 'second digest' stores nothing twice: a long canonical value is one zstd copy in the blob table under its inline digest, the row holding the reference (INSERT_BLOB is ON CONFLICT DO NOTHING). And store review F14's cost (an additive change to request JSON regenerates the golden store) stays, because the golden store holds the blob table too. Refused by round 6 area T's PR 2 after re-verification on main at e10c592.",
       "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-6/T-session-database.md#t6-three-content-addressing-schemes-for-one-need-and-one-content-stored-under-two-digests",
       "symbols": [
         {
           "file": "packages/harness/src/shared/schemas/offeredTools.ts",
           "symbol": "ContextBlobSchema",
-          "signature": "export const ContextBlobSchema = Schema.Struct({ digest: Sha256Schema, value: JsonValueSchema, });"
+          "signature": "export const ContextBlobSchema = Schema.Struct({ digest: Sha256Schema, value: Schema.Json, });"
         },
         {
           "file": "packages/harness/src/agent/runtime/run/recordedRequest.ts",
@@ -636,7 +608,7 @@
     {
       "id": "RUN-handed-down-as-general-turn-end",
       "candidate": "a script run's handedDown fold field and its loop branches (turnResponse, completeTurn, the turn and wait exits, deliver's endTurn) replaced by a tool.result that ends the turn on either status and an answer folded from the ending call",
-      "why": "The run still needs the fact 'the turn's ending result was an error' to end the run failed and to answer with that error, and only a script run has it: a model's ending call that failed is answered by the model. Moving it onto tool.result means an endTurn flag on the error branch, which every other tool's error result would carry as false, and a fold rule keyed on the run being a script run: the same special case, renamed and stored. The branches are four reads of one field the fold sets once. Dropped by #14829 and re-verified on main at 157f775; the trust half (isTrustedScript, now five reads in four files deciding four different grants) stays with the trust-grant work, not the storage format.",
+      "why": "The run still needs the fact 'the turn's ending result was an error' to end the run failed and to answer with that error, and only a script run has it: a model's ending call that failed is answered by the model. Moving it onto tool.result means an endTurn flag on the error branch, which every other tool's error result would carry as false, and a fold rule keyed on the run being a script run: the same special case, renamed and stored. The branches are five reads of one field the fold sets once (turnResponse, completeTurn, turnEnded and the wait exit in runLoop.ts, deliver's endTurn in toolUseDispatch.ts). Dropped by #14829 and re-verified on main at 157f775; the trust half (isTrustedScript, now `programOf(config) !== null` from packages/harness/src/shared/schemas/runRecords.ts, read in step.ts, AgentTool.ts and proposalFlow.ts for three different grants) stays with the trust-grant work, not the storage format.",
       "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/E-loop-tools.md#finding-4-a-script-run-is-a-model-less-run-dressed-as-a-tool-use-run-and-the-costume-shows-in-five-loop-branches",
       "symbols": [
         {
@@ -647,7 +619,7 @@
         {
           "file": "packages/harness/src/agent/runtime/loop/rows.ts",
           "symbol": "handedDown",
-          "signature": "export const handedDown = Effect.fn('rows.handedDown')(function* ( run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>, call: NonNullable<AgentRunShape['config']['script']>, ) {…})"
+          "signature": "export const handedDown = Effect.fn('rows.handedDown')(function* ( run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>, call: { readonly code: string; readonly title: string; readonly timeoutMs?: number | null; }, ) {…});"
         }
       ]
     },
@@ -667,8 +639,9 @@
     {
       "id": "ROW-followup-closed-as-run-removed",
       "candidate": "the followup.closed row deleted, a run's closed input read from run.removed alone (C11 d)",
-      "why": "Its one writer on main is openResume's records-gone branch (Inbox.closeInput from resumeRun.ts): a run whose rows hold queued input but no run.config, so no run.removed was ever written and none should be (nothing was deleted, and run.removed starts a collection). Without the row, owesResume reads that input as owed a wake at every inbox notice and each wake is refused again; the queued messages are never dropped with reason 'closed'. Deleting it needs the send path to refuse a run that has no records first, which is a send-path change, not a storage-format one. Re-verified on main at 157f775 by the storage-format batch.",
+      "why": "Its one writer on main is openResume's records-gone branch (Inbox.closeInput from resumeRun.ts): a run whose rows hold no run.config, so no run.removed was ever written and none should be (nothing was deleted, and run.removed starts a collection). closeInput now writes it only when no message is queued (a queued control request is dropped with reason 'closed'), so the reason that queued messages would otherwise never be dropped no longer holds. The row still closes the run's input: without it a later send to that run is accepted, owesResume reads the queued message as owed a wake at every inbox notice, and each wake is refused again. Deleting it needs the send path to refuse a run that has no records first, which is a send-path change, not a storage-format one. Re-verified on main at f7469ff.",
       "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/C-row-model.md",
+      "reopenWhen": "When the send path refuses a send to a run that has no records.",
       "symbols": [
         {
           "file": "packages/harness/src/agent/followUp/Inbox.ts",
@@ -680,44 +653,49 @@
     {
       "id": "LLM-xai-token-expiry-one-reading",
       "candidate": "the xAI token response's expires_in decoded plainly, with the one fallback (access JWT exp, else expires_in, else the default) read in buildSession (O9 9e)",
-      "why": "The shared SubscriptionOAuthCoordinator types every provider's token response as SubscriptionTokenResponse, whose expires_in is a number (ChatGPT's response always carries it), and buildSession takes that type, so xAI's default cannot move into buildSession without widening the shared type for ChatGPT too. Within the schema the two combinators are not a repetition: Schema.catchDecoding does not see a missing key (a struct reports 'Missing key' before the field's codec runs; verified on effect 4.1.2), so withDecodingDefault covers an absent expires_in and catchDecoding a malformed one, over one named constant (XAI_DEFAULT_EXPIRES_IN_SEC). buildSession already prefers the access JWT's exp. Refused by package E's harness-leftovers PR after re-verification on main at 157f775.",
+      "why": "The shared SubscriptionOAuthCoordinator types every provider's token response as SubscriptionTokenResponse, whose expires_in is a number (ChatGPT's response always carries it), and buildSession takes that type, so xAI's default cannot move into buildSession without widening the shared type for ChatGPT too. Within the schema the two combinators are not a repetition: Schema.catchDecoding does not see a missing key (a struct reports 'Missing key' before the field's codec runs; re-verified on effect 4.1.4), so withDecodingDefault covers an absent expires_in and catchDecoding a malformed one, over one named constant (XAI_DEFAULT_EXPIRES_IN_SEC). buildSession already prefers the access JWT's exp. Refused by package E's harness-leftovers PR after re-verification on main at 157f775.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/O-llm-providers.md#9-smaller-red-flags-batched",
       "symbols": [
         {
           "file": "packages/llm/src/oauth/xai/xaiProvider.ts",
           "symbol": "XaiTokenResponseSchema",
-          "signature": "export const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields( Struct.assign({ expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString]) .check(Schema.isGreaterThan(0)) .pipe( Schema.catchDecoding(() => Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)), ), ) .pipe( Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)), ), token_type: Schema.optional(Schema.NullOr(Schema.String)), scope: Schema.optional(Schema.NullOr(Schema.String)), }), );"
+          "signature": "const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields( Struct.assign({ expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString]) .check(Schema.isGreaterThan(0)) .pipe( Schema.catchDecoding(() => Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)), ), Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)), ), token_type: Schema.optional(Schema.NullOr(Schema.String)), scope: Schema.optional(Schema.NullOr(Schema.String)), }), );"
         },
         {
           "file": "packages/llm/src/oauth/subscriptionSessionSchema.ts",
           "symbol": "SubscriptionTokenResponseSchema",
-          "signature": "export const SubscriptionTokenResponseSchema = Schema.Struct({ access_token: Schema.String.check(Schema.isMinLength(1)), refresh_token: Schema.optional( Schema.NullOr(Schema.String.check(Schema.isMinLength(1))), ), id_token: Schema.optional( Schema.NullOr(Schema.String.check(Schema.isMinLength(1))), ), expires_in: Schema.Number, scope: Schema.optional(Schema.NullOr(Schema.String)), });"
+          "signature": "export const SubscriptionTokenResponseSchema = Schema.Struct({ access_token: Schema.NonEmptyString, refresh_token: Schema.optional(Schema.NullOr(Schema.NonEmptyString)), id_token: Schema.optional(Schema.NullOr(Schema.NonEmptyString)), expires_in: Schema.Number, scope: Schema.optional(Schema.NullOr(Schema.String)), });"
         }
       ]
     },
     {
       "id": "M7-file-lanes-as-references",
-      "candidate": "the harness's module-level PerKeyLanes maps (fileSecrets keyLanes, jsonStore writeLanes, memoryFileSystem memoryTreeLanes, approvedWrite approvedWriteLanes, sessionLayer rootLanes, workspaceAgentsState workspaceWriteLanes) as one Context.Reference<PerKeyLanes> each, defaulting to a fresh Map",
-      "why": "Each map orders the writes to one file, one store or one storage root, which every layer in the process shares: two JsonStore instances on one file, two sessions opening one root, two runs editing one file must meet on one lane, so a per-layer map would be a defect, not isolation. None is returned or crosses its module, and withPerKeyLane deletes a key once no fiber holds or waits on it (in an ensuring, so on interruption too), so an idle map is empty and a test has nothing to reset. A reference per site adds a declaration and a context read at six sites and changes no behaviour. Refused by package F (8.1) after re-verification on main at 157f775.",
+      "candidate": "the harness's module-level PerKeyLanes maps (fileSecrets keyLanes, fileWriteLane fileWriteLanes, memoryFileSystem memoryTreeLanes, sessionLayer rootLanes) as one Context.Reference<PerKeyLanes> each, defaulting to a fresh Map",
+      "why": "Each map orders the writes to one file, one store or one storage root, which every layer in the process shares: two JsonStore instances on one file, two sessions opening one root, two runs editing one file must meet on one lane (jsonStore, approvedWrite and the app's file writers all take fileWriteLanes through withFileWriteLane), so a per-layer map would be a defect, not isolation. None is returned or crosses its module, and withPerKeyLane deletes a key once no fiber holds or waits on it (in the release of an acquireUseRelease, so on interruption too), so an idle map is empty and a test has nothing to reset. A reference per site adds a declaration and a context read at four sites and changes no behaviour. Refused by package F (8.1) after re-verification on main at 157f775.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/M-harness-tools.md#finding-7-eleven-process-lifetime-facts-live-in-module-level-lets-and-maps-two-of-them-deciding-the-proxy-policy-differently",
       "symbols": [
         {
           "file": "packages/harness/src/utils/core/perKeyQueue.ts",
           "symbol": "withPerKeyLane",
           "signature": "export function withPerKeyLane<Key>( lanes: PerKeyLanes<Key>, key: Key, ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {…}"
+        },
+        {
+          "file": "packages/harness/src/utils/files/fileWriteLane.ts",
+          "symbol": "fileWriteLanes",
+          "signature": "const fileWriteLanes = new Map<string, PerKeyLane>();"
         }
       ]
     },
     {
       "id": "RUN-turn-next-move-function",
       "candidate": "the turn loop's next step as one pure, total function of the run state (nextTurnMove over the state, whether input is queued and the run's role), the loop a switch over its moves like ModelInvoker.invoke over nextAttempt, and finishCall's keep, derive, skip or run as a pure callMove the script door's finalizer shares (round-2 note, finding 1 step 2)",
-      "why": "Drafted against main at bbb6f012 and measured: the switch over nextTurnMove that keeps behavior is 338 lines against the 258 it replaces, and callMove about 76 against finishCall's 38-line decision block. Several turn ends are not facts of the run state but results of the effect just run: a dispatch whose result ends the turn (submit_output's endTurn is not kept after delivery), a text answer the turn policy finishes, a failed request with no overflow compaction, and the Stop hook's block. A pure function of the state decides those differently unless the last effect's result is fed back in, which is the cursor AGENTS.md rules out. The loop also still reads the position itself, because the model-switch check runs before every in-turn decision and never between turns, and the text policy and the request round must keep their effect order with no switch check between them. replayable decodes and logs, so callMove cannot be pure. nextAttempt works because an invocation's next move is a fact of its own rows; a turn's is not.",
+      "why": "Drafted against main at bbb6f012 and measured: the switch over nextTurnMove that keeps behavior is 338 lines against the 258 it replaces, and callMove about 76 against finishCall's 38-line decision block. Several turn ends are not facts of the run state but results of the effect just run: a text answer the turn policy finishes (afterTextResponse's done), a failed request with no overflow compaction (compactAfterOverflow answering null), and the Stop hook's block; a delivered result that ends the turn has since become one, as its append reads as results.final. A pure function of the state decides the others differently unless the last effect's result is fed back in, which is the cursor AGENTS.md rules out. The loop also still reads the position itself, because the model-switch check runs before every in-turn decision and never between turns, and the text policy and the request round must keep their effect order with no switch check between them. replayable decodes and logs, so callMove cannot be pure. nextAttempt works because an invocation's next move is a fact of its own rows; a turn's is not.",
       "ruling": ".agents/docs/implemented/architecture/2026-11-10-harness-against-pi-durable-and-deepseek-round-2.md#1-where-the-loop-stands-three-ways",
       "symbols": [
         {
           "file": "packages/harness/src/agent/runtime/loop/runLoop.ts",
           "symbol": "runToolUse",
-          "signature": "export const runToolUse = Effect.fn('toolUse.run')(function* ( start: ToolUseStart, opened: ToolUseOpening, ): Effect.fn.Return< RunReport, Error, TurnServices | ModelInvoker | Scope.Scope > {…}, Effect.scoped);"
+          "signature": "export const runToolUse = Effect.fn('toolUse.run')(function* ( opened: ToolUseOpening, ): Effect.fn.Return< RunReport, Error, TurnServices | ModelInvoker | Scope.Scope > {…}, Effect.scoped);"
         },
         {
           "file": "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts",
@@ -729,20 +707,21 @@
     {
       "id": "EFF-ADOPT-workflow-run-loop",
       "candidate": "the durable run loop (runLoop.ts, ModelInvoker.invoke over nextAttempt, toolUseDispatch over resumedAttempt) onto effect/workflow: a Workflow per run, an Activity per model or tool call, a DurableDeferred per request",
-      "why": "Read against effect 4.1.3 (every module @stability unstable); nothing was run. Three facts decide it. (1) A resume replays the workflow function from its start and memoizes completed activities by name and attempt (node_modules/effect/src/cluster/ClusterWorkflowEngine.ts:300-323, :527, :765); an awaited deferred or a child completing interrupts and replays the run (node_modules/effect/src/workflow/WorkflowEngine.ts:387-402), so each message to a run with thousands of steps costs all of them, and there is no history truncation. The loop here never re-executes: it continues from the RunState its rows rebuild. (2) Activities run at least once: only completed results are stored, and Activity.make says side effects before a suspension can repeat and must be idempotent (node_modules/effect/src/workflow/Activity.ts:124-129); an attempt that started and has no result has no representation and no hook, and an interrupted body is retried in memory. The write points here (the `attempt` row before a billed request leaves, `tool.intent` as a body starts) exist so that such an attempt spends a retry counted from the rows or is asked about, and so that a tool not declared replay-safe is not run again. (3) An interrupt ends the workflow: resume acts only on a Suspended reply (ClusterWorkflowEngine.ts:309-311), where a stopped run here resumes from its rows; and the stored results are engine messages (cluster_messages, cluster_replies) with no ordered read, where these rows are also what every host renders and what the model's history is rebuilt from, so the session rows would stay as a second log. The one durable engine, ClusterWorkflowEngine over SingleRunner (node_modules/effect/src/cluster/SingleRunner.ts:61-79), runs in one process over SQLite but brings sharding with it: 300 shards, shard-acquisition and lock-refresh loops every 10 s, reply polling every 200 ms and five cluster_* tables (node_modules/effect/src/cluster/ShardingConfig.ts:236-257). No piece lifts out: Activity, DurableDeferred and DurableClock all require the WorkflowEngine and a WorkflowInstance, and a deferred's token is what callRequestId already derives. Revisit if the engine gains a non-replaying resume and an in-flight activity hook.",
+      "why": "Read against effect 4.1.3 and re-read against 4.1.4 (every module @stability unstable); nothing was run. Three facts decide it. (1) A resume replays the workflow function from its start and memoizes completed activities by name and attempt (node_modules/effect/src/cluster/ClusterWorkflowEngine.ts:300-322, :527, :760-806); an awaited deferred or a child completing interrupts and replays the run (node_modules/effect/src/workflow/WorkflowEngine.ts:387-402), so each message to a run with thousands of steps costs all of them, and there is no history truncation. The loop here never re-executes: it continues from the RunState its rows rebuild. (2) Activities run at least once: only completed results are stored, and Activity.make says side effects before a suspension can repeat and must be idempotent (node_modules/effect/src/workflow/Activity.ts:126-129); an attempt that started and has no result has no representation and no hook, and an interrupted body is retried in memory. The write points here (the `attempt` row before a billed request leaves, `tool.intent` as a body starts) exist so that such an attempt spends a retry counted from the rows or is asked about, and so that a tool not declared replay-safe is not run again. (3) An interrupt ends the workflow: resume acts only on a Suspended reply (ClusterWorkflowEngine.ts:309-311), where a stopped run here resumes from its rows; and the stored results are engine messages (cluster_messages, cluster_replies) with no ordered read, where these rows are also what every host renders and what the model's history is rebuilt from, so the session rows would stay as a second log. The one durable engine, ClusterWorkflowEngine over SingleRunner (node_modules/effect/src/cluster/SingleRunner.ts:61-79), runs in one process over SQLite but brings sharding with it: 300 shards, shard-acquisition and lock-refresh loops every 10 s, reply polling every 200 ms and six cluster_* tables (node_modules/effect/src/cluster/ShardingConfig.ts:239-262). No piece lifts out: Activity, DurableDeferred and DurableClock all require the WorkflowEngine and a WorkflowInstance, and a deferred's token is what callRequestId already derives.",
       "ruling": "packages/harness/src/shared/session/inFlight.ts#nextAttempt",
+      "reopenWhen": "When effect's workflow engine gains a resume that does not replay the workflow function and a hook for an activity that started and has no result.",
       "symbols": [
         {
           "file": "packages/harness/src/shared/session/inFlight.ts",
           "symbol": "nextAttempt",
-          "signature": "export function nextAttempt( invocation: Invocation | null, requests: RunRowState['requests'], retries: number, activatedAt: number | null, ): NextAttempt {…}"
+          "signature": "export function nextAttempt( invocation: Invocation | null, requests: RunRowState['requests'], activatedAt: number | null, ): NextAttempt {…}"
         }
       ]
     },
     {
       "id": "EFF-ADOPT-eventlog-session-store",
       "candidate": "the session store's event table, per-aggregate sequence and projections (databaseLayer.ts, rowCodec.ts, rowReader.ts, projections.ts) onto effect/eventlog: EventJournal over SqlEventJournal, with EventLog handlers as the projections",
-      "why": "Read against effect 4.1.3 (@stability unstable); nothing was run. The journal is built for syncing one log between devices, and three facts decide it. (1) It has no stream with its own order and no ranged or keyed read: an Entry is id, event, primaryKey and payload (node_modules/effect/src/eventlog/EventJournal.ts:447-452), and the only reads are `entries`, a SELECT of the whole table, and `entriesById` (node_modules/effect/src/eventlog/SqlEventJournal.ts:487-496). The store reads one run from a seq by row type, and a commit range across runs, and never the whole log. (2) A payload is a Uint8Array in the event's binary codec stored as a BLOB, with no per-kind version; the reads here select into the rows' JSON (USAGE_ROWS, the json_each bindings), the row codec refuses a row by its kind's version, and strings over 4096 characters leave the row for the content-addressed blob table. (3) An entry cannot be deleted: the one removal is `destroy`, which drops every table (SqlEventJournal.ts:570-575), where deleting a run here cascades by foreign key and the pages are reclaimed. It also always creates its remote, checkpoint and cursor tables, and EventLog requires an identity key pair. writeMany does commit a batch with a caller's effect in its transaction (:460-484), which is what `own` over sql.withTransaction already does. Adoption would leave nearly all of the four files standing.",
+      "why": "Read against effect 4.1.3 and re-read against 4.1.4 (@stability unstable); nothing was run. The journal is built for syncing one log between devices, and three facts decide it. (1) It has no stream with its own order and no ranged or keyed read: an Entry is id, event, primaryKey and payload (node_modules/effect/src/eventlog/EventJournal.ts:447-452), and the only reads are `entries`, a SELECT of the whole table, and `entriesById` (node_modules/effect/src/eventlog/SqlEventJournal.ts:487-502). The store reads one run from a seq by row type, and a commit range across runs, and never the whole log. (2) A payload is a Uint8Array in the event's binary codec stored as a BLOB, with no per-kind version; the reads here select into the rows' JSON (USAGE_ROWS, the json_each bindings), the row codec refuses a row by its kind's version, and strings of 4096 characters or more leave the row for the content-addressed blob table. (3) An entry cannot be deleted: the one removal is `destroy`, which drops every table (SqlEventJournal.ts:570-575), where deleting a run here cascades by foreign key and the pages are reclaimed. It also always creates its remote, checkpoint and cursor tables, and EventLog requires an identity key pair. writeMany does commit a batch with a caller's effect in its transaction (:460-482), which is what `own` over sql.withTransaction already does. Adoption would leave nearly all of the four files standing.",
       "ruling": "packages/harness/src/controllers/session/rowCodec.ts#prepareEventDraft",
       "symbols": [
         {
@@ -755,26 +734,13 @@
     {
       "id": "EFF-ADOPT-sql-schema-resolver-model",
       "candidate": "the store's hand-written statements and row decoding (rowReader.ts read, rowCodec.ts decodeRow, the point reads in databaseLayer.ts and projections.ts) onto effect/sql SqlSchema, SqlResolver and SqlModel",
-      "why": "Read against effect 4.1.3; nothing was run. The store already runs on @effect/sql-sqlite-node, sql.withTransaction, sql.afterCommit and SqlError's classification, so only the layer above the driver is in question. SqlSchema's findAll, findOne and void encode a request, execute and decode the rows all or nothing (node_modules/effect/src/sql/SqlSchema.ts:35-181): they could wrap the fixed-shape reads (the store gate, projection states, readState) at about the same size each, deleting no function and turning a row-shape defect into a typed error. They do not fit the event read: blobs are fetched between the select and the decode, a wide read leaves out a row that does not decode where a strict one fails, and `data` is JSON text inflated by a reviver. SqlResolver suspends the fiber to collect a batch, against a transaction body that awaits nothing, and the reads are already batched by list arguments; the point reads inside a transaction depend on writes made earlier in the same loop. SqlModel.makeRepository is CRUD by one id column (node_modules/effect/src/sql/SqlModel.ts:35-80); current_value has a composite key and no other table is CRUD by id. SqlError does not classify SQLITE_CORRUPT or SQLITE_NOTADB (node_modules/effect/src/sql/SqlError.ts:609-610), so isDamaged keeps its errcode read. Migrator stays refused for the reasons in the storage design note, re-read against 4.1.3. A move of the statements to the tagged template would put each parameter beside its placeholder; it is a rewrite of every statement, not a deletion.",
+      "why": "Read against effect 4.1.3 and re-read against 4.1.4; nothing was run. The store already runs on @effect/sql-sqlite-node, sql.withTransaction, sql.afterCommit and SqlError's classification, so only the layer above the driver is in question. SqlSchema's findAll, findOne and void encode a request, execute and decode the rows all or nothing (node_modules/effect/src/sql/SqlSchema.ts:35-181): they could wrap the fixed-shape reads (the store gate, projection states, readState) at about the same size each, deleting no function and turning a row-shape defect into a typed error. They do not fit the event read: blobs are fetched between the select and the decode, a wide read leaves out a row that does not decode where a strict one fails, and `data` is JSON text inflated by a reviver. SqlResolver suspends the fiber to collect a batch, against a transaction body that awaits nothing, and the reads are already batched by list arguments; the point reads inside a transaction depend on writes made earlier in the same loop. SqlModel.makeRepository is CRUD by one id column (node_modules/effect/src/sql/SqlModel.ts:35-80); current_value has a composite key and no other table is CRUD by id. SqlError does not classify SQLITE_CORRUPT or SQLITE_NOTADB (node_modules/effect/src/sql/SqlError.ts:605-606), so isDamaged keeps its errcode read. Migrator stays refused for the reasons in the storage design note, re-read against 4.1.3. A move of the statements to the tagged template would put each parameter beside its placeholder; it is a rewrite of every statement, not a deletion.",
       "ruling": "packages/harness/src/controllers/session/rowCodec.ts#decodeRow",
       "symbols": [
         {
           "file": "packages/harness/src/controllers/session/rowCodec.ts",
           "symbol": "decodeRow",
           "signature": "export function decodeRow( input: SqlRow, factKinds: FactKinds, blobs: Blobs, ): Result.Result< SessionRow | undefined, DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier > {…}"
-        }
-      ]
-    },
-    {
-      "id": "SCRIPT-walkfiles-recursive-readdir",
-      "candidate": "scripts/walkFiles.mjs's hand-written recursion replaced by fs.readdirSync(startDir, { recursive: true, withFileTypes: true })",
-      "why": "Built and compared on Node 22.23.4. The recursive readdir descends into symbolic links to directories, which the hand-written walk skips (a link is neither isDirectory nor isFile on a Dirent): walking packages/texra returned 47964 files against 514, because it followed the pnpm links under node_modules. Its order also differs from the depth-first one. The built-in is a different walk, not the same one in fewer lines.",
-      "ruling": ".agents/docs/proposed/simplification/2026-11-15-natives-and-owners-left-open.md",
-      "symbols": [
-        {
-          "file": "scripts/walkFiles.mjs",
-          "symbol": "walkFiles",
-          "signature": "export function walkFiles(startDir, { include } = {}) {…}"
         }
       ]
     },
@@ -792,22 +758,22 @@
       ]
     },
     {
-      "id": "HARNESS-approval-denial-kinds-already-collapsed",
-      "candidate": "The approval policy's seven named denial reasons collapsed into the denial's message, with one decider and one answer type (HS-3 of the 2026-11-15 design red-flag audit)",
-      "why": "Already built on main by #14963 before the row was taken up: decideApproval (packages/harness/src/shared/approvalPolicy.ts) is the one decider, and it returns { action: 'deny', reason } where reason is the message itself; the named reason kinds and their per-kind message functions are gone. Rebuilding the row would only restate that change.",
-      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/HS-harness-store.md#hs-3-the-approval-policy-names-seven-denial-reasons-that-nothing-branches-on-each-mapped-back-to-its-message-by-its-own-function",
-      "symbols": [
-        {
-          "file": "packages/harness/src/shared/approvalPolicy.ts",
-          "symbol": "decideApproval",
-          "signature": "export function decideApproval(input: { readonly policy: ApprovalPolicy; readonly canPresent: boolean; readonly ask: ApprovalAsk; }): ApprovalDecision {…}"
-        }
-      ]
-    },
-    {
       "id": "TEST-kernel-default-process-without-validation-model",
       "candidate": "The test kernel's default process provides no ValidationModel, so harness suites stop loading the CLI's validation bundle layer and each suite that plays a scenario names its model (RT-6, model half, of the 2026-11-15 design red-flag audit)",
-      "why": "The default model is not always off in a kernel worker. validationHost (src/test-kernel/support/storeFaults.ts) and the golden store's killed-run block (src/test-kernel/controllers/session/goldenStore.vitest.ts, 'the golden run killed after its effect') stub VALIDATION_SWITCH and the flag file per test and run over the block's default process (SessionGraph.hosted or texraHosted), whose validationModelLayer then answers. Those blocks build one process per block and a host per test, so the model cannot move into the host; dropping the default would make every validationHost suite (the crash conformance shards, resumeRun, ExecuteCli, ResumeCommand, HeadlessRunCommand, chatSessionController, the run-loop hooks and session programs suites, about fifteen, several of them harness suites) name the CLI's layer itself, which spreads the @cli import the change meant to remove. What did hold landed instead: SessionGraph.with takes named options with the validation model as its default, so the two harness suites that imported the CLI module only to fill its positional model slot (BashTool, ExecutionsToolOutput) no longer do."
+      "why": "The default model is not always off in a kernel worker. validationHost (src/test-kernel/support/storeFaults.ts) and the golden store's killed-run block (src/test-kernel/controllers/session/goldenStore.vitest.ts, 'the golden run killed after its effect') stub VALIDATION_SWITCH and the flag file per test and run over the block's default process (SessionGraph.hosted or texraHosted), whose validationModelLayer then answers. Those blocks build one process per block and a host per test, so the model cannot move into the host; dropping the default would make every validationHost suite (the seven crash conformance shards, resumeRun, sessionStore, AgentLaunchActivation, RunAgentOwnership, ExecuteCli, ResumeCommand, HeadlessRunCommand, chatSessionController, the run-loop hooks and session programs suites, eighteen files, nine of them harness suites) name the CLI's layer itself, which spreads the @cli import the change meant to remove. What did hold landed instead: SessionGraph.with takes named options with the validation model as its default, so the two harness suites that imported the CLI module only to fill its positional model slot (BashTool, ExecutionsToolOutput) no longer do.",
+      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/RT-root-tooling.md#rt-6-the-harnesss-test-kernel-is-built-on-the-clis-validation-bundle-layer-and-texras-setup-tool-port-so-harness-suites-depend-on-two-packages-above-the-harness",
+      "symbols": [
+        {
+          "file": "src/test-kernel/support/testKernel.ts",
+          "symbol": "composedProcess",
+          "signature": "const composedProcess = ({ plugins: extra = [], model = validationModelLayer, platform = nodePlatformServices, }: { readonly plugins?: readonly Plugin[]; readonly model?: Layer.Layer<ValidationModel>; readonly platform?: Layer.Layer< FileSystem.FileSystem | Path.Path | ChildProcessSpawner >; } = {}) => Layer.unwrap(…) as Layer.Layer<KernelProcess, never, FakeHost | CurrentHost>;"
+        },
+        {
+          "file": "src/test-kernel/support/storeFaults.ts",
+          "symbol": "validationHost",
+          "signature": "export const validationHost = ( prefix: string, app?: TestApp, ): Layer.Layer<FakeHost, never, AgentCatalog> => Layer.effect(…);"
+        }
+      ]
     },
     {
       "id": "HARNESS-line-range-one-field-name",
@@ -823,25 +789,12 @@
         {
           "file": "packages/harness/src/tools/ReadTool.ts",
           "symbol": "range",
-          "signature": "range: Schema.optional(Schema.NullOr(LineRangeSchema))"
+          "signature": "range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({ description: 'Optional inclusive line range to read.', }),"
         },
         {
           "file": "packages/harness/src/tools/executions/toolInput.ts",
           "symbol": "view_range",
-          "signature": "view_range: Schema.optional(Schema.NullOr(LineRangeSchema))"
-        }
-      ]
-    },
-    {
-      "id": "RF-TC-11-store-credential-comment",
-      "candidate": "Reword storeCredential's comment, which says the CLI, the desktop app and the extension share it, as holding only through SettingsProfileKeyController (TC-11 item f, one sub-item, of the 2026-11-15 design red-flag audit)",
-      "why": "The comment is true: the CLI imports storeCredential directly (packages/cli/src/chat/tui/forms/CliConfigForm.tsx), beside the two settings-body importers (settingsGitCommands.ts, providerKeyActions.ts). The report missed the CLI's direct importer.",
-      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/TC-app-controllers.md",
-      "symbols": [
-        {
-          "file": "packages/texra/src/common/secrets/storeCredential.ts",
-          "symbol": "storeCredential",
-          "signature": "export const storeCredential = …"
+          "signature": "view_range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({ description: 'Line range for paginating file and background-command output. Conversation pagination uses offset and limit.', }),"
         }
       ]
     },
@@ -855,6 +808,107 @@
           "file": "packages/harness/src/agent/runtime/childDelivery.ts",
           "symbol": "childEndReport",
           "signature": "export const childEndReport = Effect.fn('childEndReport')( function* ( ctx: RunLaunch, report: RunReport, record: RunRows | null, wallTimeMs: number, ): Effect.fn.Return< ChildRunDelivery | null, Error, SessionRoots | SessionLog | SessionViewAccess | ToolRegistry > {…}, (built, { runId, config }, report) => Effect.catch(built, (unbuilt) => {…}), );"
+        }
+      ]
+    },
+    {
+      "id": "MEDIA-one-capability-classifier",
+      "candidate": "one shared classifier for the media-capability rule (a PDF is a native document or page images or skipped, an image needs vision, audio needs native audio) that partsForFile, storedMediaPart, FollowUps.batchMessage and attachedMedia branch on",
+      "why": "The readers do different I/O (reading and rasterizing a file, referencing a stored digest, the PDF-as-pages fallback) and all stay, so a shared classifier is one export more, not one less. partsForFile's loud failure on an unknown media type must survive beside the visible skip part for a known type the model cannot take, so a classifier needs a three-way result ({ medium } | skip | unsupported); with it the change removes the ANY_MODEL sentinel and the repeated branch structure but adds the classifier's surface, and the verification scored it at zero net elements. The two notes that propose it disagree on its shape (a two-valued mediumKind predicate in one-owner-remainders section 3, a three-way result in the SDK readiness audit), and both leave it to an owner's call on whether the shared classifier earns its export.",
+      "ruling": ".agents/docs/proposed/process/2026-11-17-open-proposals-triage-and-order.md#decided-on-2026-11-19",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/run/mediaInput.ts",
+          "symbol": "storedMediaPart",
+          "signature": "export function storedMediaPart( mimeType: string, digest: string, capabilities: MediaCapabilities, ): StoredMediaPart | null {…}"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/run/mediaInput.ts",
+          "symbol": "partsForFile",
+          "signature": "const partsForFile = Effect.fn('mediaInput.file')(function* ( location: FileLocation, capabilities: MediaCapabilities, config: ConfigProvider, ): Effect.fn.Return< MediaInputParts, Error, FileSystem.FileSystem | ChildProcessSpawner > {…});"
+        }
+      ]
+    },
+    {
+      "id": "TRANSCRIPT-pure-reads-out-of-view-update",
+      "candidate": "moving the pure functions of TranscriptView.rows (nonEmpty, operationalLatestLine, latestConversationLine, withTranscriptFacts) out of sessionViewUpdate.ts into transcriptReads.ts (store debts A9)",
+      "why": "A move for tidiness alone: the functions keep their one consumer, the view reducer in sessionViewUpdate.ts, and transcriptReads.ts has no other consumer either, so no fact gets a new owner, no caller changes and nothing is deleted; the file only gets shorter.",
+      "ruling": ".agents/docs/proposed/process/2026-11-17-open-proposals-triage-and-order.md#decided-on-2026-11-19",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/session/sessionViewUpdate.ts",
+          "symbol": "latestConversationLine",
+          "signature": "function latestConversationLine( rows: TranscriptView['rows'], finalRows: number, ): string | undefined {…}"
+        },
+        {
+          "file": "packages/harness/src/shared/session/sessionViewUpdate.ts",
+          "symbol": "withTranscriptFacts",
+          "signature": "function withTranscriptFacts(u: Update, run: RunView): RunView {…}"
+        }
+      ]
+    },
+    {
+      "id": "STORE-per-family-version-before-freeze",
+      "candidate": "a version per current-value family with upcasters, a forward-step table and a guarded ADD COLUMN in the session store before the freeze (session store review S1, S4)",
+      "why": "The PRD and the storage-format rule (packages/harness/AGENTS.md \"Storage format\") already say no: a store stamped with another schema fails the open unchanged, there is no migration, and a kind changes with no upcaster until the first released version that must stay readable across a change brings the first one. A step table and per-family versions before the freeze are that upcaster written ahead of any row that needs it.",
+      "ruling": ".agents/docs/proposed/process/2026-11-17-open-proposals-triage-and-order.md#decided-on-2026-11-19",
+      "reopenWhen": "A released version's store must stay readable across a change to its schema or to a value family's shape.",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/session/valueFamily.ts",
+          "symbol": "ValueFamily",
+          "signature": "export interface ValueFamily<T> { readonly name: string; readonly schema: Schema.Codec<T, unknown>; }"
+        },
+        {
+          "file": "packages/harness/src/controllers/session/storeSchema.ts",
+          "symbol": "checkStamps",
+          "signature": "const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {…});"
+        }
+      ]
+    },
+    {
+      "id": "PLATFORM-execution-port",
+      "candidate": "an execution port on AgentPlatform naming the FileSystem | ChildProcessSpawner pair (harness general package design, the Execution row)",
+      "why": "No consumer: every embedder runs on the Node pair the process layer already provides, and no host or embedder supplies another, so the port would be a field nothing sets differently.",
+      "ruling": ".agents/docs/proposed/process/2026-11-17-open-proposals-triage-and-order.md#decided-on-2026-11-19",
+      "reopenWhen": "An embedder needs to run the harness's commands and file access on something other than the Node FileSystem and ChildProcessSpawner.",
+      "symbols": [
+        {
+          "file": "packages/harness/src/platform/agentPlatform.ts",
+          "symbol": "AgentPlatform",
+          "signature": "export interface AgentPlatform { readonly agentDirectories: AgentDirectoriesPort; readonly roots: WorkspaceRoots; readonly secrets: PlatformSecrets; }"
+        }
+      ]
+    },
+    {
+      "id": "UI-cli-approvals-with-web-request-panels",
+      "candidate": "one approval implementation shared by the terminal chat's approval stack and the webview request panels",
+      "why": "Both concrete forms are refused already (an approve handler for the terminal chat, a declaration record for the request cards), and the two surfaces share their one decision path, request.decide on the session view; what differs is rendering and key handling in Ink and in Lit. It reopens only with a new design.",
+      "ruling": ".agents/docs/proposed/process/2026-11-17-open-proposals-triage-and-order.md#decided-on-2026-11-19",
+      "reopenWhen": "A design that names what the two surfaces would share beyond request.decide.",
+      "symbols": [
+        {
+          "file": "packages/cli/src/chat/tui/state/approvalQueue.ts",
+          "symbol": "ApprovalSurface",
+          "signature": "export interface ApprovalSurface { readonly staged: ReadonlyMap<string, TuiRequest>; readonly decided: ReadonlySet<string>; readonly promoted: RunId | undefined; }"
+        },
+        {
+          "file": "packages/texra/src/ui/progress/components/BaseRequestPanel.ts",
+          "symbol": "BaseRequestPanel",
+          "signature": "export abstract class BaseRequestPanel< K extends RequestPayload['kind'] = RequestPayload['kind'], > extends LitElement {…}"
+        }
+      ]
+    },
+    {
+      "id": "LLM-replay-foreign-protocol-turns",
+      "candidate": "replaying another protocol's assistant turns (converting a run's history when its model moves to a binding on another protocol)",
+      "why": "The code rejects it: a resume whose next request would replay an assistant message, a pending response or a continuation recorded on another protocol is refused (foreignProtocol), and llm refuses a continuation another protocol issued (resolveTurn). The harness general package design lists cross-protocol history conversion as a non-goal and refuses a model switch across protocols early.",
+      "ruling": ".agents/docs/proposed/process/2026-11-17-open-proposals-triage-and-order.md#decided-on-2026-11-19",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/loop/runLoop.ts",
+          "symbol": "foreignProtocol",
+          "signature": "const foreignProtocol = ( runId: RunId, state: RunState, bound: Pick<BoundModel, 'backend' | 'origin'>, ): RunHistoryRefused | null => {…};"
         }
       ]
     }

@@ -10,9 +10,15 @@ import {
   AppState,
   type ConfigProvider,
 } from '@texra-ai/harness/plugins';
-import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
+import {
+  TELEMETRY_ENABLED_SETTING,
+  USAGE_LOGGING_SENDS,
+} from '@texra/shared/settings/texraSettings';
 
-import { usageLoggingOptOut } from './UsageLogService';
+import {
+  USAGE_LOGGING_ENV_OPT_OUT,
+  usageLoggingOptOut,
+} from './UsageLogService';
 
 /** Set once the first-run telemetry notice has been shown on this machine. */
 const NOTICE_SHOWN_KEY = {
@@ -35,7 +41,7 @@ export const telemetryNoticeIfDue = Effect.fn('telemetryNoticeIfDue')(
     yield* state.update(NOTICE_SHOWN_KEY.key, true);
     // The config line as the file stores it: the row's key under the
     // catalog's namespace.
-    return `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${config.catalog.namespace}.${TELEMETRY_ENABLED_SETTING.key}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
+    return `${USAGE_LOGGING_SENDS} Turn it off with "${config.catalog.namespace}.${TELEMETRY_ENABLED_SETTING.key}": false, ${USAGE_LOGGING_ENV_OPT_OUT}. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
   },
   // A store failure must not stop a host starting; say so and show nothing.
   Effect.catch((error) =>
