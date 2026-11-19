@@ -209,16 +209,6 @@ export {
 } from '@utils/core/pathCore';
 // The office formats the Read tool converts to text.
 export { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
-// One exclusive lane per key, for work that must run one at a time per
-// key (a project, a prompt queue).
-export {
-  withPerKeyLane,
-  type PerKeyLane,
-  type PerKeyLanes,
-} from '@utils/core/perKeyQueue';
-// The one lane every writer of a file shares: a host's own save takes it
-// beside the harness's approved edits.
-export { withFileWriteLane } from '@utils/files/fileWriteLane';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export {

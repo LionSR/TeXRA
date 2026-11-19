@@ -202,6 +202,15 @@ export type { ValueFamily } from '@shared/session/valueFamily';
 export type { CurrentValues } from '@shared/session/database';
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 export { logFailure, withLogChannel } from '@logger/effectLog';
+// One exclusive lane per key, for work that must run one at a time per key
+// (one build per project, one edit per file), and the one lane every writer
+// of a file shares with the harness's approved edits.
+export {
+  withPerKeyLane,
+  type PerKeyLane,
+  type PerKeyLanes,
+} from '@utils/core/perKeyQueue';
+export { withFileWriteLane } from '@utils/files/fileWriteLane';
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 // What `ChildRuns` launches: an external process's child, with the one
 // turn it runs.
