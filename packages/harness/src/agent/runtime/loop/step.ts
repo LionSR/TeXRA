@@ -228,6 +228,9 @@ const openStep = Effect.fn('Step.open')(function* (
     // plugin's program's among them, follow the switches read live.
     const program = programOf(run.config);
     const trusted = program !== null && !isInstalledProgram(program);
+    // Every program is offered the tools that ask for approval, where no
+    // prompt can show too: its delegations stand approved by its launch, and
+    // any other call is still decided by the approval policy when made.
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
@@ -240,7 +243,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
       directToolCalls: keepsDirectToolCalls(yield* ScopedRef.get(run.model)),
-      ...(trusted && { approvalPromptsUnavailable: false }),
+      ...(program !== null && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     // A plugin whose dependency is missing gives the step no program and no

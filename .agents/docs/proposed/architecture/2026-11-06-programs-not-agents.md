@@ -1239,7 +1239,7 @@ history 的行。
    文件名拒绝，同一插件的其他程序照常加载），按步进模块表
    （`packages/harness/src/tools/sessionTools.ts`），名字是
    `<插件名>:<名字>`；信任审阅列出每个程序和被拒绝的文件
-   （`pluginTrust.ts`）；它列的工具看开关和审批，它交给子运行的文件照
+   （`pluginTrust.ts`）；它列的工具看开关，它交给子运行的文件照
    模型脚本解析，这两处从名字里有没有冒号推出（`isInstalledProgram`），
    不另存。`texra run <插件名>:<名字>` 能启动，`texra plugin list` 和设
    置页的插件行列出程序。还剩：`programs/` 里不带声明的辅助模块不加

@@ -103,8 +103,8 @@ export const programOf = (
  * name). A person reviewed an installed plugin's programs when they enabled
  * it, so a launch and the agents it starts stand approved like a registered
  * program's; but its text is a third party's, so the tools it lists still
- * pass the user's switches and the approval gates, and the files it hands a
- * child are resolved as a model's script's are.
+ * pass the user's switches, and the files it hands a child are resolved as
+ * a model's script's are.
  */
 export const isInstalledProgram = (name: string): boolean => name.includes(':');
 

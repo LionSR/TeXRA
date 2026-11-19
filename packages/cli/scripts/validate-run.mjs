@@ -1311,7 +1311,7 @@ function validatePluginProgram() {
       path.join(plugin, 'programs', 'first-line.js'),
       `// Reads each input file and answers with what it was offered.
 export const description = 'Quote the first line of each input file.';
-export const uses = ['read_file', 'github_subscription'];
+export const uses = ['read_file', 'github_subscription', 'agent'];
 
 export default async (args, { inputFiles }) => {
   const lines = [];
@@ -1432,7 +1432,7 @@ prompt: |
     });
     assert(
       reviewText.includes(
-        'review-kit:first-line: Quote the first line of each input file. (tools: read_file, github_subscription)',
+        'review-kit:first-line: Quote the first line of each input file. (tools: read_file, github_subscription, agent)',
       ) &&
         reviewText.includes(
           'Program programs/broken.js of plugin review-kit is not loaded: `description` must be one quoted string',
@@ -1457,6 +1457,9 @@ prompt: |
         offered.every(
           ({ tools, modules }) =>
             tools.includes('read_file') &&
+            // Its delegations stand approved, so `agent` is offered where
+            // no prompt can show.
+            tools.includes('agent') &&
             !tools.includes('github_subscription') &&
             modules.includes('review-kit:first-line') &&
             !modules.includes('review-kit:broken'),
