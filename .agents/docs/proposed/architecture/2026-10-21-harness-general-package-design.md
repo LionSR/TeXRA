@@ -442,7 +442,9 @@ to the entry whose signatures name it, with no rename:
 - the root (12): `HostInteractions` and `Notices` with the presentation
   events, payloads and options they name, `AgentDirectoriesPort` and
   `AgentDirectoriesFailed`, `HostSkillOptions` and `SkillSourceOptions`,
-  `SessionCloseReport`, `DatabaseWriteFailed`. The root is 35 → 47 names.
+  `SessionCloseReport`. `DatabaseWriteFailed` joins them beside its two
+  siblings, though no root signature names it: `GlobalDatabase` on `./node`
+  and `CellError` on `./plugins` do. The root is 35 → 47 names.
 - `./plugins` (21): the config and state store ports with their failures,
   `RootedFileSystem` and `GlobalStorageFs`, the app-signal types, `AppState`,
   `GlobalValues`, `StateStores`, `ToolCatalog` and what they name.
