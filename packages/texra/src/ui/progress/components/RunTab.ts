@@ -51,6 +51,7 @@ import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   NESTED_AGENT,
+  nestedCountsLabel,
   nestedRollupLabel,
   TASK_ACTIONS,
 } from '@ui/copy/nestedRuns';
@@ -180,10 +181,7 @@ export class RunTab extends LitElement {
     const runTitle = run.title;
     const tooltip = buildTooltip(run, this.ticker.now);
     const noun = runNoun(run);
-    const childCountLabel = formatResultCount(
-      run.rollup.total,
-      NESTED_AGENT.countNoun,
-    );
+    const childCountLabel = nestedCountsLabel(run.rollup.kinds);
     const childToggleLabel = this.expanded
       ? NESTED_AGENT.collapseAction
       : childCountLabel;
