@@ -5,7 +5,10 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
 import { describe } from 'vitest';
 
-import { readUncommentedLatex } from '@latex/latexParsingUtils';
+import {
+  collectBibliographyPaths,
+  readUncommentedLatex,
+} from '@latex/latexParsingUtils';
 
 /** `tex` as the file's readers see it: its comments removed. */
 const uncommented = (tex: string) => {
@@ -36,4 +39,17 @@ describe('readUncommentedLatex', () => {
       assert.strictEqual(text, '\\url{http://a/b%20c} \\input{real}');
     }),
   );
+});
+
+describe('collectBibliographyPaths', () => {
+  it('resolves a bibliography directive beside the file', () => {
+    const dir = path.join('/workspace', 'chapters');
+    assert.deepStrictEqual(
+      collectBibliographyPaths(
+        dir,
+        '\\addbibresource[location=local]{references}',
+      ),
+      [path.join(dir, 'references.bib')],
+    );
+  });
 });
