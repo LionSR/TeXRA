@@ -37,9 +37,10 @@ boot and before the final frame are gone.
   its dispatch (Node's `eventLoopUtilization().idle`), since some handlers
   hand their work to a fiber or a signal a turn later. Work that waits on
   I/O or a timer of its own is outside that: such a key names the text it
-  waits `until` (the `/plugins` list) or `untilGone` (the two scenarios
-  that return from a focused child with Esc, which macOS defers by its
-  chord window).
+  waits `until` (an async `/` list's loaded rows: `PLUGINS_FORM_KEYS`,
+  `CONFIG_FORM_KEYS`, `SKILLS_FORM_KEYS`, `MODEL_PICKER_KEYS`) or
+  `untilGone` (the two scenarios that return from a focused child with Esc,
+  which macOS defers by its chord window).
 - What stays on the clock, and why:
   - `ESC_CHORD_WINDOW_MS` (700 ms, macOS only, `escape-leaves-root-running`):
     the App holds a bare Esc for its 500 ms chord window and then drops it
@@ -57,7 +58,7 @@ boot and before the final frame are gone.
   painted frame rather than after one second.
 
 Measured on a 4-core Linux container, 143 scenarios, harness already built
-(`--no-build`); `main` at the time took 580 to 585 s:
+(`--no-build`):
 
 MEASURED_TABLE
 
@@ -67,7 +68,29 @@ MEASURED_TABLE
    That changes CI cost, so it is the repo owner's call: a nightly `schedule`
    run of `validate:tui` without `--smoke` at least, or every PR. Only then
    do the `smoke` tag and the split go.
-2. **The packaged desktop smoke is a second launch harness.**
+2. **A key typed while an async `/` list loads is dropped (product).** Six
+   scenarios answer a list right after opening it (`config-form`,
+   `config-category-back-responsive`, `model-form-selectable-submit`,
+   `model-form-buffered-hotkey`, `skills-form-select-submit`,
+   `skills-form-buffered-hotkey`). On `main` they passed because the fixed
+   500 ms delay after the opening Enter let the list load first, so the two
+   `buffered-hotkey` scenarios never exercised the buffering they are named
+   for. Sent as soon as the opening key is answered, the next key lands
+   while the list is still loading: an Enter or arrow is dropped by design
+   (`shouldBufferAsyncListFormInput` buffers only printable keys), and a
+   buffered hotkey was lost in 4 of the 6 tries that landed in the loading
+   frame (`/skills`, all CPUs saturated). The probable cause, not
+   confirmed: between the commit that ends `loading` and the passive effect
+   that subscribes `Select`'s `useInput`, a key reaches neither the form's
+   buffer (no longer loading) nor the list. The scenarios now wait for the
+   loaded rows, which is what the delay covered.
+   - Proposed: the form holds every key that arrives before its list is
+     listening (Enter and arrows included) and replays it once `Select`
+     subscribes, owned in `useAsyncListForm`
+     (`packages/cli/src/chat/tui/forms/_shared/useAsyncListForm.ts`); then
+     `model-form-buffered-hotkey` and `skills-form-buffered-hotkey` press
+     their hotkey without waiting, and so test the buffering.
+3. **The packaged desktop smoke is a second launch harness.**
    `scripts/verify-desktop.mjs`'s `smoke-package` stage (with
    `scripts/smoke-process-utils.mjs`) launches the packaged app, decides
    it is ready by polling renderer markup (`main#app`, the progress view's
