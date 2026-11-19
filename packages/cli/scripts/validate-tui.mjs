@@ -855,7 +855,10 @@ const SCENARIOS = [
       HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
-    keys: ['/model', '\r', '21'],
+    // The hotkey goes in once the list has loaded, which the fixed delay
+    // this replaced always waited for. Typed while the list is still
+    // loading, it is dropped in most tries (the test-launches note).
+    keys: ['/model', { input: '\r', until: '1-2/Enter select' }, '21'],
     frame: 'viewport',
     // The pick reaches `/model`'s own handler, which answers for the
     // harness's stored root.
@@ -1068,7 +1071,10 @@ const SCENARIOS = [
   {
     name: 'skills-form-buffered-hotkey',
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
-    keys: ['/skills', '\r', '21'],
+    // The hotkey goes in once the list has loaded, which the fixed delay
+    // this replaced always waited for. Typed while the list is still
+    // loading, it is dropped in most tries (the test-launches note).
+    keys: ['/skills', { input: '\r', until: 'Enter activate' }, '21'],
     frame: 'viewport',
     expect: ['Harness skill selected:'],
     unexpect: [
