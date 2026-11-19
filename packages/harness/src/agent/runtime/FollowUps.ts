@@ -20,7 +20,14 @@
  * its parent's tool-call fiber, so a context service would hand the child
  * its parent's input.
  */
-import { Effect, type FileSystem, Result, type Scope, ScopedRef } from 'effect';
+import {
+  Array as Arr,
+  Effect,
+  type FileSystem,
+  Result,
+  type Scope,
+  ScopedRef,
+} from 'effect';
 
 import { userFollowUpInstruction } from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/Inbox';
@@ -231,12 +238,9 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     );
     const current = state.input.activated ?? [];
     const activated = found.some((name) => !current.includes(name))
-      ? [
-          ...new Set([
-            ...current.filter((name) => !found.includes(name)),
-            ...found,
-          ]),
-        ].slice(-ACTIVATED_SKILLS_MAX)
+      ? [...new Set([...Arr.difference(current, found), ...found])].slice(
+          -ACTIVATED_SKILLS_MAX,
+        )
       : undefined;
     // The pointers commit beside the blobs: no crash separates them. The
     // launch's instruction is `null`.

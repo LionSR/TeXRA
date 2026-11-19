@@ -1,4 +1,4 @@
-import { Effect, Result, Schema } from 'effect';
+import { Array as Arr, Effect, Result, Schema } from 'effect';
 
 import {
   type ApiKeyProviderId,
@@ -411,7 +411,7 @@ export function setModelEnabled(input: {
             ...(input.enabled ? [input.model] : []),
           ]),
         ],
-        disabledDefaults: curated.filter((model) => !toggled.includes(model)),
+        disabledDefaults: Arr.difference(curated, toggled),
       };
       const enabled = enabledModelsOf(curated, next);
       return enabled.length > 0

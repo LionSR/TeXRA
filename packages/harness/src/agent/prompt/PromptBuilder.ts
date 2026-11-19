@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Array as Arr, Effect, FileSystem } from 'effect';
 
 // Local imports - agent
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
@@ -105,8 +105,8 @@ export function contextUpdate(
   for (const name of Object.keys(told.sections))
     if (!Object.hasOwn(now.sections, name))
       lines.push(`The earlier ${name} instructions no longer apply.`);
-  const added = now.tools.filter((name) => !told.tools.includes(name));
-  const removed = told.tools.filter((name) => !now.tools.includes(name));
+  const added = Arr.difference(now.tools, told.tools);
+  const removed = Arr.difference(told.tools, now.tools);
   if (added.length > 0)
     lines.push(`These tools are now available: ${added.join(', ')}.`);
   if (removed.length > 0)

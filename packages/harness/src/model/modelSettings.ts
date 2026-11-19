@@ -3,7 +3,7 @@
  * model switch's acceptance, the helper model and the picker's route facts
  * take a {@link ModelSettings}; nothing beneath them reads a store.
  */
-import { Effect, Struct } from 'effect';
+import { Array as Arr, Effect, Struct } from 'effect';
 
 import {
   type BackendProviderId,
@@ -277,6 +277,6 @@ export function routeFactsFor(
 ): RouteFacts {
   return {
     ...settings.route,
-    plans: settings.route.plans.filter((plan) => !declined.includes(plan)),
+    plans: Arr.difference(settings.route.plans, declined),
   };
 }
