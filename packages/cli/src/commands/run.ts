@@ -1,5 +1,6 @@
 import * as path from 'node:path';
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Option, Result } from 'effect';
+import { Argument, Flag } from 'effect/cli';
 
 import {
   toErrorMessage,
@@ -31,14 +32,8 @@ import {
   type CliPlatformServices,
 } from '../runtime/platform/initPlatform';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { cliCommand, SKILL_SOURCES_CONFIG } from './_helpers/cliCommand';
 import { emitCliResult } from './_helpers/output';
-import {
-  SKILL_SOURCE_ARGS,
-  collectCommonAgentRunFlags,
-  optionalStringFlagValue,
-  optString,
-} from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
@@ -445,64 +440,63 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
   return runOutcomeExitCode(result.outcome);
 });
 
-export const headlessRunCommand = defineCliCommand({
-  meta: { name: 'run', description: 'Run a program or an agent headlessly' },
-  args: {
-    ...SKILL_SOURCE_ARGS,
-    target: {
-      type: 'positional',
-      required: true,
-      description: RUN_TARGET_NAME_DESCRIPTION,
-    },
-    input: {
-      type: 'string',
-      alias: 'i',
-      valueHint: 'file',
-      description:
-        'Text or supported media file passed to the agent (repeatable; use `-` for text stdin; required for programs)',
-    },
-    context: {
-      type: 'string',
-      alias: 'c',
-      valueHint: 'file',
-      description:
-        'Read-only context file passed to the agent (repeatable; use `-` to read stdin)',
-    },
-    output: {
-      type: 'string',
-      valueHint: 'file',
-      description:
-        'Programs only: output file for a single-input run (use --output-dir for multi-input)',
-    },
-    'output-dir': {
-      type: 'string',
-      valueHint: 'directory',
-      description:
+const fileFlag = (name: string, description: string) =>
+  Flag.String(name).pipe(
+    Flag.withMetavar('file'),
+    Flag.withDescription(description),
+  );
+
+export const headlessRunCommand = cliCommand('run', {
+  description: 'Run a program or an agent headlessly',
+  config: {
+    ...SKILL_SOURCES_CONFIG,
+    target: Argument.String('target').pipe(
+      Argument.withDescription(RUN_TARGET_NAME_DESCRIPTION),
+    ),
+    input: fileFlag(
+      'input',
+      'Text or supported media file passed to the agent (repeatable; use `-` for text stdin; required for programs)',
+    ).pipe(Flag.withAlias('i'), Flag.atLeast(0)),
+    context: fileFlag(
+      'context',
+      'Read-only context file passed to the agent (repeatable; use `-` to read stdin)',
+    ).pipe(Flag.withAlias('c'), Flag.atLeast(0)),
+    output: fileFlag(
+      'output',
+      'Programs only: output file for a single-input run (use --output-dir for multi-input)',
+    ).pipe(Flag.optional),
+    outputDir: Flag.String('output-dir').pipe(
+      Flag.withMetavar('directory'),
+      Flag.withDescription(
         'Programs only: directory to copy outputs into for multi-input runs',
-    },
-    model: {
-      type: 'string',
-      alias: 'm',
-      description: 'Model for the agent',
-    },
-    instruction: {
-      type: 'string',
-      description:
+      ),
+      Flag.optional,
+    ),
+    model: Flag.String('model').pipe(
+      Flag.withAlias('m'),
+      Flag.withDescription('Model for the agent'),
+      Flag.optional,
+    ),
+    instruction: Flag.String('instruction').pipe(
+      Flag.withDescription(
         'Instruction passed to the agent or program (an agent needs this or --instruction-file)',
-    },
-    'instruction-file': {
-      type: 'string',
-      valueHint: 'file',
-      description:
-        'File whose contents are passed before --instruction when both are set',
-    },
+      ),
+      Flag.optional,
+    ),
+    instructionFile: fileFlag(
+      'instruction-file',
+      'File whose contents are passed before --instruction when both are set',
+    ).pipe(Flag.optional),
   },
-  run: (context, ctx) =>
+  run: (context, input) =>
     runHeadlessAgent(context, {
-      agent: ctx.args.target,
-      ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
-      output: optionalStringFlagValue(ctx.rawArgs, 'output'),
-      outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
-      model: optString(ctx.args.model),
+      agent: input.target,
+      inputFiles: [...input.input],
+      contextFiles: [...input.context],
+      instruction: Option.getOrElse(input.instruction, () => ''),
+      instructionFile: Option.getOrUndefined(input.instructionFile),
+      output: Option.getOrUndefined(input.output),
+      outputDir: Option.getOrUndefined(input.outputDir),
+      model: Option.getOrUndefined(input.model),
     }),
 });

@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
-import { Effect, absurd } from 'effect';
+import { Effect, Option, absurd } from 'effect';
+import { Argument, Command, Flag } from 'effect/cli';
 
 import { type RunId } from '@texra-ai/harness/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
@@ -27,8 +27,7 @@ import {
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
@@ -232,23 +231,31 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
     : CliExitCode.Success;
 });
 
-const historyListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List stored tasks' },
-  args: {
-    limit: {
-      type: 'string',
-      alias: 'n',
-      valueHint: 'count',
-      description: 'Show at most this many tasks',
-    },
+const boolFlag = (name: string, description: string) =>
+  Flag.Boolean(name).pipe(
+    Flag.withoutNegation,
+    Flag.withDefault(false),
+    Flag.withDescription(description),
+  );
+
+const TASK_ID_DESCRIPTION = 'Task id from `texra history list`';
+
+// `texra history` on its own is `texra history list`: the group takes the
+// listing's flags and runs it.
+const historyList = {
+  config: {
+    limit: Flag.String('limit').pipe(
+      Flag.withAlias('n'),
+      Flag.withMetavar('count'),
+      Flag.withDescription('Show at most this many tasks'),
+      Flag.optional,
+    ),
   },
   // The argument parses are the builder's, above the program: a refusal is
-  // `CliUsageError`, which `runCli` reports as the same stderr line and exit
-  // 2 the program would have returned — and refuses before `defineCliCommand`
-  // installs a process runtime this command would never bring a platform up
-  // to dispose.
-  run: (_, ctx) => {
-    const limitValue = optString(ctx.args.limit);
+  // `CliUsageError`, raised before a runtime this command would never bring
+  // a platform up to dispose.
+  run: (_: CliContext, input: { readonly limit: Option.Option<string> }) => {
+    const limitValue = Option.getOrUndefined(input.limit);
     const limit = parseHistoryListLimit(limitValue);
     if (limitValue !== undefined && limit === undefined) {
       throw new CliUsageError({
@@ -257,34 +264,32 @@ const historyListCommand = defineCliCommand({
     }
     return runHistoryList({ limit });
   },
-});
+};
 
-const historyShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one stored task' },
-  args: {
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Task id from `texra history list`',
-    },
-    full: {
-      type: 'boolean',
-      description:
-        'Show the full stored conversation instead of only the final preview',
-    },
-    export: {
-      type: 'string',
-      valueHint: 'html|md',
-      description:
+const historyShowCommand = cliCommand('show', {
+  description: 'Show one stored task',
+  config: {
+    id: Argument.String('id').pipe(
+      Argument.withDescription(TASK_ID_DESCRIPTION),
+    ),
+    full: boolFlag(
+      'full',
+      'Show the full stored conversation instead of only the final preview',
+    ),
+    export: Flag.String('export').pipe(
+      Flag.withMetavar('html|md'),
+      Flag.withDescription(
         'Export the run to stdout: html is a self-contained trace-viewer replay, md is the conversation as Markdown',
-    },
+      ),
+      Flag.optional,
+    ),
   },
-  run: (context, ctx) => {
-    const id = parseCliHistoryId(ctx.args.id);
+  run: (context, input) => {
+    const id = parseCliHistoryId(input.id);
     if (!id) {
-      throw new CliUsageError({ message: `Invalid task id: ${ctx.args.id}` });
+      throw new CliUsageError({ message: `Invalid task id: ${input.id}` });
     }
-    const exportFormat = optString(ctx.args.export);
+    const exportFormat = Option.getOrUndefined(input.export);
     if (exportFormat !== undefined) {
       if (exportFormat !== 'html' && exportFormat !== 'md') {
         throw new CliUsageError({
@@ -293,57 +298,44 @@ const historyShowCommand = defineCliCommand({
       }
       return runHistoryExport(context, id, exportFormat);
     }
-    return runHistoryShow(context, id, { full: ctx.args.full === true });
+    return runHistoryShow(context, id, { full: input.full });
   },
 });
 
-const historyDeleteCommand = defineCliCommand({
-  meta: { name: 'delete', description: 'Delete stored tasks' },
-  args: {
-    id: {
-      type: 'positional',
-      required: false,
-      description: 'Task id from `texra history list`',
-    },
-    all: {
-      type: 'boolean',
-      description: 'Delete all stored tasks (requires --yes to confirm)',
-    },
-    yes: {
-      type: 'boolean',
-      alias: 'y',
-      description:
-        'Confirm destructive deletes (required with --all; ignored otherwise)',
-    },
+const historyDeleteCommand = cliCommand('delete', {
+  description: 'Delete stored tasks',
+  config: {
+    id: Argument.String('id').pipe(
+      Argument.withDescription(TASK_ID_DESCRIPTION),
+      Argument.optional,
+    ),
+    all: boolFlag('all', 'Delete all stored tasks (requires --yes to confirm)'),
+    yes: boolFlag(
+      'yes',
+      'Confirm destructive deletes (required with --all; ignored otherwise)',
+    ).pipe(Flag.withAlias('y')),
   },
-  run: (context, ctx) => {
-    const rawId = optString(ctx.args.id);
+  run: (context, input) => {
+    const rawId = Option.getOrUndefined(input.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
       throw new CliUsageError({ message: `Invalid task id: ${rawId}` });
     }
-    const target = ctx.args.all === true ? 'all' : id;
+    const target = input.all ? 'all' : id;
     if (!target) {
       throw new CliUsageError({ message: 'Expected a task id, or --all.' });
     }
-    return runHistoryDelete(context, {
-      target,
-      yes: ctx.args.yes === true,
-    });
+    return runHistoryDelete(context, { target, yes: input.yes });
   },
 });
 
-export const historyCommand = defineCommand({
-  meta: { name: 'history', description: 'Inspect stored tasks' },
-  args: {
-    ...GLOBAL_ARGS,
-  },
-  // Bare `texra history` is the obvious history listing command. Keep it as
-  // an alias of `history list` so global flags continue to work at the parent.
-  default: 'list',
-  subCommands: {
-    list: historyListCommand,
-    show: historyShowCommand,
-    delete: historyDeleteCommand,
-  },
-});
+export const historyCommand = cliCommand('history', {
+  description: 'Inspect stored tasks',
+  ...historyList,
+}).pipe(
+  Command.withSubcommands([
+    cliCommand('list', { description: 'List stored tasks', ...historyList }),
+    historyShowCommand,
+    historyDeleteCommand,
+  ]),
+);

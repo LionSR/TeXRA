@@ -88,11 +88,11 @@
     {
       "id": "RT-install-cli-process-runtime",
       "candidate": "installCliProcessRuntime as an Effect program",
-      "why": "It is the bootstrap edge itself, so there is no runtime to run it on; an Effect face forces a bare Effect.run* at every citty action and grows BARE_EFFECT_RUN_SITES from 7 to about 20. What changed (wave 3): its one await was the package manifest read, which is now synchronous, so the install is a plain function returning the runtime and its Promise face is gone; nothing to lift into Effect. What changed (K4): the install is per command, `makeCliProcessRuntime` at the one citty edge (`defineCliCommand`), with no process memo; it is still a plain function returning the runtime.",
+      "why": "Still refused, for the platform's reasons, not the framework's. A command's runtime is a ManagedRuntime built at the Promise edge (`launchCliCommand` in cliCommand.ts) because the platform hands that same runtime to the modules that run programs at a Promise edge (`CliPlatformServices.runtime`, `makeCliProcessRuntime`'s `() => runtime`), `runChat` mounts the TUI on it after the command's program has finished, and a headless run started from inside a default-runtime fiber never finished its Ctrl-C shutdown drain. What changed (effect/cli, 2026-11-19): the old reason, a bare Effect.run* at every citty action, is gone: a command's handler is an Effect that builds its context in the parse fiber, and the binary runs one Effect.runPromise for the parse before the launch.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
       "symbols": [
         {
-          "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
+          "file": "packages/cli/src/runtime/platform/cliProcessRuntime.ts",
           "symbol": "makeCliProcessRuntime",
           "signature": "export function makeCliProcessRuntime( context: CliRuntimeContext, platform: CliPlatformOptions = {}, ): CliProcessRuntime {…}"
         }
@@ -273,14 +273,14 @@
     },
     {
       "id": "RT-cli-exit-code-one-function",
-      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting setExitCode, settleExitCode, CliConfigExecuteResult.exitCode and ChatExit.signal's code",
-      "why": "citty 0.2.2's runCommand discards a nested subcommand's run() result and passes no data down, and every command, root's direct subcommands included, runs nested, so no return value reaches texra.ts. The other names are not edge decisions: defineCliCommand already turns every command's result into the code (only doctor, which cannot use it, and help, which re-enters runCli as the non-interactive default, set it themselves); settleExitCode is the chat's run-claim code returned through runChat; CliConfigExecuteResult.exitCode is a headless run's program result; and a signal exit with a waiting run calls process.exit because that run holds the event loop open. runOutcomeExitCode is already the one outcome-to-code mapping. What landed instead: runCli and texraServe share runCommandForExitCode.",
+      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting CliConfigExecuteResult.exitCode and ChatExit.signal's code",
+      "why": "The names left are not edge decisions: CliConfigExecuteResult.exitCode is a headless run's program result; a signal exit with a waiting run calls process.exit because that run holds the event loop open; runOutcomeExitCode is already the one outcome-to-code mapping. What changed (effect/cli, 2026-11-19): the command line already ends in one code. The parse answers a launch or a code through `CliSelection`, `runCliCommandLine` runs the launch and answers the code for both binaries, and setExitCode with its module slot is deleted, so the citty half of this candidate is done and only the names above remain refused.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
       "symbols": [
         {
-          "file": "packages/cli/src/commands/_helpers/exitCode.ts",
-          "symbol": "setExitCode",
-          "signature": "export function setExitCode(code: number): void {…}"
+          "file": "packages/cli/src/commands/_helpers/cliCommand.ts",
+          "symbol": "runCliCommandLine",
+          "signature": "export async function runCliCommandLine<Name extends string, I, CI, E>( command: Command.Command<Name, I, CI, E, CliSelection | Command.Environment>, argv: readonly string[], ): Promise<{ exitCode: number }> {…}"
         }
       ]
     },

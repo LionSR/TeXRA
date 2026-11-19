@@ -10,12 +10,6 @@
  * symlink inside the project from leading outside it. The I/O goes to the
  * process `FileSystem` on those canonical paths, which a symlinked root
  * places outside the lexical root the view would accept.
- *
- * A write of a project file runs in the process that holds the project's
- * session, where its tasks write: a window whose project the background
- * service holds sends it there (`file.save`), and the service answers with
- * {@link writeWorkspaceFile}, the write a window makes of a session it holds
- * itself.
  */
 
 // Node imports
@@ -37,7 +31,6 @@ import {
   AgentCatalog,
   isPathWithin,
   OFFICE_EXTENSIONS,
-  withFileWriteLane,
 } from '@texra-ai/harness/host';
 import {
   entryTypeIn,
@@ -47,12 +40,9 @@ import {
 } from '@texra-ai/harness/node';
 import { WorkspaceFs } from '@texra-ai/harness/plugins';
 
-// Local imports - server
-import type { ServiceLink } from '@texra/controllers/server/client';
-import { writeInService } from '@texra/controllers/server/serviceSession';
-
 // Local imports - app
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
+import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import {
   passesFileFilters,
@@ -71,13 +61,6 @@ type WorkspaceFileAction = Extract<
   HostCommand,
   { kind: 'workspaceFile' }
 >['action'];
-
-/** The editor's save: the path, the contents, and what the editor last read
- *  (`base`). */
-type WorkspaceFileWrite = Pick<
-  Extract<WorkspaceFileAction, { kind: 'write' }>,
-  'path' | 'contents' | 'base'
->;
 
 /** Every containment failure reads the same: which rule refused the path
  *  tells the user nothing they can act on. */
@@ -264,37 +247,28 @@ const listDirectory = Effect.fn('workspaceFileRequest.listDirectory')(
 /**
  * A save lands only while the file still holds what the editor last read
  * (`base`); a run that rewrote it meanwhile is answered `changedOnDisk`, and
- * the editor asks whether to overwrite or reload. The check and the write
- * hold the file's write lane, which an approved edit run in this process
- * holds too, so neither lands between the other's check and write. The lane
- * is per process, so this runs in the process whose tasks write the file
- * ({@link answerWorkspaceFile} sends it there). A file gone since the read
- * is recreated, as a deleted file always was. Saves of one file arrive one
- * at a time: the editor waits for each answer. Every failure is `Rejected`,
- * a filesystem failure in its own words.
+ * the editor asks whether to overwrite or reload. The path is confined
+ * here, and `write`, the session's own writer, decides where the check and
+ * the write run. A file gone since the read is recreated, as a deleted file
+ * always was. Saves of one file arrive one at a time: the editor waits for
+ * each answer.
  */
-export const writeWorkspaceFile = Effect.fn('writeWorkspaceFile')(
-  function* ({ path: target, contents, base }: WorkspaceFileWrite) {
-    const fs = yield* FileSystem.FileSystem;
-    const absolutePath = yield* isAgentDocumentTarget(target)
-      ? resolveAgentDocument(target, true)
-      : resolveWritable(target);
-    return yield* Effect.gen(function* () {
-      if (base !== null) {
-        const onDisk = yield* readNormalizedFile(fs, absolutePath).pipe(
-          Effect.catchIf(meansAbsent, () => Effect.succeed(null)),
-        );
-        if (onDisk !== null && onDisk !== base)
-          return { kind: 'changedOnDisk' } as const;
-      }
-      yield* fs.writeFileString(absolutePath, contents);
-      return { kind: 'done' } as const;
-    }).pipe(withFileWriteLane(absolutePath));
-  },
-  Effect.catchTag('PlatformError', (error) =>
-    Effect.fail(new Rejected({ reason: toErrorMessage(error) })),
-  ),
-);
+const writeFile = Effect.fn('workspaceFileRequest.writeFile')(function* (
+  target: string,
+  contents: string,
+  base: string | null,
+  write: WriteProjectFile,
+) {
+  const absolutePath = yield* isAgentDocumentTarget(target)
+    ? resolveAgentDocument(target, true)
+    : resolveWritable(target);
+  const written = yield* write(
+    absolutePath,
+    contents,
+    base === null ? { kind: 'anything' } : { kind: 'holds', contents: base },
+  );
+  return { kind: written ? 'done' : 'changedOnDisk' } satisfies HostOutcome;
+});
 
 const readFile = Effect.fn('workspaceFileRequest.readFile')(function* (
   target: string,
@@ -311,17 +285,13 @@ const readFile = Effect.fn('workspaceFileRequest.readFile')(function* (
 /**
  * Answer one `workspaceFile` action on the session's workspace. Every
  * failure is the request's `Rejected` answer, which the editor shows: a
- * filesystem failure in its own words. `service` is the link of a window
- * whose project the background service holds: its save of a project file
- * is the service's write, so it shares the write lane of the tasks' edits,
- * and this process's only while the link is away. An agent definition is
- * written here either way: this process's catalog named the file the
- * editor shows.
+ * filesystem failure in its own words. `write` is the session's writer of
+ * project files (`GuiSession.writeFile`).
  */
 export const answerWorkspaceFile = Effect.fn('answerWorkspaceFile')(
   function* (
     action: WorkspaceFileAction,
-    service?: ServiceLink,
+    write: WriteProjectFile,
   ): Effect.fn.Return<
     HostOutcome,
     Rejected | PlatformError.PlatformError,
@@ -335,21 +305,13 @@ export const answerWorkspaceFile = Effect.fn('answerWorkspaceFile')(
         };
       case 'read':
         return yield* readFile(action.path);
-      case 'write': {
-        const { path, contents, base } = action;
-        const { root } = yield* WorkspaceFs;
-        return yield* service === undefined ||
-        root === undefined ||
-        isAgentDocumentTarget(path)
-          ? writeWorkspaceFile(action)
-          : writeInService(
-              service,
-              path,
-              (client) =>
-                client['file.save']({ workspace: root, path, contents, base }),
-              writeWorkspaceFile(action),
-            );
-      }
+      case 'write':
+        return yield* writeFile(
+          action.path,
+          action.contents,
+          action.base,
+          write,
+        );
     }
   },
   Effect.catchTag('PlatformError', (error) =>
