@@ -234,7 +234,11 @@ Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
 built-in `creator` agent or the settings view's Agents tab. A plugin registers
 programs (`Plugin.programs`): script modules started by name, each a run
 opened on `script.kind: 'program'`. The `theory` plugin's programs are in
-`packages/texra/src/tools/theory/programs.ts`.
+`packages/texra/src/tools/theory/programs.ts`. An installed plugin carries
+programs as `programs/<name>.js`, started as `<plugin>:<name>`; the file is
+third-party code, so its description and tools are read from its text
+(`packages/harness/src/common/plugins/pluginPrograms.ts`) and it is evaluated
+only in the script sandbox.
 
 **Prompts** (bundled agents, plugin agents, templates, skills,
 `.github/prompts/`) use general behavioral rubrics: never an identifiable

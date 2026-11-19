@@ -1,8 +1,9 @@
 // Reads the plugin formats other agents already publish: the Claude Code
 // plugin manifest (`.claude-plugin/plugin.json`) and the Codex plugin
 // manifest (`.codex-plugin/plugin.json`), with the conventional component
-// locations beside them (`skills/`, `commands/`, `agents/`, `.mcp.json`).
-// The harness defines no manifest of its own. Each file is validated with a schema
+// locations beside them (`skills/`, `commands/`, `agents/`, `.mcp.json`),
+// and the programs a plugin carries for TeXRA (`programs/`,
+// `./pluginPrograms`). The harness defines no manifest of its own. Each file is validated with a schema
 // here, at the boundary; fields the harness does not read are stripped. The
 // marketplace files that list plugins are read by `./marketplace`.
 
@@ -31,6 +32,7 @@ import {
   HooksConfigSchema,
   type ConfiguredHook,
 } from './hookConfig';
+import { readPluginPrograms, type PluginPrograms } from './pluginPrograms';
 import {
   jsonSyntaxError,
   parseMcpServers,
@@ -211,6 +213,9 @@ export interface ResolvedPlugin {
   readonly commands: readonly string[];
   /** Agent files (`*.md`) relative to the plugin directory. */
   readonly agents: readonly string[];
+  /** Its programs (`programs/<name>.js`), each read from its text and never
+   *  run, and one line for each program file that is not loaded. */
+  readonly programs: PluginPrograms;
   /** Its stdio MCP servers, `${CLAUDE_PLUGIN_ROOT}` expanded, each run in
    *  the plugin directory under the name `plugin_<plugin>_<server>`. */
   readonly mcpServers: readonly McpServerConfig[];
@@ -450,7 +455,7 @@ function presentComponents(
 /**
  * Read the plugin in `dir`: its skill roots (the conventional `skills/`
  * directory when present plus every declared path), command and agent files,
- * MCP servers, and the components it carries that the harness does not load.
+ * programs, MCP servers, and the components it carries that the harness does not load.
  * `fallback` stands in for a manifest when the directory has none: the
  * marketplace entry, as a non-strict Claude Code marketplace allows, or on a
  * reread the plugin's own record.
@@ -518,6 +523,7 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
         'agents',
         found.flatMap((manifest) => toList(manifest.agents)),
       ),
+      programs: readPluginPrograms(dir, name.success),
       code: presentComponents(dir, found, CODE_COMPONENTS),
       ignored: presentComponents(dir, found, IGNORED_COMPONENTS),
     },
@@ -537,6 +543,7 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
     skills: [...skills],
     commands: yield* Effect.fromResult(parts.commands),
     agents: yield* Effect.fromResult(parts.agents),
+    programs: yield* Effect.fromResult(parts.programs),
     mcpServers: mcp.servers,
     hooks: yield* hooksOf(dir, name.success, found),
     code: yield* Effect.fromResult(parts.code),
