@@ -1,7 +1,6 @@
 /** A run's registration, a resume's activation, a stop and a run's end:
- *  the transactions that commit the lifecycle rows (built beside their
- *  readers in `shared/session/runFacts.ts`; record accessors:
- *  `runRecords.ts`). */
+ *  the lifecycle rows, each built by the transaction that commits it
+ *  (record accessors: `runRecords.ts`). */
 
 import { Context, Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
@@ -10,7 +9,9 @@ import { Inbox } from '@agent/followUp/Inbox';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
 import { SessionRoots } from '@platform/rootedFs';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
+  emptyRunEndOutput,
   runEndErrorMessage,
   RUN_OUTCOME,
   RunRecordFieldsSchema,
@@ -30,11 +31,8 @@ import {
   SessionLog,
 } from '@shared/session/runHistory';
 import {
-  activationDrafts,
+  descriptionRow,
   type RegisterRunOptions,
-  type Registration,
-  registrationDrafts,
-  runEndDraft,
 } from '@shared/session/runFacts';
 import { reportRecipients } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
@@ -65,6 +63,21 @@ class ParentRunClosed extends Schema.TaggedError<ParentRunClosed>()(
 /** A defect is the path's failure, as a refusal is: its caller words it. */
 const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
 
+type RunConfigRow = Extract<SessionRowDraft, { readonly type: 'run.config' }>;
+
+/** The rows that register a run, and the `run.start` among them of a run
+ *  they give birth to (null: the run exists, and they re-register it). */
+export interface Registration {
+  readonly rows: readonly SessionRowDraft[];
+  readonly start: Extract<SessionRowDraft, { type: 'run.start' }> | null;
+  /** Its configuration as a `run.config`, apart from `rows`, so the batch
+   *  that commits them records one: a run whose loop is not this
+   *  process's records this one (`registerRun`), as does a fork of a run
+   *  that never bound (`forkRun`); a launch that binds a model records its
+   *  own, with the binding (`openToolUse`). */
+  readonly config: RunConfigRow;
+}
+
 /** What opening a run's rows reads of its session. */
 type OpenServices = SessionLog | SessionRoots | Approvals;
 
@@ -84,11 +97,13 @@ export const activationRows = Effect.fn('activationRows')(function* (
   );
   const changed =
     stored === null || stableStringify(stored) !== stableStringify(next);
-  return activationDrafts(
-    runId,
-    yield* (yield* Approvals).activationRows(runId),
-    changed ? next : null,
-  );
+  return [
+    { type: 'run.activate', aggregateId: runId },
+    ...(yield* (yield* Approvals).activationRows(runId)),
+    ...(changed
+      ? [{ type: 'run.config' as const, aggregateId: runId, config: next }]
+      : []),
+  ];
 });
 
 /** Register a run whose loop is not this process's (an agent CLI, bash)
@@ -111,10 +126,13 @@ export const registerRun = Effect.fn('registerRun')(function* (
   }).pipe(defectAsFailure); // one that died wrote nothing: launch refused
 });
 
-/** The rows that register a run, uncommitted (with a `start`, they give
- *  birth to it, `run.start` first), which a caller commits with the run's
- *  first history in one batch, so no crash leaves it registered without
- *  that history. A child is refused under a parent that was stopped. */
+/** The rows that register a run, uncommitted, in commit order: a new run's
+ *  `run.start`, its `run.activate` (a re-registration's with the grants it
+ *  ends) and the description it is born with; and its configuration, for
+ *  its first batch to record ({@link Registration}). A caller commits them
+ *  with the run's first history in one batch, so no crash leaves it
+ *  registered without that history. A child is refused under a parent that
+ *  was stopped. */
 export const registrationRows = Effect.fn('registrationRows')(function* (
   runId: RunId,
   record: RunRecord,
@@ -140,10 +158,31 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
       pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
     );
-    const ended = prior
-      ? yield* (yield* Approvals).activationRows(runId)
-      : null;
-    return registrationDrafts(runId, config, options, ended);
+    const worktree = config.workingDirectory?.trim();
+    const start = prior
+      ? null
+      : ({
+          type: 'run.start',
+          aggregateId: runId,
+          identity: options.identity,
+          takesFollowUps: options.takesFollowUps ?? false,
+          worktree: worktree ? { workingDirectory: worktree } : null,
+          parent: options.parent ?? null,
+          provenance: options.provenance ?? null,
+          grants: options.grants ?? NO_APPROVAL_GRANTS,
+        } satisfies Registration['start']);
+    const rows: SessionRowDraft[] = [
+      ...(start === null ? [] : [start]),
+      { type: 'run.activate', aggregateId: runId },
+      ...(prior ? yield* (yield* Approvals).activationRows(runId) : []),
+    ];
+    if (options.description !== undefined)
+      rows.push(descriptionRow(runId, options.description, 'model'));
+    return {
+      rows,
+      start,
+      config: { type: 'run.config', aggregateId: runId, config },
+    } satisfies Registration;
   }).pipe(defectAsFailure);
 });
 
@@ -293,7 +332,14 @@ const endIn = Effect.fn('endIn')(function* (
     if (ahead.length > 0) yield* append(ahead);
     return { end: endOf(facts.end), wrote: false };
   }
-  const end = runEndDraft(runId, { outcome, error, output: input.output });
+  // Why a cancelled run stopped is its `run.stop` row, not its end's.
+  const end = {
+    type: 'run.end' as const,
+    aggregateId: runId,
+    outcome,
+    ...(error && { error }),
+    output: input.output ?? emptyRunEndOutput(),
+  };
   const unapplied =
     facts.start?.parent == null
       ? (yield* (yield* Inbox).read(runId)).followUps

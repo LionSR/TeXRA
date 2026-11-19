@@ -235,29 +235,36 @@ export interface RunCell {
   >;
 }
 
-/** How {@link RunHistory} opens a cell. */
-export interface RunOpening<E = never> {
-  /**
-   * A new run's registration (`run.start` first), decided inside the job
-   * of the cell's first append, which it rides: the run exists with what
-   * that append writes or not at all.
-   */
-  readonly registration?: Effect.Effect<readonly SessionRowDraft[]>;
-  /**
-   * A resume: commit, in one batch, the cancellation of every request the
-   * previous launch left unbound and the rows this decides from the stored
-   * state (its `run.activate`, the grants it ends, a changed configuration).
-   */
-  readonly activation?: (
-    state: RunState | null,
-  ) => Effect.Effect<readonly SessionRowDraft[], E>;
-  /**
-   * The publisher job the caller is inside: the cell reads the run's rows
-   * in that job and appends through its transaction, never a nested one,
-   * so the job's other rows and the cell's commit together.
-   */
-  readonly within?: Append;
-}
+/** How {@link RunHistory} opens a cell: exactly one of a new run's
+ *  registration, a resume's activation, or the job the caller is inside. */
+export type RunOpening<E = never> =
+  | {
+      /**
+       * A new run's registration (`run.start` first), decided inside the
+       * job of the cell's first append, which it rides: the run exists
+       * with what that append writes or not at all.
+       */
+      readonly registration: Effect.Effect<readonly SessionRowDraft[]>;
+    }
+  | {
+      /**
+       * A resume: commit, in one batch, the cancellation of every request
+       * the previous launch left unbound and the rows this decides from the
+       * stored state (its `run.activate`, the grants it ends, a changed
+       * configuration).
+       */
+      readonly activation: (
+        state: RunState | null,
+      ) => Effect.Effect<readonly SessionRowDraft[], E>;
+    }
+  | {
+      /**
+       * The publisher job the caller is inside: the cell reads the run's
+       * rows in that job and appends through its transaction, never a
+       * nested one, so the job's other rows and the cell's commit together.
+       */
+      readonly within: Append;
+    };
 
 /** The run history over one session's log. */
 export class RunHistory extends Context.Service<
@@ -278,8 +285,9 @@ export class RunHistory extends Context.Service<
     ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
      * The run's cell, seeded with its stored state (a fresh state when it
-     * has none). A resume (`activation`) decides from the stored state
-     * before any resume side effect, in the transaction that activates it.
+     * has none); with no `opening`, over the stored rows as they are. A
+     * resume (`activation`) decides from the stored state before any resume
+     * side effect, in the transaction that activates it.
      */
     readonly open: <E = never>(
       run: RunId,
