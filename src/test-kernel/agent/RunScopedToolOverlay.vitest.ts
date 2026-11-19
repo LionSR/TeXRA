@@ -1,5 +1,5 @@
 import { layer } from '@effect/vitest';
-import { Effect, Layer, Schema, Context } from 'effect';
+import { Effect, Layer, Schema, Context, SubscriptionRef } from 'effect';
 import { assert, expect, vi } from 'vitest';
 
 import {
@@ -13,7 +13,7 @@ import {
   ValidationModel,
 } from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
-import type { InvokeRequest } from '@agent/runtime/run/recordedRequest';
+import { stored, type InvokeRequest } from '@agent/runtime/run/recordedRequest';
 import { stepFor } from '@agent/runtime/loop/step';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import {
@@ -44,8 +44,12 @@ import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { toolTable } from '@tools/toolTable';
 
 import { testLaunch } from '@test/support/scriptedRunLayers';
+import { texraHosted } from '@test/support/texraApp';
 import { noopTrace } from '@test/support/noopTrace';
 import { AppSignals, Secrets, type ITool } from '@texra-ai/harness/plugins';
+import { SessionRoots } from '@platform/rootedFs';
+import { PersonaSchema } from '@shared/schemas';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { HARNESS_APP } from '@test/support/FakePlatform';
 
 function tool(name: string): ITool {
@@ -242,3 +246,64 @@ layer(
     }),
   );
 });
+
+// TeXRA's plugins: Lean's programs follow its probe, the theory plugin's
+// need nothing.
+layer(texraHosted, { excludeTestServices: true })(
+  'programs of a probed plugin',
+  (it) => {
+    it.effect(
+      'a plugin whose dependency is missing offers no program, as it offers no tool',
+      () =>
+        Effect.gen(function* () {
+          const session = yield* isolatedTestSession({ emit: () => {} });
+          const runId = generateRunId();
+          yield* publishTestRunStart(session, runId);
+          const config = Schema.decodeUnknownSync(AgentConfigSchema)({
+            agent: 'chat',
+            model: 'test-model',
+            workingDirectory: process.cwd(),
+          });
+          // The workspace's last probe found no `lake`.
+          const { results } = yield* ToolAvailability;
+          yield* Effect.acquireRelease(
+            SubscriptionRef.getAndSet(
+              results,
+              new Map([
+                [
+                  Context.get(session, SessionRoots).workspace,
+                  [{ id: 'lean4', tools: [], status: 'not-found' as const }],
+                ],
+              ]),
+            ),
+            (before) => SubscriptionRef.set(results, before),
+          );
+          yield* Effect.flatMap(openToolUse(), runToolUse).pipe(
+            Effect.provide(
+              runLayer(
+                session,
+                {
+                  ...validationLaunch(runId, config),
+                  persona: Schema.decodeUnknownSync(PersonaSchema)({
+                    tools: ['program'],
+                  }),
+                },
+                [],
+              ),
+            ),
+            Effect.orDie,
+          );
+
+          // What the step told the model of the programs: the theory
+          // plugin's, whose plugin needs nothing, and none of Lean's.
+          const state = yield* Context.get(session, RunHistory).load(runId);
+          assert(state?.offeredContext != null);
+          const told = JSON.stringify(
+            stored(state, state.offeredContext, Schema.Json),
+          );
+          expect(told).toContain('`annotate`');
+          expect(told).not.toContain('`prove`');
+        }),
+    );
+  },
+);

@@ -9,7 +9,7 @@ When an agent revises a derivation, proof, or section of your manuscript, you ne
 
 <LatexDiffHero />
 
-<p class="hero-caption">Pick a base and an edited file (or a git commit), press latexdiff, and TeXRA compiles and opens the marked-up PDF: additions underlined in blue, deletions struck through in red.</p>
+<p class="hero-caption">Pick a base and an edited file (or a git commit), press <strong>Diff vs. edited</strong> (or <strong>Diff vs. commit</strong>), and TeXRA compiles and opens the marked-up PDF: additions underlined in blue, deletions struck through in red.</p>
 
 TeXRA generates diff files after program runs that modify `.tex` files (such as `edit` or `apply`), comparing the run-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous revision's output. You can see what the program did as soon as the run finishes.
 
@@ -52,11 +52,11 @@ To compare two LaTeX files:
 
 ### Step 1: select files
 
-1. In the "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base), select the original version
-2. In the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited), select the modified version
+1. In the **Base** dropdown, select the original version
+2. In the **Edited** dropdown, select the modified version
 
 ::: tip
-The current-file button (<wa-icon library="texra" name="file-code"></wa-icon>, "Set current file as base" / "Set current file as edited") selects the currently open file for that role. The clear button (<wa-icon library="texra" name="close"></wa-icon>, "Clear base file" / "Clear edited file") clears the selection for that role.
+The current-file button (<wa-icon library="texra" name="file-code"></wa-icon>, "Set current file as base" / "Set current file as edited") selects the currently open file for that role. The clear button (<wa-icon library="texra" name="close"></wa-icon>, "Clear base file" / "Clear edited file") clears the selection for that role. The refresh button above **Edited** (<wa-icon library="texra" name="refresh"></wa-icon>, "Refresh edited files") reloads its list.
 :::
 
 ### Step 2: generate the diff
@@ -79,11 +79,11 @@ TeXRA can also compare documents with previous Git versions:
 
 ### Step 1: select base file and commit
 
-1. Select a base file (typically your current working file) using the "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base).
-2. Choose a Git commit from the "Commit" dropdown (<wa-icon library="texra" name="git-commit"></wa-icon> Commit).
+1. Select a base file (typically your current working file) in the **Base** dropdown.
+2. Choose a Git commit from the **Commit** dropdown.
 
 ::: info
-The commit dropdown shows recent commits. Select the refresh icon (<wa-icon library="texra" name="refresh"></wa-icon>) next to the label to update the list.
+The commit dropdown shows recent commits. Select the refresh icon (<wa-icon library="texra" name="refresh"></wa-icon>, "Refresh commit list") above it to update the list.
 :::
 
 ### Step 2: generate the diff

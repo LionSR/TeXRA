@@ -1,14 +1,9 @@
 <script setup>
-// Frameless Dashboard → Tools surface. The latex-tools page repeatedly tells the
-// reader to "check Dashboard → Tools" (the Overview table maps each tool to its
-// backing software, and the prose calls out the two status states each shows:
-// warning "Not Found" vs check "Available") but never shows that panel. This
-// renders it: a "Tools" section header + grouped tool cards (LaTeX, Computation)
-// each carrying the tool icon, name, backing binary, and a status pill.
-//
-// Tool names + icons mirror the Overview table on the page verbatim. Status is a
-// believable static mix — most Available, texcount Not Found with an Install hint
-// — to show both states the prose describes.
+// Frameless Settings → LaTeX → Dependencies section, as latex-tools.md points
+// the reader to it: one card per dependency row of the LaTeX tab (the labels
+// of LATEX_DEPENDENCIES plus LaTeX Workshop), each with what it is for and its
+// state. A detected tool shows a green check; a missing one shows the
+// "Not found" tag and its "Setup guide" disclosure.
 //
 // Root carries `.mockup`, so the --mk-* token block + the litStyles alias bridge
 // (--color-*, --brand, --wa-*) resolve here and the panel flips with the theme.
@@ -18,9 +13,15 @@ const groups = [
     icon: 'file-code',
     tools: [
       {
-        icon: 'symbol-keyword',
-        name: 'latexindent',
-        backend: 'latexindent · tex-fmt',
+        icon: 'file-pdf',
+        name: 'TeX Distribution',
+        backend: 'pdflatex · latexmk',
+        status: 'available',
+      },
+      {
+        icon: 'play',
+        name: 'LaTeX Workshop',
+        backend: 'VS Code extension',
         status: 'available',
       },
       {
@@ -30,39 +31,21 @@ const groups = [
         status: 'available',
       },
       {
+        icon: 'symbol-keyword',
+        name: 'latexindent',
+        backend: 'latexindent · perl',
+        status: 'available',
+      },
+      {
         icon: 'symbol-numeric',
-        name: 'texcount',
+        name: 'TeXcount',
         backend: 'not on PATH',
         status: 'not-found',
       },
       {
         icon: 'file-media',
-        name: 'Figure Extraction',
-        backend: 'built-in',
-        status: 'available',
-      },
-      {
-        icon: 'symbol-structure',
-        name: 'TikZ',
-        backend: 'latexmk · GraphicsMagick',
-        status: 'available',
-      },
-      {
-        icon: 'book',
-        name: 'Bibliography',
-        backend: 'built-in',
-        status: 'available',
-      },
-    ],
-  },
-  {
-    label: 'Computation',
-    icon: 'symbol-operator',
-    tools: [
-      {
-        icon: 'symbol-operator',
-        name: 'Wolfram',
-        backend: 'wolframscript',
+        name: 'Image Processing',
+        backend: 'Ghostscript · GraphicsMagick',
         status: 'available',
       },
     ],
@@ -74,7 +57,7 @@ const groups = [
   <div
     class="mockup mk-card tsp"
     role="group"
-    aria-label="Dashboard Tools panel"
+    aria-label="LaTeX dependencies in Settings"
   >
     <div class="mk-card-head tsp-head">
       <wa-icon
@@ -104,10 +87,10 @@ const groups = [
                 library="texra"
                 :name="t.status === 'available' ? 'check' : 'warning'"
               ></wa-icon>
-              {{ t.status === 'available' ? 'Available' : 'Not Found' }}
+              {{ t.status === 'available' ? '' : 'Not found' }}
             </span>
             <span v-if="t.status === 'not-found'" class="tsp-install">
-              Install
+              Setup guide
             </span>
           </div>
         </section>

@@ -3,8 +3,8 @@
 // "Managing memories from the Dashboard" section, terminal counterpart. The
 // real list output (packages/cli/src/runtime/memory.ts formatCliMemoryList)
 // is a `Memories (N):` header then one `<displayPath>\t<description>` row per
-// note, where the description joins `pinned; <size>; modified: <date>; by
-// <agent>`; `memory show memories/<file>` previews one note. File names match
+// note, where the description joins `Pinned · <size> · <N> lines · Updated
+// <date> · by <agent>`; `memory show memories/<file>` previews one note. File names match
 // the page's Dashboard mockups (project-conventions.md) so both surfaces tell
 // one story.
 //
@@ -12,17 +12,17 @@
 const rows = [
   {
     path: '/memories/project-conventions.md',
-    desc: 'pinned; 1.2K; modified: 11/4/2025, 2:31:08 PM; by research',
+    desc: 'Pinned · 1.2 KiB · 9 lines · Updated Nov 4, 2025, 02:31 PM · by research',
     pinned: true,
   },
   {
     path: '/memories/notation.md',
-    desc: '819B; modified: 10/28/2025, 10:04:51 AM; by assistant',
+    desc: '819 B · 24 lines · Updated Oct 28, 2025, 10:04 AM · by assistant',
     pinned: false,
   },
   {
     path: '/memories/related-work.md',
-    desc: '2.4K; modified: 10/21/2025, 4:48:27 PM; by research',
+    desc: '2.4 KiB · 61 lines · Updated Oct 21, 2025, 04:48 PM · by research',
     pinned: false,
   },
 ];

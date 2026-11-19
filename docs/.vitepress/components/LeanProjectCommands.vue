@@ -19,7 +19,7 @@ const groups = [
     cmds: ['restart_server', 'stop_server'],
   },
   {
-    label: 'Build',
+    label: 'Project',
     icon: 'tools',
     cmds: ['build', 'clean', 'fetch_cache'],
   },

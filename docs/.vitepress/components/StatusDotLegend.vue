@@ -3,28 +3,34 @@
 // enumerates the live status-dot states as colored circles; a swatch legend
 // beats parsing "a colored circle shows the current status" four times.
 //
-// Colors mirror packages/texra/src/ui/styles/statusIndicatorStyles.ts: running =
-// green, waiting on you or interrupted = yellow, completed/cancelled = grey,
-// failed = red. No state
+// Colors mirror packages/texra/src/ui/styles/toneStyles.ts and the status
+// words of packages/texra/src/ui/copy/runStatus.ts: running and completed =
+// green, waiting on you or interrupted = yellow, ready or stopped = grey,
+// error = red. No state
 // pulses in the live UI. Root carries `.mockup` so every --mk-* token
 // resolves and the figure flips with the theme.
 const states = [
   {
     cls: 'd-run',
     label: 'Running',
-    desc: 'Agent is actively processing',
+    desc: 'The agent is working',
+  },
+  {
+    cls: 'd-run',
+    label: 'Completed',
+    desc: 'Finished, with nothing more to send',
   },
   {
     cls: 'd-wait',
-    label: 'Waiting',
-    desc: 'Waiting on you, or interrupted',
+    label: 'Waiting on you',
+    desc: 'A request needs your answer, or the task was interrupted',
   },
   {
     cls: 'd-done',
-    label: 'Completed',
-    desc: 'Finished (or cancelled) — grey',
+    label: 'Ready',
+    desc: 'Ready for your next message, or stopped',
   },
-  { cls: 'd-err', label: 'Failed', desc: 'The run hit an error' },
+  { cls: 'd-err', label: 'Error', desc: 'The task hit an error' },
 ];
 </script>
 

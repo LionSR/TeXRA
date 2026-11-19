@@ -1,8 +1,8 @@
 <script setup>
-// Dashboard → Integrations cards (mirrors the OpenAI Codex CLI / Claude Code
-// CLI setup cards). Two states stacked: a `Not Found` card whose setup actions
-// are expanded (Install in Terminal · Sign in), and an `Available`
-// card with its version + settings summary. The contrast visualizes the
+// Settings → Plugins rows (mirrors the OpenAI Codex CLI / Claude Code CLI
+// rows). Two states stacked: a `Needs setup` row whose setup actions are
+// expanded (Install in terminal · Sign in), and a `Ready` row with its
+// settings summary. The contrast visualizes the
 // Re-check flip the Quick Start prose describes.
 //
 // Root carries `.mockup` so the shared `--mk-*` tokens resolve and the card
@@ -16,19 +16,19 @@ import StatusPill from './StatusPill.vue';
     role="group"
     aria-label="integration setup cards"
   >
-    <!-- Not Found: setup actions expanded -->
+    <!-- Needs setup: setup actions expanded -->
     <article class="ic-card">
       <header class="ic-head">
         <wa-icon class="ic-glyph" library="texra" name="robot"></wa-icon>
         <span class="ic-title">OpenAI Codex CLI</span>
         <StatusPill variant="neutral" icon="circle-xmark" shape="pill"
-          >Not Found</StatusPill
+          >Needs setup</StatusPill
         >
       </header>
       <p class="ic-sub">CLI binary not detected on PATH.</p>
       <div class="ic-acts">
         <button type="button" class="r-btn">
-          <wa-icon library="texra" name="terminal"></wa-icon>Install in Terminal
+          <wa-icon library="texra" name="terminal"></wa-icon>Install in terminal
         </button>
         <button type="button" class="r-btn">
           <wa-icon library="texra" name="right-to-bracket"></wa-icon>Sign in
@@ -41,7 +41,7 @@ import StatusPill from './StatusPill.vue';
       <span>Re-check</span>
     </div>
 
-    <!-- Available: version + settings summary -->
+    <!-- Ready: settings summary -->
     <article class="ic-card ic-card--ok">
       <header class="ic-head">
         <wa-icon
@@ -51,25 +51,15 @@ import StatusPill from './StatusPill.vue';
         ></wa-icon>
         <span class="ic-title">Claude Code CLI</span>
         <StatusPill variant="success" icon="circle-check" shape="pill"
-          >Available</StatusPill
+          >Ready</StatusPill
         >
       </header>
-      <p class="ic-sub">
-        <code>claude 1.x</code> detected in the extension host environment.
-      </p>
+      <p class="ic-sub">Claude CLI ready.</p>
       <dl class="ic-summary">
         <div class="ic-srow">
           <dt>Model</dt>
           <dd>
             <StatusPill variant="accent" shape="chip">Sonnet 5.5</StatusPill>
-          </dd>
-        </div>
-        <div class="ic-srow">
-          <dt>Permission mode</dt>
-          <dd>
-            <StatusPill variant="info" shape="pill"
-              >Auto-accept edits</StatusPill
-            >
           </dd>
         </div>
         <div class="ic-srow">

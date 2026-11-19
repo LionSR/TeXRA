@@ -1,8 +1,8 @@
 <script setup>
 // Quick Start product slice: the New task view as you'd fill it for a first
-// run — session type, an instruction, an agent + model, and Run — beside the
-// open .tex. Mirrors InstructionPanel.ts (session toggle, header actions,
-// instruction textarea, model-selection footer, brand "Run" button).
+// run (an instruction, an agent and a model, and Start task) beside the open
+// .tex. Mirrors the composer: the Polish, Dictate and Attach actions, the
+// instruction text, the agent and model menus, and the Start task button.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
@@ -14,41 +14,37 @@ import MockupFrame from './MockupFrame.vue';
           ><wa-icon library="texra" name="pencil"></wa-icon> New task</span
         >
         <span class="bt"
-          ><wa-icon library="texra" name="robot"></wa-icon> Progress</span
+          ><wa-icon library="texra" name="robot"></wa-icon> Tasks</span
         >
       </div>
 
       <div class="lpanel">
         <div class="phead">
-          <div class="seg">
-            <span class="seg-opt">Interactive</span>
-            <span class="seg-opt seg-on">Workflow</span>
-          </div>
           <div class="hactions">
-            <span class="iact" title="Polish instruction"
+            <span class="iact" title="Polish with AI"
               ><wa-icon library="texra" name="sparkle"></wa-icon
             ></span>
-            <span class="iact" title="Record instruction"
+            <span class="iact" title="Dictate"
               ><wa-icon library="texra" name="mic"></wa-icon
             ></span>
-            <span class="iact" title="Erase instruction"
-              ><wa-icon library="texra" name="clear-all"></wa-icon
+            <span class="iact" title="Attach media files"
+              ><wa-icon library="texra" name="file-circle-plus"></wa-icon
             ></span>
           </div>
         </div>
 
         <div class="prompt">
-          Tighten the abstract and fix the awkward phrasing in §2 — keep my
-          notation.<span class="caret-blink"></span>
+          Polish draft.tex: tighten the abstract and fix the awkward phrasing in
+          §2. Keep my notation.<span class="caret-blink"></span>
         </div>
 
         <div class="footer">
           <div class="sgroup">
-            <span class="iact settings" title="Agent settings"
+            <span class="iact settings" title="Agent"
               ><wa-icon library="texra" name="sparkle"></wa-icon
             ></span>
             <div class="select">
-              <span class="s-val">orchestrator</span>
+              <span class="s-val">assistant</span>
               <wa-icon
                 class="s-caret"
                 library="texra"
@@ -57,11 +53,11 @@ import MockupFrame from './MockupFrame.vue';
             </div>
           </div>
           <div class="sgroup">
-            <span class="iact settings" title="Model settings"
+            <span class="iact settings" title="Model"
               ><wa-icon library="texra" name="robot"></wa-icon
             ></span>
             <div class="select">
-              <span class="s-val">anthropic/claude-sonnet-5-5</span>
+              <span class="s-val">Sonnet 5.5</span>
               <wa-icon
                 class="s-caret"
                 library="texra"
@@ -70,8 +66,8 @@ import MockupFrame from './MockupFrame.vue';
             </div>
           </div>
           <button class="run">
-            <wa-icon library="texra" name="play"></wa-icon
-            ><span class="run-lbl">Run</span>
+            <wa-icon library="texra" name="arrow-up"></wa-icon
+            ><span class="run-lbl">Start task</span>
           </button>
         </div>
       </div>

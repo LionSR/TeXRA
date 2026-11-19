@@ -2,7 +2,7 @@
 // Frameless icon → action legend for the local-editing step of the Overleaf
 // round-trip (guide/working-with-overleaf.md → "2. Edit Locally with TeXRA in
 // VS Code"). The page's bullet list pairs each editing action with its toolbar
-// glyph (play / diff-single / merge / wand / tools / source-control); a flat
+// glyph; a flat
 // prose list buries those icon associations, so this maps them one-to-one as a
 // scannable legend. Standalone — the root carries `.mockup` so the shared
 // `--mk-*` colour + dimensional tokens resolve and the card flips with the docs
@@ -33,12 +33,7 @@ const actions = [
   {
     icon: 'diff-single',
     label: 'latexdiff / merge',
-    hint: 'Compare or fold edits with code-compare & merge',
-  },
-  {
-    icon: 'wand',
-    label: 'Auto-extract & tools',
-    hint: 'Pull figures and toggle tool options',
+    hint: 'Diff, compare or merge edits from the LaTeXDiffs sheet',
   },
 ];
 </script>

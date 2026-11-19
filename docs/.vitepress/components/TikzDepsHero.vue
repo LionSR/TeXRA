@@ -1,35 +1,25 @@
 <script setup>
-// Frameless TikZ-pipeline dependency checklist. The "TikZ Figures" section on
-// latex-tools.md enumerates three requirements — latexmk (or pdflatex),
-// GraphicsMagick (or ImageMagick), Ghostscript — each "checked on Dashboard →
-// Tools". The prose implies a partial-readiness state (some present, one
-// missing) that gates whether TikZ extraction works. This renders that as a
-// compact 3-row status list: a mixed Available / Not Found mix so the reader
-// sees both states and the "install this before TikZ works" message at a glance.
+// Frameless TikZ-pipeline dependency checklist. TikZ extraction needs a
+// compiler and, for models that cannot read PDFs, the image tools. Settings →
+// LaTeX → Dependencies reports them as two rows, TeX Distribution and Image
+// Processing; this renders those two in a mixed state so the reader sees what
+// a missing one looks like ("Not found" tag, "Setup guide" disclosure).
 //
-// This is a smaller, single-group instance of ToolStatusPanel's vocabulary
-// (same icon + name + backend + status-pill row, same green-check / amber-warning
-// / Install-link treatment) so the two status figures on this page read as one
-// family. Root carries `.mockup`, so the --mk-* token block + litStyles alias
-// bridge (--color-*, --brand, --wa-*) resolve here and the panel flips with the
+// A smaller instance of ToolStatusPanel's vocabulary so the two status figures
+// on the page read as one family. Root carries `.mockup`, so the --mk-* token
+// block + litStyles alias bridge resolve here and the panel flips with the
 // docs theme.
 const deps = [
   {
     icon: 'symbol-structure',
-    name: 'latexmk',
-    backend: 'or pdflatex — compiles each tikzpicture',
+    name: 'TeX Distribution',
+    backend: 'pdflatex / latexmk: compiles each tikzpicture',
     status: 'available',
   },
   {
     icon: 'file-media',
-    name: 'GraphicsMagick',
-    backend: 'or ImageMagick — PDF → image conversion',
-    status: 'available',
-  },
-  {
-    icon: 'symbol-operator',
-    name: 'Ghostscript',
-    backend: 'PDF processing',
+    name: 'Image Processing',
+    backend: 'Ghostscript + GraphicsMagick / ImageMagick: PDF to PNG',
     status: 'not-found',
   },
 ];
@@ -64,10 +54,10 @@ const deps = [
               library="texra"
               :name="d.status === 'available' ? 'check' : 'warning'"
             ></wa-icon>
-            {{ d.status === 'available' ? 'Available' : 'Not Found' }}
+            {{ d.status === 'available' ? '' : 'Not found' }}
           </span>
           <span v-if="d.status === 'not-found'" class="tdh-install">
-            Install guide
+            Setup guide
           </span>
         </div>
       </section>

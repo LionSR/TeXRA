@@ -150,6 +150,8 @@ export class LeanServer extends Context.Service<
       {
         readonly diagnostics: LeanDiagnostic[];
         readonly complete: boolean;
+        /** The text Lean was sent for the version these describe. */
+        readonly text: string;
       },
       LeanSessionError
     >;
@@ -182,6 +184,8 @@ export class LeanServer extends Context.Service<
 /** What Lean has said about the open version of a file. */
 interface FileState {
   readonly version: number;
+  /** The file's text as this version was opened with it. */
+  readonly text: string;
   /** Absent until Lean publishes diagnostics for this version. */
   readonly diagnostics?: LeanDiagnostic[];
   /** Lean's last `$/lean/fileProgress` for this version, if it sent one. */
@@ -495,7 +499,7 @@ const make = ({
       const version = reopened
         ? (yield* SubscriptionRef.get(reopened)).version + 1
         : 1;
-      const state: FileState = { version, progress: 'unreported' };
+      const state: FileState = { version, text, progress: 'unreported' };
       const file = reopened ?? (yield* SubscriptionRef.make(state));
       if (reopened) yield* SubscriptionRef.set(reopened, state);
       else openFiles.set(absolute, file);
@@ -572,7 +576,11 @@ const make = ({
     ) {
       const { file, complete } = yield* openElaborated(filePath);
       const state = yield* SubscriptionRef.get(file);
-      return { diagnostics: state.diagnostics ?? [], complete };
+      return {
+        diagnostics: state.diagnostics ?? [],
+        complete,
+        text: state.text,
+      };
     });
 
     const requestElaborated = Effect.fn('LeanServer.requestElaborated')(

@@ -167,8 +167,15 @@ const RunViewSchema = Schema.Struct({
    *  turn or not started, `finished` the ended ones and those waiting idle
    *  between turns. No separate waiting or interrupted count: both
    *  outrank a collapsed parent (`needsUser`), so it never hides a row that
-   *  needs the user. */
-  rollup: Schema.Struct({ total: Count, running: Count, finished: Count }),
+   *  needs the user. `kinds` splits `total` by the kind of each descendant's
+   *  run, the kind `runNoun` names it by, so a count can say "2 agents,
+   *  1 command". */
+  rollup: Schema.Struct({
+    total: Count,
+    running: Count,
+    finished: Count,
+    kinds: Schema.Struct({ agent: Count, process: Count, script: Count }),
+  }),
   approval: Schema.Literals(['none', 'own', 'descendant']),
   /** What a host may offer on the run now (`runActions`). */
   actions: Schema.Array(RunActionSchema),
@@ -197,6 +204,14 @@ const RunViewSchema = Schema.Struct({
 /** One stream of the {@link SessionView}. */
 export type RunView = ReadonlyDeep<typeof RunViewSchema.Type>;
 
+/** The `rollup` of a run that started nothing, built fresh per run. */
+export const emptyRollup = () => ({
+  total: 0,
+  running: 0,
+  finished: 0,
+  kinds: { agent: 0, process: 0, script: 0 },
+});
+
 /**
  * What `children` and their descendants count toward a parent's `rollup`:
  * the view's count over the run tree (each child's own `rollup` below it),
@@ -209,11 +224,15 @@ export function rollupOf(
   children: readonly RunView[],
   below = (child: RunView) => child.rollup,
 ): RunView['rollup'] {
-  const rollup = { total: 0, running: 0, finished: 0 };
+  const rollup = emptyRollup();
   for (const child of children) {
     const idle = isIdle(child);
     const under = below(child);
     rollup.total += 1 + under.total;
+    rollup.kinds[child.identity.kind] += 1;
+    rollup.kinds.agent += under.kinds.agent;
+    rollup.kinds.process += under.kinds.process;
+    rollup.kinds.script += under.kinds.script;
     rollup.running += (isLive(child) ? 1 : 0) + under.running;
     rollup.finished +=
       (child.outcome !== null || idle ? 1 : 0) + under.finished;

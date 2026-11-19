@@ -143,6 +143,8 @@ Formalize the proof of the theorem in Proofs/GroupTheory.lean. Start with an
 informal outline, then produce Lean code and iterate until it compiles.
 ```
 
+The Lean plugin ships four more agents: `leanSearch` (finds Mathlib lemmas and answers formalization questions), `leanSimplifier` (rewrites proofs in Mathlib style), `leanBlueprint` (writes and maintains LeanBlueprint documents), and the lead agent `leanOrchestrator`. Read [Lean 4 proofs](./lean.md).
+
 ## Presentation & simplification agents
 
 ### `presenter`

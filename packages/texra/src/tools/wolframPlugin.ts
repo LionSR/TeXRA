@@ -5,9 +5,10 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { TexraPlugin } from '@texra/tools/registry';
+import { texraPlugin } from '@texra/tools/texraPlugin';
 import { probeCommand } from '@texra/utils/system/toolChecks';
 
-export const wolfram: TexraPlugin = {
+export const wolfram: TexraPlugin = texraPlugin({
   id: 'wolfram',
   // Interruption reaches the spawned `wolframscript -version`, so an
   // interrupted dashboard refresh kills the probe instead of abandoning it.
@@ -35,4 +36,4 @@ export const wolfram: TexraPlugin = {
       configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
     },
   },
-};
+});

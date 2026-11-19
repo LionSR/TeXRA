@@ -31,7 +31,7 @@ const RUN_ID = '9f3a6c81d24e';
         <div class="mk-term-prompt">
           <span class="mk-term-sigil">$</span>
           <span class="mk-term-cmd"
-            >texra run polish
+            >texra run edit
             <span class="mk-term-flag">--input</span> draft.tex</span
           >
         </div>
@@ -54,11 +54,11 @@ const RUN_ID = '9f3a6c81d24e';
     <section class="mk-term-card rph-board">
       <div class="rph-board-head">
         <wa-icon library="texra" name="robot"></wa-icon>
-        <span>Progress</span>
+        <span>Tasks</span>
       </div>
       <div class="rph-row">
         <span class="rph-dot"></span>
-        <span class="rph-agent">polish</span>
+        <span class="rph-agent">edit</span>
         <span class="rph-file">draft.tex</span>
         <code class="rph-id">{{ RUN_ID }}</code>
       </div>

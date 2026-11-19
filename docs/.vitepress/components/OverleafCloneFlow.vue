@@ -1,7 +1,7 @@
 <script setup>
 // Frameless command-palette / quick-input strip for the recommended Overleaf
-// clone flow (guide/working-with-overleaf.md → "TeXRA: Clone Overleaf
-// Project"). Three stacked stages mirror what the user actually sees:
+// clone flow (guide/working-with-overleaf.md → "TeXRA: Clone
+// Overleaf/ShareLaTeX Project"). Three stacked stages mirror what the user actually sees:
 //   1. the command palette with the command highlighted,
 //   2. the quick-input asking for the project URL / 24-char ID,
 //   3. the quick-input asking for the olp_ Git token (masked), with a
@@ -25,7 +25,9 @@
         <div class="oc-palette">
           <span class="oc-prompt">&gt;</span>
           <wa-icon class="oc-magnify" library="texra" name="search"></wa-icon>
-          <span class="oc-palette-text">TeXRA: Clone Overleaf Project</span>
+          <span class="oc-palette-text"
+            >TeXRA: Clone Overleaf/ShareLaTeX Project</span
+          >
         </div>
         <div class="oc-pal-item">
           <wa-icon
@@ -33,7 +35,9 @@
             library="texra"
             name="repo-clone"
           ></wa-icon>
-          <span class="oc-item-name">TeXRA: Clone Overleaf Project</span>
+          <span class="oc-item-name"
+            >TeXRA: Clone Overleaf/ShareLaTeX Project</span
+          >
           <span class="oc-item-cat">TeXRA</span>
         </div>
       </div>
@@ -52,7 +56,7 @@
           <wa-icon class="oc-enter" library="texra" name="reply"></wa-icon>
         </div>
         <div class="oc-place">
-          Paste Overleaf project URL or 24-character project ID
+          Enter project URL or 24-character project ID.
         </div>
       </div>
     </div>
@@ -68,7 +72,7 @@
           <wa-icon class="oc-enter" library="texra" name="reply"></wa-icon>
         </div>
         <div class="oc-place">
-          Overleaf Git token (olp_…)
+          Overleaf Git Token
           <span class="oc-tag">
             <wa-icon class="oc-tag-ic" library="texra" name="shield"></wa-icon>
             Saved to ~/.texra/secrets/

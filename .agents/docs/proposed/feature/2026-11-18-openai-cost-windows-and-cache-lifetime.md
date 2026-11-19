@@ -11,9 +11,9 @@ records what each needs.
 
 ## 1. Discounted background windows
 
-`background: { completion_window: '2h' | '8h' }` (openai 7.58) runs a
-background response 30% (2h) or 40% (8h) below the Standard rate. It needs
-`background: true`, Standard processing and a non-streamed request.
+`background_options: { completion_window: '2h' | '8h' }` (openai 7.58, beside
+`background: true`) runs a background response 30% (2h) or 40% (8h) below the
+Standard rate. It needs Standard processing and a non-streamed request.
 
 Today the mode is a capability, not a choice: `ModelInvoker` runs every turn
 in background mode when the bound model has a `background` member

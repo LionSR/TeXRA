@@ -3,7 +3,7 @@
 // Polish writes one folder per round under executions/<run-id>/ in the
 // workspace store, and KEEPS the
 // input filename (draft.tex, not output.tex). r0 is the first revision, r1 the
-// critique pass / final. A side note pins the preserved-filename point, and a
+// review pass / final. A side note pins the preserved-filename point, and a
 // dimmed sibling leaf shows the --output draft.polished.tex alternative.
 //
 // Standalone (no MockupFrame) — composed inside the shared <MockCard> primitive
@@ -21,8 +21,8 @@ const rounds = [
   {
     name: 'r1/',
     state: 'done',
-    tag: 'critique pass · final',
-    note: 'rereads r0, revises again',
+    tag: 'review pass · final',
+    note: 'rereads r0, corrects it',
   },
 ];
 </script>
@@ -32,7 +32,7 @@ const rounds = [
     class="prt"
     title="executions/"
     icon="folder-opened"
-    sub="one folder per round · input filename preserved"
+    sub="one folder per revision · input filename preserved"
   >
     <div class="prt-tree">
       <div class="prt-folder prt-run">
