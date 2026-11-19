@@ -17,6 +17,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { logFailure } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 
 import { type CommitOrdinal, type DisplayRow } from '@shared/schemas';
@@ -97,9 +98,24 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     const database = yield* Database;
     const view = yield* SessionViewService;
     const chunks = yield* TextChunkSource;
-    // Taken now, before anything can publish: they see every batch.
-    const textFeed = yield* events.subscribe;
-    const presenterFeed = yield* events.subscribe;
+    // From the head as of now, before anything can publish: every batch. A
+    // feed reads the store only for a stretch it fell too far behind to be
+    // handed; a read that fails then ends the feed, logged, as a defect:
+    // rows nobody was shown must not pass for shown.
+    const feed = (reader: string) =>
+      events
+        .batches(events.head())
+        .pipe(
+          Stream.tapError(
+            logFailure(
+              'sessionStore',
+              `The ${reader} could not read the committed rows it fell behind; it stops`,
+            ),
+          ),
+          Stream.orDie,
+        );
+    const textFeed = feed('transient text');
+    const presenterFeed = feed('presenter');
     const presented = yield* SubscriptionRef.make(events.head());
     const presenterEnded = yield* Deferred.make<void>();
     const viewApplied = (commit: CommitOrdinal) =>
@@ -151,7 +167,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       closed,
     });
     // The text a committed row closes is dropped as its batch is published.
-    yield* Stream.flattenTake(Stream.fromSubscription(textFeed)).pipe(
+    yield* textFeed.pipe(
       Stream.runForEach(({ rows }) =>
         Effect.forEach(rows, trace.committed, { discard: true }),
       ),
@@ -195,7 +211,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       detach: events.detach,
       removeRun: events.removeRun,
       // Pulled in order: `presented` moves once a batch's rows were run.
-      applied: Stream.flattenTake(Stream.fromSubscription(presenterFeed)).pipe(
+      applied: presenterFeed.pipe(
         Stream.mapEffect((batch) =>
           Effect.as(viewApplied(batch.through), batch),
         ),

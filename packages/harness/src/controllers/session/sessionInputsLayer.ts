@@ -20,7 +20,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { logFailure } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   referencedAggregates,
   replayInputs,
@@ -153,19 +153,6 @@ export const sessionInputsLayer = Layer.effect(
              *  any aggregate, any row of a subscribed one. */
             const wanted = (row: DisplayRow) =>
               LISTED_KINDS.has(row.type) || subscribed.has(row.aggregateId);
-            /** What the view starts behind the publisher: read once, by
-             *  the first step. */
-            const behind =
-              anchor < head
-                ? requiredRead(
-                    log.readInputBatch(
-                      aggregates.map(({ id }) => id),
-                      anchor,
-                      head,
-                      [],
-                    ),
-                  )
-                : Effect.succeed({ events: [], state: [], damaged: [] });
             // Every level replays on subscribe, so the first step captures
             // the text and the local state as of now.
             const wakes = Stream.mergeAll<unknown, never, never>(
@@ -192,9 +179,6 @@ export const sessionInputsLayer = Layer.effect(
                   // chunk was published before the chunk reached the text.
                   const nextText = yield* SubscriptionRef.get(text.ref);
                   const snapshot = yield* SubscriptionRef.get(local.ref);
-                  const caughtUp = previous.first
-                    ? yield* behind
-                    : { events: [], state: [], damaged: [] };
                   const from = previous.first
                     ? Math.max(anchor, head)
                     : previous.cursor;
@@ -208,10 +192,35 @@ export const sessionInputsLayer = Layer.effect(
                     from,
                     ...taken.map(({ through }) => through),
                   );
+                  // What the publisher did not hand this view is read from
+                  // the store: the stretch it starts behind the publisher,
+                  // by the first step, and every commit through the last
+                  // batch taken when the publisher dropped the batches
+                  // before the first (this view fell too far behind).
+                  const dropped = (taken.at(0)?.from ?? from) > from;
+                  if (dropped)
+                    yield* Effect.logWarning(
+                      `A session view fell too far behind the publisher to be handed every batch; reading commits ${from + 1} to ${cursor} from the store.`,
+                    ).pipe(withLogChannel('sessionInputs'));
+                  const readFrom = previous.first ? anchor : from;
+                  const readThrough = dropped ? cursor : from;
+                  const stored =
+                    readFrom < readThrough
+                      ? yield* requiredRead(
+                          log.readInputBatch(
+                            aggregates.map(({ id }) => id),
+                            readFrom,
+                            readThrough,
+                            [],
+                          ),
+                        )
+                      : { events: [], state: [], damaged: [] };
                   const rows = [
-                    ...caughtUp.events,
+                    ...stored.events,
                     ...taken.flatMap(({ rows }) =>
-                      rows.filter((row) => row.commit > from && wanted(row)),
+                      rows.filter(
+                        (row) => row.commit > readThrough && wanted(row),
+                      ),
                     ),
                   ];
                   // A removal closes its run and the runs under it, which
@@ -222,7 +231,7 @@ export const sessionInputsLayer = Layer.effect(
                       : [],
                   );
                   const existence: ExistenceReconciliation = {
-                    ...reconcileExistence([], caughtUp),
+                    ...reconcileExistence([], stored),
                     checkedAggregateIds: closed,
                   };
                   // The snapshot was read before the rows: it goes before
