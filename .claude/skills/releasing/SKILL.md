@@ -50,8 +50,10 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 
    - `gh release create vX.Y.Z --title vX.Y.Z --notes-file <notes>` — triggers
      `publish-extension`: builds the VSIX (`pnpm --filter texra build:fast`)
-     and publishes to the VS Code Marketplace and Open VSX via stored PATs
-     (`VSCE_PAT` / `OVSX_PAT`, `skipDuplicate: true`).
+     and publishes to the VS Code Marketplace over Trusted Publishing (OIDC
+     `id-token: write`, `vsce publish --oidc`; the publisher's Trusted
+     Publishing policy names this repository and `release.yml`) and to Open
+     VSX with the stored `OVSX_PAT`; both skip a version already published.
    - `gh release create cli-vX.Y.Z --title cli-vX.Y.Z --notes-file <notes>` —
      triggers `publish-cli`: `npm publish` from `packages/cli` over npm Trusted
      Publishing (OIDC `id-token: write`), so it runs unattended in CI.

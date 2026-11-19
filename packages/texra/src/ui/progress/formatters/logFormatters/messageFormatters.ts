@@ -17,6 +17,7 @@ import { html, type TemplateResult } from 'lit';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
+import { LOG_LEVEL_LOOK } from '@ui/copy/logLevels';
 import { errorRowText } from '@ui/copy/modelAccess';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -24,7 +25,6 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { buildCopyButton } from '../htmlBuilders';
 import type { LogLevel } from '@texra-ai/harness/schemas';
-import type { IconName } from '@ui/wa/iconNames';
 import type {
   ErrorRow,
   LogRow,
@@ -33,20 +33,10 @@ import type {
 } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
-/**
- * Icon per log level, rendered via `waIcon`; the per-level color comes from
- * the `log-level-icon--{level}` classes in logEntryStyles.
- */
-const ICON_BY_LEVEL: Record<LogLevel, IconName> = {
-  error: 'circle-exclamation',
-  warn: 'triangle-exclamation',
-  info: 'circle-info',
-  debug: 'magnifying-glass',
-};
-
-/** Level-decorated icon shared by the progress-status and default formatters. */
+/** Level-decorated icon shared by the progress-status and default formatters;
+ *  its colour comes from the `log-level-icon--{level}` classes in logEntryStyles. */
 function buildLevelIcon(level: LogLevel): TemplateResult {
-  return waIcon(ICON_BY_LEVEL[level], {
+  return waIcon(LOG_LEVEL_LOOK[level].icon, {
     className: `log-level-icon log-level-icon--${level}`,
     label: level === 'error' || level === 'warn' ? level : undefined,
   });

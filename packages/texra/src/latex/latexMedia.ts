@@ -1,6 +1,6 @@
 // Node imports
 import * as path from 'node:path';
-import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { type AgentTrace, type WorkspaceFs } from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
@@ -9,7 +9,11 @@ import { meansAbsent } from '@texra-ai/harness/node';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
-import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  type FileLocation,
+  hasExtension,
+} from '@texra-ai/harness/schemas';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 // Local file imports

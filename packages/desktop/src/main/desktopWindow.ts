@@ -230,7 +230,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     } = SubscriptionRef.getUnsafe(projects.state);
     host.post({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      open: open.flatMap(({ key, root }) => (root === undefined ? [] : [key])),
+      open: open.flatMap(({ key, roots }) =>
+        roots.workspace === undefined ? [] : [key],
+      ),
       activeKey,
       recent,
     });
@@ -367,7 +369,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     },
     createDesktopLogIpc(host.post, {
       readLog: () =>
-        readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
+        readDesktopLogSnapshot({
+          workspaceRoot: projects.active().roots.workspace,
+        }),
       logFile: getDesktopLogFilePath,
       following: logFollowing,
       copyLog: (text) => clipboard.writeText(text),

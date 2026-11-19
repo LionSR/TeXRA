@@ -205,10 +205,11 @@ export {
   type TraceFactKind,
 } from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
-// and its base name without the extension.
+// its base name without the extension, and a case-free extension check.
 export {
   getBasename,
   getFileStem,
+  hasExtension,
   normalizeFilePath,
 } from '@utils/core/pathBasics';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): the
@@ -382,6 +383,8 @@ export {
   RunEndSchema,
   runIdentityDisplayName,
   runIdentityName,
+  runNoun,
+  NESTED_NOUNS,
   RunIdSchema,
   RunRecordFieldsSchema,
   RunOutcomeSchema,

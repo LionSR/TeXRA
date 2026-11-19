@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Effect, Latch, Result, Schema } from 'effect';
 
-import { hasExtension } from '@texra-ai/harness/host';
+import { hasExtension } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';

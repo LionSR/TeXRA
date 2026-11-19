@@ -213,7 +213,7 @@ export class PluginsTab extends SignalWatcher(LitElement) {
               }),
           })}
           ${renderLabeledActionButton({
-            icon: 'rotate-right',
+            icon: 'arrows-rotate',
             text: PLUGINS_PAGE.recheck,
             kind: 'secondary',
             appearance: 'outlined',

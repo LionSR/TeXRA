@@ -8,8 +8,10 @@ import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsVi
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
   subscriptionProvider,
+  type SubscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -28,11 +30,11 @@ export interface DesktopSettingsIpcOptions {
     openSubscriptionSignInUrl(url: string): Effect.Effect<void, HostFailed>;
     presentSubscriptionSignInUrl(
       url: string,
-      productName: string,
+      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
     ): Effect.Effect<void, Error>;
     presentSubscriptionDeviceCode(
       prompt: SubscriptionDeviceCodePrompt,
-      productName: string,
+      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
     ): Effect.Effect<void, Error>;
   };
   /** The roots of the project this settings surface serves. The desktop has
@@ -85,7 +87,7 @@ export function createDesktopSettingsIpc(
         Effect.catch((failure) =>
           bindings.dialogs.notify(
             'error',
-            `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
+            `${SIGN_IN_PROMPT.presentFailed(displayName)}: ${toErrorMessage(failure)}`,
           ),
         ),
       );
@@ -107,7 +109,7 @@ export function createDesktopSettingsIpc(
               displayName,
               signInPresentation.presentSubscriptionDeviceCode(
                 prompt,
-                displayName,
+                provider,
               ),
             ),
           presentSignInUrl: (url) =>
@@ -121,7 +123,7 @@ export function createDesktopSettingsIpc(
                         displayName,
                         signInPresentation.presentSubscriptionSignInUrl(
                           url,
-                          displayName,
+                          provider,
                         ),
                       ),
                     ),

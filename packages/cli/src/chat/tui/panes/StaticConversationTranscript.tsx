@@ -41,8 +41,7 @@ import {
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
-import { isWorking } from '@texra-ai/harness/schemas';
-import { runNoun } from '@ui/copy/nestedRuns';
+import { isWorking, runNoun } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
   let home: string;

@@ -16,9 +16,8 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { installAdvice } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
-import { CLONE_COPY, cloneProviderLabel } from '@ui/copy/clone';
+import { CLONE_COPY } from '@ui/copy/clone';
 
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
@@ -74,7 +73,6 @@ function presentCloneOutcome(
   };
   switch (outcome._tag) {
     case 'Cloned': {
-      const label = cloneProviderLabel(remote);
       writeCliResult(
         context.outputFormat,
         commandResult(
@@ -85,7 +83,7 @@ function presentCloneOutcome(
             host: remote.host,
             destination: outcome.destination,
           },
-          `${label} project cloned into ${outcome.destination}.`,
+          CLONE_COPY.cloned(remote, outcome.destination),
         ),
       );
       return undefined;
@@ -98,25 +96,23 @@ function presentCloneOutcome(
       writeTextStderr(`Token instructions: ${OVERLEAF_TOKEN_DOCS_URL}`);
       return CliExitCode.Usage;
     case 'GitMissing':
-      writeTextStderr(
-        `Git is not installed or is not on PATH.\n\n${
-          installAdvice('Git', ['git'], osPlatformOf(process.platform)).guide
-        }`,
-      );
+      writeTextStderr(CLONE_COPY.gitMissing(osPlatformOf(process.platform)));
       return CliExitCode.AgentError;
     case 'WorkspaceUnreadable':
-      writeTextStderr(`Cannot read destination directory: ${outcome.message}`);
+      writeTextStderr(CLONE_COPY.unreadable(outcome.message));
       return CliExitCode.AgentError;
     case 'WorkspaceNotEmpty':
       writeTextStderr(
-        `The destination directory ${workspaceRoot} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
+        `${CLONE_COPY.notEmpty(workspaceRoot)} Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
       );
       return CliExitCode.AgentError;
     case 'AuthFailure': {
-      const detail = remote.isOverleaf
+      const next = remote.isOverleaf
         ? `Generate a new token at ${OVERLEAF_GIT_TOKEN_URL}, then rerun the command.`
-        : 'Check the ShareLaTeX credentials for this host, then rerun the command.';
-      writeTextStderr(`${CLONE_COPY.authFailed} ${detail}`);
+        : 'Then rerun the command.';
+      writeTextStderr(
+        `${CLONE_COPY.authFailed} ${CLONE_COPY.authDetail(remote)} ${next}`,
+      );
       gitError(outcome.error);
       return CliExitCode.AgentError;
     }
