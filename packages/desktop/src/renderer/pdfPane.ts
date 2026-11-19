@@ -69,11 +69,12 @@ export function createPdfPane(options: {
     const frame = document.createElement('iframe');
     frame.classList.add('shell-workbench-pdf-frame');
     frame.setAttribute('title', tab.title);
-    // No scripts, so a malformed PDF cannot run JS into the renderer. The
-    // cost, measured on Electron 45 on Linux: Chromium does not start its PDF
-    // viewer in a sandboxed frame and fails the load with
-    // ERR_BLOCKED_BY_CLIENT, which this pane reports like any other failure.
-    frame.setAttribute('sandbox', 'allow-same-origin');
+    // No `sandbox` attribute: Chromium does not start its PDF viewer in a
+    // sandboxed frame, whatever tokens the attribute carries, and fails the
+    // load with ERR_BLOCKED_BY_CLIENT. The frame's own document is the page
+    // Chromium wraps around a PDF. The viewer and the PDF's content run in
+    // two other processes, and the preload's API exists in the window's main
+    // frame only, so nothing a PDF carries runs beside the app's code.
     const view: PdfView = { element, frame, notice };
     const footer = document.createElement('footer');
     footer.className = 'shell-editor-toolbar';
