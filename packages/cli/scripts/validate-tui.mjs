@@ -1038,7 +1038,10 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_MULTI_AGENT_DISABLED: '1',
     },
-    keys: [...PLUGINS_FORM_KEYS, 'b'],
+    // The row's hotkey is its place in the list: wait for the list to show
+    // it on that key before pressing it, so a reordered list fails here
+    // instead of switching another plugin.
+    keys: ['/plugins', { input: '\r', until: 'a. Multi-Agent Workflow' }, 'a'],
     frame: 'viewport',
     expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 2 tools'],
     unexpect: ['Multi-Agent Workflow — off'],
