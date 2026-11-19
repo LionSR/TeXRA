@@ -190,6 +190,7 @@ const RegistrationSchema = Schema.fromJsonString(
  */
 const storedRegistration = Effect.fn('chatgpt.storedRegistration')(function* (
   secrets: CredentialStore,
+  client: ClientIdentity,
 ) {
   const raw = yield* secrets.get(CHATGPT_REGISTRATION_SECRET_KEY);
   if (!raw) return undefined;
@@ -197,7 +198,7 @@ const storedRegistration = Effect.fn('chatgpt.storedRegistration')(function* (
   if (Result.isSuccess(parsed)) return parsed.success;
   yield* secrets.delete(CHATGPT_REGISTRATION_SECRET_KEY);
   return yield* new SubscriptionOAuthError({
-    message: `TeXRA's ChatGPT client registration on this machine was unreadable and has been removed (${toErrorMessage(parsed.failure)}). Sign in again to register this machine with ChatGPT.`,
+    message: `${client.name}'s ChatGPT client registration on this machine was unreadable and has been removed (${toErrorMessage(parsed.failure)}). Sign in again to register this machine with ChatGPT.`,
     kind: 'config',
   });
 });
@@ -213,6 +214,7 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
   tokens: SubscriptionTokenResponse,
   attempt: SubscriptionAuthorizeRequest,
   secrets: CredentialStore,
+  client: ClientIdentity,
 ) {
   if (!tokens.id_token) {
     return yield* new SubscriptionOAuthError({
@@ -227,12 +229,11 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
   );
   if (
     !attempt.registering &&
-    (yield* storedRegistration(secrets))?.subject !== subject
+    (yield* storedRegistration(secrets, client))?.subject !== subject
   ) {
     yield* secrets.delete(CHATGPT_REGISTRATION_SECRET_KEY);
     return yield* new SubscriptionOAuthError({
-      message:
-        'This ChatGPT account is not the one TeXRA registered on this machine. Sign in again to register it.',
+      message: `This ChatGPT account is not the one ${client.name} registered on this machine. Sign in again to register it.`,
       kind: 'config',
     });
   }
@@ -252,8 +253,7 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
   );
   if (planDeclined) {
     return yield* new SubscriptionOAuthError({
-      message:
-        'ChatGPT sign-in finished without plan usage. Sign in again and allow TeXRA to use your ChatGPT plan, or use an OpenAI API key.',
+      message: `ChatGPT sign-in finished without plan usage. Sign in again and allow ${client.name} to use your ChatGPT plan, or use an OpenAI API key.`,
       kind: 'config',
     });
   }
@@ -265,6 +265,7 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
  *  after sign-out deletes the tokens anyway. */
 const revokeSession = Effect.fn('chatgpt.revokeSession')(function* (
   session: ChatgptSession,
+  client: ClientIdentity,
 ) {
   const body = new URLSearchParams({
     token: session.refreshToken,
@@ -284,7 +285,7 @@ const revokeSession = Effect.fn('chatgpt.revokeSession')(function* (
     Effect.mapError(
       (cause) =>
         new SubscriptionOAuthError({
-          message: `Signed out of ChatGPT on this machine, but OpenAI did not confirm that the session was revoked (${cause.message}). To end it, disconnect TeXRA in ChatGPT settings.`,
+          message: `Signed out of ChatGPT on this machine, but OpenAI did not confirm that the session was revoked (${cause.message}). To end it, disconnect ${client.name} in ChatGPT settings.`,
           kind: 'transient',
           cause,
         }),
@@ -341,7 +342,7 @@ export const chatgptPolicy = (
     // hint, which only a registration takes.
     registration: Effect.fnUntraced(function* (secrets) {
       const host = yield* hostId(secrets);
-      const registered = yield* storedRegistration(secrets);
+      const registered = yield* storedRegistration(secrets, client);
       // The consent page shows again only when asked: OpenAI's recovery for
       // a declined plan is a reauthorization with `prompt=consent`.
       const params: Readonly<Record<string, string>> =
@@ -357,8 +358,9 @@ export const chatgptPolicy = (
         params,
       };
     }),
-    acceptGrant: acceptChatgptGrant,
-    endSession: revokeSession,
+    acceptGrant: (tokens, attempt, secrets) =>
+      acceptChatgptGrant(tokens, attempt, secrets, client),
+    endSession: (session) => revokeSession(session, client),
     buildSession(tokens, refreshToken, nowMs, previous) {
       const claims = extractChatgptClaims(
         tokens.id_token ?? undefined,
