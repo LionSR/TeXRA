@@ -20,6 +20,16 @@ the reason given, in the order worth taking.
 
 ## 1. The app-state write validates JSON twice, but one owner needs an error route
 
+_Landed the same day. The pre-check is gone; `currentValues.modify` encodes
+each next value once (`encodeValue`), and a value its family's schema
+refuses fails the write as a `StoreCheckFailed` naming the family and key,
+which reaches the settings store's caller inside the `StateWriteFailed` it
+already raised for a `DatabaseWriteFailed`. The type question below was
+answered at the families: `APP_STATE` and `REPO_STATE` are
+`ValueFamily<unknown>` (a settings store hands on what its caller gave it;
+the schema, `Schema.Json`, is what the write checks), so no cast was needed.
+The rest of this section is the finding as written._
+
 `appStateStoreFromDatabase`
 (`packages/harness/src/controllers/session/appStateStore.ts:51-63`) runs
 `Schema.decodeUnknownResult(Schema.Json)` over every value before handing it
