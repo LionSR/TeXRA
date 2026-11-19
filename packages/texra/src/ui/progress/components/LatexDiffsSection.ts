@@ -335,8 +335,8 @@ export class LatexDiffsSection extends LitElement {
             <div class="file-select-label-group">
               <label id="editedFileLabel" for="editedFile">Edited</label>
               <wa-tooltip for="editedFileLabel">
-                The edited version of the base file: the one to diff or
-                compare against it, merge into it or accept over it
+                The edited version of the base file: the one to diff or compare
+                against it, merge into it or accept over it
               </wa-tooltip>
             </div>
             <div class="file-select-actions">
