@@ -292,14 +292,19 @@ selects only those kinds, and a row of any other kind is refused
 
 ### 3.1 Run history rows (private to the runtime)
 
-Read through the run history, and by the store's usage projection, which turns
-the priced usage on `response`, `failed` and `context.edit` rows, and on a
-model's `run.description`, into a projected `usage` row
+Read through the run history, by the store's usage projection, which sums the
+priced usage on `response`, `failed` and `context.edit` rows, and on a
+model's `run.description`, into each run's spend
 (`controllers/session/projections.ts#pricedUsage`), and by
-the display reader, which selects `tool.intent` and `tool.result` and shows
-each as its call's card row, a `tool.start` or a `tool.end`, in the private
-row's place (`controllers/session/rowReader.ts#DISPLAY_READ_TYPES`,
-`#callCard`). Each display row is shown from one stored row, so a display read
+the display reader, which selects the rows it shows something of and shows
+each in the private row's place: a `tool.intent` or a `tool.result` as its
+call's card row, a `tool.start` or a `tool.end`
+(`controllers/session/rowReader.ts#callCard`), and a priced row as its `usage`
+row (`controllers/session/projections.ts#usageRows`). One function says what a
+row shows, for a committed batch and a cold read alike, and it reads decoded
+rows only: no statement reads inside a stored row
+(`controllers/session/databaseLayer.ts#shown`, `#DISPLAY_READ_TYPES`). Each
+display row is shown from one stored row, so a display read
 may end a page at any row (`controllers/session/databaseLayer.ts#DISPLAY_PAGE_END`).
 The private rows themselves are never sent to a renderer
 (`shared/schemas/sessionEvent.ts#isDisplayRow`).
