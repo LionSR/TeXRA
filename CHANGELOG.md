@@ -25,6 +25,17 @@ All notable changes to this project will be documented in this file.
   request blocks the call that opened it, and `requestAnswerability` takes
   the run alone.
 
+- **The run listing says a run continues, not that it is resumable.** The
+  listing entry's `resumable` and `resumeBlocked` are now `continues` and
+  `continueBlocked`, and `records(id).readResumable` is `readContinues`: the
+  field is true for any run whose stored rows can be continued here, a
+  finished conversation included. `texra history` (text, JSON and NDJSON)
+  and `/resume` follow: the NDJSON field is `continues`, and the status
+  column reads `(can continue)` for a finished conversation and
+  `(can resume)` for an interrupted, failed or cancelled run, where both previously
+  read `(resumable)`. The view's `resume` action, `session.resume(runId)`,
+  `texra resume` and `--resume` keep their names.
+
 - **The `model.useGoogleBackgroundResponses` setting is removed.** It
   changed nothing: no request read it. A value left in `config.json` is
   reported as an unknown key. SDK: `GOOGLE_BACKGROUND_RESPONSES_SETTING` is

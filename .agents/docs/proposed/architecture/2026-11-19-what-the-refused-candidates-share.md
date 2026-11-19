@@ -296,6 +296,11 @@ already state a condition in prose: `EFF-ADOPT-mcp-client`,
 `ROW-followup-closed-as-run-removed`). None of those four conditions holds on
 effect 4.1.4 and `main` at `0611897`.
 
+Done on 2026-11-19, except for the entries other open pull requests were
+editing, which they update: every other entry was re-read against the code,
+the three that reject nothing are deleted, the six rulings are recorded, and
+the entries that state a condition carry a `reopenWhen`.
+
 ## Order
 
 1. Section 3 (mocks to layers) and the first step of section 2 (exhaustive

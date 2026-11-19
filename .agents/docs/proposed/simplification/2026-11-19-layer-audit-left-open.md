@@ -89,15 +89,19 @@ These need a decision on which wording wins:
   `desktopSignInPresenters.ts` and `subscriptionLogin.ts` / `signInUrl.ts`
   (CLI) each word the device-code steps and the open-elsewhere hint. The
   extension names the provider's session; the others don't.
-- **What usage logging sends.** `doctor.ts` (CLI), `telemetryNotice.ts`, the
-  setting's description and `PrivacyTab.ts` disagree on whether host, version
-  and error text are covered. The doctor also hard-codes the opt-out variables
-  that `TELEMETRY_OPT_OUT_ENV_VARS` holds.
 - **Queued follow-ups.** The count reads "N unread messages" (web tab),
   "Queued messages (N)" (composer), `queued N` in the warning colour
   (terminal bar) and "queued messages: N" (`/status`).
 - **Why an ended run takes no message.** The web words it in
   `BaseRunContent.ts`; the terminal hides the input and says nothing.
+
+Landed since: **what usage logging sends** is one sentence,
+`USAGE_LOGGING_SENDS` in `packages/texra/src/shared/settings/texraSettings.ts`,
+built from a wording table that is total over the fields of the usage record
+(`UsageLogEntrySchema`). The setting, the first-run notice and
+`texra doctor` show it, and the last two take the opt-out variables from
+`TELEMETRY_OPT_OUT_ENV_VARS`. The Privacy section's heading no longer words
+it a second time above the setting's row.
 
 ## 7. Two launcher requests only the extension answers
 

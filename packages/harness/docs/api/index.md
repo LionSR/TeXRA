@@ -669,7 +669,7 @@ interface RunRecords {
   readonly readSkills: Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: Effect.Effect<boolean, Error>;
+  readonly readContinues: Effect.Effect<boolean, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */

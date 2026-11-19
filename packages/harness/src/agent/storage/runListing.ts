@@ -6,7 +6,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { type AgentRunListingEntry, isAgentRunRecord } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 
-import { deriveResumability } from './resumability';
+import { deriveContinuation } from './continuation';
 const CHANNEL = 'RunListing';
 const RUN_STORAGE_CONCURRENCY = 32;
 
@@ -48,15 +48,17 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
           ).pipe(withLogChannel(CHANNEL));
           return null;
         }
-        const resumeFrom = yield* deriveResumability(id);
+        const continuation = yield* deriveContinuation(id);
         return {
           id,
           timestamp: new Date(run.launchedAt).toISOString(),
           outcome: run.outcome,
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
-          resumable: resumeFrom.kind === 'checkpoint',
-          ...('cause' in resumeFrom && { resumeBlocked: resumeFrom.cause }),
+          continues: continuation.kind === 'checkpoint',
+          ...('cause' in continuation && {
+            continueBlocked: continuation.cause,
+          }),
           identity,
           record,
         };
