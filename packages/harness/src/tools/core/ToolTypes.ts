@@ -166,7 +166,9 @@ export interface ITool<E = Error, R = never> {
 /**
  * The requests one tool call raises, opened through its run's loop. Each
  * carries an id its attempt derives. A request still open when its run
- * stops is cancelled, and the resumed call asks again under a new id.
+ * stops is cancelled, and the resumed call asks again under a new id. One a
+ * person answers while no process holds the run resumes the run, and the
+ * call takes that answer when it asks the same thing again.
  */
 export interface CallRequests {
   /** The id the call's next request opens under: the attempt's next

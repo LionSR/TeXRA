@@ -1884,6 +1884,15 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Answering a request of a task that is not running continues the task.**
+  An approval, a plan or a question left pending by a task whose process
+  exited used to refuse the answer with "resume it to answer this request",
+  and its card showed a Resume button in place of its actions. The answer now
+  resumes the task, and the tool that asked takes it without asking again; if
+  the task cannot be resumed, the answer is refused with that reason. SDK:
+  `requestAnswerability` and `RequestAnswerability` are gone from
+  `@texra-ai/harness/schemas`; every pending request can be answered.
+
 - **Codex on Windows installs where TeXRA looks for it.** **Install in
   terminal** ran `wsl --install`, but TeXRA looks for a native `codex.exe`,
   so a native Windows window never found the result. Windows now gets

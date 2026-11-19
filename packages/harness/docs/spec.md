@@ -762,7 +762,13 @@ The activation is one transaction: it folds the stored rows and commits a
 that blocks its caller, then the activation rows
 (`agent/runtime/makeRunHistory.ts#activate`). What was in flight counts as not
 done: the call or turn that asked asks again under a new id. A request that
-does not block its caller stays open.
+does not block its caller stays open. The one request the activation does not
+cancel is one a person answered while no process held the run: the decide
+door resumes the run for that answer, and the activation commits its
+`request.decided` after its `run.activate`
+(`agent/runtime/loop/runLoop.ts#heldAnswers`), so the call that asked starts
+again and takes the decision from the row when it asks the same thing
+(`agent/runtime/loop/toolGuard.ts#askOf`).
 
 ### 7.3 Refusals
 
@@ -809,8 +815,8 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requests.ts#const { requestId } = payload.data`). A tool call's
   request id is derived from the response, call, attempt and ordinal, so a
   call's requests are found from its rows
-  (`shared/session/inFlight.ts#callRequestId`). No request is joined across a
-  stop: a resumed call asks again under the next ordinal.
+  (`shared/session/inFlight.ts#callRequestId`). A request cancelled by a stop
+  or a resume is not joined: a resumed call asks again under the next ordinal.
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, through the asker's cell, so no surface lists it pending
   (`agent/runtime/requests.ts#openRequest`); a grant turned on answers every
@@ -839,7 +845,11 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`shared/session/runState.ts#cancelRequestRows`).
 - A request is a row, so it outlives its process. A resume cancels every open
   one that blocks its caller (section 7.2), and the call that asked asks again
-  (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not
+  (`shared/session/inFlight.ts#resumedAttempt`). A decision for such a request
+  while no process holds its run MUST resume the run, itself or through the
+  parent whose open call owns it, and commit with that run's activation; a
+  resume that is refused rejects the decision with the resume's reason
+  (`controllers/session/SessionRequests.ts#decideSurfaceRequest`). An open request that does not
   block its caller is not cancelled: it
   stays open until its `request.decided` commits, or until `run.removed`
   closes the run, which retires it with no decision row
@@ -919,7 +929,9 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.intent`, no result: If the last request the call opened was answered
   by nobody (open, or cancelled by a stop or a resume), the call was waiting
   on it: it runs again from its start and asks again
-  (`shared/session/inFlight.ts#resumedAttempt`). Otherwise it is re-run only if
+  (`shared/session/inFlight.ts#resumedAttempt`). One answered after the run's
+  latest activation was answered while no process held the run: the call runs
+  again from its start and takes that decision. Otherwise it is re-run only if
   both the stored and the current tool declare `replay: 'safe'` and the stored
   arguments validate, however often it started before; else settled as outcome
   unknown (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,

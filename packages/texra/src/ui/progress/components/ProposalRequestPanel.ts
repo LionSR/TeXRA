@@ -139,7 +139,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /** A script's request approves the script, not one call's agent work,
    *  so only an agent's own proposal opens in the form. */
   private get editable(): boolean {
-    return !this.readOnly && this.host !== null && !this.permission.data.script;
+    return this.host !== null && !this.permission.data.script;
   }
 
   /** Edit: the launch form opens on this proposal, filled with what it

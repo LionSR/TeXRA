@@ -70,6 +70,24 @@ export const REFUSED: { readonly failed: ResumeRefusal } = Object.freeze({
 });
 
 /**
+ * Resume `runId` for what it is owed (a message, a person's answer), as
+ * the run that can: itself, or the parent whose open call owns it, which
+ * reattaches it. Answers the run an activation is now in for, or the
+ * refusal.
+ */
+export const resumeOwner = (
+  runId: RunId,
+): Effect.Effect<
+  { readonly activated: RunId } | { readonly failed: ResumeRefusal },
+  Error,
+  RunRegistry
+> =>
+  Effect.flatMap(resumeRun(runId, {}), (answer) => {
+    if ('ownedBy' in answer) return resumeOwner(answer.ownedBy);
+    return Effect.succeed('failed' in answer ? answer : { activated: runId });
+  });
+
+/**
  * Resume `runId` for the input it holds (a wake, an interrupted task), with
  * no caller to hand the run to: a refused wake is logged, and the queued
  * row waits for the next explicit resume; an owning parent is followed; a
@@ -91,7 +109,7 @@ const wakeRun = Effect.fn('wakeRun')(function* (
       ),
     );
   if (facts === null) return;
-  const resumed = yield* Effect.exit(resumeRun(runId, {}));
+  const resumed = yield* Effect.exit(resumeOwner(runId));
   if (Exit.isFailure(resumed)) {
     if (Cause.hasInterruptsOnly(resumed.cause)) return;
     yield* Effect.logError(`Failed to resume run ${runId}`).pipe(
@@ -101,8 +119,6 @@ const wakeRun = Effect.fn('wakeRun')(function* (
     return;
   }
   const answer = resumed.value;
-  // The parent's open call reattaches the run it owns.
-  if ('ownedBy' in answer) return yield* wakeRun(answer.ownedBy);
   // A run a launch here holds reads its input itself: nothing to say.
   if ('failed' in answer && (yield* RunRegistry).get(runId) === undefined)
     yield* Effect.logWarning(

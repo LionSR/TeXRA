@@ -71,7 +71,6 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             text: ownKeyLabel,
             title: `${ownKeyLabel} (k)`,
             action: 'useOwnApiKey',
-            disabled: this.readOnly,
             onClick: () => this.emitAction(REQUEST_ACTIONS.retry.k),
           })
         : nothing,

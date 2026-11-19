@@ -33,7 +33,12 @@ import {
 import { stopRun } from '@agent/storage/runLifecycle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
-import type { RunId, RunStopReason } from '@shared/schemas';
+import type {
+  RequestDecision,
+  RunId,
+  RunStopReason,
+  SessionRowDraft,
+} from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';
 import { ancestorIds } from '@shared/session/runRelation';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -117,6 +122,14 @@ export interface RunRegistryInit {
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
+
+/** A person's answer to a request of a run no fiber here drives: the
+ *  decision, and the rows that commit only with it (a plugin's facts and
+ *  the input it sends), decided in the job that commits them. */
+export interface HeldAnswer {
+  readonly decision: RequestDecision;
+  readonly beside?: Effect.Effect<readonly SessionRowDraft[], Error>;
+}
 
 /** The fiber driving the run here, from the launch's first step (its
  *  opening included) until it exits. */
@@ -220,6 +233,10 @@ export class SessionRunRegistry implements RunsShape {
     return this.session !== 'open';
   }
 
+  /** Each answer a person gave a request of a run no fiber here drives, by
+   *  run and request, held until that run's next activation takes it. */
+  private readonly answers = new Map<RunId, Map<string, HeldAnswer>>();
+
   private readonly init: RunRegistryInit;
   constructor(init: RunRegistryInit) {
     this.init = init;
@@ -239,6 +256,25 @@ export class SessionRunRegistry implements RunsShape {
    *  waits for it, and the session's close interrupts it. */
   background(effect: Effect.Effect<void, never, AgentRunServices>): void {
     this.init.background(this.provided(effect));
+  }
+
+  /** Hold a person's `answer` to request `requestId` of a run no fiber here
+   *  drives, for the run's next activation: it commits the decision behind
+   *  its `run.activate`, so the call that asked reads it as not yet seen. */
+  holdAnswer(runId: RunId, requestId: string, answer: HeldAnswer): void {
+    const held = this.answers.get(runId) ?? new Map<string, HeldAnswer>();
+    this.answers.set(runId, held.set(requestId, answer));
+  }
+
+  /** The answers held for `runId` ({@link holdAnswer}). */
+  heldAnswers(runId: RunId): ReadonlyMap<string, HeldAnswer> {
+    return this.answers.get(runId) ?? new Map();
+  }
+
+  /** Stop holding an answer: an activation took it, or its decision's
+   *  caller withdrew it. False when it was not held. */
+  dropAnswer(runId: RunId, requestId: string): boolean {
+    return this.answers.get(runId)?.delete(requestId) ?? false;
   }
 
   /** `effect` with this registry as its session's runs. */

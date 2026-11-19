@@ -43,6 +43,7 @@ import {
   outcomeFromCause,
   RUN_OUTCOME,
   type RunId,
+  type SessionRowDraft,
   type RunOutcome,
 } from '@shared/schemas';
 import {
@@ -108,7 +109,7 @@ const turnResponse = ({ handedDown, answer }: RunState): string => {
 };
 
 /** What a resume's activation rows read of the session. */
-type ActivationServices = SessionLog | SessionRoots | Approvals;
+type ActivationServices = SessionLog | SessionRoots | Approvals | RunRegistry;
 
 /** A run that cannot open: a resume with no state to continue from, a
  *  fresh launch onto a run that has some, or a conversation with no task. */
@@ -178,6 +179,7 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
     SessionRoots,
     Approvals,
   )(yield* Effect.context<ActivationServices>());
+  const runs = yield* RunRegistry;
   const opened = runHistory.open(
     runId,
     resume
@@ -195,9 +197,28 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
               yield* ScopedRef.get(run.model),
             );
             if (refused !== null) return yield* refused;
-            return yield* activationRows(runId, run.config).pipe(
+            const rows = yield* activationRows(runId, run.config).pipe(
               Effect.provide(owners),
             );
+            // Each answer a person gave while no process held the run, for a
+            // request still open: after the `run.activate`, so the call that
+            // asked reads it as not yet seen and takes it (`resumedAttempt`).
+            const answered: SessionRowDraft[] = [];
+            for (const [requestId, answer] of runs.heldAnswers(runId)) {
+              if (state.requests[requestId]?.decision !== null) continue;
+              const { decision } = answer;
+              answered.push(
+                {
+                  type: 'request.decided',
+                  aggregateId: runId,
+                  requestId,
+                  decision,
+                },
+                ...(answer.beside === undefined ? [] : yield* answer.beside),
+              );
+              runs.dropAnswer(runId, requestId);
+            }
+            return [...rows, ...answered];
           }),
         }
       : {

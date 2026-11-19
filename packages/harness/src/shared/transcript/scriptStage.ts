@@ -24,7 +24,6 @@ import {
 import {
   acceptsFollowUp,
   isInterrupted,
-  requestAnswerability,
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
@@ -249,12 +248,9 @@ function callView(
     ...(detail !== undefined ? { detail } : {}),
     ...(child !== undefined ? { childRunId: child.id } : {}),
     ...(asking !== undefined ? { askingRunId: asking.id } : {}),
-    // Only a request this window can answer needs the user here: the rule
-    // the request card and the attention badge read.
-    needsYou:
-      request !== undefined &&
-      asking !== undefined &&
-      requestAnswerability(asking, request.payload) === 'answerable',
+    // A pending request needs the user, as the request card and the
+    // attention badge say.
+    needsYou: request !== undefined && asking !== undefined,
     talkable:
       agent &&
       asking === undefined &&

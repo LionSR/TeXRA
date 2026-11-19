@@ -5,7 +5,11 @@
 import { Context, Effect, FileSystem, Path } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { submitFollowUp, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
+import {
+  resumeOwner,
+  submitFollowUp,
+  wakeIfOwed,
+} from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import {
   narrows,
@@ -24,10 +28,12 @@ import { SessionRoots } from '@platform/rootedFs';
 import {
   answerMismatch,
   blocksCaller,
+  describeRefusal,
   readToolEditContent,
   type RunAction,
   type RunId,
   runNoun,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import type { AggregateState, Database } from '@shared/session/database';
 import {
@@ -172,92 +178,123 @@ const pendingOf = (
     ),
   );
 
+/**
+ * Decide a pending request. One a fiber here waits on, or one that keeps
+ * nothing waiting, is one checked transaction (`decideRequest`): the
+ * decision and, for a plugin's request, the facts the plugin states and the
+ * input it sends a run, none of which lands without the decision. A request
+ * that blocks its caller on a run no fiber here drives is answered by
+ * resuming that run: the registry holds the answer, and the run's
+ * activation commits it behind its `run.activate`, so the call that asked
+ * starts again and reads it. A resume that is refused rejects the decision
+ * with the resume's reason, as it does a message.
+ */
 const decideSurfaceRequest = (
   deps: SessionRequestsInit,
   req: Extract<RuntimeCommand, { kind: 'request.decide' }>,
-  heldHere: boolean,
+  runs: RunRegistry['Service'],
 ): Effect.Effect<Outcome, RequestError, GlobalValues | SessionServices> => {
+  const { runId, requestId, decision } = req;
+  const unavailable = (reason: string) => new Unavailable({ runId, reason });
+  const rejected = writeRejection(runId, 'The decision could not be recorded');
   const answer = Effect.fn('answer')(function* <R>(
     write: Effect.Effect<boolean, RequestError, R>,
   ) {
-    const pending = yield* pendingOf(deps, req.runId, req.requestId);
-    if (pending === undefined) return yield* notPending(req.runId);
-    // A request that blocks its caller is answered by the fiber waiting on it,
-    // and that fiber died with the owner this decision takes over from:
-    // recording a decision would clear the panel without doing what it says.
-    // Resuming the run cancels this request; the call asks again and is
-    // answered then.
-    if (!heldHere && blocksCaller(pending.payload)) {
-      return yield* new Unavailable({
-        runId: req.runId,
-        reason: `The ${runNoun(deps.view.run(req.runId))} that asked is no longer running: resume it to answer this request.`,
-      });
-    }
+    const pending = yield* pendingOf(deps, runId, requestId);
+    if (pending === undefined) return yield* notPending(runId);
     const { payload } = pending;
-    if (payload.kind !== 'plugin') {
-      if (!(yield* write)) return yield* notPending(req.runId);
-      return done;
-    }
     // A plugin's request: the plugin's record outside the session's store
-    // first (`Plugin.decision`, idempotent), then one checked transaction
-    // holding the decision, the facts the plugin states, checked in the
-    // job, and the input it sends a run, accepted in the job. None of them
-    // lands without the decision, and a request decided meanwhile commits
-    // none of them. The run is woken for that input once it committed.
-    const plugin =
-      deps.plugins.entries.get(payload.plugin) ??
-      (yield* new Unavailable({
-        runId: req.runId,
-        reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
-      }));
-    const recorded =
-      plugin.decision === undefined
-        ? { facts: [] }
-        : yield* Effect.orDie(
-            plugin.decision.record({ payload, decision: req.decision }),
-          );
-    const { followUp } = recorded;
-    const inbox = yield* Inbox;
+    // first (`Plugin.decision`, idempotent), then the rows beside the
+    // decision, decided in the job that commits it: the facts the plugin
+    // states, checked there, and the input it sends a run, accepted there.
+    // A request decided meanwhile commits none of them. The run is woken
+    // for that input once it committed.
     const log = deps.sessionLog;
-    const beside = Effect.gen(function* () {
-      const facts = yield* factRows(recorded.facts, req.runId, plugin, log);
-      if (followUp === undefined) return facts;
-      const accepted = yield* inbox.acceptance(
-        followUp.runId,
-        followUp.item,
-        {},
-      );
-      if (accepted.sent.kind === 'refused')
-        yield* Effect.logWarning(
-          `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId}: its input is ${accepted.sent.reason}.`,
+    let beside: Effect.Effect<readonly SessionRowDraft[], Error> | undefined;
+    let wakes: RunId | undefined;
+    if (payload.kind === 'plugin') {
+      const plugin =
+        deps.plugins.entries.get(payload.plugin) ??
+        (yield* unavailable(
+          `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
+        ));
+      const recorded =
+        plugin.decision === undefined
+          ? { facts: [] }
+          : yield* Effect.orDie(plugin.decision.record({ payload, decision }));
+      const { followUp } = recorded;
+      const inbox = yield* Inbox;
+      wakes = followUp?.runId;
+      beside = Effect.gen(function* () {
+        const facts = yield* factRows(recorded.facts, runId, plugin, log);
+        if (followUp === undefined) return facts;
+        const accepted = yield* inbox.acceptance(
+          followUp.runId,
+          followUp.item,
+          {},
         );
-      return [...facts, ...accepted.rows];
-    }).pipe(Effect.scoped);
-    const landed = yield* decideRequest(
-      req.runId,
-      req.requestId,
-      req.decision,
-      beside,
-    ).pipe(
-      Effect.provideService(SessionLog, log),
-      Effect.mapError(
-        writeRejection(req.runId, 'The decision could not be recorded'),
+        if (accepted.sent.kind === 'refused')
+          yield* Effect.logWarning(
+            `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${requestId}: its input is ${accepted.sent.reason}.`,
+          );
+        return [...facts, ...accepted.rows];
+      }).pipe(Effect.scoped);
+    }
+    // The decision as one transaction now: with the rows beside it, or the
+    // caller's `write`, which carries a grant.
+    const record =
+      beside === undefined
+        ? write
+        : decideRequest(runId, requestId, decision, beside).pipe(
+            Effect.provideService(SessionLog, log),
+            Effect.mapError(rejected),
+          );
+    const recorded = Effect.gen(function* () {
+      if (!(yield* record)) return yield* notPending(runId);
+      if (wakes !== undefined) yield* wakeIfOwed(wakes);
+      return done;
+    });
+    if (runs.get(runId) !== undefined || !blocksCaller(payload))
+      return yield* recorded;
+    // Nobody waits on the request: its run resumes for the answer, itself
+    // or through the parent whose open call owns it.
+    if (req.grant != null)
+      yield* setPolicy(
+        { field: 'bypass', runId, bypass: req.grant, enabled: true },
+        Effect.void,
+      );
+    runs.holdAnswer(runId, requestId, { decision, beside });
+    const resumed = yield* resumeOwner(runId).pipe(
+      Effect.mapError(rejected),
+      Effect.onError(() =>
+        Effect.sync(() => runs.dropAnswer(runId, requestId)),
       ),
     );
-    if (!landed) return yield* notPending(req.runId);
-    if (followUp !== undefined) yield* wakeIfOwed(followUp.runId);
-    return done;
+    if ('failed' in resumed) {
+      runs.dropAnswer(runId, requestId);
+      return yield* unavailable(describeRefusal(resumed.failed));
+    }
+    // Where a fiber drives the run by now, its opening has committed its
+    // activation, which took the answer for a request still open.
+    yield* runs.opened(runId) ?? Effect.void;
+    if (!runs.heldAnswers(runId).has(requestId)) {
+      if (wakes !== undefined) yield* wakeIfOwed(wakes);
+      return done;
+    }
+    // Its parent resumed and its open call starts the run again: that
+    // activation takes the answer.
+    if (runs.get(runId) === undefined) return done;
+    // A fiber drove the run before this resume, or the request was decided
+    // meanwhile: the transaction decides, as for any held run.
+    runs.dropAnswer(runId, requestId);
+    return yield* recorded;
   });
   // An answer the request does not take is refused before its grant.
-  return Effect.flatMap(
-    pendingOf(deps, req.runId, req.requestId),
-    (pending) => {
-      const reason =
-        pending && answerMismatch(pending, req.decision, req.grant);
-      if (reason) return Effect.fail(new Rejected({ reason }));
-      return decideUnderGrant(req, answer);
-    },
-  );
+  return Effect.flatMap(pendingOf(deps, runId, requestId), (pending) => {
+    const reason = pending && answerMismatch(pending, decision, req.grant);
+    if (reason) return Effect.fail(new Rejected({ reason }));
+    return decideUnderGrant(req, answer);
+  });
 };
 
 /** Queued on the run's input by its live loop's controls, answered once the
@@ -292,7 +329,6 @@ const handle = (
   deps: SessionRequestsInit,
   req: Exclude<RuntimeCommand, { kind: 'run.stop' | `followUp.${string}` }>,
   accepted: AggregateState,
-  heldHere: boolean,
   runs: RunRegistry['Service'],
 ): Effect.Effect<Outcome, RequestError, RequestServices | SessionServices> => {
   switch (req.kind) {
@@ -312,7 +348,7 @@ const handle = (
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
     case 'request.decide':
-      return decideSurfaceRequest(deps, req, heldHere);
+      return decideSurfaceRequest(deps, req, runs);
     case 'request.preview':
       return Effect.flatMap(
         pendingOf(deps, req.runId, req.requestId),
@@ -430,11 +466,7 @@ export function sessionRequests(
     }
     yield* requireRunAction(deps, req);
     const accepted = yield* accept(deps, req);
-    // A launch here holds the run: a blocked request has a fiber here.
-    const heldHere =
-      runs.get(req.kind === 'policy.set' ? req.change.runId : req.runId) !==
-      undefined;
-    return yield* handle(deps, req, accepted, heldHere, runs).pipe(
+    return yield* handle(deps, req, accepted, runs).pipe(
       Effect.provideContext(
         Context.merge(servicesOf(deps.services), yield* sessionServices),
       ),

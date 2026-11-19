@@ -17,7 +17,6 @@ import { html as staticHtml, literal } from 'lit/static-html.js';
 
 // Local imports - shared schemas
 import {
-  requestAnswerability,
   type PendingRequest,
   type RequestPayload,
 } from '@texra-ai/harness/schemas';
@@ -132,12 +131,6 @@ export class RequestPanels extends LitElement {
         data-request-panel
         .permission=${permission}
         .answeredBy=${request.answeredBy}
-        .answerability=${
-          this.run ? requestAnswerability(this.run, permission) : 'resume'
-        }
-        .resumeRunId=${
-          this.run?.actions.includes('resume') ? this.run.id : null
-        }
         .surface=${this.surface}
         .host=${this.host}
         .run=${this.run}
@@ -179,8 +172,7 @@ export class RequestPanels extends LitElement {
     const card = [
       ...this.renderRoot.querySelectorAll<BaseRequestPanel>(`[${CARD_MARKER}]`),
     ].find((element) => element.permission === firstNew.payload);
-    // A card this window cannot answer has nothing to put focus on.
-    if (!card || card.answerability !== 'answerable') return;
+    if (!card) return;
     // The card was just connected in this render pass; its first Lit update
     // is a microtask that cannot run until this `updated()` returns.
     void card.updateComplete.then(() => {

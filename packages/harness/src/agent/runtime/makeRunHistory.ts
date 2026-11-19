@@ -338,8 +338,11 @@ export function makeRunHistory(
    * request a dead process left waiting on a person, so no surface outlives
    * the process that asked and the call or turn that asked asks again, then
    * the activation's rows. The cancellations come first: a decision before
-   * the activation is not one its owner was given. A request that does not
-   * block its caller keeps nothing waiting and stays open.
+   * the activation is not one its owner was given. A request the
+   * activation's own rows decide (a person's answer held for this resume)
+   * is not cancelled: its decision lands behind the activation, for the
+   * owner it starts. A request that does not block its caller keeps nothing
+   * waiting and stays open.
    */
   const activate = <E>(
     run: RunId,
@@ -352,15 +355,18 @@ export function makeRunHistory(
             run,
             applyStored(null, yield* stored(run)),
           );
+          const opening = yield* activation(before);
+          const answered = new Set(
+            opening.flatMap((row) =>
+              row.type === 'request.decided' ? [row.requestId] : [],
+            ),
+          );
           const cancels = cancelRequestRows(
             run,
             before,
             'The process that asked exited.',
-          );
-          const rows: readonly SessionRowDraft[] = [
-            ...cancels,
-            ...(yield* activation(before)),
-          ];
+          ).filter(({ requestId }) => !answered.has(requestId));
+          const rows: readonly SessionRowDraft[] = [...cancels, ...opening];
           const written =
             rows.length === 0 ? [] : yield* runStateAppend(tx.append)(rows);
           const history = written.filter(isRunStateRow);
