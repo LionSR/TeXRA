@@ -460,7 +460,7 @@
     {
       "id": "UI-request-card-declaration-record",
       "candidate": "BaseRequestPanel's hooks replaced by a declaration record (ask, primary, decline, grant, keys) that each card returns to one request-card element",
-      "why": "Every card stays an element either way: the inquiry card holds its form and validation, the proposal card its model picker and edit form, the tool-edit card its preview verbs, and the base its note. A record of callbacks moves each override into a record field one for one: the four hooks one card fills (primaryIcon for retry, notePrompt for the user question, declineTakesNote for the inquiry, emitRuntimeArm for the tool edit) become four optional fields with the same defaults, read at the same points. No decision moves to its owner and no code goes; the class keeps the one action row, keyboard routing and read-only gate in one place. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "why": "Every card stays an element either way: the proposal card holds its model picker and edit form, the tool-edit card its preview verbs, and the base its note. A record of callbacks moves each override into a record field one for one: the hooks one card fills (primaryIcon for retry, notePrompt for the user question, emitRuntimeArm for the tool edit) become optional fields with the same defaults, read at the same points. No decision moves to its owner and no code goes; the class keeps the one action row, keyboard routing and read-only gate in one place. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
       "symbols": [
         {
@@ -493,19 +493,6 @@
           "file": "packages/texra/src/ui/progress/components/TerminalOutput.ts",
           "symbol": "writeTerminalText",
           "signature": "private async writeTerminalText( terminal: Terminal, text: string, ): Promise<void> {…}"
-        }
-      ]
-    },
-    {
-      "id": "UI-inquiry-decode-by-reference",
-      "candidate": "ExternalInquiryPanel stops decoding permission.data with Schema.decodeUnknownSync and caching the result by reference",
-      "why": "A plugin request's payload is opaque JSON to the harness and its view (the plugin owns the shape), so the panel is the boundary where the inquiry plugin's data is decoded. The reference compare is that decode done once per request, not a second cache; moving it to willUpdate keeps the same decode and adds a field that is undefined before the first update. A typed plugin payload in the session view would delete it, and is the change to make if that lands. Found in round 2 (J-ui-kit.md, batched items); refused in round 3, package B.",
-      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
-      "symbols": [
-        {
-          "file": "packages/texra/src/ui/progress/components/ExternalInquiryPanel.ts",
-          "symbol": "ExternalInquiryPanel.inquiry",
-          "signature": "private get inquiry(): InquiryRequest {…}"
         }
       ]
     },

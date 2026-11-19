@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The external inquiry is removed.** The `inquiry` tool, which had an
+  agent draft a question for you to paste into an outside chat
+  subscription (ChatGPT, Claude, Gemini, Grok) and paste the answer back,
+  is gone with its **External Inquiry** plugin (Settings → Plugins), its
+  card in the progress view and its threads in **Background tasks**. The
+  `assistant`, `orchestrator` and `progressCheck` agents no longer carry
+  it; `ask_user_question` still asks you directly. A custom agent file that
+  lists `inquiry` still loads, with the warning that it names a tool this
+  build does not have. A stored run that used it opens and continues as
+  before; an inquiry still open in it stays a pending request that nothing
+  can answer and keeps the window's approval badge on, until you delete the
+  run. Stored thread
+  records are kept and no longer read. The premium-pricing hint on Pro
+  models no longer points to the tool.
+
 - **The `model.useGoogleBackgroundResponses` setting is removed.** It
   changed nothing: no request read it. A value left in `config.json` is
   reported as an unknown key. SDK: `GOOGLE_BACKGROUND_RESPONSES_SETTING` is

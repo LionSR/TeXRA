@@ -544,7 +544,8 @@ designs and chooses one, and ends in a ranked plan of two PRs.
   R6-S8, R6-S7, R6-S10).
 - **E, the T session**, after #14843: PR 1 (R6-T2, R6-T1 with F13, R6-T4,
   R6-T7a, R6-T7c), about −450 lines; PR 2 (R6-T3 with C for
-  `externalInquiry.ts`, R6-T5, R6-T6), about −120.
+  `externalInquiry.ts`, moot since the inquiry's removal on 2026-11-19,
+  R6-T5, R6-T6), about −120.
 - **The owner's call:** whether R6-T6 rides the next format batch instead
   of PR 2; R6-T7b's spec wording.
 

@@ -65,15 +65,12 @@ defaults, so llm cannot tell a dashboard URL from a default. The fix is a
 ## 4. A user row does not say who sent it
 
 `logFollowUps` (`packages/harness/src/agent/runtime/FollowUps.ts`) has the
-input's `from` but logs only the text. As a result:
+input's `from` but logs only the text. As a result the web labels every
+user row "You", including a child's delivery and a host notice
+(`UserMessage.ts`). (The terminal's guess at an inquiry continuation from
+its wording went with the external inquiry on 2026-11-19.)
 
-- The terminal guesses an inquiry continuation from its wording
-  (`INQUIRY_CONTINUATION_RE`, `packages/cli/src/chat/tui/panes/transcriptEntries.ts`).
-- The web labels every user row "You", including a child's delivery and a
-  host notice (`UserMessage.ts`).
-
-The fix is a sender on `UserRow`, so both renderers branch on it and the
-regex goes. It changes a stored payload, so it needs a row-version decision.
+The fix is a sender on `UserRow`, so the renderers branch on it. It changes a stored payload, so it needs a row-version decision.
 
 ## 5. Request nouns and the "waiting on you" source differ per renderer
 
