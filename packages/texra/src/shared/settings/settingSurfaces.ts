@@ -193,7 +193,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
       models: Object.freeze([Object.freeze({ provider: 'google' })]),
     }),
   }),
-  // A transport knob, set in the global `config.json`.
   [OPENAI_FAST_TIER_SETTING.key]: providerToggle({ provider: 'openai' }),
   [MODEL_COMPACTION_THRESHOLD_SETTING.key]: Object.freeze({
     category: 'model',
