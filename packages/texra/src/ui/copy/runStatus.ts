@@ -130,6 +130,9 @@ export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
     failed: Object.freeze({ word: 'Failed', tone: 'danger' }),
   });
 
+/** The label of what the user told the model when deciding a tool call. */
+export const TOOL_USER_FEEDBACK_LABEL = 'Feedback:';
+
 /** The tone of a context compaction's activity row; its words are the
  *  row's label (`COMPACTION_ACTIVITY_LABEL`). */
 export const COMPACTION_ACTIVITY_TONE: Readonly<

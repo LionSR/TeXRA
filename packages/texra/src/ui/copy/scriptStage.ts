@@ -30,19 +30,27 @@ export const SCRIPT_CALL_STATUS_LABEL = Object.freeze({
 
 /** How each call status is painted. A queued call has not started and a
  *  reused one ran nothing this time, so neither shows its tone's glyph. */
-export const SCRIPT_CALL_STATUS_LOOK: Readonly<
-  Record<ScriptCallStatus, StatusLook>
-> = Object.freeze({
-  queued: Object.freeze({ tone: 'neutral', glyph: 'circle-dot' }),
-  running: Object.freeze({ tone: 'running' }),
-  interrupted: Object.freeze({ tone: 'warning' }),
-  finished: Object.freeze({ tone: 'success' }),
-  reused: Object.freeze({ tone: 'success', glyph: 'clock-rotate-left' }),
-  skipped: Object.freeze({ tone: 'neutral' }),
-  cancelled: Object.freeze({ tone: 'neutral' }),
-  failed: Object.freeze({ tone: 'danger' }),
-  'not run': Object.freeze({ tone: 'neutral' }),
-});
+const SCRIPT_CALL_STATUS_LOOK: Readonly<Record<ScriptCallStatus, StatusLook>> =
+  Object.freeze({
+    queued: Object.freeze({ tone: 'neutral', glyph: 'circle-dot' }),
+    running: Object.freeze({ tone: 'running' }),
+    interrupted: Object.freeze({ tone: 'warning' }),
+    finished: Object.freeze({ tone: 'success' }),
+    reused: Object.freeze({ tone: 'success', glyph: 'clock-rotate-left' }),
+    skipped: Object.freeze({ tone: 'neutral' }),
+    cancelled: Object.freeze({ tone: 'neutral' }),
+    failed: Object.freeze({ tone: 'danger' }),
+    'not run': Object.freeze({ tone: 'neutral' }),
+  });
+
+/** How a call's row is painted: its status's look, except that a call
+ *  waiting on the user reads as a run waiting on the user does. */
+export function scriptCallLook(call: ScriptCallView): StatusLook {
+  return call.needsYou
+    ? WAITING_ON_YOU_LOOK
+    : SCRIPT_CALL_STATUS_LOOK[call.status];
+}
+const WAITING_ON_YOU_LOOK: StatusLook = Object.freeze({ tone: 'warning' });
 
 /** What a row says before its answer, in one line. */
 function detailText(detail: NonNullable<ScriptCallView['detail']>): string {

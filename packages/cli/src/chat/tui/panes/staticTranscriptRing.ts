@@ -93,7 +93,8 @@ interface RingTail {
 export interface ChildHeader {
   readonly label: string;
   readonly modelLabel: string | null;
-  readonly childKind: 'script' | 'subagent';
+  /** What the run is called on screen (`runNoun`). */
+  readonly noun: string;
   readonly parentLabel: string;
 }
 
@@ -123,7 +124,7 @@ function sessionHeaderIdentityLine(
     // A child the view gives no model (a process) names none: the
     // session's model is another run's.
     return joinFacts([
-      `${child.childKind}: ${child.label}`,
+      `${child.noun}: ${child.label}`,
       `parent: ${child.parentLabel}`,
       child.modelLabel !== null && `model: ${child.modelLabel}`,
     ]);

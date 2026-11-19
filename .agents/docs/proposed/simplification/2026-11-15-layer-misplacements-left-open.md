@@ -31,24 +31,9 @@ The transcription credential is open question 3 of
 
 ## 2. The harness asks "is this Anthropic?" to choose prompt text
 
-`packages/harness/src/agent/runtime/loop/step.ts` and `executeAgent.ts` compare
-`model.config.provider` with `ModelProvider.ANTHROPIC`;
-`packages/harness/src/agent/prompt/PromptBuilder.ts` picks the tool-call
-paragraph from it, `templateInputs.ts` sets `IS_ANTHROPIC_MODEL`, and the
-public `PromptSection` context in `packages/harness/src/tools/toolTable.ts`
-carries `isAnthropic`. The fact the prompt depends on is whether the model
-issues parallel tool calls, which is a capability `packages/llm` should
-state. No plugin in `packages/texra` reads `ctx.isAnthropic` and no bundled
-agent uses the template variable; the agent-creation docs advertise it.
-
-```
-before  isAnthropic: model.config.provider === ModelProvider.ANTHROPIC
-after   parallelToolCalls: model.config.capabilities.parallelToolCalls
-```
-
-Decision needed: the capability's name on the model config, and whether
-`IS_ANTHROPIC_MODEL` is dropped (it breaks a user agent that reads it) or
-kept as a derived value for one release. It changes the plugins API report.
+Taken on 2026-11-19: `issuesParallelToolCalls` (`packages/llm/src/models/modelRoute.ts`)
+states the fact the step's tool-call paragraph depends on, and the
+`IS_ANTHROPIC_MODEL` prompt variable is gone with no alias.
 
 ## 3. Provider usage endpoints live in app controllers
 

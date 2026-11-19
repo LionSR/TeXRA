@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 98
+Exports: 99
 
 - `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "provider" | "reasoning">, route?: ModelRoute | undefined) => ReasoningEffort[]`
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
@@ -44,6 +44,7 @@ Exports: 98
 - `isApiProvider` — `function isApiProvider: (provider: string) => provider is "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai"`
 - `isKimiCodeExclusiveModel` — `function isKimiCodeExclusiveModel: (model: Pick<ModelConfig, "baseUrl" | "kimiSubscription" | "provider">) => boolean`
 - `isKimiSubscriptionEligible` — `function isKimiSubscriptionEligible: (model: Pick<ModelConfig, "kimiSubscription" | "provider">) => boolean`
+- `issuesParallelToolCalls` — `function issuesParallelToolCalls: (config: Pick<ModelConfig, "provider">) => boolean`
 - `isUnservedModel` — `function isUnservedModel: (config: Pick<ModelConfig, "openRouterOnly" | "retired">) => boolean`
 - `JsonObjectSchema` — `const JsonObjectSchema: compose<$Record<String, Codec<Json, Json, never, never>>, Unknown>`
 - `KeyPlanRoute` — `type KeyPlanRoute = { [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key' ? P : never; }[PlanRoute]; ≡ KeyPlanRoute`

@@ -139,7 +139,6 @@ import {
 import {
   bindSessionView,
   currentView,
-  runningChildCount,
   sessionView,
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
@@ -1751,7 +1750,7 @@ function appendHarnessStatus(): void {
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run && runStatus(run).word,
-      activeChildSessions: runningChildCount(view, run),
+      activeChildSessions: run?.rollup.running,
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.runs.get(runId)?.queuedFollowUps ?? []).map(

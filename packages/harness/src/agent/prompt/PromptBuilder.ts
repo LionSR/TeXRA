@@ -37,9 +37,9 @@ Never mention tool names when speaking to the user.
  * The tool-call mechanics are provider-gated: OpenAI-compatible providers
  * (DeepSeek, Kimi, GLM, MiniMax, …) need the schema/JSON/multi_tool_use
  * guardrails and the sequential-call constraint (Google/DeepSeek thought-
- * signature batching assumes ordered follow-ups). Anthropic models handle
- * parallel tool calls natively, so they get the parallel encouragement
- * instead of the weak-model boilerplate.
+ * signature batching assumes ordered follow-ups). A model that issues
+ * parallel tool calls natively (`issuesParallelToolCalls`) gets the parallel
+ * encouragement instead of the weak-model boilerplate.
  */
 const PARALLEL_TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
 Do not create excessive markdown files or documentation unless explicitly requested.`;

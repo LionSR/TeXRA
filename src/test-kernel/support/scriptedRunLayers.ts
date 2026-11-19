@@ -301,7 +301,6 @@ export function testLaunch(
     toolPolicy: {},
     opening: {
       inputs: {
-        IS_ANTHROPIC_MODEL: false,
         CWD: '.',
         BUILTIN_AGENTS_DIR: '',
         CUSTOM_AGENTS_DIR: '',

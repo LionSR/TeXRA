@@ -9,7 +9,7 @@ import { FakeHost } from '@test/support/testKernel';
 
 const buildVars = (agentConfig: typeof AgentConfigSchema.Type) =>
   Effect.flatMap(FakeHost, (host) =>
-    buildTemplateInputs(agentConfig, false, {
+    buildTemplateInputs(agentConfig, {
       workspaceRoot: host.path('workspace'),
       storageRoot: host.roots.storage,
     }),
