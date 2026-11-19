@@ -1,4 +1,5 @@
 import {
+  absurd,
   Cache,
   Cause,
   Clock,
@@ -14,7 +15,11 @@ import {
 } from '@texra-ai/harness/plugins';
 import { HttpClientError } from 'effect/http';
 
-import { apiKey, providerDisplayName } from '@texra-ai/llm';
+import {
+  apiKey,
+  isAuthFailureStatus,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import {
   fetchPlanUsage,
   type PlanUsage,
@@ -27,7 +32,7 @@ import type {
   SubscriptionUsageSnapshots,
 } from '@texra/shared/model/subscriptionUsage';
 import {
-  CODING_PLAN_SUBSCRIPTIONS,
+  codingPlanForUsageRoute,
   type CodingPlanSubscription,
 } from '@texra/shared/model/codingPlans';
 import type { HttpClient } from 'effect/http';
@@ -36,12 +41,10 @@ const CHANNEL = 'SubscriptionUsage';
 
 const CACHE_TTL = Duration.seconds(30);
 
-const [KIMI_CODE_PLAN, GLM_CODING_PLAN] = CODING_PLAN_SUBSCRIPTIONS;
-
 /** Each subscription's catalog plan, by the provider that reports its usage. */
 const PLAN_BY_PROVIDER = {
-  [KIMI_CODE_PLAN.id]: KIMI_CODE_PLAN,
-  [GLM_CODING_PLAN.id]: GLM_CODING_PLAN,
+  kimiCode: codingPlanForUsageRoute('kimi-code-subscription'),
+  glmCodingPlan: codingPlanForUsageRoute('glm-coding-plan-subscription'),
 } satisfies Record<SubscriptionUsageProvider, CodingPlanSubscription>;
 
 /** The setting slots this service reads; credentials come from the process
@@ -211,7 +214,9 @@ export class SubscriptionUsageService {
     const request: PlanUsageRequest =
       key[0] === 'glmCodingPlan'
         ? { plan: 'glm', region: key[1] }
-        : { plan: 'kimiCode' };
+        : key[0] === 'kimiCode'
+          ? { plan: 'kimiCode' }
+          : absurd(key);
     return Effect.flatMap(Secrets, (secrets) =>
       apiKey(secrets, request.plan),
     ).pipe(
@@ -251,7 +256,7 @@ export class SubscriptionUsageService {
             }),
             withLogChannel(CHANNEL),
           );
-          if (status === 401 || status === 403) {
+          if (isAuthFailureStatus(status)) {
             return yield* this.unavailable(provider, 'invalid_credentials');
           }
           if (

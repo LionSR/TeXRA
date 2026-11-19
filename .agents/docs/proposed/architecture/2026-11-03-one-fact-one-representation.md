@@ -289,7 +289,7 @@ and `REFUSED` remain; `runRejection`, `earlierBuildRefusal` and
 and failures ended on 2026-11-19: `defectAsFailure` and `defectsAsErrors`
 are gone, and no `Effect.die(Cause.squash(…))` is left in the harness. A
 registration or an awaited child's launch fails with the typed errors its
-steps raise (`ParentRunClosed`, the store's, a `ToolError`); a defect
+steps raise (`RunOpenRejected`, the store's, a `ToolError`); a defect
 there stays a defect, which the tool boundary reports to the model as a
 failed call and logs as a crash (`defineTool`). The acceptance count is 15 files, not under ten. The open
 stop and resume rows are the same work as §5 of

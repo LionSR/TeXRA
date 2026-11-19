@@ -39,6 +39,7 @@ import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
 import {
+  runsScript,
   type HookOutcomePayload,
   type ToolDefinition,
   type ToolResult,
@@ -357,7 +358,7 @@ export function stepHooks(
       const blocked = state.hookOutcomes[`Stop:${state.turn - 1}`] ?? [];
       const common = {
         stop_hook_active:
-          run.config.script != null || blocked.some((o) => o.context !== null),
+          runsScript(run.config) || blocked.some((o) => o.context !== null),
         last_assistant_message: lastMessage,
       } as const;
       const { rows, context: text } = yield* at(

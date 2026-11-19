@@ -138,11 +138,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
     },
   );
 
-  /** One request, answered by the prompt. A plugin's request is not this
-   *  host's to answer: the plugin that opens one, the external inquiry, is
-   *  unavailable on the CLI, so one listed was opened by another host in a
-   *  shared session and is answered there; this handler waits until the
-   *  view drops the request (the answerer interrupts it then). */
+  /** One request, answered by the prompt. */
   const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
     payload: RequestPayload,
@@ -182,8 +178,6 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       }
       case 'userQuestion':
         return yield* askHeadlessUserQuestion(payload.data, hooks);
-      case 'plugin':
-        return yield* Effect.never;
     }
   });
 

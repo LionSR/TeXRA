@@ -104,7 +104,7 @@ on (`controllers/session/storeSchema.ts#prepareStore`). Every transaction the
 store runs MUST begin with `BEGIN IMMEDIATE`, so it holds the write lock from its
 first statement and never upgrades a read lock: it is the SQLite client's own
 transaction, which begins that way on a writable connection
-(`controllers/session/databaseLayer.ts#sql.withTransaction`). File maintenance
+(`controllers/session/storeConnection.ts#sql.withTransaction`). File maintenance
 runs outside these: the one-time `VACUUM` at setup and page reclaim in
 autocommit `incremental_vacuum` steps, neither of which writes a row
 (`controllers/session/storeSchema.ts#incrementalVacuum`, `#reclaimFreePages`).
@@ -144,7 +144,7 @@ is one SQLite transaction followed by the publication of its rows, and it
 SHALL run where it is called as one uninterrupted turn: the driver is
 synchronous, the job awaits nothing, and the scheduler does not take the
 fiber off between its steps (`agent/runtime/sessionEventsLayer.ts#commit`,
-`controllers/session/databaseLayer.ts#PreventSchedulerYield`). So jobs run one
+`controllers/session/storeConnection.ts#PreventSchedulerYield`). So jobs run one
 at a time, the table's commit order is the order of the calls, and a job's
 appends commit together or not at all
 (`controllers/session/databaseLayer.ts#job`).
@@ -174,12 +174,19 @@ given after close is a defect; a detached one is logged and dropped
 Once a job's transaction commits, the publisher SHALL publish what the job
 wrote, from memory, to the session's subscribers, one batch per job in commit
 order: the batch's display rows as a display read of the same commits returns
-them, and the commit it reached (`agent/runtime/sessionEventsLayer.ts#publish`,
+them, the commit before it and the commit it reached
+(`agent/runtime/sessionEventsLayer.ts#publish`,
 `controllers/session/databaseLayer.ts#displayRows`). Nothing in the session reads
-its own writes back to learn what it committed. A tail reads from the store only
-the rows it starts behind the publisher's last published commit, then follows
-the batches (`agent/runtime/sessionEventsLayer.ts#all`); the session's view takes its
-rows the same way (`controllers/session/sessionInputsLayer.ts#sessionInputsLayer`).
+its own writes back to learn what it committed. The publisher MUST NOT wait
+for a subscriber: it keeps a bounded number of batches for one that is behind
+and drops the oldest past that (`agent/runtime/sessionEventsLayer.ts#KEPT_BATCHES`).
+A reader MUST NOT lose a row to that: a batch whose commit before is past the
+last commit the reader saw shows the gap, and the reader reads the commits
+between from the store. So a tail reads from the store only the rows it starts
+behind the publisher's last published commit and any stretch it fell too far
+behind to be handed, and otherwise follows the batches
+(`agent/runtime/sessionEventsLayer.ts#batches`); the session's view takes its
+rows the same way (`controllers/session/sessionInputsLayer.ts#dropped`).
 Every projection is caught up when the store opens, and each append keeps it
 current in its own transaction, so a read never checks it
 (`controllers/session/databaseLayer.ts#upkeep.catchUp`,
@@ -212,7 +219,7 @@ known kind at a version above the one this build reads
 build lacks passes the gate; its rows read as written, marked unavailable
 (below). The
 gate MUST run at open, so no build opens a store holding core rows it cannot
-read, or writes beside them (`controllers/session/databaseLayer.ts#storeGate`); a
+read, or writes beside them (`controllers/session/databaseLayer.ts#store.gate`); a
 project store's one writer is the process that opened it (section 7), so what
 the store holds cannot change under it. A core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts#readableVersion`). Kinds a build deleted are
@@ -719,7 +726,11 @@ another process makes to it is seen through a 250 ms poll of SQLite's
 `data_version`
 (`controllers/session/globalDatabaseLayer.ts#'PRAGMA data_version'`), and
 since that process can be a newer build, the store gate runs again in each
-of its writes (`#Effect.andThen(gate, body)`). A project store runs no poll: its holder learns what it committed from its own
+of its writes (`controllers/session/storeConnection.ts#Effect.andThen(gate, body)`).
+A read of whether something changed (that poll, a values change feed) that
+keeps failing is retried for about a minute and then reported as a change,
+so its reader's own read meets the failure
+(`controllers/session/currentValues.ts#changeRead`). A project store runs no poll: its holder learns what it committed from its own
 publisher.
 
 ### 7.1 Aggregates
@@ -758,11 +769,10 @@ resume a wake took follows it itself, whoever opened it,
 `effect/sessionPrograms.ts#redirectedFrom`).
 
 The activation is one transaction: it folds the stored rows and commits a
-`request.decided` `cancel` for every request the previous process left open
-that blocks its caller, then the activation rows
+`request.decided` `cancel` for every request the previous process left open,
+then the activation rows
 (`agent/runtime/makeRunHistory.ts#activate`). What was in flight counts as not
-done: the call or turn that asked asks again under a new id. A request that
-does not block its caller stays open.
+done: the call or turn that asked asks again under a new id.
 
 ### 7.3 Refusals
 
@@ -779,28 +789,27 @@ run a launch here holds that would need the run stopped first is refused as
 
 ### 8.1 Kinds
 
-The request kinds are the harness's own six and one plugin case
-(`shared/schemas/request.ts#RequestPayloadSchema`):
+The request kinds are a closed set the harness declares
+(`shared/schemas/request.ts#RequestPayloadSchema`), each with the answers it
+takes besides the three refusals (`shared/schemas/request.ts#REQUEST_ANSWERS`):
 
-| Kind           | Asks                                    | Blocks its caller |
-| -------------- | --------------------------------------- | ----------------- |
-| `toolEdit`     | approval of a file edit                 | yes               |
-| `bash`         | approval of a command                   | yes               |
-| `retry`        | whether to retry a failed model attempt | yes               |
-| `proposal`     | approval of a proposed agent run        | yes               |
-| `planApproval` | approval of a plan                      | yes               |
-| `userQuestion` | answers to questions                    | yes               |
-| `plugin`       | whatever its plugin asks, in its `data` | as declared       |
+| Kind           | Asks                                    | Answered with                 |
+| -------------- | --------------------------------------- | ----------------------------- |
+| `toolEdit`     | approval of a file edit                 | `approve`                     |
+| `bash`         | approval of a command                   | `approve`                     |
+| `retry`        | whether to retry a failed model attempt | `retry`                       |
+| `proposal`     | approval of a proposed agent run        | `approve`                     |
+| `planApproval` | approval of a plan                      | `approve`, `approve_and_goal` |
+| `userQuestion` | answers to questions                    | `submit`, `skip`              |
 
-Every own kind blocks its caller (the tool call that opened it, or for
-`retry` the model invocation). A plugin's request declares whether it does
-(`blocksCaller`) and which actions answer it (`answers`); its plugin's
-decision hook records each answer (`shared/schemas/request.ts#blocksCaller`).
+Every request blocks its caller (the tool call that opened it, or for
+`retry` the model invocation), and one decision answers it and lets that
+one waiting call go on.
 
 ### 8.2 Decisions
 
-A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
-`skip`, `retry`, `reject`, `deny` and `cancel`
+A decision is one of `approve`, `approve_and_goal`, `submit`, `skip`,
+`retry`, `reject`, `deny` and `cancel`
 (`shared/schemas/request.ts#RequestDecisionSchema`).
 
 ### 8.3 Protocol
@@ -818,7 +827,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
 - Who answers a request is decided once, as it opens, and stored as its
   `answeredBy`: a person when a `PreToolUse` hook asked or the request asks
-  about no operation (a question, a retry, a plugin's request), else the grant
+  about no operation (a question or a retry), else the grant
   its operation takes (`agent/runtime/requests.ts#answererOf`, `#OPERATIONS`).
   The policy's answer at open and a grant turned on while it waits both read
   it, so a grant answers a waiting request exactly when it would have approved
@@ -835,20 +844,13 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#'The run ended.'`);
   one a dead process left is the next resume's to cancel. Both cancel the
-  same requests, the open ones that block their caller
+  same requests, every open one
   (`shared/session/runState.ts#cancelRequestRows`).
 - A request is a row, so it outlives its process. A resume cancels every open
-  one that blocks its caller (section 7.2), and the call that asked asks again
-  (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not
-  block its caller is not cancelled: it
-  stays open until its `request.decided` commits, or until `run.removed`
-  closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#accept`). Its plugin's decision
-  hook records an answer outside the store first, idempotently; the decision,
-  the facts the hook returns and the input it sends a run (the external
-  inquiry's follow-up) then commit in one checked transaction, after which
-  that run is woken (`agent/runtime/requests.ts#decideRequest`,
-  `controllers/session/SessionRequests.ts#wakeIfOwed`).
+  one (section 7.2), and the call that asked asks again
+  (`shared/session/inFlight.ts#resumedAttempt`). A decision is accepted only
+  while the run that asked waits here: its call is the one that takes it
+  (`controllers/session/SessionRequests.ts#is no longer running`).
 
 ## 9. Crash guarantees
 

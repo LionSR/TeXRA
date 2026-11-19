@@ -65,15 +65,12 @@ defaults, so llm cannot tell a dashboard URL from a default. The fix is a
 ## 4. A user row does not say who sent it
 
 `logFollowUps` (`packages/harness/src/agent/runtime/FollowUps.ts`) has the
-input's `from` but logs only the text. As a result:
+input's `from` but logs only the text. As a result the web labels every
+user row "You", including a child's delivery and a host notice
+(`UserMessage.ts`). (The terminal's guess at an inquiry continuation from
+its wording went with the external inquiry on 2026-11-19.)
 
-- The terminal guesses an inquiry continuation from its wording
-  (`INQUIRY_CONTINUATION_RE`, `packages/cli/src/chat/tui/panes/transcriptEntries.ts`).
-- The web labels every user row "You", including a child's delivery and a
-  host notice (`UserMessage.ts`).
-
-The fix is a sender on `UserRow`, so both renderers branch on it and the
-regex goes. It changes a stored payload, so it needs a row-version decision.
+The fix is a sender on `UserRow`, so the renderers branch on it. It changes a stored payload, so it needs a row-version decision.
 
 ## 5. Request nouns and the "waiting on you" source differ per renderer
 
@@ -83,6 +80,12 @@ requests that do not block their run. The web row reads `run.approval`
 (blocking only). One noun table keyed by `RequestPayload['kind']` belongs in
 `packages/texra/src/ui/copy/requestCards.ts`, and the badge should read
 `run.approval`. Decision needed: should a non-blocking request mark the row?
+
+Landed 2026-11-19: the nouns are one table, `REQUEST_NOUN` in
+`packages/texra/src/ui/copy/requestCards.ts`, total over
+`RequestPayload['kind']`; the terminal child list and the script-stage call
+line read it. Every renderer already used the same word, so nothing a person
+reads changed. The badge's source is still the open decision.
 
 ## 6. Copy the hosts word separately
 
@@ -135,6 +138,7 @@ examples can be neutral, which changes the tool descriptions a run records.
   (`toolDigests`). Lowering it in llm would make the recorded schema differ
   from what the model saw.
 - **App settings rows that repeat provider console URLs**
-  (`settingSurfaces.ts` against `KEY_PAGES`), and the coding-plan catalog's
-  `apiProvider` against `PLAN_ROUTES`. Both are small. They belong with
-  open question 1 of the 2026-11-18 model-access note.
+  (`settingSurfaces.ts` against `KEY_PAGES`): landed 2026-11-19, the
+  toggles read `KEY_PAGES` from `packages/texra/src/shared/model/keyPages.ts`.
+  The coding-plan catalog's `apiProvider` against `PLAN_ROUTES` is small and
+  belongs with open question 1 of the 2026-11-18 model-access note.

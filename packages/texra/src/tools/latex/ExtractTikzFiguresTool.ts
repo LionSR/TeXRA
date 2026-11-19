@@ -10,7 +10,7 @@ import {
   defineTool,
   nullishWithDefault,
   type ToolResult,
-  type WorkspaceFs,
+  WorkspaceFs,
 } from '@texra-ai/harness/plugins';
 import { compileTikzPictures, extractTikzPictures } from '@latex/tikzPictures';
 import {
@@ -46,7 +46,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   > {
     const call = yield* ToolContext;
     const { path, display } = yield* resolveLatexFile(texPath);
-    const location = pathToLocationIn(call.env.roots.workspace, path.absolute);
+    const location = pathToLocationIn((yield* WorkspaceFs).root, path.absolute);
 
     const tikzFigures = yield* extractTikzPictures(location);
     if (tikzFigures.length === 0) {

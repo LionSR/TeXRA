@@ -136,15 +136,12 @@ export abstract class BaseRequestPanel<
    *  and not yet sent, so a run switch does not lose it. */
   @property({ attribute: false }) surface: Surface | null = null;
 
-  /** Where this card's draft is kept: the request, unless the card names
-   *  its own key. */
-  protected get draftKey(): string {
-    return this.permission.data.requestId;
-  }
-
   /** What is entered on this card and not yet sent. */
   protected get draft(): RequestDraft {
-    return this.surface?.requestDrafts.get(this.draftKey) ?? EMPTY_DRAFT;
+    return (
+      this.surface?.requestDrafts.get(this.permission.data.requestId) ??
+      EMPTY_DRAFT
+    );
   }
 
   /** Store the card's draft; an empty one is none. A read-only card owns
@@ -154,7 +151,7 @@ export abstract class BaseRequestPanel<
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'requestDraft',
-        key: this.draftKey,
+        key: this.permission.data.requestId,
         draft: Object.keys(draft).length === 0 ? null : draft,
       }),
     );
@@ -184,11 +181,6 @@ export abstract class BaseRequestPanel<
   protected submitPrimary(): void {
     const actions = REQUEST_ACTIONS[this.permission.kind];
     if ('y' in actions) this.emitAction(actions.y);
-  }
-
-  /** Whether the decline can carry a note the agent reads. */
-  protected get declineTakesNote(): boolean {
-    return REQUEST_ACTIONS[this.permission.kind].n !== 'stop';
   }
 
   /** The note box's label: what the agent should hear. */
@@ -418,6 +410,8 @@ export abstract class BaseRequestPanel<
 
   private renderDecline(): TemplateResult {
     const label = requestDeclineLabel(this.permission.kind);
+    // A decline that stops the run carries no note the agent would read.
+    const takesNote = REQUEST_ACTIONS[this.permission.kind].n !== 'stop';
     return html`
       ${renderLabeledActionButton({
         icon: 'xmark',
@@ -428,7 +422,7 @@ export abstract class BaseRequestPanel<
         onClick: () => this.sendDecline(),
       })}
       ${
-        this.declineTakesNote && !this.noteOpen && !this.readOnly
+        takesNote && !this.noteOpen && !this.readOnly
           ? renderLabeledActionButton({
               text: 'Add a note…',
               kind: 'link',

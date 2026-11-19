@@ -179,7 +179,6 @@ export function approvalDecisionDelivery(
     case 'approve':
     case 'approve_and_goal':
     case 'submit':
-    case 'answer':
     case 'skip':
     case 'reject':
     case 'deny':

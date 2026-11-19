@@ -84,10 +84,10 @@ const PDF_RASTER_MAX_SIZE: [number, number] = [1024, 1024];
 /**
  * A media file that could not be turned into model input for a reason other
  * than the filesystem's own (`PlatformError`): missing or empty, unmeasurable,
- * or an image tool that failed. The message is the one the run
- * transcript shows.
+ * an image tool that failed, a PDF whose pages did not render, or a file of
+ * no medium a model takes. The message is the one the run transcript shows.
  */
-class MediaConversionFailed extends Schema.TaggedError<MediaConversionFailed>()(
+export class MediaConversionFailed extends Schema.TaggedError<MediaConversionFailed>()(
   'MediaConversionFailed',
   {
     message: Schema.String,

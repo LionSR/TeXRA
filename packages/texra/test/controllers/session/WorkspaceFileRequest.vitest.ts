@@ -8,10 +8,17 @@ import {
 import { join } from 'node:path';
 
 import { layer } from '@effect/vitest';
-import { Effect, Exit } from 'effect';
+import { Effect, Exit, Ref, SubscriptionRef } from 'effect';
 import { beforeEach, expect } from 'vitest';
 
 import { sessionFsLayer } from '@texra-ai/harness/host';
+import {
+  linkOver,
+  SERVICE_OFFLINE,
+  type Linked,
+  type ServiceClient,
+  type ServiceLink,
+} from '@texra/controllers/server/client';
 import { answerWorkspaceFile } from '@texra/controllers/session/workspaceFileRequest';
 import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -24,8 +31,11 @@ let missingExternalPath = '';
 
 /** The request over the test's workspace, as the window's dispatch provides
  *  its session's rooted filesystems. */
-const file = (action: Parameters<typeof answerWorkspaceFile>[0]) =>
-  answerWorkspaceFile(action).pipe(
+const file = (
+  action: Parameters<typeof answerWorkspaceFile>[0],
+  service?: ServiceLink,
+) =>
+  answerWorkspaceFile(action, service).pipe(
     Effect.provide(
       sessionFsLayer({ workspace: workspaceRoot, storage: fixtureRoot }),
     ),
@@ -111,6 +121,55 @@ layer(SessionGraph.hosted)('workspaceFile request', (it) => {
           expect(readFileSync(join(workspaceRoot, 'paper.tex'), 'utf8')).toBe(
             'mine',
           );
+        }),
+    );
+
+    // Failure mode: a window whose project the background service holds
+    // writes the editor's save itself, so the save and a task's edit of the
+    // same file run in two processes, each under its own write lane.
+    it.effect(
+      "a save of a project the service holds is the service's write, and this process's only while the link is away",
+      () =>
+        Effect.gen(function* () {
+          const asked: unknown[] = [];
+          // cast: the one procedure a save calls stands for the client.
+          const client = {
+            'file.save': (input: unknown) => {
+              asked.push(input);
+              return Effect.succeed({ kind: 'changedOnDisk' });
+            },
+          } as unknown as ServiceClient;
+          const state = yield* SubscriptionRef.make<Linked<ServiceClient>>({
+            client,
+          });
+          const link = linkOver(state, yield* Ref.make(false));
+          const onDisk = () =>
+            readFileSync(join(workspaceRoot, 'paper.tex'), 'utf8');
+          const save = file(
+            { kind: 'write', path: 'paper.tex', contents: 'mine', base: null },
+            link,
+          );
+
+          // The service's answer is the save's, and nothing is written here.
+          expect(yield* save).toEqual({ kind: 'changedOnDisk' });
+          expect(asked).toEqual([
+            {
+              workspace: workspaceRoot,
+              path: 'paper.tex',
+              contents: 'mine',
+              base: null,
+            },
+          ]);
+          expect(onDisk()).toBe('inside');
+
+          yield* SubscriptionRef.set(state, {
+            client: null,
+            away: SERVICE_OFFLINE,
+            lasting: false,
+          });
+          expect(yield* save).toEqual({ kind: 'done' });
+          expect(onDisk()).toBe('mine');
+          expect(asked).toHaveLength(1);
         }),
     );
   });

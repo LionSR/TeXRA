@@ -36,12 +36,14 @@ import {
   Context,
   Effect,
   Exit,
+  type FileSystem,
   Record,
   Schema,
   Scope,
   ScopedRef,
   Ref,
 } from 'effect';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { issuesParallelToolCalls } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
@@ -296,7 +298,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
-        ? Settings.getConfig(roots.config, AGENT_SKILLS_ENABLED_SETTING)
+        ? yield* Settings.get(roots, AGENT_SKILLS_ENABLED_SETTING)
         : recordedSkills.length > 0;
     const catalog =
       listing || names.length > 0
@@ -441,13 +443,20 @@ export const dispatchTools = Effect.fn('Step.dispatch')(function* (
  * holds only what its plugins offer now. The first request a resumed
  * activation opens is held to the record, and so is every wait before it,
  * which leaves the hold unspent. Its base text is the recorded one, or
- * until the opening commits, `openingSystem`.
+ * until the opening commits, what `opening` renders from the tools the step
+ * offers.
  */
 export const stepFor = Effect.fn('Step.for')(function* (
   run: AgentRunShape,
   state: RunState,
   waits: boolean,
-  openingSystem?: string,
+  opening?: (
+    offered: readonly string[],
+  ) => Effect.Effect<
+    string,
+    Error,
+    FileSystem.FileSystem | ChildProcessSpawner
+  >,
 ) {
   const open = yield* Ref.get(run.steps);
   const held = open === null || open.holding;
@@ -467,12 +476,13 @@ export const stepFor = Effect.fn('Step.for')(function* (
     roots,
     run.config.delegationAgentScope ?? undefined,
   );
+  const offered = tools.definitions.map(({ name }) => name);
   const context = {
     ...stepInstructions(
       step.contributing,
       step.listed,
       {
-        offered: tools.definitions.map(({ name }) => name),
+        offered,
         isChild: run.entry.parent !== null,
         config: roots.config,
       },
@@ -481,9 +491,11 @@ export const stepFor = Effect.fn('Step.for')(function* (
     ...(delegation && { delegation }),
   };
   const base =
-    state.input.system === undefined
-      ? openingSystem
-      : stored(state, state.input.system, Schema.String);
+    state.input.system !== undefined
+      ? stored(state, state.input.system, Schema.String)
+      : opening === undefined
+        ? undefined
+        : yield* opening(offered);
   const { system, update } = systemTextAt(state, base, context);
   const modules = Record.map(tools.modules, sha256);
   const changed =
@@ -493,6 +505,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     tools.hooks.identities.join('\0') !== state.offeredWith.hooks.join('\0');
   return {
     tools,
+    base,
     system,
     // The content the set names is stored before the row that names it.
     rows: changed

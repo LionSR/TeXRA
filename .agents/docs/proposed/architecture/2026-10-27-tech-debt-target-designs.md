@@ -114,9 +114,10 @@ the `SubscriptionRef` in `SessionViewService`, and commit triggers use
 **Rejected alternatives.**
 
 - SQL views or generated columns over `event.data`: rejected by the
-  storage design's "nothing below the codec reads a payload field"
-  (`storedShapeBoundary.vitest.ts`), and blob references are unreadable in
-  SQL. The hosts need the reducer anyway, so this would be a second
+  storage design's "nothing below the codec reads a payload field" (a
+  rule no check holds since its suite was deleted, and one exception,
+  `PRICED_USAGE` in `rowReader.ts`, reads usage there), and blob references
+  are unreadable in SQL. The hosts need the reducer anyway, so this would be a second
   system.
 - A projected `run_facts` table: a cache of the reducer; reopen it only
   if a cold listing measurably exceeds its budget.

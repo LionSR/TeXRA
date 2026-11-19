@@ -1,0 +1,4 @@
+# The storage fixtures and the recorded row kinds are compared byte for byte
+# with what the code generates: a checkout must not rewrite their line ends.
+config/storage/** text eol=lf
+src/test-kernel/fixtures/storage/** text eol=lf

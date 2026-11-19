@@ -60,9 +60,7 @@ export function isFastFirstResponseModel(
 }
 
 /**
- * Models whose API pricing is high enough that the picker steers users to
- * the External Inquiry tool, which lets agents ask the user to paste an
- * answer from their own ChatGPT/Claude/Gemini subscription instead.
+ * Models whose API pricing is high enough that the picker warns about it.
  *
  * The test is the output price, not the name: a model's name does not say
  * whether it is a Pro tier. Pro-tier models price output at $80+ per 1M, and
@@ -71,8 +69,7 @@ export function isFastFirstResponseModel(
 const EXPENSIVE_OUTPUT_PRICE_FLOOR = 80;
 
 /** Hint prepended to an expensive model's picker tooltip, and its badge. */
-export const EXPENSIVE_MODEL_HINT =
-  '💸 Premium API pricing — consider the External Inquiry tool to use your own ChatGPT/Claude subscription instead';
+export const EXPENSIVE_MODEL_HINT = '💸 Premium API pricing';
 
 /**
  * Whether API use of a model is expensive enough to warn about. Undefined

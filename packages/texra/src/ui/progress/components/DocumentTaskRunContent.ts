@@ -1,6 +1,6 @@
 /**
- * A document task's conversation: the header, its pending requests, the
- * inquiries it is waiting on, then the transcript log, the files and usage
+ * A document task's conversation: the header, its pending requests, then
+ * the transcript log, the files and usage
  * it closes with, and once it has ended, what the user can do next. Reads the view
  * and the surface; every send is a child's event.
  */
@@ -19,7 +19,6 @@ import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 
 // Side-effect imports - register the elements rendered below
-import './BackgroundTasksPanel';
 import './FileList';
 
 @customElement('document-task-run-content')
@@ -34,18 +33,7 @@ export class DocumentTaskRunContent extends BaseRunContent {
     const rounds = isDocumentTaskRun(run) ? documentRoundsOf(run) : null;
     return html`
       <div class="conversation-content">
-        ${this.renderApprovalDock()}
-
-        <div class="conversation-column conversation-prelude">
-          <background-tasks-panel
-            scope="inquiries"
-            .run=${run}
-            .view=${view}
-            .surface=${surface}
-          ></background-tasks-panel>
-        </div>
-
-        ${this.renderLog()}
+        ${this.renderApprovalDock()} ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
           ${

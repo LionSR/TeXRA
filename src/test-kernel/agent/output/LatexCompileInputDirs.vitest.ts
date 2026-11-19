@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
 import {
@@ -12,6 +12,7 @@ import {
   fileLocationDisplayPath,
 } from '@texra-ai/harness/schemas';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
@@ -22,40 +23,12 @@ import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 import { compileFsLayer, runStorageFile } from './compileCheckTestUtils';
 import { LATEXDIFF_BETWEEN_ROUNDS_SETTING } from '@texra/shared/settings/documentsSettings';
 
-const mocks = vi.hoisted(() => ({
-  compileLatex2Pdf: vi.fn(
-    (): Effect.Effect<{ ok: boolean; logTail?: string }> =>
-      Effect.succeed({ ok: true }),
-  ),
-  publishCompiledPdfArtifact: vi.fn((): Effect.Effect<null, Error> =>
-    Effect.succeed(null),
-  ),
-  // The latexdiff process edge: its run.
-  executeCommand: vi.fn(() =>
-    Effect.succeed({
-      success: true,
-      stdout:
-        '\\documentclass{article}\n\\begin{document}\nchanged\n\\end{document}\n',
-      stderr: '',
-      end: { _tag: 'Exited', code: 0 },
-    }),
-  ),
-}));
-
-vi.mock('@utils/system/execUtils', () => ({
-  executeCommand: mocks.executeCommand,
-}));
-
-vi.mock('@latex/texTools', () => ({
-  compileLatex2Pdf: mocks.compileLatex2Pdf,
-}));
-
-vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({
-  // Only the publish is mocked: no PDF is ever written here.
-  ...(await importOriginal<
-    typeof import('@texra/agent/output/compiledPdfArtifacts')
-  >()),
-  publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
+/** The process edge: every command exits 0 printing a document. That is
+ *  latexdiff's diff; latexmk's output is ignored and it writes no PDF, so
+ *  no diff PDF is published and only the `.tex` paths remain. */
+const tools = scriptedSpawnerLayer(() => ({
+  stdout:
+    '\\documentclass{article}\n\\begin{document}\nchanged\n\\end{document}\n',
 }));
 
 const runId = Schema.decodeUnknownSync(RunIdSchema)('d1ff0a');
@@ -128,6 +101,6 @@ layer(
         path.join('diff', 'r1', 'a', 'main_diffr1r0.tex'),
         path.join('diff', 'r1', 'b', 'main_diffr1r0.tex'),
       ]);
-    }).pipe(Effect.provide(compileFsLayer)),
+    }).pipe(Effect.provide([compileFsLayer, tools.layer])),
   );
 });
