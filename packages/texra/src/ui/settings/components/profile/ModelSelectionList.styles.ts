@@ -119,21 +119,17 @@ export const modelSelectionListStyles: CSSResult = css`
     font-size: var(--font-size-xs);
   }
 
-  wa-button.deprecated-toggle {
-    width: 100%;
-  }
-
-  wa-button.deprecated-toggle::part(base) {
+  /* The kit's disclosure row, in the quieter type of a secondary list. */
+  .deprecated-toggle {
     color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    justify-content: flex-start;
-    border: none;
-    background: transparent;
   }
 
-  wa-button.deprecated-toggle::part(base):hover {
+  .deprecated-toggle:hover {
     color: var(--wa-color-text-normal);
-    background: var(--wa-color-neutral-fill-quiet);
+  }
+
+  .deprecated-toggle wa-button {
+    font-size: var(--font-size-sm);
   }
 
   .deprecated-models {
