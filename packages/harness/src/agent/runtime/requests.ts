@@ -12,7 +12,9 @@
  * failed run leaves open is cancelled with the run's end, in the end's
  * batch (`endIn`); one a dead process left, with the run's next activation
  * (`cancelRequestRows`). Either way the asker asks again when its run
- * resumes: no request is joined across a stop.
+ * resumes. A person's answer to a request of a run no process holds
+ * resumes that run, and the activation commits it instead of the
+ * cancellation, so the asker takes it (`RunRegistry.holdAnswer`).
  *
  * Who answers a request (`answeredBy`) is decided once, as it opens
  * ({@link answererOf}): its operation's grant ({@link OPERATIONS}), or a
