@@ -51,7 +51,7 @@ const icon = (kind) =>
             name="folder-opened"
           ></wa-icon>
           <code class="oat-fld-name">r0/</code>
-          <span class="oat-tag oat-tag--r0">Revision 0</span>
+          <span class="oat-tag oat-tag--r0">Revision 1</span>
         </div>
 
         <ul class="oat-files">

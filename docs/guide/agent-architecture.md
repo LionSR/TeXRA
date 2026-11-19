@@ -17,13 +17,13 @@ If you want a faster turnaround (quick polishes, small corrections), pick a **sm
 
 An **agent** is a chat persona defined in a flat `.yaml` file: `name`, `description`, `prompt` (the system prompt), `tools` and `temperature`. It converses and calls its tools turn by turn. Browse these files from the **Agents** tab in the TeXRA Settings, or create your own (see [Custom agents](./custom-agents.md)).
 
-A **program** is a fixed procedure that ships with TeXRA: `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides` and `poster` (see the [program reference](./built-in-agents.md#programs)). A program is not in the agent picker. It is started in one of three ways:
+A **program** is a fixed procedure that ships with TeXRA: `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides` and `poster` (see the [program reference](./built-in-agents.md#programs)). The Lean plugin adds `prove` and `blueprint`, which work on Lean files in rounds and are described in [Lean 4 proofs](./lean.md#lean-programs); the rest of this page is about the eight document programs. A program is not in the agent picker. It is started in one of three ways:
 
 - an agent you chat with calls the `program` tool, and you approve the proposed run;
 - `texra run <program> --input …` in the terminal;
 - the **Merge** action, which starts `merge`.
 
-By default a chat agent is sent one tool, `script`, and calls its other tools from the JavaScript it writes there (the **script-only tools** setting under **Settings → Agents → Advanced**), so a `program` call often appears inside a script.
+A chat agent is sent one tool, `script`, and calls its other tools from the JavaScript it writes there, so a `program` call often appears inside a script.
 
 ## Basic execution flow
 
@@ -73,10 +73,10 @@ The same pipeline runs headlessly from the terminal:
   note="Same program, same revisions, same run storage: no UI attached."
 />
 
-Each revision lands in its own folder under run storage:
+Each revision's reply and documents land in their own folder under run storage, with the diffs beside them:
 
 <RoundOutputTree />
-<p class="hero-caption">Every revision saves the raw <code>output.xml</code>, one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>), and a <code>latexdiff</code> PDF. <code>r0/</code> is the first revision (the draft); <code>r1/</code> and later are review passes.</p>
+<p class="hero-caption">Every revision saves the raw <code>output.xml</code> and one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>). <code>r0/</code> is the first revision (the draft); <code>r1/</code> is the review pass. The <code>latexdiff</code> source of each revision is under <code>diff/</code> and its compiled PDF under <code>output/</code>.</p>
 
 **Output limit:** If the reply is cut off by the model's max output tokens before the closing `</documents>` tag, TeXRA keeps what the model wrote as that revision's output and warns in the transcript that it may be incomplete. Raise the model's max output tokens if a long document gets cut off.
 

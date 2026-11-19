@@ -4,7 +4,7 @@
 // BOTH rounds reuse the input filename (intro.tex) under r0/ and r1/ — the
 // single most confusing structural fact on the page. This card draws that
 // folder shape with a one-line annotation per round so the r0 (first revision)
-// vs r1 (critique pass · final) distinction reads at a glance.
+// vs r1 (review pass · final) distinction reads at a glance.
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
 // (defined in theme/mockup.css on `.mockup`) resolve here and the card flips
@@ -19,7 +19,7 @@ const rounds = [
   {
     dir: 'r1/',
     file: 'intro.tex',
-    tag: 'critique pass · final',
+    tag: 'review pass · final',
     recommended: true,
   },
 ];
@@ -36,7 +36,7 @@ const rounds = [
       <span class="mk-card-title prt-head-name"
         >executions/&lt;run-id&gt;/</span
       >
-      <span class="mk-card-sub prt-head-sub">one folder per round</span>
+      <span class="mk-card-sub prt-head-sub">one folder per revision</span>
     </div>
     <ul class="prt-tree">
       <li

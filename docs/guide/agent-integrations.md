@@ -21,7 +21,7 @@ TeXRA agents can delegate programming tasks—such as running numerical checks o
 
 Each one is set up from its own row on **Settings → Plugins**. When a
 TeXRA agent uses the tool, the work runs in a side panel on the ProgressBoard
-that you can watch live and reply to. TeXRA carries on while the side agent
+that you can watch live. TeXRA carries on while the side agent
 works.
 
 ## Quick start
@@ -29,9 +29,9 @@ works.
 Both integrations follow the same setup flow from the TeXRA Settings.
 
 1. Open **TeXRA: Open Settings** (`Ctrl+Shift+P`) → **Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
-2. Find the **OpenAI Codex CLI** or **Claude Code CLI** row. When it shows **Needs setup**, the setup actions expand automatically.
+2. Find the **OpenAI Codex CLI** or **Claude Code CLI** row and switch it on (both are off by default). When it shows **Needs setup**, the setup actions expand automatically.
 3. Select <wa-icon library="texra" name="terminal"></wa-icon> **Install in terminal**, then <wa-icon library="texra" name="right-to-bracket"></wa-icon> **Sign in** to OAuth in your browser.
-4. Reopen the dashboard (or select **Re-check** on the **Plugins** page). The status changes to a green <wa-icon library="texra" name="check"></wa-icon> check (tooltip **Ready**) once TeXRA detects the install.
+4. Reopen Settings (or select **Re-check** on the **Plugins** page). The status changes to a green <wa-icon library="texra" name="check"></wa-icon> check (tooltip **Ready**) once TeXRA detects the install.
 
 <IntegrationCard />
 <p class="hero-caption">Each integration has its own row: a <strong>Needs setup</strong> row expands its setup actions, and <strong>Re-check</strong> flips it to <strong>Ready</strong> with a settings summary.</p>
@@ -45,7 +45,7 @@ Each integration's options live on its row and are scoped to the current workspa
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
 ::: warning Windows
-TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe`, not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in terminal** offers there. Codex is unaffected: TeXRA resolves its `codex.exe` inside the npm package itself.
+TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe`, not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in terminal** offers there. For Codex, **Install in terminal** on Windows runs `wsl --install` to set up WSL2, and the Codex CLI is then installed inside WSL. TeXRA looks for Codex in the environment it runs in, so it finds that install only when TeXRA itself runs inside WSL (the **WSL Remote** case below), not from a native Windows window.
 
 - **WSL Remote**: open TeXRA inside the WSL window before installing.
 - **Native Windows**: install the CLI on Windows so the real binary is on PATH.
@@ -55,7 +55,7 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 ### Install and authenticate
 
-- **Install** with `npm install -g @openai/codex`, or `brew install codex` (macOS), or the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli). **Install in terminal** picks Homebrew automatically when you have it, so the button works without a Node install.
+- **Install** with `npm install -g @openai/codex`, or `brew install codex` (macOS), or the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli). **Install in terminal** picks Homebrew automatically when you have it, so the button works without a Node install; on Windows it runs `wsl --install` instead (see the Windows note above).
 - **Sign in** with `codex login` to use ChatGPT Plus / Pro, or set `OPENAI_API_KEY` in the shell you launch VS Code from to bill against an API account.
 
 ### Settings
@@ -63,7 +63,7 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 | Setting              | Options                                                      | Default       | What it controls                                                                                                                           |
 | -------------------- | ------------------------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Model**            | the current OpenAI models your ChatGPT plan can use in Codex | `GPT-6.1 Sol` | Which model Codex runs.                                                                                                                    |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`, `max`                      | `medium`      | How deeply Codex deliberates. A level the model or your installed Codex lacks becomes the nearest one it has; older installs stop at High. |
+| **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum`             | `Medium`      | How deeply Codex deliberates. A level the model or your installed Codex lacks becomes the nearest one it has; older installs stop at High. |
 
 Providers, MCP servers, and custom instructions come from Codex's own `~/.codex/config.toml`.
 
@@ -71,7 +71,9 @@ Providers, MCP servers, and custom instructions come from Codex's own `~/.codex/
 
 To continue an earlier Codex turn instead of starting a fresh one, the calling
 agent calls `codex` again with the `thread_id` it received in the previous
-delivery. The new prompt joins that Codex session as the next turn.
+delivery. The new prompt joins that Codex session as the next turn. A thread
+whose turn is still running refuses another until that turn's result has been
+delivered.
 
 ## Claude Code
 
@@ -93,8 +95,8 @@ MCP servers, custom instructions, and hooks come from Claude Code's own configur
 
 To continue an earlier Claude Code session, the calling agent calls
 `claude_code` again with the `session_id` from the previous delivery. The new
-prompt joins that session as the next turn (and waits its turn in the queue if
-the session is still working).
+prompt joins that session as the next turn. A session whose turn is still
+running refuses another until that turn's result has been delivered.
 
 ## Running an integration
 
@@ -112,6 +114,8 @@ When the tool fires:
 2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>), all live.
 3. When the turn ends, the run shows **Completed**. Each call is one turn: to send a follow-up, the agent calls the tool again with the `thread_id` or `session_id` the result carried. Select <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop** to end a turn early.
 4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
+
+Both tools deliver their result as a follow-up message, so they are not available in a one-shot run such as `texra run`; there the agent delegates with `agent` instead.
 
 <DelegatedStreamHero />
 <p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, and web searches), then shows <strong>Completed</strong> and hands its result back to the calling agent.</p>
@@ -155,7 +159,8 @@ tools:
   Approval** like a shell command does: no prompt under Auto-approve or
   once you approve all agent work for the task, and every call refused
   under Block. A session where approval
-  prompts can't be shown (a headless run) is not offered MCP tools.
+  prompts can't be shown (a headless run) is not offered MCP tools unless the
+  policy is Auto-approve.
 - **The server starts when a run first uses it.** TeXRA starts it when the
   first run that names it begins; the project's runs share that one process,
   which stops 30 minutes after the last run using it ends, or when the session
@@ -165,8 +170,8 @@ tools:
 - **Environment.** A server inherits TeXRA's environment minus variables whose
   names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`, so your
   provider API keys don't reach it. Pass what a server needs through its `env`.
-- **Limits.** A call times out after 60 seconds, and output beyond 54,000
-  characters keeps its first 4,000 and last 50,000.
+- **Limits.** A call times out after 60 seconds, and output beyond 200,000
+  characters keeps its beginning and its end.
 - **A server that fails to start** (a missing command, no answer within 30
   seconds, a malformed tool list) contributes no tools; the run continues with
   the rest and its transcript names the server and the reason.
@@ -180,11 +185,11 @@ The exact error message is shown inline on the row, below its description. Read 
 
 ### OpenAI Codex
 
-| Message                                        | Fix                                                                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `@openai/codex-sdk package not found`          | Select **Install in terminal** again, then **Re-check**.                                                |
-| `Codex SDK loaded but native binary not found` | Reinstall in the same environment as the extension host. On Windows, follow the **Windows** note above. |
-| `Platform not supported`                       | Codex ships native binaries for Linux, macOS, and Windows (`x64` / `arm64`). On other hosts, use WSL.   |
+| Message                                        | Fix                                                                                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `@openai/codex-sdk package not found`          | Reinstall TeXRA (in a source checkout, run `corepack pnpm install`), then **Re-check**.                                                 |
+| `Codex SDK loaded but native binary not found` | Run the install command the message names in the same environment as the extension host. On Windows, follow the **Windows** note above. |
+| `Platform not supported`                       | Codex ships native binaries for Linux, macOS, and Windows (`x64` / `arm64`). On other hosts, use WSL.                                   |
 
 **`codex login` opens a terminal but nothing happens.** The button runs `codex login` in a fresh integrated terminal. Focus the terminal and press **Enter** if the browser didn't open, or paste the login URL manually.
 
@@ -192,10 +197,10 @@ The exact error message is shown inline on the row, below its description. Read 
 
 ### Claude Code
 
-| Message                                                     | Fix                                                                                                                   |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `@anthropic-ai/claude-agent-sdk package not found`          | Reinstall TeXRA (in a source checkout, run `corepack pnpm install`), then **Re-check**.                               |
-| `Claude Code SDK loaded but native claude binary not found` | Run `npm install -g @anthropic-ai/claude-code` in the same environment as the extension host (inside WSL on Windows). |
+| Message                                                         | Fix                                                                                                                                     |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `@anthropic-ai/claude-agent-sdk package not found`              | Reinstall TeXRA (in a source checkout, run `corepack pnpm install`), then **Re-check**.                                                 |
+| ``Claude Code SDK loaded but native `claude` binary not found`` | Run the install command the message names in the same environment as the extension host. On Windows, follow the **Windows** note above. |
 
 **`claude login` opens a terminal but nothing happens.** The button runs `claude login` in a fresh integrated terminal. Focus the terminal and press **Enter** if the browser didn't open, or paste the login URL manually.
 

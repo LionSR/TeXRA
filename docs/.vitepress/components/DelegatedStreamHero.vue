@@ -2,12 +2,12 @@
 // The live side-panel a `codex` / `claude_code` hand-off opens on the
 // ProgressBoard: a stream tab labelled `claude_code` that streams the
 // delegated agent's reasoning, the commands it runs, file changes, and web
-// searches — then shows WAITING when the turn ends, with a Stop
+// searches — then shows Completed when the turn ends, with a Stop
 // control. The final message + token cost hand back to the calling TeXRA agent.
 //
 // Standalone (frameless) — just the stream column, no MockupFrame / dash-nav.
 // Reuses the shared .stream-head / .tcard vocabulary from theme/
-// mockup.css plus the StatusPill primitive for the WAITING tag; the root carries
+// mockup.css plus the StatusPill primitive for the Completed tag; the root carries
 // `.mockup` so `--mk-*` tokens resolve and
 // the panel flips with the docs light / dark theme. Static strings only.
 import StatusPill from './StatusPill.vue';
@@ -72,10 +72,10 @@ import StatusPill from './StatusPill.vue';
         >
       </div>
 
-      <!-- Turn-end state: WAITING + follow-up affordance -->
+      <!-- Turn-end state: each call is one turn -->
       <div class="ds-foot">
-        <StatusPill variant="warning">WAITING</StatusPill>
-        <span class="ds-hint">Type to send a follow-up</span>
+        <StatusPill variant="success">Completed</StatusPill>
+        <span class="ds-hint">One turn per call</span>
       </div>
 
       <!-- Hand-back to the calling TeXRA agent -->
@@ -92,7 +92,7 @@ import StatusPill from './StatusPill.vue';
 
 <style scoped>
 /* Frameless stream column. .stream-head / .tcard primitives come from
-   theme/mockup.css (.mockup scope) and the WAITING tag uses StatusPill; this
+   theme/mockup.css (.mockup scope) and the Completed tag uses StatusPill; this
    file adds only the bits unique to a delegated session. */
 .ds-stream {
   background: var(--mk-bg);

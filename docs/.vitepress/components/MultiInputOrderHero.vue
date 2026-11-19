@@ -1,7 +1,7 @@
 <script setup>
 // Frameless figure for guide/multiple-output.md → "UI for Multiple Files".
-// The prose claims each Input row is an *ordered* list and that, for editing
-// agents, "the expected output filenames are the selected input filenames in
+// The prose claims each Input row is an *ordered* list and that, for programs
+// that edit, "the expected output filenames are the selected input filenames in
 // the same order" — but never shows the multi-row ordered list itself.
 //
 // This lifts the New task view's Input file group (the .field/.frow/.f-label +
@@ -69,7 +69,7 @@ const rows = [
     <div class="mi-note">
       <wa-icon library="texra" name="arrow-down"></wa-icon>
       <span
-        >Row order is the output order — editing agents reuse each input
+        >Row order is the output order: programs that edit reuse each input
         filename as its output filename.</span
       >
     </div>

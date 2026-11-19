@@ -106,7 +106,7 @@ TeXRA handles file paths as follows:
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
 - **Output**: A program's outputs are saved in run storage. Use **Accept** or
-  **Pack** when you want to copy reviewed outputs back into the workspace.
+  **Archive outputs to History** when you want to copy reviewed outputs back into the workspace.
 
 ### File discovery rules
 

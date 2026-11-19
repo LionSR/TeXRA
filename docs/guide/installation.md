@@ -84,7 +84,7 @@ Only a **LaTeX distribution** is required for compiling documents; Perl (for `la
 <FeatureCards
   min="220px"
   :cards="[
-    { icon: 'file-code', title: 'LaTeX distribution', tag: 'Required', tagVariant: 'accent', desc: 'Core document processing: compiles and rendering .tex.', chips: [{ text: 'MiKTeX / TeX Live', variant: 'neutral' }] },
+    { icon: 'file-code', title: 'LaTeX distribution', tag: 'Required', tagVariant: 'accent', desc: 'Core document processing: compiling and rendering .tex.', chips: [{ text: 'MiKTeX / TeX Live', variant: 'neutral' }] },
     { icon: 'diff-multiple', title: 'Perl', tag: 'Optional', tagVariant: 'neutral', desc: 'Backs the latexindent and latexdiff scripts.', chips: [{ text: 'auto-format', variant: 'info' }, { text: 'LaTeX diffs', variant: 'info' }] },
     { icon: 'image', title: 'GraphicsMagick / ImageMagick', tag: 'Optional', tagVariant: 'neutral', desc: 'Figure and image processing.', chips: [{ text: 'figures', variant: 'info' }] },
     { icon: 'file-pdf', title: 'Ghostscript', tag: 'Optional', tagVariant: 'neutral', desc: 'Rasterizes PDF figures for the image tools above.', chips: [{ text: 'figures', variant: 'info' }] }
