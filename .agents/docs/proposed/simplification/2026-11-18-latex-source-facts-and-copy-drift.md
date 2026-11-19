@@ -24,6 +24,7 @@ helpers), each finding checked against the code and against
    `packages/texra/src/latex/latexParsingUtils.ts`.
 3. **A missing `.bib` path.** `extract_bib_entries` rebuilt
    `workspaceRelativePath` with `toPosixPath`, which drops a leading slash.
+   (The tool went with the `latex-extract` plugin on 2026-11-19.)
 4. **An output's display name.** The compile check restated
    `outputDisplayName` (`packages/texra/src/shared/plugins/documentOutputs.ts`)
    without the lineage document.

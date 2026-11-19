@@ -125,6 +125,8 @@ In order of size. Each needs the decision named.
    in `packages/texra/src/latex/latexdiff.ts` has its own pattern and does
    not know `\addbibresource`. One reader in
    `packages/texra/src/latex/latexParsingUtils.ts`.
+   (`extractBibliography.ts` went with the `latex-extract` plugin on
+   2026-11-19; the dependency reader is the one that remains.)
 4. **What counts as `\input`.** Dependency mirroring
    (`packages/texra/src/latex/extractFileDependencies.ts`) accepts
    `\input {x}` and `\include{x}` and strips comments; the output rewrite
