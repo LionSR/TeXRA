@@ -127,7 +127,11 @@ the code does now and where it departs from the design.
   `RequestAnswerability` and the panels' resume state are deleted.
   Left: the held answer is in memory until the activation, so a process
   that dies between the two loses it and the request stays pending (the
-  person answers again); the variant that records the decision at once
+  person answers again). Past the commit, the rule every decision already
+  follows holds: one older than the run's latest activation counts as read,
+  so a crash between the activation and the call's next step leaves the
+  call to `mayHaveRun`, as it would a live answer; the variant that
+  records the decision at once
   takes the `request.decided` version bump named above. An answer to a
   child's request is acknowledged once its parent has resumed, before the
   child's own activation commits it.

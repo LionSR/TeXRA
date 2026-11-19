@@ -211,9 +211,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       );
       if (rejection !== null) return failed(describeRefusal(rejection));
     }
-    // A user's message to a run that is stopping continues it after the
-    // stop: its row lands after the run's end, which the wake reads.
-    if (item.from.kind === 'user' && live !== undefined) {
+    // A message to a run that is stopping is decided after the stop: its
+    // verdict and its wake read the run's end (a user's continues the run,
+    // another run's is refused).
+    if (live !== undefined) {
       const facts = yield* log.facts(runId);
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
