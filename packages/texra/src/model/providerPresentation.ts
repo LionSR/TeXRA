@@ -12,9 +12,9 @@ import {
 } from '@texra-ai/harness/plugins';
 import { Effect } from 'effect';
 
-import { providerDisplayName, type ApiKeyProviderId } from '@texra-ai/llm';
+import { providerDisplayName } from '@texra-ai/llm';
 import { providerRegionSetting } from '@texra-ai/harness/schemas';
-import { KEY_PAGES } from '@texra/shared/model/providerKeyPages';
+import { KEY_PAGES, type Regional } from '@texra/shared/model/keyPages';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 /** Whether `provider`'s region toggle picks its China platform. */
@@ -32,10 +32,9 @@ function regionByDefault(provider: string): boolean {
   return toggle ? Settings.defaultOf(TEXRA_SETTINGS.catalog, toggle) : false;
 }
 
-const KEY_PAGE_BY_PROVIDER = new Map<
-  string,
-  (typeof KEY_PAGES)[ApiKeyProviderId]
->(Object.entries(KEY_PAGES));
+const KEY_PAGE_BY_PROVIDER = new Map<string, string | Regional>(
+  Object.entries(KEY_PAGES),
+);
 
 /** Providers whose China platform goes by another name. */
 const CHINA_PLATFORM_NAMES = new Map<string, string>([

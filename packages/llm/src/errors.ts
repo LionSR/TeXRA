@@ -224,15 +224,27 @@ export const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 /**
- * Every provider's failure mapping treats HTTP 401/403 as `authentication`
- * and anything else the provider rejected as `provider-rejection`, except
- * where a provider's own reply names the credential (Google answers an
- * invalid key with a 400; `SdkHttpFailure.credentialRejected`).
+ * Whether an HTTP status is 401 or 403, the statuses an API answers a
+ * credential it refuses with. The one reading of that status test, for a
+ * model provider, an OAuth token endpoint and any other HTTP API a TeXRA
+ * package calls. A caller whose API gives a 403 another meaning refines it
+ * first: GitHub answers a valid token over its rate limit with a 403 and
+ * rate-limit headers.
+ */
+export const isAuthFailureStatus = (status: number | undefined): boolean =>
+  status === 401 || status === 403;
+
+/**
+ * Every provider's failure mapping treats an {@link isAuthFailureStatus}
+ * status as `authentication` and anything else the provider rejected as
+ * `provider-rejection`, except where a provider's own reply names the
+ * credential (Google answers an invalid key with a 400;
+ * `SdkHttpFailure.credentialRejected`).
  */
 export const authOrRejectionKind = (
   status: number | undefined,
 ): 'authentication' | 'provider-rejection' =>
-  status === 401 || status === 403 ? 'authentication' : 'provider-rejection';
+  isAuthFailureStatus(status) ? 'authentication' : 'provider-rejection';
 
 /**
  * The delay one response asks the caller to wait, in milliseconds:

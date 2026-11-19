@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 97
+Exports: 98
 
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
 - `API_KEY_PROVIDER_IDS` — `const API_KEY_PROVIDER_IDS: readonly ("anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai")[]`
@@ -41,6 +41,7 @@ Exports: 97
 - `hint` — `function hint: (model: ModelConfig | string) => string`
 - `InputPart` — `type InputPart = Extract<ResolvedTurn['messages'][number], { role: 'user'; }>['content'][number]; ≡ { readonly base64: string; readonly detail?: "high" | "low" | "medium" | "ultra-high" | undefined; readonly kind: "image"; readonly mimeType: string; } | { readonly base64: string; readonly kind: "audio" | "document" | "video"; readonly mimeType: string; } | { readonly kind: "text"; readonly text: string; }`
 - `isApiProvider` — `function isApiProvider: (provider: string) => provider is "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai"`
+- `isAuthFailureStatus` — `const isAuthFailureStatus: (status: number | undefined) => boolean`
 - `issuesParallelToolCalls` — `function issuesParallelToolCalls: (config: Pick<ModelConfig, "provider">) => boolean`
 - `isUnservedModel` — `function isUnservedModel: (config: Pick<ModelConfig, "openRouterOnly" | "retired">) => boolean`
 - `JsonObjectSchema` — `const JsonObjectSchema: compose<$Record<String, Codec<Json, Json, never, never>>, Unknown>`

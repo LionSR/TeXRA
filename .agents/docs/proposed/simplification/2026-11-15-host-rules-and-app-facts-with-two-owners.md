@@ -125,11 +125,8 @@ In order of size. Each needs the decision named.
    and command, as the Greek letters already have. It changes what the
    replacement engine converts, so it needs the replacement suites run and a
    look at each newly converted symbol.
-   Partly done, checked 2026-11-17: `MATH_SYMBOL_SPELLINGS` in
-   `packages/texra/src/replacement/constants.ts` owns the command of each
-   symbol that has both spellings, and both tables build those rows from it.
-   Still open: the nine entity-only symbols have no character mapping, so
-   `±` in math is still left alone.
+   Done, checked 2026-11-19: both tables build their rows from
+   `MATH_SYMBOL_SPELLINGS`, and `±` in math is converted.
 2. **The aux files of a base name.** `collectFilesFromPatterns`
    (`packages/texra/src/housekeeping/artifactFiles.ts`) folds case on macOS
    and Windows and searches `build/`; `deleteWithAuxFiles`
@@ -159,9 +156,10 @@ In order of size. Each needs the decision named.
    `packages/texra/src/shared/agentCliSettings.ts` tests `retired` itself;
    `packages/llm/src/models/modelRoute.ts` also treats an OpenRouter-only
    model as unserved. The app should ask llm.
-7. **Key pages, a third time.** `warningUrl` in
-   `packages/texra/src/shared/settings/settingSurfaces.ts` restates three
-   pages of `KEY_PAGES` (`packages/texra/src/model/providerPresentation.ts`).
+7. **Key pages, a third time.** Landed 2026-11-19: `KEY_PAGES` is the leaf
+   module `packages/texra/src/shared/model/keyPages.ts`, and the three
+   `warningUrl`s in `packages/texra/src/shared/settings/settingSurfaces.ts`
+   read it. Was: they restated three of its pages.
 
 ## Landed in the follow-up sweep
 
@@ -237,7 +235,8 @@ In order of size. Each needs the decision named.
   `openProjectSession` the second test is the first one's other branch,
   restated so TypeScript narrows `reached`; the service-or-local choice has
   one owner there.
-- **App fact 7** (key pages): left open. The three toggle links are chosen
+- **App fact 7** (key pages): left open then, landed 2026-11-19 as the
+  leaf module (see app fact 7 above). The three toggle links are chosen
   per toggle with their own labels (Moonshot's and MiniMax's point at the
   international platform, GLM's at the China one, against Moonshot's and
   GLM's China default), so they are not "the key page the toggle picks".
@@ -267,8 +266,10 @@ In order of size. Each needs the decision named.
   instead of a silent no-op, and the extension's double-click race is
   closed. A failure before the run opens is presented through the window's
   notices on both hosts.
-- **Host rule 4** (rejected GitHub token): still open, checked on this
-  sweep. Moving the follower into the settings body needs two decisions
+- **Host rule 4** (rejected GitHub token): done, checked 2026-11-19. Both
+  hosts run one follower, `followGitHubTokenRejections`
+  (`packages/texra/src/controllers/session/windowNotices.ts`), per window,
+  and it words the notice itself. What follows is the 2026-11-17 reading. Moving the follower into the settings body needs two decisions
   first. `Dialogs` has no non-modal notice with an action: `confirm` is
   the only call that takes an action label, and the extension's toast with
   "Open Git settings" would become a modal. And the body runs once per

@@ -12,7 +12,6 @@ import {
   type ConfirmQuestion,
   type NoticeLevel,
 } from '@texra/hosts/uiHosts';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 /** The project as the title where the platform draws one, and as a line of
@@ -103,10 +102,6 @@ export const noticeIn =
       Effect.asVoid,
     );
 
-/** A step of the export's format dialog failed, in the cause's own words. */
-const exportFailed = (cause: unknown) =>
-  new TranscriptExportFailed({ message: toErrorMessage(cause), cause });
-
 export function createDesktopDialogs(
   window: BrowserWindow,
   /** The window's fibers, where a notice waits for its dismissal. */
@@ -164,7 +159,12 @@ export function createDesktopDialogs(
     pickTranscriptExportFormat: (project: string) =>
       Effect.tryPromise({
         try: () => import('@texra/controllers/progressView/exportTranscript'),
-        catch: exportFailed,
+        catch: (cause) =>
+          new HostFailed({
+            member: 'pickTranscriptExportFormat',
+            message: toErrorMessage(cause),
+            cause,
+          }),
       }).pipe(
         Effect.flatMap(
           ({ TRANSCRIPT_EXPORT_FORMAT_CHOICES, TRANSCRIPT_EXPORT_PICK }) =>
@@ -181,7 +181,7 @@ export function createDesktopDialogs(
                 }),
               ),
               close: 'Cancel',
-            }).pipe(Effect.mapError(exportFailed)),
+            }),
         ),
       ),
   };

@@ -34,6 +34,12 @@ export function formatResetDuration(durationMs: number): string {
   return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
 }
 
+/** A child run's wall time in seconds to one decimal (`1.2s`), as its
+ *  delivery and its summary read. */
+export function formatWallTime(durationMs: number): string {
+  return `${(durationMs / 1000).toFixed(1)}s`;
+}
+
 /**
  * Format token counts for compact usage displays.
  *

@@ -52,7 +52,7 @@ The known exception: `agent/` and `tools/` form one cycle.
   4. Its key shapes in `packages/harness/src/logger/redaction.ts`.
   5. The stored provider list `MODEL_PROVIDERS` (`shared/schemas/runInput.ts`), which `ModelBackendSchema` (gated in `model/reasoningLevel.ts`) and `ApiKeyProviderIdSchema` (`shared/schemas/requestPayloads.ts`, checked by assignment in `routeDecision.ts`) both read. A run's `binding.backend` is stored as a string and read as written, so removing a provider from the list bumps no row version: a run bound to it stays readable, and its next bind is refused by name (`decideRoute`).
   6. Its endpoint row and region toggle in `shared/state/providerSettings.ts` (gated in `model/modelSettings.ts`); their placements in `packages/texra/src/shared/settings/settingSurfaces.ts` (`HARNESS_ROW_SURFACES` is total over the harness's rows).
-  7. The app's key page (`KEY_PAGES`, `packages/texra/src/model/providerPresentation.ts`) and setup probe model (`SETUP_MODEL_BY_PROVIDER`, `packages/texra/src/model/setupModelDefaults.ts`); the Models tab's source order is `API_KEY_PROVIDER_IDS` itself.
+  7. The app's key page (`KEY_PAGES`, `packages/texra/src/shared/model/keyPages.ts`) and setup probe model (`SETUP_MODEL_BY_PROVIDER`, `packages/texra/src/model/setupModelDefaults.ts`); the Models tab's source order is `API_KEY_PROVIDER_IDS` itself.
 
   A quirk outside the request (the DashScope, Gemini and Kimi reasoning rules in `routeControls`, `packages/llm/src/models/reasoningChoice.ts`) is not enforced.
 

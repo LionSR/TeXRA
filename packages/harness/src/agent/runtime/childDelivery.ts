@@ -98,7 +98,7 @@ export const childEndReport = Effect.fn('childEndReport')(
     const delivery = {
       family: DELIVERY_FAMILY.subagent,
       runId,
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTimeMs,
       lines: contextLines(ctx.workingDirectory, report.memoryMisses ?? []),
     };
     const agent = { name: 'agent', value: config.agent };
@@ -137,7 +137,7 @@ export const childEndReport = Effect.fn('childEndReport')(
             // the two reports apart.
             ...(record?.report == null
               ? []
-              : [{ name: 'continued', value: true }]),
+              : [{ name: 'continued', value: 'true' }]),
           ],
           ...(program !== undefined && program.delivery.length > 0
             ? { lines: [...delivery.lines, ...program.delivery] }

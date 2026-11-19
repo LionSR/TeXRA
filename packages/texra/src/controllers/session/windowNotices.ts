@@ -25,7 +25,6 @@ import {
 import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
 import { settingsTabByCommand } from '@texra/shared/commands/catalog';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import {
   INSTRUCTION_ACTION,
   INSTRUCTION_ACTION_BUTTON_LABELS,
@@ -191,7 +190,7 @@ export const followGitHubTokenRejections = <R>(
 ) =>
   appSignalStream('githubTokenInvalid').pipe(
     Stream.runForEach(({ message }) =>
-      ask('error', gitHubTokenRejectedMessage(message), [
+      ask('error', `GitHub token rejected: ${message}`, [
         OPEN_GIT_SETTINGS,
       ]).pipe(
         Effect.flatMap((choice) =>
