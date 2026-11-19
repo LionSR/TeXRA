@@ -70,7 +70,7 @@ export function viewWith(
       provenance: null,
       takesFollowUps: true,
       worktree: null,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(run.id, 1, { type: 'run.activate' });
     log.emit(run.id, 1, {

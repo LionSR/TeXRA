@@ -237,7 +237,7 @@ function interruptedTasksView(): SessionView {
       parent: null,
       provenance: null,
       takesFollowUps: true,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(id, at, { type: 'run.activate' });
     log.emit(id, at + 1, {
@@ -255,7 +255,7 @@ function interruptedTasksView(): SessionView {
       provenance: null,
       takesFollowUps: true,
       worktree: null,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(id, T.childProgress, { type: 'run.activate' });
   }
@@ -294,7 +294,7 @@ function forkView(): SessionView {
       parent: null,
       provenance,
       takesFollowUps: true,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(id, at, { type: 'run.activate' });
   };
@@ -603,7 +603,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       parent: null,
       provenance: null,
       takesFollowUps: false,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     });
     log.emit(ROOT, T.root, {
       type: 'run.config',

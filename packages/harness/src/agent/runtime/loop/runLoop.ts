@@ -633,7 +633,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const goesOn =
         !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
       const ending = [
-        positionRow(runId, state, 'turn.end', turn.outcome),
+        positionRow(runId, state, 'turn.end'),
         ...log.closure(runId),
         positionRow(runId, state, 'waiting'),
       ];

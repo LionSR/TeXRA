@@ -53,7 +53,7 @@ const publishRun = (
       worktree: null,
       parent: null,
       provenance: null,
-      approvalPolicy: NO_APPROVAL_GRANTS,
+      grants: NO_APPROVAL_GRANTS,
     },
     {
       type: 'run.config',
@@ -207,7 +207,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     parent: null,
                     provenance: null,
                     worktree: null,
-                    approvalPolicy: NO_APPROVAL_GRANTS,
+                    grants: NO_APPROVAL_GRANTS,
                   },
                   {
                     type: 'run.start',
@@ -217,7 +217,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     parent: { id: parentId, call: null },
                     provenance: null,
                     worktree: null,
-                    approvalPolicy: NO_APPROVAL_GRANTS,
+                    grants: NO_APPROVAL_GRANTS,
                   },
                 ]);
                 yield* holdTestRun(handle, childRunId);

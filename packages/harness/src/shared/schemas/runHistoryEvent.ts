@@ -18,7 +18,6 @@ import { Schema } from 'effect';
 
 import { ModelFailureSchema } from './errors';
 import { Sha256Schema } from './identifiers';
-import { RunOutcomeSchema } from './run';
 import { RunInputSchema } from './runInput';
 import { DeclinableUsageRouteSchema, NormalizedUsageSchema } from './usage';
 import {
@@ -90,19 +89,13 @@ export type PositionAt = typeof PositionAtSchema.Type;
 /** Where the loop stands (`at`, not "step": a step is one model call) and
  *  the turn it stands in, at each point no other row marks: the run state
  *  reads it as `RunState.at` (inside a turn, the `response` and the
- *  delivering `append` move it on), and the view as `RunView.position`. */
+ *  delivering `append` move it on), and the view as `RunView.position`. How a
+ *  `turn.end`'s turn ended is not here: a turn's outcome is a loop fact, and
+ *  the run's own end is its `run.end` row. */
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
   turn: NonNegativeIntSchema,
-  /** A `turn.end`'s: how the turn ended, `completed` with its answer or
-   *  `failed` without one. The run's own end is its `run.end` row. */
-  outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
-}).check(
-  Schema.makeFilter((p) => (p.at === 'turn.end') === (p.outcome != null), {
-    message:
-      'Only a turn.end position carries an outcome, and it always carries one.',
-  }),
-);
+});
 
 /* ---------------------------------------------------------- model.message */
 

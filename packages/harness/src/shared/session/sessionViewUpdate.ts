@@ -353,7 +353,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turn: null,
     takesFollowUps: event.takesFollowUps,
     queuedFollowUps: [],
-    grants: event.approvalPolicy,
+    grants: event.grants,
     context: null,
     parentId: event.parent?.id ?? null,
     launch:

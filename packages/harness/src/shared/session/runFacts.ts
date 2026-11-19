@@ -278,7 +278,7 @@ export function registrationDrafts(
     worktree: worktree ? { workingDirectory: worktree } : null,
     parent: options.parent ?? null,
     provenance: options.provenance ?? null,
-    approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
+    grants: options.grants ?? NO_APPROVAL_GRANTS,
   };
   const rows: SessionRowDraft[] = [
     ...(ended === null ? [start] : []),
