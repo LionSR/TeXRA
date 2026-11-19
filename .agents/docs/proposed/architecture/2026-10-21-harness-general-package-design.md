@@ -299,7 +299,7 @@ format batch (decided 2026-10-30): a `remind` tool adds it as
 
 | #   | Lane                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Effort | Files moved |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
-| 1   | Doors: the root holds what public signatures need (59 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done; left: alias scoping. `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)                                                                                                                                                                                                                                                                                                                                                                                                                                                 | L      | 8           |
+| 1   | Doors: done. The root holds what public signatures need (59 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done; alias scoping is the `HARNESS_INTERNALS` import zone in `oxlint.config.mts`, over every other package's sources, suites, scripts and tooling, with the two CLI validator harnesses as its named exemption (re-check below). `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)                                                                                                                                                                                                                                    | L      | 8           |
 | 2   | Foundation order, done another way: `logger/` and `types/` stay layer 1 of the harness AGENTS.md layer order, there is no `eventBus/`, and the run-storage leaves went to `common/storage/` (#14550); the `@common/webview` alias removed (done, #14682)                                                                                                                                                                                                                                                                                                                                                                                                                                 | M      | 11          |
 | 2b  | Session merge, with the history lint zone: not for 1.0 (the release PRD's layout comparison: a `session/` directory removes no layer edge)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | M      | ~55         |
 | 3   | Vocabulary as data: done (#14364, #14369), except llm branding as bind facts (the xAI referrer, the ChatGPT agent name and the Responses tool namespace)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | M      | 9           |
@@ -410,6 +410,23 @@ re-read the surface and the ports. Where it changes this design:
 - **Lane 5, deferred tools.** `OfferedTool.sent`, the script-only dispatch path
   and `searchTools` already exist; marking a tool deferred is about seven lines
   and changes no row, so it can follow the freeze.
+
+### Re-check (2026-11-19): the doors closed
+
+Lane 1's five tooling and test files, and a sixth the 2026-10-28 list missed
+(`packages/texra/test/tools/RoundDirOwnership.vitest.ts`), import from the
+public entries where those serve the name. Two files still need what no
+entry serves, by design: `packages/cli/scripts/tui-harness.tsx` seeds a
+session's rows through its owners (`SessionLog`, `RunHistory`,
+`RunRegistry`, `SessionOwner`), and
+`packages/cli/scripts/service-host-harness.ts` opens the global store with
+`globalDatabaseLayer` outside a process runtime. Exporting either for one
+tool grows the surface the 1.0 PRD shrinks, and moving the TUI harness into
+`src/test-kernel/` fails because the repository root cannot resolve `ink` or
+`react`. So the lint zone names them as its exemption. Repo-root
+`src/test-kernel/` (the suites that compose several packages) and
+`scripts/fixtures/sessionDatabase.ts` (the desktop e2e fixture bundle) reach
+internals and stay outside the zone.
 
 ### Sequencing with work in flight
 
