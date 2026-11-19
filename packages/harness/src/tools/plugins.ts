@@ -170,14 +170,16 @@ export interface PluginDefinition<ROut> extends Omit<
 
 /** `value` with every array and object literal it is built of frozen, down
  *  to the first value of another kind (a schema, a layer, a function), which
- *  is its own module's to keep. */
-const frozenLiterals = <T>(value: T): T => {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value))
+ *  is its own module's to keep. One its owner froze at the top is still
+ *  read through; `seen` ends a cycle. */
+const frozenLiterals = <T>(value: T, seen = new WeakSet<object>()): T => {
+  if (typeof value !== 'object' || value === null || seen.has(value))
     return value;
+  seen.add(value);
   const prototype: unknown = Object.getPrototypeOf(value);
   if (Array.isArray(value) || prototype === Object.prototype) {
     Object.freeze(value);
-    for (const child of Object.values(value)) frozenLiterals(child);
+    for (const child of Object.values(value)) frozenLiterals(child, seen);
   }
   return value;
 };
