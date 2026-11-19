@@ -68,7 +68,10 @@ const fakeService = Effect.fn('fakeService')(function* (
 });
 
 describe('linkService', () => {
-  it.effect(
+  // The service does not run on Windows yet: `linkService` refuses there
+  // before it starts anything (`WINDOWS_UNSUPPORTED`), so there is no
+  // restart to bound.
+  it.effect.skipIf(process.platform === 'win32')(
     'stops restarting a service that never comes up, and says so with its log',
     () =>
       Effect.gen(function* () {
