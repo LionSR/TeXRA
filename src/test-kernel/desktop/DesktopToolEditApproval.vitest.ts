@@ -112,33 +112,43 @@ const review = Effect.gen(function* () {
       return { controller, opened, staged, warnings };
     });
   /** Ask for the edit; the fiber ends with its answer. */
-  const requestEdit = Effect.gen(function* () {
-    // A request row is only ever appended to a run the history knows.
-    const runId = Schema.decodeSync(RunIdSchema)('a40000');
-    yield* publishTestRunStart(session, runId);
-    yield* Context.get(session, SessionLog).drained;
-    yield* holdTestRun(session, runId);
-    return yield* Effect.forkScoped(
-      requestToolEditApproval({
-        path: '/workspace/notes.txt',
-        originalContent: 'alpha\n',
-        proposedContent: 'beta\n',
-        sourceTool: 'write_file',
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            roots,
-            workingDirectory: '/workspace',
-            run: { runId, session, toolPolicy: {} },
-          }),
+  const requestEdit = requestEditTo('beta\n');
+  /** The same request, proposing `proposedContent`. */
+  function requestEditTo(proposedContent: string) {
+    return Effect.gen(function* () {
+      // A request row is only ever appended to a run the history knows.
+      const runId = Schema.decodeSync(RunIdSchema)('a40000');
+      yield* publishTestRunStart(session, runId);
+      yield* Context.get(session, SessionLog).drained;
+      yield* holdTestRun(session, runId);
+      return yield* Effect.forkScoped(
+        requestToolEditApproval({
+          path: '/workspace/notes.txt',
+          originalContent: 'alpha\n',
+          proposedContent,
+          sourceTool: 'write_file',
+        }).pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              roots,
+              workingDirectory: '/workspace',
+              run: { runId, session, toolPolicy: {} },
+            }),
+          ),
         ),
-      ),
-    );
-  });
+      );
+    });
+  }
   const pendingRequestId = () =>
     SubscriptionRef.getUnsafe(Context.get(session, SessionViewAccess).ref)
       .requests[0].requestId;
-  return { onRuntime, openWindow, requestEdit, pendingRequestId };
+  return {
+    onRuntime,
+    openWindow,
+    requestEdit,
+    requestEditTo,
+    pendingRequestId,
+  };
 });
 
 // Live clock: the window follows the session's log, and the user acts on
@@ -196,6 +206,45 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               ).resolves.toBe(false);
             }),
           );
+        }),
+      30_000,
+    );
+
+    // A file that starts with a BOM: the copy read back has none, and the
+    // approval puts it back. A copy the user emptied must stay empty.
+    it.effect(
+      'applies an empty file when the user clears a proposal that starts with a BOM',
+      () =>
+        Effect.gen(function* () {
+          const { onRuntime, openWindow, requestEditTo, pendingRequestId } =
+            yield* review;
+          const window = yield* openWindow(true);
+          const result = yield* requestEditTo('\uFEFFbeta\n');
+          yield* Effect.tryPromise(() =>
+            vi.waitFor(() => expect(window.staged).toHaveLength(1), 10_000),
+          );
+          const requestId = pendingRequestId();
+
+          yield* onRuntime(
+            window.controller.handleAction({
+              requestId,
+              action: 'previewProposed',
+            }),
+          );
+          yield* Effect.tryPromise(() =>
+            vi.waitFor(() => expect(window.opened).toHaveLength(1)),
+          );
+          yield* Effect.tryPromise(() =>
+            writeFile(window.opened[0], '', 'utf8'),
+          );
+
+          yield* onRuntime(
+            window.controller.handleAction({ requestId, action: 'approve' }),
+          );
+          expect(yield* Fiber.join(result)).toMatchObject({
+            action: 'apply',
+            appliedContent: '',
+          });
         }),
       30_000,
     );

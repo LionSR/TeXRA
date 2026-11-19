@@ -118,10 +118,11 @@ export const collectFilesFromPatterns = Effect.fn(
   // workspace root. Joining an absolute path onto the root duplicated the
   // prefix and found nothing.
   const searchDirs = [path.resolve(workspaceRoot, inputDir)];
-  if (!inputDir.includes(LATEX_BUILD_DIRECTORY)) {
-    searchDirs.push(
-      path.resolve(workspaceRoot, inputDir, LATEX_BUILD_DIRECTORY),
-    );
+  // An inputDir that names the build directory has no build directory of its
+  // own. Its last segment is compared whole: `rebuild` and `build-notes` are
+  // ordinary folders, and so is a workspace that is itself called `build`.
+  if (path.basename(inputDir).toLowerCase() !== LATEX_BUILD_DIRECTORY) {
+    searchDirs.push(path.join(searchDirs[0], LATEX_BUILD_DIRECTORY));
   }
 
   // A path that does not exist, or runs through something that is not a

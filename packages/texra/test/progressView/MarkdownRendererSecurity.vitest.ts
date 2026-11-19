@@ -29,4 +29,11 @@ describe('renderMarkdownHtml security', () => {
     expect(ref?.textContent).toBe(`\\ref{${label}}`);
     expect(doc.querySelector('img')).toBeNull();
   });
+
+  it('keeps a macro one message defines out of the next message', () => {
+    renderToDocument(String.raw`$\gdef\leaked{LEAKED}\leaked$`);
+    const next = renderToDocument(String.raw`$\leaked$`);
+
+    expect(next.body.textContent).not.toContain('LEAKED');
+  });
 });
