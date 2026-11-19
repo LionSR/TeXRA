@@ -5,7 +5,7 @@
  * name="..."> containers from the model's XML response.
  *
  * Note: this module is about the *agent output pipeline*, not general XML
- * parsing. Low-level XML text utilities live in @texra/utils/text/xmlExtraction.
+ * parsing. The document-tag parsing lives in `extraction/xmlExtraction.ts`.
  */
 
 import {
