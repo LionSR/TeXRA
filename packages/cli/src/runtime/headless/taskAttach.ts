@@ -56,8 +56,10 @@ function writeProgress(
 /**
  * Follow `task` until it ends, printing it as `output` asks. Returns the
  * task's durable outcome, or null when it has none and no service runs it
- * (the service that ran it stopped under it): nothing more can come, so the
- * watch stops there with what the task had printed.
+ * (the process that ran it stopped under it): nothing more can come, so the
+ * watch stops there with what the task had printed. The service answers the
+ * watch from the project's store, which one process holds at a time, so a
+ * run it does not hold is held by nobody.
  */
 export const attachTask = Effect.fn('attachTask')(function* (
   client: ServiceClient,
