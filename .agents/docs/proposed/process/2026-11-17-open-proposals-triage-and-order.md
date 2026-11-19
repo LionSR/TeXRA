@@ -79,27 +79,27 @@ started, unless listed under "In flight".
 
 **Do it.**
 
-| Item                                                                                               | Basis                                                                                            | Size |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---- |
-| `run.steps` is a `ScopedRef`, as `run.model` is (session surfaces 1)                               | the note's recommendation                                                                        | S    |
-| `RunCell.commit` reduces a batch once, inside the store's job (session surfaces 2)                 | the note's recommendation                                                                        | S    |
-| `SessionKey` reads only `storage`; the eight-field copy of the roots goes (store debts A6)         | the note's recommendation                                                                        | S    |
-| The six cause-shape assertions assert rows and behaviour (store debts C6)                          | the note's recommendation                                                                        | S    |
-| A malformed draft from our own code is a defect, not `DatabaseWriteFailed` (store debts A8)        | `AGENTS.md`: trust data from code you control                                                    | S    |
-| The two module mocks in `sessionEvents.vitest.ts` go (store debts C7)                              | `src/test-kernel/AGENTS.md`: never mock a repository module                                      | S    |
-| A child's delivery stores `wallTimeMs` as a number and cuts its prompt (tool card 3, run end 1)    | the note's recommendation; one `followup.queued` bump, cheapest before the freeze                | M    |
-| A model switch for a run not held here is a queued row the loop applies or refuses (R2, R7)        | the note's recommendation; `/model` is already a queued row                                      | M    |
-| The full `validate:tui` runs nightly, once it waits on state (test launches)                       | the note's recommendation; the nightly now announces a failure (#15078)                          | S    |
-| M4 (the plan tool reads its fact row) and H9 (one host route) return to the order                  | the programs note's recommendation                                                               | M, L |
-| TeXRA's plugins import nothing from `./host`: each of the twelve helpers moves or stops being used | `AGENTS.md`: the app reaches the harness through its entries; decided per helper, not as a block | M    |
-| The MCP client name is the app's, passed as data (general package, D2)                             | `AGENTS.md`: a general core takes the app's vocabulary as data                                   | S    |
-| `./plugins` splits authoring types from the built-in plugins before the first publish              | after the publish it is a breaking change; needs a two-design comparison first                   | M    |
-| Image limits are stated per protocol in `packages/llm`, as a table there                           | the note's recommendation for the owner; a table needs no llm-zoo release                        | M    |
-| A finished run that takes a follow-up shows the status table's word; the header override goes      | `AGENTS.md`, UI anti-patterns: no render-time override                                           | S    |
-| The key-pages link reads `KEY_PAGES` from a leaf module                                            | the option that changes nothing a person sees                                                    | S    |
-| Request nouns come from one table keyed by request kind                                            | no decision was needed; only the badge's source is one                                           | S    |
-| The file-tool text leaves the prompt of a run without file tools (I-C16)                           | the earlier triage's "safe at any time"; review as the resolved prompt                           | S    |
-| R12 is closed and R17 passes on either side of its window                                          | the acceptance evidence of 2026-11-19                                                            | S    |
+| Item                                                                                               | Basis                                                                                                                                        | Size |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `run.steps` is a `ScopedRef`, as `run.model` is (session surfaces 1)                               | the note's recommendation                                                                                                                    | S    |
+| `RunCell.commit` reduces a batch once, inside the store's job (session surfaces 2)                 | the note's recommendation                                                                                                                    | S    |
+| `SessionKey` reads only `storage`; the eight-field copy of the roots goes (store debts A6)         | the note's recommendation                                                                                                                    | S    |
+| The six cause-shape assertions assert rows and behaviour (store debts C6)                          | the note's recommendation                                                                                                                    | S    |
+| A malformed draft from our own code is a defect, not `DatabaseWriteFailed` (store debts A8)        | `AGENTS.md`: trust data from code you control                                                                                                | S    |
+| The two module mocks in `sessionEvents.vitest.ts` go (store debts C7)                              | the note: the `SqliteClient` mock only spreads the original; `src/test-kernel/AGENTS.md`: the `leanServerPool` one mocks a repository module | S    |
+| A child's delivery stores `wallTimeMs` as a number and cuts its prompt (tool card 3, run end 1)    | the note's recommendation; one `followup.queued` bump, cheapest before the freeze                                                            | M    |
+| A model switch for a run not held here is a queued row the loop applies or refuses (R2, R7)        | the note's recommendation; `/model` is already a queued row                                                                                  | M    |
+| The full `validate:tui` runs nightly, once it waits on state (test launches)                       | the note's recommendation; the nightly now announces a failure (#15078)                                                                      | S    |
+| M4 (the plan tool reads its fact row) and H9 (one host route) return to the order                  | the programs note's recommendation                                                                                                           | M, L |
+| TeXRA's plugins import nothing from `./host`: each of the twelve helpers moves or stops being used | `AGENTS.md`: the app reaches the harness through its entries; decided per helper, not as a block                                             | M    |
+| The MCP client name is the app's, passed as data (general package, D2)                             | `AGENTS.md`: a general core takes the app's vocabulary as data                                                                               | S    |
+| `./plugins` splits authoring types from the built-in plugins before the first publish              | after the publish it is a breaking change; needs a two-design comparison first                                                               | M    |
+| Image limits are stated per protocol in `packages/llm`, as a table there                           | the note's recommendation for the owner; a table needs no llm-zoo release                                                                    | M    |
+| A finished run that takes a follow-up shows the status table's word; the header override goes      | `AGENTS.md`, UI anti-patterns: no render-time override                                                                                       | S    |
+| The key-pages link reads `KEY_PAGES` from a leaf module                                            | the option that changes nothing a person sees                                                                                                | S    |
+| Request nouns come from one table keyed by request kind                                            | no decision was needed; only the badge's source is one                                                                                       | S    |
+| The file-tool text leaves the prompt of a run without file tools (I-C16)                           | the earlier triage's "safe at any time"; review as the resolved prompt                                                                       | S    |
+| R17 passes on either side of its window                                                            | the acceptance evidence of 2026-11-19 counts it so                                                                                           | S    |
 
 **Keep what the code does; close the item.**
 
@@ -217,6 +217,9 @@ What is left for the owner falls into five kinds. Nothing below was touched.
 
 **It is a release step.**
 
+- R12's "old paths deleted" clause. Its mechanical clause is `npm run gate`,
+  which passes; the acceptance evidence of 2026-11-19 says the rest "needs a
+  person", and no check decides it.
 - The date of the storage freeze, and zeroing the row versions with it.
 - The first npm publish and the Trusted Publisher for both names.
 - An SDK changelog section or file.
