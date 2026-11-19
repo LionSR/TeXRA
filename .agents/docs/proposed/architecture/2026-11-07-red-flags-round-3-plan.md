@@ -561,7 +561,11 @@ stamped store and a stamp of 103 would need the pre-1.0 detection reworked.
 **Landed (main `b5e28fb`):** S PR 2 (#14856: R6-S4, R6-S6, R6-S7, R6-S8,
 R6-S10) and T PR 2 (#14854: R6-T3, R6-T5; R6-T6 refused as
 `STORE-context-blob-as-brought-blob`, because `context.blob` is the run
-state's content table, read every step). Round 6 is closed except R6-T7 b.
+state's content table, read every step). Round 6 is closed. R6-T7 b was
+settled on 2026-11-19 by correcting the store review: the ratchet suite is
+gone, and SQL does read a payload field (`PRICED_USAGE` in
+`packages/harness/src/controllers/session/rowReader.ts` reads a priced row's
+usage out of `event.data`), so the review no longer lists the rule as kept.
 The two PRs shared `toolUseDispatch.ts` and the golden store; T landed
 second and reconciled.
 
