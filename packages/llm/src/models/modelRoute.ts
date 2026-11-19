@@ -144,18 +144,6 @@ export function isUnservedModel(
   return config.retired === true || config.openRouterOnly === true;
 }
 
-/**
- * Whether the model issues independent tool calls together in one response
- * and handles their results in any order. The prompt tells such a model it
- * may batch calls; every other model is told to call one tool at a time.
- * Only Anthropic's models are known to; llm-zoo carries no flag for it.
- */
-export function issuesParallelToolCalls(
-  config: Pick<ModelConfig, 'provider'>,
-): boolean {
-  return config.provider === ModelProvider.ANTHROPIC;
-}
-
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
 

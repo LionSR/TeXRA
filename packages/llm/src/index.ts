@@ -140,7 +140,6 @@ export {
   decideModelRoute,
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
-  issuesParallelToolCalls,
   isUnservedModel,
   OWN_KEY_ROUTE_FACTS,
   resolveModelSource,

@@ -31,9 +31,9 @@ The transcription credential is open question 3 of
 
 ## 2. The harness asks "is this Anthropic?" to choose prompt text
 
-Taken on 2026-11-19: `issuesParallelToolCalls` (`packages/llm/src/models/modelRoute.ts`)
-states the fact the step's tool-call paragraph depends on, and the
-`IS_ANTHROPIC_MODEL` prompt variable is gone with no alias.
+Taken on 2026-11-19: the `IS_ANTHROPIC_MODEL` prompt variable is gone with
+no alias. The step's tool-call paragraph no longer depends on the model
+either: every model gets the same text, so nothing asks the provider.
 
 ## 3. Provider usage endpoints live in app controllers
 

@@ -33,47 +33,28 @@ In replies, lead with the outcome. Keep responses short by being selective about
 Never mention tool names when speaking to the user.
 </tool_use_instructions>`;
 
-/**
- * The tool-call mechanics are provider-gated: OpenAI-compatible providers
- * (DeepSeek, Kimi, GLM, MiniMax, …) need the schema/JSON/multi_tool_use
- * guardrails and the sequential-call constraint (Google/DeepSeek thought-
- * signature batching assumes ordered follow-ups). A model that issues
- * parallel tool calls natively (`issuesParallelToolCalls`) gets the parallel
- * encouragement instead of the weak-model boilerplate.
- */
-const PARALLEL_TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
+/** How a step that offers tools may issue its calls. */
+const TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
 Do not create excessive markdown files or documentation unless explicitly requested.`;
-const SEQUENTIAL_TOOL_CALLS = `When using a tool, follow the JSON schema exactly and include all required properties.
-Always produce valid JSON when calling a tool.
-Do not call tools that are not provided or any multi_tool_use variants.
-Call tools sequentially and wait for the output before calling another.`;
 
 /**
  * The context a step renders: the tools it offers and the sections it adds
- * after the run's recorded prompt, by name, in order: the tool-call
- * mechanics of the step's model (`parallelToolCalls`: it issues independent
- * calls together natively), the skills the step lists, then each pinned plugin's
- * section, in plugin id order. They are built from the step (its model,
- * settings, offered tools and pinned contributors) and the skill catalog it
- * discovers, so a model switch or a setting change reaches the next request,
- * and a resume rebuilds them.
+ * after the run's recorded prompt, by name, in order: how to issue tool
+ * calls, the skills the step lists, then each pinned plugin's section, in
+ * plugin id order. They are built from the step (its settings, offered tools
+ * and pinned contributors) and the skill catalog it discovers, so a setting
+ * change reaches the next request, and a resume rebuilds them.
  */
 export function stepInstructions(
   plugins: readonly Pick<Plugin, 'id' | 'prompt'>[],
   skills: readonly SkillCatalogEntry[],
   ctx: Parameters<PromptSection>[0],
-  parallelToolCalls: boolean,
 ): PromptSections {
   const sections = Object.fromEntries([
     // A step that offers no tool (a document reviser, the critic) has no
     // calls to make.
     ...(ctx.offered.length > 0
-      ? [
-          [
-            'tool-call',
-            parallelToolCalls ? PARALLEL_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
-          ],
-        ]
+      ? [['tool-call', TOOL_CALLS]]
       : []),
     ...(skills.length > 0
       ? [
