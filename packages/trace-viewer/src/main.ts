@@ -1,4 +1,5 @@
 import './themeTokens.css';
+import '../../desktop/src/renderer/designTokens';
 import './shell.css';
 
 // The page-local host installs at module evaluation, before the progress
@@ -11,7 +12,9 @@ import './shell.css';
 // client, and the bridge answers it at the new cut.
 import './traceHostBridge';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { render } from 'lit';
 import '@ui/wa';
+import { renderEmptyState } from '@ui/wa/emptyState';
 import 'katex/dist/katex.min.css';
 import { mountProgressWebview } from '@ui/progress/progressWebview';
 import { ProgressApp } from '@ui/progress/ProgressApp';
@@ -35,11 +38,15 @@ function renderLoadError(err: unknown): void {
   const errorRegion = document.createElement('div');
   errorRegion.className = 'trace-viewer-error';
   errorRegion.setAttribute('role', 'alert');
-  const heading = document.createElement('h1');
-  heading.textContent = 'Unable to load trace';
-  const detail = document.createElement('p');
-  detail.textContent = toErrorMessage(err);
-  errorRegion.append(heading, detail);
+  render(
+    renderEmptyState({
+      icon: 'triangle-exclamation',
+      title: 'Unable to load trace',
+      body: toErrorMessage(err),
+      headingTag: 'h1',
+    }),
+    errorRegion,
+  );
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
 
