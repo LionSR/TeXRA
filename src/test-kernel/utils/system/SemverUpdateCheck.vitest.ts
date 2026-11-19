@@ -6,7 +6,7 @@ import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { FetchHttpClient, type HttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
 import { GlobalValues } from '@texra-ai/harness/host';
-import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
+import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { globalValuesOver } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { jsonResponse } from '@test/support/fetchTestUtils';

@@ -1,12 +1,12 @@
 /**
- * A root's current values and input history:
- * application state, not history, and the one writer of `current_value` and
- * `input_history`. Each family's row is replaced in place in one
+ * A root's current values: application state, not history, and the one
+ * writer of `current_value`. Each family's row is replaced in place in one
  * `BEGIN IMMEDIATE`, and decodes with its family's
  * schema where it is read; a row that no longer decodes fails that read.
- * `Database` hands it the connection's statements and transaction, and the
- * counter of value writes its change feed wakes on: this module moves it
- * for its own writes, the global store's poll for another process's.
+ * The store (a project's `Database`, or the global one) hands it its
+ * connection's statements and transaction, and the counter of value writes
+ * its change feed wakes on: this module moves it for its own writes, the
+ * global store's poll for another process's.
  */
 import {
   Clock,
@@ -20,17 +20,15 @@ import {
 } from 'effect';
 import type { SqlClient } from 'effect/sql/SqlClient';
 import { logFailure } from '@logger/effectLog';
-import {
-  InputHistoryRecordSchema,
-  INPUT_HISTORY_LIMIT,
-  type CurrentValues,
-  type Database,
-  type DatabaseAggregateClosed,
-  type DatabaseReadFailed,
-  type DatabaseWriteFailed,
+import { CURRENT_VALUE_VERSION } from '@shared/schemas';
+import type {
+  CurrentValues,
+  DatabaseAggregateClosed,
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
-import type { SqlRow } from './rowCodec';
+import { CURRENT_VALUE_KIND, UPSERT_KINDS, type SqlRow } from './rowCodec';
 import { StoreCheckFailed } from './storeAside';
 import type { SqlError } from 'effect/sql/SqlError';
 
@@ -49,11 +47,10 @@ const SNAPSHOT = `SELECT json_group_array(json_array(key, value) ORDER BY key)
   FROM current_value
   WHERE family = ? AND key IN (SELECT value FROM json_each(?))`;
 
-/** Append an entry unless it repeats the latest; a row back when it did. */
-const APPEND_HISTORY = `INSERT INTO input_history (at, value)
-  SELECT ?1, ?2
-  WHERE ?2 IS NOT (SELECT value FROM input_history ORDER BY id DESC LIMIT 1)
-  RETURNING id`;
+/** What a value write records for the store gate: this build's version. */
+const VALUE_KIND = JSON.stringify([
+  [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION],
+]);
 
 /** A failed change read's backoff (this feed's and the store's change
  *  poll): 250 ms doubling, at most 30 s. */
@@ -64,7 +61,6 @@ export const READ_RETRY = Schedule.exponential('250 millis').pipe(
 );
 
 const decodeString = Schema.decodeUnknownSync(Schema.String);
-const decodeHistoryRecord = Schema.decodeUnknownSync(InputHistoryRecordSchema);
 
 /** One current value, decoded by its family's schema; one that no longer
  *  decodes fails the read naming itself, as a failure the read's caller
@@ -109,11 +105,8 @@ export function currentValues(store: {
   readonly afterCommit: SqlClient['afterCommit'];
   /** Moved once per committed value write. */
   readonly written: SubscriptionRef.SubscriptionRef<number>;
-  /** Record for the gate that a value was written at this build's version. */
-  readonly valueWritten: Effect.Effect<void, SqlError>;
-}): Pick<Database['Service'], 'values' | 'inputHistory'> {
-  const { exec, execOne, transact, query, afterCommit, written, valueWritten } =
-    store;
+}): CurrentValues {
+  const { exec, execOne, transact, query, afterCommit, written } = store;
   const notifyWritten = afterCommit(
     SubscriptionRef.update(written, (count) => count + 1),
   );
@@ -122,7 +115,7 @@ export function currentValues(store: {
       'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
       [family, key],
     );
-  const values: CurrentValues = {
+  return {
     get: (family, key) =>
       query(
         valueRow(family.name, key).pipe(
@@ -182,7 +175,7 @@ export function currentValues(store: {
             ]);
             upserted = true;
           }
-          if (upserted) yield* valueWritten;
+          if (upserted) yield* exec(UPSERT_KINDS, [VALUE_KIND]);
           if (upserted || deleted) yield* notifyWritten;
           return result;
         }),
@@ -227,26 +220,5 @@ export function currentValues(store: {
         Stream.changes,
         Stream.as(undefined),
       ),
-  };
-  return {
-    values,
-    inputHistory: {
-      read: query(
-        exec('SELECT at, value FROM input_history ORDER BY id').pipe(
-          Effect.map((rows) => rows.map((row) => decodeHistoryRecord(row))),
-        ),
-      ),
-      append: ({ at, value }) =>
-        transact(
-          Effect.gen(function* () {
-            if ((yield* execOne(APPEND_HISTORY, [at, value])) !== undefined) {
-              yield* exec(
-                'DELETE FROM input_history WHERE id NOT IN (SELECT id FROM input_history ORDER BY id DESC LIMIT ?)',
-                [INPUT_HISTORY_LIMIT],
-              );
-            }
-          }),
-        ),
-    },
   };
 }

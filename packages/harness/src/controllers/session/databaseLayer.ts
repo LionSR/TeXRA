@@ -4,9 +4,9 @@
  * collection, and the reads. One database per session root
  * (`SessionWorkspace`), never a process singleton; a project store is held
  * exclusively by the one process that opened it (`locking_mode =
- * EXCLUSIVE`), the global store is shared across processes; an ephemeral
- * session runs the same schema in SQLite memory, and a failed file open is an
- * error, never the ephemeral mode. `storeSchema.ts` owns the DDL and the open
+ * EXCLUSIVE`); an ephemeral session runs the same schema in SQLite memory,
+ * and a failed file open is an error, never the ephemeral mode. The global
+ * storage root's store is `globalDatabaseLayer.ts`'s. `storeSchema.ts` owns the DDL and the open
  * sequence; `rowCodec.ts` every stored shape, by the fact kinds the process's
  * plugins contribute (this module reads no payload); `projections` the
  * projectors and their upkeep, run in this module's transactions. This
@@ -25,17 +25,14 @@ import {
   type FileSystem,
   Layer,
   Option,
-  Schedule,
   Scheduler,
   Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
-import { logFailure } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
-  CURRENT_VALUE_VERSION,
   edgesOf,
   isDisplayRow,
   RunIdSchema,
@@ -57,15 +54,14 @@ import { InPublisherJob } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
   Database,
-  GlobalDatabase,
   DatabaseOpenFailed,
   DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
   RunChanged,
 } from '@shared/session/database';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { currentValues, READ_RETRY } from './currentValues';
+import { ToolRegistry } from '@tools/toolTable';
+import { currentValues } from './currentValues';
 import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
@@ -74,11 +70,11 @@ import {
   aggregateColumns,
   aggregateList,
   aggregateOf,
-  CURRENT_VALUE_KIND,
   encodeDraft,
   pluginKind,
   prepareEventDraft,
   storeGate,
+  UPSERT_KINDS,
   type EncodedRow,
   type SqlRow,
 } from './rowCodec';
@@ -91,11 +87,16 @@ import {
   READ_RUN_RECORD,
   rowReader,
 } from './rowReader';
-import { isBusy, isDamaged, retryBusy } from './storeAside';
+import { isBusy, isDamaged, mapDatabaseFailure } from './storeAside';
 import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
-/** The database file of a session root, beside the stores it replaces. */
+/** The database file of a storage root, beside the stores it replaces. */
 export const SESSION_DATABASE_FILE = 'texra.db';
-const CHANNEL = 'sessionDatabase';
+/** The store file under `storage`, by the directory's real path. SQLite
+ *  makes only the file, so `create` makes the directory first. */
+export const storeFile = (storage: string, create: boolean): string => {
+  if (create) mkdirSync(storage, { recursive: true });
+  return join(realpathSync.native(storage), SESSION_DATABASE_FILE);
+};
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
 /** First append creates the aggregate and mints its uid; a closed one
@@ -120,13 +121,6 @@ const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
  *  `[digest, inline]` pairs. */
 const INSERT_REFS = `INSERT INTO event_blob ("commit", digest, inline)
   SELECT ?, value ->> 0, value ->> 1 FROM json_each(?)`;
-/** Record the kinds written, bound as one `json_each(?)` array of
- *  `[type, version]` pairs; a kind keeps the highest version written. */
-const UPSERT_KINDS = `INSERT INTO stored_kind (type, version)
-  SELECT value ->> 0, value ->> 1 FROM json_each(?) WHERE true
-  ON CONFLICT(type) DO UPDATE
-  SET version = max(stored_kind.version, excluded.version)`;
-
 /** Aggregates bound as one `json_each(?)` array of `[kind, logicalId]`
  *  pairs (`aggregateList`), each found by its unique key. */
 const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
@@ -183,9 +177,8 @@ const displayRows = (rows: readonly SessionRow[]) =>
 
 /** How a store is opened: a project store, created if absent
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
- *  process for the connection's life; the `global` store is shared across
- *  processes and polled for their commits; `ephemeral` runs in memory. */
-type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
+ *  process for the connection's life; `ephemeral` runs in memory. */
+type StoreMode = 'persistent' | 'existing' | 'ephemeral';
 
 /** Why a project store did not open: another process holds it. */
 export const STORE_HELD_MESSAGE =
@@ -209,34 +202,25 @@ export const databaseLayer = (
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
       const create = mode !== 'existing';
-      const exclusive = mode === 'persistent' || mode === 'existing';
-      // The store's directory is made here (not by SQLite, which makes
-      // only the file), unless the store must exist already.
+      // The store's directory is made unless the store must exist already.
       const filename =
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
           : yield* Effect.try({
-              try: () => {
-                if (create) mkdirSync(roots.storage, { recursive: true });
-                return join(
-                  realpathSync.native(roots.storage),
-                  SESSION_DATABASE_FILE,
-                );
-              },
+              try: () => storeFile(roots.storage, create),
               catch: (cause) => openFailed(ensureError(cause)),
             });
       // A project store has one holder, this process, so the driver opens
       // it with no busy wait: a lock another process holds refuses the open
       // instead of waiting out the driver's timeout. The exclusive lock
       // below waits at most the 25 ms slice `prepareStore` leaves set.
-      const busyTimeout = exclusive ? 0 : '5 seconds';
       const { sql, movedAside } = yield* openStore(
         SqliteClient.make({
           filename: create
             ? filename
             : `file:${filename.replaceAll(/[%?#]/g, encodeURIComponent)}?mode=rw`,
           disableWAL: mode === 'ephemeral',
-          busyTimeout,
+          busyTimeout: 0,
         }),
         path,
         filename,
@@ -246,7 +230,7 @@ export const databaseLayer = (
         ),
         mapDatabaseFailure(openFailed),
       );
-      if (exclusive)
+      if (mode !== 'ephemeral')
         // Taken once and kept for the connection's life: in WAL mode an
         // exclusive holder keeps the wal-index in its own memory, so no
         // other process reads or writes the store until it closes.
@@ -260,8 +244,7 @@ export const databaseLayer = (
           ),
           mapDatabaseFailure(openFailed),
         );
-      /** Moved by every value write, this process's or (on the global
-       *  store, by the poll) another's: what `values.changes` wakes on. */
+      /** Moved by every value write: what `values.changes` wakes on. */
       const valuesWritten = yield* SubscriptionRef.make(0);
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
       const commitFromRows = ([row]: readonly SqlRow[]) =>
@@ -275,19 +258,14 @@ export const databaseLayer = (
       const query = <A, E>(
         read: Effect.Effect<A, E>,
       ): Effect.Effect<A, DatabaseReadFailed> =>
-        read.pipe(retryBusy, mapDatabaseFailure(readFailed));
+        read.pipe(mapDatabaseFailure(readFailed));
       /** One statement's rows, untyped until the caller parses them. */
       const exec = (statement: string, params?: readonly unknown[]) =>
         sql.unsafe<Record<string, unknown>>(statement, params);
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows.at(0)));
-      /** The store gate (`storeGate`), run at open. A project store's one
-       *  writer is this process, so what it holds cannot change under it;
-       *  the global store's other processes can be newer builds, so there
-       *  the gate runs again in every value write (`transact`). */
       const { factKinds } = yield* ToolRegistry;
-      const gate = storeGate(exec, factKinds);
       const reader = rowReader(path, factKinds, exec);
       const decodedRows = (
         statement: string,
@@ -300,7 +278,9 @@ export const databaseLayer = (
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
       );
-      yield* gate.pipe(mapDatabaseFailure(openFailed));
+      // The store gate, run once: this process is the store's one writer,
+      // so what the store holds cannot change under it.
+      yield* storeGate(exec, factKinds).pipe(mapDatabaseFailure(openFailed));
       // An aggregate and its open descendants. A descendant an earlier
       // deletion closed belongs to that deletion's marker alone, which
       // names its files and collects it.
@@ -352,39 +332,12 @@ export const databaseLayer = (
           WHERE e.aggregate IN (${AGGREGATE_LIST})
             AND e.type NOT IN (SELECT value FROM json_each(?))`,
       );
-      // Only the global store has other writers to watch for, and it holds
-      // values alone: each change of its `data_version` wakes the readers of
-      // values (the first read, at start, wakes them for nothing). A failed
-      // read logs and retries.
-      if (mode === 'global')
-        yield* Effect.forkScoped(
-          Stream.fromEffectSchedule(
-            query(execOne('PRAGMA data_version', [])).pipe(
-              Effect.map((row) => row?.data_version),
-              Effect.tapError(
-                logFailure(
-                  CHANNEL,
-                  'The session database change poll failed; retrying.',
-                ),
-              ),
-              Effect.retry(READ_RETRY),
-              Effect.orDie,
-            ),
-            Schedule.spaced('250 millis'),
-          ).pipe(
-            Stream.changes,
-            Stream.runForEach(() =>
-              SubscriptionRef.update(valuesWritten, (wake) => wake + 1),
-            ),
-          ),
-        );
       // Every body is database-only. It runs in the client's own transaction,
       // which on this writable connection begins `BEGIN IMMEDIATE` (holding
       // the write lock from its first statement), skips a ROLLBACK SQLite
       // already made and gives a failed COMMIT back typed; inside a caller's
-      // transaction it is a savepoint. A busy lock, which only the global
-      // store's other writers take, runs the transaction again whole; a
-      // nested body never meets one, its transaction holding the lock already.
+      // transaction it is a savepoint. It never meets a busy lock: this
+      // connection holds the store's lock, or the store is in memory.
       //
       // The driver is synchronous and a body awaits nothing, so the only way
       // another fiber could run between BEGIN and COMMIT is the scheduler
@@ -393,12 +346,10 @@ export const databaseLayer = (
       // connection run in the order they are called, and none waits for
       // another.
       const own = <A, E>(body: Effect.Effect<A, E>) =>
-        retryBusy(
-          Effect.provideService(
-            sql.withTransaction(body),
-            Scheduler.PreventSchedulerYield,
-            true,
-          ),
+        Effect.provideService(
+          sql.withTransaction(body),
+          Scheduler.PreventSchedulerYield,
+          true,
         );
       const transaction = <A, E, EBody>(
         body: Effect.Effect<A, EBody>,
@@ -406,17 +357,13 @@ export const databaseLayer = (
       ) => own(body).pipe(mapDatabaseFailure(failed));
       /** A write transaction. A closed-aggregate rejection the body raised
        *  leaves as itself, as it does from `job`; any other failure is the
-       *  write's. On the global store, whose other processes can be newer
-       *  builds, the gate runs first in each (`job` serves a project store
-       *  alone, whose gate ran at open). */
+       *  write's. */
       const transact = <A, E>(body: Effect.Effect<A, E>) =>
-        transaction(
-          mode === 'global' ? Effect.andThen(gate, body) : body,
-          (cause) =>
-            cause instanceof DatabaseAggregateClosed
-              ? // cast: only a body raises it, so it is one of its errors.
-                (cause as Extract<E, DatabaseAggregateClosed>)
-              : writeFailed(cause),
+        transaction(body, (cause) =>
+          cause instanceof DatabaseAggregateClosed
+            ? // cast: only a body raises it, so it is one of its errors.
+              (cause as Extract<E, DatabaseAggregateClosed>)
+            : writeFailed(cause),
         );
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND closed_by IS NULL`;
@@ -616,8 +563,8 @@ export const databaseLayer = (
         };
       });
       // Every projection is caught up here, before the first read: from then
-      // on this process is the store's one writer (the global store holds no
-      // event rows), and each append keeps them current (`follow`).
+      // on this process is the store's one writer, and each append keeps
+      // them current (`follow`).
       yield* transaction(
         Effect.flatMap(currentCommit, upkeep.catchUp),
         openFailed,
@@ -682,18 +629,13 @@ export const databaseLayer = (
               },
             ),
           ),
-        ...currentValues({
+        values: currentValues({
           exec,
           execOne,
           transact,
           query,
           afterCommit: sql.afterCommit,
           written: valuesWritten,
-          valueWritten: Effect.asVoid(
-            exec(UPSERT_KINDS, [
-              JSON.stringify([[CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]]),
-            ]),
-          ),
         }),
         readAggregate: (id, fromSeq, types, toSeq = Number.MAX_SAFE_INTEGER) =>
           query(
@@ -811,36 +753,3 @@ export const storeOpenElsewhere = (filename: string) =>
     ),
     Effect.provide(Reactivity.layer),
   );
-
-/**
- * The process's handle on the global storage root: one connection, schema and
- * `data_version` poll for every application record of that root, closed with
- * the entry's runtime. Building it creates the directory, the file and the
- * poll fiber; an entry that must create none passes a refusing layer. */
-export const globalDatabaseLayer = (
-  storage: string,
-): Layer.Layer<GlobalDatabase, DatabaseOpenFailed, FileSystem.FileSystem> =>
-  Layer.effect(GlobalDatabase, Database).pipe(
-    Layer.provide(
-      databaseLayer('global').pipe(
-        Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
-        Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
-      ),
-    ),
-  );
-
-/** Interruption stays; a failure, or SQLite's error raised as a defect (a
- *  ROLLBACK or RELEASE that failed in a transaction's cleanup), becomes
- *  `failed`'s. Any other defect dies: the store's own protocol refusals
- *  (`invariant`) are a caller's defect, never a disk failure. */
-function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
-  return <A, EOp, R>(
-    operation: Effect.Effect<A, EOp, R>,
-  ): Effect.Effect<A, E, R> =>
-    operation.pipe(
-      Effect.catchDefect((defect) =>
-        isSqlError(defect) ? Effect.fail(defect) : Effect.die(defect),
-      ),
-      Effect.mapError(failed),
-    );
-}
