@@ -525,6 +525,57 @@ every task an id prefix matched) and, into `serviceSession.ts`,
 `watchTask`; `texra tasks start` starts through the project's `Session`
 as a window does.
 
+### 2026-11-19: a service that fails at every start is not restarted forever
+
+The link's reconnect (`linkService`) retried on a schedule that never
+ends. A service that died and then failed at every start was started again
+about every two minutes for as long as a window stayed open (a wait of the
+start window for another build's service, then its own start and another
+start window with nothing answering): 56 starts in two hours in the
+regression test, each one's output appended to `serve.log`, while the
+window said "The TeXRA service is offline; TeXRA is reconnecting to it."
+and never anything else. One that answered and died right after looped the
+same way, faster. Nothing else restarts a service or a run unattended: a
+run resumes only when someone asks, and the service resumes none at start.
+
+Two designs:
+
+- **The link bounds its own restarts (chosen).** One service, from
+  reaching it until it goes away, is one effect: it fails as a failed
+  start when the service went within its start window (read from the
+  hello's `startedAt`, the service's own fact) and finishes when it had
+  run longer. `Effect.retry` over it with the reconnect schedule cut at
+  three (`Schedule.upTo`) is the limit, and `Effect.forever` around the
+  retry is the reset: a service that stayed up begins the count again
+  because the retried effect succeeded. Only a failed start counts
+  (`ServiceUnavailable`'s `startFailed`: it could not be spawned, it exited
+  abnormally, nothing answered within the start window, or it answered and
+  was gone again within it); a newer or a wedged service, and a caller
+  that starts none, wait on another process and are retried as before. A
+  host's start now answers the spawned process's abnormal end, so a
+  service that exits at start fails the start at once with its exit code
+  instead of after sixty silent seconds. At the limit the link is away for
+  good: `Linked.lasting`, which ends every wait on the link (a session's
+  first client, a window's attachment) with the reason, shows it once as
+  an error in the window and keeps it in the banner. No counter, no timer,
+  no setting, nothing stored.
+- **A restart count in the global store (rejected).** The service's record
+  family gains a count of starts, written by whoever starts one and
+  cleared by a service that stays up; every client reads it before
+  starting, as pi counts `restarts` on the task row. It holds across
+  windows and client restarts, where the chosen design lets each link try
+  three times. It was rejected because the count needs a rule for when it
+  expires (a person who fixed the cause must not stay locked out, so
+  either a clock, a command or a setting), it is a second writer beside
+  the record's compare-and-set, and a new window or command trying again
+  is what a person expects of opening one.
+
+Left as it is: the minute the reconnect waits for another build's service
+before starting its own (a service that was retired and one that died are
+not told apart there), and the reason said twice on stderr by a command
+that needs the service (`linkCliService` says it, then the command fails
+with it).
+
 ## 2026-11-17: two windows on one project, and who can ask
 
 A service session opens with `answeredFromView: true`
