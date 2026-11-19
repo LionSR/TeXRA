@@ -109,7 +109,9 @@ function readDeclarations(
         at = index + 1;
         return text;
       }
-      if (char === '\n' || char === '\r') return undefined;
+      // JavaScript ends a string literal at any line terminator, so the
+      // engine would refuse what this reader took.
+      if ('\n\r\u2028\u2029'.includes(char)) return undefined;
       if (char !== '\\') {
         text += char;
         continue;

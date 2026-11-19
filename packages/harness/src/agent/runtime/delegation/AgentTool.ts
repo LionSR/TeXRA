@@ -330,7 +330,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // completed child of it; a registered program's files pass as named, an
   // installed plugin's program's are resolved like a model's.
   const caller = programOf(run.config);
-  const trusted = caller !== null && !isInstalledProgram(caller);
+  const trusted = caller !== null && !isInstalledProgram(caller.name);
   const fileArgs =
     program === null
       ? []

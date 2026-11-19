@@ -20,7 +20,7 @@ describe('the creator agent tool catalog', () => {
   // tool cannot stay listed.
   it('names only tools the registry has', () => {
     const registered = new Set(
-      [codemode, ...texraPlugins({ name: 'vscode', inquiryPanel: true })]
+      [codemode, ...texraPlugins({ name: 'vscode' })]
         .flatMap((plugin) => plugin.tools ?? [])
         .map((tool) => tool.definition.name),
     );

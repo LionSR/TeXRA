@@ -27,7 +27,6 @@ import { faCircleCheck } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
 import { faCircleDot } from '@fortawesome/free-solid-svg-icons/faCircleDot';
 import { faCircleExclamation } from '@fortawesome/free-solid-svg-icons/faCircleExclamation';
 import { faCircleInfo } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
-import { faCircleQuestion } from '@fortawesome/free-solid-svg-icons/faCircleQuestion';
 import { faCircleStop } from '@fortawesome/free-solid-svg-icons/faCircleStop';
 import { faCircleUser } from '@fortawesome/free-solid-svg-icons/faCircleUser';
 import { faCircleXmark } from '@fortawesome/free-solid-svg-icons/faCircleXmark';
@@ -161,7 +160,6 @@ const icons = {
   'circle-dot': faCircleDot,
   'circle-exclamation': faCircleExclamation,
   'circle-info': faCircleInfo,
-  'circle-question': faCircleQuestion,
   'circle-stop': faCircleStop,
   'circle-user': faCircleUser,
   'circle-xmark': faCircleXmark,

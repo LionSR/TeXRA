@@ -214,7 +214,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v10: a delivery with no usage leaves `usage` out, never `null`, and a
     // message's `displayText` is never `null` (an earlier build's agent-CLI
     // delivery without usage would fail as damaged).
-    'followup.queued': Object.freeze({ version: 10, listing: 'followup' }),
+    // v11: a delivery's wall time is a number (`wallTimeMs`), worded where
+    // it is rendered; a prompt it echoes is an attribute its builder cut;
+    // an attribute's value is a string, never `null` (an earlier build's
+    // `wallTime` and `prompt` would be silently dropped).
+    'followup.queued': Object.freeze({ version: 11, listing: 'followup' }),
     // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
     // it and fails to decode.
     // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
@@ -252,12 +256,17 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // inline agent's persona inside `agentSource`, no `persona` beside it.
     // v16: a proposal's agent source, working directory and root instruction
     // are absent when unset, never `null`, as `run.config` v12.
-    'request.opened': Object.freeze({ version: 16, listing: 'request' }),
+    // v17: no `plugin` kind: every request is one the harness declares,
+    // and blocks the call that opened it (an earlier build's plugin request
+    // would fail as damaged).
+    'request.opened': Object.freeze({ version: 17, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
     // v3: a decision's optional fields are absent when unset, never `null`
     // (an earlier build's `null` feedback would fail as damaged).
-    'request.decided': Object.freeze({ version: 3, listing: 'request' }),
+    // v4: no `answer` arm, which only a plugin's request took (an earlier
+    // build's would fail as damaged).
+    'request.decided': Object.freeze({ version: 4, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
     // its check).
@@ -448,6 +457,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v4: the modules a script may import (`modules`); an earlier build's row
     // would resume a script against the modules shipped now.
     'tools.offered': Object.freeze({ version: 4, listing: 'none' }),
+    // The recorded request a blob holds is part of this kind's shape, its
+    // controls as each protocol prepares them: a resumed background turn is
+    // rebuilt from it, so a change to it is a version, never only new
+    // digests (`rowVersions.vitest.ts` holds it at a release).
     'context.blob': Object.freeze({ ...V1, listing: 'none' }),
     // v2: a `PreToolUse` answer is `decision` (allow, deny, ask) with its
     // `reason` and `updatedInput`, not a `deny` reason alone (an earlier

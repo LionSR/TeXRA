@@ -30,7 +30,9 @@ import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
+  LATEX_TOOL_ENTRIES,
   LATEX_WORKSHOP_EXT_ID,
+  type LatexToolName,
   missingLatexTools,
   PROBED_LATEX_TOOLS,
 } from '@texra/shared/constants/latexToolchain';
@@ -38,12 +40,14 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import { detectPackageManager } from '@texra/utils/system/toolChecks';
+
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local file imports
 
 import { SetupHost } from './platform';
-import { locateTool } from './toolProbing';
 
 /**
  * The ChatGPT subscription routing probe could not answer. It reads the
@@ -106,6 +110,30 @@ const ProbeEnvironmentInputSchema = Schema.Struct({
 type ProbeInput = typeof ProbeEnvironmentInputSchema.Type;
 
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
+
+/** Installation status of one probed tool, with its path when discoverable. */
+interface ToolStatus {
+  readonly name: string;
+  readonly installed: boolean;
+  readonly path: string | undefined;
+}
+
+/**
+ * Whether one tool is installed: a catalog tool as the toolchain probe
+ * reports it, any other binary (`node`, `python3`, one the user asks about)
+ * by a PATH search, which also supplies the path presented beside the flag.
+ */
+const locateTool = Effect.fn('locateTool')(function* (
+  name: string,
+): Effect.fn.Return<ToolStatus, never, ChildProcessSpawner> {
+  if (Object.hasOwn(LATEX_TOOL_ENTRIES, name)) {
+    // cast: `hasOwn` just found `name` among the catalog's keys.
+    const { tools } = yield* probeLatexTools([name as LatexToolName]);
+    return tools[0];
+  }
+  const found = yield* findCommand(name);
+  return { name, installed: found !== null, path: found?.resolvedPath };
+});
 
 /** OS, arch and shell; the shell comes from the ambient ConfigProvider. */
 const readHostInfo = Effect.map(

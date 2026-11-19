@@ -34,8 +34,8 @@ export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = Object.freeze({
 /**
  * The remembered projects, on the process's handle on the global root.
  *
- * That root is the shared `~/.texra` this process already keeps its sessions,
- * inquiry threads and update check in, not the Electron profile directory:
+ * That root is the shared `~/.texra` this process already keeps its sessions
+ * and update check in, not the Electron profile directory:
  * one handle per process, since a second root would mean a second connection
  * and a second change poll for one list.
  *

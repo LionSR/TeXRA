@@ -71,7 +71,10 @@ const registerRoot = <E, R>(
   directory.pipe(
     Effect.flatMap((absolutePath) =>
       Effect.try({
-        try: () => registerExternalRoot(absolutePath, options),
+        // The follower replaces a kind's slot and never removes one.
+        try: () => {
+          registerExternalRoot(absolutePath, options);
+        },
         catch: (cause) =>
           new RootNotRegistered({ message: ensureError(cause).message, cause }),
       }),

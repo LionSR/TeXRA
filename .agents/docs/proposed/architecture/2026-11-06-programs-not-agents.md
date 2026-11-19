@@ -462,6 +462,25 @@ store。
   （diff、accept、Pass N of M）认 run 上有没有 documents 的 fact，不认名
   字，这样包了一层的程序照样有界面。
 
+已落地（2026-11-19）：不另存记录，也不加表；三个谓词都在
+`packages/harness/src/shared/schemas/runRecords.ts`，每处读它要问的那个，
+没有一处再直接测 `config.script` 或 `kind` 字面量。
+
+- `programOf`：受不受信（`step.ts` 固定工具、`proposalFlow.ts` 批准委派、
+  `AgentTool.ts` 文件照传），以及插件的界面读的程序名和参数（视图的
+  `program`、`documentState.ts`、`readProgramResult`、CLI）。受信今天和
+  "是程序"是同一个式子，所以没有单独的受信谓词。
+- `runsScript`：形状。不渲染 prompt、不激活 skill、一个周期就结束、
+  `Stop` hook 视为已激活、不能 fork 也不能从它开 goal（`executeAgent.ts`、
+  `hooks.ts`、`templateInputs.ts`、`forkRun.ts`、`PlanTool.ts`、`self`）。
+  后台脚本和程序在每一处答得一样，所以是一个事实。
+- `backgroundScriptOf`：后台脚本，它的结束作为脚本投递交给启动它的对话，
+  它的 `self()` 是那个对话（`childDelivery.ts`、`SelfTool.ts`）。
+
+形状里有两条今天只认程序：花费含子运行（`runOwnership.ts`）和结束后不再
+从行恢复（`continuesFromRows`，读视图的 `program`）。后台脚本在这两处答
+得不同，这次没改行为；它们和视图上的 `program` 字段一起随第 5 期定。
+
 ### 入口只有一个 agent
 
 入口 agent 只有一个，用户不能改它（负责人 2026-11-14）。它不是一个 agent

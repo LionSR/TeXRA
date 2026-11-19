@@ -17,21 +17,16 @@ import {
 
 // Local imports
 import type { ITool } from '@tools/core/ToolTypes';
-import type { InboxItem } from '@agent/followUp/Inbox';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AppSignals } from '@platform/appSignals';
 import type { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { GlobalValues } from '@platform/processRuntime';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
   factName,
   isInstalledProgram,
   type FactName,
-  type PluginRequest,
-  type RequestDecision,
   type RunId,
-  type ToolFact,
 } from '@shared/schemas';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { FactKind, FactKinds, Plugin } from '@tools/plugins';
@@ -96,36 +91,6 @@ export type PromptSection = (ctx: {
    *  setting of its plugin's. */
   readonly config: ConfigProvider;
 }) => string;
-
-/**
- * A plugin's side of a decision on a pending request it opened (a
- * `PluginRequest` naming it), run before the decision commits: what the
- * plugin records outside the session's store, and what commits with the
- * decision in its one checked transaction ({@link RequestDecisionRecord}).
- * The outside record must be idempotent: an answer tried again after a
- * failure, or raced by another, records nothing twice, and the second
- * reads the first's. A process that exits before the transaction leaves
- * the request pending and answerable.
- */
-export interface RequestDecisionHook {
-  readonly record: (request: {
-    readonly payload: PluginRequest;
-    readonly decision: RequestDecision;
-  }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>;
-}
-
-/** What commits with a plugin request's decision, in its transaction
- *  ({@link RequestDecisionHook}). */
-export interface RequestDecisionRecord {
-  /** Facts about the plugin's own aggregates, hung under the request's run
-   *  and checked in the transaction: one its kind refuses is logged and
-   *  left out. */
-  readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, accepted in the
-   *  transaction (one the run's closed input refuses is logged), the run
-   *  woken for it once that commits. */
-  readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
-}
 
 /**
  * One of a plugin's script modules that a person or a model starts by name

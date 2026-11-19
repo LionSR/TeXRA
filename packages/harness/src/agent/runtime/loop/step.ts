@@ -227,7 +227,7 @@ const openStep = Effect.fn('Step.open')(function* (
     // A registered program's tools are fixed; anyone else's, an installed
     // plugin's program's among them, follow the switches read live.
     const program = programOf(run.config);
-    const trusted = program !== null && !isInstalledProgram(program);
+    const trusted = program !== null && !isInstalledProgram(program.name);
     // Every program is offered the tools that ask for approval, where no
     // prompt can show too: its delegations stand approved by its launch, and
     // any other call is still decided by the approval policy when made.
@@ -312,7 +312,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
-        ? Settings.getConfig(roots.config, AGENT_SKILLS_ENABLED_SETTING)
+        ? yield* Settings.get(roots, AGENT_SKILLS_ENABLED_SETTING)
         : recordedSkills.length > 0;
     const catalog =
       listing || names.length > 0

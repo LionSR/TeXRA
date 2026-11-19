@@ -272,9 +272,10 @@ lanes table below keep it as the refused option.
   ([the tool layer](../../implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md),
   decision 4).
 - `defineTool({ deferred: true })` builds on codemode's existing discovery.
-- The built-in request kinds stay closed (ledger D11); a plugin opens requests
-  in its own vocabulary through the generic `plugin` case
-  (`shared/schemas/request.ts:119`).
+- The request kinds are closed (ledger D11): a plugin opens no request of its
+  own. The generic `plugin` case went with the external inquiry, its one
+  user, on 2026-11-19; every request blocks the call that opened it
+  (`packages/harness/src/shared/schemas/request.ts`).
 
 ## Deletion ledger
 

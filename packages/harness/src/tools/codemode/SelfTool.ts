@@ -29,7 +29,12 @@ import {
   childOutputSchema,
   printSubagentProgress,
 } from '@agent/runtime/delegation/subagentRun';
-import { AgentConfigSchema, ToolError } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  backgroundScriptOf,
+  runsScript,
+  ToolError,
+} from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
@@ -65,15 +70,14 @@ type SelfInput = typeof SelfInputSchema.Type;
  */
 const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const { run } = call;
-  const { script } = run.config;
-  if (script == null)
+  if (!runsScript(run.config))
     return {
       config: run.config,
       source: run.runId,
       before: Number.POSITIVE_INFINITY,
       boundAt: undefined,
     };
-  if (script.kind !== 'background')
+  if (backgroundScriptOf(run.config) === null)
     return { config: run.config, source: null, before: 0, boundAt: undefined };
   const start = (yield* (yield* SessionLog).facts(run.runId))?.start;
   const missing = new ToolError(

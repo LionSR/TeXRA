@@ -173,7 +173,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 - History records (`history-entry`, `history-detail`) carry the run's
   `outcome` (`completed`, `cancelled`, `failed`, or `null` when none was
   recorded) and, separately, whether `texra resume` continues it
-  (`resumable`).
+  (`continues`).
 
 ## Authentication
 
@@ -401,7 +401,7 @@ texra run my-programs:todo-list --input paper.tex
 - **The two declarations**: the file must begin with `export const description = '...';` (one line, at most 300 characters) and `export const uses = ['...'];`, in either order, each a quoted literal ending in `;`, with only comments before and between them. `uses` names the tools the program's run is offered. TeXRA reads both from the text of the file and never runs the file to find them, so a computed value, a template string or code before them refuses that file by name; the plugin's other programs still load. (The list is not called `tools`: inside the program, `tools.read_file(...)` calls a tool, and a `tools` of your own would hide it.)
 - **The program**: the default export is `async (args, launch) => result`, where `launch` holds the `instruction` and the `inputFiles`, `contextFiles` and `mediaFiles` it was started with. What it returns is its answer. It runs in the same sandbox as a script a model writes: no filesystem, network, timers or `Date.now()`, only the tools `uses` names (`tools.<name>(...)`, and `agent(...)`, `program(...)` when listed). It can `import` the built-in modules and the other programs of enabled plugins by name.
 - **Naming**: the file name is the program's name: lowercase letters, digits and hyphens. TeXRA follows no symbolic link in `programs/`.
-- **Trust**: `texra plugin enable` lists each program with its description and tools, and each file it refused. A program acts only through the tools it lists. Unlike a built-in program's, those tools are withheld while their plugin is switched off. A call that needs approval (a shell command, an edit) is decided by the approval policy as for an agent; the agents and programs it starts are not asked about one by one. When a plugin has an agent and a program of one name, `texra run <plugin>:<name>` starts the program. Editing any file in the plugin, a program included, withdraws every program of the plugin until you enable it again.
+- **Trust**: `texra plugin enable` lists each program with its description and tools, and each file it refused. A program acts only through the tools it lists. Unlike a built-in program's, those tools are withheld while their plugin is switched off. A call that needs approval (a shell command, an edit) is decided by the approval policy as for an agent; the agents and programs it starts are not asked about one by one. `texra run` refuses a name that is both a program and an agent of the plugin. Editing any file in the plugin, a program included, withdraws every program of the plugin until you enable it again.
 - **Where it shows**: `texra plugin list` and **Settings → Plugins** name a plugin's programs, `texra run <plugin>:<name>` starts one, and an agent that can start programs is told of it with the built-in ones.
 
 ## Shell completion
@@ -444,10 +444,11 @@ Text output prints one tab-separated row per run:
 The NDJSON form is stable for scripts under the version 3 contract above.
 Each line has kind `history-entry` and contains the same run entry object used
 by JSON output, with the terminal `outcome` spelled as `completed`,
-`cancelled`, or `failed` (`null` when none was recorded) and `resumable`
+`cancelled`, or `failed` (`null` when none was recorded) and `continues`
 saying whether `texra resume` continues it. The text form's status column
-reads the same outcome, or `no outcome`, followed by `(resumable)` when it
-applies.
+reads the same outcome, or `no outcome`, followed by `(can continue)` for a
+finished conversation that takes another message, or `(can resume)` for an
+interrupted, failed or cancelled run.
 
 Inspect or delete one run:
 

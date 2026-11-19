@@ -72,6 +72,8 @@ it.layer(nodePlatformLayer)('an installed plugin’s programs', (it) => {
         const refused = {
           // 1. Bad syntax.
           'unterminated.js': `export const description = 'no end;\nexport const uses = [];\n`,
+          // A line separator ends a string literal for the engine.
+          'line-separator.js': `export const description = 'one two';\nexport const uses = [];\n`,
           'no-equals.js': `export const description 'x';\nexport const uses = [];\n`,
           'open-array.js': `export const description = 'x';\nexport const uses = ['a',\n`,
           // 2. Missing fields.

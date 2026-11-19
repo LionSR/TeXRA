@@ -202,7 +202,7 @@ export interface RunCell {
    * appended after the batch's in its one append: a child turn's delivery
    * to its parent. Failure of any member commits none.
    *
-   * Preconditions, checked before anything is written; a violation is a
+   * Preconditions, checked before anything commits; a violation is a
    * defect:
    * - a batch on an unopened run carries the `run.position` that opens it,
    *   unless it is empty (a registration alone) or carries the run's end;

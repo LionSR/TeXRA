@@ -60,9 +60,7 @@ GPT-6.1 Sol (`openai/gpt-6.1-sol`), GPT-6.1 Terra (`openai/gpt-6.1-terra`), and 
 GPT-6.1 Sol, GPT-6.1 Terra, and GPT-6 Luna supersede the GPT-5.6 series (`openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, and `openai/gpt-5.6-luna`). The [Codex integration](./agent-integrations.md#openai-codex) runs GPT-6.1 Sol unless you pick another model.
 
 **Pro mode.** Add `+pro` to a supported GPT model (for example `openai/gpt-6.1-sol+pro`) to run it in the Responses API's pro reasoning mode, billed at standard token rates
-rather than a premium tier, for the hardest planning and long-horizon tasks. For one-off hard questions you can
-also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
-running a full agent turn against the API.
+rather than a premium tier, for the hardest planning and long-horizon tasks.
 
 **Fast mode.** Turn on **Fast mode** under OpenAI in Settings → Models (or in `/config` in the CLI, or set `"texra.model.openaiFastTier": true` in the global `config.json`; a project's `.texra/config.json` cannot set it) to send OpenAI requests on OpenAI's fast service tier, for models that offer it. Responses come back faster at a higher per-token price (for example $4 / $20 per 1M tokens for GPT-6.1 Sol), and run costs use the fast-tier prices. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
 full capabilities.

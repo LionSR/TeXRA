@@ -39,7 +39,7 @@ provider key, and about 30 on hold with a stated reopening event. Decisions
 outnumber work: what limits progress is no longer hands.
 
 The notes are stale as a rule. None is right throughout, and more than
-twenty items still marked open are done. One note is finished and can be
+twenty items still marked open are done. One note was finished and is
 deleted: `architecture/2026-11-09-decisions-read-the-log-not-the-view.md`
 (the one decision reader of the view left, `submitFollowUp`, stays by the
 ruling in #14986). Correcting the other notes item by item is step 5 of the
@@ -101,6 +101,25 @@ started, unless listed under "In flight".
 | The file-tool text leaves the prompt of a run without file tools (I-C16)                           | the earlier triage's "safe at any time"; review as the resolved prompt                                                                                             | S    |
 | R17 gets one kernel case that interrupts inside its handoff window                                 | the evidence of 2026-11-19 (`release-acceptance-rows`) covers either side and says the window itself is hit by no check; a small check is better than a waived one | S    |
 
+The earlier version's list of work "safe at any time", read again on
+2026-11-19:
+
+- Landed in one pull request: `RunCell.commit` applies its batch once,
+  inside the store's job; the key-pages links read `KEY_PAGES` from
+  `packages/texra/src/shared/model/keyPages.ts`; the rejected-token notice
+  is worded at its one follower; R6-T7 b, by correcting the store review
+  (its codec ratchet is gone and SQL reads a payload field).
+- Already on `main`: the tool-edit diff title (`toolEditDiffLabel`), the
+  one symbol table (`MATH_SYMBOL_SPELLINGS`), the `script` tool's
+  description (#15024), and the `model.useGoogleBackgroundResponses`
+  deletion (#15081).
+- Waiting for open pull requests on their files: store debts A6 and A8
+  (`controllers/session/`) and deriving `referencedAggregates`
+  (`shared/schemas/sessionEvent.ts`).
+- Not to be done: the media classifier (below). Left to whoever owns the
+  bundled prompts: I-C4, and I-C16 as ruled above. Left to the UI work:
+  tooltip ids carried by the data.
+
 **Keep what the code does; close the item.**
 
 - A stop of a run no fiber drives commits its `run.end` with the stop
@@ -121,7 +140,8 @@ started, unless listed under "In flight".
 - `edgesOf` keeps a case per kind: its own comment gives the reason.
 - `LabelsRootRuns` stays a `Context.Reference` with a default.
 
-**Do not do it.** Each belongs in `refuted-candidates.json` at step 5.
+**Do not do it.** Each is recorded in `.agents/docs/refuted-candidates.json`
+(2026-11-19), with its symbols and a `ruling` anchor to this section.
 
 - A shared media-capability classifier: the two notes disagree and the
   verification scored it at zero net elements.
@@ -145,7 +165,8 @@ started, unless listed under "In flight".
   review F14): a pull request that commits no dump fails the suite that
   reads it until the job runs, so the design has a gap.
 - The script delivery's `stopped` literal: one note renames it, the delivery
-  note keeps it. It rides with the delivery union.
+  note keeps it. The delivery union it rode with was kept as one struct
+  (2026-11-19), so it stays as it is.
 - `definition.ts` ending a run through `readCause`; the TUI's local rows
   through `LocalSession.emit`; a slot-agnostic `rowDefault` export: none has
   a recommendation, and none blocks other work.
@@ -236,19 +257,27 @@ first, as its phase 7).
    each green broke `main` together on 2026-11-19.
 2. **The work this note's rulings unblock**, grouped by the files it shares:
    stop and resume (one stop-or-failure decider, one rejection decider per
-   resume, the model switch as a queued row); the store's small rulings; the
-   delivery shape with its one row bump; the app's entries (`./host`
-   helpers, the MCP client name, the `./plugins` split); the dispatcher
-   split (tech debt T1, PRD row 10), which waits for the requests work to
-   leave the run loop.
+   resume, the model switch as a queued row); the store's small rulings;
+   the app's entries (`./host` helpers, the MCP client name, the
+   `./plugins` split); the dispatcher split (tech debt T1, PRD row 10),
+   which waits for the requests work to leave the run loop. The row-version
+   pass is done (2026-11-19): `finishEvidence` and `refusalEvidence` were
+   already gone (`model.message` v21, #15017); the delivery stores
+   `wallTimeMs` and its prompt as a cut attribute (`followup.queued` v11);
+   the delivery union was compared and kept as one struct
+   (`refuted-candidates.json`, `DELIVERY-union-on-family-and-outcome`); and
+   the recorded request is held under the `context.blob` version (store
+   debts B5).
 3. **Programs.** Phase 4 is in flight. Phase 5 follows on the owner's answer
    to question 1; its slices that do not depend on the answer can be
    prepared.
 4. **Evidence that needs no key**: the `unified-latex` spike, the tar
    stream spike, the `EARLIER_RUNS` scan and the cold-read measurements, the
    packaged smoke before the banner script stops rebuilding `__dirname`.
-5. **Correct the notes**: delete the finished one, mark the stale items,
-   record the items above that are not to be done in `refuted-candidates.json`, fix the ledger's
-   publishing line. Last, because every pull request before it edits notes.
+5. **Correct the notes**: mark the stale items. Last, because every pull
+   request before it edits notes. Done on 2026-11-19: the finished note is
+   deleted, the items above that are not to be done are recorded in
+   `refuted-candidates.json` (whose entries were re-read against the code),
+   and the ledger's publishing line (D11) is fixed.
 6. **The freeze and the first publish**, on the owner's date, after the two
    live routes pass.

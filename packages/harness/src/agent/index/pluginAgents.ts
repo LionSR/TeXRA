@@ -30,6 +30,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 
 // Local imports - this module's neighbours
 import type { AgentEntry } from './agentEntry';
+import { AgentScanError } from './agentYamlScanner';
 
 /** A subagent's frontmatter; `tools` is a comma-separated list or a list. */
 const SubagentFrontmatterSchema = Schema.Struct({
@@ -39,12 +40,6 @@ const SubagentFrontmatterSchema = Schema.Struct({
     Schema.Union([Schema.String, Schema.Array(Schema.String)]),
   ),
 });
-
-/** A plugin's subagent file that does not read as an agent. */
-class PluginAgentUnread extends Schema.TaggedError<PluginAgentUnread>()(
-  'PluginAgentUnread',
-  { message: Schema.String },
-) {}
 
 /** Read the subagent file `file` of plugin `plugin`: its catalog entry,
  *  and the tools it names that the harness has no counterpart for. */
@@ -57,12 +52,18 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     file,
   ).pipe(
     Effect.mapError(
-      (error) => new PluginAgentUnread({ message: error.message }),
+      (error) =>
+        new AgentScanError({
+          path: file,
+          message: error.message,
+          cause: error,
+        }),
     ),
   );
   const split = splitFrontmatterFence(content);
   if (split.kind !== 'ok')
-    return yield* new PluginAgentUnread({
+    return yield* new AgentScanError({
+      path: file,
       message: `${file} must start with YAML frontmatter (---).`,
     });
   const parsed = Result.flatMap(
@@ -70,12 +71,14 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     Schema.decodeUnknownResult(SubagentFrontmatterSchema),
   );
   if (Result.isFailure(parsed))
-    return yield* new PluginAgentUnread({
+    return yield* new AgentScanError({
+      path: file,
       message: `${file}: ${toErrorMessage(parsed.failure)}`,
     });
   const systemPrompt = split.body.trim();
   if (!systemPrompt)
-    return yield* new PluginAgentUnread({
+    return yield* new AgentScanError({
+      path: file,
       message: `${file} has no system prompt.`,
     });
   const declared =
@@ -96,7 +99,8 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     declared.length > 0 &&
     mapped.every((t) => t === undefined)
   )
-    return yield* new PluginAgentUnread({
+    return yield* new AgentScanError({
+      path: file,
       message: `${file} names only tools this build does not have (${declared.join(', ')}).`,
     });
   // `undefined` when it names none and inherits them (`AgentRun`).

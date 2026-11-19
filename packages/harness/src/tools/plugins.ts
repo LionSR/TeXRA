@@ -45,7 +45,6 @@ import type {
   ProcessPluginLayer,
   Program,
   PromptSection,
-  RequestDecisionHook,
   SessionPluginLayer,
 } from '@tools/toolTable';
 
@@ -136,8 +135,6 @@ export interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request it opened, on or off. */
-  readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
   /** Script module sources by name, imported as `builtIn:<name>`. */
@@ -372,8 +369,7 @@ export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
 
 /**
  * The rows a plugin's facts under `runId` commit in the batch that records
- * what they are facts of (a call's `tool.result`, a plugin request's
- * decision), after `ownFactsChecked`, so each commits with that record or
+ * what they are facts of (a call's `tool.result`), after `ownFactsChecked`, so each commits with that record or
  * not at all. The record is the run's and stands: a fact its plugin's rule
  * rejects is the plugin's row alone, left out and logged.
  */

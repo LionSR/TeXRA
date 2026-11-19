@@ -47,7 +47,6 @@ export const ICON_NAMES = Object.freeze([
   'circle-dot',
   'circle-exclamation',
   'circle-info',
-  'circle-question',
   'circle-stop',
   'circle-user',
   'circle-xmark',

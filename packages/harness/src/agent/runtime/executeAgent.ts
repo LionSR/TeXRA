@@ -20,7 +20,11 @@ import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
-import { type RunId, type SubagentProgressUpdate } from '@shared/schemas';
+import {
+  runsScript,
+  type RunId,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
@@ -88,7 +92,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   // which no message may reach, whoever resumes it.
   const stopAfterCycle =
     parent !== null ||
-    config.script != null ||
+    runsScript(config) ||
     options.stopAfterCycle === true ||
     facts?.start?.takesFollowUps === false;
   const registered =

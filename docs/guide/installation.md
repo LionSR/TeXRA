@@ -17,8 +17,9 @@ TeXRA runs on all major operating systems. Minimum requirements:
 
 ## Usage logging
 
-A fresh install logs anonymous usage metadata (model, agent, token counts,
-duration, host, version) under a random install ID, and says so once on first
+A fresh install logs anonymous usage metadata (agent, model, provider API,
+billing route, token counts, cost at list prices, response time, time of the
+call, task ID, version, host) under a random install ID, and says so once on first
 run. There is no sign-in. Turn it off with `TEXRA_NO_TELEMETRY=1`,
 `DO_NOT_TRACK=1`, or `"texra.telemetry.enabled": false`. Details, including how
 to reset the ID: [Usage logging](./configuration.md#usage-logging).
