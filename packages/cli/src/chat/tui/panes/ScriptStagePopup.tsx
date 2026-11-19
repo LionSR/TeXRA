@@ -30,7 +30,7 @@ import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import {
   SCRIPT_CALL_STATUS_LABEL,
-  SCRIPT_CALL_STATUS_LOOK,
+  scriptCallLook,
   scriptCallSummary,
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
@@ -49,7 +49,7 @@ import type { RuntimeCommand, RunId } from '@texra-ai/harness/schemas';
 const POPUP_EXTRA_ROWS = 1;
 
 /** The terminal markers of the statuses whose look carries a glyph of its
- *  own (`SCRIPT_CALL_STATUS_LOOK`): a queued call has not started and a
+ *  own (`scriptCallLook`): a queued call has not started and a
  *  reused one ran nothing this time, so neither shows its tone's marker. */
 const OWN_MARKER: Partial<Record<ScriptCallView['status'], string>> = {
   queued: HOLLOW_DOT,
@@ -70,17 +70,17 @@ function CallRow({
 }: {
   readonly call: ScriptCallView;
 }): React.JSX.Element {
-  const waiting = call.needsYou;
   const last = scriptCallSummary(call);
-  const paint = TONE_PAINT[SCRIPT_CALL_STATUS_LOOK[call.status].tone];
+  const look = scriptCallLook(call);
+  const paint = TONE_PAINT[look.tone];
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text
-          aria-hidden
-          color={waiting ? TONE_PAINT.warning.color : paint.color}
-        >
-          {fillRows(` ${OWN_MARKER[call.status] ?? paint.marker}`, 3)}
+        <Text aria-hidden color={paint.color}>
+          {fillRows(
+            ` ${look.glyph === undefined ? paint.marker : (OWN_MARKER[call.status] ?? paint.marker)}`,
+            3,
+          )}
         </Text>
       </Box>
       <RowSegment flexShrink={0}>
