@@ -4,7 +4,8 @@
  * runs one child agent per round, told the program's system text and given
  * the file, shell and Lean tools, and checks the round's work in code before
  * it ends or starts the next: `prove` with Lean's own diagnostics (no error,
- * no `sorry`), `blueprint` with the leanblueprint CLI's own build and
+ * no `sorry`) and the `axiom` declarations the files gained since the run
+ * started (none), `blueprint` with the leanblueprint CLI's own build and
  * declaration check. The checks are what make them programs and not a sentence of a
  * prompt.
  *
@@ -74,22 +75,53 @@ const diagnose = async (file) => {
   }
 };
 
-/** Whether Lean reports every file clean, and what it still reports. */
-const check = async (files) => {
+/** The names of after beyond those of before, each occurrence counted. */
+const added = (before, after) => {
+  const left = [...before];
+  return after.filter((name) => {
+    const at = left.indexOf(name);
+    if (at !== -1) left.splice(at, 1);
+    return at === -1;
+  });
+};
+
+/** Whether Lean reports every file clean and none declares an axiom it did
+ *  not declare in stated (each file's axioms when the program started), and
+ *  what is still open. An axiom in place of a proof elaborates without an
+ *  error or a sorry, so Lean's diagnostics alone would pass it. */
+const checker = (stated) => async (files) => {
   const verdicts = [];
-  for (const file of files) verdicts.push({ file, result: await diagnose(file) });
-  const open = verdicts.filter(({ result }) => !result.complete || result.errors > 0 || result.sorries > 0);
-  if (open.length === 0) return { clean: true, report: 'Lean reports no error and no sorry in ' + files.join(', ') + '.' };
+  for (const file of files) {
+    const result = await diagnose(file);
+    verdicts.push({ file, result, unproved: !result.complete || result.errors > 0 || result.sorries > 0, axioms: added(stated[file] ?? [], result.axioms) });
+  }
+  const open = verdicts.filter(({ unproved, axioms }) => unproved || axioms.length > 0);
+  if (open.length === 0)
+    return { clean: true, report: 'Lean reports no error and no sorry in ' + files.join(', ') + ', and no new axiom is declared there.' };
   return {
     clean: false,
     report: open
-      .map(({ file, result }) => '<diagnostics file="' + file + '" summary="' + result.summary + '">\n' + result.output + '\n</diagnostics>')
+      .flatMap(({ file, result, unproved, axioms }) => [
+        ...(unproved
+          ? ['<diagnostics file="' + file + '" summary="' + result.summary + '">\n' + result.output + '\n</diagnostics>']
+          : []),
+        ...(axioms.length > 0
+          ? [file + ' declares ' + axioms.join(', ') + ' as an axiom, which it did not before: an axiom is not a proof. Prove the statement, or remove the axiom and say what you could not prove.']
+          : []),
+      ])
       .join('\n'),
   };
 };
 
-export default (args, launch) =>
-  rounds(
+export default async (args, launch) => {
+  // Each file's axioms as the program found it: only one a round adds is
+  // the round's doing.
+  const stated = {};
+  for (const file of launch.inputFiles.filter((name) => name.endsWith('.lean'))) {
+    await tools.lean_file({ file });
+    stated[file] = (await tools.lean_diagnostics({ file, command: 'count' })).axioms;
+  }
+  return rounds(
     {
       name: 'prove',
       system: PROVER,
@@ -98,10 +130,11 @@ export default (args, launch) =>
       extension: '.lean',
       describes: 'the .lean files to complete',
       fallback: 'Complete every proof in these files: replace each sorry with a proof and fix every error.',
-      check,
+      check: checker(stated),
     },
     launch,
-  );`;
+  );
+};`;
 
 /** The module `builtIn:blueprint`. */
 const BLUEPRINT_MODULE = String.raw`import { rounds } from 'builtIn:rounds';
@@ -160,7 +193,7 @@ export const LEAN_MODULES = Object.freeze({
 export const LEAN_PROGRAMS = Object.freeze({
   prove: Object.freeze({
     description:
-      'Complete the proofs in the `.lean` files of `inputFiles` until Lean reports no error and no `sorry`; the instruction narrows which.',
+      'Complete the proofs in the `.lean` files of `inputFiles` until Lean reports no error and no `sorry` and the files declare no new `axiom`; the instruction narrows which.',
     tools: Object.freeze(['agent', 'lean_file', 'lean_diagnostics']),
   }),
   blueprint: Object.freeze({

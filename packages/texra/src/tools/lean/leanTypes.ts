@@ -124,6 +124,8 @@ export interface FetchDiagnosticsResult {
    * wait: `diagnostics` are the ones so far, not the file's verdict.
    */
   readonly complete: boolean;
+  /** The file's text as Lean was sent it: what `diagnostics` describe. */
+  readonly text: string;
 }
 
 /**
