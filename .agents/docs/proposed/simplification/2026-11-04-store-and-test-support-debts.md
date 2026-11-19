@@ -78,8 +78,10 @@ deliberate CI shard split).
 
 ## Order
 
-C1's freeze is F14 and goes with it. Of the small PRs, A3's pre-check is
-left (A1, A2, A4, A5, A7 and B1 to B4 are done). C2 to C5 are one
+C1's freeze is F14 and goes with it. The small PRs are done (A1 to A5, A7
+and B1 to B4): A3's pre-check went on 2026-11-19, the write's encode being
+the one check (`currentValues.ts`, `encodeValue`), its failure naming the
+family and key inside the `StateWriteFailed` the settings store raises. C2 to C5 are one
 test-support PR. A6, A8, A9, B5, B6 and what is left of C6 to C8 need a
 word from the owner first (a boundary or a diagnostic contract may be
 intended).

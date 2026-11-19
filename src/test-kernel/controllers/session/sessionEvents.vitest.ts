@@ -38,6 +38,7 @@ import {
   type FileSystem,
   Layer,
   PlatformError,
+  PubSub,
   Result,
   Scheduler,
   Schema,
@@ -85,7 +86,7 @@ import { SessionRowSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
-import { SessionEvents } from '@shared/session/sessionEvents';
+import { SessionEvents, type Append } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   createFakeWorkspaceRoots,
@@ -413,6 +414,57 @@ describe('session events and view', () => {
       // The synchronous door's order is the call: nothing is left queued.
       expect(events.head()).toBeGreaterThan(before);
     }).pipe(Effect.provide(graph([runStartRow]))),
+  );
+
+  // Failure mode: a reader slower than the publisher made the publisher
+  // keep every batch for it, without end; a bound must not cost it a row.
+  it.effect(
+    'reads from the store what a reader too far behind was not handed',
+    () =>
+      Effect.gen(function* () {
+        const events = yield* SessionEvents;
+        const view = yield* SessionViewService;
+        // The view is following before the jobs, so it falls behind too.
+        yield* settle(view.ref, (v) => v.runs.has(RUN));
+        const position = (turn: number) => (append: Append) =>
+          runStateAppend(append)([
+            {
+              type: 'run.position',
+              aggregateId: RUN,
+              payload: { at: 'turn.begin', turn },
+            },
+          ]);
+        // The tail has read one live row, so it is subscribed, before the
+        // jobs it falls behind on: every one commits before it runs again.
+        const jobs = 1500;
+        const start = events.head() + 1;
+        const following = yield* Deferred.make<void>();
+        const tail = yield* Effect.forkScoped(
+          events.all(start - 1).pipe(
+            Stream.tap(() => Deferred.succeed(following, undefined)),
+            Stream.map((row) => row.commit),
+            Stream.takeUntil((commit) => commit >= start + jobs),
+            Stream.runCollect,
+          ),
+        );
+        yield* events.transact(position(0));
+        yield* Deferred.await(following);
+        const idle = yield* events.subscribe;
+        for (let turn = 1; turn <= jobs; turn++) events.detach(position(turn));
+        expect(events.head()).toBe(start + jobs);
+        const kept = (yield* PubSub.takeAll(idle)).flatMap((take) =>
+          Exit.isExit(take) ? [] : take,
+        );
+        // The publisher kept a bounded number of batches, and the first one
+        // left says how far back the reader's gap starts.
+        expect(kept.length).toBeLessThan(jobs);
+        expect(kept.at(0)?.from).toBe(start + jobs - kept.length);
+        // Every row, once, in order.
+        expect(yield* Fiber.join(tail)).toEqual(
+          Array.from({ length: jobs + 1 }, (_, index) => start + index),
+        );
+        yield* settle(view.ref, (v) => v.cursor >= start + jobs);
+      }).pipe(Effect.provide(graph([runStartRow]))),
   );
 
   it.effect('runs no job that reached the publisher after it closed', () =>

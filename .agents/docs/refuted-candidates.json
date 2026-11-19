@@ -931,6 +931,24 @@
           "signature": "const endProcessChild = ( runId: RunId, { logger, turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.Effect<void, Error, AgentRunServices> => {…};"
         }
       ]
+    },
+    {
+      "id": "STORE-fact-version-one-reader",
+      "candidate": "One shared reader of a plugin fact's version for factKindOf (the store's row codec) and readTraceFacts (the trace import), which each write the retired, unknown, newer and earlier branches",
+      "why": "The two readers agree on the four cases and on nothing they do with them. The store fails a newer fact as DatabaseStoreNewer and an earlier or retired one as DatabaseRowEarlier, each carrying the commit; the trace import has no commit, throws one message for any other version and a different one for a retired kind. A shared classifier returns a four-literal standing that each caller switches over again, so both keep four branches and the classifier and its union are added: tried twice (an earlier attempt, and again on 2026-11-19), the diff came out no shorter, and routing the trace import through the store's errors changed its wording. Until a third reader appears, or the two outcomes converge, the eight short branches are the smaller design.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md#2-storage-one-classifier-for-a-run-that-cannot-be-read",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/rowCodec.ts",
+          "symbol": "factKindOf",
+          "signature": "export function factKindOf(fact: { readonly plugin: string; readonly kind: string; readonly version: number; }, commit: number, factKinds: FactKinds): Result.Result<FactKinds[FactName] | undefined, DatabaseStoreNewer | DatabaseRowEarlier> {…}"
+        },
+        {
+          "file": "packages/harness/src/shared/schemas/traceDocument.ts",
+          "symbol": "readTraceFacts",
+          "signature": "export function readTraceFacts(document: TraceDocument, appFactKinds: readonly TraceFactKind[]): TraceDocument {…}"
+        }
+      ]
     }
   ]
 }
