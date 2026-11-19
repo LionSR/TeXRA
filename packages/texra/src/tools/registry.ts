@@ -359,7 +359,7 @@ export const texraPlugins = (host: {
   readonly inquiryPanel?: true;
 }): readonly TexraPlugin[] => {
   const editors = host.editors ?? editorRegistry(() => ({}));
-  return [
+  const plugins: readonly TexraPlugin[] = [
     {
       ...fileOps({ writeFilter: texWriteFilter }),
       icons: {
@@ -443,4 +443,7 @@ export const texraPlugins = (host: {
     setup(host.setup ?? {}, host.name, host.editor),
     theory,
   ];
+  // The entries built here are held for the life of the process as the
+  // module-level ones are, so they are frozen the same way.
+  return plugins.map(texraPlugin);
 };
