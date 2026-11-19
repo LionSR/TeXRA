@@ -4,7 +4,7 @@
 repository embeds the harness through the published package
 `@texra-ai/harness` and its entries (`.`, `/node`, `/plugins`, `/schemas`,
 `/transcript`), documented in `packages/harness/README.md`:
-`Sessions.layer({ platform, plugins })` composes everything §1 walks through,
+`Sessions.layer({ platform, plugins, client })` composes everything §1 walks through,
 and the §1 example uses only those entries. The rest of this note documents
 the internal composition behind that layer, reached through the repo-root path
 aliases declared in `tsconfig.json`, for work on the harness itself. Plain
@@ -173,7 +173,7 @@ object it passes to `attach` (§3), which keeps the approval-gated tools away fr
 ### Putting it together
 
 An embedder does not run the steps above itself. `Sessions.layer({ platform,
-plugins })` installs the process runtime (Step 1) over the platform's process
+plugins, client })` installs the process runtime (Step 1) over the platform's process
 services, seeds the first-install tool switches, and serves the `Sessions`
 that open a session over the platform's roots (Prerequisite A). The catalog
 loads on its first miss (Prerequisite B). `nodePlatform` reads provider keys
