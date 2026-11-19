@@ -90,6 +90,15 @@ export function serializeFilteredConfig(
 export const runsScript = (config: Pick<AgentConfig, 'script'>): boolean =>
   config.script != null;
 
+/** A script a parent sent to the background, the one script its run is,
+ *  or null for any other run. Its end is delivered to the conversation that
+ *  launched it as a script's delivery, not a subagent's report, and its
+ *  `self()` is that conversation as the script found it. */
+export const backgroundScriptOf = (
+  config: Pick<AgentConfig, 'script'>,
+): Extract<AgentConfig['script'], { kind: 'background' }> | null =>
+  config.script?.kind === 'background' ? config.script : null;
+
 /** The name of the registered program the run opened on (`script.name`),
  *  or null for any other run. A program's run is a script that ends: its
  *  value and its children's spend are its output, its end its record, and
