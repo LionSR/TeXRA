@@ -54,4 +54,10 @@ describe('tools that change things outside the run', () => {
       '2401.00001',
     );
   });
+
+  it('asks before zotero_add changes the Zotero library', () => {
+    expect(asked('zotero_add', { items: [{ title: 'A Title' }] })).toContain(
+      'A Title',
+    );
+  });
 });
