@@ -23,6 +23,11 @@ Landed since:
   does, so `insert_line` takes exactly the lines a view numbered. Insert puts
   the file's final newline back after the join. Line endings were never the
   difference: `readMemoryFile` normalizes CRLF before either split.
+- **One `runCliEntry` for both CLI entries**
+  (`packages/cli/src/runtime/platform/logSinks.ts`): it installs the stderr
+  sink and the pipe handlers, runs the entry's body for its exit code, and
+  words a crash under the entry's label. `texra` also passes the
+  crash-report line; `CliEntryCrashed` is file-local.
 
 ## Open
 
@@ -58,16 +63,6 @@ Landed since:
    - A shared `hostBlock` (or a settings-tab styles array) in
      `packages/texra/src/ui/styles/litStyles.ts` would hold it once.
    - It needs a visual check of both webviews, which this run could not do.
-5. **The two CLI entry points share a crash wrapper.**
-   `packages/cli/src/bin/texra.ts` and `packages/cli/src/bin/texraServe.ts`
-   each do the same three things:
-   - install the stderr log sink;
-   - run their body under `Effect.tryPromise` with `CliEntryCrashed`;
-   - word the crash and set the exit code.
-
-   They differ in the label and the crash-report line. One `runCliEntry` in
-   `packages/cli/src/runtime/platform/logSinks.ts` would serve both. These
-   are runtime entries, so the change wants a packaged CLI smoke run.
 
 ## Checked and declined
 
