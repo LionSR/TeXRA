@@ -166,8 +166,8 @@ Agents with tools can reuse existing figures as references when creating new one
 
 ### Using reference figures
 
-1. Add previous TikZ figures to the **Context** section (<wa-icon library="texra" name="book"></wa-icon>).
-2. Mention them explicitly in your instructions.
+1. Name the files that hold the earlier TikZ figures in your instructions; the agent reads them with its own tools.
+2. Say what to take from them.
 3. Ask the agent to adopt similar styles or approaches.
 
 **Example instruction:**
@@ -188,7 +188,7 @@ When a figure does not build, find the matching failure mode and work through it
 
 ## <wa-icon library="texra" name="lightbulb"></wa-icon> Tips
 
-- **Point at a reference figure**: Attach an existing `.tex` figure in **Context** (<wa-icon library="texra" name="book"></wa-icon>) when you want a new diagram to match its node styles, arrow tips, and color palette.
+- **Point at a reference figure**: Name an existing `.tex` figure in your instruction when you want a new diagram to match its node styles, arrow tips, and color palette.
 - **Cache slow figures**: For documents with many complex `tikzpicture` environments, enable PGF's `external` library so unchanged figures are not recompiled on every build.
 
 ## Next steps
