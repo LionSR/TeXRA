@@ -4,9 +4,7 @@
  * (`readTraceFacts`). Browser-safe: it imports only the fact kinds.
  */
 import { DOCUMENTS_ACCEPTED_KIND, DOCUMENTS_OUTPUT_KIND } from './documents';
-import { EXTERNAL_INQUIRY_THREAD_KIND } from './externalInquiry';
 
 export const APP_FACT_KINDS = Object.freeze({
   theory: Object.freeze([DOCUMENTS_OUTPUT_KIND, DOCUMENTS_ACCEPTED_KIND]),
-  'external-inquiry': Object.freeze([EXTERNAL_INQUIRY_THREAD_KIND]),
 } as const);

@@ -78,7 +78,7 @@ const walkRunStorage = Effect.fn('walkRunStorage')(function* (
     // directory is the expected "nothing persisted here" case; any other read
     // failure (permissions, corrupt storage) still degrades to empty, but
     // loudly — the warn is the surfacing mechanism, matching the
-    // outputDiscovery/externalInquiryStorage fallback precedent.
+    // outputDiscovery fallback precedent.
     // The run directory itself has no rest to keep: its failure propagates
     // rather than reading as "no generated files".
     Effect.catch((error) => {

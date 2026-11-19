@@ -22,7 +22,6 @@ import {
 } from '@shared/schemas';
 import { APP_STATE, REPO_STATE } from '@shared/session/valueFamily';
 import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
-import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
 import { toolTable } from '@tools/toolTable';
@@ -56,7 +55,6 @@ const VALUE_FAMILIES = [
   REPO_STATE,
   WORKSPACE_STORES,
   DESKTOP_PROJECTS,
-  INQUIRY_THREADS,
   UPDATE_CHECKS,
   TEXRA_SERVICE,
 ];

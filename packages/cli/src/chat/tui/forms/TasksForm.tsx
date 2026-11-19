@@ -46,7 +46,7 @@ import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';
 import { AsyncListForm } from './_shared/ListForm';
-import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
+import type { TuiRequest } from '../state/approvalQueue';
 
 interface TasksFormProps {
   readonly connect: ConnectService;
@@ -187,16 +187,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   };
 
-  // A plugin's request (the external inquiry's) is answered from its
-  // thread and never blocks its run, so it is named apart and never stands
-  // in front of a request this view can answer.
   const pending = level.requests.find(
-    (request): request is PendingApprovalFact =>
-      request.payload.kind !== 'plugin' && !decided.has(request.requestId),
+    (request) => !decided.has(request.requestId),
   );
-  const inquiries = level.requests.filter(
-    (request) => request.payload.kind === 'plugin',
-  ).length;
   // Previews of decided requests go: each holds two whole documents.
   useEffect(() => {
     const open = new Set(level.requests.map((request) => request.requestId));
@@ -363,11 +356,6 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           availableRows={10}
           onDecide={decide}
         />
-      )}
-      {inquiries > 0 && (
-        <Text dimColor>
-          {`${inquiries === 1 ? 'An external inquiry waits' : `${inquiries} external inquiries wait`}; answer from its thread.`}
-        </Text>
       )}
     </Box>
   );

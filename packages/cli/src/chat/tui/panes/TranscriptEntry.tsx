@@ -6,7 +6,7 @@
 import { memo } from 'react';
 import { Box, Text } from 'ink';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows } from '@cli/runtime/terminal/terminalText';
 
@@ -20,10 +20,7 @@ import {
   transcriptEntryLayout,
   type TranscriptEntryLayout,
 } from './transcriptEntryLayout';
-import {
-  isInquiryContinuationText,
-  transcriptRowHeadline,
-} from './transcriptEntries';
+import { transcriptRowHeadline } from './transcriptEntries';
 
 function PlainEntryRows({
   entry,
@@ -34,13 +31,8 @@ function PlainEntryRows({
   readonly fillWidth?: boolean;
   readonly layout: TranscriptEntryLayout;
 }): React.JSX.Element {
-  const isInquiryContinuation =
-    entry.kind === 'user' && isInquiryContinuationText(entry.text.full);
   // User turns are full-width inverse bands in both static and live panes.
-  // Inquiry continuations remain ordinary prefixed rows and only fill when
-  // their bounded caller requests it.
-  const shouldFill =
-    fillWidth === true || (entry.kind === 'user' && !isInquiryContinuation);
+  const shouldFill = fillWidth === true || entry.kind === 'user';
   const lines = shouldFill
     ? fillRows(layout.lines.join('\n'), layout.columns).split('\n')
     : layout.lines;
@@ -51,22 +43,6 @@ function PlainEntryRows({
     marginTop: layout.marginTopRows,
     paddingX,
   };
-
-  if (isInquiryContinuation) {
-    return (
-      <Box {...boxProps}>
-        {lines.map((line, index) => (
-          <Text
-            key={index}
-            color={index === 0 ? COLOR_HINT : undefined}
-            dimColor={index > 0}
-          >
-            {line}
-          </Text>
-        ))}
-      </Box>
-    );
-  }
 
   let rowColor: string | undefined;
   if (entry.kind === 'error') {
