@@ -19,7 +19,11 @@
 
 // Local imports
 import type { RunView } from '@texra-ai/harness/schemas';
-import { formatResultCount, joinFacts, runNoun } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  joinFacts,
+  runNoun,
+} from '@texra-ai/harness/schemas';
 
 /** The agents a task started. */
 export const NESTED_AGENT = Object.freeze({

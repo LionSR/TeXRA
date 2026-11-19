@@ -73,7 +73,9 @@ export const runNoun = (
     | { readonly parentId: string | null; readonly identity: RunIdentity }
     | undefined,
 ): string =>
-  run == null || run.parentId === null ? 'task' : NESTED_NOUNS[run.identity.kind];
+  run == null || run.parentId === null
+    ? 'task'
+    : NESTED_NOUNS[run.identity.kind];
 
 /** UI label for a run identity — strips a known source prefix from agent ids. */
 export function runIdentityDisplayName(id: RunIdentity): string {

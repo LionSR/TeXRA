@@ -1102,6 +1102,18 @@ shows them is total over.
 type HarnessRowKey = (typeof HARNESS_SETTINGS)[number]['key'];
 ```
 
+## hasExtension
+
+Whether a path has the given extension, ignoring case.
+
+- `@example` hasExtension('notes.md', '.md') // true
+  hasExtension('Notes.MD', '.md') // true
+  hasExtension('notes.pdf', '.md') // false
+
+```ts
+function hasExtension(filePath: string, extension: string): boolean
+```
+
 ## HELPER_MODEL_SETTING
 
 No default here: absent means none is configured, and a helper call uses
@@ -1498,6 +1510,15 @@ function needsUser(
   run: RunView,
   runs: ReadonlyMap<RunId, RunView>,
 ): boolean
+```
+
+## NESTED_NOUNS
+
+What a task started, by the kind of its run: the noun a count of them
+takes, in the order a summary lists them.
+
+```ts
+const NESTED_NOUNS: Readonly<{ readonly agent: "agent"; readonly process: "command"; readonly script: "script"; }>
 ```
 
 ## NonNegativeIntSchema
@@ -2118,6 +2139,16 @@ string that was never minted as a run id cannot be passed for one.
 
 ```ts
 const RunIdSchema: brand<String, "RunId">
+```
+
+## runNoun
+
+What a run is called on screen and in a rejection: the task the user
+started (or a run the view no longer holds), else what a task started,
+by the kind of its run.
+
+```ts
+const runNoun: (run: { readonly parentId: string | null; readonly identity: { readonly kind: "agent"; readonly agent: string; readonly tool?: string | undefined; } | { readonly kind: "process"; readonly tool: string; } | { readonly kind: "script"; readonly title: string; }; } | undefined) => string
 ```
 
 ## RunOutcome
