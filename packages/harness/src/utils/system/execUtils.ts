@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Duration, Effect, Fiber, Result, Schema, Stream } from 'effect';
+import { Duration, Effect, Fiber, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import * as CommandLine from 'effect/process/CommandLine';
 
@@ -337,12 +337,15 @@ const awaitOutcome = Effect.fnUntraced(function* (
     concurrency: 'unbounded',
   }).pipe(
     Effect.andThen(releaseLifeline(handle)),
-    Effect.andThen(Effect.result(handle.exitCode)),
-    // The exit-code read fails only when the child died by a signal.
-    Effect.map((exit): Outcome =>
-      Result.isSuccess(exit)
-        ? { _tag: 'Exited', code: exit.success }
-        : { _tag: 'Signalled', description: toErrorMessage(exit.failure) },
+    Effect.andThen(
+      Effect.match(handle.exitCode, {
+        onSuccess: (code): Outcome => ({ _tag: 'Exited', code }),
+        // The exit-code read fails only when the child died by a signal.
+        onFailure: (error): Outcome => ({
+          _tag: 'Signalled',
+          description: toErrorMessage(error),
+        }),
+      }),
     ),
     Effect.catchTags({
       OutputLimitExceeded: (error) =>

@@ -24,6 +24,18 @@ export function formatMediaLabel(media: {
   return `[${media.kind}, ${formatBytes(media.sizeBytes)}]`;
 }
 
+/** A file's line range as a path suffix: `:5-9`, `:5` for one line or an
+ *  open end, and nothing for a whole file. */
+export function formatLineRange(
+  startLine: number | undefined,
+  endLine: number | undefined,
+): string {
+  if (!startLine) return '';
+  return endLine && endLine !== startLine
+    ? `:${startLine}-${endLine}`
+    : `:${startLine}`;
+}
+
 /** A change's line counts as a diff prints them (`+3 -1`). */
 export function formatLineChanges(added: number, removed: number): string {
   return `+${added} -${removed}`;

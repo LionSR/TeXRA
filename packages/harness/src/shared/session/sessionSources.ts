@@ -21,9 +21,8 @@ import { Context, Effect, Layer, type Scope, SubscriptionRef } from 'effect';
 import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 
 import type {
-  AggregateId,
-  LocalRuntimeState,
   RunId,
+  LocalRuntimeState,
   TranscriptSubscription,
 } from '@shared/schemas';
 
@@ -112,7 +111,7 @@ export class TranscriptSubscriptions extends Context.Service<
       const union = (): TranscriptSubscription[] => {
         // The lowest `fromSeq` any port asks for: a port that already holds
         // an aggregate's history must not shorten another's read.
-        const byId = new Map<AggregateId, TranscriptSubscription>();
+        const byId = new Map<RunId, TranscriptSubscription>();
         for (const set of ports.values()) {
           for (const entry of set) {
             const held = byId.get(entry.id);

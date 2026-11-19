@@ -21,10 +21,10 @@ import {
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
-  runStatusLabel,
   statusGlyph,
   TOOL_STATUS,
   TOOL_USER_FEEDBACK_LABEL,
+  toolRowLook,
 } from '@ui/copy/runStatus';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
@@ -53,29 +53,28 @@ const DRAWN_ICONS: ReadonlyMap<string, IconName> = new Map(
 const HEADER_PREVIEW_MAX_CHARS = 120;
 
 /**
- * Format tool use log entry as TemplateResult. On a run that is
- * `interrupted` (its process died), an open call is not running: nothing
- * works on it until Resume, so it shows no spinner or timer.
+ * Format tool use log entry as TemplateResult. An open call of an
+ * interrupted run (`model.status`) is not running: nothing works on it
+ * until Resume, so it shows no spinner or timer.
  */
 export function formatToolUseTemplate(
   row: ToolRow,
-  interrupted: boolean,
   tools: HostSnapshot['tools'],
 ): FormatResult {
   const { model } = row;
-  const inProgress = model.status === 'in_progress';
-  const running = inProgress && !interrupted;
-  const stopped = inProgress && interrupted;
+  const running = model.status === 'in_progress';
+  const stopped = model.status === 'interrupted';
   const toolName = row.log.toolName.trim();
   const normalizedToolName = normalizeToolName(toolName);
   const displayKind = toolDisplayKind(toolName);
-  const showAsError = model.status === 'failed' && !model.isUserFeedback;
+  const look = toolRowLook(model);
+  const showAsError = look?.tone === 'danger';
 
+  // A card wears its tool's icon unless its state has something to say:
+  // the user's feedback, an interruption or a failure.
   let iconName: IconName;
-  if (model.isUserFeedback) {
-    iconName = 'comment';
-  } else if (stopped || showAsError) {
-    iconName = statusGlyph({ tone: stopped ? 'warning' : 'danger' });
+  if (look !== undefined && (model.isUserFeedback || stopped || showAsError)) {
+    iconName = statusGlyph(look);
   } else {
     const icon = tools.icons[normalizedToolName];
     iconName =
@@ -142,7 +141,7 @@ export function formatToolUseTemplate(
   const timerTemplate = running ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${model.timeoutMs ?? 0}></tool-timer>` : nothing;
 
   // prettier-ignore
-  const stoppedTemplate = stopped ? html`<span class="tool-interrupted">${runStatusLabel('interrupted')}</span>` : nothing;
+  const stoppedTemplate = stopped ? html`<span class="tool-interrupted">${TOOL_STATUS.interrupted.word}</span>` : nothing;
   // prettier-ignore
   const extraContent = html`${timerTemplate}${stoppedTemplate}`;
 

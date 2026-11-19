@@ -2,7 +2,7 @@
  *  the global `AppState`), read from SQLite on every operation. */
 import * as path from 'node:path';
 
-import { Effect, Layer, RcMap, Result, Schema } from 'effect';
+import { Effect, Layer, RcMap, Result } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { logFailure } from '@logger/effectLog';
@@ -48,19 +48,6 @@ function appStateStoreFromDatabase(
       message: `The settings store at ${storage} refused the write of "${key}": ${toErrorMessage(cause)}`,
       cause,
     });
-  const encode = (key: string, value: unknown) =>
-    value === undefined
-      ? Result.succeed(undefined)
-      : Result.mapError(
-          Schema.decodeUnknownResult(Schema.Json)(value),
-          (cause) =>
-            refused(
-              key,
-              new Error(`State key ${key} was given a value that is not JSON`, {
-                cause,
-              }),
-            ),
-        );
   const modify = <K extends string, A, E>(
     keys: readonly K[],
     change: (
@@ -71,35 +58,29 @@ function appStateStoreFromDatabase(
     >,
   ): Effect.Effect<A, E | StateWriteFailed> =>
     values
-      .modify(
-        family,
-        keys.map(rowKey),
-        (
-          current,
-        ): Result.Result<
-          readonly [A] | readonly [A, Record<string, Schema.Json | undefined>],
-          E | StateWriteFailed
-        > => {
-          const result = change(
+      .modify(family, keys.map(rowKey), (current) =>
+        Result.map(
+          change(
             // cast: one entry for each of `keys`.
             Object.fromEntries(
               keys.map((key) => [key, current[rowKey(key)]]),
             ) as Readonly<Record<K, unknown>>,
-          );
-          if (Result.isFailure(result)) return Result.fail(result.failure);
-          if (result.success.length === 1)
-            return Result.succeed([result.success[0]]);
-          const [answer, next] = result.success;
-          const rows: Record<string, Schema.Json | undefined> = {};
-          for (const key of keys) {
-            const json = encode(key, next[key]);
-            if (Result.isFailure(json)) return Result.fail(json.failure);
-            rows[rowKey(key)] = json.success;
-          }
-          return Result.succeed([answer, rows]);
-        },
+          ),
+          (
+            result,
+          ): readonly [A] | readonly [A, Readonly<Record<string, unknown>>] =>
+            result.length === 1
+              ? result
+              : [
+                  result[0],
+                  Object.fromEntries(
+                    keys.map((key) => [rowKey(key), result[1][key]]),
+                  ),
+                ],
+        ),
       )
       .pipe(
+        // A value that is not JSON fails the write's own encode, by name.
         Effect.mapError((error) =>
           error instanceof DatabaseWriteFailed
             ? refused(keys.join(', '), error)
@@ -153,11 +134,11 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
           ] as const),
         )
         .pipe(
-          Effect.catch((error) =>
+          Effect.catch(
             logFailure(
               'sessionDatabase',
               `Could not record that ${storage} serves ${workspaceRoot}; a storage prune will not know that store's project, so it will not offer to delete the store once that folder is gone.`,
-            )(error),
+            ),
           ),
         );
     }

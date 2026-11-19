@@ -299,7 +299,6 @@ export function buildScenario({ proposal = false } = {}) {
     plugin: DOCUMENTS_OUTPUT_KIND.plugin,
     kind: DOCUMENTS_OUTPUT_KIND.kind,
     version: DOCUMENTS_OUTPUT_KIND.version,
-    parent: null,
     value: {
       task: {
         intro: '',

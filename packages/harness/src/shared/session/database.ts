@@ -22,12 +22,11 @@ import {
   Schema,
   type Stream,
 } from 'effect';
-import { AggregateIdSchema } from '@shared/schemas';
+import { RunIdSchema } from '@shared/schemas';
 import type {
-  AggregateId,
+  RunId,
   CommitOrdinal,
   DisplayRow,
-  RunId,
   SessionRow,
   SessionRowDraft,
   UnreadableRun,
@@ -47,11 +46,11 @@ export const INPUT_HISTORY_LIMIT = 1000;
 
 /** The current existence of an aggregate, independent of its rows' writers. */
 export const AggregateStateSchema = Schema.Struct({
-  aggregateId: AggregateIdSchema,
+  aggregateId: RunIdSchema,
   /** The incarnation's durable identity, minted with its first row. */
   uid: Schema.String.check(Schema.isUUID()),
   closed: Schema.BooleanFromBit,
-  parentId: Schema.NullOr(AggregateIdSchema),
+  parentId: Schema.NullOr(RunIdSchema),
   startCommit: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
 });
 export type AggregateState = typeof AggregateStateSchema.Type;
@@ -82,7 +81,7 @@ export class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>
  *  so it is never wrapped in `DatabaseWriteFailed`. */
 export class DatabaseAggregateClosed extends Schema.TaggedError<DatabaseAggregateClosed>()(
   'DatabaseAggregateClosed',
-  { aggregateId: AggregateIdSchema },
+  { aggregateId: RunIdSchema },
 ) {
   override readonly message = `${this.aggregateId} is closed; nothing was written.`;
 }
@@ -90,7 +89,7 @@ export class DatabaseAggregateClosed extends Schema.TaggedError<DatabaseAggregat
 /** A run's removal found a later lifetime of the run than the one its
  *  request read (it ended and started again since); nothing was written. */
 export class RunChanged extends Schema.TaggedError<RunChanged>()('RunChanged', {
-  aggregateId: AggregateIdSchema,
+  aggregateId: RunIdSchema,
 }) {
   override readonly message = `${this.aggregateId} changed since its removal was asked for; nothing was written.`;
 }
@@ -179,7 +178,9 @@ export interface CurrentValues {
   /**
    * Emits as subscribed, then after each value write, by this process or
    * (on the global store) another, that changed one of `keys`' values. A
-   * read that fails is logged and retried, so no change is missed.
+   * read of them that fails is logged and retried for about a minute, then
+   * emits as a change would: no change is missed, and the reader's own read
+   * meets the failure.
    */
   readonly changes: (
     family: Pick<ValueFamily<unknown>, 'name'>,
@@ -257,7 +258,7 @@ export class Database extends Context.Service<
      *  record kind, which the listing indexes), null for a run never
      *  started or removed. A row of them that does not decode fails it. */
     readonly readRunRecord: (
-      id: AggregateId,
+      id: RunId,
     ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
@@ -265,7 +266,7 @@ export class Database extends Context.Service<
      *  fork's cut), read through the `(aggregate, type, seq)` index in seq
      *  order. A row past `toSeq` is never read. */
     readonly readAggregate: (
-      id: AggregateId,
+      id: RunId,
       fromSeq: number,
       types: readonly SessionRow['type'][],
       toSeq?: number,
@@ -274,7 +275,7 @@ export class Database extends Context.Service<
      *  call rows show and the `usage` rows its priced responses project:
      *  what a renderer replays. */
     readonly readDisplayAggregate: (
-      id: AggregateId,
+      id: RunId,
       fromSeq: number,
     ) => Effect.Effect<readonly DisplayRow[], DatabaseReadFailed>;
     /** The job that removes a run tree (`SessionEvents.removeRun`): reread
@@ -303,10 +304,10 @@ export class Database extends Context.Service<
      *  every row of the aggregates `ids` shows), the existence of
      *  `checkedIds`, and the runs this build cannot open. */
     readonly readInputBatch: (
-      ids: readonly AggregateId[],
+      ids: readonly RunId[],
       fromCommit: CommitOrdinal,
       throughCommit: CommitOrdinal,
-      checkedIds: readonly AggregateId[],
+      checkedIds: readonly RunId[],
     ) => Effect.Effect<
       {
         readonly events: readonly DisplayRow[];
@@ -316,7 +317,7 @@ export class Database extends Context.Service<
       DatabaseReadFailed
     >;
     readonly aggregateState: (
-      ids: readonly AggregateId[],
+      ids: readonly RunId[],
     ) => Effect.Effect<readonly AggregateState[], DatabaseReadFailed>;
   }
 >()('@texra-ai/harness/session/Database') {}

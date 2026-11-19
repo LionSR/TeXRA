@@ -66,22 +66,23 @@ table's word for that state, "Waiting on you", not a second "Needs approval".
 
 ## 7. An open call on an interrupted run reads differently per host
 
-The time limit half is taken (`toolRowModel` carries `timeoutMs`).
-"An open call on an interrupted run is not running" is computed in
-`StageList.ts` and `toolFormatters.ts`; the terminal's `toolRenderers.tsx`
-has no such case and keeps painting the call as running. The row model can
-carry it beside `cutByRunEnd`, which changes the transcript entry's API
-report.
+Taken on 2026-11-19. The time limit half was taken earlier (`toolRowModel`
+carries `timeoutMs`). The row model's `status` (`ToolRowStatus`,
+`packages/harness/src/shared/transcript/toolRowModel.ts`) now reads
+`interrupted` for a call still open on a run nobody drives. The session
+view's updater decides it where it derives the run's holder
+(`packages/harness/src/shared/session/sessionViewUpdate.ts`) and paints the
+open cards again when the holder goes or returns. The web no longer joins
+the run to its rows, the script stage reads the row, and the terminal
+paints the status it had no case for: a warning dot and the word
+"Interrupted".
 
 ## 8. Child counts call every descendant an agent
 
-`rollup.total` counts commands and scripts as well as agents, and
-`nestedRollupLabel`, `RunTab.ts` and the terminal status bar label the total
-"agents"; the dispatch card counts per kind through `NESTED_NOUNS`. A task
-that ran three background commands reads "3 agents" in the tab and "3
-commands in the background" on the card. The rollup needs a count per
-identity kind (it is computed once in the session view update), which is a
-view shape change.
+Closed, checked on 2026-11-19: the rollup counts per identity kind
+(`rollup.kinds`), and `nestedCountsLabel`
+(`packages/texra/src/ui/copy/nestedRuns.ts`) words the tab, the terminal's
+run tree and the status bar by each kind's own noun.
 
 ## 9. The harness classifies the Claude Code plugin's raw tool names
 
@@ -129,9 +130,12 @@ segment should carry the route too is a narrow-terminal layout decision.
 - A run grant: the terminal paints `superYolo` in its error colour
   (`statusBarDisplay.ts`), the web's `runGrantChips.ts` every grant as a
   warning.
-- A user-feedback rejection: the terminal's `toolRenderers.tsx` paints any
-  `isError` row `danger`; the web's `toolFormatters.ts` excludes
-  `isUserFeedback`. The row model (`toolRowModel`) could carry the tone.
+- A user-feedback rejection: taken on 2026-11-19. `toolRowLook`
+  (`packages/texra/src/ui/copy/runStatus.ts`) decides how a tool card paints
+  its state for both hosts: the user's feedback outranks the call's status,
+  so the terminal no longer paints a rejection in its error colour. The
+  tone stays in the copy module, which owns the tone vocabulary; the row
+  model carries the two facts it reads (`status`, `isUserFeedback`).
 
 ## Checked and left alone
 

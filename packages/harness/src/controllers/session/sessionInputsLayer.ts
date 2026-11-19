@@ -20,11 +20,11 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { logFailure } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   referencedAggregates,
   replayInputs,
-  type AggregateId,
+  type RunId,
   type DisplayRow,
   type ExistenceReconciliation,
   type LocalRuntimeState,
@@ -90,17 +90,13 @@ export const readReplay = Effect.fnUntraced(function* (
   },
 ) {
   const listing = yield* requiredRead(log.readListing());
-  const checked = new Set<AggregateId>(read.subscriptions.map(({ id }) => id));
+  const checked = new Set<RunId>(read.subscriptions.map(({ id }) => id));
   for (const event of listing)
     for (const id of referencedAggregates(event)) checked.add(id);
-  const aggregateRows: DisplayRow[] = [];
-  for (const aggregate of read.subscriptions) {
-    aggregateRows.push(
-      ...(yield* requiredRead(
-        log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
-      )),
-    );
-  }
+  const aggregateRows = (yield* Effect.forEach(
+    read.subscriptions,
+    ({ id, fromSeq }) => requiredRead(log.readDisplayAggregate(id, fromSeq)),
+  )).flat();
   const checkedIds = [...checked];
   const replayState = yield* requiredRead(
     log.readInputBatch([], read.at, read.at, checkedIds),
@@ -153,19 +149,6 @@ export const sessionInputsLayer = Layer.effect(
              *  any aggregate, any row of a subscribed one. */
             const wanted = (row: DisplayRow) =>
               LISTED_KINDS.has(row.type) || subscribed.has(row.aggregateId);
-            /** What the view starts behind the publisher: read once, by
-             *  the first step. */
-            const behind =
-              anchor < head
-                ? requiredRead(
-                    log.readInputBatch(
-                      aggregates.map(({ id }) => id),
-                      anchor,
-                      head,
-                      [],
-                    ),
-                  )
-                : Effect.succeed({ events: [], state: [], damaged: [] });
             // Every level replays on subscribe, so the first step captures
             // the text and the local state as of now.
             const wakes = Stream.mergeAll<unknown, never, never>(
@@ -186,15 +169,18 @@ export const sessionInputsLayer = Layer.effect(
                   first: true,
                   text: new Map() as InflightText,
                   local: initialLocal,
+                  // Every aggregate this view was handed a row of.
+                  shown: new Set(
+                    replay.flatMap((input) =>
+                      input._tag === 'event' ? [input.event.aggregateId] : [],
+                    ),
+                  ),
                 }),
                 Effect.fnUntraced(function* (previous) {
                   // Text first, then the batches: a row committed before a
                   // chunk was published before the chunk reached the text.
                   const nextText = yield* SubscriptionRef.get(text.ref);
                   const snapshot = yield* SubscriptionRef.get(local.ref);
-                  const caughtUp = previous.first
-                    ? yield* behind
-                    : { events: [], state: [], damaged: [] };
                   const from = previous.first
                     ? Math.max(anchor, head)
                     : previous.cursor;
@@ -208,12 +194,43 @@ export const sessionInputsLayer = Layer.effect(
                     from,
                     ...taken.map(({ through }) => through),
                   );
+                  // What the publisher did not hand this view is read from
+                  // the store: the stretch it starts behind the publisher,
+                  // by the first step, and every commit through the last
+                  // batch taken when the publisher dropped the batches
+                  // before the first (this view fell too far behind).
+                  const dropped = (taken.at(0)?.from ?? from) > from;
+                  if (dropped)
+                    yield* Effect.logWarning(
+                      `A session view fell too far behind the publisher to be handed every batch; reading commits ${(previous.first ? anchor : from) + 1} to ${cursor} from the store.`,
+                    ).pipe(withLogChannel('sessionInputs'));
+                  const readFrom = previous.first ? anchor : from;
+                  const readThrough = dropped ? cursor : from;
+                  // A dropped batch may have removed a run whose deletion
+                  // marker the store has since collected, so no row read
+                  // back says so: the read checks every aggregate this view
+                  // was shown, and one the store no longer holds leaves it.
+                  const checked = dropped ? [...previous.shown] : [];
+                  const stored =
+                    readFrom < readThrough
+                      ? yield* requiredRead(
+                          log.readInputBatch(
+                            aggregates.map(({ id }) => id),
+                            readFrom,
+                            readThrough,
+                            checked,
+                          ),
+                        )
+                      : { events: [], state: [], damaged: [] };
                   const rows = [
-                    ...caughtUp.events,
+                    ...stored.events,
                     ...taken.flatMap(({ rows }) =>
-                      rows.filter((row) => row.commit > from && wanted(row)),
+                      rows.filter(
+                        (row) => row.commit > readThrough && wanted(row),
+                      ),
                     ),
                   ];
+                  for (const row of rows) previous.shown.add(row.aggregateId);
                   // A removal closes its run and the runs under it, which
                   // the marker names.
                   const closed = rows.flatMap((row) =>
@@ -222,8 +239,8 @@ export const sessionInputsLayer = Layer.effect(
                       : [],
                   );
                   const existence: ExistenceReconciliation = {
-                    ...reconcileExistence([], caughtUp),
-                    checkedAggregateIds: closed,
+                    ...reconcileExistence([], stored),
+                    checkedAggregateIds: [...checked, ...closed],
                   };
                   // The snapshot was read before the rows: it goes before
                   // them, as in the replay.
@@ -260,7 +277,13 @@ export const sessionInputsLayer = Layer.effect(
                     ...inputs,
                   ];
                   return [
-                    { cursor, first: false, text: nextText, local: snapshot },
+                    {
+                      cursor,
+                      first: false,
+                      text: nextText,
+                      local: snapshot,
+                      shown: previous.shown,
+                    },
                     batch.length === 0 ? [] : [batch],
                   ] as const;
                 }),
@@ -277,7 +300,7 @@ export const sessionInputsLayer = Layer.effect(
  *  `run.removed` row is still stored; the runs the read found this build
  *  cannot open (`damaged`) ride beside. */
 function reconcileExistence(
-  checkedAggregateIds: readonly AggregateId[],
+  checkedAggregateIds: readonly RunId[],
   read: {
     readonly state: readonly AggregateState[];
     readonly damaged: readonly UnreadableRun[];

@@ -22,6 +22,7 @@
 import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { decodingDefault } from '@shared/schemas';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -306,12 +307,14 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
   // goes to the process log only, never into tool results.
   yield* Effect.forkScoped(
     Effect.gen(function* () {
-      const exit = yield* Effect.result(handle.exitCode);
+      const code = yield* Effect.orElseSucceed(
+        handle.exitCode,
+        () => 'unknown' as const,
+      );
       yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
         concurrency: 'unbounded',
       }).pipe(Effect.timeoutOption(STOP_TIMEOUT));
       const tail = stderrTail.trim();
-      const code = exit._tag === 'Success' ? exit.success : 'unknown';
       if (tail)
         yield* Effect.logWarning(
           `MCP server "${config.name}" exited (code ${code}); its stderr:\n${tail}`,
@@ -328,7 +331,11 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
     .request('initialize', {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: 'texra', version: '1' },
+      // The app the process runs, as it names itself to model providers.
+      clientInfo: {
+        name: (yield* SubscriptionAccounts).client.id,
+        version: '1',
+      },
     })
     .pipe(Effect.mapError(failed));
   yield* decode(InitializeResultSchema, initialized, 'initialize');
@@ -362,7 +369,7 @@ export const acquireMcpServer = Effect.fn('acquireMcpServer')(function* (
 ): Effect.fn.Return<
   LoadedPluginTools,
   never,
-  Scope.Scope | ChildProcessSpawner.ChildProcessSpawner
+  Scope.Scope | ChildProcessSpawner.ChildProcessSpawner | SubscriptionAccounts
 > {
   const scope = yield* Scope.fork(yield* Effect.scope, 'sequential');
   const result = yield* connect(config).pipe(

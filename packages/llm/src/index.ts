@@ -139,9 +139,8 @@ export type { SelectedModel } from './models/modelSelection.js';
 export {
   codexBackendModelId,
   decideModelRoute,
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
   isUnservedModel,
+  kimiCodeServing,
   OWN_KEY_ROUTE_FACTS,
   resolveModelSource,
   routeConfig,
@@ -153,11 +152,10 @@ export type {
   RouteFacts,
 } from './models/modelRoute.js';
 export {
-  acceptedEfforts,
   chooseReasoning,
   DEFAULT_EFFORT,
   ReasoningChoiceError,
-  wireEffort,
+  reasoningOnRoute,
 } from './models/reasoningChoice.js';
 export type {
   ChooseReasoningOptions,

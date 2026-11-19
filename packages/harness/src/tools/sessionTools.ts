@@ -50,7 +50,8 @@ export interface ToolStep {
    *  the step reads their continuation and prompt section. */
   readonly plugins: readonly Plugin[];
   /** The modules its scripts may import, source by specifier: each of the
-   *  on built-in plugins' `scriptModules` as `builtIn:<name>`. The
+   *  on built-in plugins' `scriptModules` as `builtIn:<name>`, and each
+   *  program of the installed plugins it loaded as `<plugin>:<name>`. The
    *  programs its scripts may start are those plugins' `programs`. */
   readonly modules: { readonly [specifier: string]: string };
   /** The installed plugins the step loaded, by id, as read (those that ship
@@ -234,14 +235,20 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   return {
     entries: merged.entries,
     plugins,
-    modules: Object.fromEntries(
-      plugins.flatMap(({ scriptModules = {} }) =>
+    modules: Object.fromEntries([
+      ...plugins.flatMap(({ scriptModules = {} }) =>
         Object.entries(scriptModules).map(([name, source]) => [
           `builtIn:${name}`,
           source,
         ]),
       ),
-    ),
+      ...read.plugins.flatMap(({ source }) =>
+        source.plugin.programs.loaded.map(({ name, source: text }) => [
+          name,
+          text,
+        ]),
+      ),
+    ]),
     installed: new Map(read.plugins.map(({ id, source }) => [id, source])),
     warnings: [...read.warnings, ...failures, ...merged.warnings],
     services: (used) =>
