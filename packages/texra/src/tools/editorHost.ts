@@ -82,7 +82,7 @@ export type EditorCapability = keyof EditorCapabilities;
 
 /** What the editor tools read: the capabilities offered for a session's
  *  storage root ({} for none). */
-export interface EditorHostShape {
+interface EditorHostShape {
   readonly at: (storage: string) => EditorCapabilities;
 }
 

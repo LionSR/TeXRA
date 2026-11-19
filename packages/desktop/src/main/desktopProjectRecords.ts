@@ -23,13 +23,13 @@ const EMPTY: ProjectLists = { remembered: [], recent: [] };
  * @public Exported for the storage freeze (`npm run storage:freeze`, which
  * fingerprints every stored family), not for another module.
  */
-export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
+export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = Object.freeze({
   name: 'desktop-projects',
   schema: Schema.Struct({
     remembered: Schema.Array(Schema.NonEmptyString),
     recent: Schema.Array(Schema.NonEmptyString),
   }),
-};
+});
 
 /**
  * The remembered projects, on the process's handle on the global root.

@@ -21,7 +21,7 @@ import type {
 import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
 import type { CliContext } from '../platform/cliContext';
 
-export interface CliRuntimeHost {
+interface CliRuntimeHost {
   emit<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],

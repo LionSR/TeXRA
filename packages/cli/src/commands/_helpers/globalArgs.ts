@@ -21,69 +21,69 @@ function formatCommaList(items: readonly string[]): string {
  * `options` readonly, which citty's `ArgsDef` rejects. Adding a new global
  * flag is a one-line change here.
  */
-export const GLOBAL_ARGS = {
-  print: {
+export const GLOBAL_ARGS = Object.freeze({
+  print: Object.freeze({
     type: 'boolean',
     alias: 'p' as const,
     description:
       'For headless commands, run non-interactively and print the result to stdout',
-  },
-  quiet: {
+  }),
+  quiet: Object.freeze({
     type: 'boolean',
     alias: 'q' as const,
     description: 'Suppress progress output and informational logs',
-  },
-  verbose: {
+  }),
+  verbose: Object.freeze({
     type: 'boolean',
     description:
       'Emit debug-level diagnostics (the terminal has no level filter of its own)',
-  },
-  cwd: {
+  }),
+  cwd: Object.freeze({
     type: 'string',
     valueHint: 'directory',
     description: 'Directory the command works in (defaults to $PWD)',
-  },
-  'output-format': {
+  }),
+  'output-format': Object.freeze({
     type: 'enum',
     options: [...CLI_OUTPUT_FORMATS],
     description: 'Output format for headless commands (default: text)',
-  },
-  'approval-policy': {
+  }),
+  'approval-policy': Object.freeze({
     type: 'enum',
     options: [...APPROVAL_POLICIES],
     description:
       'Privileged tool actions: never (deny all), ask (prompt; default), or yolo (auto-approve)',
-  },
+  }),
   // Positively-named boolean defaulting to `true`: citty parses `--no-color`
   // into `color: false` and renders the negative variant in usage from
   // `negativeDescription` (see citty's `parseRawArgs`).
-  color: {
+  color: Object.freeze({
     type: 'boolean',
     default: true,
     description: 'Emit ANSI color (also honors NO_COLOR / FORCE_COLOR / TERM)',
     negativeDescription: 'Disable ANSI color on every stream',
-  },
-  'no-input': {
+  }),
+  'no-input': Object.freeze({
     type: 'boolean',
     description:
       'For headless commands, disable prompts and default approvals to never',
-  },
-} satisfies ArgsDef;
+  }),
+} satisfies ArgsDef);
 
-export const SKILL_SOURCE_ARGS = {
-  source: {
+export const SKILL_SOURCE_ARGS = Object.freeze({
+  source: Object.freeze({
     type: 'string',
     alias: 's' as const,
     valueHint: 'directory',
     description:
       'Additional skill root; may be repeated and is resolved relative to --cwd',
-  },
-} satisfies ArgsDef;
+  }),
+} satisfies ArgsDef);
 
-export const AGENT_RUN_GLOBAL_ARGS = {
+export const AGENT_RUN_GLOBAL_ARGS = Object.freeze({
   ...GLOBAL_ARGS,
   ...SKILL_SOURCE_ARGS,
-} as const;
+} as const);
 
 /** citty's parse of the global flags; a command declares a subset of them. */
 export type ParsedGlobalArgs = Partial<
@@ -117,11 +117,11 @@ export function pickGlobalArgs(
   };
 }
 
-export const HEADLESS_ONLY_GLOBAL_ARG_NAMES = [
+export const HEADLESS_ONLY_GLOBAL_ARG_NAMES = Object.freeze([
   'print',
   'output-format',
   'no-input',
-] as const;
+] as const);
 type HeadlessOnlyGlobalArgName =
   (typeof HEADLESS_ONLY_GLOBAL_ARG_NAMES)[number];
 
@@ -135,13 +135,13 @@ type HeadlessOnlyGlobalArgName =
 export const INTERACTIVE_GLOBAL_ARGS: Omit<
   typeof GLOBAL_ARGS,
   HeadlessOnlyGlobalArgName
-> = {
+> = Object.freeze({
   quiet: GLOBAL_ARGS.quiet,
   verbose: GLOBAL_ARGS.verbose,
   cwd: GLOBAL_ARGS.cwd,
   'approval-policy': GLOBAL_ARGS['approval-policy'],
   color: GLOBAL_ARGS.color,
-};
+});
 
 /**
  * Commands that necessarily own the terminal and therefore reject the
@@ -149,7 +149,10 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
  * (see {@link rejectHeadlessOnlyFlags} and dispatch's flag-spec handling)
  * instead of reporting them as unknown flags.
  */
-export const INTERACTIVE_COMMAND_NAMES: readonly string[] = ['chat', 'setup'];
+export const INTERACTIVE_COMMAND_NAMES: readonly string[] = Object.freeze([
+  'chat',
+  'setup',
+]);
 
 // The long flag plus any single-character alias for a routable global flag.
 function flagSpellings(
@@ -163,13 +166,13 @@ function flagSpellings(
 // Derived from `AGENT_RUN_GLOBAL_ARGS` so adding/renaming a leading-routable flag
 // in one place flows through to `reorderGlobalFlags` automatically. Commands
 // still choose which routed flags they accept through their own args objects.
-export const GLOBAL_VALUE_FLAGS = new Set<string>(
+export const GLOBAL_VALUE_FLAGS: ReadonlySet<string> = new Set<string>(
   Object.entries(AGENT_RUN_GLOBAL_ARGS).flatMap(([name, def]) =>
     def.type === 'boolean' ? [] : flagSpellings(name, def),
   ),
 );
 
-export const GLOBAL_BOOL_FLAGS = new Set<string>(
+export const GLOBAL_BOOL_FLAGS: ReadonlySet<string> = new Set<string>(
   Object.entries(AGENT_RUN_GLOBAL_ARGS).flatMap(([name, def]) => {
     if (def.type !== 'boolean') return [];
     const flags = flagSpellings(name, def);

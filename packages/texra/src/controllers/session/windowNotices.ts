@@ -47,7 +47,7 @@ type AskNotice = (
 ) => Effect.Effect<string | undefined, HostFailed>;
 
 /** What a window's notices need from its host. */
-export interface WindowNoticeHost {
+interface WindowNoticeHost {
   readonly ask: AskNotice;
   /** Ask for a provider API key: a prompt on one host, the Models tab on
    *  the other. */

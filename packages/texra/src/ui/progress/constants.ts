@@ -14,7 +14,7 @@ export interface RunMenuTarget {
 }
 
 /** One run action in the run header's menu. Stop sits in the row itself. */
-export interface RunMenuAction {
+interface RunMenuAction {
   /** The run action it performs: shown only while `RunView.actions` holds it. */
   action: RunAction;
   icon: IconName;

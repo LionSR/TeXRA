@@ -122,7 +122,6 @@ export const GhPullRequestSchema = Schema.Struct({
   mergeable_state: Schema.optional(Schema.NullOr(Schema.String)),
   head: Schema.Struct({ sha: Schema.String }),
 });
-export type GhPullRequest = typeof GhPullRequestSchema.Type;
 
 /**
  * GitHub computes `mergeable_state` asynchronously after every push or base

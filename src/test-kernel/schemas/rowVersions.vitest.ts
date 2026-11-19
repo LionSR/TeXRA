@@ -120,7 +120,7 @@ describe('row versions', () => {
       )
       .flatMap((file) => [
         ...readFileSync(file, 'utf8').matchAll(
-          /:\s*ValueFamily<[^=]*=\s*\{\s*name:\s*'([^']+)'/g,
+          /:\s*ValueFamily<[^=]*=\s*(?:Object\.freeze\(\s*)?\{\s*name:\s*'([^']+)'/g,
         ),
       ])
       .map((match) => match[1]);

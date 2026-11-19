@@ -45,10 +45,11 @@ export interface DesktopSettingsIpcOptions {
 type SettingsViewBody = Effect.Success<ReturnType<typeof makeSettingsViewBody>>;
 
 /** The commands the settings view posts to its host. */
-export const SETTINGS_VIEW_INBOUND_COMMANDS =
+export const SETTINGS_VIEW_INBOUND_COMMANDS = Object.freeze(
   SettingsViewInboundMessageSchema.members.map(
     (member) => member.fields.command.literal,
-  );
+  ),
+);
 
 export interface DesktopSettingsIpc extends Pick<
   SettingsViewBody,

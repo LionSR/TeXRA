@@ -31,8 +31,8 @@ const THEME_KINDS = [
 /** Every `vscode-<kind>` body class, derived from THEME_KINDS.
  *  `applyHostBodyTheme` strips these on re-apply and `isDarkTheme` below
  *  classifies body classes against this same list. */
-export const THEME_CLASSES: readonly string[] = THEME_KINDS.map(
-  (kind) => `vscode-${kind}`,
+export const THEME_CLASSES: readonly string[] = Object.freeze(
+  THEME_KINDS.map((kind) => `vscode-${kind}`),
 );
 
 /**

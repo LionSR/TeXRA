@@ -29,82 +29,112 @@ export interface CommandCatalogEntry {
  * runs some of them beside commands of its own. Where a host shows them and
  * how (an icon, a menu, when a command is enabled) is the host's.
  */
-export const COMMAND_CATALOG = [
-  { id: 'texra.createSampleProject', title: 'Create Sample Project' },
-  { id: 'texra.runSetupAssistant', title: 'Run Setup Assistant' },
-  {
+export const COMMAND_CATALOG = Object.freeze([
+  Object.freeze({
+    id: 'texra.createSampleProject',
+    title: 'Create Sample Project',
+  }),
+  Object.freeze({
+    id: 'texra.runSetupAssistant',
+    title: 'Run Setup Assistant',
+  }),
+  Object.freeze({
     id: 'texra.openGettingStarted',
     title: 'Open Getting Started Walkthrough',
-  },
-  {
+  }),
+  Object.freeze({
     id: 'texra.cleanBuild',
     title: 'Delete All build/ Folders in Workspace',
-  },
-  {
+  }),
+  Object.freeze({
     id: 'texra.cloneOverleafProject',
     title: 'Clone Overleaf/ShareLaTeX Project',
-  },
-  { id: 'texra.indentCurrentTeX', title: 'Format Current LaTeX File' },
-  { id: 'texra.fixCompilation', title: 'Fix LaTeX Compilation Errors' },
-  { id: 'texra.getTeXCount', title: 'Count Words in Current TeX File' },
-  {
+  }),
+  Object.freeze({
+    id: 'texra.indentCurrentTeX',
+    title: 'Format Current LaTeX File',
+  }),
+  Object.freeze({
+    id: 'texra.fixCompilation',
+    title: 'Fix LaTeX Compilation Errors',
+  }),
+  Object.freeze({
+    id: 'texra.getTeXCount',
+    title: 'Count Words in Current TeX File',
+  }),
+  Object.freeze({
     id: 'texra.compileTikzFigures',
     title: 'Compile TikZ Figures from Current File',
-  },
-  { id: 'texra.downloadArXivSource', title: 'Download arXiv Source' },
-  {
+  }),
+  Object.freeze({
+    id: 'texra.downloadArXivSource',
+    title: 'Download arXiv Source',
+  }),
+  Object.freeze({
     id: 'texra.execute',
     title: 'Execute Agent',
-    keybinding: { key: 'ctrl+alt+e', mac: 'cmd+option+e' },
-  },
-  { id: 'texra.setApiKey', title: 'Set API Key' },
-  { id: 'texra.removeApiKey', title: 'Remove API Key' },
-  {
+    keybinding: Object.freeze({ key: 'ctrl+alt+e', mac: 'cmd+option+e' }),
+  }),
+  Object.freeze({ id: 'texra.setApiKey', title: 'Set API Key' }),
+  Object.freeze({ id: 'texra.removeApiKey', title: 'Remove API Key' }),
+  Object.freeze({
     id: 'texra.auth.chatgpt.signIn',
     title: 'Sign In with ChatGPT Subscription',
-  },
-  { id: 'texra.showMemory', title: 'Memory Settings', settingsTab: 'memory' },
-  {
+  }),
+  Object.freeze({
+    id: 'texra.showMemory',
+    title: 'Memory Settings',
+    settingsTab: 'memory',
+  }),
+  Object.freeze({
     id: 'texra.showModels',
     title: 'Model Settings',
     settingsTab: 'models/models',
-  },
-  {
+  }),
+  Object.freeze({
     id: 'texra.showAgents',
     title: 'Agent Settings',
     settingsTab: 'agents/library',
-  },
-  { id: 'texra.showTools', title: 'Plugin Settings', settingsTab: 'plugins' },
-  {
+  }),
+  Object.freeze({
+    id: 'texra.showTools',
+    title: 'Plugin Settings',
+    settingsTab: 'plugins',
+  }),
+  Object.freeze({
     id: 'texra.showApprovalSettings',
     title: 'Approval Settings',
     settingsTab: 'general/approval',
-  },
-  {
+  }),
+  Object.freeze({
     id: 'texra.showGitSettings',
     title: 'Git Settings',
     settingsTab: 'general/git',
-  },
-  {
+  }),
+  Object.freeze({
     id: 'texra.showMainView',
     title: 'New Task',
-    keybinding: { key: 'ctrl+alt+m', mac: 'cmd+option+m' },
-  },
-  {
+    keybinding: Object.freeze({ key: 'ctrl+alt+m', mac: 'cmd+option+m' }),
+  }),
+  Object.freeze({
     id: 'texra.showProgressView',
     title: 'Show Tasks',
-    keybinding: { key: 'ctrl+alt+p', mac: 'cmd+option+p' },
-  },
-  {
+    keybinding: Object.freeze({ key: 'ctrl+alt+p', mac: 'cmd+option+p' }),
+  }),
+  Object.freeze({
     id: 'texra.openProgressViewInTab',
     title: 'Open Tasks in Editor',
     shortTitle: 'Open in Editor',
-  },
-  { id: 'texra.showDashboard', title: 'Open Settings', shortTitle: 'Settings' },
-  { id: 'texra.replyComment', title: 'Reply' },
-  { id: 'texra.resolveCommentThread', title: 'Resolve' },
-  { id: 'texra.unresolveCommentThread', title: 'Reopen' },
-] as const satisfies readonly CommandCatalogEntry[];
+  }),
+  Object.freeze({
+    id: 'texra.showDashboard',
+    title: 'Open Settings',
+    shortTitle: 'Settings',
+  }),
+  Object.freeze({ id: 'texra.replyComment', title: 'Reply' }),
+  Object.freeze({ id: 'texra.resolveCommentThread', title: 'Resolve' }),
+  Object.freeze({ id: 'texra.unresolveCommentThread', title: 'Reopen' }),
+] as const satisfies readonly CommandCatalogEntry[]);
 
 /** A TeXRA command's id: persisted in keybindings and settings, never
  *  renamed. */
@@ -125,8 +155,10 @@ export type SettingsTabCommandId = Extract<
  * Both hosts build their `showSettings` handler rows from this map.
  */
 // cast: each entry with a `settingsTab` keys its own id: exactly SettingsTabCommandId.
-export const settingsTabByCommand = Object.fromEntries(
-  COMMAND_CATALOG.flatMap((entry) =>
-    'settingsTab' in entry ? [[entry.id, entry.settingsTab]] : [],
-  ),
-) as Record<SettingsTabCommandId, SettingsTarget>;
+export const settingsTabByCommand = Object.freeze(
+  Object.fromEntries(
+    COMMAND_CATALOG.flatMap((entry) =>
+      'settingsTab' in entry ? [[entry.id, entry.settingsTab]] : [],
+    ),
+  ) as Record<SettingsTabCommandId, SettingsTarget>,
+);

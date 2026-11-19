@@ -247,14 +247,14 @@ const COMPLETION_SOURCES = {
  */
 export const POSITIONAL_COMPLETION_SOURCES: Readonly<
   Record<string, CompletionSource>
-> = {
+> = Object.freeze({
   run: COMPLETION_SOURCES.launchableAgents,
   'agents show': COMPLETION_SOURCES.agents,
   'agents customize': COMPLETION_SOURCES.launchableAgents,
   'agents reset': COMPLETION_SOURCES.agents,
   'agents keep': COMPLETION_SOURCES.agents,
   'models show': COMPLETION_SOURCES.models,
-};
+});
 
 /**
  * Dynamic flag-value completions, keyed by flag name. `--model`/`-m` and
@@ -264,10 +264,10 @@ export const POSITIONAL_COMPLETION_SOURCES: Readonly<
  */
 export const DYNAMIC_VALUE_FLAG_SOURCES: Readonly<
   Record<string, CompletionSource>
-> = {
+> = Object.freeze({
   model: COMPLETION_SOURCES.models,
   agent: COMPLETION_SOURCES.launchableAgents,
-};
+});
 
 /** Every dynamic listing source, for the generators that emit each function. */
 export function allCompletionSources(): CompletionSource[] {

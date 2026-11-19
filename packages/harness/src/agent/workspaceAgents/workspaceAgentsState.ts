@@ -33,19 +33,19 @@ import type { StateKey } from '@shared/state/stateSettings';
 
 /** How the workspace obtains its visible agents, per repository; absent is
  *  every agent. */
-export const WORKSPACE_AGENTS_KEY = {
+export const WORKSPACE_AGENTS_KEY = Object.freeze({
   key: 'workspaceAgents',
   slot: 'repoState',
   schema: decodingDefault(WorkspaceAgentsSelectionSchema, ALL_WORKSPACE_AGENTS),
-} as const satisfies StateKey<WorkspaceAgentsSelection>;
+} as const satisfies StateKey<WorkspaceAgentsSelection>);
 
 /** The custom agents the user turned off, per repository; every other
  *  custom agent is shown, and an absent value reads as none. */
-export const HIDDEN_CUSTOM_AGENTS_KEY = {
+export const HIDDEN_CUSTOM_AGENTS_KEY = Object.freeze({
   key: 'hiddenCustomAgents',
   slot: 'repoState',
   schema: decodingDefault(HiddenCustomAgentKeysSchema, []),
-} as const satisfies StateKey<readonly string[]>;
+} as const satisfies StateKey<readonly string[]>);
 
 interface WorkspaceAgentEntry {
   readonly name: string;

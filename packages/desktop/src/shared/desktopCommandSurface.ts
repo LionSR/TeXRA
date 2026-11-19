@@ -15,7 +15,7 @@ import type { OsPlatform } from '@texra/shared/osPlatform';
 import { DESKTOP_SHELL_COMMANDS } from './desktopShellMessages.js';
 import type { DesktopPush } from './desktopOutboundMessages.js';
 
-export const DESKTOP_LOCAL_COMMANDS = {
+export const DESKTOP_LOCAL_COMMANDS = Object.freeze({
   SHOW_LOGS: 'texra.desktop.showLogs',
   SHOW_BROWSER: 'texra.desktop.showBrowser',
   TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
@@ -25,7 +25,7 @@ export const DESKTOP_LOCAL_COMMANDS = {
   SAVE_FILE: 'texra.desktop.saveFile',
   SWITCH_PROJECT: 'texra.desktop.switchProject',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
-} as const;
+} as const);
 
 /** The command palette's own command: its shortcut opens the palette, which
  *  neither lists it nor has a menu entry for it. */
@@ -144,11 +144,11 @@ export type DesktopCommandId = (typeof DESKTOP_PALETTE_COMMANDS)[number];
  * main process posts every other command to the renderer as
  * `desktop:runCommand`.
  */
-export const DESKTOP_MAIN_COMMANDS = [
+export const DESKTOP_MAIN_COMMANDS = Object.freeze([
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly DesktopLocalCommandId[];
+] as const satisfies readonly DesktopLocalCommandId[]);
 
 export type DesktopMainCommandId = (typeof DESKTOP_MAIN_COMMANDS)[number];
 
