@@ -1,257 +1,254 @@
 # Open proposals: what is left, who decides, and the order
 
-Date: 2026-11-17
+Date: 2026-11-17, rewritten 2026-11-19
 Status: proposed
 
-A reading of every note under `.agents/docs/proposed/` at `main` `c78e9f9`:
-how much each still asks for, which of its waiting items need the owner,
-which areas a later step deletes, and the order that follows. It is a
+A reading of every note under `.agents/docs/proposed/` at `main` `8439d64`
+(2026-11-19): what each still asks for, which waiting items were decided and
+on what basis, which stay with the owner, and the order that follows. It is a
 snapshot for planning. The notes stay the owners of their items; when one of
 them and this note disagree, fix this note or delete it.
 
-How it was made: each note was read in full, and every item it listed as
-open was checked against the tree with a whole-word search and a read of
-the code it cites. The notes themselves were corrected in the same change,
-so the numbers below are the notes' own. An item that is "partly done"
-counts as open, and the notes say which items could not be established. The buckets under "Who decides" apply rules
-the repository already states; a lean written here is not a ruling.
+The 2026-11-17 version of this note read `c78e9f9`, 59 commits earlier. Its
+five defects are all fixed (#15018, #15024, #15026, #15071), every entry of
+its "In flight" list has merged, and its table was wrong for every note it
+covered, so it is replaced, not patched.
+
+How it was made: four read-only passes, one per area, read each of the 49
+other notes in full and checked every item it lists as open against the tree
+by name, trusting neither the note's line numbers nor its own "done" and
+"open" labels. A second pass read, for each item waiting on a decision, what
+the note itself recommends, whether taking it makes data an install holds
+unreadable, changes something a person sees by default, needs a provider key
+or a third party, and whether a revert restores it. Items counted done from
+a note's own "landed" list were confirmed by the symbol's presence, not by
+behaviour.
 
 ## What is left
 
-About 192 items: about 103 that are code work, about 64 that wait on a
-decision, and about 25 on hold. A first count from the notes' text alone,
-before they were corrected, gave about 230. Some are counted twice (see
-"Overlaps").
+| Area                                       | Notes | Do now | Waits on a decision | Needs evidence | On hold |
+| ------------------------------------------ | ----- | ------ | ------------------- | -------------- | ------- |
+| Storage and row shapes                     | 12    | 16     | 18                  | 4              | 3       |
+| Run runtime and architecture               | 11    | 17     | 17                  | 7              | 8       |
+| App, hosts, UI, LaTeX, programs, features  | 16    | 21     | 37                  | 6              | 7       |
+| Model layer, SDK surface, release, process | 10    | 8      | 20                  | 8              | 14      |
 
-| Note                                                                                                                                 | Work | Waits on a decision | On hold |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ---- | ------------------- | ------- |
-| [harness general-package design](../architecture/2026-10-21-harness-general-package-design.md)                                       | 6    |                     | 2       |
-| [tech-debt target designs](../architecture/2026-10-27-tech-debt-target-designs.md)                                                   | 3    | 1                   |         |
-| [harness 1.0 release PRD](../architecture/2026-10-28-harness-1-release-prd.md)                                                       | 6    | 2                   | 1       |
-| [one fact, one representation](../architecture/2026-11-03-one-fact-one-representation.md)                                            | 4    | 1                   |         |
-| [session store review](../architecture/2026-11-03-session-store-review.md)                                                           | 6    | 2                   | 1       |
-| [root designs, Effect-native](../architecture/2026-11-05-root-designs-effect-native.md)                                              | 6    |                     |         |
-| [CLI service root causes](../architecture/2026-11-06-cli-service-root-causes.md)                                                     | 4    |                     |         |
-| [root designs, PR-1 compromises](../architecture/2026-11-06-root-designs-pr1-compromises.md)                                         | 3    | 1                   |         |
-| [programs, not agents](../architecture/2026-11-06-programs-not-agents.md)                                                            | 4    | 2                   |         |
-| [red flags round 2 and the order](../architecture/2026-11-07-red-flags-round-2-and-order.md)                                         | 1    | 2                   | 1       |
-| [red flags round 3, the plan](../architecture/2026-11-07-red-flags-round-3-plan.md)                                                  | 4    | 1                   | 11      |
-| [agent data: one row per fact](../architecture/2026-11-09-agent-data-one-row-per-fact.md)                                            |      | 2                   |         |
-| [decisions read the log, not the view](../architecture/2026-11-09-decisions-read-the-log-not-the-view.md)                            | 2    |                     |         |
-| [harness against the peers, round 3](../architecture/2026-11-11-harness-against-pi-durable-and-deepseek-round-3.md)                  | 6    | 1                   |         |
-| [nothing held across a wait](../architecture/2026-11-14-nothing-held-across-a-wait.md)                                               | 7    | 5                   |         |
-| [desktop and extension UX roadmap](../feature/2026-09-26-desktop-and-extension-ux-roadmap.md)                                        | 6    | 1                   |         |
-| [orchestrator over projects](../feature/2026-09-26-orchestrator-over-projects.md)                                                    |      |                     | 5       |
-| [Claude Agent model route](../feature/2026-10-31-claude-agent-model-route.md)                                                        |      | 4                   |         |
-| [runtime performance measurement record](./2026-09-21-runtime-performance-measurement-record.md)                                     |      |                     | 3       |
-| [SDK npm publishing](./2026-11-05-sdk-npm-publishing.md)                                                                             |      | 4                   |         |
-| [fewer processing options](../simplification/2026-11-03-fewer-processing-options.md)                                                 | 1    | 1                   |         |
-| [storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md)                                      | 12   |                     |         |
-| [store and test-support debts](../simplification/2026-11-04-store-and-test-support-debts.md)                                         | 6    | 8                   |         |
-| [session surfaces, ad hoc](../simplification/2026-11-10-session-surfaces-ad-hoc.md)                                                  |      | 5                   |         |
-| [llm history lowering and reply-document recovery](../simplification/2026-11-14-llm-history-lowering-and-reply-document-recovery.md) |      | 2                   | 1       |
-| [reading a failed cause](../simplification/2026-11-14-reading-a-failed-cause.md)                                                     |      | 3                   |         |
-| [tool card result and delivery shapes](../simplification/2026-11-14-tool-card-result-and-delivery-shapes.md)                         | 1    | 2                   |         |
-| [unified-latex for LaTeX extraction](../simplification/2026-11-14-unified-latex-for-latex-extraction.md)                             |      | 1                   |         |
-| [data shapes left after the audit](../simplification/2026-11-15-data-shapes-left-after-the-audit.md)                                 |      | 3                   |         |
-| [global store, values only](../simplification/2026-11-15-global-store-values-only.md)                                                | 4    |                     |         |
-| [host rules and app facts with two owners](../simplification/2026-11-15-host-rules-and-app-facts-with-two-owners.md)                 | 3    | 3                   |         |
-| [layer misplacements left open](../simplification/2026-11-15-layer-misplacements-left-open.md)                                       | 4    | 4                   |         |
-| [run-end audit left open](../simplification/2026-11-15-run-end-audit-left-open.md)                                                   | 2    |                     |         |
-| [llm provider wire boundary](../simplification/2026-11-16-llm-provider-wire-boundary.md)                                             |      | 1                   |         |
-| [SDK readiness audit](../simplification/2026-11-16-sdk-readiness-audit.md)                                                           |      | 1                   |         |
-| [test launches wait on state](../simplification/2026-11-16-test-launches-wait-on-state.md)                                           | 2    |                     |         |
+About 60 items of work after overlaps, about 90 decisions before this note's
+rulings below, about 25 items that need a measurement, a spike or a live
+provider key, and about 30 on hold with a stated reopening event. Decisions
+outnumber work: what limits progress is no longer hands.
 
-[Copilot possibilities](../feature/2026-10-26-copilot-possibilities.md) and
-[natives and owners left open](../simplification/2026-11-15-natives-and-owners-left-open.md)
-ask for nothing: the first records options, and every item of the second
-has landed. The second stays because `refuted-candidates.json` cites it as
-the source of a ruling.
-
-### Overlaps
-
-- Red flags round 2 is nearly finished: each of its lane steps now names
-  the catalogue row that records it, and one item of code work is left
-  (`childEndReport` switching on the child's kind). Round 3 holds the rest.
-- The dispatcher split is in the tech-debt note (T1) and the PRD (row 10).
-- The global store split is in the storage-errors note (§1) and its own
-  note.
-- The follow-up rule for a one-shot root is in the decisions note and in
-  round 3 of the peers note; #14986 ruled it (keep reading the view).
-- The seven LaTeX `*Path` fields are in the data-shapes and host-rules
-  notes.
-- The stop and resume rows left in the one-fact note are the storage-errors
-  note's §5.
-
-## Five defects in the list
-
-These are behaviour, not structure, and none sits in an area a later step
-deletes. They go first.
-
-1. The run state does not keep a turn's end (peers round 3, F4).
-2. The desktop terminal drops input typed before the shell starts (run-end
-   audit, 2).
-3. A full disk reported by SQLite is not classified as `disk-full` (session
-   surfaces; reproduce first).
-4. Deleting a run does not delete its children (nothing held across a
-   wait, "The view").
-5. No limit on a service that crashes at every start (PRD, row 6).
-   Ended 2026-11-19: the service link gives up after three failed starts
-   in a row and says so (`linkService`,
-   `packages/texra/src/controllers/server/client.ts`; the design is in
-   `.agents/docs/proposed/architecture/2026-11-06-cli-service-root-causes.md`,
-   the 2026-11-19 section).
-
-## Areas a later step deletes
-
-Work here is thrown away. Leave these until the step named has landed or
-its question is answered.
-
-| Area                                                                                                                                                                 | Deleted or rewritten by                                       | Items to leave                                                                                                                                                                   |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The agents directory, its index and schema, teams, workspace selection, customize, the bundled skills, the `latex-extract` plugin, the agent list of the launch form | programs, phase 5                                             | M9 (catalog follower); the `AgentConfig` union; the Agents › Advanced switches; composer and launch-form items of the UX roadmap; a compatibility alias for `IS_ANTHROPIC_MODEL` |
-| Tools that could be a command-line program (`arxiv`, Zotero)                                                                                                         | programs, phase 7, if accepted                                | card, label and schema polish for those tools                                                                                                                                    |
-| The database layer's open modes and per-mode busy rule                                                                                                               | the global store split                                        | storage-errors §1; session store review S5 and S6                                                                                                                                |
-| `sessionViewUpdate.ts`, `sessionInputsLayer.ts`, `projections.ts`                                                                                                    | the unanswered question of who owns the view                  | listing narrowing; `SessionViewAccessShape.run` narrowing; the rollup count; `operationalLatestLine`                                                                             |
-| The webview's hand-written frames and message dispatcher                                                                                                             | `effect/rpc`, if its bundle check passes                      | round 2 steps 3.4 and 3.5                                                                                                                                                        |
-| The golden store and the crash-conformance test support                                                                                                              | the row-version changes and the freeze, which regenerate both | store-debts C1 to C4 and C8; the regeneration job (F14)                                                                                                                          |
-| The similarity recovery for reply documents                                                                                                                          | llm-history note, stages 3 to 5                               | any tidying of that code                                                                                                                                                         |
-| The `followup.queued` row                                                                                                                                            | one version bump shared by three notes                        | changing it once per note                                                                                                                                                        |
-
-## Order
-
-**0. Five answers that decide the table above.** Programs question 1
-(project and user skill directories; agents an installed plugin carries);
-programs question 2 (tools as command-line programs); who owns the view;
-whether a second window on Windows is rejected for now; whether the freeze
-waits for programs phase 5.
-
-**1. The five defects.** Three are in flight (see "In flight").
-
-**2. Two lines in parallel.** They touch different packages.
-
-- _Store (harness)._ The global store split, with the new file created
-  beside the old one. Then the rest of storage-errors §1. Then the
-  row-version changes in one pass: delete `finishEvidence` and
-  `refusalEvidence`; one `followup.queued` bump for the wall time and the
-  delivery union; the request-blob version. Then the unreadable-run
-  classifier (§2), then errors, stop paths and the model-call failure path
-  (§3 to §6), which takes the rows left in the one-fact note and F1 and F5
-  of peers round 3.
-- _Programs (app)._ Phase 3 (the two `lean4` programs), phase 4 (installed
-  plugins carry programs; it must precede phase 5), phase 5. Phase 5
-  changes a stored shape (`run.chat`) and two public signatures (`agent()`,
-  `StartRequest`), so it is on the path to the freeze and the SDK release,
-  not after them.
-
-**3. Evidence, in dependency order.** The llm cassettes (tech-debt M6 to
-M8) first: the scripted server they need is also what the model socket
-(nothing held, row 18) and the OpenAI background submit check need. Then
-the `effect/rpc` bundle check, the `unified-latex` spike, and the
-reply-document route counts.
-
-**4. The freeze.** Reset row versions and drop retired row kinds,
-regenerate the golden store, remove the duplicated test support,
-`storage:freeze`, the R1 to R24 acceptance, publish.
-
-**After the freeze.** The UX roadmap, the full TUI validation in CI, the
-packaged smoke launcher.
-
-Work with no place in the order, safe at any time: store-debts A6 and A8; `RunCell.commit` applying a batch once; deriving
-`referencedAggregates`; one string for the tool-edit diff title;
-`KEY_PAGES` in one module; the shared wording of the rejected-token
-notice; the one symbol table; the media classifier; tooltip ids carried by
-the data; prompt items I-C4 and I-C16; the `ScriptTool` description; the
-spec wording R6-T7 b; deleting `model.useGoogleBackgroundResponses`.
+The notes are stale as a rule. None is right throughout, and more than
+twenty items still marked open are done. One note is finished and can be
+deleted: `architecture/2026-11-09-decisions-read-the-log-not-the-view.md`
+(the one decision reader of the view left, `submitFollowUp`, stays by the
+ruling in #14986). Correcting the other notes item by item is step 5 of the
+order, after the work in flight has landed and edited them.
 
 ## In flight
 
-Started from this note on 2026-11-17, one pull request each:
+Started on 2026-11-19, one pull request each:
 
-- #15018: a full store reads as disk-full; a run's deletion takes its
-  children (defects 3 and 4).
-- #15019: the decided items left in the fewer-processing-options note.
-- #15020: programs phase 3, the `lean4` plugin's two programs.
-- Not yet a pull request: the turn end the run state forgets with the
-  smaller items of peers round 3 (defect 1); the desktop terminal's early
-  input with UX roadmap items 3, 5 and 6 (defect 2); §3 and §4 of the
-  storage-errors note; the llm cassettes (tech-debt M6 to M8).
+- Requests and input: a decision wakes a run nobody holds; one send verdict;
+  a run's input read once per step (peers round 3, findings 1 and 2; PRD
+  row 8; nothing held, row 14).
+- One writer per project file, and issue #15083 (`texra service stop`
+  returning while the service still holds a project store).
+- The terminal and the web paint the same row (four differences).
+- Storage: one connection module under both stores; bounded read retry and
+  event hub (store review S5, F5, F6, F11; nothing held, rows 19 and 20).
+- Run lifecycle shapes: one `RunOpening`, a child's end report from its
+  launch, typed failures, rejection reasons nothing reads.
+- The `latex-extract` plugin goes (ruled by the owner on 2026-11-14 and never
+  done), and the LaTeX status becomes one record keyed by tool.
+- CLI and memory tool: the memory tool's two line counts, one usage-logging
+  sentence, one CLI entry, the CLI's roots.
+- The TUI validator waits on state, not on the clock.
+- Programs phase 4: an installed plugin carries programs. The programs note
+  records it as accepted (its ruling 7); it had been treated as waiting on
+  that note's question 1, which holds only two slices of phase 5.
 
-Not started because each needs a word from the owner first: the schema
-half of the global store split (its code half is in: the global store has
-its own layer) and the row-version changes (what happens to the old file);
-§5 and §6 of the storage-errors note (after §3 and §4 merge, same files);
-programs phases 4 and 5 (question 1). The limit on a service that crashes
-at every start (defect 5) was designed and implemented on 2026-11-19.
+## Decided on 2026-11-19
 
-## Who decides
+The owner's instruction for this pass was to use best judgment. Each ruling
+below is reversible by a revert, makes no data an install holds unreadable,
+and changes no default a person sees unless it says so. The basis is named:
+the note's own recommendation, a rule in `AGENTS.md`, or the code as it
+stands. The owner can overturn any row; the work it unblocks is queued, not
+started, unless listed under "In flight".
 
-About 130 entries once sub-questions are counted. The rules applied: before
-1.0 a stored format, a public name or a behaviour may change when that is
-simpler, as its own commit under "Needs your eye"; no compatibility reader
-and no migration; delete what nothing reads; a rename or re-layout for
-tidiness alone is rejected and recorded; nothing speculative; a note's own
-recommendation stands unless something argues against it.
+**Do it.**
 
-**Already ruled or overtaken (about 10).** The one-shot follow-up rule
-(#14986). The `entry-files` count that blocked the dispatcher split: no
-such check exists in the tree. "S4 first, or keep `owner_id`": the column
-is gone. The Google `replayableHistory` question: Google calls it. SDK
-publishing questions 1 and 2: the code is on `main`. Whether `texra.*` keys
-stay: no stored byte changes.
+| Item                                                                                               | Basis                                                                                                                                                              | Size |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| `run.steps` is a `ScopedRef`, as `run.model` is (session surfaces 1)                               | the note's recommendation                                                                                                                                          | S    |
+| `RunCell.commit` reduces a batch once, inside the store's job (session surfaces 2)                 | the note's recommendation                                                                                                                                          | S    |
+| `SessionKey` reads only `storage`; the eight-field copy of the roots goes (store debts A6)         | the note's recommendation                                                                                                                                          | S    |
+| The six cause-shape assertions assert rows and behaviour (store debts C6)                          | the note's recommendation                                                                                                                                          | S    |
+| A malformed draft from our own code is a defect, not `DatabaseWriteFailed` (store debts A8)        | `AGENTS.md`: trust data from code you control                                                                                                                      | S    |
+| The two module mocks in `sessionEvents.vitest.ts` go (store debts C7)                              | the note: the `SqliteClient` mock only spreads the original; `src/test-kernel/AGENTS.md`: the `leanServerPool` one mocks a repository module                       | S    |
+| A child's delivery stores `wallTimeMs` as a number and cuts its prompt (tool card 3, run end 1)    | the note's recommendation; one `followup.queued` bump, cheapest before the freeze                                                                                  | M    |
+| A model switch for a run not held here is a queued row the loop applies or refuses (R2, R7)        | the note's recommendation; `/model` is already a queued row                                                                                                        | M    |
+| The full `validate:tui` runs nightly, once it waits on state (test launches)                       | the note's recommendation; the nightly now announces a failure (#15078)                                                                                            | S    |
+| M4 (the plan tool reads its fact row) and H9 (one host route) return to the order                  | the programs note's recommendation                                                                                                                                 | M, L |
+| TeXRA's plugins import nothing from `./host`: each of the twelve helpers moves or stops being used | `AGENTS.md`: the app reaches the harness through its entries; decided per helper, not as a block                                                                   | M    |
+| The MCP client name is the app's, passed as data (general package, D2)                             | `AGENTS.md`: a general core takes the app's vocabulary as data                                                                                                     | S    |
+| `./plugins` splits authoring types from the built-in plugins before the first publish              | after the publish it is a breaking change; needs a two-design comparison first                                                                                     | M    |
+| Image limits are stated per protocol in `packages/llm`, as a table there                           | the note's recommendation for the owner; a table needs no llm-zoo release                                                                                          | M    |
+| A finished run that takes a follow-up shows the status table's word; the header override goes      | `AGENTS.md`, UI anti-patterns: no render-time override                                                                                                             | S    |
+| The key-pages link reads `KEY_PAGES` from a leaf module                                            | the option that changes nothing a person sees                                                                                                                      | S    |
+| Request nouns come from one table keyed by request kind                                            | no decision was needed; only the badge's source is one                                                                                                             | S    |
+| The file-tool text leaves the prompt of a run without file tools (I-C16)                           | the earlier triage's "safe at any time"; review as the resolved prompt                                                                                             | S    |
+| R17 gets one kernel case that interrupts inside its handoff window                                 | the evidence of 2026-11-19 (`release-acceptance-rows`) covers either side and says the window itself is hit by no check; a small check is better than a waived one | S    |
 
-**The rules decide; do it (about 40).** The row-version changes above. The
-global store's old file stays where it is and the new one is created
-beside it. No upcaster frame until the first upcaster. `IS_ANTHROPIC_MODEL`
-goes with no alias. `facts` and `consumedFollowUps` are returned by
-`execute`, not collected through `ToolContext`. The golden store is
-regenerated by one job after a merge. The rest are the "safe at any time"
-list above. Each change a person can see is its own commit under "Needs
-your eye".
+**Keep what the code does; close the item.**
 
-**The rules decide; do not do it (about 13).** A terminal row for an
-in-flight call at Stop (tech-debt D2). A version per current-value family
-(S1). A second turn on a process run. Moving 110 lines for no net change
-(store-debts A9). `run.steps` as a `ScopedRef`. The `default` half of
-`edgesOf`. `formTitle`. W3's alternative, a `list_cost` column and the
-third slice of #14728. The `AgentConfig` union before phase 5. Issues for
-the store review's slices.
+- A stop of a run no fiber drives commits its `run.end` with the stop
+  (one-fact A6 proposed writing nothing). The harness guide and the spec
+  state the current rule, and Stop is offered only on a run this process
+  holds, so the path is reached by a cascade or a race.
+- A terminal row at Stop for an in-flight call (tech debt D2): the note
+  recommends today's rule.
+- One turn per call on an agent-CLI process run (PR-1 compromises 1.2).
+- `RunServices` and `PlatformServices` stay on `./host`; the entry's header
+  states the exception.
+- A request with no surface attached waits for the next one (CLI service
+  note); the code already does this.
+- The launch cap counts in memory; the later record ("kept: a policy
+  decision") stands over the earlier note.
+- The three behaviour changes the nothing-held note landed and asked to have
+  confirmed stay. Each is one commit to revert.
+- `edgesOf` keeps a case per kind: its own comment gives the reason.
+- `LabelsRootRuns` stays a `Context.Reference` with a default.
 
-**Not a decision; evidence first (about 15).** Measurements: PRD R12,
-`EARLIER_RUNS`, reply-document route counts, the code-mode fallback list,
-the result-reader comparison. Spikes: `unified-latex`, `effect/rpc` in the
-webview bundle, tar extraction as a stream. Reproductions: SQLite full;
-whether `crashAt` needs only `projection_state` cleared. A check against
-the live API: OpenAI background submit without streaming. A scripted
-server before the model socket. A design: how the usage log closes;
-`PreventSchedulerYield`.
+**Do not do it.** Each belongs in `refuted-candidates.json` at step 5.
 
-**The owner's (about 37).**
+- A shared media-capability classifier: the two notes disagree and the
+  verification scored it at zero net elements.
+- Moving the transcript's pure functions out of `sessionViewUpdate.ts`
+  (store debts A9): a move for tidiness alone.
+- A version per current-value family, forward steps and a guarded
+  `ADD COLUMN` before the freeze (store review S1, S4): the PRD and the
+  storage-format rule already say no.
+- An execution port on `AgentPlatform`: no consumer.
+- Unifying the CLI approval stack with the web request panels: both concrete
+  forms are refused already; it reopens with a new design.
+- Replaying another protocol's assistant turns: the code rejects, and the
+  design note lists it as a non-goal.
 
-- _Behaviour._ A second window on Windows. Replaying another protocol's
-  turns. What a saved `endpoint.<provider>` means after a protocol change.
-  What `plan: null` means when an approval is rejected. Programs questions
-  1 and 2. In nothing held: busy as an answer to a second `lake build`; a
-  failed refresh no longer signs out; a launcher's interruption is not a
-  `user` stop; who owns the view. Whether `history delete` waits for its
-  own cleanup. The dependency banner on the desktop. Labels for delegated
-  Claude Code calls. `file.write` as a public request, and a save while
-  the service is away. The transcription credential. `StartOptions.continues`.
-  Whether `definition.ts` re-fails a cause. Whether a script's awaits set
-  the order. Where selection-first and saved prompts live in the composer.
-  Which place decides the GitHub account-age rule.
-- _Copy._ The local banner and the missing-key wording. The three display
-  rules of the LaTeX card. "Ready" and "Needs approval" against the run
-  status words. Prompt items I-C1 and I-C5. An SDK changelog.
-- _Only the owner can act._ An Anthropic key and budget for acceptance.
-  The first npm publish and the Trusted Publisher. Whether the CI action
-  reads the inline allowed-tools list (S9). Which tree the 0.40 server runs
-  (W7). Asking Anthropic about the Claude plan route. The full TUI
-  validation in CI. The date of the freeze.
+**Not ruled, though a note leans.** Left as it is until someone argues it.
 
-**On hold with a stated reopening event (about 16).** These are answered
-and should not be listed as waiting: the `session/` directory merge, the
-builtins fence, timed follow-ups, `defineTool({ deferred })`, a storage
-port, workspace import, the orchestrator, Copilot, the performance
-readings, a background capability from llm-zoo, the bounded closer, and a
-fourth protocol reopening the history-walk design.
+- "Busy" as the answer to a second `lake build` on a root. The note designs
+  it; the earlier triage kept it for the owner; a caller that waits is the
+  friendlier default for an agent.
+- Regenerating the golden store only on `main` by a post-merge job (store
+  review F14): a pull request that commits no dump fails the suite that
+  reads it until the job runs, so the design has a gap.
+- The script delivery's `stopped` literal: one note renames it, the delivery
+  note keeps it. It rides with the delivery union.
+- `definition.ts` ending a run through `readCause`; the TUI's local rows
+  through `LocalSession.emit`; a slot-agnostic `rowDefault` export: none has
+  a recommendation, and none blocks other work.
+
+## The owner's
+
+What is left for the owner falls into five kinds. Nothing below was touched.
+
+**It makes data an install holds unreadable or unreachable.**
+
+- The two-DDL split of the stores. `AGENTS.md` rules out copying the old
+  data forward, so the choices are a new global file beside the old one or a
+  "move it away" message, and either leaves today's settings, project
+  records and input history unread.
+- A bounded `quick_check` at open that moves a failing file aside (store
+  review F12). A file moved aside stays aside.
+- Renaming `texra.db` and the `TEXRA_*` variables to app-supplied names.
+  Whether `release/0.40` writes a `texra.db` was not established; if it
+  does, the rename is of this kind.
+- Programs phase 5 and its question 1 (are project and user skill
+  directories still loaded; are an installed plugin's agents kept as
+  sub-runs or not loaded). Phase 5 deletes the agent catalog and changes
+  `run.config`, so custom agents stop working and older runs read as an
+  earlier build's. Only two of its slices wait on the question.
+
+**It changes what a person gets by default.**
+
+- Model access: which models the launcher lists; whether a delegation may
+  name a model the list hides; what the GUI does when a plan is turned on
+  while signed out.
+- Subscriptions: which credential serves a person who holds both a plan and
+  a key (it decides who is billed); dropping "Experimental" from the ChatGPT
+  plan; the four features of that note (limit reset time, helper model,
+  first-run list, paste-the-URL sign-in).
+- Windows: accept that a second window or the CLI is rejected, or build the
+  named-pipe service first.
+- What a saved `endpoint.<provider>` means after a backend changes protocol.
+  It is urgent in one respect: `config.json` is additive-only from 1.0, so
+  the choice is cheap only before the release.
+- Whether `history delete` waits for its own cleanup; `StartOptions.continues`;
+  the meaning of `plan: null` on a rejected plan; the facts-on-the-result
+  shape for tools; the `ToolFileAttachment` content union for outside
+  plugins; who owns the session view; how `texra run` and the listings
+  attach to the store's holder.
+- Wording and small display choices with no recommendation anywhere: one
+  word for a cancelled run (the headless word is pinned public vocabulary),
+  "Pass" or "Revision", the build-folder layout, the dependency banner on
+  the desktop, the terminal title's scope, the cost segment, the `superYolo`
+  tone, the queued-message count, the ended-run line, the request badge's
+  source, how a delegated Claude Code call is labelled, the five prompt and
+  copy texts of round 3. A draft of each can be prepared for the owner to
+  pick from.
+
+**It needs a provider key or a third party.**
+
+- Live acceptance on the Anthropic route, `npm run test:live`, and the
+  journeys.
+- Whether a tool-use turn on a background-capable route should stream in the
+  foreground. Today every GPT turn on the HTTP route goes out as background
+  work; the setting that claimed otherwise was deleted in #15081.
+- OpenAI: whether a background response created without a stream can be
+  read with one. Google: a capture of `requires_continuation` and of
+  `incomplete`, before either design is chosen.
+- The keyed wire cassettes; the reply-document recovery counts; the xAI
+  transcription question; the transcription credential.
+- Which copy of the server half is deployed; who owns the GitHub account-age
+  rule; whether the CI action reads the inline allowed-tools list; the
+  Claude plan route, which waits on Anthropic's written answer.
+
+**It is a release step.**
+
+- R12's "old paths deleted" clause. Its mechanical clause is `npm run gate`,
+  which passes; the acceptance evidence of 2026-11-19 says the rest "needs a
+  person", and no check decides it.
+- The date of the storage freeze, and zeroing the row versions with it.
+- The first npm publish and the Trusted Publisher for both names.
+- An SDK changelog section or file.
+
+**It is a feature.** The UX roadmap's selection action, saved prompts and
+cross-tab filter; the two Unix ideas of the programs note; tools as
+command-line programs (the programs note recommends accepting, `arxiv`
+first, as its phase 7).
+
+## Order
+
+1. **Land what is in flight**, one pull request at a time, each checked on
+   the tree merged with `main` before the next: two pull requests that were
+   each green broke `main` together on 2026-11-19.
+2. **The work this note's rulings unblock**, grouped by the files it shares:
+   stop and resume (one stop-or-failure decider, one rejection decider per
+   resume, the model switch as a queued row); the store's small rulings; the
+   delivery shape with its one row bump; the app's entries (`./host`
+   helpers, the MCP client name, the `./plugins` split); the dispatcher
+   split (tech debt T1, PRD row 10), which waits for the requests work to
+   leave the run loop.
+3. **Programs.** Phase 4 is in flight. Phase 5 follows on the owner's answer
+   to question 1; its slices that do not depend on the answer can be
+   prepared.
+4. **Evidence that needs no key**: the `unified-latex` spike, the tar
+   stream spike, the `EARLIER_RUNS` scan and the cold-read measurements, the
+   packaged smoke before the banner script stops rebuilding `__dirname`.
+5. **Correct the notes**: delete the finished one, mark the stale items,
+   record the items above that are not to be done in `refuted-candidates.json`, fix the ledger's
+   publishing line. Last, because every pull request before it edits notes.
+6. **The freeze and the first publish**, on the owner's date, after the two
+   live routes pass.
