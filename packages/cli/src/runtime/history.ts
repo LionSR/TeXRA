@@ -342,13 +342,21 @@ export function formatInvalidExportFormatText(raw: string): string {
   return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
 }
 
+/** What a run that continues can take: a finished conversation another
+ *  message, anything else (interrupted, failed, cancelled) a resume. */
+function continueNote(outcome: RunOutcome | null): string {
+  return outcome === 'completed' ? 'can continue' : 'can resume';
+}
+
 /** How a listed run stands in `texra history`'s text: its outcome, else
  *  none, and whether `texra resume` continues it. */
 export function historyStanding(
   entry: Pick<CliHistoryEntry, 'outcome' | 'continues'>,
 ): string {
   const outcome = entry.outcome ?? 'no outcome';
-  return entry.continues ? `${outcome} (resumable)` : outcome;
+  return entry.continues
+    ? `${outcome} (${continueNote(entry.outcome)})`
+    : outcome;
 }
 
 export function formatCliHistoryDetailsText(
@@ -361,7 +369,7 @@ export function formatCliHistoryDetailsText(
     : undefined;
   // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
-    details.continues ? ' (resumable)' : ''
+    details.continues ? ` (${continueNote(details.outcome)})` : ''
   }`;
   const lines = [
     `Run: ${details.id}`,
