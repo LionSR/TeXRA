@@ -7,6 +7,7 @@
  * body).
  */
 import {
+  absurd,
   Duration,
   Effect,
   Number as Num,
@@ -72,19 +73,21 @@ export function fetchPlanUsage(
           },
           parse: parseKimiCodeUsage,
         }
-      : {
-          url: new URL(
-            '/api/monitor/usage/quota/limit',
-            GLM_BASE_URLS[request.region],
-          ).href,
-          headers: {
-            Accept: 'application/json',
-            'Accept-Language': 'en-US,en',
-            Authorization: key,
-            'Content-Type': 'application/json',
-          },
-          parse: parseGlmCodingPlanUsage,
-        };
+      : request.plan === 'glm'
+        ? {
+            url: new URL(
+              '/api/monitor/usage/quota/limit',
+              GLM_BASE_URLS[request.region],
+            ).href,
+            headers: {
+              Accept: 'application/json',
+              'Accept-Language': 'en-US,en',
+              Authorization: key,
+              'Content-Type': 'application/json',
+            },
+            parse: parseGlmCodingPlanUsage,
+          }
+        : absurd<never>(request);
   return HttpClient.get(url, { headers }).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap((response) => response.json),
