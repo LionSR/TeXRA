@@ -74,8 +74,15 @@ export interface ConfigProvider {
    * (`catalog.configDefault`); a key no row owns reads as `undefined` when
    * absent.
    *
-   * It is synchronous, and it casts: the value it returns is whatever the
-   * store holds. A reader that needs the value checked reads through
+   * It is synchronous because some readers cannot wait for an Effect: the
+   * replacement engine's rule sets, a tool's `prompt` callback, the
+   * approval `policy` callback, the VS Code status bar's paint, the host
+   * snapshot's projection and the CLI's startup rows, read before its
+   * runtime exists. A read is cheap: the JSON store stats its file on every
+   * `get` (inode, mtime, size) and re-reads it only when that changed, so
+   * another process's edit is seen without a watcher.
+   *
+   * It casts: the value it returns is whatever the store holds. A reader that needs the value checked reads through
    * `Settings.get`, which safe-parses the stored value against the row's
    * schema; a hand-edited `"false"` in a
    * boolean row is a truthy string here and silently means the opposite.
@@ -289,7 +296,10 @@ function inspect<A>(
 
 /**
  * {@link get} for a row whose slot is `config`, over a `ConfigProvider`
- * alone and synchronously. The CLI resolves its startup rows
+ * alone and synchronously, for the readers that cannot wait (named on
+ * `ConfigProvider.get`, whose cost a read is: one stat of the config file).
+ * Inside an Effect that holds the stores, read with {@link get}. The CLI
+ * resolves its startup rows
  * (`approvalPolicy`, `outputFormat`) before the state stores of
  * that process exist, and this is the whole rule for a config-backed row, so
  * both readers run the same body rather than two that can drift.
