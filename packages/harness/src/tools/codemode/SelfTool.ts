@@ -45,7 +45,7 @@ import {
 } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
 
 const SelfInputSchema = Schema.Struct({
   prompt: Schema.NonEmptyString.annotate({
@@ -56,12 +56,10 @@ const SelfInputSchema = Schema.Struct({
     true,
     'Continue this conversation as it stood when the script started, with `prompt` added to the message that started it; `false` starts with no earlier conversation. Either way the child is told `prompt` is the one part of the work it does.',
   ),
-  schema: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-  ).annotate({
-    description:
-      'A JSON Schema object: the run finishes by submitting a value of it, returned as `structured`.',
-  }),
+  schema: optionalInput(
+    Schema.Record(Schema.String, Schema.Unknown),
+    'A JSON Schema object: the run finishes by submitting a value of it, returned as `structured`.',
+  ),
   ...CHILD_FIELDS,
 });
 type SelfInput = typeof SelfInputSchema.Type;

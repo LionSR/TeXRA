@@ -27,14 +27,16 @@ import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/definition';
+import { optionalInput } from './core/inputSchema';
 
 const GlobInputSchema = Schema.Struct({
   pattern: Schema.NonEmptyString.annotate({
     description: 'Glob pattern to match, such as "**/*.md" or "src/**/*.ts".',
   }),
-  path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'Directory to search within. Defaults to the workspace root.',
-  }),
+  path: optionalInput(
+    Schema.String,
+    'Directory to search within. Defaults to the workspace root.',
+  ),
 });
 
 type GlobInput = typeof GlobInputSchema.Type;

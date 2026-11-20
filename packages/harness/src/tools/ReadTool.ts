@@ -27,14 +27,16 @@ import {
 
 // Local file imports
 import { defineTool } from './core/definition';
+import { optionalInput } from './core/inputSchema';
 
 const ReadInputSchema = Schema.Struct({
   path: Schema.String.annotate({
     description: 'Workspace-relative or absolute file path to read.',
   }),
-  range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({
-    description: 'Optional inclusive line range to read.',
-  }),
+  range: optionalInput(
+    LineRangeSchema,
+    'Optional inclusive line range to read.',
+  ),
 });
 
 type ReadInput = typeof ReadInputSchema.Type;
