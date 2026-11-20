@@ -21,8 +21,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports
-import { meansAbsent } from '@utils/files/fsEntryExists';
-import { readDeclarations } from './pluginPrograms';
+import { readDeclaredFile } from './pluginPrograms';
 
 /** The native entry's file name, at the plugin's root. */
 export const NATIVE_ENTRY_FILE = 'harness.mjs';
@@ -92,31 +91,17 @@ export const readNativeEntry = Effect.fn('readNativeEntry')(function* (
   never,
   FileSystem.FileSystem
 > {
-  const fs = yield* FileSystem.FileSystem;
   const file = path.join(dir, NATIVE_ENTRY_FILE);
   const refused = (reason: string) => ({
     entry: null,
     refused: `The native code ${NATIVE_ENTRY_FILE} of plugin ${plugin} is not loaded: ${reason}.`,
   });
-  const text = yield* Effect.result(
-    Effect.gen(function* () {
-      const info = yield* fs.lstat(file);
-      return info.type === 'File' ? yield* fs.readFileString(file) : null;
-    }),
-  );
-  if (Result.isFailure(text))
-    return meansAbsent(text.failure)
-      ? { entry: null, refused: null }
-      : refused(text.failure.message);
-  if (text.success === null)
-    return refused(
-      'it is not a regular file inside the plugin (a link is not followed)',
-    );
-  const declared = readDeclarations(text.success, {
+  const declared = yield* readDeclaredFile(file, {
     name: 'provides',
     holds: 'what its plugin contributes',
     example: "['tool:word_count', 'processLayer']",
   });
+  if (declared === null) return { entry: null, refused: null };
   if (Result.isFailure(declared)) return refused(declared.failure);
   const { description, names } = declared.success;
   const unknown = names.find((name) => !CONTRIBUTION.test(name));
