@@ -48,4 +48,25 @@ layer(SessionGraph.hosted)('delegation model availability', (it) => {
       );
     }).pipe(withEnv({})),
   );
+
+  // The parent runs on a model the person never enabled (an embedder names
+  // its run's model; the catalog curates others): the child keeps it, since
+  // the parent's own run shows it can run, instead of falling back to a
+  // model from the enabled list.
+  it.effect("keeps the parent run's model when it is not an enabled one", () =>
+    Effect.gen(function* () {
+      const host = yield* FakeHost;
+      yield* host.secrets.set(apiKeySecretName('openai'), 'sk-key');
+      const selected = yield* selectAvailableDelegationModel({
+        parentModel: 'openai/gpt-6.2-sol',
+        settings: host.roots,
+      });
+
+      expect(selected).toMatchObject({
+        _tag: 'Chosen',
+        model: 'openai/gpt-6.2-sol',
+        reason: 'parent-run',
+      });
+    }).pipe(withEnv({})),
+  );
 });

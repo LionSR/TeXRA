@@ -1978,6 +1978,14 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A child run keeps its parent's model when that model is not an
+  enabled one.** A sub-agent or program started from a run on a model the
+  person never enabled (an SDK embedder names its run's model) fell back to
+  the first enabled model, or was refused with "No models are currently
+  available for delegation" when the enabled list was empty. The parent's
+  model is now judged by its own route; the enabled list only supplies the
+  default.
+
 - **Answering a request of a task that is not running continues the task.**
   An approval, a plan or a question left pending by a task whose process
   exited used to refuse the answer with "resume it to answer this request",
