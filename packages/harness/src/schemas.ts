@@ -378,6 +378,7 @@ export {
   FileFieldsSchema,
   type Plan,
   type PlanApprovalRequest,
+  type PluginTrustRequest,
   planOf,
   planSummaryLine,
   type RequestKind,

@@ -218,6 +218,7 @@ function answerFor(
       case 'proposal':
       case 'toolEdit':
       case 'bash':
+      case 'pluginTrust':
         return operationAsk(owners.approvals, runId, answeredBy, hook);
       case 'userQuestion':
         return { kind: 'question' };

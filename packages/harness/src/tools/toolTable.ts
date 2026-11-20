@@ -311,31 +311,45 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
 
 /**
  * `listed` with the native plugins loaded now, each judged whole against
- * the table the ones before it made: one whose tool or module name another
- * plugin holds, or that runs on a plugin the table lacks, is withheld with
- * its reason, and the rest load. In order of their ids, so the same set
- * gives the same table.
+ * the table the ones accepted before it made: one whose tool or module
+ * name another plugin holds, or that runs on a plugin the table lacks, is
+ * withheld with its reason, and the rest load. The plugins are judged in
+ * passes, in order of their ids, until a pass accepts none: one that runs
+ * on a native plugin judged after it loads in the next pass, whatever the
+ * names. What no pass accepts (a collision, a plugin nobody loads, or a
+ * cycle of plugins that run on each other) is withheld with the reason its
+ * last judgement gave. The same set gives the same table.
  */
 export const withNatives = (
   listed: ToolTable,
   natives: readonly NativePlugin[],
-): { readonly table: ToolTable; readonly withheld: readonly string[] } => {
+): {
+  readonly table: ToolTable;
+  /** Each native plugin left out, with why. */
+  readonly withheld: readonly {
+    readonly native: NativePlugin;
+    readonly reason: string;
+  }[];
+} => {
   const base = [...listed.entries.values()];
   let table = listed;
   const accepted: NativePlugin[] = [];
-  const withheld: string[] = [];
-  for (const native of natives.toSorted((a, b) =>
-    a.plugin.id < b.plugin.id ? -1 : 1,
-  )) {
-    const next = tableOf(base, [...accepted, native]);
-    if (Result.isFailure(next)) {
-      withheld.push(
-        `The native code of ${native.plugin.id} is not loaded: ${next.failure}`,
-      );
-      continue;
+  let withheld = natives
+    .toSorted((a, b) => (a.plugin.id < b.plugin.id ? -1 : 1))
+    .map((native) => ({ native, reason: 'it was not judged' }));
+  for (let progress = true; progress && withheld.length > 0;) {
+    progress = false;
+    const judged: typeof withheld = [];
+    for (const { native } of withheld) {
+      const next = tableOf(base, [...accepted, native]);
+      if (Result.isFailure(next)) judged.push({ native, reason: next.failure });
+      else {
+        accepted.push(native);
+        table = next.success;
+        progress = true;
+      }
     }
-    accepted.push(native);
-    table = next.success;
+    withheld = judged;
   }
   return { table, withheld };
 };

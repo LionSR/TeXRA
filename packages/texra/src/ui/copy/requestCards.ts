@@ -45,6 +45,7 @@ export const REQUEST_NOUN = Object.freeze({
   proposal: 'proposal',
   retry: 'retry',
   userQuestion: 'question',
+  pluginTrust: 'plugin',
 } as const satisfies Record<RequestPayload['kind'], string>);
 
 /** The label of the directory a command or a proposed agent runs in. */
@@ -61,6 +62,11 @@ export const REQUEST_ASK = Object.freeze({
   /** The words before the edited file: `Edit draft.tex`. */
   edit: 'Edit',
   plan: 'Approve this plan',
+  /** The words before the plugin's name; one with native code says so
+   *  after it. */
+  pluginTrust: 'Trust and load the plugin',
+  /** What a plugin's native code is, said wherever its trust is asked. */
+  nativeCode: 'Its native code runs inside this process, as you, unsandboxed.',
   /** The words before the proposed agent: an agent launched on a task
    *  runs it; any other is delegated one. */
   proposal: (task: boolean): string => (task ? 'Run' : 'Delegate a task to'),

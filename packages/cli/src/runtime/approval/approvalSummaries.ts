@@ -3,6 +3,7 @@ import {
   getProposalFileGroups,
   type AgentProposalRequest,
   type BashRequest,
+  type PluginTrustRequest,
   type RetryRequest,
   type ToolEditContent,
   type ToolEditRequest,
@@ -237,6 +238,17 @@ export function formatRetryRequestMessage(payload: RetryRequest): string {
 export function formatBashApprovalSummary(payload: BashRequest): string {
   const cwd = payload.cwd ? `${WORKING_DIRECTORY_LABEL}: ${payload.cwd}\n` : '';
   return `${REQUEST_ASK.command}:\n${cwd}${payload.command}`;
+}
+
+/** What trusting a plugin asks: its name and version, a warning when it
+ *  carries native code, where it is, and the whole review. */
+export function formatPluginTrustSummary(payload: PluginTrustRequest): string {
+  return [
+    `${REQUEST_ASK.pluginTrust} ${payload.plugin}${payload.version ? ` ${payload.version}` : ''}:`,
+    ...(payload.native ? [REQUEST_ASK.nativeCode] : []),
+    `${payload.path} (digest ${payload.digest.slice(0, 12)})`,
+    ...payload.review,
+  ].join('\n');
 }
 
 /** What a tool edit's prompt shows: its diff's label (the tool, the file

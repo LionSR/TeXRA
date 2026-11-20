@@ -22,32 +22,120 @@
  * runs that take installed plugins' tools) and a program result (it reads a
  * row kind). A module that fails any of it, or throws, is withheld with the
  * reason; it never fails a step or another plugin.
+ *
+ * The host, not the module, decides how its tools run ({@link hostRun}):
+ * every call asks under the session's approval policy, as an MCP server's
+ * tool does (`@tools/mcp/mcpServer`), whatever the tool's own definition
+ * declares about approval, concurrency or scripts.
  */
 // Node imports
 import { pathToFileURL } from 'node:url';
 
 // Third-party imports
-import * as effect from 'effect';
-import { Effect, Layer, Predicate, Result, Schema } from 'effect';
+import {
+  Array as Arr,
+  Cause,
+  Clock,
+  Config,
+  Context,
+  Data,
+  DateTime,
+  Deferred,
+  Duration,
+  Effect,
+  Equal,
+  Exit,
+  Fiber,
+  Function as Fn,
+  HashMap,
+  HashSet,
+  Layer,
+  Option,
+  Order,
+  Predicate,
+  PubSub,
+  Queue,
+  Record,
+  Redacted,
+  Ref,
+  Result,
+  Schedule,
+  Schema,
+  Scope,
+  Stream,
+  String as Str,
+  Struct,
+  SubscriptionRef,
+} from 'effect';
 
 // Local imports
 import type { NativeEntry } from '@common/plugins/nativeEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { installedPluginId } from '@common/plugins/pluginTrust';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import type { ToolResult } from '@shared/schemas';
+import { findStorageRefusal } from '@shared/session/runHistory';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { Plugin } from '@tools/plugins';
 import * as plugins from '@tools/pluginSurface';
+import { thirdPartyCommand, withinDeadline } from '@tools/thirdPartyTool';
 import type { NativePlugin } from '@tools/toolTable';
 import { sha256Hex } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
 
+/**
+ * The modules of `effect` a native entry is handed, as this process loaded
+ * them: those a plugin's tools, layers and programs are written with. A
+ * fixed list, not the whole package: handing every module would keep all
+ * of `effect` in every host's bundle, most of it nothing else uses.
+ */
+const EFFECT = Object.freeze({
+  Array: Arr,
+  Cause,
+  Clock,
+  Config,
+  Context,
+  Data,
+  DateTime,
+  Deferred,
+  Duration,
+  Effect,
+  Equal,
+  Exit,
+  Fiber,
+  Function: Fn,
+  HashMap,
+  HashSet,
+  Layer,
+  Option,
+  Order,
+  Predicate,
+  PubSub,
+  Queue,
+  Record,
+  Redacted,
+  Ref,
+  Result,
+  Schedule,
+  Schema,
+  Scope,
+  Stream,
+  String: Str,
+  Struct,
+  SubscriptionRef,
+});
+
 /** What a native entry's default export is called with: this process's
- *  plugin authoring surface and its `effect`. */
+ *  plugin authoring surface and the modules of its `effect` a plugin is
+ *  written with. */
 export interface NativePluginHost {
   /** `@texra-ai/harness/plugins`, as this process loaded it. */
   readonly plugins: typeof plugins;
-  /** `effect`, as this process loaded it. */
-  readonly effect: typeof effect;
+  /** `effect`'s authoring modules, as this process loaded them: `Effect`,
+   *  `Context`, `Layer`, `Schema`, `Stream`, `Scope` and the data and
+   *  concurrency modules beside them, by their `effect` names. */
+  readonly effect: typeof EFFECT;
 }
 
 /** A native entry module (`harness.mjs`): its default export returns the
@@ -56,14 +144,17 @@ export interface NativeEntryModule {
   readonly default: (harness: NativePluginHost) => Plugin;
 }
 
-const HOST: NativePluginHost = Object.freeze({ plugins, effect });
+const HOST: NativePluginHost = Object.freeze({ plugins, effect: EFFECT });
 
 /** A native entry that did not load: the message names the plugin and
- *  why. */
+ *  why (`reason`), and `revision` the revision that did not load, when it
+ *  has one. */
 export class NativePluginFailed extends Schema.TaggedError<NativePluginFailed>()(
   'NativePluginFailed',
   {
     message: Schema.String,
+    reason: Schema.String,
+    revision: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
@@ -132,6 +223,68 @@ const contributions = (plugin: Plugin): readonly string[] => [
   ...(plugin.prompt === undefined ? [] : ['prompt']),
 ];
 
+/**
+ * The tool `tool` of the native plugin `name` as the host runs it: the
+ * gate and deadline an MCP server's tool gets (`@tools/thirdPartyTool`).
+ * Each call is a command the loop's one guard puts to the session's
+ * approval policy, every call is a barrier, and it is not a script
+ * function. Kept from the definition: its contract, whether a repeat is
+ * safe, the host capability it needs and the paths it writes, which only
+ * narrow what it may do. However its call ends but by interruption or a
+ * store refusal (an error result, a failure, a defect, a throw outside any
+ * effect, the deadline), it ends that call alone, with an error that names
+ * the plugin.
+ */
+const hostRun = (
+  name: string,
+  tool: ITool<Error, PluginToolServices>,
+): ITool<Error, PluginToolServices> => {
+  const { definition, replay, hostCapability, guard } = tool;
+  const what = `${definition.name} of plugin ${name}`;
+  const failed = (message: string): ToolResult => ({
+    status: 'error',
+    error: `${what} failed: ${message}`,
+  });
+  return {
+    definition,
+    ...(replay !== undefined && { replay }),
+    ...(hostCapability !== undefined && { hostCapability }),
+    guard: {
+      ...(guard?.writes !== undefined && { writes: guard.writes }),
+      command: thirdPartyCommand(
+        (input: unknown) =>
+          `plugin ${name} ${definition.name} ${JSON.stringify(input)}`,
+      ),
+    },
+    call: (input) =>
+      withinDeadline(
+        Effect.suspend(() => tool.call(input)).pipe(
+          Effect.map((result) =>
+            result.status === 'error'
+              ? { ...result, ...failed(result.error) }
+              : result,
+          ),
+          Effect.catch((error) =>
+            findStorageRefusal(Cause.fail(error)) === undefined
+              ? Effect.succeed(failed(error.message))
+              : Effect.fail(error),
+          ),
+          Effect.catchDefect((defect) =>
+            findStorageRefusal(Cause.die(defect)) === undefined
+              ? Effect.as(
+                  Effect.logWarning(
+                    `${what} crashed: ${ensureError(defect).message}`,
+                  ).pipe(withLogChannel('plugins')),
+                  failed(ensureError(defect).message),
+                )
+              : Effect.die(defect),
+          ),
+        ),
+        what,
+      ),
+  };
+};
+
 /** `value` as the plugin `source`'s native entry may return it, or why
  *  not. */
 const checked = (
@@ -184,13 +337,27 @@ const checked = (
             ]),
       ].join('; '),
     );
-  return Result.succeed({ ...plugin, id: installedPluginId(name) });
+  return Result.succeed({
+    ...plugin,
+    id: installedPluginId(name),
+    ...(plugin.tools !== undefined && {
+      tools: plugin.tools.map((tool) => hostRun(name, tool)),
+    }),
+  });
 };
 
-/** The plugin `source`'s native entry is not loaded, for `reason`. */
-const failure = (source: LoadablePlugin, reason: string, cause?: unknown) =>
+/** The plugin `source`'s native entry (at `revision`) is not loaded, for
+ *  `reason`. */
+const failure = (
+  source: LoadablePlugin,
+  reason: string,
+  revision?: string,
+  cause?: unknown,
+) =>
   new NativePluginFailed({
     message: `The native code of plugin ${source.record.name} is not loaded: ${reason}`,
+    reason,
+    ...(revision === undefined ? {} : { revision }),
     ...(cause === undefined ? {} : { cause }),
   });
 
@@ -202,7 +369,7 @@ const importEntry = (
   revision: string,
 ): Effect.Effect<NativePlugin, NativePluginFailed> => {
   const failed = (reason: string, cause?: unknown) =>
-    failure(source, reason, cause);
+    failure(source, reason, revision, cause);
   const url = `${pathToFileURL(entry.file).href}?rev=${revision}`;
   return Effect.gen(function* () {
     const module: unknown = yield* Effect.tryPromise({
@@ -236,11 +403,14 @@ const importEntry = (
   );
 };
 
-/** The revision of `source`'s native entry `entry`: a digest of the
- *  entry's path and the trust digest, the module's identity, which its
- *  layers are kept under. */
+/** The revision of the native entry `file` trusted at `digest`: a digest
+ *  of both, the module's identity, which its layers are kept under. */
+export const nativeRevision = (file: string, digest: string): string =>
+  sha256Hex(`${file}\0${digest}`);
+
+/** The revision of `source`'s native entry `entry`. */
 const revisionOf = (source: LoadablePlugin, entry: NativeEntry): string =>
-  sha256Hex(`${entry.file}\0${source.trust.digest}`);
+  nativeRevision(entry.file, source.trust.digest);
 
 /**
  * The process's native plugin loader: each installed plugin's entry at

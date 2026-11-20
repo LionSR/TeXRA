@@ -445,7 +445,15 @@ const openStep = Effect.fn('Step.open')(function* (
   const withheldChanged =
     step.withheld.length > 0 &&
     step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
-  const warnings = toolsChanged || skillsChanged ? [...step.warnings] : [];
+  // Every warning where the offer changed; otherwise only those the last
+  // step did not give (a plugin enabled that does not load changes no
+  // offer, and says why once).
+  const warnings =
+    toolsChanged || skillsChanged
+      ? [...step.warnings]
+      : step.warnings.filter(
+          (warning) => previous?.warnings.includes(warning) !== true,
+        );
   if (withheldChanged) {
     warnings.push(
       `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,

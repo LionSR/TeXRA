@@ -12,8 +12,8 @@
  * approval-gated through the loop's one guard (the session's bash approval),
  * is never parallel-safe, is replay-safe only when its server marks it
  * read-only or idempotent (any other interrupted call finishes as outcome
- * unknown on resume, and the model decides), and is bounded by a timeout and
- * an output cap.
+ * unknown on resume, and the model decides), and is bounded by the
+ * third-party deadline (`@tools/thirdPartyTool`) and an output cap.
  *
  * A server that fails to spawn, initialize or list answers its failure and
  * no tools, with a warning in the process log; the run that names it shows
@@ -33,6 +33,7 @@ import type { ToolResult } from '@shared/schemas';
 import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
+import { thirdPartyCommand, withinDeadline } from '@tools/thirdPartyTool';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { envNameKey, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
@@ -49,7 +50,6 @@ const CHANNEL = 'mcp';
  *  would start with no tools. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
-const CALL_TIMEOUT = Duration.seconds(60);
 const STOP_TIMEOUT = Duration.seconds(2);
 const STDERR_TAIL_LIMIT = 2048;
 /** Function-name contract every provider accepts. */
@@ -200,12 +200,7 @@ function mcpTool(
         : 'unsafe',
     // The call as the approval prompt shows it; the loop asks the session's
     // one approval authority before the body runs.
-    guard: {
-      command: {
-        text: describe,
-        cwd: 'unknown',
-      },
-    },
+    guard: { command: thirdPartyCommand(describe) },
     call: (rawInput) => {
       if (!Schema.is(McpArgumentsSchema)(rawInput))
         return Effect.succeed(
@@ -221,15 +216,7 @@ function mcpTool(
               ? errorResult(text || `${listed.name} failed.`)
               : executed(text, `${server}: ${listed.name}`);
           }),
-          Effect.timeoutOrElse({
-            duration: CALL_TIMEOUT,
-            orElse: () =>
-              Effect.succeed(
-                errorResult(
-                  `MCP tool ${listed.name} timed out after ${Duration.toSeconds(CALL_TIMEOUT)}s.`,
-                ),
-              ),
-          }),
+          (request) => withinDeadline(request, `MCP tool ${listed.name}`),
           Effect.catch((error) =>
             Effect.succeed(
               errorResult(

@@ -1449,20 +1449,31 @@ All notable changes to this project will be documented in this file.
   begins with `export const description = '...';` and
   `export const provides = ['tool:<name>', ...];`, and its default export
   takes `{ plugins, effect }` (the `@texra-ai/harness/plugins` surface and
-  the `effect` TeXRA runs on) and returns a plugin with tools, process or
-  session services, a prompt section, script modules and programs. It runs
+  the modules of the `effect` TeXRA runs on that a plugin is written with,
+  `Effect`, `Context`, `Layer`, `Schema`, `Stream` and their kin) and
+  returns a plugin with tools, process or session services, a prompt
+  section, script modules and programs. It runs
   inside the process as you, so `texra plugin enable` says so and lists what
   it provides; once trusted at its digest it loads from every run's next
   step, with no restart. An edit replaces it the same way once trusted
   again: a call already running finishes on the version it started with,
   and the old version's services are released when the last step using
-  them ends. A version that fails to load is left out with its reason, and
-  nothing else changes. Agents get a `plugin_manager` tool to list,
-  install, enable, disable and remove plugins themselves, each change but a
-  listing or an install asked of you first; trusting native code is always
-  your own answer, whatever the approval policy, so a run that cannot ask
-  you leaves it to `texra plugin enable`. Listing, installing or reviewing a
-  plugin runs none of its code.
+  them ends. A new version that fails to load, or whose services do not
+  come up, is reported with its reason and leaves the version before it in
+  use until the plugin is fixed or disabled (until TeXRA restarts, after
+  which the plugin is left out with that reason); `plugin_manager list`
+  names the version in use. Nothing else changes. Each call of a native tool asks under your
+  approval policy, as an MCP server's tool does, whatever the module
+  declares, and stops after 60 seconds as one does; a call that fails or
+  crashes fails alone, naming the plugin. Agents get a `plugin_manager` tool to list, install, enable,
+  disable and remove plugins themselves, each change but a listing or an
+  install asked of you first. Trusting a plugin is asked as its own card in
+  the progress view and the terminal, naming the plugin, its version, its
+  folder, what it contributes and whether it carries native code. Trusting
+  native code is always your own answer, whatever the approval policy, and
+  so is an agent enabling again native code you trusted and then disabled;
+  a run that cannot ask you leaves it to `texra plugin enable`. Listing,
+  installing or reviewing a plugin runs none of its code.
 - **An agent can write a program for itself.** A file an agent creates with
   the `memory` tool at `/memories/programs/<name>.js` is the program
   `own:<name>` from its next step, with no restart and nothing to install,

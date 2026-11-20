@@ -26,8 +26,8 @@
  *   [`approvedWriteConflict`](#approvedwriteconflict)).
  * - **Native plugins**: an installed plugin folder's `harness.mjs` is a
  *   module whose default export ([`NativeEntryModule`](#nativeentrymodule))
- *   the harness calls with this surface and its own `effect`
- *   ([`NativePluginHost`](#nativepluginhost)) and which returns a
+ *   the harness calls with this surface and its own `effect` authoring
+ *   modules ([`NativePluginHost`](#nativepluginhost)) and which returns a
  *   [`Plugin`](#plugin); once the person trusts it, it is added, replaced or
  *   removed while the process runs, each run seeing the change from its next
  *   step.

@@ -9,6 +9,7 @@ import { AgentProposal } from './AgentProposal';
 import { BashRequest } from './BashRequest';
 import { ToolEditRequest } from './ToolEditRequest';
 import { PlanRequest } from './PlanRequest';
+import { PluginTrustRequest } from './PluginTrustRequest';
 import { RetryRequest } from './RetryRequest';
 import { UserQuestion } from './UserQuestion';
 import type { TuiRequest } from '../state/approvalQueue';
@@ -66,6 +67,15 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
         <RetryRequest
           availableRows={availableRows}
           payload={payload}
+          onDecide={onDecide}
+        />
+      );
+    case 'pluginTrust':
+      return (
+        <PluginTrustRequest
+          availableRows={availableRows}
+          grant={grant}
+          payload={payload.data}
           onDecide={onDecide}
         />
       );

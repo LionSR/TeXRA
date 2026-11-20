@@ -30,6 +30,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { PluginContext } from '@platform/processRuntime';
 import {
   entriesOf,
@@ -38,7 +39,12 @@ import {
   type ToolEntry,
 } from '@tools/catalogEntries';
 import type { Plugin } from '@tools/plugins';
-import { PluginHold, ToolRegistry, type ToolTable } from '@tools/toolTable';
+import {
+  PluginHold,
+  ToolRegistry,
+  type NativePlugin,
+  type ToolTable,
+} from '@tools/toolTable';
 import {
   projectServers,
   type InstalledToolReader,
@@ -128,6 +134,13 @@ export interface ProcessCatalog {
   /** Read the installed plugins and the native ones they load, and publish
    *  the table they make as `live`. */
   readonly read: Effect.Effect<CatalogRead>;
+  /** Record that `native`'s services did not come up, for `reason`: the
+   *  reads from now on leave the revision before it in use, or withhold
+   *  the plugin, until its trust digest changes. */
+  readonly layerFailed: (
+    native: NativePlugin,
+    reason: string,
+  ) => Effect.Effect<void>;
   /** The plugin a layer key names: a listed one, or any native revision
    *  this process loaded. */
   readonly pluginOf: (key: string) => Plugin | undefined;
@@ -236,8 +249,15 @@ export const follow = (
     );
   }).pipe(Effect.forkScoped, Effect.asVoid);
 
+/** A plugin that has no layer of a kind holds none. */
+const NOTHING = Effect.void;
+
 /** Reads no plugins, from configuration or installed. */
-export const NONE = Effect.succeed({ plugins: [], warnings: [] });
+export const NONE = Effect.succeed({
+  plugins: [],
+  warnings: [],
+  enabled: new Set<string>(),
+});
 
 /** One step's pin over its session's resources. */
 const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
@@ -246,7 +266,7 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   off: Effect.Effect<ReadonlySet<string>, E>,
   options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
 ): Effect.fn.Return<ToolStep, E, Scope.Scope> {
-  const [offSet, read] = yield* Effect.all(
+  const [offSet, first] = yield* Effect.all(
     [
       off,
       options?.installed === true
@@ -254,19 +274,66 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
         : // Without the installed plugins, no native one: the listed
           // plugins' table.
           Effect.succeed({
-            installed: { plugins: [], warnings: [] },
+            installed: {
+              plugins: [],
+              warnings: [],
+              enabled: new Set<string>(),
+            },
             table: shared.listed,
             warnings: [],
           }),
     ],
     { concurrency: 'unbounded' },
   );
+  // The native plugins the read loaded, as the table accepted them, each
+  // with its layers up for the step before the step offers anything of it.
+  // A revision whose layer fails to build, or dies building, is recorded
+  // as failed and the plugins read again, which leaves the revision before
+  // it in use or withholds the plugin with the reason; each pass records
+  // another failed revision, so it ends.
+  let read = first;
+  for (;;) {
+    const { table } = read;
+    const built = yield* Effect.forEach(
+      [...table.entries.values()].filter(
+        ({ id }) => table.revisionOf(id) !== 'builtin',
+      ),
+      (plugin) => {
+        const revision = table.revisionOf(plugin.id);
+        const key = layerKey(plugin.id, revision);
+        return Effect.all(
+          [
+            plugin.processLayer
+              ? RcMap.get(shared.processLayers, key)
+              : NOTHING,
+            plugin.sessionLayer ? RcMap.get(session.layers, key) : NOTHING,
+          ],
+          { concurrency: 'unbounded', discard: true },
+        ).pipe(
+          Effect.catchDefect(Effect.fail),
+          Effect.matchEffect({
+            onSuccess: () => Effect.succeed(false),
+            onFailure: (cause) =>
+              Effect.as(
+                shared.layerFailed(
+                  { plugin, revision },
+                  `its services did not come up: ${ensureError(cause).message}`,
+                ),
+                true,
+              ),
+          }),
+        );
+      },
+      { concurrency: 'unbounded' },
+    );
+    if (!built.includes(true)) break;
+    read = yield* shared.read;
+  }
   const { table } = read;
   const switchedOn = shared.onOf(offSet);
   const builtIn = shared.builtIn.filter(({ plugin }) =>
     switchedOn.has(plugin.id),
   );
-  // The native plugins the read loaded, as the table accepted them.
   const natives = [...table.entries.values()].filter(
     ({ id }) => table.revisionOf(id) !== 'builtin',
   );

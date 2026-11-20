@@ -101,6 +101,41 @@ export const BashRequestSchema = RequestBaseSchema.mapFields(
 export type BashRequest = typeof BashRequestSchema.Type;
 
 /**
+ * A run asks a person to trust an installed plugin as it is now, and load
+ * it: what it is and where, what it contributes, and whether it carries
+ * native code, which runs inside the process. `review` is the whole review
+ * a person reads, one line each (its hooks, the files outside it its
+ * servers and hooks run); the other fields are what a surface shows first.
+ */
+export const PluginTrustRequestSchema = RequestBaseSchema.mapFields(
+  Struct.assign({
+    /** The installed plugin's name. */
+    plugin: Schema.String,
+    version: Schema.optional(Schema.String),
+    /** The digest trusting it records: every file it ships and what its
+     *  servers and hooks run. */
+    digest: Sha256Schema,
+    /** Its folder. */
+    path: Schema.String,
+    skills: NonNegativeIntSchema,
+    /** Its programs, by the name each is started by. */
+    programs: Schema.Array(Schema.String),
+    /** Its MCP servers, by name. */
+    servers: Schema.Array(Schema.String),
+    /** Its native entry, when it carries one: the header's one line and
+     *  what it `provides`. */
+    native: Schema.optional(
+      Schema.Struct({
+        description: Schema.String,
+        provides: Schema.Array(Schema.String),
+      }),
+    ),
+    review: Schema.Array(Schema.String),
+  }),
+);
+export type PluginTrustRequest = typeof PluginTrustRequestSchema.Type;
+
+/**
  * The API-key providers a stored retry offer names. Storage owns the enum
  * (the llm catalog's `ApiKeyProviderId` must stay assignable to it, which
  * `credentialSwitch` checks where it builds an offer), so a catalog

@@ -456,8 +456,10 @@ function goldenTurn(
     );
   }
   // The native plugin run: it installs and enables the plugin its task
-  // names, then calls its `native_echo` once, or twice with the first
-  // waiting for its release. A step that does not
+  // names, calls the tools its task names in turn, then calls its
+  // `native_echo` once, or two or three times with all but the last
+  // waiting for their release (three times with a listing of the plugins
+  // after the first). A step that does not
   // offer `native_echo` says so, with what it does offer.
   if (system.includes('GOLDEN-NATIVE')) {
     const offered = turn.tools.map(({ name }) => name);
@@ -466,15 +468,48 @@ function goldenTurn(
       offered.includes('native_echo')
         ? [call('native_echo', input)]
         : text(`native_echo is not offered; offered: ${offered.join(', ')}`);
+    // A plugin a person trusted and then disabled, enabled again.
+    if (said.includes('Enable echoes again.'))
+      return Effect.succeed(
+        results.length === 0
+          ? [call('plugin_manager', { command: 'enable', name: 'echoes' })]
+          : text('Enabled again.'),
+      );
+    // `Call native_a, native_b in turn.`: each named tool once, offered or
+    // not, then the echo.
+    const named =
+      /Call (native_\w+(?:, native_\w+)*) in turn\./.exec(said)?.[1] ?? null;
     const steps = [
       () =>
         offered.includes('native_echo')
           ? [call('native_echo', {})]
           : [call('plugin_manager', { command: 'install', source })],
       () => [call('plugin_manager', { command: 'enable', name: 'echoes' })],
-      ...(said.includes('Echo twice, the first waiting.')
-        ? [echo({ wait: true }), echo({})]
-        : [echo({})]),
+      ...(named === null
+        ? []
+        : named.split(', ').map((name) => () => [call(name, {})])),
+      ...(said.includes('Echo, then echo waiting, in one reply.')
+        ? [
+            // Two calls of one tool in one reply, each its own id.
+            () =>
+              [call('native_echo', {}), call('native_echo', { wait: '1' })].map(
+                (each, n) =>
+                  each.kind === 'local-call'
+                    ? { ...each, providerCallId: `${each.providerCallId}-${n}` }
+                    : each,
+              ),
+            echo({}),
+          ]
+        : said.includes('Echo twice, the first waiting.')
+          ? [echo({ wait: '1' }), echo({})]
+          : said.includes('Echo three times, the first two waiting.')
+            ? [
+                echo({ wait: '1' }),
+                () => [call('plugin_manager', { command: 'list' })],
+                echo({ wait: '2' }),
+                echo({}),
+              ]
+            : [echo({})]),
     ];
     const step = steps[results.length];
     return Effect.succeed(step === undefined ? text('Echoed.') : step());

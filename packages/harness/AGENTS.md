@@ -89,9 +89,27 @@ new revision comes up beside the old one, which goes down when the last step
 that pinned it ends; a swap interrupts nothing. A native module is imported
 only when a step or a launch reads the table; a change to the install record
 only takes out what no longer loads, so listing, installing or reviewing a
-plugin runs none of its code. Trusting a native module is a person's own
-answer whatever the policy: `plugin_manager` opens that request as one a
-hook asked about (`hook: 'ask'`, so `answeredBy: 'person'`).
+plugin runs none of its code. The host decides how a native tool runs, not
+its definition: the loader (`hostRun`, `tools/nativePlugins.ts`) gives
+each the gate and deadline an MCP server's tool has
+(`tools/thirdPartyTool.ts`), so every call asks under the session's
+approval policy through the loop's one guard, and however it ends but by
+interruption it ends that call alone, its error naming the plugin. A step
+brings a native plugin's layers up before it offers anything of it
+(`pinStep`, `tools/sessionTools.ts`). A revision that does not load (its
+import, its value, the table's check or its layers) is not tried again
+until its trust digest changes, and the revision of that plugin the table
+held before it stays in use, in memory only, until the plugin is fixed,
+disabled or removed (`standing`, `toolCatalogLayer`); with none, the
+plugin is withheld. Either way the step says why. A call's tool is its
+plugin's revision as its step recorded it (`sameIdentity`), so a resume
+after a replacement or a disable runs no unfinished call of the old
+revision again: it ends with its outcome unknown. Trusting a native
+module is a person's own answer whatever the policy, and so is enabling
+again one a person trusted and then disabled: `plugin_manager` opens that
+request, a `pluginTrust` request (what the plugin is, where, what it
+contributes and whether it carries native code), as one a hook asked about
+(`hook: 'ask'`, so `answeredBy: 'person'`).
 
 ## Event channels and cards
 

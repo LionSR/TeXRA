@@ -57,10 +57,11 @@ import {
   type SessionTools,
   type ProcessCatalog,
 } from '@tools/sessionTools';
-import { nativeLoader } from '@tools/nativePlugins';
+import { nativeLoader, type NativePluginFailed } from '@tools/nativePlugins';
 import {
   ToolRegistry,
   withNatives,
+  type NativePlugin,
   type PluginLayerServices,
   type ToolTable,
 } from '@tools/toolTable';
@@ -189,32 +190,156 @@ export const toolCatalogLayer = (
           .map((id) => layerKey(id, of.revisionOf(id)))
           .join('\0');
       const loader = nativeLoader();
+      // Each native plugin's revision in the table and the one it replaced,
+      // while its installed plugin stays enabled: what stands in, kept in
+      // memory only, for a newer revision that does not load. A disabled or
+      // removed plugin forgets both.
+      const standing = new Map<
+        string,
+        { readonly now: NativePlugin; readonly before?: NativePlugin }
+      >();
+      // The revisions whose services did not come up for a step, by layer
+      // key, with why: like a failed import, not tried again until the
+      // trust digest changes.
+      const layerFailures = new Map<string, string>();
+      const failedHere = (native: NativePlugin) =>
+        layerFailures.has(layerKey(native.plugin.id, native.revision));
+      /** The revision that stands in for `revision` of `id`, which did not
+       *  load: the one in the table, else the one before it. */
+      const standIn = (id: string, revision: string | undefined) => {
+        const held = standing.get(id);
+        return [held?.now, held?.before].find(
+          (native): native is NativePlugin =>
+            native !== undefined &&
+            native.revision !== revision &&
+            !failedHere(native),
+        );
+      };
+      const short = (revision: string | undefined) =>
+        revision === undefined ? '' : ` at revision ${revision.slice(0, 12)}`;
+      /** Why `id`'s `revision` is not loaded, and what stands in for it. */
+      const notLoaded = (
+        id: string,
+        revision: string | undefined,
+        reason: string,
+        stand: NativePlugin | undefined,
+      ) =>
+        stand === undefined
+          ? `The native code of ${id}${short(revision)} is not loaded: ${reason}`
+          : `The native code of ${id}${short(revision)} is not loaded: ${reason}; revision ${stand.revision.slice(0, 12)} stays in use until the plugin is fixed or disabled.`;
       // The installed plugins as read now and the table they make, with
       // each native entry imported now (`load`), or only those a step or a
       // launch already imported: a change to the install record takes a
-      // disabled or replaced plugin out at once, and runs no plugin's code.
+      // disabled or replaced plugin out at once, and runs no plugin's code;
+      // a plugin trusted at a revision not imported yet keeps the one in use
+      // until a step tries the new one. A revision that does not load, or
+      // whose services did not come up, leaves the one before it in use.
       const readWith = (load: boolean) =>
         Effect.gen(function* () {
           const found = yield* installed;
-          const sources = found.plugins.flatMap(({ source }) =>
-            source.plugin.native === null ? [] : [source],
+          for (const id of standing.keys())
+            if (!found.enabled.has(id)) standing.delete(id);
+          const sources = found.plugins.flatMap(({ id, source }) =>
+            source.plugin.native === null ? [] : [{ id, source }],
           );
-          const results = load
-            ? yield* Effect.forEach(
-                sources,
-                (source) => Effect.result(loader.load(source)),
-                { concurrency: 'unbounded' },
-              )
-            : sources.flatMap((source) => {
-                const imported = loader.imported(source);
-                return imported === undefined ? [] : [Result.succeed(imported)];
-              });
-          const loaded = results.flatMap((result) =>
-            Result.isSuccess(result) ? [result.success] : [],
+          const notes: string[] = [];
+          const fresh = new Set<NativePlugin>();
+          const attempts = yield* Effect.forEach(
+            sources,
+            ({
+              id,
+              source,
+            }): Effect.Effect<{
+              readonly id: string;
+              readonly result: Result.Result<
+                NativePlugin,
+                NativePluginFailed
+              > | null;
+            }> => {
+              const imported = loader.imported(source);
+              return load || imported !== undefined
+                ? Effect.map(Effect.result(loader.load(source)), (result) => ({
+                    id,
+                    result,
+                  }))
+                : Effect.succeed({ id, result: null });
+            },
+            { concurrency: 'unbounded' },
           );
-          for (const { plugin, revision } of loaded)
+          const candidates = attempts.flatMap(({ id, result }) => {
+            if (result === null) {
+              const now = standing.get(id)?.now;
+              return now === undefined ? [] : [now];
+            }
+            let failed: {
+              readonly revision: string | undefined;
+              readonly reason: string;
+            };
+            if (Result.isFailure(result))
+              failed = {
+                revision: result.failure.revision,
+                reason: result.failure.reason,
+              };
+            else {
+              const native = result.success;
+              const layerFailure = layerFailures.get(
+                layerKey(id, native.revision),
+              );
+              if (layerFailure === undefined) {
+                fresh.add(native);
+                return [native];
+              }
+              failed = { revision: native.revision, reason: layerFailure };
+            }
+            const stand = standIn(id, failed.revision);
+            notes.push(notLoaded(id, failed.revision, failed.reason, stand));
+            return stand === undefined ? [] : [stand];
+          });
+          for (const { plugin, revision } of candidates)
             natives.set(layerKey(plugin.id, revision), plugin);
-          const composed = withNatives(table, loaded);
+          // A new revision the table refuses leaves the one before it in
+          // use, judged again with the rest.
+          const first = withNatives(table, candidates);
+          const refused = new Map(
+            first.withheld.flatMap(({ native, reason }) => {
+              const stand = fresh.has(native)
+                ? standIn(native.plugin.id, native.revision)
+                : undefined;
+              return stand === undefined ? [] : [[native, { stand, reason }]];
+            }),
+          );
+          const composed =
+            refused.size === 0
+              ? first
+              : withNatives(
+                  table,
+                  candidates.map(
+                    (native) => refused.get(native)?.stand ?? native,
+                  ),
+                );
+          for (const [native, { stand, reason }] of refused)
+            notes.push(
+              notLoaded(native.plugin.id, native.revision, reason, stand),
+            );
+          notes.push(
+            ...composed.withheld.map(({ native, reason }) =>
+              notLoaded(native.plugin.id, native.revision, reason, undefined),
+            ),
+          );
+          for (const id of composed.table.entries.keys()) {
+            const revision = composed.table.revisionOf(id);
+            const now = standing.get(id)?.now;
+            const native = natives.get(layerKey(id, revision));
+            if (
+              revision !== 'builtin' &&
+              native !== undefined &&
+              now?.revision !== revision
+            )
+              standing.set(id, {
+                now: { plugin: native, revision },
+                ...(now === undefined ? {} : { before: now }),
+              });
+          }
           if (
             revisions(composed.table) !==
             revisions(yield* SubscriptionRef.get(live))
@@ -223,13 +348,7 @@ export const toolCatalogLayer = (
           return {
             installed: found,
             table: composed.table,
-            warnings: [
-              ...found.warnings,
-              ...results.flatMap((result) =>
-                Result.isFailure(result) ? [result.failure.message] : [],
-              ),
-              ...composed.withheld,
-            ],
+            warnings: [...found.warnings, ...notes],
           };
         });
       const read = readWith(true);
@@ -255,6 +374,13 @@ export const toolCatalogLayer = (
         on,
         live,
         read,
+        layerFailed: (native, reason) =>
+          Effect.sync(() =>
+            layerFailures.set(
+              layerKey(native.plugin.id, native.revision),
+              reason,
+            ),
+          ),
         pluginOf,
         processLayers,
         spawner: Context.get(process, ChildProcessSpawner),
