@@ -368,6 +368,13 @@ still detected twice in one resume, both through `runReadRefusal`
 (`resumeRun.ts:88-92`, `resumability.ts:37-41`; `ownedElsewhere` is gone).
 The other deciders and the remaining stopped vocabulary were not re-read._
 
+_Done 2026-11-20: a resume reads its run's facts once (`openResume`,
+`packages/harness/src/agent/runtime/resumeRun.ts`): a failed read is
+`refusalFor`'s, and the continuation is `continuationOf`
+(`packages/harness/src/agent/storage/continuation.ts`) over that read, so an
+earlier build is detected once. `FollowUps.release` and the script summary's
+`stopped` are still open._
+
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
 
