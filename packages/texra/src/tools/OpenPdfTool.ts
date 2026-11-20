@@ -3,11 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
-import {
-  ToolContext,
-  createRunStorageLocation,
-  pathToLocationIn,
-} from '@texra-ai/harness/plugins';
+import { ToolContext, pathToLocationIn } from '@texra-ai/harness/plugins';
 import { meansAbsent, isPathWithin } from '@texra-ai/harness/node';
 import {
   normalizeFilePath,
@@ -72,7 +68,12 @@ export const OpenPdfTool = defineTool({
         ? normalizeFilePath(path.relative(runDirectory, trimmedPath))
         : '';
     const location: FileLocation = runRelative
-      ? createRunStorageLocation(trimmedPath, runRelative, runId)
+      ? {
+          kind: 'runStorage',
+          absolutePath: trimmedPath,
+          relativePath: runRelative,
+          runId,
+        }
       : pathToLocationIn(
           env.roots.workspace,
           (yield* resolveToolPath(env, trimmedPath)).absolute,

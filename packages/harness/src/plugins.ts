@@ -277,14 +277,9 @@ export {
   type RunStorageEntry,
   sourceLocationUnder,
 } from '@common/storage/storageLayout';
-// A `FileLocation` by its root (workspace, run storage or external), and a
-// path's location against the workspace root a caller holds.
-export {
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-  pathToLocationIn,
-} from '@common/storage/fileLocation';
+// A path's `FileLocation` against the workspace root a caller holds: workspace
+// or external.
+export { pathToLocationIn } from '@common/storage/fileLocation';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

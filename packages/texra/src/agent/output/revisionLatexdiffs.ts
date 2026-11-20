@@ -40,7 +40,6 @@ import {
   Settings,
   withLogChannel,
   type WorkspaceFs,
-  createRunStorageLocation,
 } from '@texra-ai/harness/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
@@ -348,11 +347,12 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
   DiffServices
 > {
   const diffFileName = path.basename(diffPath);
-  const diffLocation = createRunStorageLocation(
-    path.join(diffDirectory.absolutePath, diffFileName),
-    path.join(diffDirectory.relativePath, diffFileName),
-    diffDirectory.runId,
-  );
+  const diffLocation: RunStorageFileLocation = {
+    kind: 'runStorage',
+    absolutePath: path.join(diffDirectory.absolutePath, diffFileName),
+    relativePath: path.join(diffDirectory.relativePath, diffFileName),
+    runId: diffDirectory.runId,
+  };
 
   const buildDir = path.join(
     path.dirname(diffLocation.absolutePath),

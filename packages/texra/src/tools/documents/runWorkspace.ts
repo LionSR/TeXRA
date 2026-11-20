@@ -24,7 +24,6 @@ import {
   runDirUnder,
   sourceLocationUnder,
   withLogChannel,
-  createRunStorageLocation,
   withFileWriteLane,
 } from '@texra-ai/harness/plugins';
 import {
@@ -162,11 +161,12 @@ export class RunWorkspace {
       if (target.kind !== 'workspace') return target;
 
       const snapshotAbsolute = this.originalSnapshotPath(target.relativePath);
-      const snapshot = createRunStorageLocation(
-        snapshotAbsolute,
-        target.relativePath,
-        this.runId,
-      );
+      const snapshot: FileLocation = {
+        kind: 'runStorage',
+        absolutePath: snapshotAbsolute,
+        relativePath: target.relativePath,
+        runId: this.runId,
+      };
       // Checked and copied as the snapshot's one writer: two captures of
       // one file never both copy it.
       return yield* Effect.gen(function* () {
@@ -223,11 +223,12 @@ export class RunWorkspace {
   createLocation(inputPath: string): FileLocation {
     const source = sourceLocationUnder(this.roots, inputPath);
     if (source.kind !== 'workspace') return source;
-    return createRunStorageLocation(
-      this.inRunDirectory(source.relativePath),
-      source.relativePath,
-      this.runId,
-    );
+    return {
+      kind: 'runStorage',
+      absolutePath: this.inRunDirectory(source.relativePath),
+      relativePath: source.relativePath,
+      runId: this.runId,
+    };
   }
 
   /**
@@ -274,11 +275,12 @@ export class RunWorkspace {
         yield* this.captureOriginalSnapshot(location);
       }
 
-      return createRunStorageLocation(
-        runAbsolute,
-        location.relativePath,
-        this.runId,
-      );
+      return {
+        kind: 'runStorage',
+        absolutePath: runAbsolute,
+        relativePath: location.relativePath,
+        runId: this.runId,
+      };
     },
   );
 
