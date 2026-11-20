@@ -1118,12 +1118,10 @@ class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistered>()(
 ## programsNow
 
 Every program a run of the project at `roots` can open on now, by name:
-those the plugin list registers, those of the installed plugins that load
-now (enabled, and trusted as they are), each under `<plugin>:<name>`, and
-those the project's agent wrote for itself, each under `own:<name>`; a
-program read from a file has the description and tools its file
-declares. `withheld` says why an enabled plugin or a program file is not
-loaded.
+those the plugin list registers and those read from files
+({@link programFiles}); a program read from a file has the description
+and tools its file declares. `withheld` says why an enabled plugin or a
+program file is not loaded.
 
 ```ts
 const programsNow: (roots: Pick<WorkspaceRoots, "storage">) => Effect<{ programs: Map<string, Program<unknown>>; withheld: string[]; }, never, FileSystem | AppState | ToolRegistry>

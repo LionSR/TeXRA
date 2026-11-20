@@ -11,6 +11,7 @@
 import { Effect, FileSystem, Result, Schema, SchemaIssue } from 'effect';
 
 import { readOwnPrograms } from '@agent/memory/ownPrograms';
+import type { PluginPrograms } from '@common/plugins/pluginPrograms';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
@@ -67,7 +68,7 @@ return await program(${JSON.stringify(args)}, ${JSON.stringify({
 
 /** The `script` call a run opened on `script` makes, and the tools its run
  *  offers that call. */
-interface ScriptCall {
+export interface ScriptCall {
   readonly code: string;
   readonly title: string;
   readonly tools: readonly string[];
@@ -94,45 +95,70 @@ export class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistere
 }
 
 /**
+ * The programs read from files of one origin in the project at `roots`:
+ * those of the installed plugins that load now (enabled, and trusted as
+ * they are), each under `<plugin>:<name>`, or those the project's agent
+ * wrote for itself, each under `own:<name>`. `refused` says why an enabled
+ * plugin or a program file is not loaded.
+ */
+const programFiles = {
+  installed: Effect.fn('installedPrograms')(function* () {
+    const { loadable, withheld } = yield* readInstalledPluginLoad({
+      globalState: yield* AppState,
+    });
+    return {
+      loaded: loadable.flatMap(({ plugin }) => plugin.programs.loaded),
+      refused: [
+        ...withheld.map(({ reason }) => reason),
+        ...loadable.flatMap(({ plugin }) => plugin.programs.refused),
+      ],
+    };
+  }),
+  own: (roots: Pick<WorkspaceRoots, 'storage'>) =>
+    readOwnPrograms(roots.storage),
+} satisfies Record<
+  Exclude<ProgramOrigin, 'listed'>,
+  (
+    roots: Pick<WorkspaceRoots, 'storage'>,
+  ) => Effect.Effect<PluginPrograms, never, AppState | FileSystem.FileSystem>
+>;
+
+/** The listed programs and those read from `files`, by name, and why a
+ *  plugin or a file among them is not loaded. */
+const programTable = (
+  listed: ReadonlyMap<string, Program>,
+  files: readonly PluginPrograms[],
+) => ({
+  programs: new Map<string, Program>([
+    ...listed,
+    ...files.flatMap(({ loaded }) =>
+      loaded.map(
+        ({ name, description, tools }) =>
+          [name, { description, tools }] as const,
+      ),
+    ),
+  ]),
+  withheld: files.flatMap(({ refused }) => refused),
+});
+
+/**
  * Every program a run of the project at `roots` can open on now, by name:
- * those the plugin list registers, those of the installed plugins that load
- * now (enabled, and trusted as they are), each under `<plugin>:<name>`, and
- * those the project's agent wrote for itself, each under `own:<name>`; a
- * program read from a file has the description and tools its file
- * declares. `withheld` says why an enabled plugin or a program file is not
- * loaded.
+ * those the plugin list registers and those read from files
+ * ({@link programFiles}); a program read from a file has the description
+ * and tools its file declares. `withheld` says why an enabled plugin or a
+ * program file is not loaded.
  */
 export const programsNow = Effect.fn('programsNow')(function* (
   roots: Pick<WorkspaceRoots, 'storage'>,
 ) {
-  const { programs } = yield* ToolRegistry;
-  const installed = yield* readInstalledPluginLoad({
-    globalState: yield* AppState,
-  });
-  // The agent's own last: no plugin holds their prefix.
-  const fromFiles = [
-    ...installed.loadable.map(({ plugin }) => plugin.programs),
-    yield* readOwnPrograms(roots.storage),
-  ];
-  return {
-    programs: new Map<string, Program>([
-      ...programs,
-      ...fromFiles.flatMap(({ loaded }) =>
-        loaded.map(
-          ({ name, description, tools }) =>
-            [name, { description, tools }] as const,
-        ),
-      ),
-    ]),
-    withheld: [
-      ...installed.withheld.map(({ reason }) => reason),
-      ...fromFiles.flatMap(({ refused }) => refused),
-    ],
-  };
+  return programTable((yield* ToolRegistry).programs, [
+    yield* programFiles.installed(),
+    yield* programFiles.own(roots),
+  ]);
 });
 
-/** The program started by `name` in the project at `roots`. The program
- *  files are read only for a name of theirs. */
+/** The program started by `name` in the project at `roots`. Only the files
+ *  of the name's origin are read: none for a listed program. */
 const registeredProgram = Effect.fn('registeredProgram')(function* (
   name: string,
   roots: Pick<WorkspaceRoots, 'storage'>,
@@ -141,12 +167,12 @@ const registeredProgram = Effect.fn('registeredProgram')(function* (
   ProgramNotRegistered,
   ToolRegistry | AppState | FileSystem.FileSystem
 > {
-  const registered = (yield* ToolRegistry).programs.get(name);
-  if (registered !== undefined) return registered;
-  const { programs, withheld } =
-    programOrigin(name) === 'listed'
-      ? { programs: (yield* ToolRegistry).programs, withheld: [] }
-      : yield* programsNow(roots);
+  const listed = (yield* ToolRegistry).programs;
+  const origin = programOrigin(name);
+  const { programs, withheld } = programTable(
+    listed,
+    origin === 'listed' ? [] : [yield* programFiles[origin](roots)],
+  );
   const program = programs.get(name);
   if (program === undefined)
     return yield* new ProgramNotRegistered({

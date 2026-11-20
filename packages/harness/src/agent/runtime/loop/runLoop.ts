@@ -68,7 +68,6 @@ import { mediaInputParts } from '../run/mediaInput';
 import type { InputPart } from '@texra-ai/llm';
 import { claimFollowUps, type FollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
-import { scriptCallOf } from '../programRun';
 import { resumeLeftoverChildren } from '../leftoverChildren';
 import {
   appendRow,
@@ -363,7 +362,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
     const { content, offered, handed } = yield* Effect.interruptible(
       Effect.gen(function* () {
         // A script's run renders no prompt: what it runs is its call.
-        const script = yield* scriptCallOf(run.config, roots);
+        const { script } = run;
         if (script !== null) {
           echo();
           const step = yield* stepFor(run, opening, false);

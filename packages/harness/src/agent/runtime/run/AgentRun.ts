@@ -52,7 +52,7 @@ import type { Alongside } from '@shared/session/sessionEvents';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import type { ToolRegistry } from '@tools/toolTable';
 import { ProjectTools, type OpenStep } from '../loop/step';
-import { scriptCallOf } from '../programRun';
+import { scriptCallOf, type ScriptCall } from '../programRun';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
@@ -141,6 +141,12 @@ export interface AgentRunShape extends RunLaunch {
   readonly steps: ScopedRef.ScopedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
+  /**
+   * The call a script's run makes, read once as the run is built, so the
+   * tools the run offers and the code its opening runs come from one read
+   * of a program's file; null for a run that asks its model.
+   */
+  readonly script: ScriptCall | null;
   /**
    * The binding in force, this activation's resource (its route, socket,
    * ping fiber and uploads), in a scope of its own under the run's. A
@@ -322,6 +328,7 @@ export const agentRunLayer = (
           Scope.provide(scope),
         ),
         finalToolName,
+        script,
         model,
         scope,
         callbacks: input.callbacks,
