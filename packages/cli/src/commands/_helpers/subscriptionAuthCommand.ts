@@ -18,8 +18,7 @@ import {
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
-import { cliCommand } from './cliCommand';
-import { boolFlag } from './flags';
+import { boolFlag, cliCommand } from './cliCommand';
 import { cliProgressWriter, emitCliResult } from './output';
 
 /**

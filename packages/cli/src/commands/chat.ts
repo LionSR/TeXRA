@@ -12,9 +12,9 @@ import { notifyCliUpdate } from '../runtime/platform/updateChecker';
 import {
   cliCommand,
   SKILL_SOURCES_CONFIG,
+  modelFlag,
   type CliCommandOptions,
 } from './_helpers/cliCommand';
-import { modelFlag } from './_helpers/flags';
 
 const chatConfig = {
   ...SKILL_SOURCES_CONFIG,

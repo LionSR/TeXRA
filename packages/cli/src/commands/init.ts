@@ -27,8 +27,7 @@ import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
-import { cliCommand } from './_helpers/cliCommand';
-import { boolFlag } from './_helpers/flags';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
 interface InitAgentOption {

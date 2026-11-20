@@ -5,18 +5,17 @@
  * exactly while some holder names it, so an unnamed signal keeps Node's
  * default.
  */
-type CliSignal = 'SIGINT' | 'SIGTERM' | 'SIGHUP' | 'SIGTSTP' | 'SIGCONT';
-
-/** What a holder does on each signal it names. */
-export type SignalPolicy = Partial<Record<CliSignal, () => void>>;
-
-const CLI_SIGNALS: readonly CliSignal[] = [
+const CLI_SIGNALS = Object.freeze([
   'SIGINT',
   'SIGTERM',
   'SIGHUP',
   'SIGTSTP',
   'SIGCONT',
-];
+] as const);
+type CliSignal = (typeof CLI_SIGNALS)[number];
+
+/** What a holder does on each signal it names. */
+export type SignalPolicy = Partial<Record<CliSignal, () => void>>;
 // Holders in the order they were taken; the newest naming a signal answers it.
 const holders: SignalPolicy[] = [];
 const listeners = new Map<CliSignal, () => void>();

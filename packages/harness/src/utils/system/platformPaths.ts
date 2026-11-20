@@ -129,6 +129,11 @@ export const withCommandDirs = <T extends NodeJS.ProcessEnv>(
 ): Effect.Effect<T> =>
   Effect.map(CommandDirs, (appDirs) => withExtendedPath(env, appDirs()));
 
+/** Whether a command word names a file by path (it holds a separator)
+ *  rather than a program to look up on PATH. */
+export const namesPath = (word: string): boolean =>
+  word.includes('/') || word.includes(path.sep);
+
 /**
  * Resolve `name` on the process PATH extended with `appDirs` the way a shell
  * would, or null on a miss. In-process (npm `which`), and PATHEXT-aware on

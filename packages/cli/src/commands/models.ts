@@ -25,8 +25,7 @@ import {
   type CliModelListOptions,
 } from '../runtime/models/modelAccess';
 
-import { cliCommand } from './_helpers/cliCommand';
-import { boolFlag } from './_helpers/flags';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,

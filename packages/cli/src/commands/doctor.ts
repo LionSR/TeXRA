@@ -20,8 +20,8 @@ import { pruneStorage } from '../runtime/pruneStorage';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
-import { boolFlag } from './_helpers/flags';
 import {
+  boolFlag,
   readCliGlobalArgs,
   selectCliCommand,
   selectExitCode,

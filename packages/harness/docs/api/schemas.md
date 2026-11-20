@@ -2402,7 +2402,7 @@ interface SettingRow<A = unknown> extends StateKey<A> {
   /** Human-readable description, shared across every host that renders it. */
   readonly description: string;
   /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
-  readonly configTarget?: 'global' | 'workspace' | 'local';
+  readonly configTarget?: ConfigTarget;
   /**
    * A `global` row a project file may still switch off: its project value
    * counts unless it is `true`, so a repository can opt out (telemetry) but

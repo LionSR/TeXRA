@@ -28,8 +28,7 @@ import {
 } from '../runtime/platform/logSinks';
 import { gh, ghAvailable, git } from '../runtime/gitOps';
 
-import { cliCommand } from './_helpers/cliCommand';
-import { boolFlag } from './_helpers/flags';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from '../runtime/platform/cliContext';
 

@@ -55,12 +55,31 @@ import {
 } from '@cli/runtime/platform/logSinks';
 
 import { cliPresenterLayer } from './cliHelp';
-import { boolFlag } from './flags';
 import { loadConfigAndWarn } from './loadConfigAndWarn';
 
 // ---------------------------------------------------------------------------
 // The global flags: every command takes them, before or after its name.
 // ---------------------------------------------------------------------------
+
+/** A switch: off unless given, with no `--no-` form. */
+export const boolFlag = (name: string, description: string) =>
+  Flag.Boolean(name).pipe(
+    Flag.withoutNegation,
+    Flag.withDefault(false),
+    Flag.withDescription(description),
+  );
+
+/**
+ * The optional `--model/-m` flag the commands that launch an agent share. The
+ * surface's own wording is the parameter: a session, a run or a task names what
+ * the model is for.
+ */
+export const modelFlag = (description: string) =>
+  Flag.String('model').pipe(
+    Flag.withAlias('m'),
+    Flag.withDescription(description),
+    Flag.optional,
+  );
 
 const Print = GlobalFlag.Setting('print')({
   flag: boolFlag(

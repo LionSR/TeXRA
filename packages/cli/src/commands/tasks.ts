@@ -41,8 +41,7 @@ import { selectCliRunModel } from '../runtime/models/runModel';
 import { attachTask } from '../runtime/headless/taskAttach';
 import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 
-import { cliCommand } from './_helpers/cliCommand';
-import { modelFlag } from './_helpers/flags';
+import { cliCommand, modelFlag } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';

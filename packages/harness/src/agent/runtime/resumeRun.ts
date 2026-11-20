@@ -192,15 +192,14 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   const refuse = (answer: ResumeRefusalAnswer) =>
     Effect.fail(new ResumeNotOpened({ answer }));
   const inbox = yield* Inbox;
-  const store = getRunRecords(runId);
-  const records = yield* Effect.result(
-    Effect.all([store.readConfig(), store.exists()]),
-  );
+  // One read of the run's facts: a run the store does not hold has no
+  // config either.
+  const records = yield* Effect.result(getRunRecords(runId).readConfig());
   // A record read fails on a row this build cannot use, wherever it sits.
   if (Result.isFailure(records))
     return yield* Effect.flatMap(refusalFor(records.failure, runId), refuse);
-  const [config, exists] = records.success;
-  if (!config || !exists) {
+  const config = records.success;
+  if (config === null) {
     // A run whose records are gone: with nothing queued its input ends.
     yield* inbox.closeInput(runId);
     return yield* refuse(REFUSED);

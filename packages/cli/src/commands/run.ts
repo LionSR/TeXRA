@@ -32,8 +32,11 @@ import {
   type CliPlatformServices,
 } from '../runtime/platform/initPlatform';
 
-import { cliCommand, SKILL_SOURCES_CONFIG } from './_helpers/cliCommand';
-import { modelFlag } from './_helpers/flags';
+import {
+  cliCommand,
+  modelFlag,
+  SKILL_SOURCES_CONFIG,
+} from './_helpers/cliCommand';
 import { emitCliResult } from './_helpers/output';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {

@@ -26,8 +26,7 @@ import {
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-import { cliCommand } from './_helpers/cliCommand';
-import { boolFlag } from './_helpers/flags';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
