@@ -14,7 +14,7 @@ import {
   ToolAvailability,
   type PluginReview,
 } from '@texra-ai/harness/host';
-import { COLOR_WARNING } from '@cli/tui/ui/colors';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
@@ -148,7 +148,7 @@ export function PluginsListForm(
       detailFor={(data) => {
         if (reviewLines) return reviewLines;
         if (data.mcpWarnings.length === 0) return undefined;
-        return <Text color={COLOR_WARNING}>{data.mcpWarnings.join(' ')}</Text>;
+        return <ToneLine tone="warning" text={data.mcpWarnings.join(' ')} />;
       }}
       // A trust question shows what it declares in every layout: the compact
       // one keeps the lines, not the list's warnings.
@@ -158,7 +158,6 @@ export function PluginsListForm(
         return data.mcpWarnings.length > 0 ? 1 : 0;
       }}
       action={pending ? PLUGINS_TUI.chooseAction : PLUGINS_TUI.switchAction}
-      showTransientCloseHint={false}
       onSelect={(value, { data, update }) => {
         if (pending) {
           pending.answer(value === TRUST);

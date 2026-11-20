@@ -1,5 +1,3 @@
-import { useEffect, useRef } from 'react';
-
 /**
  * Shared poll registry: one interval per cadence, so N live surfaces never
  * each own a timer. Without it, per-component intervals would each fire at
@@ -42,24 +40,4 @@ export function subscribeToPolling(
     clearInterval(subscribed.timer);
     polls.delete(intervalMs);
   };
-}
-
-/**
- * Poll `fn` every `intervalMs`, firing once immediately on mount. The latest
- * `fn` is always used (held in a ref, not a dependency), so callers may pass a
- * fresh closure each render. Changing `resetKey` re-fires immediately and
- * restarts the interval.
- */
-export function usePollingInterval(
-  fn: () => void,
-  intervalMs: number,
-  resetKey?: unknown,
-): void {
-  const fnRef = useRef(fn);
-  fnRef.current = fn;
-
-  useEffect(() => {
-    fnRef.current();
-    return subscribeToPolling(intervalMs, () => fnRef.current());
-  }, [intervalMs, resetKey]);
 }

@@ -15,14 +15,7 @@ import {
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
-import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import {
-  CROSS,
-  PENDING_BOX,
-  TICK,
-  WARNING,
-  LIST_BULLET,
-} from '@cli/tui/ui/glyphs';
+import { PENDING_BOX, LIST_BULLET } from '@cli/tui/ui/glyphs';
 import {
   compileFailuresOf,
   roundAlerts,
@@ -34,13 +27,14 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { formatLineChanges } from '@ui/copy/format';
-import { stageStatus } from '@ui/copy/runStatus';
+import { stageStatus, type RunTone } from '@ui/copy/runStatus';
 
 interface DocumentTaskRunDetailLine {
   readonly key: string;
   readonly text: string;
-  /** Undefined paints in the terminal's default foreground. */
-  readonly color: string | undefined;
+  /** The line's colour comes from its tone; undefined paints in the
+   *  terminal's default foreground. */
+  readonly tone: RunTone | undefined;
   readonly role: 'lifecycle' | 'outputHeading' | 'output' | 'alert';
 }
 
@@ -62,7 +56,6 @@ function stageLine(
   stage: Stage,
   status: ReturnType<typeof stageStatus>,
 ): DocumentTaskRunDetailLine {
-  const appearance = TONE_PAINT[status.tone];
   const duration =
     stage.endTime !== undefined &&
     formatCompactDuration(stage.endTime - stage.startTime);
@@ -71,10 +64,10 @@ function stageLine(
     // Worded as the progress view's stage header words it, never with the
     // call-status vocabulary that happens to share key names.
     text: joinFacts([
-      `${appearance.marker} ${safeTerminalText(stage.name || stage.id)} ${status.word}`,
+      `${TONE_PAINT[status.tone].marker} ${safeTerminalText(stage.name || stage.id)} ${status.word}`,
       duration,
     ]),
-    color: appearance.color,
+    tone: status.tone,
     role: 'lifecycle',
   };
 }
@@ -108,7 +101,7 @@ function documentTaskRunDetailGroups(
       {
         key: `round:${round}`,
         text: `${PENDING_BOX} ${formatRoundLabel(round)} results`,
-        color: COLOR_BORDER,
+        tone: 'neutral',
         role: 'lifecycle',
       },
     ];
@@ -117,7 +110,7 @@ function documentTaskRunDetailGroups(
       lines.push({
         key: `outputs:${round}`,
         text: `  Generated files`,
-        color: COLOR_BORDER,
+        tone: 'neutral',
         role: 'outputHeading',
       });
       for (const [index, file] of outputs.entries()) {
@@ -134,46 +127,56 @@ function documentTaskRunDetailGroups(
               ? fileLocationDisplayPath(file.location)
               : outputDisplayName(file),
           )}${diff}`,
-          color: undefined,
+          tone: undefined,
           role: 'output',
         });
       }
     }
+    const alert = (
+      key: string,
+      tone: 'danger' | 'warning',
+      facts: readonly (string | false | null | undefined)[],
+    ): void => {
+      const text = joinFacts([formatRoundLabel(round), ...facts]);
+      lines.push({
+        key,
+        text: `  ${TONE_PAINT[tone].marker} ${text}`,
+        tone,
+        role: 'alert',
+      });
+    };
     const { noDocuments, replyToCheck } = roundAlerts(record);
     if (noDocuments || replyToCheck)
-      lines.push({
-        key: `reply:${round}`,
-        text: `  ${WARNING} ${joinFacts([
-          formatRoundLabel(round),
-          noDocuments && 'Wrote no documents',
-          replyToCheck &&
-            `Reply kept at ${safeTerminalText(replyToCheck.absolutePath)}`,
-        ])}`,
-        color: COLOR_WARNING,
-        role: 'alert',
-      });
+      alert(`reply:${round}`, 'warning', [
+        noDocuments && 'Wrote no documents',
+        replyToCheck &&
+          `Reply kept at ${safeTerminalText(replyToCheck.absolutePath)}`,
+      ]);
     for (const [index, path] of missing.entries()) {
-      lines.push({
-        key: `missing:${round}:${path}:${index}`,
-        text: `  ${WARNING} ${joinFacts([formatRoundLabel(round), `Missing output: ${safeTerminalText(path)}`])}`,
-        color: COLOR_WARNING,
-        role: 'alert',
-      });
+      alert(`missing:${round}:${path}:${index}`, 'warning', [
+        `Missing output: ${safeTerminalText(path)}`,
+      ]);
     }
     for (const [index, failure] of compileFailuresOf(record).entries()) {
-      lines.push({
-        key: `compile:${round}:${failure.log.absolutePath}:${index}`,
-        text: `  ${CROSS} ${joinFacts([formatRoundLabel(round), `Compile check failed: ${safeTerminalText(failure.displayName)}`, safeTerminalText(failure.logRelativePath)])}`,
-        color: COLOR_ERROR,
-        role: 'alert',
-      });
+      alert(`compile:${round}:${failure.log.absolutePath}:${index}`, 'danger', [
+        `Compile check failed: ${safeTerminalText(failure.displayName)}`,
+        safeTerminalText(failure.logRelativePath),
+      ]);
     }
     for (const [index, entry] of record.latexdiffs.entries()) {
+      const label = `Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`;
+      const key = `latexdiff:${round}:${index}`;
+      if (entry.status === 'failed') {
+        alert(key, 'danger', [
+          `${label}${DETAIL_SEPARATOR}${safeTerminalText(entry.error)}`,
+        ]);
+        continue;
+      }
       lines.push({
-        key: `latexdiff:${round}:${index}`,
-        text: `  ${entry.status === 'ok' ? TICK : CROSS} ${joinFacts([formatRoundLabel(round), `Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`])}${entry.status === 'failed' ? `${DETAIL_SEPARATOR}${safeTerminalText(entry.error)}` : ''}`,
-        color: entry.status === 'ok' ? undefined : COLOR_ERROR,
-        role: entry.status === 'ok' ? 'output' : 'alert',
+        key,
+        text: `  ${TONE_PAINT.success.marker} ${joinFacts([formatRoundLabel(round), label])}`,
+        tone: undefined,
+        role: 'output',
       });
     }
     groups.push({ key: `round:${round}`, lines, priority: ROUND_PRIORITY });
@@ -227,10 +230,10 @@ export function selectDocumentTaskRunDetailLines(
 
   // First preserve actionable errors, then warnings, together with their
   // round whenever capacity permits.
-  for (const color of [COLOR_ERROR, COLOR_WARNING]) {
+  for (const tone of ['danger', 'warning'] as const) {
     for (const group of rankedGroups) {
       for (const [index, line] of group.lines.entries()) {
-        if (line.role === 'alert' && line.color === color) {
+        if (line.role === 'alert' && line.tone === tone) {
           addWithLifecycle(group, index);
         }
       }
@@ -278,7 +281,10 @@ export function DocumentTaskRunDetails({
     <>
       {lines.map((line) => (
         <Box key={line.key} height={1} overflowY="hidden" width={width}>
-          <Text color={line.color} wrap="truncate-end">
+          <Text
+            color={line.tone && TONE_PAINT[line.tone].color}
+            wrap="truncate-end"
+          >
             {line.text}
           </Text>
         </Box>

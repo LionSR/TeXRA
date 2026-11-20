@@ -82,29 +82,35 @@ across a round's diffs. Which layout is right needs a decision first.
 
 ## Open: copy the terminal restates
 
-Items 1, 2 and 4 each need a wording decision; nothing in the repo pins
+Items 1, 2 and 4 each needed a wording decision; nothing in the repo pins
 the CLI words except the TUI titles in `validate-tui.mjs`.
 
-1. **How a run ended.** `CLI_RUN_STATUS` and `runOutcomeToCliRunStatus`
-   (`packages/cli/src/schemas/cliOutput.ts`), `historyStanding`
-   (`packages/cli/src/runtime/history.ts`) and `runStatusLabel`
-   (`packages/texra/src/ui/copy/runStatus.ts`) word one cancelled run as
-   "interrupted", "cancelled" and "Stopped". Proposed owner:
-   `runStatusLabel`.
-2. **A request's heading.** Bash, edit, proposal, retry and plan requests
-   are headed separately by the web panels, the TUI modals and the headless
-   summaries (`packages/cli/src/runtime/approval/approvalSummaries.ts`); the
-   headless tool-edit header shows an absolute path in one branch and a
-   relative one in the other, and a plan is dumped as JSON.
-   `toolEditDiffLabel` (`packages/texra/src/ui/copy/toolEditPreview.ts`)
-   already exists for one of them.
+1. **How a run ended.** Taken on 2026-11-20: the headless chat result's
+   status line, a failed program's text result and `historyStanding`
+   (`packages/cli/src/runtime/history.ts`, which the `/resume` form reads
+   too) word an outcome through `runStatusLabel`
+   (`packages/texra/src/ui/copy/runStatus.ts`), so a cancelled run reads
+   "Stopped" everywhere a person reads it. `CLI_RUN_STATUS` and
+   `runOutcomeToCliRunStatus` fed only that text line and are gone; the
+   JSON and NDJSON `outcome` values and the exit codes are unchanged.
+2. **A request's heading.** Taken on 2026-11-20: every kind's ask and
+   action words were already `@ui/copy/requestCards.ts`'s, and the headless
+   plan prompt already printed the plan's objective, as the web panel and
+   the TUI card do. What was left was the headless tool edit, headed by an
+   absolute path when its preview loaded and a relative one when it did
+   not: both branches now head it with `toolEditDiffLabel`
+   (`packages/texra/src/ui/copy/toolEditPreview.ts`), the title the editor
+   hosts give the same diff, and the diff names the workspace-relative
+   path. The CLI's own `toolEditAsk` is gone.
 3. **Skipping a user question.** Closed, checked on 2026-11-19: the
    `USER_QUESTION_SKIPPED_FEEDBACK` note is gone, and the terminal declines
    through the web's `declineDecision`
    (`packages/texra/src/shared/session/surfaceDecision.ts`).
-4. **"Pass N" and "Revision N".** `passLabel`
-   (`packages/texra/src/ui/copy/taskDiagnostics.ts`) and `formatRoundLabel`
-   name one round with two nouns in the same view.
+4. **"Pass N" and "Revision N".** Taken on 2026-11-20: the guide and
+   every other surface say "Revision", so `formatRoundLabel`
+   (`packages/texra/src/shared/plugins/documentOutputs.ts`) takes the
+   planned total too and words the run header's chip ("Revision 2 of 3")
+   and the copied diagnostics. `passLabel` is gone.
 5. **Section painting.** Taken on 2026-11-19: `formatLineRange`
    (`packages/texra/src/ui/copy/format.ts`) writes a file's range for both
    hosts, so a one-line range reads `:5` in the terminal as on the web. The

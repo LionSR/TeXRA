@@ -4,6 +4,7 @@ import { css, html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
+import { RUN_GRANT_TONE } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
@@ -18,7 +19,7 @@ function grantChip(
       id=${id}
       class="run-grant"
       size="s"
-      variant="warning"
+      variant=${RUN_GRANT_TONE}
       with-remove
       tabindex="0"
       role="button"

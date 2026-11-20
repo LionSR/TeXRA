@@ -58,9 +58,13 @@ export const OUTPUT_END_TAG = `</${OUTPUT_DOCUMENTS_TAG}>`;
 /** The tag a model wraps its thinking in, before the documents container. */
 export const SCRATCHPAD_TAG = 'scratchpad';
 
-/** A round's label: `Revision 2`. A zero-based round renders one-based. */
-export function formatRoundLabel(round: number): string {
-  return `Revision ${round + 1}`;
+/** A round's label, in every host and in what the model is told:
+ *  `Revision 2`, or `Revision 2 of 3` against a planned total. A zero-based
+ *  round renders one-based. */
+export function formatRoundLabel(round: number, total?: number): string {
+  return total === undefined
+    ? `Revision ${round + 1}`
+    : `Revision ${round + 1} of ${total}`;
 }
 
 // Generic raw-wrapper stems are run-storage internals, not the meaningful
