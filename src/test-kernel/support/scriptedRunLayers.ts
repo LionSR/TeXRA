@@ -38,7 +38,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { AgentConfigSchema, PersonaSchema, type RunId } from '@shared/schemas';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { generateRunId } from '@shared/schemas';
-import { testRunTools } from '@test/support/nativeToolTestLayer';
+import { noStep, testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace } from '@test/support/noopTrace';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -321,13 +321,14 @@ export function testLaunch(
  * case under test reads.
  */
 export function testAgentRun(
-  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'scope'>,
+  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'steps' | 'scope'>,
   over: Partial<AgentRunShape> = {},
 ): AgentRunShape {
-  const { runId, logger, model, scope } = base;
+  const { runId, logger, model, steps, scope } = base;
   return {
     ...testLaunch(runId, { logger }),
     model,
+    steps,
     scope,
     ...testRunTools(),
     finalToolName: null,
@@ -376,7 +377,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
         ...(init.scriptCall ? { script: init.scriptCall } : {}),
       });
       return testAgentRun(
-        { runId: init.runId, logger, model, scope },
+        { runId: init.runId, logger, model, steps: yield* noStep(), scope },
         {
           config,
           persona: Schema.decodeUnknownSync(PersonaSchema)({

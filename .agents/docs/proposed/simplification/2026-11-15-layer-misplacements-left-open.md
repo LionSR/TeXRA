@@ -59,7 +59,14 @@ decides expansion for the web tab strip and the TUI tree.
 the terminal paints `runStatus(run).word`. The same run reads "Ready" in the
 web header and "Completed" in the web tab and the terminal. Either the
 reading becomes a key in `packages/texra/src/shared/session/runStatusKey.ts`,
-or the override goes. Decision needed: which word is right.
+or the override goes.
+
+Landed 2026-11-19: the override went. The header's word, tone, aria label,
+tooltip and menu status read `runStatus(run)` as the tab and the terminal do:
+a finished run that takes a follow-up reads "Completed" (or "Error", where
+the override had painted a failed run a neutral "Ready"), and the composer
+below the log is what says it takes a message. The table's `ready` entry
+stays the word for a run no activation has started yet.
 
 Taken on 2026-11-18 for the tab: a request under the run reads in the status
 table's word for that state, "Waiting on you", not a second "Needs approval".
@@ -127,9 +134,11 @@ segment should carry the route too is a narrow-terminal layout decision.
 
 ## 12. Two tone drifts between web and terminal (found 2026-11-17)
 
-- A run grant: the terminal paints `superYolo` in its error colour
-  (`statusBarDisplay.ts`), the web's `runGrantChips.ts` every grant as a
-  warning.
+- A run grant: taken on 2026-11-20. `RUN_GRANT_TONE`
+  (`packages/texra/src/ui/copy/runStatus.ts`) is the one tone of a grant
+  that is on, a warning whatever it approves: the web's `runGrantChips.ts`
+  and the terminal's status bar both read it, so the bar no longer paints
+  `superYolo` in its error colour.
 - A user-feedback rejection: taken on 2026-11-19. `toolRowLook`
   (`packages/texra/src/ui/copy/runStatus.ts`) decides how a tool card paints
   its state for both hosts: the user's feedback outranks the call's status,

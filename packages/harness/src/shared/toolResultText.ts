@@ -8,6 +8,7 @@
 import type { ToolResult } from '@shared/schemas';
 import { elidedNote } from '@shared/toolUse';
 import { appendHead, headTail } from '@utils/text/appendTail';
+import { formatCount } from '@utils/text/stringUtils';
 
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
 const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
@@ -61,9 +62,9 @@ export function capToolResultText(text: string): string {
   const { head, tail, elided } = window.read();
 
   const message =
-    `Tool result too large: ${text.length.toLocaleString()} characters ` +
-    `(limit: ${MAX_TOOL_RESULT_TEXT_LENGTH.toLocaleString()}). Showing the first ${head.length.toLocaleString()} ` +
-    `and last ${tail.length.toLocaleString()} characters.\n\n` +
+    `Tool result too large: ${formatCount(text.length)} characters ` +
+    `(limit: ${formatCount(MAX_TOOL_RESULT_TEXT_LENGTH)}). Showing the first ${formatCount(head.length)} ` +
+    `and last ${formatCount(tail.length)} characters.\n\n` +
     `${head}\n\n${elidedNote(elided)}\n\n${tail}`;
 
   return message.length > MAX_TOOL_RESULT_TEXT_LENGTH

@@ -484,9 +484,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   // such row, so its open cards read as interrupted until a holder returns.
   const tWork = transcriptWork(u, next.id);
   const cards = repaintOpenCards(next.transcript, tWork, u.view.runs);
-  const transcript = turnOver
-    ? finishOpenCompactions(cards, tWork, next.lastTimestamp)
-    : cards;
+  const transcript = turnOver ? finishOpenCompactions(cards, tWork) : cards;
   return withTranscriptFacts(
     u,
     transcript === next.transcript ? next : { ...next, transcript },
@@ -841,7 +839,7 @@ function relink(u: Update, run: RunView, previousParentId: RunId | null): void {
 function applyEvent(
   u: Update,
   event: DisplayRow,
-  read: 'listing' | 'aggregate' | 'all',
+  read: Extract<SessionViewInput, { _tag: 'event' }>['read'],
 ): boolean {
   // Where a lifecycle row leaves its run, which moves its transcript too.
   const standing = standingAfter(event);

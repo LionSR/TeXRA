@@ -340,8 +340,8 @@ export class StageList extends LitElement {
     const formattedStartTime = getTimeFormatter().format(
       new Date(stage.startTime),
     );
-    const durationText = stage.endTime
-      ? formatCompactDuration(stage.endTime - stage.startTime)
+    const durationText = stage.end
+      ? formatCompactDuration(stage.end.at - stage.startTime)
       : '';
 
     const status = stageStatus(stage, this.run);

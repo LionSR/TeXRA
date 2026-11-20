@@ -32,6 +32,7 @@ import * as tar from 'tar';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
+import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { LatexProgress } from './progress';
 import {
@@ -154,33 +155,6 @@ function getExtensionFromContentType(contentType: string): string {
 }
 
 const ARXIV_CHANNEL = 'arxivProcessor';
-
-/**
- * Best-effort delete that logs failures at debug level instead of failing.
- * `force` mirrors the facade's `delete`, which swallowed a missing target
- * (`ENOENT`) rather than reporting it; every other failure still reaches
- * the debug log below.
- */
-function cleanUpBestEffort(
-  target: string,
-  description: string,
-  options?: { recursive?: boolean },
-): Effect.Effect<void, never, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs.remove(target, {
-      recursive: options?.recursive ?? false,
-      force: true,
-    });
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.logDebug(`Failed to clean up ${description} ${target}`).pipe(
-        Effect.annotateLogs({ data: error }),
-      ),
-    ),
-    withLogChannel(ARXIV_CHANNEL),
-  );
-}
 
 /** @returns Error message if invalid, null if valid */
 export function validateArxivId(input: string): string | null {
@@ -338,7 +312,11 @@ function downloadFileOnce(
     // Failure and interruption both clean up after the scope closed the
     // file handle, so neither cleanup nor a retry can race its writes (and
     // Windows does not refuse to unlink an open file).
-    Effect.onError(() => cleanUpBestEffort(destPath, 'partial download')),
+    Effect.onError(() =>
+      Effect.flatMap(FileSystem.FileSystem, (fs) =>
+        removeBestEffort(fs, [destPath], 'partial download'),
+      ),
+    ),
   );
 }
 
@@ -616,9 +594,9 @@ const downloadAndPlaceSource = Effect.fn(
   // that ran out of retries, a PDF-only submission detected from the content
   // type, a failed extraction, or interruption.
   yield* Effect.addFinalizer(() =>
-    cleanUpBestEffort(downloadDirFull, 'staging download dir', {
+    removeBestEffort(fs, [downloadDirFull], 'staging download dir', {
       recursive: true,
-    }),
+    }).pipe(withLogChannel(ARXIV_CHANNEL)),
   );
   const downloadBasePath = path.join(downloadDirFull, 'source');
 

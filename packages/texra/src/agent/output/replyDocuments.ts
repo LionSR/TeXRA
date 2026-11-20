@@ -12,7 +12,6 @@ import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 
 import { Effect, FileSystem } from 'effect';
 
-import { createExternalLocation } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
@@ -29,7 +28,7 @@ import {
   bareLatexDocument,
   extractDocuments,
   type NamedDocument,
-} from '@texra/utils/text/xmlExtraction';
+} from '@texra/agent/output/extraction/xmlExtraction';
 import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,
@@ -344,8 +343,8 @@ const writeDocuments = Effect.fn('replyDocuments.write')(function* (
     }
 
     const texFile = getExtractedDocOutputFileName(source, roundDir);
-    const texLocation = isExternal
-      ? createExternalLocation(texFile)
+    const texLocation: FileLocation = isExternal
+      ? { kind: 'external', absolutePath: texFile }
       : fileService.createLocation(texFile);
     const cleanedContent = cleanExtractedDocumentContent(
       logger,

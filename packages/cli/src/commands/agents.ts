@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Argument, Command, Flag } from 'effect/cli';
+import { Argument, Command } from 'effect/cli';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
 import { AGENT_SOURCE, agentKey, agentName } from '@texra-ai/harness/schemas';
@@ -18,13 +18,17 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import type { CliContext } from '../runtime/platform/cliContext';
+import {
+  failUsage,
+  isQuiet,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
   context: CliContext,
@@ -33,7 +37,7 @@ const listAgents = Effect.fn('listAgents')(function* (
   const services = yield* cliPlatform;
   const result = yield* loadCliAgentList(services, options);
 
-  if (!context.quietLogs) {
+  if (!isQuiet(context)) {
     const catalog = yield* AgentCatalog;
     const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
     if (hiddenNotice) writeTextStderr(hiddenNotice);
@@ -54,7 +58,7 @@ const listAgents = Effect.fn('listAgents')(function* (
       formatCliAgentList(result.agents, {
         showEmptyState:
           options.includeHidden !== true &&
-          !context.quietLogs &&
+          !isQuiet(context) &&
           context.outputFormat === 'text',
       }),
     ),
@@ -69,10 +73,9 @@ const showAgent = Effect.fn('showAgent')(function* (
   const catalog = yield* AgentCatalog;
   const entry = catalog.get(name);
   if (!entry) {
-    writeTextStderr(missingAgentMessage(name));
-    return CliExitCode.Usage;
+    return yield* failUsage(missingAgentMessage(name));
   }
-  if (!context.quietLogs && catalog.newerBuiltIn(entry)) {
+  if (!isQuiet(context) && catalog.newerBuiltIn(entry)) {
     writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
   }
 
@@ -96,16 +99,11 @@ function emitCopyResult(result: {
   return emitCliResult(cliResult('agent-copy', copy, text));
 }
 
-function refuse(message: string) {
-  writeTextStderr(message);
-  return CliExitCode.Usage;
-}
-
 /** Copy a bundled agent into the custom agents directory, stamped `basedOn`. */
 const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
   yield* cliPlatform;
   const builtIn = yield* bundledAgentNamed(name);
-  if (!builtIn) return refuse(`No built-in agent named ${name}.`);
+  if (!builtIn) return yield* failUsage(`No built-in agent named ${name}.`);
   return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
     Effect.flatMap(({ path }) =>
       emitCopyResult({
@@ -116,7 +114,7 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
       }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
-      Effect.succeed(refuse(refused.message)),
+      failUsage(refused.message),
     ),
   );
 });
@@ -127,7 +125,9 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   if (!custom || !(yield* bundledAgentNamed(name))) {
-    return refuse(`${name} is not a custom copy of a built-in agent.`);
+    return yield* failUsage(
+      `${name} is not a custom copy of a built-in agent.`,
+    );
   }
   return yield* catalog
     .workspaceAgents(services)
@@ -142,7 +142,7 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
         }),
       ),
       Effect.catchTag('AgentCustomizeRefused', (refused) =>
-        Effect.succeed(refuse(refused.message)),
+        failUsage(refused.message),
       ),
     );
 });
@@ -160,7 +160,7 @@ const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
       }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
-      Effect.succeed(refuse(refused.message)),
+      failUsage(refused.message),
     ),
   );
 });
@@ -196,12 +196,9 @@ const agentsKeepCommand = cliCommand('keep', {
 const agentsListCommand = cliCommand('list', {
   description: 'List available agents',
   config: {
-    all: Flag.Boolean('all').pipe(
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription(
-        'Show every agent, including agents hidden by workspace visibility settings',
-      ),
+    all: boolFlag(
+      'all',
+      'Show every agent, including agents hidden by workspace visibility settings',
     ),
   },
   run: (context, input) => listAgents(context, { includeHidden: input.all }),

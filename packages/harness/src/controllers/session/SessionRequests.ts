@@ -239,29 +239,37 @@ const decideSurfaceRequest = (
   });
 };
 
-/** Queued on the run's input by its live loop's controls, answered once the
- *  input holds it. */
-const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
+/** Queued on the run's input, answered once the input holds it. A
+ *  `/compact` needs the run's live loop. A model switch is queued for any
+ *  run: its loop applies or refuses it at its next model boundary, here or
+ *  at its next resume; a run held here refuses a model it cannot take at
+ *  once. */
+const viaInput = Effect.fn('SessionRequests.viaInput')(function* (
   deps: SessionRequestsInit,
   req: Extract<RuntimeCommand, { kind: `run.${'compact' | 'model'}` }>,
   runs: RunRegistry['Service'],
 ): Effect.fn.Return<Outcome, RequestError, Inbox> {
   const { runId } = req;
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
-  const controls = runs.get(runId)?.controls;
-  if (controls === undefined)
-    return yield* unavailable(
-      req.kind === 'run.compact'
-        ? `This ${runNoun(deps.view.run(runId))} has no conversation to compact.`
-        : `Resume the ${runNoun(deps.view.run(runId))} to switch its model.`,
-    );
   const failed = Effect.mapError((error: Error) => unavailable(error.message));
-  if (req.kind === 'run.model')
-    return yield* controls.switchModel(req.model).pipe(failed, Effect.as(done));
-  // A `/compact` queues on the run's input; the live loop answers it.
-  const control = { kind: 'compact' } as const;
-  const item = { text: '/compact', from: { kind: 'user' }, control } as const;
-  const sent = yield* (yield* Inbox).send(runId, item).pipe(failed);
+  const controls = runs.get(runId)?.controls;
+  if (req.kind === 'run.compact' && controls === undefined)
+    return yield* unavailable(
+      `This ${runNoun(deps.view.run(runId))} has no conversation to compact.`,
+    );
+  if (req.kind === 'run.model' && controls !== undefined) {
+    const refused = yield* controls
+      .modelSwitchDisabledReason(req.model)
+      .pipe(failed);
+    if (refused !== undefined) return yield* unavailable(refused);
+  }
+  const control =
+    req.kind === 'run.compact'
+      ? { kind: 'compact' as const }
+      : { kind: 'model' as const, model: req.model };
+  const sent = yield* (yield* Inbox)
+    .send(runId, { control, from: { kind: 'user' } })
+    .pipe(failed);
   return sent.kind === 'refused'
     ? yield* unavailable('This conversation takes no more input.')
     : done;
@@ -278,7 +286,7 @@ const handle = (
       return deleteAcceptedRun(deps, req.runId, accepted, runs);
     case 'run.compact':
     case 'run.model':
-      return viaControls(deps, req, runs);
+      return viaInput(deps, req, runs);
     case 'run.rename':
       return rename(deps, req);
     case 'run.files':

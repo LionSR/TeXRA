@@ -103,11 +103,13 @@ const FollowUpMessageSchema = Schema.Struct({
 export type FollowUpMessage = typeof FollowUpMessageSchema.Type;
 
 /**
- * One follow-up as it is queued, taken, and shown: a message, or a child's
+ * One follow-up as it is queued, taken, and shown: a message; a child's
  * delivery to its parent, whose facts are rendered once, as the envelope its
- * parent's model reads, where the row becomes the run's message. `from` is
- * the provenance a consumer reads: a user's or parent's text becomes the
- * run's instruction. A loop's own maintenance wake is never a follow-up row.
+ * parent's model reads, where the row becomes the run's message; or a
+ * request of the run's own (`control`: a `/compact`, a model switch), which
+ * no turn reads and the batch that applies it consumes. `from` is the
+ * provenance a consumer reads: a user's or parent's text becomes the run's
+ * instruction. A loop's own maintenance wake is never a follow-up row.
  */
 const FollowUpContentSchema = Schema.Union([
   FollowUpMessageSchema,
@@ -115,8 +117,28 @@ const FollowUpContentSchema = Schema.Union([
     delivery: ChildRunDeliverySchema,
     from: FollowUpSenderSchema,
   }),
+  Schema.Struct({
+    control: Schema.Union([
+      Schema.Struct({ kind: Schema.Literal('compact') }),
+      Schema.Struct({
+        kind: Schema.Literal('model'),
+        model: Schema.NonEmptyString,
+      }),
+    ]),
+    from: FollowUpSenderSchema,
+  }),
 ]);
 export type FollowUpContent = typeof FollowUpContentSchema.Type;
+/** A follow-up a turn reads: a message or a child's delivery. */
+export type FollowUpMessageContent = Exclude<
+  FollowUpContent,
+  { readonly control: unknown }
+>;
+/** A request of the run's own a follow-up carries. */
+export type FollowUpControl = Extract<
+  FollowUpContent,
+  { readonly control: unknown }
+>['control'];
 
 /** What a follow-up asks of its run, as its `followup.queued` row stores
  *  it. */
@@ -124,16 +146,6 @@ export const FollowUpRequestSchema = Schema.Struct({
   content: FollowUpContentSchema,
   /** When the row may be read; the rules are `readableMessages`. */
   holdUntil: Schema.optional(Schema.Literal('turn')),
-  /** A request of the run's own, consumed by the batch that applies it. */
-  control: Schema.optional(
-    Schema.Union([
-      Schema.Struct({ kind: Schema.Literal('compact') }),
-      Schema.Struct({
-        kind: Schema.Literal('model'),
-        model: Schema.NonEmptyString,
-      }),
-    ]),
-  ),
 });
 
 /**
@@ -142,7 +154,8 @@ export const FollowUpRequestSchema = Schema.Struct({
  * `turn`; a child's prompt or delivery was answered by the report or tool
  * result committed beside it; a control (`/compact`, `/model`) was applied
  * by the edit or `run.config` beside it; or it was dropped unread and
- * unapplied: a control that changed nothing (`noop`), the run's end
+ * unapplied: a control that changed nothing (`noop`: a switch to the model
+ * in force or one the run cannot take, a `/compact` with no edit), the run's end
  * (`ended`) or its input's close (`closed`).
  */
 export const FollowUpDispositionSchema = Schema.Union([

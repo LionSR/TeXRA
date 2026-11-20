@@ -2,7 +2,12 @@
 import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
-import { CountSchema, ModelOriginSchema, TurnUsageSchema } from './protocol.js';
+import {
+  CountSchema,
+  ModelOriginSchema,
+  TurnProtocolSchema,
+  TurnUsageSchema,
+} from './protocol.js';
 import type { ModelOrigin } from './protocol.js';
 import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 
@@ -12,7 +17,10 @@ import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 export const RemoteOperationSchema = Schema.Struct({
   origin: ModelOriginSchema.mapFields(
     Struct.assign({
-      protocol: Schema.Literals(['openai-responses', 'google-interactions']),
+      protocol: TurnProtocolSchema.pick([
+        'openai-responses',
+        'google-interactions',
+      ]),
     }),
   ),
   providerResponseId: Schema.NonEmptyString,

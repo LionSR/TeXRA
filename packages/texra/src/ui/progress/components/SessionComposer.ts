@@ -38,7 +38,7 @@ import {
   getExtensionFromMimeType,
   readFileAsBase64,
   type ExtractedClipboardImage,
-} from '@texra/shared/utils/clipboardImages';
+} from '@ui/progress/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';

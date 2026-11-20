@@ -19,6 +19,7 @@
  *   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
  *   [`executed`](#executed), [`errorResult`](#errorresult),
  *   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
+ *   [`optionalInput`](#optionalinput),
  *   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
  *   ([`requestToolEditApproval`](#requesttooleditapproval),
  *   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
@@ -122,6 +123,17 @@ export {
   approvedWriteConflict,
   type ApprovedEditConflictError,
 } from '@tools/approval/approvedWrite';
+// The diff engine behind every edit card's counts and diff body: a change's
+// unified-diff hunks, their line counts and text, and the warning a diff
+// that ran past its bound logs.
+export {
+  buildDiffHunks,
+  countLineChanges,
+  reportDiffTimeout,
+  unifiedDiffText,
+  type DiffHunks,
+  type Hunk,
+} from '@tools/unifiedDiff';
 // JSON-RPC 2.0 over a child process's stdio (a language server's framing,
 // or one message per line).
 export {
@@ -139,7 +151,7 @@ export {
   type EditRecord,
   type ToolFileAttachment,
 } from '@shared/schemas';
-export { nullishWithDefault } from '@tools/core/inputSchema';
+export { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
   parseWorkingDirectory,
@@ -191,8 +203,14 @@ export {
 // the per-project settings stores, the global root's current values with
 // each family a host or plugin declares (`ValueFamily`), and the tool
 // catalog (enabled built-ins, plugin services and switches) with the
-// context it hands a plugin.
-export { AppState, type AppStateStore } from '@platform/interfaces';
+// context it hands a plugin, and the agent directories with the packaged
+// resources root a plugin's bundled files ship under (the port is the root
+// entry's).
+export {
+  AgentDirectories,
+  AppState,
+  type AppStateStore,
+} from '@platform/interfaces';
 export {
   GlobalValues,
   StateStores,
@@ -202,6 +220,15 @@ export type { ValueFamily } from '@shared/session/valueFamily';
 export type { CurrentValues } from '@shared/session/database';
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 export { logFailure, withLogChannel } from '@logger/effectLog';
+// One exclusive lane per key, for work that must run one at a time per key
+// (one build per project, one edit per file), and the one lane every writer
+// of a file shares with the harness's approved edits.
+export {
+  withPerKeyLane,
+  type PerKeyLane,
+  type PerKeyLanes,
+} from '@utils/core/perKeyQueue';
+export { withFileWriteLane } from '@utils/files/fileWriteLane';
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 // What `ChildRuns` launches: an external process's child, with the one
 // turn it runs.
@@ -236,6 +263,7 @@ export type {
   ToolCardHandle,
 } from '@agent/trace/AgentTrace';
 export type { LogOptions } from '@shared/schemas/logPayload';
+export type { ProcessOutputStream } from '@shared/schemas/traceEvent';
 export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 export type {
   ModelRetryGate,
@@ -250,6 +278,9 @@ export {
   type RunStorageEntry,
   sourceLocationUnder,
 } from '@common/storage/storageLayout';
+// A path's `FileLocation` against the workspace root a caller holds: workspace
+// or external.
+export { pathToLocationIn } from '@common/storage/fileLocation';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

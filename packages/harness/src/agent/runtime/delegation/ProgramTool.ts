@@ -11,6 +11,7 @@ import { Schema } from 'effect';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { PROGRAM_TOOL_NAME } from '@shared/schemas';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 
 import { launchChildAgent } from './AgentTool';
 import { CALL_FIELDS, fileList } from './inputFields';
@@ -19,14 +20,10 @@ const ProgramInputSchema = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1)).annotate({
     description: 'The program to start, by its name.',
   }),
-  prompt: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'The instruction the program follows, in plain prose: what to change, from which point of view, and what to keep. Omit for the program as written.',
-  }),
-  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Model reference, `@effort` suffix allowed. Defaults to your current model when available.',
-  }),
+  prompt: optionalInput(
+    Schema.String,
+    'The instruction the program follows, in plain prose: what to change, from which point of view, and what to keep. Omit for the program as written.',
+  ),
   inputFiles: fileList('The files it works on.'),
   contextFiles: fileList(
     'Read-only context (guidance, .bib, .sty). Say in the prompt what each is for.',
@@ -35,11 +32,10 @@ const ProgramInputSchema = Schema.Struct({
   outputFiles: fileList(
     'Output paths, used when one is not among `inputFiles`. Otherwise the program writes its own outputs, or revises the inputs when it names none.',
   ),
-  args: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
-  ).annotate({
-    description: "The program's own arguments, as its description names them.",
-  }),
+  args: optionalInput(
+    Schema.Record(Schema.String, Schema.Json),
+    "The program's own arguments, as its description names them.",
+  ),
   ...CALL_FIELDS,
 });
 type ProgramInput = typeof ProgramInputSchema.Type;
@@ -56,7 +52,7 @@ export const programTool = (): DefinedTool<ProgramInput, PluginToolServices> =>
       "{ response: string; files: string[]; changes?: { path: string; absolutePath: string; base: string | null; added: number | null; removed: number | null }[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
     description: `Start a program by name, as a child of this run: a fixed procedure a plugin ships, run over the files you pass.
 
-From a script, \`program(name, opts)\` waits for the program and resolves to its result: \`{ response, files, changes?, structured?, runId, outcome, cost, spent }\`, where \`changes\` lists the files a program reports writing, in order (\`path\` the workspace file, \`absolutePath\` the copy it wrote), \`cost\` is what the program spent and \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, \`Skipped\`, \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the program runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,
+From a script, \`program(name, opts)\` waits for the program and resolves to its result: \`{ response, files, changes?, structured?, runId, outcome, cost, spent }\`, where \`changes\` lists the files a program reports writing, in order (\`path\` the workspace file, \`absolutePath\` the copy it wrote), \`cost\` is what the program spent and \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\` (past \`timeoutMs\`), \`BudgetExceeded\` (the program and the runs it started spent \`maxCostUsd\` before it finished), \`Skipped\`, \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the program runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,
     schema: ProgramInputSchema,
     execute: (input: ProgramInput) =>
       launchChildAgent({
@@ -66,6 +62,7 @@ From a script, \`program(name, opts)\` waits for the program and resolves to its
         workingDirectory: input.working_directory,
         id: input.id,
         timeoutMs: input.timeoutMs,
+        maxCostUsd: input.maxCostUsd,
         background: input.background,
         files: {
           inputFiles: input.inputFiles,

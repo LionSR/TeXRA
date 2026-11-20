@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Two SDK shapes lose a field nothing read.** `ownKeyCredential` on
+  `@texra-ai/harness/host` resolves to `{ bearer, endpoint }`: the credential
+  no longer carries its provider or route, since a binding keys its retry
+  gate from the route it already holds. `ChildRunsShape` on
+  `@texra-ai/harness/plugins` has no `requested`; its only caller was the
+  external inquiry tool, removed above.
+
 - **The `texra` command line has new help and stricter flags.** Help at
   every level has a new layout: a subcommand's help lists its own flags and
   points to `texra --help` for the global ones. `texra help <command>` is
@@ -132,6 +139,21 @@ All notable changes to this project will be documented in this file.
 - **A script imports modules by their exact specifier.** A relative
   specifier no longer reaches a module. `describeTool(name)` also returns
   the source of a module or program.
+- **SDK: the helpers TeXRA's own plugins use leave `@texra-ai/harness/host`.**
+  `@texra-ai/harness/plugins` now exports `pathToLocationIn`, the lanes
+  (`withPerKeyLane`, `PerKeyLane`, `PerKeyLanes`, `withFileWriteLane`), the
+  diff engine (`buildDiffHunks`, `countLineChanges`, `reportDiffTimeout`,
+  `unifiedDiffText`, `DiffHunks`, `Hunk`) and `AgentDirectories`;
+  `@texra-ai/harness/node` exports the path helpers (`getPathSegments`,
+  `isPathWithin`, `isStrictlyWithin`, `toPosixPath`). None of them is on
+  `/host` any more, and `isModuleNotFoundError` is removed.
+- **SDK: a `FileLocation` is written as its object.** `createWorkspaceLocation`,
+  `createRunStorageLocation` and `createExternalLocation` are removed from
+  the SDK (they were on `@texra-ai/harness/host`): write
+  `{ kind: 'workspace', absolutePath, relativePath }`,
+  `{ kind: 'runStorage', absolutePath, relativePath, runId }` or
+  `{ kind: 'external', absolutePath }`. `pathToLocationIn` still resolves a
+  path against a workspace root.
 - **SDK: a program is called with its launch's instruction and files.** A
   program module's default export is `async (args, launch) => result`, the
   second argument `{ instruction, inputFiles, contextFiles, mediaFiles }`;
@@ -1391,6 +1413,48 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Agents can edit their own context.** A new built-in `context` tool
+  lets an agent read the messages its requests send (each with its index,
+  kind, estimated tokens and a preview, plus the window size and the tokens
+  in use) and replace any range of them with text it writes, for example a
+  long tool output it no longer needs, or everything so far with its own
+  handoff. The replacement takes effect at the agent's next request; the
+  original messages stay in the transcript. The progress view and the CLI
+  show the edit as **Agent edited its context**, with the messages replaced
+  and the tokens freed. In code mode a script calls it as
+  `tools.context(...)` and gets the view as data. Conversations saved by an
+  earlier build show as written by that build and cannot be resumed by this
+  one. SDK: a `context.edit` row's cause may be `edit` (row version 9), and
+  a completed compaction activity may carry how many messages it
+  `replaced` (`log` row version 13).
+- **A goal completes only when a judge confirms it.** A round that says
+  the objective is done no longer ends the goal on its own word: the same
+  agent runs again with no earlier conversation, as a judge that did not do
+  the work, derives the requirements from the objective and checks each
+  one itself with the tools the conversation's agent has. It answers with
+  one claim per requirement: `verified`, `failed` or `unverified`, the
+  check anyone can run again, and what it showed. The goal completes when
+  no claim failed; otherwise the next round is told what the judge found.
+  The goal's result carries the latest judge's `claims`, so you need read
+  only the unverified and failed ones, and a judge that fails or gives no
+  verdict pauses the goal with `judge_failed`. A goal now costs one more
+  agent run per claim that it is done, counted in its spend and its cap.
+  SDK: `builtIn:goal` exports `judge(objective, { report })` and
+  `claimSchema` beside `goal`, so any script can check work with a judge,
+  or several, its own way; `GoalResultSchema` gains the optional `claims`
+  (the strategy's own shape, which the harness stores and does not read)
+  and the `judge_failed` pause.
+- **A script caps what a child run spends, and `self()` takes a model.**
+  Every child a script waits for (`agent()`, `program()`, `self()`) takes
+  `maxCostUsd`, a spend cap in USD on the child and every run it starts:
+  once they have spent it the child is stopped and the call rejects with an
+  Error named `BudgetExceeded`, beside `TimedOut`. The cap is read after
+  each reply, so the spend can pass it by the replies then in flight.
+  `self()` now takes `model` (with an `@effort` suffix), `timeoutMs` and
+  `maxCostUsd` as `agent()` does, so a script gets a second model's check
+  with the same prompt and tools; a forked `self()` takes only a model that
+  can continue the conversation. A call that runs in the background, where
+  `timeoutMs` was accepted and never applied, now rejects both limits.
 - **A plugin you install can carry programs.** Put `programs/<name>.js` in
   a Claude Code or Codex plugin folder and each file is a program started as
   `<plugin>:<name>`: `texra run my-programs:todo-list --input paper.tex`,
@@ -1966,6 +2030,14 @@ All notable changes to this project will be documented in this file.
   Compilation, Indent, TeX Count and Compile TikZ took only `.tex`.
 
 ### Bug Fixes
+
+- **A child run keeps its parent's model when that model is not an
+  enabled one.** A sub-agent or program started from a run on a model the
+  person never enabled (an SDK embedder names its run's model) fell back to
+  the first enabled model, or was refused with "No models are currently
+  available for delegation" when the enabled list was empty. The parent's
+  model is now judged by its own route; the enabled list only supplies the
+  default.
 
 - **Answering a request of a task that is not running continues the task.**
   An approval, a plan or a question left pending by a task whose process

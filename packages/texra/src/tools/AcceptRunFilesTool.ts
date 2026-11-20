@@ -20,8 +20,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness/plugins';
-import { pathToLocationIn } from '@texra-ai/harness/host';
+import { ToolContext, pathToLocationIn } from '@texra-ai/harness/plugins';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
   ChildRuns,
@@ -33,6 +32,7 @@ import {
   approvedWriteConflict,
   buildApprovalRejectedResult,
   requestToolEditApproval,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import {
   meansAbsent,
@@ -40,7 +40,6 @@ import {
   readNormalizedFile,
 } from '@texra-ai/harness/node';
 import {
-  ensureError,
   RunIdSchema,
   FileLocation,
   formatResultCount,
@@ -144,10 +143,10 @@ const FileMapping = Schema.Struct({
    * Original workspace path to restore to (matches `original` attribute in
    * subagent-result XML). If omitted, defaults to path.
    */
-  original: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Original workspace path to write to (matches original attribute in delivery). Defaults to path if omitted.',
-  }),
+  original: optionalInput(
+    Schema.String,
+    'Original workspace path to write to (matches original attribute in delivery). Defaults to path if omitted.',
+  ),
 });
 
 /**
@@ -186,10 +185,10 @@ const AcceptRunFilesInputSchema = Schema.Struct({
     .check(Schema.isMinLength(1))
     .annotate({ description: 'Files to copy from run storage to workspace' }),
   /** If true, strip `\criticize{...}{...}{...}` annotations before approval. */
-  strip_criticize: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'If true, remove all \\criticize{...}{...}{...} LaTeX annotations from each file before approval. Use when accepting output from critique-style agents that embed review markers.',
-  }),
+  strip_criticize: optionalInput(
+    Schema.Boolean,
+    'If true, remove all \\criticize{...}{...}{...} LaTeX annotations from each file before approval. Use when accepting output from critique-style agents that embed review markers.',
+  ),
 });
 
 type AcceptRunFilesInput = typeof AcceptRunFilesInputSchema.Type;
@@ -208,7 +207,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     (yield* entryTypeIn(
       yield* FileSystem.FileSystem,
       runFiles.runDirectory,
-    ).pipe(Effect.mapError(ensureError))) !== undefined;
+    )) !== undefined;
   if (
     !hasDirectory &&
     !(yield* (yield* ChildRuns).records(input.execution_id).exists)
@@ -248,29 +247,22 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       const rawContent = yield* readNormalizedFile(
         hostFs,
         sourceLocation.absolutePath,
-      ).pipe(Effect.mapError(ensureError));
+      );
       const { content: proposedContent, count: strippedCount } = strip_criticize
         ? stripCriticizeAnnotations(rawContent)
         : { content: rawContent, count: 0 };
       const destExists = yield* entryTypeIn(
         workspaceFs,
         dest.relativePath,
-      ).pipe(
-        Effect.map((type) => type !== undefined),
-        Effect.mapError(ensureError),
-      );
+      ).pipe(Effect.map((type) => type !== undefined));
 
       // Determine original content for diff display. In-place document
       // outputs can make source and destination the same workspace file, so
       // the pre-run snapshot is the only reliable "before" image.
       const snapshotPath = runFiles.originalSnapshotPath(dest.relativePath);
-      const snapshotExists = yield* fileAt(hostFs, snapshotPath).pipe(
-        Effect.mapError(ensureError),
-      );
+      const snapshotExists = yield* fileAt(hostFs, snapshotPath);
       const snapshotContent = snapshotExists
-        ? yield* readNormalizedFile(hostFs, snapshotPath).pipe(
-            Effect.mapError(ensureError),
-          )
+        ? yield* readNormalizedFile(hostFs, snapshotPath)
         : undefined;
       const isSameFile =
         sourceLocation.kind === 'workspace' &&
@@ -284,7 +276,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         originalContent = yield* readNormalizedFile(
           workspaceFs,
           dest.relativePath,
-        ).pipe(Effect.mapError(ensureError));
+        );
       } else {
         originalContent = '';
       }
@@ -442,9 +434,7 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
     FileSystem.FileSystem | WorkspaceFs
   > {
     const { runId } = runFiles;
-    const entry = yield* runEntryUnder(storage, runId, runPath).pipe(
-      Effect.mapError(ensureError),
-    );
+    const entry = yield* runEntryUnder(storage, runId, runPath);
     switch (entry.kind) {
       case 'file':
         return entry.location;
@@ -471,9 +461,7 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
     const wsLoc = pathToLocationIn(workspaceFs.root, runPath);
     if (
       wsLoc.kind === 'workspace' &&
-      (yield* entryTypeIn(workspaceFs, wsLoc.relativePath).pipe(
-        Effect.mapError(ensureError),
-      )) !== undefined
+      (yield* entryTypeIn(workspaceFs, wsLoc.relativePath)) !== undefined
     ) {
       return wsLoc;
     }
@@ -490,8 +478,8 @@ export const AcceptRunFilesTool = defineTool({
   requiresApproval: 'inBody',
   description: `Accept output files from a completed document task into the workspace.
 
-Only document task results (<subagent-result kind="task">) list output
-files to accept; other agents' results have nothing for this tool.
+Only a document task's result (a <subagent-result> holding <output-files>)
+lists output files to accept; other agents' results have nothing for this tool.
 
 Locates output files in run storage and writes them to the workspace.
 Each file goes through an approval step before writing and may be rejected.

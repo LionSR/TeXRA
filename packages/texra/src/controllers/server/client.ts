@@ -702,7 +702,7 @@ export const SERVICE_OFFLINE =
 
 /** What a window is told when a newer TeXRA's service replaced the one it
  *  spoke to: it cannot reconnect until it is reloaded or updated. */
-export const WINDOW_OUTDATED =
+const WINDOW_OUTDATED =
   'This window is older than the running TeXRA service; reload or update TeXRA.';
 
 /** A value as its readers follow it: what it is now, and each value from

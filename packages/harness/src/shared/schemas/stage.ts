@@ -9,10 +9,11 @@ export const StageSchema = Schema.Struct({
    *  (`TranscriptRowBase.seqNo`), which orders it among them. */
   seqNo: Schema.Int,
   startTime: Schema.Number,
-  endTime: Schema.optional(Schema.Number),
-  /** The outcome it closed with; null while it is open, when it reads as
-   *  its run reads. */
-  outcome: Schema.NullOr(RunOutcomeSchema),
+  /** When and with what outcome it closed; null while it is open, when it
+   *  reads as its run reads. */
+  end: Schema.NullOr(
+    Schema.Struct({ outcome: RunOutcomeSchema, at: Schema.Number }),
+  ),
 });
 
 export type Stage = typeof StageSchema.Type;

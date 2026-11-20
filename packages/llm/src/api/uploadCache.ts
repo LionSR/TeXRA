@@ -164,13 +164,14 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
       );
 
   const digestOf = digestMemo();
-  const live = new Map<string, Uploaded>();
-  const inFlight = new Set<string>();
+  /** Each digest's upload: its file once the provider answered, or
+   *  `uploading` while one fiber's request for it is out. */
+  const uploads = new Map<string, Uploaded | 'uploading'>();
   let released = false;
 
   const fileIdFor = (base64: string, nowMs: number): string | null => {
-    const entry = live.get(digestOf(base64));
-    if (entry === undefined) return null;
+    const entry = uploads.get(digestOf(base64));
+    if (entry === undefined || entry === 'uploading') return null;
     return entry.expiresAtMs === null ||
       entry.expiresAtMs - EXPIRY_MARGIN_MS > nowMs
       ? entry.fileId
@@ -191,13 +192,12 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
     // Only the request is interruptible: once it answers, the id has one
     // owner at every instant: the cache, or this fiber after scope close.
     yield* Effect.uninterruptibleMask((restore) => {
-      if (released || live.has(digest) || inFlight.has(digest))
-        return Effect.void;
-      inFlight.add(digest);
+      if (released || uploads.has(digest)) return Effect.void;
+      uploads.set(digest, 'uploading');
       return Effect.gen(function* () {
         const uploaded = yield* restore(send(parsed.success));
         if (!released) {
-          live.set(digest, uploaded);
+          uploads.set(digest, uploaded);
           return;
         }
         // The release that would have reported this id already finished, so
@@ -211,9 +211,13 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
           Effect.onInterrupt(() => unreleased('interrupted')),
         );
       }).pipe(
-        // Keep the claim until the id is published: an uninterruptible
-        // fiber can still yield to another uploader before that write.
-        Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
+        // A claim no file replaced (the request failed or was cut) is
+        // dropped, so the next uploader of these bytes tries again.
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (uploads.get(digest) === 'uploading') uploads.delete(digest);
+          }),
+        ),
       );
     });
   });
@@ -223,13 +227,14 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
       released = true;
       // A digest is uploaded once. Derive unique ids before clearing the
       // cache, since a provider may return the same id for different bytes.
-      const pending = new Map(
-        [...live.values()].map(({ fileId }) => [
-          fileId,
-          `no answer within ${RELEASE_DEADLINE}`,
-        ]),
+      const pending = new Map<string, string>(
+        [...uploads.values()].flatMap((entry) =>
+          entry === 'uploading'
+            ? []
+            : [[entry.fileId, `no answer within ${RELEASE_DEADLINE}`]],
+        ),
       );
-      live.clear();
+      uploads.clear();
       yield* Effect.forEach(
         [...pending.keys()],
         (fileId) =>

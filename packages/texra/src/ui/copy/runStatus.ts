@@ -159,6 +159,10 @@ export function toolRowLook(
   return model.status && TOOL_STATUS[model.status];
 }
 
+/** How an auto-approval grant on a run paints, in every host: a caution
+ *  while it is on, whichever kind of work it approves. */
+export const RUN_GRANT_TONE = 'warning' satisfies RunTone;
+
 /** The tone of a context compaction's activity row; its words are the
  *  row's label (`COMPACTION_ACTIVITY_LABEL`). */
 export const COMPACTION_ACTIVITY_TONE: Readonly<
@@ -209,13 +213,13 @@ export function runAttentionLine(
  *  process died before the run's end closed the stage), else running. A
  *  transcript shown without its run (null) reads an open stage as running. */
 export function stageStatus(
-  stage: Pick<Stage, 'outcome'>,
+  stage: Pick<Stage, 'end'>,
   run: Pick<RunView, 'holder' | 'outcome' | 'position'> | null,
 ): Pick<RunStatus, 'word' | 'tone' | 'glyph'> & {
   readonly key: RunOutcome | 'running' | 'interrupted';
 } {
   const key =
-    stage.outcome ??
+    stage.end?.outcome ??
     (run !== null && isInterrupted(run) ? 'interrupted' : 'running');
   const { word, tone } = RUN_STATUS[key];
   return { key, word, tone, glyph: TONE_GLYPH[tone] };

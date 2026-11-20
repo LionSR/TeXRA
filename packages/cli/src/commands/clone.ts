@@ -21,7 +21,11 @@ import { osPlatformOf } from '@texra/shared/osPlatform';
 import { CLONE_COPY } from '@ui/copy/clone';
 
 // Local imports - runtime
-import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
+import {
+  CliUsageError,
+  isQuiet,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliSecretsLayer } from '../runtime/platform/cliProcessRuntime';
@@ -69,7 +73,7 @@ function presentCloneOutcome(
   outcome: OverleafCloneOutcome,
 ): CliExitCode | undefined {
   const gitError = (error: string) => {
-    if (!context.quietLogs) writeTextStderr(`Git clone error: ${error}`);
+    if (!isQuiet(context)) writeTextStderr(`Git clone error: ${error}`);
   };
   switch (outcome._tag) {
     case 'Cloned': {

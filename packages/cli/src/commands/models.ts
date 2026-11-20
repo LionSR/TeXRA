@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Argument, Command, Flag } from 'effect/cli';
+import { Argument, Command } from 'effect/cli';
 
 import { MODELS } from '@texra-ai/llm';
 
@@ -25,13 +25,13 @@ import {
   type CliModelListOptions,
 } from '../runtime/models/modelAccess';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import type { CliContext } from '../runtime/platform/cliContext';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 
 /**
  * The report every model command gives when its runtime, platform or model
@@ -79,8 +79,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
   const entry = yield* loadCliModelAccessEntry(id, services);
 
   if (!entry) {
-    writeTextStderr(`Model not found: ${id}`);
-    return CliExitCode.Usage;
+    return yield* failUsage(`Model not found: ${id}`);
   }
 
   // A reference with `@effort` or `+mode` is valid when a run's bind takes
@@ -91,8 +90,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
       ? verdict.reasoning?.sent
       : undefined;
   if (sent !== undefined && 'refused' in sent) {
-    writeTextStderr(`A run cannot use ${id}: ${sent.refused}`);
-    return CliExitCode.Usage;
+    return yield* failUsage(`A run cannot use ${id}: ${sent.refused}`);
   }
 
   const record = cliModelRecord(entry);
@@ -104,13 +102,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
 const modelsListCommand = cliCommand('list', {
   description: 'List available models',
   config: {
-    all: Flag.Boolean('all').pipe(
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription(
-        'Include unavailable models with their access status',
-      ),
-    ),
+    all: boolFlag('all', 'Include unavailable models with their access status'),
   },
   run: (context, input) =>
     listModels(context, { includeUnavailable: input.all }),
@@ -174,12 +166,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
           : `Disabled ${result.model} in the model picker.`,
       }),
     ),
-    Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        writeTextStderr(toErrorMessage(cause));
-        return CliExitCode.Usage;
-      }),
-    ),
+    Effect.catchCause((cause) => failUsage(toErrorMessage(cause))),
   );
 });
 

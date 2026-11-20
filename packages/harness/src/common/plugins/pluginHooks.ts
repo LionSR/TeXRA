@@ -20,6 +20,7 @@ import { isPathWithin } from '@utils/core/pathCore';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import {
   CommandDirs,
+  namesPath,
   whichOnExtendedPath,
   withExtendedPath,
 } from '@utils/system/platformPaths';
@@ -191,7 +192,7 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
     }
     const realRoot = yield* fs.realPath(root);
     const files: PinnedFile[] = [];
-    if (!program.includes('/') && !program.includes(path.sep)) {
+    if (!namesPath(program)) {
       // `runHook` spawns on the process PATH, or `/usr/bin:/bin` when it is
       // unset, extended as an MCP server's is. Pin only when that is the PATH
       // searched here, so the hook runs the binary it pinned.
@@ -209,7 +210,7 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
       });
     }
     for (const word of words) {
-      if (!word.includes('/') && !word.includes(path.sep)) continue;
+      if (!namesPath(word)) continue;
       if (!path.isAbsolute(word))
         return yield* dynamic(`${word} is a path relative to the workspace`);
       const real = yield* fs

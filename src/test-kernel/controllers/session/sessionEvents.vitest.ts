@@ -52,12 +52,6 @@ import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { definePlugin } from '@texra-ai/harness/plugins';
 
-vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@effect/sql-sqlite-node/SqliteClient')
-  >()),
-}));
-
 import {
   type RunId,
   RunIdSchema,
@@ -170,6 +164,18 @@ const rowsOf = (
   Effect.forEach(ids, (id) => db.readAggregate(id, 0, ROW_TYPES)).pipe(
     Effect.map((rows) => rows.flat().toSorted((x, y) => x.commit - y.commit)),
   );
+
+/** A read refused on a stored row that does not decode: the typed failure a
+ *  caller catches, its message naming the row's kind and commit (a pattern
+ *  where the commit is not known). */
+const rowCorrupt = (type: string, commit: number | string) => ({
+  _tag: 'DatabaseReadFailed',
+  message: expect.stringMatching(
+    new RegExp(
+      `'s ${type.replaceAll('.', String.raw`\.`)} row at commit ${commit} does not decode`,
+    ),
+  ),
+});
 
 const runStartRow = runStart(RUN);
 
@@ -676,14 +682,7 @@ describe('the session event table and its one publisher', () => {
               db.readRunRecord(runStartRow.aggregateId),
             ).pipe(Effect.provide(substrate(storage))),
           ),
-        ).toMatchObject({
-          _tag: 'DatabaseReadFailed',
-          cause: {
-            _tag: 'DatabaseRowCorrupt',
-            type: 'followup.closed',
-            commit: 4,
-          },
-        });
+        ).toMatchObject(rowCorrupt('followup.closed', 4));
         yield* corrupt(3);
         yield* Effect.gen(function* () {
           const db = yield* Database;
@@ -691,14 +690,7 @@ describe('the session event table and its one publisher', () => {
             yield* Effect.flip(
               db.readAggregate(runStartRow.aggregateId, 0, ROW_TYPES),
             ),
-          ).toMatchObject({
-            _tag: 'DatabaseReadFailed',
-            cause: {
-              _tag: 'DatabaseRowCorrupt',
-              type: 'run.position',
-              commit: 3,
-            },
-          });
+          ).toMatchObject(rowCorrupt('run.position', 3));
         }).pipe(Effect.provide(substrate(storage)));
         // A listing built at open over that row (a store that held none
         // yet) lists it as the run's unread row, so the record's read fails
@@ -718,14 +710,7 @@ describe('the session event table and its one publisher', () => {
               db.readRunRecord(runStartRow.aggregateId),
             ).pipe(Effect.provide(substrate(storage))),
           ),
-        ).toMatchObject({
-          _tag: 'DatabaseReadFailed',
-          cause: {
-            _tag: 'DatabaseRowCorrupt',
-            type: 'run.position',
-            commit: 3,
-          },
-        });
+        ).toMatchObject(rowCorrupt('run.position', 3));
         // A fresh session over the store opens: the healthy run lists, and
         // the damaged one lists too, shown damaged and read-only, with
         // delete its one way out of the list.
@@ -756,10 +741,7 @@ describe('the session event table and its one publisher', () => {
               db.readRunRecord(runStartRow.aggregateId),
             ).pipe(Effect.provide(substrate(storage))),
           ),
-        ).toMatchObject({
-          _tag: 'DatabaseReadFailed',
-          cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
-        });
+        ).toMatchObject(rowCorrupt('run.start', 1));
       });
     },
   );
@@ -972,9 +954,7 @@ describe('the session event table and its one publisher', () => {
           const fresh = yield* Database;
           expect(
             yield* Effect.flip(fresh.readAggregate(OLDER, 0, ROW_TYPES)),
-          ).toMatchObject({
-            cause: { _tag: 'DatabaseRowCorrupt', type: 'tool.start' },
-          });
+          ).toMatchObject(rowCorrupt('tool.start', String.raw`\d+`));
           yield* remove(OLDER);
           expect(yield* count('blob')).toBe(0);
         }).pipe(Effect.provide(opened));

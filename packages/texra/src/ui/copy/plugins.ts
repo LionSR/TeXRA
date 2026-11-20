@@ -6,13 +6,31 @@
  * them itself. The `/plugins` command's own sentences, which spell its
  * slash command and flag, are the terminal's.
  */
-import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   formatClippedList,
   formatResultCount,
   joinFacts,
+  type ToolDependencyStatus,
 } from '@texra-ai/harness/schemas';
+
+const TOOL_DEPENDENCY_STATUS_FALLBACK_LABELS = {
+  available: 'Ready',
+  'not-found': 'Needs setup',
+  unknown: 'Not checked',
+} satisfies Record<ToolDependencyStatus, string>;
+
+/** A TeXRA plugin's dependency status in words: the probe's own label when
+ *  it gave one, else the status's fallback, else the raw status. */
+export function toolDependencyStatusLabel(
+  status: string,
+  statusLabel: string | undefined,
+): string {
+  if (statusLabel != null) return statusLabel;
+  const labels: Readonly<Record<string, string>> =
+    TOOL_DEPENDENCY_STATUS_FALLBACK_LABELS;
+  return Object.hasOwn(labels, status) ? labels[status] : status;
+}
 
 /** The page's own copy. */
 export const PLUGINS_PAGE = Object.freeze({
@@ -151,10 +169,12 @@ export function pluginRowTrust(row: PluginRow): string | null {
  */
 export function pluginRowProblem(row: PluginRow): string | null {
   switch (row.kind) {
-    case 'texra':
-      return row.item.status === 'available'
+    case 'texra': {
+      const { setup } = row.item;
+      return setup === null || setup.status === 'available'
         ? null
-        : toolDependencyStatusLabel(row.item.status, row.item.statusLabel);
+        : toolDependencyStatusLabel(setup.status, setup.statusLabel);
+    }
     case 'installed':
       if (row.plugin.problem) return row.plugin.problem;
       return row.plugin.code.length > 0

@@ -52,7 +52,10 @@ export const AGGREGATE =
   '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
 /** The call rows a display read shows as tool cards: {@link callCard} has
  *  a case for each, which the compiler checks. */
-export const CARD_ROW_TYPES = ['tool.intent', 'tool.result'] as const;
+export const CARD_ROW_TYPES = Object.freeze([
+  'tool.intent',
+  'tool.result',
+] as const);
 const CARD_KINDS: readonly string[] = CARD_ROW_TYPES;
 /** The listing (each aggregate's `listing_entry` rows and each run's spend
  *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a

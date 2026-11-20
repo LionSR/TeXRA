@@ -19,18 +19,15 @@ import type { FileLocation } from '@texra-ai/harness/schemas';
 // Local file imports
 import {
   collectBibliographyPaths,
-  collectCommaSeparatedMatches,
   ensureExtension,
   existingExternalPath,
   joinLatexPath,
   LATEX_PROBE_CONCURRENCY,
+  loadedPackages,
   readUncommentedLatex,
   resolveLatexDir,
   texInputPaths,
 } from './latexParsingUtils';
-
-const USEPACKAGE_PATTERN =
-  /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
 
 /**
  * Resolve a TeX input path (\input / \include argument) to an existing
@@ -78,10 +75,9 @@ export const extractLatexFileDependencies = Effect.fn(
   );
 
   const bibCandidates = collectBibliographyPaths(latexDir, uncommented);
-  const styCandidates = collectCommaSeparatedMatches(
-    uncommented,
-    USEPACKAGE_PATTERN,
-  ).map((name) => path.join(latexDir, `${name}.sty`));
+  const styCandidates = loadedPackages(uncommented).map((name) =>
+    path.join(latexDir, `${name}.sty`),
+  );
 
   // The probe sets run as one bounded fan-out under the calling fiber:
   // a failure interrupts the siblings instead of leaving them running behind

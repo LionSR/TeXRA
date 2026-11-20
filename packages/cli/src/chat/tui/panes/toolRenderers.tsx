@@ -13,7 +13,6 @@
 
 // Local imports - shared schemas and utilities
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
-import { buildDiffHunks } from '@texra-ai/harness/host';
 import {
   CUT_BY_RUN_END_NOTE,
   isMcpToolName,
@@ -22,7 +21,7 @@ import {
   type ToolSectionFile,
   type TranscriptText,
 } from '@texra-ai/harness/transcript';
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { AGENT_TOOL_NAME, buildDiffHunks } from '@texra-ai/harness/plugins';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   safeTerminalText,

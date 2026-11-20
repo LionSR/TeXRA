@@ -7,7 +7,10 @@
  * Either way `selfTask` frames `prompt` as the one part of the script's work
  * the child does. It is the same agent with
  * the same tools, so nothing is proposed: the user approved the script.
- * The default goal strategy is this function in a loop (`builtIn:goal`).
+ * It runs on the conversation's model unless the call names one, and its
+ * call holds it to the limits every child launch takes (`CHILD_FIELDS`).
+ * The default goal strategy (`builtIn:goal`) is this function in a loop:
+ * forked rounds, and a fresh one that judges a round's `done`.
  */
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
@@ -18,13 +21,19 @@ import {
   type ScriptScope,
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runOwnership';
-import { childResult, failedResult } from '@agent/runtime/delegation/AgentTool';
+import {
+  childModel,
+  childResult,
+  failedResult,
+} from '@agent/runtime/delegation/AgentTool';
 import {
   agentChildRunId,
   countLaunch,
   recoverAgentChild,
+  withinLimits,
 } from '@agent/runtime/delegation/agentChild';
 import { executeSubagentInBand } from '@agent/runtime/delegation/childLaunch';
+import { CHILD_FIELDS } from '@agent/runtime/delegation/inputFields';
 import {
   childOutputSchema,
   printSubagentProgress,
@@ -37,7 +46,7 @@ import {
 } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
 
 const SelfInputSchema = Schema.Struct({
   prompt: Schema.NonEmptyString.annotate({
@@ -48,15 +57,11 @@ const SelfInputSchema = Schema.Struct({
     true,
     'Continue this conversation as it stood when the script started, with `prompt` added to the message that started it; `false` starts with no earlier conversation. Either way the child is told `prompt` is the one part of the work it does.',
   ),
-  schema: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-  ).annotate({
-    description:
-      'A JSON Schema object: the run finishes by submitting a value of it, returned as `structured`.',
-  }),
-  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'A short title for the call’s card.',
-  }),
+  schema: optionalInput(
+    Schema.Record(Schema.String, Schema.Unknown),
+    'A JSON Schema object: the run finishes by submitting a value of it, returned as `structured`.',
+  ),
+  ...CHILD_FIELDS,
 });
 type SelfInput = typeof SelfInputSchema.Type;
 
@@ -123,12 +128,17 @@ const runSelf = Effect.fn('self.call')(function* (
   const notify = printSubagentProgress(name, call.emit);
   // An earlier attempt's child answers the call, or continues under its id.
   const recovered = yield* Effect.result(
-    recoverAgentChild(call, { notify, running: (work) => work }),
+    recoverAgentChild(call, { notify, limits: input }),
   );
   if (Result.isFailure(recovered)) return failedResult(name, recovered.failure);
   if (recovered.success.kind === 'ended')
     return yield* childResult(call, name, recovered.success, undefined);
 
+  // A model the call names is chosen as `agent()` chooses one: it runs, or
+  // the call fails. None named, the child runs on the conversation's.
+  const model =
+    input.model == null ? undefined : yield* childModel(call, input.model);
+  if (model !== undefined && typeof model !== 'string') return model;
   const limited = yield* countLaunch(script, name);
   if (limited !== null) return limited;
   const runId = agentChildRunId(call);
@@ -137,36 +147,44 @@ const runSelf = Effect.fn('self.call')(function* (
   // framed prompt alone. Either way it is launched, never resumed, so it starts
   // with the grants its parent holds now.
   const launched = yield* Effect.result(
-    Effect.gen(function* () {
-      const fork = input.fork && source !== null;
-      const task = selfTask(input.prompt, fork);
-      const forked = fork
-        ? yield* forkSeed(source, before, runId, task, boundAt)
-        : null;
-      // The child's first message is its task or its seed, never its
-      // parent's launch, so it renders none of the skills that launch
-      // activated; forked, it holds the activations its seed copies.
-      const { skills: _skills, ...record } = forked?.record ?? {
-        ...launch,
-        model: (yield* ScopedRef.get(run.model)).modelId,
-        instruction: task,
-        displayInstruction: input.prompt,
-        outputFiles: [],
-        launch: undefined,
-      };
-      return yield* executeSubagentInBand({
-        runId,
-        parentId,
-        configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
-          ...record,
-          outputSchema,
-          asCaller: true,
-        }),
-        ...(forked !== null && { seed: forked.seed }),
-        parentCall: { callId: call.callId, card: call.logId },
-        notify,
-      });
-    }),
+    withinLimits(
+      runId,
+      input,
+      Effect.gen(function* () {
+        const fork = input.fork && source !== null;
+        const task = selfTask(input.prompt, fork);
+        const forked = fork
+          ? yield* forkSeed(source, before, runId, task, boundAt)
+          : null;
+        // The child's first message is its task or its seed, never its
+        // parent's launch, so it renders none of the skills that launch
+        // activated; forked, it holds the activations its seed copies.
+        const { skills: _skills, ...record } = forked?.record ?? {
+          ...launch,
+          model: (yield* ScopedRef.get(run.model)).modelId,
+          instruction: task,
+          displayInstruction: input.prompt,
+          outputFiles: [],
+          launch: undefined,
+        };
+        return yield* executeSubagentInBand({
+          runId,
+          parentId,
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
+            ...record,
+            // A fork on a named model keeps its seed's binding, as a model
+            // switch keeps the conversation's: the child's bind rejects a
+            // model that conversation's format cannot run on.
+            ...(model !== undefined && { model }),
+            outputSchema,
+            asCaller: true,
+          }),
+          ...(forked !== null && { seed: forked.seed }),
+          parentCall: { callId: call.callId, card: call.logId },
+          notify,
+        });
+      }),
+    ),
   );
   return Result.isFailure(launched)
     ? failedResult(name, launched.failure)
@@ -201,7 +219,9 @@ export const SelfTool = defineTool({
     "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number }",
   description: `Run yourself again on a prompt, as a child of this call, and wait for its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`, as \`agent()\` resolves.
 
-Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts with no earlier conversation. Either way the child is told \`prompt\` is the one part of the script's work it does, and not to take on the rest. It is you with your tools and model: nothing is proposed or approved again. It rejects with an Error named \`AgentFailed\` or \`Skipped\` (the user stopped it). Call it from a script; called directly, it runs nothing.`,
+Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts with no earlier conversation. Either way the child is told \`prompt\` is the one part of the script's work it does, and not to take on the rest. It is you with your tools, and nothing is proposed or approved again. It runs on your model unless \`model\` names another, which is how a different model checks a result with your prompt and tools; a fork takes only a model that can continue this conversation, and a model with another conversation format takes \`fork: false\`.
+
+It rejects with an Error named \`AgentFailed\`, \`TimedOut\` (past \`timeoutMs\`), \`BudgetExceeded\` (the child and the runs it started spent \`maxCostUsd\` before it finished; the cap is read after each reply, so the spend can pass it by the replies then in flight), \`Skipped\` (the user stopped it) or \`ModelUnavailable\`. Call it from a script; called directly, it runs nothing.`,
   schema: SelfInputSchema,
   execute: Effect.fn('SelfTool.execute')(function* (input: SelfInput) {
     return yield* inRunSession((call) =>

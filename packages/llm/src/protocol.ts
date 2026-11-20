@@ -35,6 +35,38 @@ export const TurnProtocolSchema = Schema.Literals([
   'anthropic-messages',
 ]);
 
+/** One protocol's limits on an image's longest side, in pixels. */
+interface ImageLimits {
+  /** The largest side any image may have; a larger one is rejected. */
+  readonly maxDimension: number;
+  /** The largest side an image may have in a request that carries many. */
+  readonly manyImageMaxDimension: number;
+}
+
+/**
+ * The image size limits each wire protocol states, by protocol. Every
+ * protocol has a row, so a new one does not compile without its limits.
+ */
+export const IMAGE_LIMITS = Object.freeze({
+  // A larger image fails the whole request with a 400 that no retry fixes.
+  'anthropic-messages': Object.freeze({
+    maxDimension: 8000,
+    manyImageMaxDimension: 2000,
+  }),
+  // Carried over from the harness constants, not established for this
+  // protocol: both numbers are the Anthropic row's.
+  'openai-responses': Object.freeze({
+    maxDimension: 8000,
+    manyImageMaxDimension: 2000,
+  }),
+  // Carried over from the harness constants, not established for this
+  // protocol: both numbers are the Anthropic row's.
+  'google-interactions': Object.freeze({
+    maxDimension: 8000,
+    manyImageMaxDimension: 2000,
+  }),
+} satisfies Record<typeof TurnProtocolSchema.Type, ImageLimits>);
+
 /** Selected binding, distinct from an optional returned model version. */
 export const ModelOriginSchema = BindingSchema.mapFields(
   Struct.assign({

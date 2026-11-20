@@ -6,7 +6,6 @@ import {
   EFFORT_SCALE,
   ReasoningEffort,
 } from '@texra-ai/llm';
-import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import { executeCommand } from '@texra-ai/harness/node';
 import {
   isCodexModel,
@@ -19,10 +18,13 @@ import {
 } from './agentCliModel';
 import {
   type ToolError,
+  logFailure,
   withLogChannel,
   Settings,
   type SettingsStores,
   type StateReadFailed,
+  withPerKeyLane,
+  type PerKeyLane,
 } from '@texra-ai/harness/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -219,12 +221,10 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
   }
   const efforts = catalogEfforts(result.stdout, slug);
   if (efforts == null) {
-    yield* Effect.logWarning(
+    yield* logFailure(
+      CHANNEL,
       'Codex reasoning-level probe returned unreadable catalog',
-    ).pipe(
-      Effect.annotateLogs({ data: { binaryPath, slug } }),
-      withLogChannel(CHANNEL),
-    );
+    )({ binaryPath, slug });
     return UNPROBED_ROUTE_EFFORTS;
   }
   codexRouteEffortsByKey.set(key, efforts);

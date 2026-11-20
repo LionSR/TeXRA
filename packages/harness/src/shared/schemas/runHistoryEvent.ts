@@ -268,19 +268,22 @@ export const ModelMessagePayloadSchema = Schema.Union([
  * appending: the messages in `range` (`[from, to)` of the history it
  * applies to) are replaced by `messages`. An edit drops the provider-side
  * continuation, which was over the old view, and the offered system text.
- * `trigger` says what asked for a compaction: the threshold
- * (`context-limit`), the user's `/compact` (`user`), or a request the
- * model's window could not hold (`overflow`); null for the other causes. A
- * fork's seed carries the source's `input` with its messages. `usage` is a
- * summary call's priced usage, applied as a response's (`null` when no model
- * was called). Compaction (`run/compaction.ts`), on the run's own fiber, and
- * the fork seed (`forkRun.ts`), a run's first row, write it, so an edit
- * always applies to the view it was computed from. Whether the result is
+ * Its `cause` is what replaced the range: a summary by a model call
+ * (`compaction`), the agent's own text through its `context` tool
+ * (`edit`), or a fork's seed (`fork`). `trigger` says what asked for a
+ * compaction: the threshold (`context-limit`), the user's `/compact`
+ * (`user`), or a request the model's window could not hold (`overflow`);
+ * null for the other causes. A fork's seed carries the source's `input`
+ * with its messages. `usage` is a summary call's priced usage, applied as a
+ * response's (`null` when no model was called). Compaction and the agent's
+ * edits (`run/compaction.ts`), on the run's own fiber at a request
+ * boundary, and the fork seed (`forkRun.ts`), a run's first row, write it,
+ * so an edit always applies to the view it was computed from. Whether the result is
  * preparable is the run history's check, at write and cold load: a payload
  * cannot see the history it edits.
  */
 export const ContextEditPayloadSchema = Schema.Struct({
-  cause: Schema.Literals(['compaction', 'fork']),
+  cause: Schema.Literals(['compaction', 'edit', 'fork']),
   trigger: Schema.NullOr(
     Schema.Literals(['context-limit', 'user', 'overflow']),
   ),
@@ -307,6 +310,24 @@ export const ContextEditPayloadSchema = Schema.Struct({
       },
     ),
   );
+
+/** The tool an agent reads and edits its own context with. */
+export const CONTEXT_TOOL_NAME = 'context';
+
+/**
+ * A `replace` of the `context` tool, as its executed result's `value`
+ * records it: messages `[from, to)` of the view its response was sent with
+ * are to be replaced by one message holding `with`, at the run's next
+ * request boundary, where the loop writes the `context.edit` (cause
+ * `edit`). `freed` is the tool's estimate of the tokens it saves.
+ */
+export const ContextReplaceSchema = Schema.Struct({
+  action: Schema.Literal('replace'),
+  from: NonNegativeIntSchema,
+  to: NonNegativeIntSchema,
+  with: Schema.NonEmptyString,
+  freed: Schema.Int,
+});
 
 /* ------------------------------------------------------------ script.call */
 

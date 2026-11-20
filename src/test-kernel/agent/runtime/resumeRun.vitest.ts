@@ -11,6 +11,9 @@
  *   offered to the run it resumed;
  * - a run another live process holds is resumed here, or the host
  *   rearranges itself before the refusal;
+ * - a model switch asked of a run no process holds is refused instead of
+ *   queued, or the resumed run fails on a switch it cannot take instead of
+ *   naming it and going on;
  * - a user's stop while a resume decides is lost: the stop writes no
  *   `run.stop` row or no end, or the resume activates the stopped run anyway;
  * - a root launched to run once, resumed by an interactive caller after it
@@ -128,8 +131,9 @@ describe(
               const { session, runId, storage } = yield* waitingRunAfterCrash();
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
-              // The resume reads the run's queued input and then its lineage
-              // (`persistedParentId`): that read fails.
+              // The resume reads the run's queued input, then, as its
+              // activation's batch commits, the run's records: that read
+              // fails.
               const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.flip(resume(runId, { session })),
@@ -153,21 +157,22 @@ describe(
             Effect.gen(function* () {
               const { session, runId, storage } = yield* waitingRunAfterCrash();
               const faults = yield* sessionStoreFaults(storage);
-              // The first records read finds the run's owner; the second, its
-              // config, is inside the resume.
-              const owner = yield* faults.holdNext('readRunRecord');
+              // The resume reads the run's queued input, then, as it opens
+              // the run, its history: input sent during that read is past
+              // the resume's own read of the input.
+              const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 resume(runId, { session }),
               );
-              yield* owner.reached;
-              const config = yield* faults.holdNext('readRunRecord');
-              yield* owner.release;
-              yield* config.reached;
+              yield* input.reached;
+              const history = yield* faults.holdNext('readAggregate');
+              yield* input.release;
+              yield* history.reached;
 
               expect(yield* send(session, runId, 'raced')).toEqual({
                 kind: 'queue',
               });
-              yield* config.release;
+              yield* history.release;
               expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);
               yield* untilStored(
                 storage,
@@ -303,6 +308,43 @@ describe(
               expect(withheld.filter((name) => name === 'plan')).toEqual([
                 'plan',
               ]);
+            }),
+        );
+
+        it.effect(
+          'a model switch asked of a run no process holds is queued, and the resumed run names a switch it cannot take and goes on',
+          () =>
+            Effect.gen(function* () {
+              const { session, runId, storage } = yield* waitingRunAfterCrash();
+              const model = 'unregistered/model';
+              const answered = yield* Context.get(session, SessionRequests)
+                .request({ kind: 'run.model', runId, model })
+                .pipe(Effect.provide(session));
+              expect(answered).toEqual({ kind: 'done' });
+              yield* send(session, runId, 'after the switch');
+
+              expect(yield* resume(runId, { session })).toMatchObject(
+                ACTIVATED,
+              );
+              yield* untilStored(
+                storage,
+                () =>
+                  answersOf(storage, runId)
+                    .at(-1)
+                    ?.includes('after the switch') ?? false,
+              );
+              const notes = storedRows(storage).flatMap((row) => {
+                if (row.run !== runId || row.type !== 'log') return [];
+                // cast: a `log` row's data holds its message.
+                const { message } = JSON.parse(row.data) as {
+                  message: string;
+                };
+                return message.startsWith('The switch to') ? [message] : [];
+              });
+              expect(notes).toEqual([
+                `The switch to ${model} was not applied: Model ${model} is not registered`,
+              ]);
+              expect(endsOf(storage, runId)).not.toContain('failed');
             }),
         );
 

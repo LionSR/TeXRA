@@ -11,6 +11,7 @@ import { Context, Effect, Result, type Scope } from 'effect';
 import { logFailure } from '@logger/effectLog';
 import {
   type ChildRunDelivery,
+  type FollowUpControl,
   type FollowUpSender,
   type RunId,
   type StoredMedia,
@@ -61,13 +62,13 @@ export type InboxItem = (
       readonly blobs?: readonly DraftBlob[];
     }
   | { readonly delivery: ChildRunDelivery }
+  /** A request of the run's own (`/compact`, a model switch), not a message. */
+  | { readonly control: FollowUpControl }
 ) & {
   readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
-  /** A request of the run's own (`/compact`, a model switch), not a message. */
-  readonly control?: QueuedFollowUp['control'];
 };
 
 /** What a send asks of the row and of the run. */

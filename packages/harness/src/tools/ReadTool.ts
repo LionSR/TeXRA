@@ -14,8 +14,9 @@ import {
   buildFileAttachment,
 } from '@tools/attachments';
 import { formatFileView, LineRangeSchema } from '@tools/formatting';
-import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { parseEml } from '@tools/emlParser';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { formatCount, splitContentLines } from '@utils/text/stringUtils';
 import { hasExtension, getExtensionLowercase } from '@utils/core/pathBasics';
 import {
   getMimeType,
@@ -26,14 +27,16 @@ import {
 
 // Local file imports
 import { defineTool } from './core/definition';
+import { optionalInput } from './core/inputSchema';
 
 const ReadInputSchema = Schema.Struct({
   path: Schema.String.annotate({
     description: 'Workspace-relative or absolute file path to read.',
   }),
-  range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({
-    description: 'Optional inclusive line range to read.',
-  }),
+  range: optionalInput(
+    LineRangeSchema,
+    'Optional inclusive line range to read.',
+  ),
 });
 
 type ReadInput = typeof ReadInputSchema.Type;
@@ -93,38 +96,33 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     return { ...result, reads };
   }
 
-  // EML files use complex MIME encoding (multipart, base64, quoted-printable).
-  // Parse into readable text and extract image attachments for vision models.
-  let emlImages: EmlImageAttachment[] = [];
-  let lines: string[];
-
   // The resolution already entered the call's workspace frame, so the
   // absolute path it produced is what the process filesystem reads: a
   // workspace file and one under a registered external root are the same
   // read here, through the process `FileSystem`.
   const fs = yield* FileSystem.FileSystem;
 
-  if (hasExtension(input.path, '.eml')) {
+  // EML files use complex MIME encoding (multipart, base64, quoted-printable).
+  // Parse into readable text and extract image attachments for vision models.
+  const isEml = hasExtension(input.path, '.eml');
+  if (isEml) {
     const stats = yield* fs.stat(resolved.absolute);
     // Guard against very large EML files exhausting memory during parsing.
     if (Number(stats.size) > ATTACHMENT_MAX_BYTES) {
       return yield* new ToolError(
-        `EML file exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
+        `EML file exceeds maximum size of ${formatCount(ATTACHMENT_MAX_BYTES)} bytes.`,
       );
     }
-    const raw = yield* fs
-      .readFileString(resolved.absolute)
-      .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')));
-    const { text, images } = yield* parseEml(raw);
-    lines = splitContentLines(text);
-    emlImages = images;
-  } else {
-    lines = splitContentLines(
-      yield* fs
-        .readFileString(resolved.absolute)
-        .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n'))),
-    );
   }
+  // The same read the edit tools make, so a line read here is a line an
+  // edit can match, a leading BOM included.
+  const content = yield* readNormalizedFile(fs, resolved.absolute);
+  // A leading BOM hides an email's headers from the MIME parser, which then
+  // reads the whole message as its body.
+  const { text, images: emlImages } = isEml
+    ? yield* parseEml(content.replace(/^\uFEFF/, ''))
+    : { text: content, images: [] };
+  const lines = splitContentLines(text);
 
   const result = formatFileView({
     path: displayPath,

@@ -14,8 +14,12 @@ import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { type ProcessServices, pathToLocationIn } from '@texra-ai/harness/host';
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
+import { type ProcessServices } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  WorkspaceFs,
+  pathToLocationIn,
+} from '@texra-ai/harness/plugins';
 import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
@@ -69,7 +73,6 @@ import {
 
 // Local file imports
 import { handleCompare } from './compareFiles';
-import { getCurrentFile } from './fileSelection';
 import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
@@ -101,6 +104,26 @@ export interface ExtensionHostRequestsOptions {
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
+
+/** The editor's current file, project-relative: the active text editor's
+ *  document, else the active tab's file (an image or a PDF opens in a
+ *  custom editor). */
+function getCurrentFile(roots: WorkspaceRoots): Effect.Effect<string | null> {
+  return Effect.sync(() => {
+    const doc = vscode.window.activeTextEditor?.document;
+    if (doc?.uri.scheme === 'file') {
+      return workspaceRelativePath(roots.workspace, doc.uri.fsPath);
+    }
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    const isFileInput =
+      (input instanceof vscode.TabInputText ||
+        input instanceof vscode.TabInputCustom) &&
+      input.uri.scheme === 'file';
+    return isFileInput
+      ? workspaceRelativePath(roots.workspace, input.uri.fsPath)
+      : null;
+  });
+}
 
 /** One of this extension's own command handlers, or a VS Code command, run
  *  in the handler's fiber: a typed failure or a defect is named and logged. */

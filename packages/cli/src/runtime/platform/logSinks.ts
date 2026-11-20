@@ -6,10 +6,12 @@ import { Writable } from 'node:stream';
 import { Effect, LogLevel, Predicate, Schema } from 'effect';
 
 // Local imports
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  entryChannel,
-  entryMessage,
+  ensureError,
+  entryLine,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
+import {
   setLogSink,
   type LogEntry,
   type LogSink as HostLogSink,
@@ -31,7 +33,7 @@ function isCliPipeClosureError(error: unknown): boolean {
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 
-export function installCliPipeErrorHandlers(): void {
+function installCliPipeErrorHandlers(): void {
   for (const key of ['stdout', 'stderr'] as const) {
     process[key].on('error', (error) => {
       if (isCliPipeClosureError(error)) {
@@ -309,10 +311,7 @@ export function stderrDiagnosticSink(
         LogLevel.isLessThan(ENTRY_LOG_LEVEL[entry.level], minimumLogLevel)
       )
         return;
-      const channel = entryChannel(entry);
-      writeTextStderr(
-        `${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
-      );
+      writeTextStderr(entryLine(entry));
     },
   });
 }
