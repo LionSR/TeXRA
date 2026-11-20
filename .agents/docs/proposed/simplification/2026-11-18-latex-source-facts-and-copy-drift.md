@@ -93,13 +93,15 @@ the CLI words except the TUI titles in `validate-tui.mjs`.
    "Stopped" everywhere a person reads it. `CLI_RUN_STATUS` and
    `runOutcomeToCliRunStatus` fed only that text line and are gone; the
    JSON and NDJSON `outcome` values and the exit codes are unchanged.
-2. **A request's heading.** Bash, edit, proposal, retry and plan requests
-   are headed separately by the web panels, the TUI modals and the headless
-   summaries (`packages/cli/src/runtime/approval/approvalSummaries.ts`); the
-   headless tool-edit header shows an absolute path in one branch and a
-   relative one in the other, and a plan is dumped as JSON.
-   `toolEditDiffLabel` (`packages/texra/src/ui/copy/toolEditPreview.ts`)
-   already exists for one of them.
+2. **A request's heading.** Taken on 2026-11-20: every kind's ask and
+   action words were already `@ui/copy/requestCards.ts`'s, and the headless
+   plan prompt already printed the plan's objective, as the web panel and
+   the TUI card do. What was left was the headless tool edit, headed by an
+   absolute path when its preview loaded and a relative one when it did
+   not: both branches now head it with `toolEditDiffLabel`
+   (`packages/texra/src/ui/copy/toolEditPreview.ts`), the title the editor
+   hosts give the same diff, and the diff names the workspace-relative
+   path. The CLI's own `toolEditAsk` is gone.
 3. **Skipping a user question.** Closed, checked on 2026-11-19: the
    `USER_QUESTION_SKIPPED_FEEDBACK` note is gone, and the terminal declines
    through the web's `declineDecision`
