@@ -1,8 +1,11 @@
 // Node imports
 import * as path from 'node:path';
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { type AgentTrace, type WorkspaceFs } from '@texra-ai/harness/plugins';
+import {
+  type AgentTrace,
+  type WorkspaceFs,
+  pathToLocationIn,
+} from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
 
 // Third-party imports

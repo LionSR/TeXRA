@@ -20,8 +20,12 @@ import {
   type Semaphore,
 } from 'effect';
 
-import { pathToLocationIn, withSessionFs } from '@texra-ai/harness/host';
-import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
+import { withSessionFs } from '@texra-ai/harness/host';
+import {
+  logFailure,
+  pathToLocationIn,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';

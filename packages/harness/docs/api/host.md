@@ -200,22 +200,6 @@ class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefused>()(
 type AgentDelegationScope = typeof AgentDelegationScopeSchema.Type;
 ```
 
-## AgentDirectories
-
-The process's agent directories as an Effect service, provided once by the
-composition root through `processLayer`. The shape is the port itself: a
-program that resolves one of the three local agent directories yields the
-port's own readers instead of reaching for the process platform's copy.
-A root holds its port before it installs the runtime that serves it, so the
-layer is `Layer.succeed(AgentDirectories)(port)`.
-
-```ts
-class AgentDirectories extends Context.Service<
-  AgentDirectories,
-  AgentDirectoriesPort
->()('@texra-ai/harness/platform/AgentDirectories')
-```
-
 ## AgentDirectoryService
 
 ```ts
@@ -333,21 +317,6 @@ type AvailabilityResults = ReadonlyMap<
 >;
 ```
 
-## buildDiffHunks
-
-Unified-diff hunks between two texts — the one diff engine behind every
-count, every rendered diff body, and every patch note in the product.
-
-On timeout this reports a whole-file replacement rather than an empty diff:
-"everything changed" is a true (if verbose) description of the edit, while
-an empty hunk list would read as "nothing changed". The returned `timeout`
-names the cause, and the caller that owns the edit reports it through
-{@link reportDiffTimeout}, so a degraded diff is never silent.
-
-```ts
-function buildDiffHunks(oldText: string, newText: string): DiffHunks
-```
-
 ## BUNDLED_AGENTS_DIRECTORY
 
 The one bundled agent directory under a host's packaged resources.
@@ -399,44 +368,6 @@ interface ConversationFormatOptions {
 }
 ```
 
-## countLineChanges
-
-Added/removed line counts applied over hunks a caller already holds.
-
-```ts
-function countLineChanges(hunks: readonly Hunk[]): {
-  added: number;
-  removed: number;
-}
-```
-
-## createExternalLocation
-
-```ts
-function createExternalLocation(
-  absolutePath: string,
-): ExternalFileLocation
-```
-
-## createRunStorageLocation
-
-```ts
-function createRunStorageLocation(
-  absolutePath: string,
-  relativePath: string,
-  runId: RunId,
-): RunStorageFileLocation
-```
-
-## createWorkspaceLocation
-
-```ts
-function createWorkspaceLocation(
-  absolutePath: string,
-  relativePath: string,
-): WorkspaceFileLocation
-```
-
 ## CUSTOM_AGENT_DIR_KEY
 
 The custom agent directory the user configured, trimmed; empty when none is
@@ -467,18 +398,6 @@ item's outcome, in listing order.
 
 ```ts
 const deleteStorageInventory: (storageRoot: string, inventory: Pick<StorageInventory, "orphans" | "asides">) => Effect<({ path: string; outcome: "failed"; message: string; } | { path: string; outcome: "kept"; message?: undefined; } | { path: string; outcome: "deleted"; message?: undefined; } | { path: string; outcome: "failed"; message: string; })[], DatabaseReadFailed | PlatformError, FileSystem | GlobalValues>
-```
-
-## DiffHunks
-
-One diff pass: its hunks, and — when the pass hit its bound — the warning
-naming why the hunks are a whole-file replacement.
-
-```ts
-interface DiffHunks {
-  readonly hunks: StructuredPatchHunk[];
-  readonly timeout: string | undefined;
-}
 ```
 
 ## ExternalToolCheckResult
@@ -560,20 +479,6 @@ helper model reads it here, from the setting slots the caller holds.
 const getHelperModelName: (stores: SettingsStores) => Effect<string | undefined, StateReadFailed, never>
 ```
 
-## getPathSegments
-
-Get path segments as an array.
-Only converts backslashes — does NOT resolve '..' so callers can detect
-traversal attempts (e.g. AcceptRunFilesTool's `includes('..')` guard).
-It also trims its input, so a caller that must keep a leading or trailing
-space in a name (hidden-file and excluded-directory checks, published
-artifact paths) cannot route through it; those call sites split on their
-own, and each handles `..` its own way on purpose.
-
-```ts
-function getPathSegments(input: string): string[]
-```
-
 ## helperCall
 
 One helper call: bind the configured helper model (else `runModel`) for
@@ -601,16 +506,6 @@ interface HelperPrompt {
 }
 ```
 
-## Hunk
-
-A hunk as its readers see it: jsdiff's, or one carried as data.
-
-```ts
-type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
-  readonly lines: readonly string[];
-};
-```
-
 ## InstalledPlugin
 
 ```ts
@@ -628,32 +523,6 @@ process opened.
 
 ```ts
 const InstalledPlugins: Readonly<{ readonly unloadedComponents: readonly ("LSP servers" | "output styles" | "apps")[]; readonly origin: (input: string, cwd: string, ref: string | undefined) => Result<PluginOrigin, PluginRequestError>; readonly install: (origin: PluginOrigin, only: readonly string[], env: PluginEnv) => Effect<{ readonly source: string; readonly name: string; readonly path: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], Error, FileSystem | ChildProcessSpawner>; readonly update: (names: readonly string[], env: PluginEnv) => Effect<PluginUpdate[], PluginError | PluginRequestError, FileSystem | ChildProcessSpawner>; readonly remove: (name: string, env: PluginEnv) => Effect<{ name: string; path: string; local: boolean; leftover: boolean; }, PluginError | PluginRequestError, FileSystem>; readonly list: (env: PluginEnv) => Effect<PluginListing[], PluginError, FileSystem>; readonly enable: <E, R>(name: string, env: PluginEnv, confirm: (review: PluginReview) => Effect<boolean, E, R>) => Effect<"enabled" | "declined", PluginError | PluginRequestError | E, FileSystem | R>; readonly disable: (name: string, env: PluginEnv) => Effect<undefined, PluginError | PluginRequestError, never>; readonly loaded: (env: Pick<PluginEnv, "globalState">) => Effect<{ readonly source: string; readonly name: string; readonly path: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], never, FileSystem>; readonly describeHook: (hook: ConfiguredHook) => Effect<string, never, never>; }>
-```
-
-## isModuleNotFoundError
-
-Check if an error is "dynamic import couldn't find the module" (Node + ESM variants).
-
-```ts
-function isModuleNotFoundError(err: unknown): boolean
-```
-
-## isPathWithin
-
-True if `target` is `base` itself or a descendant of it.
-Computed via path.relative — works for both absolute and relative inputs
-as long as both are resolved the same way by the caller.
-
-```ts
-function isPathWithin(base: string, target: string): boolean
-```
-
-## isStrictlyWithin
-
-True if `target` is a strict descendant of `base` (excludes `target === base`).
-
-```ts
-function isStrictlyWithin(base: string, target: string): boolean
 ```
 
 ## listRunGeneratedFiles
@@ -782,58 +651,6 @@ route `config` takes with every preference off.
 
 ```ts
 const ownKeyCredential: (stores: SettingsStores, config: ModelConfig) => Effect<{ readonly bearer: string; readonly endpoint: string; }, RouteUnavailable, Secrets>
-```
-
-## pathToLocationIn
-
-Convert a string path to a FileLocation against the workspace root its
-caller holds as data: `undefined` with no folder open, which resolves every
-path as external.
-
-NOT run-storage aware — it can only create workspace or external locations.
-For run-storage awareness, use `sourceLocationUnder`.
-
-Path normalization is handled internally - you can pass paths with either
-forward slashes or backslashes. It's safe to pass already-normalized paths
-(path.normalize() is idempotent).
-
-- `@param` workspaceRoot - The session's workspace root
-- `@param` target - Absolute or workspace-relative path
-- `@returns` FileLocation (workspace or external, never runStorage)
-
-```ts
-function pathToLocationIn(
-  workspaceRoot: string | undefined,
-  target: string,
-): FileLocation
-```
-
-## PerKeyLane
-
-One in-process exclusive lane per key for Effect programs: the key's
-`Semaphore`, and the number of fibers holding or waiting on it. The count
-is what lets the entry leave its map once the last fiber is done.
-
-```ts
-interface PerKeyLane {
-  readonly lock: Semaphore.Semaphore;
-  fibers: number;
-}
-```
-
-## PerKeyLanes
-
-Where the lanes live. A `Map` is the usual choice; a `WeakMap` keyed by an
-owning object works too and does not need the idle cleanup (its entries'
-lifetime is the key's own), which is why only these three methods are
-required.
-
-```ts
-interface PerKeyLanes<Key> {
-  get(key: Key): PerKeyLane | undefined;
-  set(key: Key, lane: PerKeyLane): unknown;
-  delete(key: Key): unknown;
-}
 ```
 
 ## PlatformServices
@@ -1316,7 +1133,7 @@ the setting, so a run launched right after sees the new directory; the
 follower runs it for a change written anywhere else.
 
 ```ts
-const registerCustomAgentRoot: Effect<void, never, FileSystem | GlobalStorageFs | AgentDirectories>
+const registerCustomAgentRoot: Effect<void, never, AgentDirectories | FileSystem | GlobalStorageFs>
 ```
 
 ## replayTrace
@@ -1353,16 +1170,6 @@ function replayTrace<E>(
   activation: CommitOrdinal,
   result: Effect.Effect<unknown, E>,
 ): Stream.Stream<AgentEvent, E>
-```
-
-## reportDiffTimeout
-
-Warn that a diff pass fell back to a whole-file replacement, if it did.
-
-```ts
-function reportDiffTimeout(
-  timeout: string | undefined,
-): Effect.Effect<void>
 ```
 
 ## RouteReasoning
@@ -1706,30 +1513,6 @@ class ToolAvailability extends Context.Service<
 >()('@texra-ai/harness/tools/ToolAvailability')
 ```
 
-## toPosixPath
-
-Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`).
-
-```ts
-function toPosixPath(relativePath: string): string
-```
-
-## unifiedDiffText
-
-Unified-diff body between two texts (`text` is undefined when they are
-identical), with the pass's {@link DiffHunks.timeout} for the caller to
-report.
-
-Carries no `---`/`+++` file header: every consumer already names the file in
-its own surrounding prose.
-
-```ts
-function unifiedDiffText(
-  oldText: string,
-  newText: string,
-): { readonly text: string | undefined; readonly timeout: string | undefined }
-```
-
 ## UsageAttribution
 
 Who a call's usage is billed to, as the usage log's wire names them. Every
@@ -1804,39 +1587,6 @@ class ValidationModel extends Context.Service<
     };
   }
 >()('@texra-ai/harness/ValidationModel')
-```
-
-## withFileWriteLane
-
-Run `self`, a read, decision and write of `file`, as the file's one
-writer in this process. `file` is absolute.
-
-```ts
-const withFileWriteLane: (file: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, FileSystem | R>
-```
-
-## withPerKeyLane
-
-Run `self` holding `key`'s one permit. The exclusion, the queue and its
-release under interruption are the `Semaphore`'s: a fiber joins the key's
-queue and enters in the order it joined, and a waiter that is interrupted
-leaves the queue. What this adds is the keyed map: the lane is created on
-first use, counted while a fiber holds or waits on it, and deleted from
-`lanes` when the count returns to zero. The count is taken and given back
-as one acquire and release, so no exit leaves a key counted.
-
-Order is the order fibers join the semaphore's queue, a few steps after
-they call this. Two fibers that call within those steps of each other,
-with the scheduler taking the first one off in between, can enter in the
-other order (measured at 8 of 2101 step offsets at the default budget,
-against 2 for a bare `Semaphore`). A caller that must keep the order of
-its calls puts them through one consumer, not a lane.
-
-```ts
-function withPerKeyLane<Key>(
-  lanes: PerKeyLanes<Key>,
-  key: Key,
-): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
 ```
 
 ## withProcessServices

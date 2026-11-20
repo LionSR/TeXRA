@@ -31,13 +31,21 @@ import {
 } from 'effect';
 import which from 'which';
 
-import { isModuleNotFoundError } from '@texra-ai/harness/host';
 import { logFailure } from '@texra-ai/harness/plugins';
 import { executeCommand, withCommandDirs } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'VendorPackages';
+
+/** Whether `err` is a dynamic import's "module not found" (the CommonJS and
+ *  ESM codes). */
+export function isModuleNotFoundError(err: unknown): boolean {
+  return (
+    Predicate.hasProperty(err, 'code') &&
+    (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND')
+  );
+}
 
 /** A vendor CLI's SDK could not be imported, or its package or binary could
  *  not be looked up. */

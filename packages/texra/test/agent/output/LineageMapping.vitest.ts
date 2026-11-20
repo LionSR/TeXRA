@@ -5,7 +5,7 @@ import {
   RunIdSchema,
   fileLocationDisplayPath,
 } from '@texra-ai/harness/schemas';
-import { createRunStorageLocation } from '@texra-ai/harness/host';
+import { createRunStorageLocation } from '@texra-ai/harness/plugins';
 import { pairOutputsWithBases } from '@texra/agent/output/lineageMapping';
 
 describe('document task output lineage mapping', () => {

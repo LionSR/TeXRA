@@ -15,19 +15,15 @@
 import { Cause, Effect, Stream, SubscriptionRef } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
 
-import {
-  type PerKeyLane,
-  setModelEnabled,
-  Skills,
-  withPerKeyLane,
-  withSessionFs,
-} from '@texra-ai/harness/host';
+import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
 import {
   Settings,
   type StorageFs,
   emitAppSignal,
   type AppSignal,
   type AppSignalPayloads,
+  type PerKeyLane,
+  withPerKeyLane,
 } from '@texra-ai/harness/plugins';
 import {
   DISABLED_SKILLS_SETTING,

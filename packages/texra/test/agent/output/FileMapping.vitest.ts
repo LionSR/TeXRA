@@ -7,7 +7,7 @@ import { describe, expect } from 'vitest';
 import {
   createExternalLocation as externalLocation,
   createWorkspaceLocation,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
 import { replaceInputCommands } from '@texra/agent/output/fileMapping';
 import { noopTrace } from '@test/support/noopTrace';
 

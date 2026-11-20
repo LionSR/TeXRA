@@ -9,18 +9,16 @@ import {
 import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 
 // Local imports
-import {
-  pathToLocationIn,
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-} from '@texra-ai/harness/host';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   WorkspaceFs,
   emitAppSignal,
   type AppSignals,
+  pathToLocationIn,
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
 } from '@texra-ai/harness/plugins';
 import {
   generateDiffFileName,

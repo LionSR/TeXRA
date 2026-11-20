@@ -6,9 +6,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports - run facts and filesystem access
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import { entryTypeIn } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   Rejected,
