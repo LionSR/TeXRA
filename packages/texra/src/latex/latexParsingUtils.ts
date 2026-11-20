@@ -10,7 +10,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
-import { ensureError, hasExtension } from '@texra-ai/harness/schemas';
+import { hasExtension } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'LatexParsing';
 
@@ -66,9 +66,7 @@ export const LATEX_PROBE_CONCURRENCY = 8;
 export const readUncommentedLatex = Effect.fn('latex.readUncommentedLatex')(
   function* (absolutePath: string) {
     const fs = yield* FileSystem.FileSystem;
-    const content = yield* readNormalizedFile(fs, absolutePath).pipe(
-      Effect.mapError(ensureError),
-    );
+    const content = yield* readNormalizedFile(fs, absolutePath);
     return content.replaceAll(
       COMMENT_PATTERN,
       (_match, url: string | undefined) => url ?? '',
@@ -159,9 +157,7 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
 export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
   function* (absolutePath: string) {
     const fs = yield* FileSystem.FileSystem;
-    const exists = yield* pathExists(fs, absolutePath).pipe(
-      Effect.mapError(ensureError),
-    );
+    const exists = yield* pathExists(fs, absolutePath);
     return exists ? absolutePath : null;
   },
 );
