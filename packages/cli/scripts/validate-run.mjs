@@ -1655,7 +1655,7 @@ prompt: |
       !edited.answers.some((answer) => answer.startsWith('echo ')) &&
         edited.answers.some((answer) =>
           answer.includes(
-            'A person must enable it: `texra plugin enable echoes`',
+            'A person must enable echoes themselves, outside this run.',
           ),
         ),
       `an edited native plugin should not be trusted again by a headless yolo run (artifact: ${artifactPath})\n${JSON.stringify(edited.answers)}`,

@@ -117,7 +117,7 @@ const approved = Effect.fn('plugin_manager.approved')(function* (
   const answer = (yield* Approvals).permission(runId, 'call', hook);
   if (native !== null && answer !== 'ask')
     return yield* new ToolError(
-      `Trusting the native module of ${native} takes a person's own answer, and this run cannot ask one${answer === 'allow' ? '' : `: ${answer.reason.replace(/\.$/, '')}`}. A person must enable it: \`texra plugin enable ${native}\`.`,
+      `Trusting the native module of ${native} takes a person's own answer, and this run cannot ask one${answer === 'allow' ? '' : `: ${answer.reason.replace(/\.$/, '')}`}. A person must enable ${native} themselves, outside this run.`,
     );
   if (answer === 'allow') return true;
   const decision =
