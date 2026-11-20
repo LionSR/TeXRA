@@ -15,7 +15,6 @@ import {
   Scope,
   ScopedRef,
   Semaphore,
-  Ref,
 } from 'effect';
 
 import type { ITool } from '@tools/core/ToolTypes';
@@ -133,11 +132,12 @@ export interface AgentRunShape extends RunLaunch {
     'approvalPromptsUnavailable' | 'hostCapabilities' | 'directToolCalls'
   >;
   /**
-   * The run's current step: the tools it offers and the pin that holds its
-   * catalog generation, replaced by each new step. A background script
+   * The run's current step: the tools it offers, held with the pin on its
+   * catalog generation in a scope of its own under the run's. Each new step
+   * replaces it, and the replaced step's scope closes. A background script
    * reads what its parent's step offered here.
    */
-  readonly steps: Ref.Ref<OpenStep | null>;
+  readonly steps: ScopedRef.ScopedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
   /**
@@ -316,7 +316,9 @@ export const agentRunLayer = (
       return {
         ...launch,
         toolInputs,
-        steps: yield* Ref.make<OpenStep | null>(null),
+        steps: yield* ScopedRef.make<OpenStep | null>(() => null).pipe(
+          Scope.provide(scope),
+        ),
         finalToolName,
         model,
         scope,

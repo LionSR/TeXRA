@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Ref } from 'effect';
+import { Effect, ScopedRef } from 'effect';
 
 import {
   type FollowUpDisposition,
@@ -136,7 +136,7 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
   });
   const [facts] = dispatchFactsFor(
     [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
-    (yield* Ref.get(run.steps))?.tools.registry,
+    (yield* ScopedRef.get(run.steps))?.tools.registry,
     run.logger,
   );
   if (facts === undefined)
