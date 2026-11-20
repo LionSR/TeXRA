@@ -45,7 +45,12 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { executed } from '@tools/core/result';
-import { previewLabel, stripControlCharacters } from '@utils/text/stringUtils';
+import {
+  formatCount,
+  formatWallTime,
+  previewLabel,
+  stripControlCharacters,
+} from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { headTail } from '@utils/text/appendTail';
 
@@ -188,7 +193,7 @@ function backgroundBashTurn(params: {
     if (!capReached) {
       capReached = true;
       logger.warn(
-        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: each stream's first ${BACKGROUND_OUTPUT.head.toLocaleString()} characters are still recorded, and its last ${BACKGROUND_OUTPUT.tail.toLocaleString()} when the command ends]`,
+        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: each stream's first ${formatCount(BACKGROUND_OUTPUT.head)} characters are still recorded, and its last ${formatCount(BACKGROUND_OUTPUT.tail)} when the command ends]`,
       );
     }
     // The head the delivery shows, past what was recorded before the cap,
@@ -329,7 +334,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   }
 
   const elapsedMs = (yield* Clock.currentTimeMillis) - startedAt;
-  const duration = `${(elapsedMs / 1000).toFixed(1)}s`;
+  const duration = formatWallTime(elapsedMs);
 
   if (result.success) {
     const preview = previewLabel(command);

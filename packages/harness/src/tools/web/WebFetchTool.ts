@@ -21,6 +21,7 @@ import { defineTool } from '@tools/core/definition';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
+import { formatCount } from '@utils/text/stringUtils';
 import type { LookupFunction } from 'node:net';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
@@ -197,7 +198,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
         // Permanent: not retried.
         return yield* new ToolError(
-          `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes.`,
+          `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${formatCount(MAX_CONTENT_BYTES)} bytes.`,
         );
       }
 
@@ -230,7 +231,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           if (total > MAX_CONTENT_BYTES) {
             return Effect.fail(
               new ToolError(
-                `Failed to fetch ${url}: Response too large (exceeds ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes maximum).`,
+                `Failed to fetch ${url}: Response too large (exceeds ${formatCount(MAX_CONTENT_BYTES)} bytes maximum).`,
               ),
             );
           }
