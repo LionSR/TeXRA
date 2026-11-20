@@ -38,7 +38,10 @@ Landed since:
 
 ## Open
 
-1. **Warnings with no channel of their own.** Some sites write
+1. Landed 2026-11-20: every such site, and twenty more that wrote
+   `logFailure`'s body by hand, calls `logFailure` with its module's channel
+   (`2026-11-20-one-owner-per-wording-left-open.md`). Was: **Warnings with
+   no channel of their own.** Some sites write
    `Effect.logWarning(...).pipe(Effect.annotateLogs({ data }))` with no
    channel and inherit their caller's:
    - `packages/harness/src/agent/runtime/runRegistry.ts`
