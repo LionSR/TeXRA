@@ -44,7 +44,10 @@ export const GITHUB_TOKEN_SAVED_MESSAGE = 'GitHub token saved.';
 export const GITHUB_TOKEN_REMOVED_MESSAGE = 'GitHub token removed.';
 
 /** Environment variables accepted by GitHub tools, in precedence order. */
-export const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
+export const GITHUB_TOKEN_ENV_VARS = Object.freeze([
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+] as const);
 
 /** Store the token a host's token form was given: trimmed, and refused
  *  when it is empty or looks like a placeholder (`storeCredential`). */

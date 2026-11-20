@@ -91,11 +91,11 @@ interface Projector {
 
 /** The kinds of row a model call's spend is recorded on: {@link pricedUsage}
  *  has a case for each, which the compiler checks. */
-export const PRICED_ROW_TYPES = [
+export const PRICED_ROW_TYPES = Object.freeze([
   'model.message',
   'context.edit',
   'run.description',
-] as const;
+] as const);
 const PRICED_KINDS: readonly string[] = PRICED_ROW_TYPES;
 const isPricedRow = (
   row: SessionRow,

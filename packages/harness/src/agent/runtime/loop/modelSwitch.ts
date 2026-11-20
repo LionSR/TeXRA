@@ -5,7 +5,6 @@
  */
 import { Effect, ScopedRef } from 'effect';
 
-import { selectModel } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -44,14 +43,16 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     if (state.modelId === model) return yield* cell.append(dropped);
     const consumed = requests(controls, { kind: 'applied' });
     const current = yield* ScopedRef.get(run.model);
-    const refused = yield* access.switchRejection(
-      model,
-      current,
-      state.declinedRoutes,
-    );
-    const selected = refused === null ? selectModel(model) : undefined;
-    if (!selected) {
-      const message = `The switch to ${model} was not applied: ${refused ?? `Model ${model} is not registered`}`;
+    // Settings that cannot be read refuse the switch, as a route would.
+    const refused = yield* access
+      .switchRejection(model, current, state.declinedRoutes)
+      .pipe(
+        Effect.catchTag('RouteUnavailable', (error) =>
+          Effect.succeed(error.message),
+        ),
+      );
+    if (refused !== null) {
+      const message = `The switch to ${model} was not applied: ${refused}`;
       yield* Effect.logWarning(message).pipe(withLogChannel('ModelSwitch'));
       run.logger.warn(message);
       return yield* cell.append(dropped);
@@ -65,7 +66,6 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
       Effect.gen(function* () {
         const next = yield* access.bind({
           modelId: model,
-          config: selected.config,
           backend: current.backend,
           declinedRoutes: state.declinedRoutes,
           textOnly: current.textOnly,
