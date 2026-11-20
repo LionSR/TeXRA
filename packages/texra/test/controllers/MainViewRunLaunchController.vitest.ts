@@ -4,8 +4,8 @@ import { Effect, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { AppState } from '@texra-ai/harness/plugins';
-import { AgentCatalog, AgentDirectories } from '@texra-ai/harness/host';
+import { AppState, AgentDirectories } from '@texra-ai/harness/plugins';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,

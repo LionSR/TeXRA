@@ -108,28 +108,30 @@ const GOLDEN = readFileSync(
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
 const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
-/** The goal script the chat's plan launched, named by the plan call, and
- *  its one round, named by the script's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('c22000c7d5e126b3617ba3e3');
-const ROUND = '0accd89ce9df2f1109c8359e';
+/** The goal script the chat's plan launched, named by the plan call, its
+ *  one round, named by the script's `self()` call, and the judge the round's
+ *  `done` started, named by the judge's `self()` call. */
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('115a23989b868e9aa72ef6c6');
+const ROUND = '92c152d3454ebdcaf668be83';
+const JUDGE = 'af2b42e263afafa73834e36b';
 /** The chat's Codex child, which ended on its own before the user's stop. */
-const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
-const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
+const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
+const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000d');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
-const DEFINED = 'e06bb3ef6fa9b53a7135ae7f';
+const DEFINED = '23fd96e0ed29f5316b23ba6a';
 /** A headless run, and the fork `texra resume --fork` made of it. */
-const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
-const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
+const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
+const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
 /** Killed after its command's effect, before the command's result. */
-const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
+const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
 /** The service's task, and the background command it sent, a finished
  *  shell whose input the service's resume closed. */
-const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
-const SERVICE_COMMAND = 'a00000000013';
+const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000013');
+const SERVICE_COMMAND = 'a00000000014';
 /** The `texra run --output` document task and the revisions its program
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const REVISIONS = ['5e635e24c44c38717d06c117', 'f67ab3ad610d33f7b85cbf1c'];
+const REVISIONS = ['8aaceaf46fb196456799b9ea', '6415cf1b6ba5a5918e20c782'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -273,14 +275,14 @@ describe('the golden 1.0 store', () => {
         const applied = raw(storage, (db) =>
           db
             .prepare(
-              `SELECT json_extract(q.data, '$.control.kind') AS kind,
+              `SELECT json_extract(q.data, '$.content.control.kind') AS kind,
                (SELECT json_extract(c.data, '$.disposition.kind') FROM event c
                 WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
                   AND json_extract(c.data, '$.followUpId')
                     = json_extract(q.data, '$.followUpId')) AS disposition
              FROM event q JOIN event_sequence s ON s.id = q.aggregate
              WHERE s.logical_id = ? AND q.type = 'followup.queued'
-               AND json_extract(q.data, '$.control') IS NOT NULL
+               AND json_extract(q.data, '$.content.control') IS NOT NULL
              ORDER BY q."commit"`,
             )
             .all(CHAT),
@@ -325,9 +327,11 @@ describe('the golden 1.0 store', () => {
           // Each revision is an `agent` call in the program's script.
           [DOCUMENT_TASK, 'script/1'],
           [DOCUMENT_TASK, 'script/6'],
-          // The goal is the plan call's child; its round, its program's.
+          // The goal is the plan call's child; its round and the judge of
+          // the round's `done`, its program's.
           [CHAT, 'validation-plan-1'],
           [GOAL, 'script/0'],
+          [GOAL, 'script/1'],
           [CHAT, 'validation-codex-4'],
           // The agent the script defined is its `agent()` call's child.
           [SCRIPTED, 'validation-script-1/4'],
@@ -342,10 +346,11 @@ describe('the golden 1.0 store', () => {
               ? [event.payload.tools.map(({ name }) => name)]
               : [],
           ),
-        ).toEqual([['read_file', 'executions', 'memory', 'plan']]);
+        ).toEqual([['read_file', 'executions', 'memory', 'plan', 'context']]);
         // The plan the chat ran as a goal: a run on the default strategy, its
         // agent the chat's, that ends with the goal's result: what its one
-        // round verified, and what that round spent.
+        // round reported, the judge's claims on it, and what the round and
+        // the judge spent.
         const goal = GOAL;
         expect(
           events.flatMap((event) =>
@@ -357,8 +362,16 @@ describe('the golden 1.0 store', () => {
           {
             outcome: 'completed',
             rounds: 1,
-            spent: 0.000048,
+            spent: 0.000072,
             report: 'The golden chat is answered.',
+            claims: [
+              {
+                requirement: 'The golden chat is answered.',
+                status: 'verified',
+                check: 'Read the round report.',
+                observed: 'The golden chat is answered.',
+              },
+            ],
           },
         ]);
         // Context blobs two runs share: one stored value, referenced by rows of
@@ -416,8 +429,9 @@ describe('the golden 1.0 store', () => {
           outcome: 'cancelled',
           children: [CODEX, GOAL],
         }),
-        run(GOAL, 'Goal', { parent: CHAT, children: [ROUND] }),
+        run(GOAL, 'Goal', { parent: CHAT, children: [JUDGE, ROUND] }),
         run(ROUND, 'golden_chat', { parent: GOAL }),
+        run(JUDGE, 'golden_chat', { parent: GOAL }),
         run(CODEX, 'codex', { parent: CHAT }),
         run(SCRIPTED, 'golden_script', { children: [DEFINED] }),
         run(DEFINED, 'golden_reader', { parent: SCRIPTED }),

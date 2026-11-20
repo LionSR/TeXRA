@@ -11,7 +11,11 @@ import { Schema } from 'effect';
 import type { ApprovalPolicy } from './approvalPolicy';
 import type { RunId } from './schemas/identifiers';
 
-export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
+export const APPROVAL_BYPASS_KINDS = Object.freeze([
+  'bash',
+  'toolEdit',
+  'superYolo',
+] as const);
 
 export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 

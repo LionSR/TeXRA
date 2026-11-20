@@ -169,10 +169,12 @@ export function pluginRowTrust(row: PluginRow): string | null {
  */
 export function pluginRowProblem(row: PluginRow): string | null {
   switch (row.kind) {
-    case 'texra':
-      return row.item.status === 'available'
+    case 'texra': {
+      const { setup } = row.item;
+      return setup === null || setup.status === 'available'
         ? null
-        : toolDependencyStatusLabel(row.item.status, row.item.statusLabel);
+        : toolDependencyStatusLabel(setup.status, setup.statusLabel);
+    }
     case 'installed':
       if (row.plugin.problem) return row.plugin.problem;
       return row.plugin.code.length > 0

@@ -5,13 +5,13 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
   renderPrompt,
   withLogChannel,
   Settings,
   type SettingsStores,
   WorkspaceFs,
+  pathToLocationIn,
 } from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils

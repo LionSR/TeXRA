@@ -2,9 +2,11 @@ import { Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { onAppSignal } from '@texra-ai/harness/host';
-import type { AppSignals } from '@texra-ai/harness/plugins';
+import { logFailure, type AppSignals } from '@texra-ai/harness/plugins';
 import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import type { Session } from '@texra-ai/harness';
+
+const CHANNEL = 'FileDecorations';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.
@@ -75,10 +77,11 @@ export const registerFileDecorations = Effect.fn('registerFileDecorations')(
       ).pipe(
         // The listener ends with a failed read; it says so rather than
         // leaving the badges quietly stale.
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
+        Effect.catchCause(
+          logFailure(
+            CHANNEL,
             'TeXRA stopped badging output files: the session read failed',
-          ).pipe(Effect.annotateLogs({ data: cause })),
+          ),
         ),
       ),
       { startImmediately: true },

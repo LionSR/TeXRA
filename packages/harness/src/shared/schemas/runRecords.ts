@@ -205,9 +205,9 @@ export function emptyRunEndOutput(): RunEndOutput {
 }
 
 /**
- * A run's terminal result as every reader sees it. `error` is present only
- * on a failed outcome; `usage` once a round recorded usage, including on
- * failures. Cost is `usage.cost` and nothing else. Derived on read
+ * A run's terminal result as every reader sees it. `error` is present on a
+ * failed outcome, and on a cancelled one whose stop cut a failure short;
+ * `usage` once a round recorded usage, including on failures. Cost is `usage.cost` and nothing else. Derived on read
  * (`readRunEnd`): the usage is the run history's fold of its priced response
  * rows, the output as {@link RunEndOutputSchema} says.
  */
@@ -285,16 +285,17 @@ export const AgentRunListingEntrySchema = Schema.Struct({
   /** The model the run is on, as the view folds it: its newest
    *  `run.config`'s. */
   model: Schema.optional(Schema.String),
-  /** The stored rows hold a point to continue from in this process
-   *  (`deriveContinuation`), whatever the outcome: true for a finished
-   *  conversation, which takes another message, as for an interrupted run.
-   *  Ownership and loadability are finished when the run is opened. */
-  continues: Schema.Boolean,
-  /** Why the run cannot continue in this build although it may have rows to
-   *  continue from: they could not be read, an earlier build wrote them, or
-   *  they hold a fact of a plugin this process does not load. Absent when
-   *  it continues or simply has nothing to continue from. */
-  continueBlocked: Schema.optional(Schema.String),
+  /** Whether the run continues in this process (`deriveContinuation`),
+   *  whatever its outcome: `continues` for a finished conversation, which
+   *  takes another message, as for an interrupted run; `finished` for a
+   *  program whose result is in; `blocked` with why its rows cannot be
+   *  continued in this build (they could not be read, an earlier build
+   *  wrote them, or they hold a fact of a plugin this process does not
+   *  load). Ownership and loadability are decided when the run is opened. */
+  continuation: Schema.Union([
+    Schema.Struct({ kind: Schema.Literals(['continues', 'finished']) }),
+    Schema.Struct({ kind: Schema.Literal('blocked'), cause: Schema.String }),
+  ]),
   /** What the run is: the durable authority, stamped at registration. */
   identity: RunIdentitySchema.members[0],
   record: AgentConfigSchema,

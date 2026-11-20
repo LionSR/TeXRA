@@ -30,17 +30,14 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import {
-  AgentCatalog,
-  buildDiffHunks,
-  countLineChanges,
-  MODEL_SELECTION_KEY,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, MODEL_SELECTION_KEY } from '@texra-ai/harness/host';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   Secrets,
   ToolCatalog,
   type DraftBlob,
+  buildDiffHunks,
+  countLineChanges,
 } from '@texra-ai/harness/plugins';
 import {
   acceptsFollowUp,
@@ -284,7 +281,6 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   cwd: HARNESS_CWD,
   mode: 'interactive',
   outputFormat: 'text',
-  quietLogs: true,
   minimumLogLevel: 'None',
   resourcesPath: HARNESS_RESOURCES_PATH,
   skillSourceOptions: {},

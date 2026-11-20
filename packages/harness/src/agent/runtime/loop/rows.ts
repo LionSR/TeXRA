@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { Effect, ScopedRef } from 'effect';
 
 import {
+  type FollowUpControl,
   type FollowUpDisposition,
   type PositionAt,
   type RunBinding,
@@ -23,7 +24,7 @@ import {
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
 import type { ModelMessagePayload } from '@shared/session/historyTurns';
-import type { QueuedFollowUp } from '@shared/session/runRows';
+import { controlOf, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { dispatchFactsFor } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../providerMessages';
@@ -165,13 +166,15 @@ const SCRIPT_CALL_ID = 'script';
  *  of every kind), each with the `disposition` given. A caller names the run
  *  and the kind once and records a different disposition per call. */
 export const consumedRows =
-  (runId: RunId, kind?: NonNullable<QueuedFollowUp['control']>['kind']) =>
+  (runId: RunId, kind?: FollowUpControl['kind']) =>
   (
     controls: readonly QueuedFollowUp[],
     disposition: FollowUpDisposition,
   ): Extract<RunHistoryDraft, { type: 'followup.consumed' }>[] =>
-    controls.flatMap(({ followUpId, control }) =>
-      control !== undefined && (kind === undefined || control.kind === kind)
-        ? [consumedRow(runId, followUpId, disposition)]
-        : [],
-    );
+    controls.flatMap((f) => {
+      const control = controlOf(f);
+      return control !== undefined &&
+        (kind === undefined || control.kind === kind)
+        ? [consumedRow(runId, f.followUpId, disposition)]
+        : [];
+    });

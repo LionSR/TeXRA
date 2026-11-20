@@ -2,14 +2,6 @@ import { Predicate } from 'effect';
 
 import { causeChain } from '@utils/errors/errorMessage';
 
-/** Check if an error is "dynamic import couldn't find the module" (Node + ESM variants). */
-export function isModuleNotFoundError(err: unknown): boolean {
-  return (
-    Predicate.hasProperty(err, 'code') &&
-    (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND')
-  );
-}
-
 /** Walks `err` and its `cause` chain, returning the first defined result of
  *  `extract`, or `undefined` if none of the nodes match. */
 export function findInCauseChain<T>(

@@ -9,7 +9,8 @@
  * the same tools, so nothing is proposed: the user approved the script.
  * It runs on the conversation's model unless the call names one, and its
  * call holds it to the limits every child launch takes (`CHILD_FIELDS`).
- * The default goal strategy is this function in a loop (`builtIn:goal`).
+ * The default goal strategy (`builtIn:goal`) is this function in a loop:
+ * forked rounds, and a fresh one that judges a round's `done`.
  */
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
@@ -45,7 +46,7 @@ import {
 } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
 
 const SelfInputSchema = Schema.Struct({
   prompt: Schema.NonEmptyString.annotate({
@@ -56,12 +57,10 @@ const SelfInputSchema = Schema.Struct({
     true,
     'Continue this conversation as it stood when the script started, with `prompt` added to the message that started it; `false` starts with no earlier conversation. Either way the child is told `prompt` is the one part of the work it does.',
   ),
-  schema: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-  ).annotate({
-    description:
-      'A JSON Schema object: the run finishes by submitting a value of it, returned as `structured`.',
-  }),
+  schema: optionalInput(
+    Schema.Record(Schema.String, Schema.Unknown),
+    'A JSON Schema object: the run finishes by submitting a value of it, returned as `structured`.',
+  ),
   ...CHILD_FIELDS,
 });
 type SelfInput = typeof SelfInputSchema.Type;
@@ -190,7 +189,7 @@ const runSelf = Effect.fn('self.call')(function* (
         return yield* executeSubagentInBand({
           runId,
           parentId,
-          configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
             ...record,
             // A fork on a named model keeps its seed's binding, as a model
             // switch keeps the conversation's: the child's bind rejects a

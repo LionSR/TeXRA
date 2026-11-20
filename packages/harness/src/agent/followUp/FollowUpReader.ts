@@ -14,7 +14,12 @@ import { Clock, Effect, Latch, Option, Stream } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
-import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
+import {
+  controlOf,
+  isMessage,
+  type QueuedFollowUp,
+  type QueuedMessage,
+} from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 
@@ -37,8 +42,8 @@ function readableMessages(
   rows: readonly QueuedFollowUp[],
   at: InputPoint,
   now: number,
-): QueuedFollowUp[] {
-  return rows.filter((f) => {
+): QueuedMessage[] {
+  return rows.filter((f): f is QueuedMessage => {
     const due = dueOf(f);
     return (
       isMessage(f) &&
@@ -127,7 +132,7 @@ export function sendVerdict(
 export type FollowUpBatch =
   | {
       readonly kind: 'followUps';
-      readonly followUps: readonly QueuedFollowUp[];
+      readonly followUps: readonly QueuedMessage[];
     }
   | { readonly kind: 'synthetic'; readonly text: string };
 
@@ -163,13 +168,13 @@ const inputOf = (
     const followUps = readableMessages(rows, at, now);
     return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
   };
-  const compacting = rows.some((f) => f.control?.kind === 'compact');
+  const compacting = rows.some((f) => controlOf(f)?.kind === 'compact');
   const later = rows.flatMap((f) => {
     const due = dueOf(f);
     return due !== undefined && due > now ? [due] : [];
   });
   return {
-    controls: rows.filter((f) => f.control !== undefined),
+    controls: rows.filter((f) => !isMessage(f)),
     batch,
     pending: (at) => compacting || batch(at) !== null,
     from,

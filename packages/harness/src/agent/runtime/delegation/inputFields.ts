@@ -31,7 +31,11 @@ import { Settings, type SettingsStores } from '@shared/config/settings';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
-import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
+import {
+  nullishWithDefault,
+  optionalInput,
+  timeoutMsField,
+} from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
 import { formatError, ensureError } from '@utils/errors/errorMessage';
@@ -120,24 +124,18 @@ export function withToolUseSubagentHandoffInstruction(
 
 /** An agent an `agent` call defines instead of naming one from the
  *  catalog, named by its `agentName`. */
-export const personaField = Schema.optional(
-  Schema.NullOr(
-    Schema.Struct({
-      prompt: Schema.NonEmptyString.annotate({
-        description: 'Its system prompt: who it is and how it works.',
-      }),
-      tools: Schema.optional(
-        Schema.NullOr(Schema.Array(Schema.NonEmptyString)),
-      ).annotate({
-        description:
-          'The tools it gets, by name; omitted, none. It gets only those you have.',
-      }),
+export const personaField = optionalInput(
+  Schema.Struct({
+    prompt: Schema.NonEmptyString.annotate({
+      description: 'Its system prompt: who it is and how it works.',
     }),
-  ),
-).annotate({
-  description:
-    'Define the agent here, named `agentName`, instead of naming one from the catalog: for this call alone.',
-});
+    tools: optionalInput(
+      Schema.Array(Schema.NonEmptyString),
+      'The tools it gets, by name; omitted, none. It gets only those you have.',
+    ),
+  }),
+  'Define the agent here, named `agentName`, instead of naming one from the catalog: for this call alone.',
+);
 
 /**
  * Shared field for the `working_directory` parameter on delegation tools.
@@ -145,31 +143,29 @@ export const personaField = Schema.optional(
  * canonical `string | undefined` value — no trimming or absolute-path checks
  * needed at the call site.
  */
-const workingDirectoryField = Schema.optional(Schema.NullOr(Schema.String))
-  .annotate({
-    description:
-      'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`git.worktreeSupport`) is enabled for this workspace.',
-  })
-  .pipe(
-    Schema.decodeTo(Schema.optional(Schema.String), {
-      decode: SchemaGetter.transformOptionalEffect((value) => {
-        // Neither the worktree opt-in nor the path's existence is checked here:
-        // this runs on the tool facade's one decode of a static schema, before
-        // any call exists. Both run in `execute`, through
-        // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
-        const parsed = parseWorkingDirectory(Option.getOrUndefined(value));
-        return Result.isSuccess(parsed)
-          ? Effect.succeed(Option.some(parsed.success))
-          : Effect.fail(
-              new SchemaIssue.InvalidValue(
-                { message: parsed.failure.message },
-                value,
-              ),
-            );
-      }),
-      encode: SchemaGetter.passthrough(),
+const workingDirectoryField = optionalInput(
+  Schema.String,
+  'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`git.worktreeSupport`) is enabled for this workspace.',
+).pipe(
+  Schema.decodeTo(Schema.optional(Schema.String), {
+    decode: SchemaGetter.transformOptionalEffect((value) => {
+      // Neither the worktree opt-in nor the path's existence is checked here:
+      // this runs on the tool facade's one decode of a static schema, before
+      // any call exists. Both run in `execute`, through
+      // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
+      const parsed = parseWorkingDirectory(Option.getOrUndefined(value));
+      return Result.isSuccess(parsed)
+        ? Effect.succeed(Option.some(parsed.success))
+        : Effect.fail(
+            new SchemaIssue.InvalidValue(
+              { message: parsed.failure.message },
+              value,
+            ),
+          );
     }),
-  );
+    encode: SchemaGetter.passthrough(),
+  }),
+);
 
 /** A list of file paths, empty when the call names none. */
 export const fileList = (
@@ -183,23 +179,19 @@ export const fileList = (
  * holds it to (`withinLimits`, `agentChild.ts`).
  */
 export const CHILD_FIELDS = Object.freeze({
-  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Model reference, `@effort` suffix allowed (`@low` … `@max`, `@none`). Defaults to your current model when available.',
-  }),
-  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'A short title for the call’s card.',
-  }),
+  model: optionalInput(
+    Schema.String,
+    'Model reference, `@effort` suffix allowed (`@low` … `@max`, `@none`). Defaults to your current model when available.',
+  ),
+  label: optionalInput(Schema.String, 'A short title for the call’s card.'),
   timeoutMs: timeoutMsField.annotate({
     description:
       'Stops the child after this many milliseconds: `TimedOut`. Only for a call that waits for its child.',
   }),
-  maxCostUsd: Schema.optional(
-    Schema.NullOr(Schema.Finite.check(Schema.isGreaterThan(0))),
-  ).annotate({
-    description:
-      'A spend cap in USD on the child and every run it starts: once they have spent it, the child is stopped: `BudgetExceeded`. Only for a call that waits for its child.',
-  }),
+  maxCostUsd: optionalInput(
+    Schema.Finite.check(Schema.isGreaterThan(0)),
+    'A spend cap in USD on the child and every run it starts: once they have spent it, the child is stopped: `BudgetExceeded`. Only for a call that waits for its child.',
+  ),
 });
 
 /** The fields an `agent` or `program` launch takes beside its own: those of
@@ -207,15 +199,15 @@ export const CHILD_FIELDS = Object.freeze({
 export const CALL_FIELDS = Object.freeze({
   memories: memoriesField,
   working_directory: workingDirectoryField,
-  id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Tells apart two otherwise identical calls: a completed call is reused by a later one with the same prompt, options and files.',
-  }),
+  id: optionalInput(
+    Schema.String,
+    'Tells apart two otherwise identical calls: a completed call is reused by a later one with the same prompt, options and files.',
+  ),
   ...CHILD_FIELDS,
-  background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run. A background child takes no `timeoutMs` or `maxCostUsd`.',
-  }),
+  background: optionalInput(
+    Schema.Boolean,
+    'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run. A background child takes no `timeoutMs` or `maxCostUsd`.',
+  ),
 });
 
 /**

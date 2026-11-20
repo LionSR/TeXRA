@@ -6,10 +6,7 @@ import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import {
-  createWorkspaceLocation,
-  sessionFsLayer,
-} from '@texra-ai/harness/host';
+import { sessionFsLayer } from '@texra-ai/harness/host';
 import { runDirUnder } from '@common/storage/storageLayout';
 import { processInputFiles } from '@latex/latexMedia';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
@@ -94,7 +91,13 @@ describe('latexMedia figure extraction', () => {
       );
       const media = yield* processInputFiles(
         { logger, roots, fileService: new RunWorkspace(runId, roots) },
-        [createWorkspaceLocation(texPath, 'main.tex')],
+        [
+          {
+            kind: 'workspace',
+            absolutePath: texPath,
+            relativePath: 'main.tex',
+          },
+        ],
         extractFiguresConfig,
       ).pipe(Effect.provide(sessionFsLayer(roots)));
 

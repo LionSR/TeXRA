@@ -5,7 +5,6 @@ import { it } from '@effect/vitest';
 import { Effect, Option } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { createWorkspaceLocation } from '@texra-ai/harness/host';
 import { AppSignals } from '@texra-ai/harness/plugins';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
@@ -33,8 +32,16 @@ describe('acceptEditedFileReplace', () => {
         });
 
         const accepted = yield* acceptEditedFileReplace(
-          createWorkspaceLocation(base, 'paper_diff.tex'),
-          createWorkspaceLocation(edited, 'paper.tex'),
+          {
+            kind: 'workspace',
+            absolutePath: base,
+            relativePath: 'paper_diff.tex',
+          },
+          {
+            kind: 'workspace',
+            absolutePath: edited,
+            relativePath: 'paper.tex',
+          },
           {
             confirm: () => Effect.succeed(true),
             showInfo: () => Effect.void,
@@ -67,8 +74,16 @@ describe('acceptEditedFileReplace', () => {
         });
 
         const accepted = yield* acceptEditedFileReplace(
-          createWorkspaceLocation(base, 'paper.tex'),
-          createWorkspaceLocation(edited, 'paper_edited.tex'),
+          {
+            kind: 'workspace',
+            absolutePath: base,
+            relativePath: 'paper.tex',
+          },
+          {
+            kind: 'workspace',
+            absolutePath: edited,
+            relativePath: 'paper_edited.tex',
+          },
           {
             confirm: () => Effect.succeed(true),
             showInfo: () => Effect.void,

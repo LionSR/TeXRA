@@ -9,18 +9,13 @@ import {
 import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 
 // Local imports
-import {
-  pathToLocationIn,
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-} from '@texra-ai/harness/host';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   WorkspaceFs,
   emitAppSignal,
   type AppSignals,
+  pathToLocationIn,
 } from '@texra-ai/harness/plugins';
 import {
   generateDiffFileName,
@@ -45,19 +40,24 @@ function siblingLocation(
     targetFileName,
   );
   if (baseLocation.kind === 'external') {
-    return createExternalLocation(targetAbsolutePath);
+    return { kind: 'external', absolutePath: targetAbsolutePath };
   }
   const targetRelativePath = normalizeFilePath(
     path.join(path.dirname(baseLocation.relativePath), targetFileName),
   );
   if (baseLocation.kind === 'workspace') {
-    return createWorkspaceLocation(targetAbsolutePath, targetRelativePath);
+    return {
+      kind: 'workspace',
+      absolutePath: targetAbsolutePath,
+      relativePath: targetRelativePath,
+    };
   }
-  return createRunStorageLocation(
-    targetAbsolutePath,
-    targetRelativePath,
-    baseLocation.runId,
-  );
+  return {
+    kind: 'runStorage',
+    absolutePath: targetAbsolutePath,
+    relativePath: targetRelativePath,
+    runId: baseLocation.runId,
+  };
 }
 
 /**

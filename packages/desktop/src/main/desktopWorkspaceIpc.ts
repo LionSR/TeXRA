@@ -8,7 +8,8 @@
 
 import { Effect } from 'effect';
 
-import { isPathWithin, onAppSignal } from '@texra-ai/harness/host';
+import { onAppSignal } from '@texra-ai/harness/host';
+import { isPathWithin } from '@texra-ai/harness/node';
 import type { AppSignals } from '@texra-ai/harness/plugins';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 

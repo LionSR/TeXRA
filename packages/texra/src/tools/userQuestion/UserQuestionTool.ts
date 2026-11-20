@@ -5,8 +5,10 @@ import {
   executed,
   defineTool,
   withLogChannel,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import {
+  formatResultCount,
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
   type UserQuestionRequest,
@@ -36,9 +38,10 @@ const AskUserQuestionInputSchema = Schema.Struct({
       description:
         'One to three questions for the user, each worded differently. Keep each question short and provide two to four clear options.',
     }),
-  context: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'Optional short context explaining why the answer is needed.',
-  }),
+  context: optionalInput(
+    Schema.String,
+    'Optional short context explaining why the answer is needed.',
+  ),
 });
 
 type AskUserQuestionInput = typeof AskUserQuestionInputSchema.Type;
@@ -98,7 +101,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
 
   return executed(
     JSON.stringify({ answers }, null, 2),
-    `Answered ${answerCount} user question(s).`,
+    `Answered ${formatResultCount(answerCount, 'user question')}.`,
   );
 });
 

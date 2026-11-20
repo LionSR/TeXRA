@@ -31,7 +31,7 @@ import {
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import type { CliContext } from '../runtime/platform/cliContext';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 
 /**
  * The report every model command gives when its runtime, platform or model
@@ -79,8 +79,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
   const entry = yield* loadCliModelAccessEntry(id, services);
 
   if (!entry) {
-    writeTextStderr(`Model not found: ${id}`);
-    return CliExitCode.Usage;
+    return yield* failUsage(`Model not found: ${id}`);
   }
 
   // A reference with `@effort` or `+mode` is valid when a run's bind takes
@@ -91,8 +90,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
       ? verdict.reasoning?.sent
       : undefined;
   if (sent !== undefined && 'refused' in sent) {
-    writeTextStderr(`A run cannot use ${id}: ${sent.refused}`);
-    return CliExitCode.Usage;
+    return yield* failUsage(`A run cannot use ${id}: ${sent.refused}`);
   }
 
   const record = cliModelRecord(entry);
@@ -168,12 +166,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
           : `Disabled ${result.model} in the model picker.`,
       }),
     ),
-    Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        writeTextStderr(toErrorMessage(cause));
-        return CliExitCode.Usage;
-      }),
-    ),
+    Effect.catchCause((cause) => failUsage(toErrorMessage(cause))),
   );
 });
 

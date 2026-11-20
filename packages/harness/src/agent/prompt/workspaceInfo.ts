@@ -89,7 +89,8 @@ const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
  *
  * @param wsPath - The run's workspace root, or undefined when no folder is open.
  * @param offered - The tools the run offers, by name: the external
- *   directories are listed only for a run offered a tool that reads them.
+ *   directories are listed only for a run offered a tool that reads them,
+ *   and the advice before a git command only for one offered `bash`.
  */
 export const buildWorkspaceInfoBlock = Effect.fn(function* (
   wsPath: string | undefined,
@@ -119,7 +120,8 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     const parts = ['Git: yes', branchPart];
     if (git.dirty) parts.push('uncommitted changes');
     lines.push(parts.join(', '));
-  } else if (wsPath) {
+  } else if (wsPath && offered.includes('bash')) {
+    // Only a run that can run git is told to check before it does.
     lines.push(
       'Git: this workspace is not a git work tree, or git could not be checked; confirm a repository exists before running git history or status checks.',
     );

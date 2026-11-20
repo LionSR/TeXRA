@@ -106,12 +106,8 @@ export function repaintOpenCards(
 export function finishOpenCompactions(
   transcript: TranscriptView,
   work: TranscriptWork,
-  finishedAt: number,
 ): TranscriptView {
-  const changed = finalizeCompactionActivities(
-    work.ix.compactionState,
-    finishedAt,
-  );
+  const changed = finalizeCompactionActivities(work.ix.compactionState);
   if (changed.length === 0) return transcript;
   const next: TranscriptDraft = { ...transcript };
   upsertCompactionRows(work, next, changed);
