@@ -142,7 +142,8 @@ export const FollowUpRequestSchema = Schema.Struct({
  * `turn`; a child's prompt or delivery was answered by the report or tool
  * result committed beside it; a control (`/compact`, `/model`) was applied
  * by the edit or `run.config` beside it; or it was dropped unread and
- * unapplied: a control that changed nothing (`noop`), the run's end
+ * unapplied: a control that changed nothing (`noop`: a switch to the model
+ * in force or one the run cannot take, a `/compact` with no edit), the run's end
  * (`ended`) or its input's close (`closed`).
  */
 export const FollowUpDispositionSchema = Schema.Union([

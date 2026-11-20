@@ -19,8 +19,6 @@ import {
 } from '@texra/shared/settings/texraSettings';
 
 interface LatexFormatterDefinition {
-  /** Setting value that selects this formatter. */
-  id: string;
   /** The row holding this formatter's optional config-file path. */
   configFile: SettingRow<string>;
   run(
@@ -35,6 +33,8 @@ interface LatexFormatterDefinition {
 }
 
 export interface LatexFormatter extends LatexFormatterDefinition {
+  /** The setting value that selected it. */
+  readonly id: Exclude<LatexFormatterValue, 'none'>;
   readonly configPath: string;
 }
 
@@ -45,12 +45,10 @@ const LATEX_FORMATTERS: Record<
   LatexFormatterDefinition
 > = {
   'tex-fmt': {
-    id: 'tex-fmt',
     configFile: TEXFMT_CONFIG_SETTING,
     run: runTexFmt,
   },
   latexindent: {
-    id: 'latexindent',
     configFile: LATEXINDENT_CONFIG_SETTING,
     run: runLatexIndent,
   },
@@ -58,8 +56,8 @@ const LATEX_FORMATTERS: Record<
 
 /**
  * Resolve the configured LaTeX formatter, or null when formatting is
- * disabled. Unrecognized settings fall back to latexindent. Sole owner of the
- * formatter → runner + config-file row mapping.
+ * disabled. An unset setting reads as latexindent (the row's default). Sole
+ * owner of the formatter → runner + config-file row mapping.
  *
  * `stores` are the settings slots of the workspace the caller is formatting
  * (a session's roots), held as data, so both the formatter choice and its
@@ -74,6 +72,7 @@ export const resolveLatexFormatter = Effect.fn('resolveLatexFormatter')(
     }
     const selected = LATEX_FORMATTERS[formatter];
     return {
+      id: formatter,
       ...selected,
       configPath: yield* Settings.get(stores, selected.configFile),
     };

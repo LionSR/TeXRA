@@ -10,11 +10,11 @@ import {
   formatResultCount,
   pluralize,
 } from '@texra-ai/harness/schemas';
-import {
-  runOutcomeToCliRunStatus,
-  type CliRunResult,
-  type CliDocumentTaskResult,
+import type {
+  CliRunResult,
+  CliDocumentTaskResult,
 } from '@cli/schemas/cliOutput';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import {
   finalDocumentOutput,
   type DocumentsResult,
@@ -61,10 +61,7 @@ function destinationMessage(
 /** A delivery the CLI cannot make, worded for its output: a destination the
  *  flags named is a usage error; a completed task that wrote too little is
  *  a rejection of its result. */
-function deliveryError(
-  reason: DeliveryReason,
-  terminalStatus: string,
-): CliUsageError | Rejected {
+function deliveryError(reason: DeliveryReason): CliUsageError | Rejected {
   switch (reason._tag) {
     case 'Destination':
       return new CliUsageError({ message: destinationMessage(reason) });
@@ -72,12 +69,12 @@ function deliveryError(
       return new Rejected({
         reason:
           reason.destination === 'directory'
-            ? `Program ${terminalStatus} without generated outputs; nothing was copied to ${reason.path}.`
-            : `Program ${terminalStatus} without a generated output; ${reason.path} was not written.`,
+            ? `Program completed without generated outputs; nothing was copied to ${reason.path}.`
+            : `Program completed without a generated output; ${reason.path} was not written.`,
       });
     case 'MissingOutputs':
       return new Rejected({
-        reason: `Program ${terminalStatus} without expected ${pluralize(reason.missing.length, 'output')}: ${reason.missing.join(', ')}; copied ${reason.copied} of ${formatResultCount(reason.expected, 'expected output')} to ${reason.directory}.`,
+        reason: `Program completed without expected ${pluralize(reason.missing.length, 'output')}: ${reason.missing.join(', ')}; copied ${reason.copied} of ${formatResultCount(reason.expected, 'expected output')} to ${reason.directory}.`,
       });
   }
 }
@@ -152,14 +149,13 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
         ? { kind: 'file', path: outputFile }
         : undefined;
     if (destination === undefined) return baseResult;
-    const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
     const copied = yield* deliverDocumentTaskOutputs(
       documents.outputs,
       destination,
       context.cwd,
     ).pipe(
       Effect.catchTag('OutputDeliveryRejected', ({ reason }) =>
-        Effect.fail(deliveryError(reason, terminalStatus)),
+        Effect.fail(deliveryError(reason)),
       ),
     );
     return destination.kind === 'directory'
@@ -175,7 +171,7 @@ export function formatDocumentTaskTextResult(
     // The reply of a failed run is its error (the uncompiled documents and
     // their logs), so the text result says it beside where the artifacts are.
     return [
-      'FAILED',
+      runStatusLabel(result.outcome),
       result.output.response.trim(),
       `Run artifacts: ${result.runDirectory}`,
     ]

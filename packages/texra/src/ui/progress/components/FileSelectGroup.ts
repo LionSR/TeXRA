@@ -16,7 +16,7 @@ import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { SortableController } from '@ui/litControllers/SortableController';
 import type { FileSelectConfig } from '@ui/copy/fileSelectConfigs';
-import { dropCueStyles } from '@ui/styles/commonViewStyles';
+import { dropTargetStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { placeholderStyles, renderEmptyMessage } from '@ui/wa/emptyState';
@@ -30,6 +30,7 @@ export class FileSelectGroup extends LitElement {
     designTokens,
     ...fileSelectStyles,
     placeholderStyles,
+    dropTargetStyles,
     css`
       :host {
         display: block;
@@ -37,20 +38,6 @@ export class FileSelectGroup extends LitElement {
 
       .file-select {
         position: relative;
-      }
-
-      .file-select.drop-active {
-        outline: 1px dashed var(--wa-color-brand-fill-loud);
-        outline-offset: 2px;
-        background: color-mix(
-          in srgb,
-          var(--wa-color-brand-fill-quiet) 22%,
-          transparent
-        );
-      }
-
-      .drop-cue {
-        ${dropCueStyles}
       }
     `,
   ];
@@ -217,7 +204,7 @@ export class FileSelectGroup extends LitElement {
       <div
         class=${classMap({
           'file-select': true,
-          'drop-active': this.fileDrop.isDragActive,
+          'is-drag-active': this.fileDrop.isDragActive,
         })}
         role="group"
         aria-labelledby=${labelId}

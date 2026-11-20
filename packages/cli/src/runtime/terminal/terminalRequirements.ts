@@ -1,3 +1,5 @@
+import type { CliContext } from '../platform/cliContext';
+
 /**
  * Node.js semver range the `texra` CLI supports; the same value
  * `packages/cli/package.json` declares as `engines.node`, so `texra doctor`
@@ -13,7 +15,7 @@ export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.22.2 || >=24.15.0';
 type InteractiveTerminalFailureReason = 'headless' | 'dumb-terminal';
 
 interface InteractiveTerminalContext {
-  readonly mode: 'headless' | 'interactive';
+  readonly mode: CliContext['mode'];
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
 }
