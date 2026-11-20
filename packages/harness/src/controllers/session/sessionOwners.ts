@@ -15,6 +15,7 @@ import {
   FiberMap,
   FiberSet,
   Layer,
+  Option,
   Scope,
   Semaphore,
   Stream,
@@ -22,7 +23,11 @@ import {
 } from 'effect';
 
 import { Inbox, SessionInbox } from '@agent/followUp/Inbox';
-import { wakeIfOwed, wakePendingNotes } from '@agent/followUp/ToolUseFollowUp';
+import {
+  waitForWakeNotes,
+  wakeIfOwed,
+  wakePendingNotes,
+} from '@agent/followUp/ToolUseFollowUp';
 import { lastReportRecipients } from '@agent/storage/runLifecycle';
 import {
   ChildRunBudget,
@@ -140,10 +145,12 @@ export const sessionOwnersLayer = (
       // The publisher closes after the runs' fibers published their last
       // rows.
       yield* Effect.addFinalizer(() => store.close);
-      // The runs' fibers (one per run, under its id) and the session's own,
+      // The runs' fibers (one per run, under its id), their wake timers
+      // (at most one per run, under its id) and the session's own,
       // interrupted after the services above them are disposed and before
       // the publisher closes.
       const runFibers = yield* FiberMap.make<RunId>();
+      const wakeTimers = yield* FiberMap.make<RunId>();
       const fibers = yield* FiberSet.make();
 
       // The project's side: its tools, its history store, its run history
@@ -247,6 +254,9 @@ export const sessionOwnersLayer = (
       const forkRun = yield* FiberMap.runtime(runFibers)<
         Exclude<AgentRunServices, RunRegistry>
       >().pipe(Effect.provide(services));
+      const forkTimer = yield* FiberMap.runtime(wakeTimers)<
+        Exclude<AgentRunServices, RunRegistry>
+      >().pipe(Effect.provide(services));
       const local = (yield* LocalRuntimeSource).ref;
       const runs: SessionRunRegistry = new SessionRunRegistry({
         log,
@@ -258,6 +268,11 @@ export const sessionOwnersLayer = (
         inSession: (effect) => Effect.provide(effect, services),
         fork: forkRun,
         background: (effect) => void fork(effect),
+        wakeTimer: (id, effect) => void forkTimer(id, effect),
+        endWakeTimer: (id) => {
+          const timer = FiberMap.getUnsafe(wakeTimers, id);
+          if (Option.isSome(timer)) timer.value.interruptUnsafe();
+        },
         wake: (id) =>
           runs.background(
             Effect.gen(function* () {
@@ -267,6 +282,7 @@ export const sessionOwnersLayer = (
               // And every other run its last end reported to.
               const reported = yield* Effect.exit(lastReportRecipients(id));
               yield* wakeIfOwed(id);
+              yield* waitForWakeNotes(id);
               const woken = new Set<RunId>();
               if (Exit.isSuccess(parent)) {
                 if (parent.value !== null) woken.add(parent.value);

@@ -22,15 +22,15 @@ import {
 } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
+import { wakeNoteOf } from './followUpMessages';
 
 /** Where in its loop a run reads its input: before a model request inside
  *  a turn, at the turn's end, or while it waits for input. */
 type InputPoint = 'request' | 'turn' | 'idle';
 
-/** When a run's own note for a later time (`from.kind: 'self'`) becomes
- *  readable; undefined for every other row, which holds no time. */
-const dueOf = ({ content: { from } }: QueuedFollowUp): number | undefined =>
-  from.kind === 'self' ? from.due : undefined;
+/** When a run's own note for a later time becomes readable; undefined for
+ *  every other row, which holds no time. */
+const dueOf = (row: QueuedFollowUp): number | undefined => wakeNoteOf(row)?.due;
 
 /**
  * The pending messages a run reads at `at` when the clock says `now`, in
@@ -126,8 +126,9 @@ export function sendVerdict(
 
 /**
  * What a run reads from its input: the messages readable at this point, or
- * a text the loop itself supplies (a `/compact` with nothing else queued, a
- * Stop hook's block), which never shares a batch with messages.
+ * a text the loop itself supplies (a `/compact` committed before any
+ * readable message, a Stop hook's block), which never shares a batch with
+ * messages.
  */
 export type FollowUpBatch =
   | {
@@ -143,7 +144,8 @@ export type FollowUpBatch =
 interface InputReading {
   /** The run's own pending requests (`/compact`, a model switch). */
   readonly controls: readonly QueuedFollowUp[];
-  /** The messages readable at `at`, when there are any; nothing is taken. */
+  /** The messages readable at `at`, when there are any and no `/compact`
+   *  committed before the first of them waits; nothing is taken. */
   readonly batch: (
     at: InputPoint,
   ) => Extract<FollowUpBatch, { kind: 'followUps' }> | null;
@@ -164,11 +166,19 @@ const inputOf = (
   from: CommitOrdinal,
   now: number,
 ): InputReading => {
+  // The earliest pending `/compact`. One committed before the first
+  // readable message is answered first: no message is read until it is, so
+  // which comes first follows commit order, not when the run looks. One
+  // committed after lands at the request boundary of the message's turn.
+  const compact = rows.find((f) => controlOf(f)?.kind === 'compact')?.commit;
   const batch: InputReading['batch'] = (at) => {
     const followUps = readableMessages(rows, at, now);
-    return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
+    const first = followUps[0]?.commit;
+    if (first === undefined || (compact !== undefined && compact < first))
+      return null;
+    return { kind: 'followUps', followUps };
   };
-  const compacting = rows.some((f) => controlOf(f)?.kind === 'compact');
+  const compacting = compact !== undefined;
   const later = rows.flatMap((f) => {
     const due = dueOf(f);
     return due !== undefined && due > now ? [due] : [];
@@ -182,11 +192,16 @@ const inputOf = (
   };
 };
 
-/** Sleep until the clock reads `due`, in epoch milliseconds. */
-const sleepUntil = (due: number): Effect.Effect<void> =>
-  Effect.flatMap(Clock.currentTimeMillis, (now) =>
-    now >= due ? Effect.void : Effect.sleep(due - now),
-  );
+/** Sleep until the clock reads `due`, in epoch milliseconds. The clock is
+ *  read again after each sleep: one set back leaves time to wait. */
+export const sleepUntil = (due: number): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    for (;;) {
+      const wait = due - (yield* Clock.currentTimeMillis);
+      if (wait <= 0) return;
+      yield* Effect.sleep(wait);
+    }
+  });
 
 /** What a reader reads of the session's log. */
 type ReaderLog = Pick<SessionLogShape, 'runRows' | 'tail' | 'now'>;

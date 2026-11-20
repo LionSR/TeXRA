@@ -1481,12 +1481,6 @@ prompt: |
 }
 
 /**
- * An SDK run of an inline persona (`StartInput.agent` as an object): the
- * embedder writes no agent file, the echo model's reply shows the
- * instruction reached a run of that persona, and the session view names the
- * run by the persona. The reply and the run's identity are the artifact.
- */
-/**
  * A plugin folder with native code (`harness.mjs`), installed and trusted
  * through the CLI, then loaded by a run of the bundled binary: its tool runs
  * on the binary's own `effect` and harness, over its process layer. The run
@@ -1574,10 +1568,13 @@ prompt: |
     const reviewText = `${review.stdout}\n${review.stderr}`;
     const listing = cli(['plugin', 'list']);
     assertSuccess(listing, 'texra plugin list');
+    // What the plugin's code noted it did, in order.
+    const notes = () =>
+      existsSync(events)
+        ? readFileSync(events, 'utf8').split('\n').filter(Boolean)
+        : [];
     // Installing, reviewing, enabling and listing ran none of its code.
-    const beforeRun = existsSync(events)
-      ? readFileSync(events, 'utf8').split('\n').filter(Boolean)
-      : [];
+    const beforeRun = notes();
     const nativeRun = () => {
       const started = cli([
         'run',
@@ -1608,9 +1605,7 @@ prompt: |
       return { started, answers };
     };
     const trusted = nativeRun();
-    const noted = existsSync(events)
-      ? readFileSync(events, 'utf8').split('\n').filter(Boolean)
-      : [];
+    const noted = notes();
     // An edit withdraws it; a headless run under yolo cannot trust it again,
     // since only a person's own answer does.
     appendFileSync(path.join(plugin, 'harness.mjs'), '// edited\n');
@@ -1665,6 +1660,12 @@ prompt: |
   }
 }
 
+/**
+ * An SDK run of an inline persona (`StartInput.agent` as an object): the
+ * embedder writes no agent file, the echo model's reply shows the
+ * instruction reached a run of that persona, and the session view names the
+ * run by the persona. The reply and the run's identity are the artifact.
+ */
 function validateSdkInlinePersona() {
   const cwd = makeScratch('texra-sdk-inline-persona-');
   try {

@@ -19,7 +19,7 @@
  * - a child held to a cap is not told of it.
  */
 import { layer } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
+import { DateTime, Effect, Layer, Option, Schema } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
 import { assert, describe, expect } from 'vitest';
@@ -50,6 +50,15 @@ const NOW = OBSERVED + 10 * 60 * 1000;
 const KIMI_RESET = '2026-11-23T00:00:00Z';
 /** When the ChatGPT secondary window resets, in epoch seconds. */
 const CHATGPT_SECONDARY_RESET = Date.parse('2026-11-25T00:00:00Z') / 1000;
+
+/** The instant a time the tool shows names, when it is written with its
+ *  UTC offset and its zone named; undefined for any other form. */
+const instant = (shown: string | undefined): number | undefined =>
+  shown === undefined || !shown.endsWith(']')
+    ? undefined
+    : Option.getOrUndefined(
+        Option.map(DateTime.makeZonedFromString(shown), DateTime.toEpochMillis),
+      );
 
 /** Every HTTP request the process makes: the Kimi Code quota endpoint
  *  answers its weekly window; anything else is refused. */
@@ -86,7 +95,6 @@ const WindowSchema = Schema.Struct({
 });
 const ResourcesSchema = Schema.Struct({
   now: Schema.String,
-  timeZone: Schema.String,
   models: Schema.Array(
     Schema.Struct({ id: Schema.String, billing: Schema.String }),
   ),
@@ -219,8 +227,7 @@ describe(
                 )(scriptResult.data).payload.result.value;
 
                 // The process's clock, in the process's zone.
-                expect(Date.parse(own.now)).toBe(NOW);
-                expect(own.timeZone).not.toBe('');
+                expect(instant(own.now)).toBe(NOW);
                 expect(own.models.length).toBeGreaterThan(0);
 
                 const plan = (name: string) => {
@@ -232,11 +239,11 @@ describe(
                 const kimi = plan('kimi-code-subscription');
                 expect(kimi.on).toBe(true);
                 expect(kimi.quota.source).toBe('quota endpoint');
-                expect(Date.parse(kimi.quota.asOf ?? '')).toBe(NOW);
+                expect(instant(kimi.quota.asOf)).toBe(NOW);
                 expect(
                   kimi.quota.windows?.map((window) => ({
                     ...window,
-                    resetsAt: Date.parse(window.resetsAt ?? ''),
+                    resetsAt: instant(window.resetsAt),
                   })),
                 ).toStrictEqual([
                   {
@@ -248,11 +255,11 @@ describe(
                 // ChatGPT: the reply's word, dated when it came.
                 const chatgpt = plan('chatgpt-subscription');
                 expect(chatgpt.quota.source).toBe('reply headers');
-                expect(Date.parse(chatgpt.quota.asOf ?? '')).toBe(OBSERVED);
+                expect(instant(chatgpt.quota.asOf)).toBe(OBSERVED);
                 expect(
                   chatgpt.quota.windows?.map((window) => ({
                     ...window,
-                    resetsAt: Date.parse(window.resetsAt ?? ''),
+                    resetsAt: instant(window.resetsAt),
                   })),
                 ).toStrictEqual([
                   {

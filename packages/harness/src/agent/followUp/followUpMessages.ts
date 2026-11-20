@@ -5,6 +5,7 @@ import { isInstruction } from '@shared/session/runFacts';
 import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { escapeText } from '@shared/utils/xmlEscape';
+import { formatLocalTime } from '@utils/text/stringUtils';
 import type { InboxItem } from './Inbox';
 
 /** What the run was asked to do, joined from its instructing input. */
@@ -64,22 +65,20 @@ export interface WakeNote {
   readonly due: number;
 }
 
+/** The wake note `row` is, if it is one: a message the run sent itself
+ *  (`from.kind: 'self'`), the one kind of row that holds a time. */
+export const wakeNoteOf = ({
+  followUpId,
+  at,
+  content,
+}: QueuedFollowUp): WakeNote | undefined =>
+  'text' in content && content.from.kind === 'self'
+    ? { id: followUpId, note: content.text, asked: at, due: content.from.due }
+    : undefined;
+
 /** The wake notes among a run's pending input, in the order it asked. */
 export const wakeNotes = (rows: readonly QueuedFollowUp[]): WakeNote[] =>
-  rows.flatMap(({ followUpId, at, content }) =>
-    !('text' in content) || content.from.kind !== 'self'
-      ? []
-      : [
-          {
-            id: followUpId,
-            note: content.text,
-            asked: at,
-            due: content.from.due,
-          },
-        ],
-  );
-
-const iso = (time: number): string => new Date(time).toISOString();
+  rows.flatMap((row) => wakeNoteOf(row) ?? []);
 
 /**
  * A wake note as its run's model reads it, rendered where the row becomes
@@ -93,7 +92,7 @@ export const wakeNoteText = (
   now: number,
 ): string =>
   [
-    `<wake-note asked="${iso(asked)}" due="${iso(due)}" delivered="${iso(now)}">`,
+    `<wake-note asked="${formatLocalTime(asked)}" due="${formatLocalTime(due)}" delivered="${formatLocalTime(now)}">`,
     'You wrote this note to yourself when you arranged to be continued at the due time. No person sent it: read it as your own reminder and decide what to do now.',
     '',
     escapeText(note),

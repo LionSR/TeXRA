@@ -12,18 +12,25 @@
 import { randomUUID } from 'node:crypto';
 
 // Third-party imports
-import { Clock, Effect, Schema } from 'effect';
+import { Clock, DateTime, Effect, Option, Schema } from 'effect';
 
 // Local imports
 import { wakeNotes } from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/Inbox';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  submitFollowUp,
+  waitForWakeNotes,
+} from '@agent/followUp/ToolUseFollowUp';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import { ToolError, type RunId } from '@shared/schemas';
 import { conversationOf } from '@tools/codemode/SelfTool';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { formatCompactDuration, previewLabel } from '@utils/text/stringUtils';
+import {
+  formatCompactDuration,
+  formatLocalTime,
+  previewLabel,
+} from '@utils/text/stringUtils';
 
 /** The soonest a wake may be: every wake is a model turn nobody asked for
  *  at that moment, so a run that arranges its next wake each time it wakes
@@ -33,8 +40,6 @@ const MIN_DELAY_SECONDS = 60;
 /** The wakes one run may hold pending: what bounds the rows it queues and
  *  the turns they start, however it arranges them. */
 const MAX_PENDING = 20;
-/** The latest time a `Date` holds, in epoch milliseconds. */
-const LATEST_TIME = 8.64e15;
 
 const WakeInputSchema = Schema.Union([
   Schema.Struct({
@@ -64,7 +69,7 @@ const WakeInputSchema = Schema.Union([
       ),
     ).annotate({
       description:
-        'A time as ISO 8601 with its UTC offset (`2030-01-31T09:00:00Z`, `2030-01-31T09:00:00+01:00`). Give this or `afterSeconds`.',
+        'A time as ISO 8601 with its UTC offset (`2030-01-31T09:00:00Z`, `2030-01-31T09:00:00+01:00`), without the zone name in brackets that times are shown with. Give this or `afterSeconds`.',
     }),
   }),
   Schema.Struct({
@@ -82,8 +87,6 @@ const WakeInputSchema = Schema.Union([
   }),
 ]);
 type WakeInput = typeof WakeInputSchema.Type;
-
-const iso = (time: number): string => new Date(time).toISOString();
 
 /** The run a call's wake continues: its conversation, as `self()` reads it
  *  (`conversationOf`). A program's script has none. */
@@ -109,7 +112,8 @@ const answer = Effect.fn('wake.answer')(function* (
       : [
           `Pending wakes (${pending.length} of at most ${MAX_PENDING}):`,
           ...pending.map(
-            ({ id, due, note }) => `- ${id}, due ${iso(due)}: ${note}`,
+            ({ id, due, note }) =>
+              `- ${id}, due ${formatLocalTime(due)}: ${note}`,
           ),
         ];
   return {
@@ -119,10 +123,10 @@ const answer = Effect.fn('wake.answer')(function* (
     ),
     summary: done.summary,
     value: {
-      ...(set !== undefined && { id: set.id, due: iso(set.due) }),
+      ...(set !== undefined && { id: set.id, due: formatLocalTime(set.due) }),
       pending: pending.map(({ id, due, note }) => ({
         id,
-        due: iso(due),
+        due: formatLocalTime(due),
         note,
       })),
     },
@@ -143,8 +147,11 @@ const runWake = Effect.fn('wake.call')(function* (
       return yield* new ToolError(
         `No pending wake has the id ${input.id}. \`list\` answers the pending ones.`,
       );
+    // A run no fiber drives (a background script's conversation) waits
+    // for the notes it has left, not the one dropped.
+    yield* waitForWakeNotes(runId);
     return yield* answer(runId, {
-      text: `Cancelled the wake due ${iso(dropped.due)}.`,
+      text: `Cancelled the wake due ${formatLocalTime(dropped.due)}.`,
       summary: 'Cancelled a wake',
     });
   }
@@ -154,13 +161,15 @@ const runWake = Effect.fn('wake.call')(function* (
   // The host's clock, read once: the due time is recorded with the call's
   // result, so a script that replays reads the same answer.
   const now = yield* Clock.currentTimeMillis;
-  const due = at != null ? Date.parse(at) : now + (afterSeconds ?? 0) * 1000;
-  // Not a date (the 31st of a 30-day month), or past the last one.
-  if (!(due <= LATEST_TIME))
+  // The schema has made sure `at` names its offset. None: past the last
+  // time a date holds.
+  const asked = DateTime.make(at ?? now + (afterSeconds ?? 0) * 1000);
+  if (Option.isNone(asked))
     return yield* new ToolError('The time asked for is not a valid date.');
+  const due = DateTime.toEpochMillis(asked.value);
   if (due - now < MIN_DELAY_SECONDS * 1000)
     return yield* new ToolError(
-      `A wake is at least ${MIN_DELAY_SECONDS} seconds from now. Now is ${iso(now)}, and it was asked for ${iso(due)}.`,
+      `A wake is at least ${MIN_DELAY_SECONDS} seconds from now. Now is ${formatLocalTime(now)}, and it was asked for ${formatLocalTime(due)}.`,
     );
   const held = wakeNotes((yield* inbox.read(runId)).followUps).length;
   if (held >= MAX_PENDING)
@@ -172,7 +181,7 @@ const runWake = Effect.fn('wake.call')(function* (
     runId,
     {
       text: note,
-      displayText: `Note to self, due ${iso(due)}: ${previewLabel(note)}`,
+      displayText: `Note to self, due ${formatLocalTime(due)}: ${previewLabel(note)}`,
       from: { kind: 'self', due },
       deliveryId: id,
     },
@@ -183,8 +192,8 @@ const runWake = Effect.fn('wake.call')(function* (
   return yield* answer(
     runId,
     {
-      text: `Arranged: you will be continued at ${iso(due)} (${formatCompactDuration(due - now)} from now) with your note. Its id is ${id}.`,
-      summary: `Wake arranged for ${iso(due)}`,
+      text: `Arranged: you will be continued at ${formatLocalTime(due)} (${formatCompactDuration(due - now)} from now) with your note. Its id is ${id}.`,
+      summary: `Wake arranged for ${formatLocalTime(due)}`,
     },
     { id, due },
   );
