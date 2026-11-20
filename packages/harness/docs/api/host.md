@@ -973,6 +973,9 @@ interface PluginReview {
   readonly version: string | null;
   /** What the plugin declares, one line each, for the prompt. */
   readonly lines: readonly string[];
+  /** Its native entry, which runs inside the process once trusted: only a
+   *  person's own answer trusts it. */
+  readonly native: NativeEntry | null;
 }
 ```
 

@@ -106,6 +106,9 @@ export interface PluginReview {
   readonly version: string | null;
   /** What the plugin declares, one line each, for the prompt. */
   readonly lines: readonly string[];
+  /** Its native entry, which runs inside the process once trusted: only a
+   *  person's own answer trusts it. */
+  readonly native: NativeEntry | null;
 }
 
 /** How many skills the plugin's skill directories hold. */
@@ -225,6 +228,7 @@ export const enablePlugin = Effect.fn('enablePlugin')(function* <E, R>(
       name,
       version: key.version,
       lines: yield* reviewLines(record, plugin),
+      native: plugin.native,
     });
     if (!accepted) return 'declined' as const;
   }

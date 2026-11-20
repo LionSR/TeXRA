@@ -1513,6 +1513,7 @@ export const provides = ['tool:native_echo', 'processLayer'];
 import { appendFileSync } from 'node:fs';
 
 const note = (line) => appendFileSync(${JSON.stringify(events)}, line + '\\n');
+note('imported');
 
 export default ({ plugins, effect }) => {
   const { Context, Effect, Layer, Schema } = effect;
@@ -1573,42 +1574,54 @@ prompt: |
     const reviewText = `${review.stdout}\n${review.stderr}`;
     const listing = cli(['plugin', 'list']);
     assertSuccess(listing, 'texra plugin list');
-    // What the run's process does with the plugin, alone.
-    rmSync(events, { force: true });
-    const started = cli([
-      'run',
-      'native_validation',
-      '--model',
-      'openai/gpt-5.6-sol',
-      '--cwd',
-      project.work,
-      '--approval-policy',
-      'yolo',
-      '--instruction',
-      `Install the plugin at ${plugin}. Echo once.`,
-      '--output-format',
-      'json',
-      '--print',
-    ]);
-    assertSuccess(started, 'texra run native_validation');
-    const result = parseJson(started.stdout, 'native plugin run');
-    const outputs = project
-      .readStore(
-        `SELECT json_extract(e.data, '$.payload.result.output') AS output
-         FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE e.type = 'tool.result' AND s.logical_id = '${result.runId}'
-         ORDER BY e."commit"`,
-      )
-      .map(({ output }) => String(output));
+    // Installing, reviewing, enabling and listing ran none of its code.
+    const beforeRun = existsSync(events)
+      ? readFileSync(events, 'utf8').split('\n').filter(Boolean)
+      : [];
+    const nativeRun = () => {
+      const started = cli([
+        'run',
+        'native_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--cwd',
+        project.work,
+        '--approval-policy',
+        'yolo',
+        '--instruction',
+        `Install the plugin at ${plugin}. Echo once.`,
+        '--output-format',
+        'json',
+        '--print',
+      ]);
+      assertSuccess(started, 'texra run native_validation');
+      const result = parseJson(started.stdout, 'native plugin run');
+      const answers = project
+        .readStore(
+          `SELECT json_extract(e.data, '$.payload.result.output') AS output,
+             json_extract(e.data, '$.payload.result.error') AS error
+           FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE e.type = 'tool.result' AND s.logical_id = '${result.runId}'
+           ORDER BY e."commit"`,
+        )
+        .map(({ output, error }) => String(output ?? error));
+      return { started, answers };
+    };
+    const trusted = nativeRun();
     const noted = existsSync(events)
       ? readFileSync(events, 'utf8').split('\n').filter(Boolean)
       : [];
+    // An edit withdraws it; a headless run under yolo cannot trust it again,
+    // since only a person's own answer does.
+    appendFileSync(path.join(plugin, 'harness.mjs'), '// edited\n');
+    const edited = nativeRun();
     const artifactPath = writeArtifact('native-plugin.json', {
       review: reviewText,
       listing: listing.stdout,
-      response: result.output?.response,
-      outputs,
+      beforeRun,
+      trusted: trusted.answers,
       events: noted,
+      edited: edited.answers,
     });
     assert(
       reviewText.includes(
@@ -1626,12 +1639,26 @@ prompt: |
       `texra plugin list should name the native code (artifact: ${artifactPath})\n${listing.stdout}`,
     );
     assert(
-      outputs.length === 3 &&
-        outputs[0] === 'echo bundled' &&
-        outputs[1].startsWith('Enabled echoes.') &&
-        outputs[2] === 'echo bundled' &&
-        noted.join(',') === 'acquire bundled,release bundled',
-      `the bundled binary should load the native plugin once, run its tool over its process layer and release it at exit (artifact: ${artifactPath})\n${JSON.stringify(outputs)}\nstderr: ${started.stderr}`,
+      beforeRun.length === 0,
+      `installing, enabling and listing the plugin should import none of its code (artifact: ${artifactPath})\n${JSON.stringify(beforeRun)}`,
+    );
+    const { answers } = trusted;
+    assert(
+      answers.length === 3 &&
+        answers[0] === 'echo bundled' &&
+        answers[1].startsWith('Enabled echoes.') &&
+        answers[2] === 'echo bundled' &&
+        noted.join(',') === 'imported,acquire bundled,release bundled',
+      `the bundled binary should import the native plugin once, run its tool over its process layer and release it at exit (artifact: ${artifactPath})\n${JSON.stringify(answers)}\nstderr: ${trusted.started.stderr}`,
+    );
+    assert(
+      !edited.answers.some((answer) => answer.startsWith('echo ')) &&
+        edited.answers.some((answer) =>
+          answer.includes(
+            'A person must enable it: `texra plugin enable echoes`',
+          ),
+        ),
+      `an edited native plugin should not be trusted again by a headless yolo run (artifact: ${artifactPath})\n${JSON.stringify(edited.answers)}`,
     );
   } finally {
     removeScratch(cwd);

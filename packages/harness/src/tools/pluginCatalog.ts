@@ -28,8 +28,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
-import { nativeLoader, type NativePluginFailed } from '@tools/nativePlugins';
-import type { NativePlugin, ToolTable } from '@tools/toolTable';
+import type { ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DISABLED_TOOLS_KEY,
@@ -47,10 +46,11 @@ const SWITCH_READ = Schedule.exponential('200 millis');
  * that `processLayer` serves, to read that file, and its
  * `AppState`, which holds the key MCP env values are digested under, the
  * switches and the plugin install record. A switch flipped or a plugin
- * enabled or disabled in any process sharing that state reaches the catalog
- * at once (`AppState.changes`), not only at a run's next step, so what
- * follows the catalog outside a run (a plugin layer's lifetime) follows the
- * switch and the record.
+ * disabled in any process sharing that state reaches the catalog at once
+ * (`AppState.changes`), not only at a run's next step, so what follows the
+ * catalog outside a run (a plugin layer's lifetime) follows the switch and
+ * the record. A native plugin enabled meanwhile is imported only when a
+ * step or a launch next reads the table.
  */
 export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
   Layer.unwrap(
@@ -72,10 +72,8 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
       );
       // The installed plugins a step loads: the enabled, trusted ones, and
       // why each other enabled one loads nothing or leaves a program file
-      // or its native entry out. One that ships only skills or programs
-      // loads with no servers; one with a native entry loads the plugin it
-      // returns, imported once per trust digest for the process.
-      const loadNative = nativeLoader();
+      // out. One that ships only skills or programs loads with no servers;
+      // the catalog loads a native entry's plugin (`toolCatalogLayer`).
       const installed = Effect.gen(function* () {
         const {
           loadable,
@@ -84,22 +82,9 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
         } = yield* readInstalledPluginLoad({
           globalState: appState,
         }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
-        const natives = yield* Effect.forEach(
-          loadable,
-          (
-            source,
-          ): Effect.Effect<
-            Result.Result<NativePlugin | null, NativePluginFailed>
-          > =>
-            source.plugin.native === null
-              ? Effect.succeed(Result.succeed(null))
-              : Effect.result(loadNative(source)),
-          { concurrency: 'unbounded' },
-        );
         return {
-          plugins: loadable.map((source, index) => {
+          plugins: loadable.map((source) => {
             const id = installedPluginId(source.record.name);
-            const native = natives[index];
             return {
               id,
               servers:
@@ -108,10 +93,6 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
                   : source.plugin.mcpServers.map((server) =>
                       mcpPlugin(server, installedKey, id),
                     ),
-              native:
-                native !== undefined && Result.isSuccess(native)
-                  ? native.success
-                  : null,
               source,
             };
           }),
@@ -121,9 +102,6 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
               ...plugin.warnings,
               ...plugin.programs.refused,
             ]),
-            ...natives.flatMap((native) =>
-              Result.isFailure(native) ? [native.failure.message] : [],
-            ),
           ],
         };
       });

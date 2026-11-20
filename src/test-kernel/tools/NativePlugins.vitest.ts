@@ -17,7 +17,9 @@
  * - a revision that fails to import fails the step or the other tools, or
  *   the step falls back to the previous revision;
  * - the person is not asked to trust the native code, or the question does
- *   not say it runs inside the process.
+ *   not say it runs inside the process;
+ * - a policy or a grant that approves every call trusts native code with no
+ *   person asked.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -43,6 +45,7 @@ import {
   validationHost,
   waitingAfter,
 } from '@test/support/storeFaults';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 
 import { autoDecideRequests } from '../agent/progressTestUtils';
@@ -230,6 +233,32 @@ describe(
                 'Echoed.',
               ]);
             }),
+          );
+
+          it.effect(
+            'asks the person to trust it under a policy that approves every call',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const files = yield* pluginFiles;
+                files.write('rev1');
+                yield* setTestApprovalPolicy('yolo');
+                const session = yield* persistentTestSession();
+                const { runId, decided } = yield* start(session, 'Echo once.');
+                // `yolo` answers the install's and every other call's
+                // approval; trusting the native module is the person's.
+                const [trust, ...more] = decided.opened;
+                expect(more).toStrictEqual([]);
+                expect(trust?.answeredBy).toBe('person');
+                expect(JSON.stringify(trust)).toContain(
+                  'runs inside this process, as you',
+                );
+                expect(toolOutputs(roots.storage, runId)).toStrictEqual([
+                  'installed',
+                  'enabled',
+                  'echo rev1',
+                ]);
+              }),
           );
 
           it.effect(

@@ -236,35 +236,57 @@ const importEntry = (
   );
 };
 
+/** The revision of `source`'s native entry `entry`: a digest of the
+ *  entry's path and the trust digest, the module's identity, which its
+ *  layers are kept under. */
+const revisionOf = (source: LoadablePlugin, entry: NativeEntry): string =>
+  sha256Hex(`${entry.file}\0${source.trust.digest}`);
+
 /**
  * The process's native plugin loader: each installed plugin's entry at
- * each trust digest is imported and checked once, its plugin (or why it
- * did not load) kept for the life of the process, as the module itself is.
- * The plugin's revision is a digest of the entry's path and the trust
- * digest: the module's identity, which its layers are kept under.
+ * each trust digest is imported and checked once (`load`), its plugin (or
+ * why it did not load) kept for the life of the process, as the module
+ * itself is. `imported` answers the plugin a load already gave, and imports
+ * nothing: what a reader that must run no plugin's code reads.
  */
-export const nativeLoader = (): ((
-  source: LoadablePlugin,
-) => Effect.Effect<NativePlugin, NativePluginFailed>) => {
+export const nativeLoader = (): {
+  readonly load: (
+    source: LoadablePlugin,
+  ) => Effect.Effect<NativePlugin, NativePluginFailed>;
+  readonly imported: (source: LoadablePlugin) => NativePlugin | undefined;
+} => {
   const loads = new Map<
     string,
     Effect.Effect<NativePlugin, NativePluginFailed>
   >();
-  return (source) =>
-    Effect.suspend(() => {
+  const loaded = new Map<string, NativePlugin>();
+  return {
+    load: (source) =>
+      Effect.suspend(() => {
+        const entry = source.plugin.native;
+        if (entry === null)
+          return Effect.fail(failure(source, 'it has no native entry'));
+        const revision = revisionOf(source, entry);
+        const known = loads.get(revision);
+        if (known !== undefined) return known;
+        return Effect.flatMap(
+          Effect.cached(
+            importEntry(source, entry, revision).pipe(
+              Effect.tap((native) =>
+                Effect.sync(() => loaded.set(revision, native)),
+              ),
+            ),
+          ),
+          (load) => {
+            const raced = loads.get(revision) ?? load;
+            loads.set(revision, raced);
+            return raced;
+          },
+        );
+      }),
+    imported: (source) => {
       const entry = source.plugin.native;
-      if (entry === null)
-        return Effect.fail(failure(source, 'it has no native entry'));
-      const revision = sha256Hex(`${entry.file}\0${source.trust.digest}`);
-      const known = loads.get(revision);
-      if (known !== undefined) return known;
-      return Effect.flatMap(
-        Effect.cached(importEntry(source, entry, revision)),
-        (load) => {
-          const raced = loads.get(revision) ?? load;
-          loads.set(revision, raced);
-          return raced;
-        },
-      );
-    });
+      return entry === null ? undefined : loaded.get(revisionOf(source, entry));
+    },
+  };
 };

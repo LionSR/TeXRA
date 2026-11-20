@@ -29,6 +29,7 @@ import {
   Option,
   Path,
   RcMap,
+  Result,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -56,6 +57,7 @@ import {
   type SessionTools,
   type ProcessCatalog,
 } from '@tools/sessionTools';
+import { nativeLoader } from '@tools/nativePlugins';
 import {
   ToolRegistry,
   withNatives,
@@ -127,7 +129,8 @@ export const ToolCatalogOwner = Context.Service<
  * `loader` reads for a run's declared tools, the installed plugins and
  * their native plugins `installed` reads at each step (none when omitted),
  * read again at each of `installedChanges` (the install record changed, so
- * a native plugin enabled or disabled anywhere comes up or goes down then),
+ * a native plugin disabled or replaced anywhere goes down then; one enabled
+ * is imported when a step or a launch next reads, never by this read),
  * and the `switches` as they stand and on each change (the ids held off;
  * before the first, every switched plugin is off; omitted, none ever is).
  */
@@ -185,26 +188,53 @@ export const toolCatalogLayer = (
         [...of.entries.keys()]
           .map((id) => layerKey(id, of.revisionOf(id)))
           .join('\0');
-      const read = Effect.gen(function* () {
-        const found = yield* installed;
-        const loaded = found.plugins.flatMap(({ native }) => native ?? []);
-        for (const { plugin, revision } of loaded)
-          natives.set(layerKey(plugin.id, revision), plugin);
-        const composed = withNatives(table, loaded);
-        if (
-          revisions(composed.table) !==
-          revisions(yield* SubscriptionRef.get(live))
-        )
-          yield* SubscriptionRef.set(live, composed.table);
-        return {
-          installed: found,
-          table: composed.table,
-          warnings: [...found.warnings, ...composed.withheld],
-        };
-      });
-      yield* Stream.runForEach(
-        options.installedChanges ?? Stream.empty,
-        () => read,
+      const loader = nativeLoader();
+      // The installed plugins as read now and the table they make, with
+      // each native entry imported now (`load`), or only those a step or a
+      // launch already imported: a change to the install record takes a
+      // disabled or replaced plugin out at once, and runs no plugin's code.
+      const readWith = (load: boolean) =>
+        Effect.gen(function* () {
+          const found = yield* installed;
+          const sources = found.plugins.flatMap(({ source }) =>
+            source.plugin.native === null ? [] : [source],
+          );
+          const results = load
+            ? yield* Effect.forEach(
+                sources,
+                (source) => Effect.result(loader.load(source)),
+                { concurrency: 'unbounded' },
+              )
+            : sources.flatMap((source) => {
+                const imported = loader.imported(source);
+                return imported === undefined ? [] : [Result.succeed(imported)];
+              });
+          const loaded = results.flatMap((result) =>
+            Result.isSuccess(result) ? [result.success] : [],
+          );
+          for (const { plugin, revision } of loaded)
+            natives.set(layerKey(plugin.id, revision), plugin);
+          const composed = withNatives(table, loaded);
+          if (
+            revisions(composed.table) !==
+            revisions(yield* SubscriptionRef.get(live))
+          )
+            yield* SubscriptionRef.set(live, composed.table);
+          return {
+            installed: found,
+            table: composed.table,
+            warnings: [
+              ...found.warnings,
+              ...results.flatMap((result) =>
+                Result.isFailure(result) ? [result.failure.message] : [],
+              ),
+              ...composed.withheld,
+            ],
+          };
+        });
+      const read = readWith(true);
+      yield* Stream.runForEach(options.installedChanges ?? Stream.empty, () =>
+        readWith(false),
       ).pipe(Effect.forkScoped);
       // A process layer may read this catalog.
       const processLayers: RcMap.RcMap<string, PluginContext> =

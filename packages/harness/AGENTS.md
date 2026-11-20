@@ -86,7 +86,12 @@ launch read on its fiber (`executeAgent`), and the table a step read for
 that step's calls (`ToolStep.services`). A plugin's layers are `RcMap`
 entries keyed by id and revision (`layerKey`), so a replaced native plugin's
 new revision comes up beside the old one, which goes down when the last step
-that pinned it ends; a swap interrupts nothing.
+that pinned it ends; a swap interrupts nothing. A native module is imported
+only when a step or a launch reads the table; a change to the install record
+only takes out what no longer loads, so listing, installing or reviewing a
+plugin runs none of its code. Trusting a native module is a person's own
+answer whatever the policy: `plugin_manager` opens that request as one a
+hook asked about (`hook: 'ask'`, so `answeredBy: 'person'`).
 
 ## Event channels and cards
 

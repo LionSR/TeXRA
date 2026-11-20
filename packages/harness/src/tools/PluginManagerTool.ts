@@ -24,7 +24,11 @@ import {
   NATIVE_ENTRY_FILE,
 } from '@common/plugins/nativeEntry';
 import type { PluginListing } from '@common/plugins/pluginTrust';
-import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
+import {
+  inRunSession,
+  RunCall,
+  type RunToolCall,
+} from '@agent/runtime/RunCall';
 import { refusalCopy } from '@shared/session/approvalDecision';
 import { Approvals } from '@shared/session/runHistory';
 import { ToolError } from '@shared/schemas';
@@ -93,25 +97,41 @@ const listingLine = (plugin: PluginListing): string => {
   ].join('\n');
 };
 
-/** Whether the person approves `text` for this call: the session's policy
- *  first, as for any call (`Approvals.permission`), and then the person,
- *  asked once. A refusal is the call's failure, with its reason. */
+/**
+ * Whether the person approves `text` for this call: the session's policy
+ * first, as for any call (`Approvals.permission`), and then the person,
+ * asked once. A refusal is the call's failure, with its reason. Trusting
+ * the native module of `native` is a person's own answer, whatever the
+ * policy and grants: the request opens as one a `PreToolUse` hook asked
+ * about (`hook: 'ask'`), which the harness routes to a person
+ * (`answeredBy: 'person'`) and no policy or grant answers. Where no person
+ * can be asked, the call fails and says who can enable it.
+ */
 const approved = Effect.fn('plugin_manager.approved')(function* (
   call: RunToolCall,
   text: string,
+  native: string | null = null,
 ) {
   const { runId } = call.run;
-  const answer = (yield* Approvals).permission(runId, 'call', call.hook);
+  const hook = native === null ? call.hook : 'ask';
+  const answer = (yield* Approvals).permission(runId, 'call', hook);
+  if (native !== null && answer !== 'ask')
+    return yield* new ToolError(
+      `Trusting the native module of ${native} takes a person's own answer, and this run cannot ask one${answer === 'allow' ? '' : `: ${answer.reason.replace(/\.$/, '')}`}. A person must enable it: \`texra plugin enable ${native}\`.`,
+    );
   if (answer === 'allow') return true;
   const decision =
     answer === 'ask'
-      ? (yield* call.requests.open(
-          {
-            kind: 'bash',
-            data: { requestId: call.requests.nextId(), command: text, runId },
-          },
-          { operation: 'call' },
-        )).decision
+      ? (yield* call.requests
+          .open(
+            {
+              kind: 'bash',
+              data: { requestId: call.requests.nextId(), command: text, runId },
+            },
+            { operation: 'call' },
+          )
+          .pipe(Effect.updateService(RunCall, (open) => ({ ...open, hook }))))
+          .decision
       : answer;
   if (decision.action === 'approve') return true;
   const copy = refusalCopy('Plugin change', decision);
@@ -178,6 +198,7 @@ const runPluginManager = Effect.fn('plugin_manager.call')(function* (
             `Trust and load the plugin ${review.name}${review.version ? ` ${review.version}` : ''}, as this agent asks:`,
             ...review.lines.map((line) => `  ${line}`),
           ].join('\n'),
+          review.native === null ? null : review.name,
         );
       }).pipe(
         Effect.catchTags({ PluginError: fail, PluginRequestError: fail }),
@@ -240,7 +261,7 @@ export const PluginManagerTool = defineTool({
 Commands:
 - \`list\` (the default) answers every installed plugin: whether it is enabled, whether it is trusted as it is now, and what it carries.
 - \`install\` takes \`source\`: a plugin folder, a git URL, or github.com/<owner>/<repo>[@ref]. It records the plugin disabled; nothing in it runs.
-- \`enable\` takes \`name\`. Unless the person already trusts the plugin as it is, they are shown what it carries and asked to trust it; once they do, it loads. Any later edit to it withdraws it until it is enabled and trusted again.
+- \`enable\` takes \`name\`. Unless the person already trusts the plugin as it is, they are shown what it carries and asked to trust it; once they do, it loads. Any later edit to it withdraws it until it is enabled and trusted again. Enabling a plugin with a native module always asks the person, whatever the approval policy; where no person can be asked, it fails and a person enables it themselves.
 - \`disable\` takes \`name\`: it stays installed and trusted, and loads nothing. The person is asked first.
 - \`remove\` takes \`name\`: it is forgotten with its trust. The person is asked first.
 
