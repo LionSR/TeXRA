@@ -204,8 +204,10 @@ const NO_DELEGATION_MODELS_MESSAGE =
  * Decide which model a delegated run uses: an explicit override, else the
  * parent run's model, else the first model the user has access to — checked
  * against the live availability list so an unavailable choice fails here rather
- * than after launch. A parent model that cannot run falls back with the
- * notice the caller shows.
+ * than after launch. The parent's model is judged by its own route even when
+ * the person has not enabled it (an embedder names its run's model): the
+ * enabled list only supplies the default. A parent model that cannot run
+ * falls back with the notice the caller shows.
  */
 export const selectAvailableDelegationModel = Effect.fn(
   'selectAvailableDelegationModel',
@@ -221,10 +223,17 @@ export const selectAvailableDelegationModel = Effect.fn(
    */
   readonly settings: SettingsStores;
 }) {
-  const options = yield* readModelOptions(input.settings);
+  // Availability belongs to the model; an `@effort` suffix does not change it.
+  const refOf = (model: string) => modelRefOf(model) ?? model;
+  const enabled = yield* readModelOptions(input.settings);
+  const parent = input.parentModel?.trim() || undefined;
+  const parentOptions =
+    parent === undefined || enabled.some(({ model }) => model === refOf(parent))
+      ? []
+      : yield* readModelOptions(input.settings, [refOf(parent)]);
   const availableModels = [
     ...new Set(
-      availableModelNames(options)
+      availableModelNames([...enabled, ...parentOptions])
         .map((model) => model.trim())
         .filter(Boolean),
     ),
@@ -239,8 +248,7 @@ export const selectAvailableDelegationModel = Effect.fn(
       { model: input.parentModel, reason: 'parent-run' },
       { model: availableModels[0], reason: 'access-list-default' },
     ],
-    // Availability belongs to the model; an `@effort` suffix does not change it.
-    (model) => availableModels.includes(modelRefOf(model) ?? model),
+    (model) => availableModels.includes(refOf(model)),
   );
   if (!decision) {
     return yield* new ToolError(NO_DELEGATION_MODELS_MESSAGE);

@@ -6,15 +6,15 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 
+import { SUBSCRIPTION_ROUTES } from '@shared/model/subscriptionAuth';
 import { formatResetDuration } from '@utils/text/stringUtils';
 
 import { type DeclinableUsageRoute, DeclinableUsageRouteSchema } from './usage';
 
 /** A route that bills a signed-in subscription session (ChatGPT, Grok). */
-export const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick([
-  'chatgpt-subscription',
-  'xai-subscription',
-]);
+const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick(
+  Object.values(SUBSCRIPTION_ROUTES),
+);
 
 /** A signed-in subscription that could not bill a call: its route, and
  *  whether only a fresh sign-in can help (else it may recover). */

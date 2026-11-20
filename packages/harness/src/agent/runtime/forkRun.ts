@@ -16,15 +16,15 @@
  */
 import { Effect } from 'effect';
 
-import { getRunRecords } from '@agent/storage/runOwnership';
+import { agentConfigOf } from '@agent/storage/runOwnership';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import type { SessionRoots } from '@platform/rootedFs';
 import {
-  blocksCaller,
   type RunId,
   generateRunId,
   factName,
   runNoun,
+  runsScript,
   type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
@@ -37,22 +37,19 @@ import {
 } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { descriptionRow } from '@shared/session/runFacts';
-import { factRow } from '@tools/plugins';
+import { factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
 import { configRow, positionRow } from './loop/rows';
 import { addressedMessages } from './providerMessages';
 
 /** Whether nothing is in flight: no invocation, response or undecided
- *  request its caller waits on (one it does not wait on stands across
- *  turns). A turn's beginning is quiet (its input is in,
+ *  request. A turn's beginning is quiet (its input is in,
  *  nothing answered it yet), so a child can be forked there. */
 const isQuiet = (state: RunState): boolean =>
   state.invocation === null &&
   state.pendingResponse === null &&
-  Object.values(state.requests).every(
-    (request) => request.decision !== null || !blocksCaller(request.payload),
-  );
+  Object.values(state.requests).every((request) => request.decision !== null);
 
 /**
  * Whether the run stands at a finished position: at a turn boundary,
@@ -85,13 +82,12 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
 ) {
   const log = yield* SessionLog;
   const runHistory = yield* RunHistory;
-  const records = getRunRecords(from);
-  const config = yield* records.readConfig();
-  if (config === null || config.script != null) {
+  const facts = yield* log.facts(from);
+  const config = agentConfigOf(facts);
+  if (config === null || runsScript(config)) {
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = from;
-  const facts = yield* log.facts(from);
   const start = facts?.start;
   if (start == null) {
     const noun = runNoun((yield* SessionViewAccess).run(from));
@@ -208,9 +204,8 @@ const forkedFacts = Effect.fn('forkRun.facts')(function* (
         ? [{ plugin, kind, version, value }]
         : [],
   );
-  // Copied onto the fork as the rows the run held at the cut: no plugin's
-  // own aggregate among them, and no rule to apply to a copy.
-  return kept.map((fact) => factRow(fact, runId));
+  // Copied onto the fork as the rows the run held at the cut.
+  return factRows(kept, runId);
 });
 
 /**

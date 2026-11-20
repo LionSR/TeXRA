@@ -2,16 +2,29 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 
 import { layer } from '@effect/vitest';
-import { Effect, Exit } from 'effect';
+import { Effect, Exit, Ref, SubscriptionRef } from 'effect';
+import { RpcClientError } from 'effect/rpc';
 import { beforeEach, expect } from 'vitest';
 
 import { sessionFsLayer } from '@texra-ai/harness/host';
+import {
+  linkOver,
+  SERVICE_OFFLINE,
+  type Linked,
+  type ServiceClient,
+} from '@texra/controllers/server/client';
+import { serviceFileWrite } from '@texra/controllers/server/serviceSession';
+import {
+  writeFileIfUnchanged,
+  type WriteProjectFile,
+} from '@texra/common/files/projectFileWrite';
 import { answerWorkspaceFile } from '@texra/controllers/session/workspaceFileRequest';
 import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -24,8 +37,11 @@ let missingExternalPath = '';
 
 /** The request over the test's workspace, as the window's dispatch provides
  *  its session's rooted filesystems. */
-const file = (action: Parameters<typeof answerWorkspaceFile>[0]) =>
-  answerWorkspaceFile(action).pipe(
+const file = (
+  action: Parameters<typeof answerWorkspaceFile>[0],
+  write: WriteProjectFile = writeFileIfUnchanged,
+) =>
+  answerWorkspaceFile(action, write).pipe(
     Effect.provide(
       sessionFsLayer({ workspace: workspaceRoot, storage: fixtureRoot }),
     ),
@@ -111,6 +127,91 @@ layer(SessionGraph.hosted)('workspaceFile request', (it) => {
           expect(readFileSync(join(workspaceRoot, 'paper.tex'), 'utf8')).toBe(
             'mine',
           );
+        }),
+    );
+
+    // Failure mode: a window whose project the background service holds
+    // writes the editor's save itself, so the save and a task's edit of the
+    // same file run in two processes, each under its own write lane.
+    it.effect(
+      "a save of a project the service holds is the service's write, and this process's only while the link is away",
+      () =>
+        Effect.gen(function* () {
+          const asked: unknown[] = [];
+          // cast: the one procedure a save calls stands for the client.
+          const client = {
+            'file.write': (input: unknown) => {
+              asked.push(input);
+              return Effect.succeed(false);
+            },
+          } as unknown as ServiceClient;
+          const state = yield* SubscriptionRef.make<Linked<ServiceClient>>({
+            client,
+          });
+          const write = serviceFileWrite(
+            linkOver(state, yield* Ref.make(false)),
+          );
+          const onDisk = () =>
+            readFileSync(join(workspaceRoot, 'paper.tex'), 'utf8');
+          const save = file(
+            { kind: 'write', path: 'paper.tex', contents: 'mine', base: null },
+            write,
+          );
+
+          // The service's answer is the save's, and nothing is written here.
+          expect(yield* save).toEqual({ kind: 'changedOnDisk' });
+          expect(asked).toEqual([
+            {
+              path: realpathSync(join(workspaceRoot, 'paper.tex')),
+              contents: 'mine',
+              expected: { kind: 'anything' },
+            },
+          ]);
+          expect(onDisk()).toBe('inside');
+
+          yield* SubscriptionRef.set(state, {
+            client: null,
+            away: SERVICE_OFFLINE,
+            lasting: false,
+          });
+          expect(yield* save).toEqual({ kind: 'done' });
+          expect(onDisk()).toBe('mine');
+          expect(asked).toHaveLength(1);
+
+          // The service wrote the save and the connection went before its
+          // answer did: the write this window then makes finds the file
+          // already holding the save, which is the save done, not someone
+          // else's change.
+          writeFileSync(join(workspaceRoot, 'paper.tex'), 'inside');
+          const cutOff = {
+            'file.write': () =>
+              Effect.sync(() =>
+                writeFileSync(join(workspaceRoot, 'paper.tex'), 'mine, again'),
+              ).pipe(
+                Effect.andThen(
+                  Effect.fail(
+                    new RpcClientError.RpcClientError({
+                      reason: new RpcClientError.RpcClientDefect({
+                        message: 'the connection closed',
+                        cause: undefined,
+                      }),
+                    }),
+                  ),
+                ),
+              ),
+          } as unknown as ServiceClient; // cast: as above
+          yield* SubscriptionRef.set(state, { client: cutOff });
+          expect(
+            yield* file(
+              {
+                kind: 'write',
+                path: 'paper.tex',
+                contents: 'mine, again',
+                base: 'inside',
+              },
+              write,
+            ),
+          ).toEqual({ kind: 'done' });
         }),
     );
   });

@@ -20,7 +20,11 @@ import {
   workspaceEnvironmentLayer,
   programLaunch,
 } from '@texra-ai/harness/host';
-import { withLogChannel, StateReadFailed } from '@texra-ai/harness/plugins';
+import {
+  logFailure,
+  withLogChannel,
+  StateReadFailed,
+} from '@texra-ai/harness/plugins';
 import { Effect, Scope } from 'effect';
 
 import {
@@ -224,9 +228,10 @@ export const createHostRunActions = Effect.fn(
       Effect.tapError((error) =>
         isRequestRefusal(error)
           ? Effect.void
-          : Effect.logWarning('A run did not start').pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
+          : logFailure(
+              CHANNEL,
+              'A run did not start',
+            )(error).pipe(
               Effect.andThen(presentRunFailure(ports.present, error)),
             ),
       ),

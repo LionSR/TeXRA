@@ -215,7 +215,7 @@ describe('the golden 1.0 store', () => {
       );
       return Effect.gen(function* () {
         // The fixture's own connection runs the reader's earlier-build scan.
-        const exec = (statement: string, params: readonly unknown[]) =>
+        const exec = (statement: string, params: readonly unknown[] = []) =>
           Effect.sync(() =>
             raw(storage, (db) =>
               db
@@ -228,9 +228,8 @@ describe('the golden 1.0 store', () => {
             ),
           );
         const events = yield* rowReader(
-          storage,
+          { path: storage, exec },
           toolTable(texraPlugins({ name: 'vscode' })).factKinds,
-          exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
         const types = new Set<string>(events.map((event) => event.type));
@@ -274,14 +273,14 @@ describe('the golden 1.0 store', () => {
         const applied = raw(storage, (db) =>
           db
             .prepare(
-              `SELECT json_extract(q.data, '$.control.kind') AS kind,
+              `SELECT json_extract(q.data, '$.content.control.kind') AS kind,
                (SELECT json_extract(c.data, '$.disposition.kind') FROM event c
                 WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
                   AND json_extract(c.data, '$.followUpId')
                     = json_extract(q.data, '$.followUpId')) AS disposition
              FROM event q JOIN event_sequence s ON s.id = q.aggregate
              WHERE s.logical_id = ? AND q.type = 'followup.queued'
-               AND json_extract(q.data, '$.control') IS NOT NULL
+               AND json_extract(q.data, '$.content.control') IS NOT NULL
              ORDER BY q."commit"`,
             )
             .all(CHAT),
@@ -479,6 +478,7 @@ describe('the golden 1.0 store', () => {
       // A newer build's `model.message` (one version past this build's),
       // committed as that build would: the row, its sequence, `stored_kind`.
       const storage = goldenRoot();
+      const version = ROW_KINDS['model.message'].version + 1;
       raw(storage, (db) => {
         const { id, seq } = Schema.decodeUnknownSync(
           Schema.Struct({ id: Schema.Number, seq: Schema.Number }),
@@ -487,7 +487,6 @@ describe('the golden 1.0 store', () => {
             .prepare('SELECT id, seq FROM event_sequence WHERE logical_id = ?')
             .get('a00000000004'),
         );
-        const version = ROW_KINDS['model.message'].version + 1;
         db.exec('BEGIN');
         db.prepare(
           `INSERT INTO event (aggregate, seq, type, version, at, data)
@@ -516,7 +515,9 @@ describe('the golden 1.0 store', () => {
           ),
         ).toMatchObject({
           _tag: 'DatabaseOpenFailed',
-          cause: { _tag: 'DatabaseStoreNewer', type: 'model.message' },
+          message: expect.stringContaining(
+            `holds model.message rows at version ${version}, which this build does not read`,
+          ),
         });
         expect(stored()).toEqual(before);
       });
@@ -729,6 +730,21 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
         [
           "an earlier build's row",
           `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
+          refusedAs({ kind: 'earlierBuild', cause: expect.any(String) }),
+        ],
+        [
+          "an earlier build's plugin aggregate hung under it",
+          // An external inquiry's thread, as the build that had one stored it.
+          `INSERT INTO event_sequence (kind, logical_id, uid, seq, parent_id)
+             SELECT 'plugin', 'inquiry:t1', '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+               1, id FROM event_sequence WHERE logical_id = '${CHAT}';
+           INSERT INTO event (aggregate, seq, type, version, at, data)
+             SELECT id, 1, 'plugin.fact', ${ROW_KINDS['plugin.fact'].version},
+               1767312000000, json_object('plugin', 'inquiry', 'kind', 'thread',
+                 'version', 1, 'value', json_object(), 'parent', '${CHAT}')
+             FROM event_sequence WHERE logical_id = 'inquiry:t1';
+           INSERT OR IGNORE INTO stored_kind (type, version)
+             VALUES ('plugin.fact/inquiry/thread', 1);`,
           refusedAs({ kind: 'earlierBuild', cause: expect.any(String) }),
         ],
         [

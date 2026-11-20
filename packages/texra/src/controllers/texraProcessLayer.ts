@@ -16,13 +16,17 @@ import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 
 // Local imports
 import {
-  AgentDirectories,
   AgentDirectoryService,
   BUNDLED_AGENTS_DIRECTORY,
   processLayer,
   type ProcessServices,
 } from '@texra-ai/harness/host';
-import { emitAppSignal, Secrets, AppState } from '@texra-ai/harness/plugins';
+import {
+  emitAppSignal,
+  Secrets,
+  AppState,
+  AgentDirectories,
+} from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
   FileSecrets,
@@ -48,8 +52,8 @@ import type { ClientIdentity } from '@texra-ai/llm/node';
 
 /**
  * TeXRA as the model providers name it: the client a ChatGPT sign-in
- * registers, the referrer on a Grok sign-in, and the namespace a ChatGPT
- * plan's tools sit in.
+ * registers, the referrer on a Grok sign-in, the namespace a ChatGPT
+ * plan's tools sit in, and the client name an MCP server is told.
  */
 export const TEXRA_CLIENT: ClientIdentity = Object.freeze({
   name: 'TeXRA',

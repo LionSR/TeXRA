@@ -34,7 +34,6 @@ import type {
 } from '@texra-ai/harness';
 import {
   AgentCatalog,
-  AgentDirectories,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
@@ -46,6 +45,7 @@ import {
   ToolRegistry,
   type StorageFs,
   type WorkspaceFs,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
@@ -98,6 +98,7 @@ import {
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import { answerWorkspaceFile } from './workspaceFileRequest';
+import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 import type { RunId } from '@texra-ai/harness/schemas';
 import {
   agentKeyOf,
@@ -130,6 +131,10 @@ export interface GuiSession {
    *  (it was out of reach); null for a window with no folder, which the
    *  service never holds. */
   readonly where: 'service' | { readonly local: string | null };
+  /** The write of a project file on a person's word (the editor's save, an
+   *  accept), run where the runs run: one process reads, decides and writes
+   *  a file, under one write lane. */
+  readonly writeFile: WriteProjectFile;
 }
 
 /** The kinds a host answers its own way, and what the refusal of one a
@@ -466,6 +471,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       },
       runs: runActions,
       latexdiff: latexdiff.file,
+      writeFile: runs.writeFile,
     },
   );
 
@@ -518,7 +524,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* bindings.openPath(request.path, request.line);
           return done;
         case 'workspaceFile':
-          return yield* answerWorkspaceFile(request.action);
+          return yield* answerWorkspaceFile(request.action, runs.writeFile);
         case 'openLabel': {
           // The search is the body's; the host only opens the match.
           const opened = yield* findLabelInWorkspace(

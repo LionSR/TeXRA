@@ -60,7 +60,6 @@ export interface CliContext {
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
    *  config: what a service launch sends to narrow its own task. */
   readonly requestedApprovalPolicy?: ApprovalPolicy;
-  readonly quietLogs: boolean;
   /**
    * The diagnostics emission threshold this process's runtime builds with,
    * decided once from argv — `--quiet` is `None`, `--verbose` is `Debug`,
@@ -94,10 +93,15 @@ export interface CliContext {
   readonly skillSourceOptions: SkillSourceOptions;
 }
 
+/** Whether `--quiet` silenced this invocation's notes and warnings: its
+ *  diagnostics threshold is `None`. */
+export const isQuiet = (context: Pick<CliContext, 'minimumLogLevel'>) =>
+  context.minimumLogLevel === 'None';
+
 /**
  * The invocation a command's program runs for: its context, decided once
  * from argv, and the one prompt lane over this process's stdin.
- * `defineCliCommand` provides it, so the helpers that print a result or ask
+ * `cliCommand` provides it, so the helpers that print a result or ask
  * the operator read it here instead of taking the context as a parameter.
  */
 export class CliInvocation extends Context.Service<
@@ -438,7 +442,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
     const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
     const noInput = init.globalArgs.noInput === true;
-    // The flag is validated by citty (`type: 'enum'`) and the config tiers by
+    // The flag is validated by its parse (`Flag.Literals`) and the config tiers by
     // the catalog row's own schema, which also supplies the value when no tier
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers
@@ -475,7 +479,6 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       outputFormat,
       approvalPolicy,
       ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
-      quietLogs: init.globalArgs.quiet === true,
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,
       termIsDumb: ambient.termIsDumb === true,

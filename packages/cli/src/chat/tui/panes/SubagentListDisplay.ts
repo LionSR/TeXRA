@@ -1,9 +1,9 @@
 // Local imports - shared formatting
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
+import { REQUEST_NOUN } from '@ui/copy/requestCards';
 
-// Local imports - TUI state
-import type { PendingRequestKind } from '../state/approvalQueue';
 import {
+  type RequestKind,
   formatCompactTokenCount,
   formatResultCount,
   joinFacts,
@@ -11,15 +11,6 @@ import {
 
 /** A steady marker, so list updates never animate the whole live region. */
 export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;
-
-const PENDING_APPROVAL_ROW_LABELS: Record<PendingRequestKind, string> = {
-  bash: 'bash',
-  toolEdit: 'edit',
-  planApproval: 'plan',
-  proposal: 'proposal',
-  retry: 'retry',
-  userQuestion: 'question',
-};
 
 /** Terminal width below which the right-aligned metadata column is dropped
  *  and rows keep their inline elapsed, so identity is not crowded out. */
@@ -55,14 +46,14 @@ export function childRowMetadataText({
  * count are separate so narrow layouts can preserve the actionable kind while
  * allowing the informational count to yield. */
 export function pendingApprovalRowDisplay(
-  kinds: readonly PendingRequestKind[] | undefined,
+  kinds: readonly RequestKind[] | undefined,
 ):
   | { readonly label: string; readonly overflow: string | undefined }
   | undefined {
   const first = kinds?.[0];
   if (kinds === undefined || first === undefined) return undefined;
   return {
-    label: PENDING_APPROVAL_ROW_LABELS[first],
+    label: REQUEST_NOUN[first],
     overflow: kinds.length > 1 ? `+${kinds.length - 1}` : undefined,
   };
 }

@@ -14,9 +14,10 @@ import {
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { setTimeout } from 'node:timers/promises';
 
-import { render } from 'ink';
+import { render, useInput } from 'ink';
 import {
   Context,
   Effect,
@@ -29,17 +30,14 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import {
-  AgentCatalog,
-  buildDiffHunks,
-  countLineChanges,
-  MODEL_SELECTION_KEY,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, MODEL_SELECTION_KEY } from '@texra-ai/harness/host';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   Secrets,
   ToolCatalog,
   type DraftBlob,
+  buildDiffHunks,
+  countLineChanges,
 } from '@texra-ai/harness/plugins';
 import {
   acceptsFollowUp,
@@ -104,7 +102,6 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   AgentProposalRequestSchema,
-  aggregateTarget,
   describeRefusal,
   LOG_LEVELS,
   TOOL_CALL_STATUS,
@@ -284,7 +281,6 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   cwd: HARNESS_CWD,
   mode: 'interactive',
   outputFormat: 'text',
-  quietLogs: true,
   minimumLogLevel: 'None',
   resourcesPath: HARNESS_RESOURCES_PATH,
   skillSourceOptions: {},
@@ -295,6 +291,90 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   termIsDumb: false,
   version: '0.0.0-harness',
 };
+// What the validator (validate-tui.mjs) waits on instead of the clock. The
+// harness reports its state in one private OSC sequence, which a terminal
+// ignores, written in order with the frame bytes: after each burst of
+// output, after a resize, and after each dispatched key once the frame it
+// produced is written. Whoever reads a report has everything written before
+// it on screen, and knows how much of its input that screen answers.
+const frameReport = {
+  /** Key events Ink has dispatched, and how many of them are rendered. */
+  keysDispatched: 0,
+  keysRendered: 0,
+  outputPending: false,
+  renderPending: false,
+  renderAgain: false,
+  /** Set as the harness exits: the state a report reads is being closed. */
+  closed: false,
+};
+// Set where the session is opened and where Ink renders, below.
+let tuiCaughtUp = (): boolean => false;
+let renderFlushed = (): Promise<void> => Promise.resolve();
+// A report once what was just started has run and its frame is written,
+// for a change that may write nothing. A key's handlers update React at
+// once, but some hand the work to a fiber or a signal that runs a turn of
+// the event loop later. All of that has run when the loop next blocks
+// waiting for I/O or a timer, which its idle counter shows; the one
+// millisecond timer only gives the loop something to block on. Work that
+// waits on I/O or a timer of its own is not covered: the validator names
+// the text such a key waits for.
+function reportAfterRender(): void {
+  if (frameReport.renderPending) {
+    frameReport.renderAgain = true;
+    return;
+  }
+  frameReport.renderPending = true;
+  void (async () => {
+    do {
+      frameReport.renderAgain = false;
+      const idleBefore = performance.eventLoopUtilization().idle;
+      while (performance.eventLoopUtilization().idle === idleBefore) {
+        await setTimeout(1);
+      }
+      const dispatched = frameReport.keysDispatched;
+      await renderFlushed();
+      frameReport.keysRendered = dispatched;
+    } while (frameReport.renderAgain);
+    frameReport.renderPending = false;
+    writeFrameReport();
+  })();
+}
+const writeTerminal = process.stdout.write.bind(process.stdout);
+function writeFrameReport(): void {
+  if (frameReport.closed) return;
+  const fields = {
+    // Input bytes Ink has taken off stdin, and the key events it made of
+    // them whose frame is written: the counter a key's wait passes.
+    read: process.stdin.bytesRead - process.stdin.readableLength,
+    keys: frameReport.keysRendered,
+    cols: process.stdout.columns,
+    rows: process.stdout.rows,
+    // Before raw mode the terminal, not the TUI, answers a key.
+    raw: process.stdin.isRaw ? 1 : 0,
+    // Whether the TUI holds everything the session has been sent.
+    caughtUp: tuiCaughtUp() ? 1 : 0,
+  };
+  writeTerminal(
+    `\u001B]7747;${Object.entries(fields)
+      .map(([name, value]) => `${name}=${value}`)
+      .join(';')}\u0007`,
+  );
+}
+function reportAfterOutput(): void {
+  if (frameReport.outputPending) return;
+  frameReport.outputPending = true;
+  // One frame is several writes in one turn of the event loop.
+  setImmediate(() => {
+    frameReport.outputPending = false;
+    writeFrameReport();
+  });
+}
+process.stdout.write = ((...args: Parameters<typeof writeTerminal>) => {
+  reportAfterOutput();
+  return writeTerminal(...args);
+}) as typeof process.stdout.write;
+process.stdout.on('resize', reportAfterOutput);
+
 const HARNESS_STDOUT = tuiOutputStreamForColor(
   process.stdout,
   HARNESS_COLOR_ENABLED,
@@ -447,17 +527,13 @@ function publish(...drafts: SeedRow[]): void {
     Effect.gen(function* () {
       if (unfolded.length > 0) yield* log.transact(unfolded);
       for (const draft of drafts) {
-        const target = aggregateTarget(draft.aggregateId);
-        if (draft.type === 'run.activate' && target.kind === 'run')
-          yield* runHistory.open(target.id, {
+        if (draft.type === 'run.activate')
+          yield* runHistory.open(draft.aggregateId, {
             activation: () => Effect.succeed([draft]),
           });
       }
       for (const [key, rows] of Map.groupBy(folded, (row) => row.aggregateId)) {
-        const target = aggregateTarget(key);
-        if (target.kind !== 'run')
-          return yield* Effect.die(new Error(`${key} is not a run`));
-        const cell = yield* runHistory.open(target.id);
+        const cell = yield* runHistory.open(key);
         yield* cell.append(rows);
       }
     }),
@@ -484,6 +560,50 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 // The chat's scope and its runner, as `runChat` builds them: what the TUI
 // starts from a key press or a mounted component ends with this scope.
+// What a key or a fixture sends the session reaches the screen in steps:
+// the session writes it and updates its view, the bound signal takes that
+// view, and each run in it gets its transcript. The TUI has caught up when
+// all three have happened for everything written so far. Nothing announces
+// a write, so a report that finds a new one asks the session when it is
+// through and reports again then.
+const sessionCatchUp = {
+  /** The view the TUI is bound to. */
+  current: harnessRunSession.view.current,
+  /** Whether that view's runs get their transcripts from a subscription. */
+  subscribed: true,
+  /** The log position the session last said it was through. */
+  drainedAt: undefined as number | undefined,
+  draining: false,
+};
+tuiCaughtUp = () => {
+  const written = session().log.now();
+  if (written !== sessionCatchUp.drainedAt) {
+    if (!sessionCatchUp.draining) {
+      sessionCatchUp.draining = true;
+      harnessRuntime.runFork(
+        harnessRunSession.drained.pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              sessionCatchUp.draining = false;
+              sessionCatchUp.drainedAt = written;
+              reportAfterRender();
+            }),
+          ),
+        ),
+      );
+    }
+    return false;
+  }
+  const shown = sessionView().get();
+  return (
+    shown === sessionCatchUp.current() &&
+    (!sessionCatchUp.subscribed ||
+      [...shown.runs.keys()].every((id) => shown.transcriptSeq.has(id)))
+  );
+};
+HARNESS_DISPOSERS.push(
+  subscribeToSignalChanges([sessionView()], reportAfterRender),
+);
 const harnessChatScope = Scope.makeUnsafe();
 HARNESS_DISPOSERS.push(() =>
   harnessRuntime.runFork(Scope.close(harnessChatScope, Exit.void)),
@@ -936,16 +1056,13 @@ function seedSubagentFollowupTranscript(): void {
         { name: 'agent', value: 'leanSolver' },
         { name: 'status', value: 'completed' },
       ],
-      wallTime: '2min, 3sec',
+      wallTimeMs: 123_000,
       response: 'Proved </response> is escaped & visible.',
     },
     {
       family: 'subagent',
       runId: 'child-c',
-      attributes: [
-        { name: 'agent', value: 'reviewer' },
-        { name: 'retryable', value: 'true' },
-      ],
+      attributes: [{ name: 'agent', value: 'reviewer' }],
       message: 'rate limit: <tokens> & retries exhausted',
     },
   ];
@@ -1498,7 +1615,6 @@ if (SHOW_PLAN) {
     plugin: 'goal',
     kind: 'plan',
     version: 1,
-    parent: null,
     value: {
       objective: [
         'Coordinate a small math proof through nested CLI work.',
@@ -1579,18 +1695,22 @@ if (SHOW_BASH_APPROVAL) {
   };
 
   if (SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS) {
-    let pollCount = 0;
-    const timer = setInterval(() => {
-      pollCount += 1;
+    // Asked once, when the selection is first off the root: now, or on
+    // the change that moves it.
+    const offRoot = (): boolean => {
       const activeRunId = selectedRunId.get();
-      if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) {
-        if (pollCount >= 200) clearInterval(timer);
-        return;
-      }
-      clearInterval(timer);
+      return activeRunId !== undefined && activeRunId !== HARNESS_RUN_ID;
+    };
+    if (offRoot()) {
       startApprovals();
-    }, 25);
-    timer.unref?.();
+    } else {
+      const stopWatching = subscribeToSignalChanges([selectedRunId], () => {
+        if (!offRoot()) return;
+        stopWatching();
+        startApprovals();
+      });
+      HARNESS_DISPOSERS.push(stopWatching);
+    }
   } else {
     startApprovals();
   }
@@ -1894,9 +2014,21 @@ function handleHarnessCtrlC(): void {
   void exitHarness(0);
 }
 
+// Counts each key Ink dispatches and asks for a report once it is rendered.
+// A key that does nothing writes no frame; the report still says the key
+// was answered.
+function KeyReport(): null {
+  useInput(() => {
+    frameReport.keysDispatched += 1;
+    reportAfterRender();
+  });
+  return null;
+}
+
 function renderHarnessApp(): React.JSX.Element {
   return (
     <SlashContextProvider value={harnessSlashContext}>
+      <KeyReport />
       <ChatProcessProvider
         value={{
           chat: harnessChat,
@@ -1976,6 +2108,11 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       changes: SubscriptionRef.changes(ref),
     }),
   );
+  sessionCatchUp.current = () => SubscriptionRef.getUnsafe(ref);
+  sessionCatchUp.subscribed = false;
+  HARNESS_DISPOSERS.push(
+    subscribeToSignalChanges([sessionView()], reportAfterRender),
+  );
   rootRunId.set(interrupted);
   focusRun(PROCESS);
 }
@@ -1989,11 +2126,13 @@ const ink = render(renderHarnessApp(), {
   incrementalRendering: true,
 });
 inkRef.current = ink;
+renderFlushed = () => ink.waitUntilRenderFlush();
 
 if (SHOW_STREAMING_TOOL_OUTPUT) {
   const fiber = harnessRuntime.runFork(
     Effect.gen(function* () {
-      yield* Effect.sleep('1 second');
+      // The stream starts over the first painted frame.
+      yield* Effect.promise(() => ink.waitUntilRenderFlush());
       seedStanding(HARNESS_RUN_ID, 'running');
       session().log.publish(HARNESS_RUN_ID, {
         type: 'stream.start',
@@ -2017,6 +2156,8 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
           id: 'streaming-tool',
           text: `output-${index}: ${'long result '.repeat(30)}\n`,
         });
+        // The fixture's own pacing: a stream that arrives over time, one
+        // chunk to a frame.
         yield* Effect.sleep('80 millis');
       }
     }),
@@ -2050,6 +2191,7 @@ let harnessExiting = false;
 async function exitHarness(exitCode: number): Promise<void> {
   if (harnessExiting) return;
   harnessExiting = true;
+  frameReport.closed = true;
   for (const dispose of HARNESS_DISPOSERS.splice(0).toReversed()) {
     dispose();
   }

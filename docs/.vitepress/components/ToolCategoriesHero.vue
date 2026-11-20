@@ -24,13 +24,8 @@ const categories = [
   {
     icon: 'file-code',
     name: 'LaTeX',
-    desc: 'Extract figures, TikZ, and bibliography; report compile diagnostics',
-    tools: [
-      'extract_figures',
-      'extract_tikz_figures',
-      'extract_bib_entries',
-      'diagnostics',
-    ],
+    desc: 'Report compile diagnostics and show the compiled PDF',
+    tools: ['diagnostics', 'open_pdf'],
   },
   {
     icon: 'mortar-board',
@@ -54,8 +49,8 @@ const categories = [
   {
     icon: 'comment-discussion',
     name: 'Delegation',
-    desc: 'Delegate to Codex or Claude Code, consult an external model',
-    tools: ['codex', 'claude_code', 'inquiry'],
+    desc: 'Delegate to Codex or Claude Code',
+    tools: ['codex', 'claude_code'],
   },
   {
     icon: 'beaker',

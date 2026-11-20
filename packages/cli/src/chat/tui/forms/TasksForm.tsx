@@ -16,13 +16,9 @@ import {
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
-import {
-  BORDERED_PANEL_CHROME_COLUMNS,
-  BorderedPanel,
-} from '@cli/tui/ui/BorderedPanel';
-import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 import {
   approvalDecisionDelivery,
   type SurfaceDecision,
@@ -45,8 +41,9 @@ import {
 import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';
+import { FormFrame, formFrameContentWidth } from './_shared/FormFrame';
 import { AsyncListForm } from './_shared/ListForm';
-import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
+import type { TuiRequest } from '../state/approvalQueue';
 
 interface TasksFormProps {
   readonly connect: ConnectService;
@@ -57,6 +54,8 @@ interface TasksFormProps {
 /** Rows the attached view spends outside the transcript: the panel's
  *  border and title, the composer, and the key hints. */
 const ATTACHED_CHROME_ROWS = 6;
+/** Rows a pending request's card gets below the transcript. */
+const REQUEST_CARD_ROWS = 10;
 
 export function TasksForm(props: TasksFormProps): React.JSX.Element {
   const [task, setTask] = useState<TaskSummary>();
@@ -187,16 +186,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   };
 
-  // A plugin's request (the external inquiry's) is answered from its
-  // thread and never blocks its run, so it is named apart and never stands
-  // in front of a request this view can answer.
   const pending = level.requests.find(
-    (request): request is PendingApprovalFact =>
-      request.payload.kind !== 'plugin' && !decided.has(request.requestId),
+    (request) => !decided.has(request.requestId),
   );
-  const inquiries = level.requests.filter(
-    (request) => request.payload.kind === 'plugin',
-  ).length;
   // Previews of decided requests go: each holds two whole documents.
   useEffect(() => {
     const open = new Set(level.requests.map((request) => request.requestId));
@@ -279,13 +271,17 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     if (!composing && !answering && isEscapeInput(input, key)) props.onClose();
   });
 
-  const width = Math.max(20, (columns ?? 80) - BORDERED_PANEL_CHROME_COLUMNS);
   const lines = level.run
-    ? transcriptToLines(level.run.transcript.rows, width)
+    ? transcriptToLines(
+        level.run.transcript.rows,
+        formFrameContentWidth(columns),
+      )
     : [];
   const budget = Math.max(
     3,
-    (props.availableRows ?? 24) - ATTACHED_CHROME_ROWS - (presentable ? 10 : 0),
+    (props.availableRows ?? 24) -
+      ATTACHED_CHROME_ROWS -
+      (presentable ? REQUEST_CARD_ROWS : 0),
   );
   const runWord = level.run && runStatus(level.run).word;
   const status = level.ended
@@ -294,24 +290,17 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   return (
     <Box flexDirection="column">
-      <BorderedPanel
-        color={level.ended ? COLOR_ERROR : COLOR_HINT}
+      <FormFrame
+        color={level.ended ? COLOR_ERROR : undefined}
         title={joinFacts([task.label, status])}
-        footer={
-          <KeyHints
-            // While a request is on screen its card owns Esc (reject or
-            // skip); detaching waits until it is answered.
-            hints={[
-              ...(composing
-                ? [{ key: 'Enter', action: 'send a follow-up' }]
-                : []),
-              ...(answering
-                ? []
-                : [{ key: 'Esc', action: 'detach (the task keeps running)' }]),
-            ]}
-            confirmCancel={false}
-          />
-        }
+        // While a request is on screen its card owns Esc (reject or skip);
+        // detaching waits until it is answered.
+        hints={[
+          ...(composing ? [{ key: 'Enter', action: 'send a follow-up' }] : []),
+          ...(answering
+            ? []
+            : [{ key: 'Esc', action: 'detach (the task keeps running)' }]),
+        ]}
       >
         {lines.slice(-budget).map((line, index) => (
           <Text key={index}>{line}</Text>
@@ -351,8 +340,8 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
             />
           </Box>
         )}
-        {notice && <Text color={COLOR_WARNING}>{notice}</Text>}
-      </BorderedPanel>
+        {notice && <ToneLine tone="warning" text={notice} />}
+      </FormFrame>
       {presentable && pending && (
         <ApprovalModal
           // A fresh modal per request: a question's answers or a card's
@@ -360,14 +349,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           key={pending.requestId}
           payload={presentable}
           grant={offeredGrant(pending)}
-          availableRows={10}
+          availableRows={REQUEST_CARD_ROWS}
           onDecide={decide}
         />
-      )}
-      {inquiries > 0 && (
-        <Text dimColor>
-          {`${inquiries === 1 ? 'An external inquiry waits' : `${inquiries} external inquiries wait`}; answer from its thread.`}
-        </Text>
       )}
     </Box>
   );

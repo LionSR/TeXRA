@@ -20,8 +20,13 @@ import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
-import { type RunId, type SubagentProgressUpdate } from '@shared/schemas';
+import {
+  runsScript,
+  type RunId,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
+import type { RunRows } from '@shared/session/runRowsShape';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -44,9 +49,13 @@ export interface ExecuteAgentOptions {
   /** A fresh run's registration, which its opening batch commits: the run
    *  is born with its opening or not at all. Absent, the run is resumed. */
   readonly registration?: RegisterRunOptions;
-  /** A resumed run's parent, as its rows hold it, read once by the resume;
-   *  a fresh run's is its registration's. */
-  readonly parentId?: RunId;
+  /** A resumed run's entry, from the facts its resume read: its parent as
+   *  its rows hold it (less one the store no longer lists) and its
+   *  `run.start`. A fresh run's registration says both. */
+  readonly resumed?: {
+    readonly parentId: RunId | undefined;
+    readonly start: RunRows['start'];
+  };
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
@@ -71,26 +80,26 @@ const enterRun = Effect.fn('enterRun')(function* (
 ) {
   const log = yield* SessionLog;
   const { config } = definition;
-  const parent = options.registration?.parent?.id ?? options.parentId ?? null;
-  // A resumed run's facts, read once: whether its parent's call awaits it,
-  // and whether its launch let it take input.
-  const facts =
-    options.registration === undefined ? yield* log.facts(runId) : null;
+  const parent =
+    options.registration?.parent?.id ?? options.resumed?.parentId ?? null;
+  // A resumed run's `run.start`: whether its parent's call awaits it, and
+  // whether its launch let it take input.
+  const start = options.resumed?.start ?? null;
   // Whether the parent's call awaits the child: a fresh run's
   // registration says; a resumed run's rows do.
   const awaited =
     options.registration !== undefined
       ? options.registration.parent?.call?.awaited === true
-      : (facts?.start?.parent?.call?.awaited ?? false);
+      : (start?.parent?.call?.awaited ?? false);
   // Whether the run ends after one cycle, decided once: every child does
   // (a message to it is a resume), a script's run (its call is its only
   // turn), a root its caller asks to, and a root launched to run once,
   // which no message may reach, whoever resumes it.
   const stopAfterCycle =
     parent !== null ||
-    config.script != null ||
+    runsScript(config) ||
     options.stopAfterCycle === true ||
-    facts?.start?.takesFollowUps === false;
+    start?.takesFollowUps === false;
   const registered =
     options.registration === undefined
       ? null

@@ -79,7 +79,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(yield* listRuns().pipe(Effect.provide(session))).toEqual([
               expect.objectContaining({
                 id,
-                continues: false,
+                continuation: expect.objectContaining({ kind: 'blocked' }),
               }),
             ]);
           }),

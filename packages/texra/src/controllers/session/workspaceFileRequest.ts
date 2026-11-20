@@ -27,22 +27,19 @@ import {
   Rejected,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import {
-  AgentCatalog,
-  isPathWithin,
-  OFFICE_EXTENSIONS,
-  withFileWriteLane,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, OFFICE_EXTENSIONS } from '@texra-ai/harness/host';
 import {
   entryTypeIn,
   meansAbsent,
   readDirectoryTypedTolerant,
   readNormalizedFile,
+  isPathWithin,
 } from '@texra-ai/harness/node';
 import { WorkspaceFs } from '@texra-ai/harness/plugins';
 
 // Local imports - app
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
+import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import {
   passesFileFilters,
@@ -247,34 +244,27 @@ const listDirectory = Effect.fn('workspaceFileRequest.listDirectory')(
 /**
  * A save lands only while the file still holds what the editor last read
  * (`base`); a run that rewrote it meanwhile is answered `changedOnDisk`, and
- * the editor asks whether to overwrite or reload. The check and the write
- * hold the file's write lane, which an approved edit run in this process
- * holds too, so neither lands between the other's check and write. The lane
- * is per process: a run in the background service takes its own, and an
- * edit it lands between this check and write is replaced unseen. A file gone
- * since the read is recreated, as a deleted file always was. Saves of one
- * file arrive one at a time: the editor waits for each answer.
+ * the editor asks whether to overwrite or reload. The path is confined
+ * here, and `write`, the session's own writer, decides where the check and
+ * the write run. A file gone since the read is recreated, as a deleted file
+ * always was. Saves of one file arrive one at a time: the editor waits for
+ * each answer.
  */
 const writeFile = Effect.fn('workspaceFileRequest.writeFile')(function* (
   target: string,
   contents: string,
   base: string | null,
+  write: WriteProjectFile,
 ) {
-  const fs = yield* FileSystem.FileSystem;
   const absolutePath = yield* isAgentDocumentTarget(target)
     ? resolveAgentDocument(target, true)
     : resolveWritable(target);
-  return yield* Effect.gen(function* () {
-    if (base !== null) {
-      const onDisk = yield* readNormalizedFile(fs, absolutePath).pipe(
-        Effect.catchIf(meansAbsent, () => Effect.succeed(null)),
-      );
-      if (onDisk !== null && onDisk !== base)
-        return { kind: 'changedOnDisk' } satisfies HostOutcome;
-    }
-    yield* fs.writeFileString(absolutePath, contents);
-    return { kind: 'done' } satisfies HostOutcome;
-  }).pipe(withFileWriteLane(absolutePath));
+  const written = yield* write(
+    absolutePath,
+    contents,
+    base === null ? { kind: 'anything' } : { kind: 'holds', contents: base },
+  );
+  return { kind: written ? 'done' : 'changedOnDisk' } satisfies HostOutcome;
 });
 
 const readFile = Effect.fn('workspaceFileRequest.readFile')(function* (
@@ -292,11 +282,13 @@ const readFile = Effect.fn('workspaceFileRequest.readFile')(function* (
 /**
  * Answer one `workspaceFile` action on the session's workspace. Every
  * failure is the request's `Rejected` answer, which the editor shows: a
- * filesystem failure in its own words.
+ * filesystem failure in its own words. `write` is the session's writer of
+ * project files (`GuiSession.writeFile`).
  */
 export const answerWorkspaceFile = Effect.fn('answerWorkspaceFile')(
   function* (
     action: WorkspaceFileAction,
+    write: WriteProjectFile,
   ): Effect.fn.Return<
     HostOutcome,
     Rejected | PlatformError.PlatformError,
@@ -311,7 +303,12 @@ export const answerWorkspaceFile = Effect.fn('answerWorkspaceFile')(
       case 'read':
         return yield* readFile(action.path);
       case 'write':
-        return yield* writeFile(action.path, action.contents, action.base);
+        return yield* writeFile(
+          action.path,
+          action.contents,
+          action.base,
+          write,
+        );
     }
   },
   Effect.catchTag('PlatformError', (error) =>

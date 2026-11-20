@@ -30,6 +30,7 @@ import {
   ToolError,
   type AgentTrace,
   type ToolCardHandle,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
@@ -73,10 +74,10 @@ const CodexInputSchema = Schema.Struct({
     description:
       'Instruction for the Codex agent. For a new session, describe the task. For a resume (thread_id set), describe the follow-up.',
   }),
-  thread_id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Continue an existing Codex thread with a follow-up instruction, as its next turn. A thread whose turn is still running refuses another until that turn is delivered.',
-  }),
+  thread_id: optionalInput(
+    Schema.String,
+    'Continue an existing Codex thread with a follow-up instruction, as its next turn. A thread whose turn is still running refuses another until that turn is delivered.',
+  ),
 });
 
 type CodexInput = typeof CodexInputSchema.Type;
@@ -295,7 +296,9 @@ function runStreamedTurn(
         Effect.map((): AgentCliTurn => ({
           response: responseParts.join('\n\n'),
           usage: codexTurnUsage(usage),
-          attributes: [{ name: 'thread-id', value: thread.id || null }],
+          attributes: thread.id
+            ? [{ name: 'thread-id', value: thread.id }]
+            : [],
         })),
         Effect.ensuring(Effect.sync(() => finalizeTurnCard('failed'))),
       );

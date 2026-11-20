@@ -44,6 +44,7 @@ export type {
 } from './turn.js';
 export type { InputPart } from './api/parts.js';
 export {
+  IMAGE_LIMITS,
   JsonObjectSchema,
   ModelOriginSchema,
   originOf,
@@ -65,6 +66,7 @@ export {
   ModelError,
   ModelErrorFieldsSchema,
   fillModelError,
+  isAuthFailureStatus,
   PLAN_ROUTES,
   RemoteOperationSchema,
 } from './errors.js';
@@ -138,10 +140,8 @@ export type { SelectedModel } from './models/modelSelection.js';
 export {
   codexBackendModelId,
   decideModelRoute,
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-  issuesParallelToolCalls,
   isUnservedModel,
+  kimiCodeServing,
   OWN_KEY_ROUTE_FACTS,
   resolveModelSource,
   routeConfig,
@@ -153,11 +153,10 @@ export type {
   RouteFacts,
 } from './models/modelRoute.js';
 export {
-  acceptedEfforts,
   chooseReasoning,
   DEFAULT_EFFORT,
   ReasoningChoiceError,
-  wireEffort,
+  reasoningOnRoute,
 } from './models/reasoningChoice.js';
 export type {
   ChooseReasoningOptions,

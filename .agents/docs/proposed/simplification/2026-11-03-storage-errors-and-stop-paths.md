@@ -87,7 +87,11 @@ call it; `unloadable`, `earlierBuildRefusal` and `runRecords.ts` are gone.
 (`:259,351`). The raw end write is documented on `RunCell` as the one
 exception (`runHistory.ts:179-184`). Still open: `factKindOf`
 (`rowCodec.ts:344-365`) and `readTraceFacts` (`traceDocument.ts:60-93`)
-still write the version branches twice (`pluginFactFloor` is gone), and
+still write the version branches twice (`pluginFactFloor` is gone; refused
+on 2026-11-19 as `STORE-fact-version-one-reader` in
+`.agents/docs/refuted-candidates.json`: the two readers share the four cases
+and none of the outcomes, so a shared classifier adds a helper and a
+four-literal union and removes no branch), and
 "the store is missing" is still decided in `readSessionView.ts:43-57` and
 by `storeOpenElsewhere`, whose callers each read one value
 (`projectDatabase.ts:130,181`); `probeStore` is not built. The callers'
@@ -191,6 +195,36 @@ values `runReadRefusal` reads (`unprepared-history`, `inconsistent`,
 `not-owner` were produced and read by nothing; each is the refusal's
 `detail` now, on a refusal with no reason._
 
+_Also 2026-11-19: the two pairs were already one each: a device code
+that runs out is one `SubscriptionOAuthError` of kind `expired`
+(`packages/llm/src/oauth/deviceAuthorization.ts`), and a host's missing
+resources one `ResourcesNotFound`
+(`packages/texra/src/controllers/texraProcessLayer.ts`), which both hosts
+raise. A second tag no production code reads is gone where its
+subsystem already had one: `PluginAgentUnread` is `AgentScanError`,
+`AgentsMdUnread` is `PromptRenderFailed`, `ParentRunClosed` is
+`RunOpenRejected` (now in
+`packages/harness/src/agent/storage/runLifecycle.ts`),
+`MediaInputFailed` is `MediaConversionFailed`; and two host capabilities
+raise `HostFailed` with the member's name: the setup command adapter
+(`SetupCommandFailed` is gone) and the export's format pick, whose 1:1
+re-wrap into `TranscriptExportFailed` is gone with
+`transcriptExportFailure.ts`. Checked and kept, each read by a branch:
+`TerminalRunFailed.reason`, `DiagnosticsReadFailed.reason`,
+`VscodeCommandRefused.reason` (`not-registered` in `compareFiles.ts`), the
+Lean tags (read in `catchTag` arrays), the GitHub client's four, and the
+six "unavailable" (each caught by its tag). Kept as each subsystem's one
+error, with no sibling to fold into: `AudioRecorderError`,
+`CliPromptFailed`, `JsonFileFailed`, `EditorPaneError`,
+`ChatExportInputUnreadable` (the tag over a port declared `Error`), and
+the `Effect.try` wrappers logged where they are raised
+(`ChildNotKilled`, `HomeDirectoryUnresolved`,
+`SkillDirectoryUnverified`, `CredentialFileUnchecked`). Still open,
+because open PRs hold their files: `HostCallFailed` and `WindowCallFailed`
+(`packages/texra/src/controllers/server/`), and `SettingsRequestFailed`
+and `ApiKeyPromptFailed`, raised from the CLI chat's forms and
+`openGuiWindow.ts`._
+
 **Give up.** Catching a failure by a name nobody catches it by.
 
 ## 4. Errors: one classifier per question
@@ -238,6 +272,13 @@ the app with `modelFailureText` (`packages/texra/src/ui/copy/modelAccess.ts:108`
 Still open: the 401/403 question has five deciders (`packages/llm/src/errors.ts:229`,
 `packages/llm/src/oauth/oauthRequest.ts:58`, `githubClient.ts:113`,
 `SubscriptionUsageService.ts:316`, `overleafClone.ts:212`)._
+
+_Done 2026-11-19: `isAuthFailureStatus` (`packages/llm/src/errors.ts`,
+public in `@texra-ai/llm`) owns the 401/403 fact; `authOrRejectionKind`,
+`oauthTokenErrorKind` (a rejected grant: 400 or that), the GitHub client's
+`classifyFailure` and the subscription usage service read it. Kept:
+`isCloneAuthError` in `overleafClone.ts`, which reads git's own wording on
+exit 128, not a status._
 
 **Give up.** Nothing observable.
 
@@ -327,6 +368,37 @@ still detected twice in one resume, both through `runReadRefusal`
 (`resumeRun.ts:88-92`, `resumability.ts:37-41`; `ownedElsewhere` is gone).
 The other deciders and the remaining stopped vocabulary were not re-read._
 
+_At 2026-11-20, every production `Cause.hasInterrupts` site was re-read.
+The ones that asked "did the run stop" call the owner: `readCause`
+(`packages/harness/src/shared/session/causeReading.ts`) and the session
+description's finalizer (`sessionDescription.ts`) ask `outcomeFromCause`;
+`endVerdict` (`AgentRunLifecycle.ts`) no longer wraps it in a ternary that
+returned its own answer; and `commitEnd` reads the outcome its caller's
+verdict decided instead of asking the exit again (`Cause.hasInterrupts`:
+38 files to 36). `stopOrFailure` is not built: `endVerdict` is that
+richer answer (the outcome, and the failure that rode a stop), and the
+two run terminals left (`endRun`, `processRun.ts`'s `endProcessChild`) both
+call it. The sites kept ask other questions: whether a catch or a
+finalizer passes an interruption through (`definition.ts`,
+`LatexToolingController.ts`, `LspTools.ts`, `arxivProcessor.ts`), whether
+an interrupted call proves anything about a route (`ModelRetryGate.ts`),
+whether a fiber's exit is interrupts only, so that nothing is logged or
+the process exits 130 (the hosts' report handlers, `executeCli.ts`,
+`cliCommand.ts`, `runRegistry.ts`'s `drained` and `notOpened`, `commitEnd`'s
+re-raise). The three bare `Effect.interrupt` re-raises (two in
+`ModelInvoker.ts`, one in `compaction.ts`) still drop a failure that rode
+beside the stop, where the tool dispatch keeps it as a defect
+(`toolUseDispatch.ts:488-498`). Keeping it there too would make a root
+run that the person stopped end in an `AgentError` whenever a stream's
+finalizer fails as the stop unwinds it; how often a provider stream's
+close fails on interruption was not measured, so this waits for that
+evidence before every stop can surface an error. `openResume` reads the run's facts once and decides
+from that read: a failed read is `refusalFor`'s, and the continuation is
+`continuationOf` (`packages/harness/src/agent/storage/continuation.ts`) over
+it, so an earlier build is detected once (2026-11-20). `FollowUps.release`'s two literals stay until `runLoop.ts`, their
+one caller, is free to change. The script delivery's `stopped` stays (the
+2026-11-17 triage note)._
+
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
 
@@ -400,6 +472,17 @@ OpenAI's `failed`/`cancelled` are all `provider-rejection`
 `SyntaxError`. One "no completed turn" check was rejected: the three
 guard three boundaries of the `Model` interface
 (`.agents/docs/refuted-candidates.json`)._
+
+_At 2026-11-20: the one skip signal is refused (`RUN-one-skip-signal` in
+`.agents/docs/refuted-candidates.json`: a disposition `skipped` is a call
+whose body never ran, `name: 'Skipped'` a delegation whose body ran and
+whose child was stopped). `terminalStatusFailure` is not built: the kind
+has converged, and what remains differs per provider, OpenAI's failure
+codes deciding whether a repeat can clear it
+(`openaiResponsesCodec.ts`'s `terminalParts`) and Google's two sites
+(`googleInteractions.ts`, live and background) naming the turn in their
+own words; one helper over two sites of one provider is not worth its
+name._
 
 **Give up.** A silent success on truncation, which is the defect.
 

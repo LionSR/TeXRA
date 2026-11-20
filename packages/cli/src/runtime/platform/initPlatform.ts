@@ -43,7 +43,7 @@ import { flush, writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import { SIGNAL_EXIT_CODE } from './exitCodes';
 import { holdSignals, type SignalPolicy } from './processSignals';
 import { linkCliService } from './cliService';
-import type { CliContext } from './cliContext';
+import { isQuiet, type CliContext } from './cliContext';
 
 /** What a command decides about the platform it brings up, beyond its
  *  context. */
@@ -61,7 +61,7 @@ export interface CliPlatformOptions {
 /** The context fields the platform reads. */
 type CliPlatformContext = Pick<
   CliContext,
-  'config' | 'cwd' | 'quietLogs' | 'storageRoot'
+  'config' | 'cwd' | 'minimumLogLevel' | 'storageRoot'
 >;
 
 /** The platform services a command reads once its platform is up. */
@@ -220,7 +220,7 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
 
   // The one-time telemetry notice: a single stderr line, then a state
   // flag. A quiet run neither prints it nor marks it shown.
-  if (!context.quietLogs) {
+  if (!isQuiet(context)) {
     const notice = yield* telemetryNoticeIfDue(roots.config);
     if (notice) writeTextStderr(notice);
   }
@@ -232,7 +232,7 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
       Scope.close(scope, Exit.void).pipe(
         Effect.andThen(Effect.suspend(() => runtime().disposeEffect)),
       ),
-      context.quietLogs,
+      isQuiet(context),
     ).pipe(Effect.andThen(Effect.sync(() => process.exit(code))));
   // @effect-diagnostics lazyPromiseInEffectSync:warning
   // The platform's own answer to SIGINT, SIGTERM and SIGHUP while it is

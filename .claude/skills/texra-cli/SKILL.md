@@ -150,8 +150,14 @@ robustness; empathy.
 - **Configuration & environment.** Precedence flags > env > project > user >
   system; honor general-purpose vars (`NO_COLOR`/`FORCE_COLOR`, `PAGER`, …).
 
-Lean on `citty` (parsing/help) and `picocolors` (color) rather than
-hand-rolling.
+Lean on `effect/cli` (parsing, help, suggestions; a command is a
+`cliCommand` in `commands/_helpers/cliCommand.ts`) and `picocolors` (color)
+rather than hand-rolling. Global flags are `GlobalFlag.Setting`s on the root;
+a flag only some commands take (`--source`) is a local flag those commands
+spread in. A command's handler builds its context in the parse and leaves its
+launch (or an exit code) in `CliSelection`; the launch runs at the Promise
+edge. Completion is `texra completion <shell>`, TeXRA's own generators over
+`Completions.fromCommand`, so agent, model and path values complete.
 
 ## Running a local build
 

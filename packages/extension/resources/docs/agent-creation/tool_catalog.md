@@ -38,11 +38,10 @@ whenever it is offered the tool, so an agent's prompt does not restate it.
 
 ## LaTeX processing
 
-- `extract_figures` — list and resolve figure assets referenced in a LaTeX
-  document.
-- `extract_bib_entries` — collect BibTeX records for citations.
-- `extract_tikz_figures` — discover TikZ figures and optionally compile them
-  to PDF.
+There are no dedicated extraction tools. An agent reads a document's figures
+and bibliography with the file tools: `grep` for `\includegraphics` or a
+citation key, `read_file` on an image or PDF (returned as an attachment), and
+`bash` to compile a TikZ picture or the whole document.
 
 ## Citation management
 
@@ -109,9 +108,6 @@ whenever it is offered the tool, so an agent's prompt does not restate it.
 - `ask_user_question` — ask the user one to three short clarification
   questions and wait for their answers, when continuing without their
   preference would be guesswork.
-- `inquiry` — dispatch a question to an external AI model via the user as a
-  human-in-the-loop bridge; the run continues (even after a restart, even
-  hours later) once the user pastes the answer back.
 
 ## Recommended tool groups by use case
 
@@ -125,8 +121,7 @@ arxiv_search, download_arxiv_source`
 `bash, read_file, write_file, edit_file, glob, grep, diagnostics`
 
 **LaTeX analysis agent:**
-`bash, read_file, write_file, glob, grep, extract_figures,
-extract_bib_entries, extract_tikz_figures`
+`bash, read_file, write_file, glob, grep, diagnostics`
 
 **Literature review agent:**
 `bash, read_file, write_file, glob, grep, arxiv_search, web_search,

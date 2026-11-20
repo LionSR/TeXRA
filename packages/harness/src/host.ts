@@ -24,9 +24,14 @@ export { processLayer } from './effect/processLayer.js';
 // for a session whose runs run elsewhere (a window over the background
 // service).
 export { replayTrace } from '@controllers/session/runTrace';
-// What launches a registered program as a run of its own: the config a
-// host or an app's command starts it with.
-export { programLaunch, ProgramNotRegistered } from '@agent/runtime/programRun';
+// What launches a program as a run of its own: the config a host or an
+// app's command starts it with, and the programs there are to start now
+// (the plugin list's and the installed plugins').
+export {
+  programLaunch,
+  ProgramNotRegistered,
+  programsNow,
+} from '@agent/runtime/programRun';
 export {
   activationView,
   type ActivationViewSource,
@@ -97,17 +102,7 @@ export {
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
 export { followPendingRequests } from './effect/requestAnswerer.js';
-export {
-  buildDiffHunks,
-  countLineChanges,
-  reportDiffTimeout,
-  unifiedDiffText,
-  type DiffHunks,
-  type Hunk,
-} from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-// The agent-directories service (its port is the root entry's).
-export { AgentDirectories } from '@platform/interfaces';
 // App-lifecycle signals as hosts and the app follow them (the hub and its
 // signals are on `./plugins`).
 export {
@@ -156,13 +151,6 @@ export {
 // The layers of the rooted file systems plugins read (`./plugins`), for a
 // host that reads them outside a run.
 export { sessionFsLayer, withSessionFs } from '@platform/rootedFs';
-// A `FileLocation` by its root: workspace, run storage, external, or relative.
-export {
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-  pathToLocationIn,
-} from '@common/storage/fileLocation';
 // The user's MCP servers: their config file, and a namespaced tool's server.
 export { readMcpConfig } from '@tools/mcp/mcpConfig';
 export { mcpConfigPathOf } from '@common/plugins/mcpServers';
@@ -196,31 +184,13 @@ export {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
-// Failures as hosts and plugins read them: the agent error, a predicate, and
-// a failure's plain words with a model call's verdict.
+// Failures as hosts and plugins read them: the agent error, and a failure's
+// plain words with a model call's verdict.
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
-export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 export type { ProviderError } from '@shared/schemas';
-// Platform path containment, segments, POSIX form.
-export {
-  getPathSegments,
-  isPathWithin,
-  isStrictlyWithin,
-  toPosixPath,
-} from '@utils/core/pathCore';
 // The office formats the Read tool converts to text.
 export { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
-// One exclusive lane per key, for work that must run one at a time per
-// key (a project, a prompt queue).
-export {
-  withPerKeyLane,
-  type PerKeyLane,
-  type PerKeyLanes,
-} from '@utils/core/perKeyQueue';
-// The one lane every writer of a file shares: a host's own save takes it
-// beside the harness's approved edits.
-export { withFileWriteLane } from '@utils/files/fileWriteLane';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export {

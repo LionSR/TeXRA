@@ -25,7 +25,6 @@ import {
   type HookOutcomePayload,
   type RefusalDecision,
   type RequestPayload,
-  RequestPayloadSchema,
   type RunId,
   toJsonValue,
   ToolError,
@@ -291,14 +290,21 @@ export const guardedToolCall = (
   );
 };
 
+/** What a request asks, whatever its id: its payload as its row stores it. */
+const askOf = (payload: RequestPayload): unknown =>
+  toJsonValue({ ...payload, data: { ...payload.data, requestId: '' } });
+
 /**
  * One tool call's requests (`CallRequests`), opened through its run's loop
  * under ids its attempt (`at` and `entered.attempt`) derives: each a fresh
- * one, past every ordinal the attempt `raised`. A resumed call joins
- * nothing: a request its last run left open was cancelled when that run
- * ended or this one was activated, so it asks again. Every request opens at
- * the one door (`openRequest`) through `commit`, which commits rows of the
- * call, and a person's answer is the one wait (`decisionOf`).
+ * one, past every ordinal the attempt `raised`. A request a resumed call's
+ * last run left open was cancelled when that run ended or this one was
+ * activated, so the call asks again; the one a person answered while no
+ * process held the run (`entered.answer`) is taken from its row when the
+ * call asks the same thing again, and only then: an answer is to what was
+ * asked. Every other request opens at the one door (`openRequest`) through
+ * `commit`, which commits rows of the call, and a person's answer is the
+ * one wait (`decisionOf`).
  */
 export const callRequests = (call: {
   readonly run: Pick<AgentRunShape, 'runId'>;
@@ -309,6 +315,7 @@ export const callRequests = (call: {
   readonly at: Omit<CallAttempt, 'attempt'>;
   readonly entered: Pick<AttemptRequests, 'raised'> & {
     readonly attempt: number;
+    readonly answer: AttemptRequests['last'];
   };
 }): CallRequests => {
   const { run, session, commit, entered } = call;
@@ -317,10 +324,30 @@ export const callRequests = (call: {
   const at: CallAttempt = { ...call.at, attempt: entered.attempt };
   const interactions = Context.get(session, Interactions);
   let opened = entered.raised;
+  let answer = entered.answer;
   return {
     nextId: () => callRequestId(at, opened + 1),
     open: (payload, opening) =>
       Effect.suspend(() => {
+        const answered = answer?.request;
+        if (
+          answered != null &&
+          answered.decision !== null &&
+          isDeepStrictEqual(askOf(answered.payload), askOf(payload))
+        ) {
+          answer = null;
+          return recordedDecision(payload, answered.decision).pipe(
+            Effect.map((decision) => ({
+              // cast: the stored request asks what this payload asks, so it
+              // is of its kind; its row holds the blobs it names.
+              payload: answered.payload as Extract<
+                RequestPayload,
+                { kind: (typeof payload)['kind'] }
+              >,
+              decision,
+            })),
+          );
+        }
         if (payload.data.requestId === callRequestId(at, opened + 1))
           opened += 1;
         return Effect.gen(function* () {
@@ -352,15 +379,6 @@ export const callRequests = (call: {
           })),
         );
       }),
-    post: (request) =>
-      Effect.suspend(() =>
-        openRequest(
-          asker,
-          // A plugin's data as the JSON its row stores; one that is not
-          // JSON is a defect of the plugin.
-          Schema.decodeUnknownSync(RequestPayloadSchema)(toJsonValue(request)),
-        ),
-      ).pipe(Effect.provide(session), Effect.asVoid),
     present: interactions.emit,
   };
 };

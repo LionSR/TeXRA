@@ -22,7 +22,6 @@ import { Effect, FileSystem, Predicate, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/host';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
@@ -36,6 +35,8 @@ import {
   Settings,
   type SettingsStores,
   AppState,
+  type PerKeyLane,
+  withPerKeyLane,
 } from '@texra-ai/harness/plugins';
 import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 

@@ -43,16 +43,11 @@ export const GITHUB_TOKEN_SAVED_MESSAGE = 'GitHub token saved.';
 /** Confirmation after the token is cleared from the host secret store. */
 export const GITHUB_TOKEN_REMOVED_MESSAGE = 'GitHub token removed.';
 
-/**
- * What every host says when the `githubTokenInvalid` signal fires: GitHub
- * rejected the stored token. One signal, one sentence.
- */
-export function gitHubTokenRejectedMessage(reason: string): string {
-  return `GitHub token rejected: ${reason}`;
-}
-
 /** Environment variables accepted by GitHub tools, in precedence order. */
-export const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
+export const GITHUB_TOKEN_ENV_VARS = Object.freeze([
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+] as const);
 
 /** Store the token a host's token form was given: trimmed, and refused
  *  when it is empty or looks like a placeholder (`storeCredential`). */

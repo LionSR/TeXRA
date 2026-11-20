@@ -3,22 +3,15 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
-import { createExternalLocation } from '@texra-ai/harness/host';
+import { latexdiff } from '@latex/latexdiff';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
-
-const mocks = vi.hoisted(() => ({
-  executeCommand: vi.fn(),
-}));
-
-vi.mock('@utils/system/execUtils', () => ({
-  executeCommand: mocks.executeCommand,
-}));
 
 describe('latexdiff shadow output', () => {
   const tempDirs = useTempDirs();
@@ -59,30 +52,26 @@ describe('latexdiff shadow output', () => {
         ),
         FakeHost,
       );
-      mocks.executeCommand.mockReturnValueOnce(
-        Effect.succeed({
-          success: false,
-          stdout: '',
-          stderr:
-            'OPENAI_API_KEY=sk-abcdefghijklmnop1234 Authorization: Bearer tok.en-123',
-          end: { _tag: 'Exited', code: 1 },
-        }),
-      );
+      const tool = scriptedSpawnerLayer(() => ({
+        stderr:
+          'OPENAI_API_KEY=sk-abcdefghijklmnop1234 Authorization: Bearer tok.en-123',
+        exitCode: 1,
+      }));
 
-      const { latexdiff } = yield* Effect.promise(
-        () => import('@latex/latexdiff'),
-      );
       const error = yield* Effect.flip(
         latexdiff(
-          createExternalLocation(path.join(sourceDir, 'base.tex')),
-          createExternalLocation(path.join(sourceDir, 'revised.tex')),
+          { kind: 'external', absolutePath: path.join(sourceDir, 'base.tex') },
+          {
+            kind: 'external',
+            absolutePath: path.join(sourceDir, 'revised.tex'),
+          },
           {
             roots,
             cwd: roots.workspace,
             suffix: '_diff',
             outputDirectory: path.join(tempDir, 'executions', 'run-1', 'diff'),
           },
-        ),
+        ).pipe(Effect.provide(tool.layer)),
       );
 
       // The failure must come from the scrubbed subprocess path, not an

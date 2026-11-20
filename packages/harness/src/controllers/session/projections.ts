@@ -16,42 +16,38 @@
  *   rows: a `model.message` response or failure, a `context.edit` summary
  *   and a model's `run.description` label (a run with a run history stores
  *   its spend there, never as a `usage` row). The `usage` display row of a
- *   priced row is not stored: a display read takes it off that row
- *   (`USAGE_ROWS`), and a committed batch's from `usageRows`.
+ *   priced row is not stored: a display read and a committed batch both
+ *   take it off the decoded row (`usageRows`).
  *
  * This module reads decoded events only, never `event.data`.
  */
-import { Effect, Schema } from 'effect';
+import { absurd, Effect, Schema } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateTarget,
+  DisplayRowSchema,
   listingKeyOf,
   listingTypeOf,
   pendingKeyOf,
   SessionRowDraftSchema,
-  SessionRowSchema,
   sumUsageStats,
   TokenUsageStatsSchema,
-  type AggregateId,
+  RunIdSchema,
+  type DisplayRow,
+  type RunId,
   type SessionRow,
   type TokenUsageStats,
   NonNegativeIntSchema,
 } from '@shared/schemas';
-import {
-  EVENT_COLUMNS,
-  EVENT_FROM,
-  aggregateColumns,
-  aggregateOf,
-  type SqlRow,
-} from './rowCodec';
+import { EVENT_COLUMNS, EVENT_FROM, aggregateColumns } from './rowCodec';
 import { AGGREGATE, UNREAD_KEY } from './rowReader';
 import type { RowReader } from './rowReader';
+import type { StoreConnection } from './storeConnection';
 
 /** One write a projector asks its upkeep to make. */
 type ProjectionOp =
   | {
       readonly table: 'listing_entry';
-      readonly aggregate: AggregateId;
+      readonly aggregate: RunId;
       readonly key: string;
       /** Null deletes the key. */
       readonly commit: number | null;
@@ -60,7 +56,7 @@ type ProjectionOp =
     }
   | {
       readonly table: 'run_usage';
-      readonly aggregate: AggregateId;
+      readonly aggregate: RunId;
       readonly commit: number;
       /** The listing's `usage` row data: the run's spend so far. */
       readonly data: string;
@@ -87,32 +83,55 @@ interface Projector {
    *  `aggregate`) writes; absent, the row is left out, as the wide read that
    *  marks its run damaged leaves it out. */
   readonly unread?: (
-    aggregate: AggregateId,
+    aggregate: RunId,
     commit: number,
     prior: string | undefined,
   ) => readonly ProjectionOp[];
 }
 
+/** The kinds of row a model call's spend is recorded on: {@link pricedUsage}
+ *  has a case for each, which the compiler checks. */
+export const PRICED_ROW_TYPES = Object.freeze([
+  'model.message',
+  'context.edit',
+  'run.description',
+] as const);
+const PRICED_KINDS: readonly string[] = PRICED_ROW_TYPES;
+const isPricedRow = (
+  row: SessionRow,
+): row is Extract<SessionRow, { type: (typeof PRICED_ROW_TYPES)[number] }> =>
+  PRICED_KINDS.includes(row.type);
+
 /** A priced row's spend as the `usage` display row carries it: its counts,
- *  cost, route and plan, without the call's surface and response time. */
+ *  cost, route and plan, without the call's surface and response time. None
+ *  for a row that records no spend: a `model.message` that is neither a
+ *  response nor a failure, a failure the provider did not bill, a title a
+ *  person gave. */
 function pricedUsage(event: SessionRow): TokenUsageStats | null {
-  let priced = null;
-  if (event.type === 'context.edit') priced = event.payload.usage;
-  if (
-    event.type === 'model.message' &&
-    (event.payload.kind === 'response' || event.payload.kind === 'failed')
-  )
-    priced = event.payload.usage ?? null;
-  if (event.type === 'run.description') priced = event.usage;
+  if (!isPricedRow(event)) return null;
+  let priced;
+  switch (event.type) {
+    case 'model.message':
+      if (event.payload.kind === 'response' || event.payload.kind === 'failed')
+        priced = event.payload.usage;
+      break;
+    case 'context.edit':
+      priced = event.payload.usage;
+      break;
+    case 'run.description':
+      priced = event.usage;
+      break;
+    default:
+      return absurd(event);
+  }
   if (priced == null) return null;
   const { provider, responseTimeMs, ...usage } = priced;
   return usage;
 }
 
-/** The `usage` display row a priced row projects, as a display read of the
- *  store returns it, or none. */
-export function usageRows(event: SessionRow): readonly SessionRow[] {
-  if (event.type === 'usage') return [];
+/** The `usage` display row a priced row shows, on that row's envelope, or
+ *  none. Nothing stores it: the priced row is the one record of the spend. */
+export function usageRows(event: SessionRow): readonly DisplayRow[] {
   const usage = pricedUsage(event);
   if (usage === null) return [];
   const { aggregateId, seq, commit, at } = event;
@@ -127,7 +146,7 @@ export function usageRows(event: SessionRow): readonly SessionRow[] {
     }),
   ];
 }
-const decodeUsageRow = Schema.decodeUnknownSync(SessionRowSchema);
+const decodeUsageRow = Schema.decodeUnknownSync(DisplayRowSchema);
 
 /** The projections this build maintains; {@link PROJECTORS} has one each. */
 const PROJECTION_NAMES = ['listing', 'usage'] as const;
@@ -146,19 +165,16 @@ const PROJECTORS = {
     table: 'listing_entry',
     // A run's first row a catch-up could not read is listed too, so a read
     // of its listing or its record meets the row and never answers without
-    // it. A plugin's own aggregate keeps no record.
-    unread: (aggregate, commit) =>
-      aggregateTarget(aggregate).kind === 'run'
-        ? [
-            {
-              table: 'listing_entry',
-              aggregate,
-              key: UNREAD_KEY,
-              commit,
-              first: true,
-            },
-          ]
-        : [],
+    // it.
+    unread: (aggregate, commit) => [
+      {
+        table: 'listing_entry',
+        aggregate,
+        key: UNREAD_KEY,
+        commit,
+        first: true,
+      },
+    ],
     // Every input has a listing key (`inputs`); the row that closes a
     // request or a follow-up drops its key.
     project: (event) => {
@@ -174,9 +190,9 @@ const PROJECTORS = {
     // v2: the rows carry `TurnUsage`'s count names and no `elapsedTime`.
     // v3: a model label's `run.description` is priced too.
     // v4: no `usage` row is stored: a display read takes it off its priced
-    // row (`USAGE_ROWS`).
+    // row (`usageRows`).
     version: 4,
-    inputs: ['model.message', 'context.edit', 'run.description', 'usage'],
+    inputs: [...PRICED_ROW_TYPES, 'usage'],
     prior: 'run_usage',
     table: 'run_usage',
     project: (event, prior) => {
@@ -209,8 +225,6 @@ export const LISTED_KINDS: ReadonlySet<string> = new Set([
   ...PROJECTORS.listing.inputs,
   'usage',
 ]);
-/** {@link LISTED_KINDS} as the JSON list a read binds. */
-export const LISTED_TYPES = JSON.stringify([...LISTED_KINDS]);
 /** One projection's checkpoint: its projector's version and the commit it
  *  read through. A name this build does not know (a later build's, or one
  *  an earlier build kept) is ignored. */
@@ -262,15 +276,11 @@ function opStatement(op: ProjectionOp): [string, unknown[]] {
   }
 }
 
-/** The upkeep of the store at `path`'s projections, in the caller's
- *  transaction: `exec` runs a statement, `read` decodes selected rows. */
-export function projectionUpkeep<E>(
-  exec: (
-    statement: string,
-    params?: readonly unknown[],
-  ) => Effect.Effect<readonly SqlRow[], E>,
-  read: RowReader<E>['read'],
-  path: string,
+/** The upkeep of a store's projections, in the caller's transaction on
+ *  its connection: `read` decodes selected rows. */
+export function projectionUpkeep(
+  { exec, path }: Pick<StoreConnection, 'exec' | 'path'>,
+  read: RowReader['read'],
 ) {
   const states = Effect.map(
     exec(
@@ -293,7 +303,7 @@ export function projectionUpkeep<E>(
   /** A projector's prior row of `aggregate`: its stored column, if any. */
   const priorOf = Effect.fnUntraced(function* (
     projector: Projector,
-    aggregate: AggregateId,
+    aggregate: RunId,
   ) {
     if (projector.prior === null) return undefined;
     const row = (yield* exec(
@@ -354,8 +364,12 @@ export function projectionUpkeep<E>(
         const decoded = new Set(events.map((event) => event.commit));
         for (const row of projector.unread === undefined ? [] : rows) {
           const commit = Schema.decodeUnknownSync(Schema.Int)(row.commit);
-          if (decoded.has(commit)) continue;
-          const aggregate = aggregateOf(row.kind, row.logicalId);
+          // A row under another aggregate kind than a run's is an earlier
+          // build's, of no run: there is no listing to record it in.
+          if (decoded.has(commit) || row.kind !== 'run') continue;
+          const aggregate = Schema.decodeUnknownSync(RunIdSchema)(
+            row.logicalId,
+          );
           const prior = yield* priorOf(projector, aggregate);
           for (const op of projector.unread?.(aggregate, commit, prior) ?? [])
             yield* exec(...opStatement(op));

@@ -82,6 +82,8 @@ their own (a record that fails to decode fails the read), so the turn
 schema decodes the flags an earlier record left absent as `false` or `[]`,
 and the writer states them.
 
+Moot since 2026-11-19: the external inquiry and its records were removed.
+
 ## 5. Smaller
 
 - `FollowUpMessage.displayText` and `ChildRunDelivery.usage`

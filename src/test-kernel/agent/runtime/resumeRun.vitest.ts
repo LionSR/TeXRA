@@ -11,6 +11,9 @@
  *   offered to the run it resumed;
  * - a run another live process holds is resumed here, or the host
  *   rearranges itself before the refusal;
+ * - a model switch asked of a run no process holds is refused instead of
+ *   queued, or the resumed run fails on a switch it cannot take instead of
+ *   naming it and going on;
  * - a user's stop while a resume decides is lost: the stop writes no
  *   `run.stop` row or no end, or the resume activates the stopped run anyway;
  * - a root launched to run once, resumed by an interactive caller after it
@@ -20,18 +23,25 @@
  *   wrote it is still leaving, is answered with the ended activation and
  *   resumes nothing.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { layer } from '@effect/vitest';
-import { Effect, Fiber, Context } from 'effect';
-import { describe, expect } from 'vitest';
+import { Effect, Fiber, Context, Schema } from 'effect';
+import { assert, describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { Inbox } from '@agent/followUp/Inbox';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRequests } from '@agent/runtime/requests';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
+  crashedCopy,
+  persistentTestSession,
   waitingRunAfterCrash,
   sessionStoreFaults,
   storedRows,
@@ -41,7 +51,11 @@ import {
 } from '@test/support/storeFaults';
 import { FakeHost, TestSession } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
-import type { RunId } from '@texra-ai/harness/schemas';
+import {
+  AgentConfigSchema,
+  generateRunId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 
 /** A resume in `session`. */
 const resume = (
@@ -117,8 +131,9 @@ describe(
               const { session, runId, storage } = yield* waitingRunAfterCrash();
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
-              // The resume reads the run's queued input and then its lineage
-              // (`persistedParentId`): that read fails.
+              // The resume reads the run's queued input, then, as its
+              // activation's batch commits, the run's records: that read
+              // fails.
               const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.flip(resume(runId, { session })),
@@ -142,21 +157,22 @@ describe(
             Effect.gen(function* () {
               const { session, runId, storage } = yield* waitingRunAfterCrash();
               const faults = yield* sessionStoreFaults(storage);
-              // The first records read finds the run's owner; the second, its
-              // config, is inside the resume.
-              const owner = yield* faults.holdNext('readRunRecord');
+              // The resume reads the run's queued input, then, as it opens
+              // the run, its history: input sent during that read is past
+              // the resume's own read of the input.
+              const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 resume(runId, { session }),
               );
-              yield* owner.reached;
-              const config = yield* faults.holdNext('readRunRecord');
-              yield* owner.release;
-              yield* config.reached;
+              yield* input.reached;
+              const history = yield* faults.holdNext('readAggregate');
+              yield* input.release;
+              yield* history.reached;
 
               expect(yield* send(session, runId, 'raced')).toEqual({
-                kind: 'queued',
+                kind: 'queue',
               });
-              yield* config.release;
+              yield* history.release;
               expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);
               yield* untilStored(
                 storage,
@@ -170,6 +186,89 @@ describe(
                 storage,
                 () => endsOf(storage, runId).at(-1) === 'cancelled',
               );
+            }),
+        );
+
+        it.effect(
+          "a person's answer to a request a dead process left resumes the run, and the call that asked takes it",
+          () =>
+            Effect.gen(function* () {
+              const { roots } = yield* FakeHost;
+              const { workspace } = roots;
+              assert(workspace !== undefined);
+              const effects = join(workspace, 'effects.log');
+              const runId = generateRunId();
+              // The run asks to run a command, and its process dies while
+              // the request waits.
+              const storage = yield* Effect.scoped(
+                Effect.gen(function* () {
+                  const session = yield* persistentTestSession(roots);
+                  yield* rootRun({
+                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                      agent: 'command_runner',
+                      agentSource: {
+                        kind: 'inline',
+                        persona: {
+                          description: 'Runs one command.',
+                          prompt: `GOLDEN-APPROVAL bash echo ran >> ${effects}`,
+                          tools: ['bash'],
+                        },
+                      },
+                      model: 'openai/gpt-5.6-sol',
+                      instruction: 'Run the command.',
+                    }),
+                    runId,
+                  }).pipe(Effect.provide(session));
+                  yield* untilStored(roots.storage, (rows) =>
+                    rows.some(
+                      (row) =>
+                        row.run === runId && row.type === 'request.opened',
+                    ),
+                  );
+                  const copy = crashedCopy(roots.storage);
+                  yield* Sessions.use((sessions) => sessions.close(roots));
+                  return copy;
+                }),
+              );
+              const requests = (type: string) =>
+                storedRows(storage)
+                  .filter((row) => row.run === runId && row.type === type)
+                  // cast: a request row's data names its request.
+                  .map((row) => JSON.parse(row.data) as { requestId: string });
+              const [asked] = requests('request.opened');
+              assert(asked !== undefined);
+
+              // A fresh process holds no run: the answer alone continues it.
+              const session = yield* persistentTestSession({
+                ...roots,
+                storage,
+              });
+              const answered = yield* Context.get(session, SessionRequests)
+                .request({
+                  kind: 'request.decide',
+                  runId,
+                  requestId: asked.requestId,
+                  decision: { action: 'approve' },
+                })
+                .pipe(Effect.provide(session));
+              expect(answered).toEqual({ kind: 'done' });
+              yield* untilStored(storage, (rows) =>
+                rows.some(
+                  (row) => row.run === runId && row.type === 'tool.result',
+                ),
+              );
+              yield* Sessions.use((sessions) =>
+                sessions.close({ ...roots, storage }),
+              );
+
+              // The command ran once on that answer: the request was never
+              // asked again, and its one decision is the person's.
+              expect(activations(storage, runId)).toBe(2);
+              expect(requests('request.opened')).toEqual([asked]);
+              expect(requests('request.decided')).toMatchObject([
+                { requestId: asked.requestId, decision: { action: 'approve' } },
+              ]);
+              expect(readFileSync(effects, 'utf8').trimEnd()).toBe('ran');
             }),
         );
 
@@ -209,6 +308,43 @@ describe(
               expect(withheld.filter((name) => name === 'plan')).toEqual([
                 'plan',
               ]);
+            }),
+        );
+
+        it.effect(
+          'a model switch asked of a run no process holds is queued, and the resumed run names a switch it cannot take and goes on',
+          () =>
+            Effect.gen(function* () {
+              const { session, runId, storage } = yield* waitingRunAfterCrash();
+              const model = 'unregistered/model';
+              const answered = yield* Context.get(session, SessionRequests)
+                .request({ kind: 'run.model', runId, model })
+                .pipe(Effect.provide(session));
+              expect(answered).toEqual({ kind: 'done' });
+              yield* send(session, runId, 'after the switch');
+
+              expect(yield* resume(runId, { session })).toMatchObject(
+                ACTIVATED,
+              );
+              yield* untilStored(
+                storage,
+                () =>
+                  answersOf(storage, runId)
+                    .at(-1)
+                    ?.includes('after the switch') ?? false,
+              );
+              const notes = storedRows(storage).flatMap((row) => {
+                if (row.run !== runId || row.type !== 'log') return [];
+                // cast: a `log` row's data holds its message.
+                const { message } = JSON.parse(row.data) as {
+                  message: string;
+                };
+                return message.startsWith('The switch to') ? [message] : [];
+              });
+              expect(notes).toEqual([
+                `The switch to ${model} was not applied: Model ${model} is not registered`,
+              ]);
+              expect(endsOf(storage, runId)).not.toContain('failed');
             }),
         );
 

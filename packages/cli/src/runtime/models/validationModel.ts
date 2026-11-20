@@ -102,6 +102,20 @@ const [notes, shell] = await Promise.all([
 const child = await agent('Answer the conformance child task.', { agentName: 'golden_child', label: 'Child' })
 return { notes: notes.output, shell: shell.output, child: child.response }`;
 
+/** The limits run's script: a `self()` child held to a spend cap its first
+ *  reply passes, then a fork of the conversation on a model the call names,
+ *  under a cap it never reaches. */
+const GOLDEN_LIMITS_SOURCE = `section('Limits')
+let capped
+try {
+  await self('Spend past the cap, then hold.', { fork: false, label: 'Capped', maxCostUsd: 1e-9 })
+  capped = 'finished'
+} catch (error) {
+  capped = error.name
+}
+const named = await self('Answer on the named model.', { label: 'Named', model: 'openai/gpt-6.1-sol', maxCostUsd: 100 })
+return { capped, named: named.response }`;
+
 /** A reply of `value` alone. */
 const text = (value: string): TurnResult['content'] => [
   { kind: 'message', content: [{ kind: 'text', text: value }] },
@@ -210,6 +224,20 @@ function goldenTurn(
         : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
+    // The judge of the round's `done` (a fresh `self()`): its claims.
+    if (said.includes('<goal_judge>'))
+      return Effect.succeed([
+        call('submit_output', {
+          claims: [
+            {
+              requirement: 'The golden chat is answered.',
+              status: 'verified',
+              check: 'Read the round report.',
+              observed: ANSWERED,
+            },
+          ],
+        }),
+      ]);
     // The goal's round (`self()`): a command its grant approves, a verdict.
     // Its first call is held, so the chat that started the goal finishes
     // its turn before the round goes on.
@@ -338,6 +366,22 @@ function goldenTurn(
         ? null
         : step(),
     );
+  }
+  // The limits run: its script's `self()` children, told apart by their
+  // tasks. One spends (a priced reply that calls a tool) and then is never
+  // answered, so only its call's cap ends it; the other answers at once.
+  if (system.includes('GOLDEN-LIMITS')) {
+    if (!said.includes('started this run of you with self()'))
+      return Effect.succeed(
+        results.length === 0
+          ? [call('script', { title: 'Limits', code: GOLDEN_LIMITS_SOURCE })]
+          : text('Limits done.'),
+      );
+    if (!said.includes('Spend past the cap, then hold.'))
+      return Effect.succeed(text('Named model answered.'));
+    return results.length === 0
+      ? Effect.succeed([call('executions', { path: '/executions' })])
+      : Effect.never;
   }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [

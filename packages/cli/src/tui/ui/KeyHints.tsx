@@ -1,7 +1,8 @@
 // Shared footer-strip for every modal / form / palette / approval card.
 //
-// The footer convention: each row carries scope-specific keys first, navigation in the middle, and
-// `Enter confirm · Esc cancel` last. Ad-hoc footer text is a review-blocker.
+// The footer convention: each row carries scope-specific keys first,
+// navigation in the middle, and Enter and Esc last. Ad-hoc footer text is a
+// review-blocker.
 
 import { FACT_SEPARATOR, joinFacts } from '@texra-ai/harness/schemas';
 import { Box, Text } from 'ink';
@@ -14,12 +15,8 @@ export interface KeyHint {
 }
 
 interface KeyHintsProps {
-  /** Scope-specific keys (rendered first). */
+  /** The keys, in the order the strip shows them. */
   readonly hints: readonly KeyHint[];
-  /** Append the canonical `Enter confirm · Esc cancel` pair when true.
-   *  Modals override to `false` when their primary affordance is different
-   *  (e.g. a `y / n` prompt). */
-  readonly confirmCancel?: boolean;
   /** Allow a reader footer to consume multiple rows instead of truncating. */
   readonly wrap?: boolean;
 }
@@ -46,11 +43,6 @@ export const CANCEL_HINT: KeyHint = Object.freeze({
 
 /** Esc steps back to the surface this one was opened from. */
 export const BACK_HINT: KeyHint = Object.freeze({ key: 'Esc', action: 'back' });
-
-const DEFAULT_TAIL: readonly KeyHint[] = Object.freeze([
-  Object.freeze({ key: 'Enter', action: 'confirm' }),
-  CANCEL_HINT,
-]);
 
 /** How a hint names each arrow-key pair. */
 export const UP_DOWN_KEYS = '↑/↓';
@@ -114,14 +106,10 @@ export function keyHintSpans(
 }
 
 export function KeyHints(props: KeyHintsProps): React.JSX.Element {
-  const all =
-    props.confirmCancel === false
-      ? props.hints
-      : [...props.hints, ...DEFAULT_TAIL];
   return (
     <Box>
       <Text dimColor wrap={props.wrap ? 'wrap' : 'truncate-end'}>
-        {keyHintSpans(all)}
+        {keyHintSpans(props.hints)}
       </Text>
     </Box>
   );

@@ -584,7 +584,7 @@ line to its source by grep, and checked that the paths named are internal
   module contract whose field docs point back at its own steps ("step 2"),
   not at a document.
 - `texra/src/shared/constants/latexToolchain.ts` and
-  `src/test-kernel/model/PinnedModels.vitest.ts`: where a comment says a
+  `packages/texra/test/model/PinnedModels.vitest.ts`: where a comment says a
   suite pins a fact, the suite exists and checks it (the opposite of IC1's
   eight).
 - `@ui/copy/*` (`texra/src/ui/copy/`): one home per user-visible word,

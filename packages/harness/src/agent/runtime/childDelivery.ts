@@ -14,6 +14,7 @@ import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
+  backgroundScriptOf,
   RUN_OUTCOME,
   runEndErrorMessage,
   type AttachedMemoryMiss,
@@ -28,6 +29,10 @@ import { readProgramResult } from './programRun';
 import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
 import { scriptEndDelivery, scriptStopNotice } from './scriptRun';
+
+/** The run lifecycle's log channel (`AgentRunLifecycle.ts`, which imports
+ *  this module, names the same). */
+const CHANNEL = 'agentRunLifecycle';
 
 /** A subagent's context lines, after its wall time: its working directory,
  *  then the memories its launch named and could not attach. */
@@ -74,8 +79,8 @@ export const childEndReport = Effect.fn('childEndReport')(
     SessionRoots | SessionLog | SessionViewAccess | ToolRegistry
   > {
     const { runId, config } = ctx;
-    const { script } = config;
-    if (script?.kind === 'background') {
+    const script = backgroundScriptOf(config);
+    if (script !== null) {
       if (report.outcome === RUN_OUTCOME.CANCELLED)
         return record?.stop?.reason === 'user'
           ? yield* scriptStopNotice(runId, script.title, ctx.startedAt)
@@ -93,7 +98,7 @@ export const childEndReport = Effect.fn('childEndReport')(
     const delivery = {
       family: DELIVERY_FAMILY.subagent,
       runId,
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTimeMs,
       lines: contextLines(ctx.workingDirectory, report.memoryMisses ?? []),
     };
     const agent = { name: 'agent', value: config.agent };
@@ -132,7 +137,7 @@ export const childEndReport = Effect.fn('childEndReport')(
             // the two reports apart.
             ...(record?.report == null
               ? []
-              : [{ name: 'continued', value: true }]),
+              : [{ name: 'continued', value: 'true' }]),
           ],
           ...(program !== undefined && program.delivery.length > 0
             ? { lines: [...delivery.lines, ...program.delivery] }
@@ -145,14 +150,17 @@ export const childEndReport = Effect.fn('childEndReport')(
     Effect.catch(built, (unbuilt) =>
       Effect.as(
         logFailure(
-          'agentRunLifecycle',
+          CHANNEL,
           `Run ${runId}: its report could not be built`,
-        )({ runId, error: unbuilt }),
+        )({
+          runId,
+          error: unbuilt,
+        }),
         {
           family:
-            config.script?.kind === 'background'
-              ? DELIVERY_FAMILY.script
-              : DELIVERY_FAMILY.subagent,
+            backgroundScriptOf(config) === null
+              ? DELIVERY_FAMILY.subagent
+              : DELIVERY_FAMILY.script,
           runId,
           message: `The run ${runId} ended ${report.outcome}, but its report could not be built: ${unbuilt.message}`,
         } satisfies ChildRunDelivery,

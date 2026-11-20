@@ -21,7 +21,7 @@
  * platform as the region setting defaults. A GLM Coding Plan key takes its
  * region's Responses endpoint, the same one an API key does.
  *
- * Kimi Code has two eligibility shapes:
+ * Kimi Code has two eligibility shapes ({@link kimiCodeServing}):
  *  - **exclusive** models (`kimi-for-coding`, `kimi-for-coding-highspeed`)
  *    are served ONLY by the coding endpoint (llm-zoo pins their `baseUrl` to
  *    it), so they take the `kimiCode` key whatever the toggles say;
@@ -30,6 +30,7 @@
  *    subscription" on and a Kimi Code key stored, and their wire ID differs
  *    (`kimi-k3` becomes `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
+import { absurd } from 'effect';
 import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import { PLAN_ROUTES, type PlanRoute } from '../errors.js';
@@ -134,25 +135,18 @@ function codexSubscriptionOf(
 }
 
 /**
- * Whether no route TeXRA reaches serves `config`: llm-zoo retired the model,
- * or only OpenRouter serves it, which TeXRA does not call.
+ * Whether TeXRA serves no run on `config`: llm-zoo retired the model, only
+ * OpenRouter serves it, which TeXRA does not call, or it cannot call
+ * functions, which every run does (its tools, or `script` in code mode).
  */
 export function isUnservedModel(
-  config: Pick<ModelConfig, 'retired' | 'openRouterOnly'>,
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'capabilities'>,
 ): boolean {
-  return config.retired === true || config.openRouterOnly === true;
-}
-
-/**
- * Whether the model issues independent tool calls together in one response
- * and handles their results in any order. The prompt tells such a model it
- * may batch calls; every other model is told to call one tool at a time.
- * Only Anthropic's models are known to; llm-zoo carries no flag for it.
- */
-export function issuesParallelToolCalls(
-  config: Pick<ModelConfig, 'provider'>,
-): boolean {
-  return config.provider === ModelProvider.ANTHROPIC;
+  return (
+    config.retired === true ||
+    config.openRouterOnly === true ||
+    !config.capabilities.supportsFunctionCalling
+  );
 }
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
@@ -172,35 +166,29 @@ export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {
 }
 
 /**
- * Whether the Kimi Code coding endpoint serves `model`: the llm-zoo
- * `kimiSubscription` flag on a Moonshot model. Serving status is a fact about
- * the Kimi Code backend, not derivable from other model fields.
+ * How the Kimi Code coding endpoint serves `model`: `only` it (llm-zoo pins
+ * the model's `baseUrl` there, so no open-platform route exists),
+ * `with-plan` beside the Moonshot open platform (the coding endpoint takes it
+ * only with the plan on), or `undefined` when it does not serve it. Serving
+ * status is the llm-zoo `kimiSubscription` flag on a Moonshot model: a fact
+ * about the Kimi Code backend, not derivable from other model fields.
  */
-export function isKimiSubscriptionEligible(
-  model: Pick<ModelConfig, 'provider' | 'kimiSubscription'>,
-): boolean {
-  return (
-    model.provider === ModelProvider.MOONSHOT && model.kimiSubscription === true
-  );
-}
-
-/**
- * Whether the coding endpoint ALONE serves `model`: llm-zoo pins its `baseUrl`
- * there, so no open-platform route exists.
- */
-export function isKimiCodeExclusiveModel(
+export function kimiCodeServing(
   model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): boolean {
-  return (
-    isKimiSubscriptionEligible(model) && model.baseUrl === KIMI_CODE_BASE_URL
-  );
+): 'only' | 'with-plan' | undefined {
+  if (
+    model.provider !== ModelProvider.MOONSHOT ||
+    model.kimiSubscription !== true
+  )
+    return undefined;
+  return model.baseUrl === KIMI_CODE_BASE_URL ? 'only' : 'with-plan';
 }
 
 /** Product-facing model source; direct managed services own their own group. */
 export function resolveModelSource(
   config: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): string {
-  return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
+  return kimiCodeServing(config) === 'only' ? 'kimiCode' : config.provider;
 }
 
 /**
@@ -237,67 +225,101 @@ function pluginEndpoint(provider: string): string | undefined {
     : plugin.baseUrl.international;
 }
 
+/** The endpoint a provider key takes for `config`: the per-model base URL,
+ *  the host's endpoint for its provider, else the plugin's default. */
+const keyEndpoint = (config: ModelConfig, facts: RouteFacts) =>
+  config.baseUrl ??
+  facts.endpoints[config.provider] ??
+  pluginEndpoint(config.provider);
+
+/**
+ * The route each plan gives `config` under `facts`, or `undefined` when the
+ * plan does not take it. Keyed by every plan, so a new plan does not compile
+ * until it says when it serves a model; read in key order, which is the
+ * precedence: the subscriptions are preferences, so a model whose plans are
+ * all off or ineligible takes its own key.
+ */
+const PLAN_DECISIONS = Object.freeze({
+  // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
+  'chatgpt-subscription': (config, facts) => {
+    const codex = codexSubscriptionOf(config);
+    return facts.plans.includes('chatgpt-subscription') &&
+      facts.mode === undefined &&
+      codex !== undefined
+      ? {
+          kind: 'session',
+          plan: 'chatgpt-subscription',
+          endpoint: OPENAI_DEFAULT_ENDPOINT,
+          contextWindow: facts.chatgptContextWindow ?? codex.contextWindow,
+        }
+      : undefined;
+  },
+  'xai-subscription': (config, facts) =>
+    facts.plans.includes('xai-subscription') &&
+    config.provider === ModelProvider.XAI
+      ? {
+          kind: 'session',
+          plan: 'xai-subscription',
+          endpoint: XAI_DEFAULT_ENDPOINT,
+        }
+      : undefined,
+  // An exclusive model takes the plan whatever the toggles say.
+  'kimi-code-subscription': (config, facts) => {
+    const serving = kimiCodeServing(config);
+    return serving === 'only' ||
+      (serving === 'with-plan' &&
+        facts.plans.includes('kimi-code-subscription'))
+      ? {
+          kind: 'api-key',
+          endpoint: config.baseUrl ?? KIMI_CODE_BASE_URL,
+          provider: PLAN_ROUTES['kimi-code-subscription'].provider,
+          plan: 'kimi-code-subscription',
+        }
+      : undefined;
+  },
+  // A per-model base URL outranks the plan's path; the plan's key takes the
+  // endpoint an API key does.
+  'glm-coding-plan-subscription': (config, facts) => {
+    if (
+      config.provider !== ModelProvider.GLM ||
+      !facts.plans.includes('glm-coding-plan-subscription') ||
+      config.baseUrl
+    )
+      return undefined;
+    const endpoint = keyEndpoint(config, facts);
+    return endpoint === undefined
+      ? undefined
+      : {
+          kind: 'api-key',
+          endpoint,
+          provider: PLAN_ROUTES['glm-coding-plan-subscription'].provider,
+          plan: 'glm-coding-plan-subscription',
+        };
+  },
+} satisfies Record<
+  PlanRoute,
+  (config: ModelConfig, facts: RouteFacts) => ModelRoute | undefined
+>);
+
 /** Decide the route `config` takes under `facts`. Pure. */
 export function decideModelRoute(
   config: ModelConfig,
   facts: RouteFacts,
 ): ModelRoute {
   if (isUnservedModel(config)) return { kind: 'unserved' };
-  const { plans } = facts;
-  // The subscriptions are preferences: signed out, the model takes its key.
-  // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
-  const codex = codexSubscriptionOf(config);
-  if (
-    plans.includes('chatgpt-subscription') &&
-    facts.mode === undefined &&
-    codex !== undefined
-  ) {
-    return {
-      kind: 'session',
-      plan: 'chatgpt-subscription',
-      endpoint: OPENAI_DEFAULT_ENDPOINT,
-      contextWindow: facts.chatgptContextWindow ?? codex.contextWindow,
-    };
-  }
-  if (
-    plans.includes('xai-subscription') &&
-    config.provider === ModelProvider.XAI
-  ) {
-    return {
-      kind: 'session',
-      plan: 'xai-subscription',
-      endpoint: XAI_DEFAULT_ENDPOINT,
-    };
-  }
-  if (
-    isKimiCodeExclusiveModel(config) ||
-    (isKimiSubscriptionEligible(config) &&
-      plans.includes('kimi-code-subscription'))
-  ) {
-    return {
-      kind: 'api-key',
-      endpoint: config.baseUrl ?? KIMI_CODE_BASE_URL,
-      provider: PLAN_ROUTES['kimi-code-subscription'].provider,
-      plan: 'kimi-code-subscription',
-    };
+  for (const decide of Object.values(PLAN_DECISIONS)) {
+    const route = decide(config, facts);
+    if (route !== undefined) return route;
   }
   // A provider with no HTTP route of its own has no key route either.
-  const endpoint =
-    config.baseUrl ??
-    facts.endpoints[config.provider] ??
-    pluginEndpoint(config.provider);
+  const endpoint = keyEndpoint(config, facts);
   if (!isApiProvider(config.provider) || endpoint === undefined)
     return { kind: 'no-api-key' };
-  // A per-model base URL outranks the plan's path.
-  const onCodingPlan =
-    config.provider === ModelProvider.GLM &&
-    plans.includes('glm-coding-plan-subscription') &&
-    !config.baseUrl;
   return {
     kind: 'api-key',
     endpoint,
     provider: config.provider,
-    plan: onCodingPlan ? 'glm-coding-plan-subscription' : null,
+    plan: null,
   };
 }
 
@@ -328,10 +350,9 @@ export function routeConfig(
   config: ModelConfig,
   route: ModelRoute,
 ): ModelConfig {
-  switch (route.kind) {
-    case 'session': {
-      if (route.plan !== 'chatgpt-subscription')
-        return { ...config, ...zeroCostAccessOverrides(config.contextWindow) };
+  if (!('plan' in route) || route.plan === null) return config;
+  switch (route.plan) {
+    case 'chatgpt-subscription': {
       const inputTokenLimit = Math.min(
         route.contextWindow,
         config.contextWindow,
@@ -346,12 +367,8 @@ export function routeConfig(
         ),
       };
     }
-    case 'api-key': {
-      if (route.plan === null) return config;
-      if (
-        route.plan !== 'kimi-code-subscription' ||
-        isKimiCodeExclusiveModel(config)
-      )
+    case 'kimi-code-subscription': {
+      if (kimiCodeServing(config) === 'only')
         return { ...config, ...zeroCostAccessOverrides(config.contextWindow) };
       const wireId = KIMI_CODE_WIRE_MODEL_IDS[config.id] ?? config.id;
       return {
@@ -362,7 +379,10 @@ export function routeConfig(
         ),
       };
     }
+    case 'xai-subscription':
+    case 'glm-coding-plan-subscription':
+      return { ...config, ...zeroCostAccessOverrides(config.contextWindow) };
     default:
-      return config;
+      return absurd(route.plan);
   }
 }

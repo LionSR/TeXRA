@@ -29,6 +29,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
+import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
 
 import {
   BUILD_VERSION,
@@ -342,6 +343,8 @@ export const serviceHandlers = (
               ),
             ),
           ),
+        'file.write': ({ path, contents, expected }) =>
+          writeFileIfUnchanged(path, contents, expected),
         'host.focus': ({ attachment }) => hosts.focus(attachment),
         'host.answer': ({ attachment, message }) =>
           hosts.answer(attachment, message),

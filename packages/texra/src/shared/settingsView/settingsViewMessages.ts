@@ -29,6 +29,8 @@ import {
 import {
   LATEX_DEPENDENCIES,
   LATEX_RECOMMENDED_SETTINGS,
+  PROBED_LATEX_TOOLS,
+  type ProbedLatexTool,
   SYSTEM_PACKAGE_MANAGERS,
 } from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
@@ -263,13 +265,18 @@ const ToolDashboardItemSchema = Schema.Struct({
   name: Schema.String,
   description: Schema.String,
   tools: Schema.Array(ToolInfoSchema),
-  status: ToolDependencyStatusSchema,
-  requiresSetup: Schema.Boolean,
-  statusLabel: Schema.optional(Schema.String),
-  installActions: Schema.Array(ToolInstallActionSchema),
-  configNotes: Schema.optional(Schema.String),
-  statusDetail: Schema.optional(Schema.String),
-  authNote: Schema.optional(Schema.String),
+  /** What a probed plugin needs and how its probe found it; null for a
+   *  built-in plugin, which needs nothing outside TeXRA. */
+  setup: Schema.NullOr(
+    Schema.Struct({
+      status: ToolDependencyStatusSchema,
+      statusLabel: Schema.optional(Schema.String),
+      installActions: Schema.Array(ToolInstallActionSchema),
+      configNotes: Schema.optional(Schema.String),
+      statusDetail: Schema.optional(Schema.String),
+      authNote: Schema.optional(Schema.String),
+    }),
+  ),
   /** A built-in plugin is always on; one with a toggle is on or off. */
   switch: Schema.Literals(['always-on', 'on', 'off']),
   settings: Schema.optional(
@@ -373,17 +380,25 @@ const LatexSettingsStatusSchema = Schema.Struct({
     Schema.Boolean,
   ),
   platform: OsPlatformSchema,
-  pdflatexPath: Schema.NullOr(Schema.String),
-  latexmkPath: Schema.NullOr(Schema.String),
-  latexdiffPath: Schema.NullOr(Schema.String),
-  latexindentPath: Schema.NullOr(Schema.String),
-  texcountPath: Schema.NullOr(Schema.String),
-  ghostscriptPath: Schema.NullOr(Schema.String),
-  graphicsmagickPath: Schema.NullOr(Schema.String),
+  /** Where each probed tool was found; null for one that was not. */
+  paths: Schema.Record(
+    Schema.Literals(PROBED_LATEX_TOOLS),
+    Schema.NullOr(Schema.String),
+  ),
   /** Detected package manager available on the system (null = none found). */
   packageManager: Schema.NullOr(Schema.Literals(SYSTEM_PACKAGE_MANAGERS)),
 });
 export type LatexSettingsStatus = typeof LatexSettingsStatusSchema.Type;
+
+/** The status's `paths`: `pathOf`'s answer for each probed tool. */
+export function probedToolPaths(
+  pathOf: (tool: ProbedLatexTool) => string | null,
+): LatexSettingsStatus['paths'] {
+  // cast: the entries are keyed by every probed tool, one each.
+  return Object.fromEntries(
+    PROBED_LATEX_TOOLS.map((tool) => [tool, pathOf(tool)]),
+  ) as LatexSettingsStatus['paths'];
+}
 
 /** Shared default — used by SettingsApp and LaTeXTab before backend data arrives. */
 export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = Object.freeze(
@@ -397,13 +412,7 @@ export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = Object.freeze(
       image: false,
     }),
     platform: 'linux',
-    pdflatexPath: null,
-    latexmkPath: null,
-    latexdiffPath: null,
-    latexindentPath: null,
-    texcountPath: null,
-    ghostscriptPath: null,
-    graphicsmagickPath: null,
+    paths: Object.freeze(probedToolPaths(() => null)),
     packageManager: null,
   },
 );

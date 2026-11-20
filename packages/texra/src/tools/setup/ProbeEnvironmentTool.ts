@@ -8,7 +8,6 @@ import { Config, Effect, Option, Predicate, Schema } from 'effect';
 // Local imports
 import { API_KEY_PROVIDER_IDS, apiKeyEntry, apiKey } from '@texra-ai/llm';
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
-import { readModelOptions } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
 import { ToolContext } from '@texra-ai/harness/plugins';
@@ -23,14 +22,20 @@ import {
   defineTool,
   Secrets,
   withLogChannel,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import { probeLatexTools } from '@latex/latexToolchain';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import {
+  hasUsableSetupCredential,
+  loadModelOptions,
+} from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
+  LATEX_TOOL_ENTRIES,
   LATEX_WORKSHOP_EXT_ID,
+  type LatexToolName,
   missingLatexTools,
   PROBED_LATEX_TOOLS,
 } from '@texra/shared/constants/latexToolchain';
@@ -38,12 +43,14 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import { detectPackageManager } from '@texra/utils/system/toolChecks';
+
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local file imports
 
 import { SetupHost } from './platform';
-import { locateTool } from './toolProbing';
 
 /**
  * The ChatGPT subscription routing probe could not answer. It reads the
@@ -80,7 +87,7 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   );
   // Routing is consulted only for a signed-in account.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const [option] = yield* readModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
+  const [option] = yield* loadModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
@@ -97,15 +104,39 @@ export const getChatGptSubscriptionStatus = Effect.fn(
 
 const CHANNEL = 'Setup Credentials';
 const ProbeEnvironmentInputSchema = Schema.Struct({
-  tool: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'If provided, re-checks just this one tool on PATH (e.g. "pdflatex") and answers in one line. Otherwise returns the full JSON report.',
-  }),
+  tool: optionalInput(
+    Schema.String,
+    'If provided, re-checks just this one tool on PATH (e.g. "pdflatex") and answers in one line. Otherwise returns the full JSON report.',
+  ),
 });
 
 type ProbeInput = typeof ProbeEnvironmentInputSchema.Type;
 
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
+
+/** Installation status of one probed tool, with its path when discoverable. */
+interface ToolStatus {
+  readonly name: string;
+  readonly installed: boolean;
+  readonly path: string | undefined;
+}
+
+/**
+ * Whether one tool is installed: a catalog tool as the toolchain probe
+ * reports it, any other binary (`node`, `python3`, one the user asks about)
+ * by a PATH search, which also supplies the path presented beside the flag.
+ */
+const locateTool = Effect.fn('locateTool')(function* (
+  name: string,
+): Effect.fn.Return<ToolStatus, never, ChildProcessSpawner> {
+  if (Object.hasOwn(LATEX_TOOL_ENTRIES, name)) {
+    // cast: `hasOwn` just found `name` among the catalog's keys.
+    const { tools } = yield* probeLatexTools([name as LatexToolName]);
+    return tools[0];
+  }
+  const found = yield* findCommand(name);
+  return { name, installed: found !== null, path: found?.resolvedPath };
+});
 
 /** OS, arch and shell; the shell comes from the ambient ConfigProvider. */
 const readHostInfo = Effect.map(

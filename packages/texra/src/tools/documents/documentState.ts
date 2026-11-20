@@ -22,14 +22,16 @@ import {
   type ToolRun,
   ToolError,
   sourceLocationUnder,
+  pathToLocationIn,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import {
+  programOf,
   toErrorMessage,
   fileLocationDisplayPath,
   type FileListEntry,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import { AgentDirectories, pathToLocationIn } from '@texra-ai/harness/host';
 import { processInputFiles, type InputMediaOptions } from '@latex/latexMedia';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -255,13 +257,13 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   // argument its launch named, read only from a program that registers it
   // as one (`Program.fileArgs`), so the launch checked it where it was
   // accepted.
-  const { script } = config;
+  const program = programOf(config);
   const editedFile =
-    script?.kind === 'program' &&
+    program !== null &&
     (yield* ToolRegistry).programs
-      .get(script.name)
+      .get(program.name)
       ?.fileArgs?.includes(MERGE_EDITED_FILE) === true
-      ? script.args[MERGE_EDITED_FILE]
+      ? program.args[MERGE_EDITED_FILE]
       : undefined;
   // The launch's files as they read now; one that does not read changes
   // what the model sees, so it is reported on the run's own channel.

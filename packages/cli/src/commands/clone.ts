@@ -1,7 +1,8 @@
 // Node imports
 import { resolve } from 'node:path';
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
+import { Argument, Command } from 'effect/cli';
 
 // Internal imports
 import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
@@ -20,15 +21,18 @@ import { osPlatformOf } from '@texra/shared/osPlatform';
 import { CLONE_COPY } from '@ui/copy/clone';
 
 // Local imports - runtime
-import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
+import {
+  CliUsageError,
+  isQuiet,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliSecretsLayer } from '../runtime/platform/cliProcessRuntime';
 import { askCliQuestion, writeTextStderr } from '../runtime/platform/logSinks';
 
 // Local imports - command helpers
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { withUsageSections } from './_helpers/dispatch';
+import { cliCommand } from './_helpers/cliCommand';
 import { commandResult, writeCliResult } from './_helpers/output';
 
 function buildOverleafClonePorts(
@@ -69,7 +73,7 @@ function presentCloneOutcome(
   outcome: OverleafCloneOutcome,
 ): CliExitCode | undefined {
   const gitError = (error: string) => {
-    if (!context.quietLogs) writeTextStderr(`Git clone error: ${error}`);
+    if (!isQuiet(context)) writeTextStderr(`Git clone error: ${error}`);
   };
   switch (outcome._tag) {
     case 'Cloned': {
@@ -123,67 +127,60 @@ function presentCloneOutcome(
   }
 }
 
-export const cloneCommand = withUsageSections(
-  defineCliCommand({
-    meta: {
-      name: 'clone',
-      description:
-        'Clone an Overleaf or ShareLaTeX project into a destination directory',
-    },
-    args: {
-      project: {
-        type: 'positional',
-        required: true,
-        description: 'Project URL, git URL, or 24-character project ID',
-      },
-      destination: {
-        type: 'positional',
-        required: false,
-        description:
-          'Directory to create or clone into (defaults to the working directory)',
-      },
-    },
-    // `clone` runs without a platform: its token ports are the credential
-    // store (`Secrets`), and git runs on the Node process services.
-    layer: cliSecretsLayer,
-    // The project and destination parses are the builder's, above the
-    // program: they refuse before anything is built.
-    run: (context, ctx) => {
-      const remote = parseLatexGitUrl(ctx.args.project);
-      if (!remote) {
-        throw new CliUsageError({
-          message:
-            'Invalid Overleaf/ShareLaTeX project. Pass a project URL, git URL, or 24-character project ID.',
-        });
-      }
-
-      const workspaceRoot = ctx.args.destination
-        ? resolve(context.cwd, ctx.args.destination)
-        : context.cwd;
-
-      return Effect.gen(function* () {
-        const outcome = yield* cloneOverleafProject(
-          remote,
-          workspaceRoot,
-          buildOverleafClonePorts(context, remote, yield* Secrets),
-        );
-        return presentCloneOutcome(context, remote, workspaceRoot, outcome);
+export const cloneCommand = cliCommand('clone', {
+  description:
+    'Clone an Overleaf or ShareLaTeX project into a destination directory',
+  config: {
+    project: Argument.String('project').pipe(
+      Argument.withDescription(
+        'Project URL, git URL, or 24-character project ID',
+      ),
+    ),
+    destination: Argument.String('destination').pipe(
+      Argument.withDescription(
+        'Directory to create or clone into (defaults to the working directory)',
+      ),
+      Argument.optional,
+    ),
+  },
+  // `clone` runs without a platform: its token ports are the credential
+  // store (`Secrets`), and git runs on the Node process services.
+  layer: cliSecretsLayer,
+  // The project and destination parses run before the runtime is built:
+  // they refuse before anything is opened.
+  run: (context, input) => {
+    const remote = parseLatexGitUrl(input.project);
+    if (!remote) {
+      throw new CliUsageError({
+        message:
+          'Invalid Overleaf/ShareLaTeX project. Pass a project URL, git URL, or 24-character project ID.',
       });
-    },
-  }),
-  [
+    }
+
+    const destination = Option.getOrUndefined(input.destination);
+    const workspaceRoot = destination
+      ? resolve(context.cwd, destination)
+      : context.cwd;
+
+    return Effect.gen(function* () {
+      const outcome = yield* cloneOverleafProject(
+        remote,
+        workspaceRoot,
+        buildOverleafClonePorts(context, remote, yield* Secrets),
+      );
+      return presentCloneOutcome(context, remote, workspaceRoot, outcome);
+    });
+  },
+}).pipe(
+  Command.withExamples([
     {
-      title: 'EXAMPLES',
-      rows: [
-        [
-          'texra clone 0123456789abcdef01234567 ./project',
-          'create a directory and clone an Overleaf project into it',
-        ],
-        [
-          'texra clone https://sharelatex.example.edu/project/0123456789abcdef01234567',
-          'clone from a self-hosted ShareLaTeX instance',
-        ],
-      ],
+      command: 'texra clone 0123456789abcdef01234567 ./project',
+      description: 'create a directory and clone an Overleaf project into it',
     },
-  ],
+    {
+      command:
+        'texra clone https://sharelatex.example.edu/project/0123456789abcdef01234567',
+      description: 'clone from a self-hosted ShareLaTeX instance',
+    },
+  ]),
 );

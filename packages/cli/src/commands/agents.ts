@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
 import { Effect } from 'effect';
+import { Argument, Command } from 'effect/cli';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
 import { AGENT_SOURCE, agentKey, agentName } from '@texra-ai/harness/schemas';
@@ -18,13 +18,17 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import type { CliContext } from '../runtime/platform/cliContext';
+import {
+  failUsage,
+  isQuiet,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
   context: CliContext,
@@ -33,7 +37,7 @@ const listAgents = Effect.fn('listAgents')(function* (
   const services = yield* cliPlatform;
   const result = yield* loadCliAgentList(services, options);
 
-  if (!context.quietLogs) {
+  if (!isQuiet(context)) {
     const catalog = yield* AgentCatalog;
     const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
     if (hiddenNotice) writeTextStderr(hiddenNotice);
@@ -54,7 +58,7 @@ const listAgents = Effect.fn('listAgents')(function* (
       formatCliAgentList(result.agents, {
         showEmptyState:
           options.includeHidden !== true &&
-          !context.quietLogs &&
+          !isQuiet(context) &&
           context.outputFormat === 'text',
       }),
     ),
@@ -69,10 +73,9 @@ const showAgent = Effect.fn('showAgent')(function* (
   const catalog = yield* AgentCatalog;
   const entry = catalog.get(name);
   if (!entry) {
-    writeTextStderr(missingAgentMessage(name));
-    return CliExitCode.Usage;
+    return yield* failUsage(missingAgentMessage(name));
   }
-  if (!context.quietLogs && catalog.newerBuiltIn(entry)) {
+  if (!isQuiet(context) && catalog.newerBuiltIn(entry)) {
     writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
   }
 
@@ -96,16 +99,11 @@ function emitCopyResult(result: {
   return emitCliResult(cliResult('agent-copy', copy, text));
 }
 
-function refuse(message: string) {
-  writeTextStderr(message);
-  return CliExitCode.Usage;
-}
-
 /** Copy a bundled agent into the custom agents directory, stamped `basedOn`. */
 const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
   yield* cliPlatform;
   const builtIn = yield* bundledAgentNamed(name);
-  if (!builtIn) return refuse(`No built-in agent named ${name}.`);
+  if (!builtIn) return yield* failUsage(`No built-in agent named ${name}.`);
   return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
     Effect.flatMap(({ path }) =>
       emitCopyResult({
@@ -116,7 +114,7 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
       }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
-      Effect.succeed(refuse(refused.message)),
+      failUsage(refused.message),
     ),
   );
 });
@@ -127,7 +125,9 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   if (!custom || !(yield* bundledAgentNamed(name))) {
-    return refuse(`${name} is not a custom copy of a built-in agent.`);
+    return yield* failUsage(
+      `${name} is not a custom copy of a built-in agent.`,
+    );
   }
   return yield* catalog
     .workspaceAgents(services)
@@ -142,7 +142,7 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
         }),
       ),
       Effect.catchTag('AgentCustomizeRefused', (refused) =>
-        Effect.succeed(refuse(refused.message)),
+        failUsage(refused.message),
       ),
     );
 });
@@ -160,85 +160,74 @@ const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
       }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
-      Effect.succeed(refuse(refused.message)),
+      failUsage(refused.message),
     ),
   );
 });
 
-const NAME_ARG = {
-  type: 'positional',
-  required: true,
-  description: AGENT_NAME_DESCRIPTION,
-} as const;
+const NAME_CONFIG = {
+  name: Argument.String('name').pipe(
+    Argument.withDescription(AGENT_NAME_DESCRIPTION),
+  ),
+};
 
-const agentsCustomizeCommand = defineCliCommand({
-  meta: {
-    name: 'customize',
-    description: 'Copy a built-in agent into your custom agents folder to edit',
-  },
-  args: { name: NAME_ARG },
+const agentsCustomizeCommand = cliCommand('customize', {
+  description: 'Copy a built-in agent into your custom agents folder to edit',
+  config: NAME_CONFIG,
   catchExitCode: CliExitCode.AgentError,
-  run: (_, ctx) => customizeAgent(ctx.args.name),
+  run: (_, input) => customizeAgent(input.name),
 });
 
-const agentsResetCommand = defineCliCommand({
-  meta: {
-    name: 'reset',
-    description: 'Delete your copy of a built-in agent so the built-in is used',
-  },
-  args: { name: NAME_ARG },
+const agentsResetCommand = cliCommand('reset', {
+  description: 'Delete your copy of a built-in agent so the built-in is used',
+  config: NAME_CONFIG,
   catchExitCode: CliExitCode.AgentError,
-  run: (_, ctx) => resetAgent(ctx.args.name),
+  run: (_, input) => resetAgent(input.name),
 });
 
-const agentsKeepCommand = defineCliCommand({
-  meta: {
-    name: 'keep',
-    description:
-      'Keep your copy of a built-in agent and dismiss the newer-version notice',
-  },
-  args: { name: NAME_ARG },
+const agentsKeepCommand = cliCommand('keep', {
+  description:
+    'Keep your copy of a built-in agent and dismiss the newer-version notice',
+  config: NAME_CONFIG,
   catchExitCode: CliExitCode.AgentError,
-  run: (_, ctx) => keepAgent(ctx.args.name),
+  run: (_, input) => keepAgent(input.name),
 });
 
-const agentsListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List available agents' },
-  args: {
-    all: {
-      type: 'boolean',
-      description:
-        'Show every agent, including agents hidden by workspace visibility settings',
-    },
+const agentsListCommand = cliCommand('list', {
+  description: 'List available agents',
+  config: {
+    all: boolFlag(
+      'all',
+      'Show every agent, including agents hidden by workspace visibility settings',
+    ),
   },
-  run: (context, ctx) =>
-    listAgents(context, { includeHidden: ctx.args.all === true }),
+  run: (context, input) => listAgents(context, { includeHidden: input.all }),
 });
 
-const agentsShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one agent' },
-  args: {
-    name: {
-      type: 'positional',
-      required: true,
-      description: `${AGENT_NAME_DESCRIPTION} (use \`source:name\` to disambiguate when the same name exists in multiple sources)`,
-    },
+const agentsShowCommand = cliCommand('show', {
+  description: 'Show one agent',
+  config: {
+    name: Argument.String('name').pipe(
+      Argument.withDescription(
+        `${AGENT_NAME_DESCRIPTION} (use \`source:name\` to disambiguate when the same name exists in multiple sources)`,
+      ),
+    ),
   },
   // A catalog that fails to load is an error line and a non-zero exit, not a
   // CLI crash.
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) => showAgent(context, ctx.args.name),
+  run: (context, input) => showAgent(context, input.name),
 });
 
-export const agentsCommand = defineCommand({
-  meta: { name: 'agents', description: 'Inspect TeXRA agents' },
-  // `show` already prints everything about an agent, so there is no separate
-  // `inspect` verb here.
-  subCommands: {
-    list: agentsListCommand,
-    show: agentsShowCommand,
-    customize: agentsCustomizeCommand,
-    reset: agentsResetCommand,
-    keep: agentsKeepCommand,
-  },
-});
+// `show` already prints everything about an agent, so there is no separate
+// `inspect` verb here.
+export const agentsCommand = Command.make('agents').pipe(
+  Command.withDescription('Inspect TeXRA agents'),
+  Command.withSubcommands([
+    agentsListCommand,
+    agentsShowCommand,
+    agentsCustomizeCommand,
+    agentsResetCommand,
+    agentsKeepCommand,
+  ]),
+);

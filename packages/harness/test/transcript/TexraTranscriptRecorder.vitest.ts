@@ -97,9 +97,8 @@ describe('createTestRunTrace script stage across a stop and resume', () => {
     trace.emit({ ...call, attempt: 2 });
 
     expect(transcript().stages).toMatchObject([
-      { id: 'script-card', name: 'Map', outcome: null },
+      { id: 'script-card', name: 'Map', end: null },
     ]);
-    expect(transcript().stages[0]).not.toHaveProperty('endTime');
     // The card the run's end cut is running again, as its stage is.
     const card = transcript().rows.find((row) => row.id === 'call-1');
     expect(card).toMatchObject({

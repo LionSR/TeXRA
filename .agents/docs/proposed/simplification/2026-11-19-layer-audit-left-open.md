@@ -42,16 +42,27 @@ only when the bind asked for it and the route can carry it, and the harness
 keeps passing `background: request.textOnly`. It changes what is sent to
 OpenAI and Google, so it needs a live run with a key before it lands.
 
-## 2. Image size limits are one provider's, applied to all
+## 2. Image size limits are one provider's, applied to all (landed)
 
-`MANY_IMAGE_MAX_DIMENSION = 2000` (`packages/harness/src/tools/attachments.ts`)
-is Anthropic's multi-image limit. It drops the bytes of any tool-attachment
-image over 2000px for every provider, even a single image to GPT or Gemini.
-`API_MAX_IMAGE_DIMENSION = 8000` (`agent/runtime/run/img.ts`) caps the
-`maxImageDimension` setting below the 10,000 its schema allows. Both are wire
-limits, and `packages/llm` should state them per protocol, e.g.
-`imageLimits(config)`. Decision needed: does llm-zoo gain the field, or does
-llm keep a protocol table?
+`packages/llm` now states the image limits per protocol: `IMAGE_LIMITS` in
+`packages/llm/src/protocol.ts`, a frozen table with a row for every
+`TurnProtocolSchema` member (a new protocol does not compile without one),
+holding each protocol's largest image side and its largest side in a
+many-image request. The harness constants are gone. A tool attachment
+(`buildBytesAttachment`, `packages/harness/src/tools/attachments.ts`) reads
+the many-image limit of the protocol its call's run is bound to
+(`ToolContext` → `run.model`); an opening message's media
+(`mediaInputParts`) caps the `maxImageDimension` setting at the bound
+model's protocol limit; a follow-up's media (`attachedMedia`), stored once
+and replayable to any binding, at the smallest limit of all protocols.
+
+Only the Anthropic row is established (8000 px, from #2737, and 2000 px
+for many-image requests, from the harness's own comment on the 400 it
+returns). The OpenAI Responses and Google Interactions rows carry the same
+numbers over, marked in the table as not established for those protocols, so
+nothing sent changed. Open: replace those two rows with each provider's
+documented limits, read from a source this repo can cite; the GPT and Gemini
+behaviour then changes there and nowhere else.
 
 ## 3. The GLM Coding Plan's precedence is decided in two packages
 
@@ -65,15 +76,12 @@ defaults, so llm cannot tell a dashboard URL from a default. The fix is a
 ## 4. A user row does not say who sent it
 
 `logFollowUps` (`packages/harness/src/agent/runtime/FollowUps.ts`) has the
-input's `from` but logs only the text. As a result:
+input's `from` but logs only the text. As a result the web labels every
+user row "You", including a child's delivery and a host notice
+(`UserMessage.ts`). (The terminal's guess at an inquiry continuation from
+its wording went with the external inquiry on 2026-11-19.)
 
-- The terminal guesses an inquiry continuation from its wording
-  (`INQUIRY_CONTINUATION_RE`, `packages/cli/src/chat/tui/panes/transcriptEntries.ts`).
-- The web labels every user row "You", including a child's delivery and a
-  host notice (`UserMessage.ts`).
-
-The fix is a sender on `UserRow`, so both renderers branch on it and the
-regex goes. It changes a stored payload, so it needs a row-version decision.
+The fix is a sender on `UserRow`, so the renderers branch on it. It changes a stored payload, so it needs a row-version decision.
 
 ## 5. Request nouns and the "waiting on you" source differ per renderer
 
@@ -83,6 +91,12 @@ requests that do not block their run. The web row reads `run.approval`
 (blocking only). One noun table keyed by `RequestPayload['kind']` belongs in
 `packages/texra/src/ui/copy/requestCards.ts`, and the badge should read
 `run.approval`. Decision needed: should a non-blocking request mark the row?
+
+Landed 2026-11-19: the nouns are one table, `REQUEST_NOUN` in
+`packages/texra/src/ui/copy/requestCards.ts`, total over
+`RequestPayload['kind']`; the terminal child list and the script-stage call
+line read it. Every renderer already used the same word, so nothing a person
+reads changed. The badge's source is still the open decision.
 
 ## 6. Copy the hosts word separately
 
@@ -127,6 +141,22 @@ The harness still carries TeXRA's name and LaTeX in a few places:
 The first two can take the product name from the catalog namespace. The
 examples can be neutral, which changes the tool descriptions a run records.
 
+Landed 2026-11-19 (#15106): the MCP client sends the app's client id as
+`clientInfo.name`, read from `SubscriptionAccounts` (`mcpServer.ts`).
+
+Landed 2026-11-20: the three model-facing LaTeX examples are neutral —
+`sessionDescription.ts`'s label-prompt example, and the `**/*.tex` examples
+in the `glob` and `grep` tool descriptions and hints — the two user-facing
+store errors (`databaseLayer.ts`, `sessionStore.ts`) name no product, and the
+harness-owned `GLM_CODING_PLAN_SETTING.description` (`stateSettings.ts`) no
+longer says "TeXRA shows the plan's quota". A general package now puts no
+embedder's domain or name in any string it sends a model or shows a user
+(the "TeXRA" left in harness source is in code comments naming the reference
+app). The remaining `texra` strings an embedder's
+users still see (the store file `texra.db`, `TEXRA_APPROVAL_POLICY`,
+`TEXRA_SKILL_DIR`) are persisted names and env keys, a format change
+deferred to the release (design doc, "Re-check (2026-11-19)").
+
 ## Checked and left alone
 
 - **The JSON Schema provider rules in `convertToolSchema`**
@@ -135,6 +165,7 @@ examples can be neutral, which changes the tool descriptions a run records.
   (`toolDigests`). Lowering it in llm would make the recorded schema differ
   from what the model saw.
 - **App settings rows that repeat provider console URLs**
-  (`settingSurfaces.ts` against `KEY_PAGES`), and the coding-plan catalog's
-  `apiProvider` against `PLAN_ROUTES`. Both are small. They belong with
-  open question 1 of the 2026-11-18 model-access note.
+  (`settingSurfaces.ts` against `KEY_PAGES`): landed 2026-11-19, the
+  toggles read `KEY_PAGES` from `packages/texra/src/shared/model/keyPages.ts`.
+  The coding-plan catalog's `apiProvider` against `PLAN_ROUTES` is small and
+  belongs with open question 1 of the 2026-11-18 model-access note.

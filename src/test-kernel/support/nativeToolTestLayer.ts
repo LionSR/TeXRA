@@ -1,13 +1,5 @@
 /** Explicit call capabilities over the calling fiber's process services. */
-import {
-  Context,
-  Effect,
-  Layer,
-  Schema,
-  ScopedRef,
-  Semaphore,
-  Ref,
-} from 'effect';
+import { Context, Effect, Layer, Schema, ScopedRef, Semaphore } from 'effect';
 
 import { callRequests } from '@agent/runtime/loop/toolGuard';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -41,14 +33,15 @@ type TestCallRun = Pick<RunCallShape['run'], 'runId' | 'toolPolicy'> &
     readonly session: Context.Context<SessionServices>;
   };
 
-/** A run that has opened no step yet. */
-const noStep = () => Ref.makeUnsafe<OpenStep | null>(null);
+/** A run that has opened no step yet, its steps held in the caller's
+ *  scope. */
+export const noStep = () => ScopedRef.make<OpenStep | null>(() => null);
 
-/** A run fixture's step fields: no step opened yet, and every step offers
- *  exactly `tools`, as the run's own tools over an empty catalog. */
+/** A run fixture's tool inputs: every step offers exactly `tools`, as the
+ *  run's own tools over an empty catalog. */
 export const testRunTools = (
   tools: Readonly<Record<string, ITool<Error, PluginToolServices>>> = {},
-): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
+): Pick<AgentRunShape, 'toolInputs'> => ({
   toolInputs: {
     tools: [],
     runTools: Object.values(tools),
@@ -56,7 +49,6 @@ export const testRunTools = (
     injectInstalled: false,
     held: { warnings: [], loaded: new Map(), entries: new Map() },
   },
-  steps: noStep(),
 });
 
 /** Every test call is a run's call, as every tool call is. Tests may supply
@@ -101,12 +93,17 @@ export function nativeToolTestLayer(
           agent: 'test',
           model: 'test-model',
         }),
-        // cast: a tool reads only the id off the run's model cell.
+        // cast: a tool reads only the id and the protocol (for an image's
+        // size limit) off the run's model cell.
         model: yield* ScopedRef.make(
-          () => ({ modelId: 'test-model' }) as BoundModel,
+          () =>
+            ({
+              modelId: 'test-model',
+              origin: { protocol: 'anthropic-messages' },
+            }) as BoundModel,
         ),
         logger: noopTrace,
-        steps: noStep(),
+        steps: yield* noStep(),
         scope: yield* Effect.scope,
         callbacks: {},
         awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
@@ -147,7 +144,7 @@ export function nativeToolTestLayer(
             session,
             commit: cell.append,
             at: { responseId: runCall.responseId, callId },
-            entered: { attempt: 1, raised: 0 },
+            entered: { attempt: 1, raised: 0, answer: null },
           }),
       );
       return Layer.mergeAll(

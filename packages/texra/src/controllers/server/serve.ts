@@ -20,7 +20,9 @@
  * record is released as it exits. It never starts at login: a client starts it detached when none answers.
  * Its projects are its own (one session per project, opened on demand over
  * that project's own roots, as the desktop opens its folders), and it
- * closes every session the process opened before its socket closes. Every
+ * closes every session the process opened, and then every project's roots
+ * (its hold on the project's store), before its socket closes: the socket
+ * closing is what tells a client the stores are free. Every
  * fact the lifetime follows is a published one (the projects' load, the
  * admissions, the watch streams), never a poll.
  */
@@ -246,34 +248,24 @@ const openProjects = Effect.fn('server.openProjects')(function* (
     );
     // A run at work holds the project through a lease of the project's
     // own (not one waiting for its next message, which the service's close
-    // stops, resumable).
-    let hold: Scope.Closeable | null = null;
-    const follow = (busy: boolean) =>
-      Effect.gen(function* () {
-        if (busy === (hold !== null)) return;
-        if (busy) {
-          hold = yield* Scope.make();
-          // The entry exists: this runs inside its own lookup's scope.
-          yield* RcMap.get(projects, root).pipe(
-            Scope.provide(hold),
-            Effect.orDie,
-          );
-          yield* count(0, 1);
-          return;
-        }
-        const held = hold;
-        hold = null;
-        if (held !== null) yield* Scope.close(held, Exit.void);
-        yield* count(0, -1);
-      });
+    // stops, resumable). The lease closes before the count drops, and the
+    // view ending counts as idle.
+    const held = Effect.acquireRelease(count(0, 1), () => count(0, -1)).pipe(
+      // The entry exists: this runs inside its own lookup's scope.
+      Effect.andThen(RcMap.get(projects, root)),
+      Effect.orDie,
+      Effect.andThen(Effect.never),
+      Stream.fromEffect,
+      Stream.scoped,
+    );
     yield* Effect.forkScoped(
-      Stream.runForEach(
-        session.view.changes.pipe(
-          Stream.map(() => runsAtWork(session) > 0),
-          Stream.changes,
-        ),
-        follow,
-      ).pipe(Effect.ensuring(follow(false))),
+      session.view.changes.pipe(
+        Stream.map(() => runsAtWork(session) > 0),
+        Stream.concat(Stream.succeed(false)),
+        Stream.changes,
+        Stream.switchMap((busy) => (busy ? held : Stream.empty)),
+        Stream.runDrain,
+      ),
     );
     return session;
   });
@@ -319,9 +311,15 @@ export const serve = Effect.fn('server.serve')(function* (
       cause: new Error(WINDOWS_UNSUPPORTED),
     });
   const fs = yield* FileSystem.FileSystem;
-  // Opened first, so the projects close last, after the socket and the
-  // record.
-  const projects = yield* openProjects(options.storageRoot, options.idleAfter);
+  // In a scope of their own, which the exit below closes before the socket:
+  // a client takes the socket's close to mean the service holds no project
+  // store any more (`stopService`), and a store is held exclusively. A run
+  // that fails instead closes them with its scope, after the socket.
+  const projectsScope = yield* Scope.fork(yield* Effect.scope);
+  const projects = yield* openProjects(
+    options.storageRoot,
+    options.idleAfter,
+  ).pipe(Scope.provide(projectsScope));
   const paths = servicePaths(options.storageRoot);
   // This service's own socket: a retired one that exits later can only
   // remove its own file, never this one's.
@@ -507,5 +505,7 @@ export const serve = Effect.fn('server.serve')(function* (
       ),
     ),
   );
+  // Each project's roots, and with them the last hold on its store.
+  yield* Scope.close(projectsScope, Exit.void);
   return exit;
 }, Effect.scoped);

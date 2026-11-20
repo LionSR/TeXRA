@@ -1,4 +1,5 @@
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Option } from 'effect';
+import { Flag } from 'effect/cli';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
@@ -9,8 +10,7 @@ import {
   pickDefaultToolUseAgent,
 } from '@texra/shared/constants/agents';
 import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
-import { type CliContext } from '../runtime/platform/cliContext';
-import { CliExitCode } from '../runtime/platform/exitCodes';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 import {
   buildInitConfig,
   ensureTexraGitignored,
@@ -26,7 +26,7 @@ import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
 interface InitAgentOption {
@@ -144,10 +144,9 @@ const runInit = Effect.fn('runInit')(function* (
     !opts.force &&
     (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, filePath)))
   ) {
-    writeTextStderr(
+    return yield* failUsage(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );
-    return CliExitCode.Usage;
   }
 
   const agents = implicitDefaultToolUseAgents(
@@ -194,33 +193,26 @@ const runInit = Effect.fn('runInit')(function* (
   yield* emitInitSummary(filePath, answers, config, models, gitignoreOutcome);
 });
 
-export const initCommand = defineCliCommand({
-  meta: {
-    name: 'init',
-    description: 'Bootstrap a .texra/config.json with sensible defaults',
+export const initCommand = cliCommand('init', {
+  description: 'Bootstrap a .texra/config.json with sensible defaults',
+  config: {
+    yes: boolFlag('yes', 'Accept defaults non-interactively').pipe(
+      Flag.withAlias('y'),
+    ),
+    force: boolFlag('force', 'Overwrite an existing config file'),
+    // Absent leaves the choice to the wizard (or `false` without one);
+    // `--no-gitignore` refuses it.
+    gitignore: Flag.Boolean('gitignore').pipe(
+      Flag.withDescription(
+        'Add .texra/ to .gitignore (non-interactive default: false)',
+      ),
+      Flag.optional,
+    ),
   },
-  args: {
-    yes: {
-      type: 'boolean',
-      alias: 'y',
-      description: 'Accept defaults non-interactively',
-    },
-    force: {
-      type: 'boolean',
-      description: 'Overwrite an existing config file',
-    },
-    gitignore: {
-      type: 'boolean',
-      description: 'Add .texra/ to .gitignore (non-interactive default: false)',
-    },
-  },
-  run: (context, ctx) =>
+  run: (context, input) =>
     runInit(context, {
-      yes: ctx.args.yes === true,
-      force: ctx.args.force === true,
-      gitignore:
-        typeof ctx.args.gitignore === 'boolean'
-          ? ctx.args.gitignore
-          : undefined,
+      yes: input.yes,
+      force: input.force,
+      gitignore: Option.getOrUndefined(input.gitignore),
     }),
 });

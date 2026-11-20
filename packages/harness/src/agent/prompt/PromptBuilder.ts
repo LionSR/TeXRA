@@ -17,12 +17,24 @@ import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * Instructions appended to an agent-with-tools prompt at open. What depends on
- * the model or the settings is rendered by each step (`stepInstructions`).
+ * Instructions appended to an agent-with-tools prompt at open, led by the
+ * working-directory sentences of the tools its first step offers. What
+ * depends on the model or the settings is rendered by each step
+ * (`stepInstructions`).
  */
-const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
-Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
-Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
+const toolUseInstructions = (offered: readonly string[]) => {
+  const offers = (...names: string[]) =>
+    names.some((name) => offered.includes(name));
+  const workingDirectory = [
+    offers('bash') &&
+      'Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., `ls src/`, `cat README.md`).',
+    offers('bash', 'glob', 'grep') &&
+      'Scope file searches to `.` or a subdirectory, or use the glob/grep tools.',
+  ].filter(Boolean);
+  const lead =
+    workingDirectory.length > 0 ? `${workingDirectory.join(' ')}\n` : '';
+  return `<tool_use_instructions>
+${lead}Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
 
 Prefer using tools over asking the user to take manual actions.
 Do not ask for permission in chat before editing a file or running a command: when the user's approval settings require confirmation, the harness asks before the call runs.
@@ -32,49 +44,37 @@ When this run carries out an approved plan or a goal's round, work toward it end
 In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
 Never mention tool names when speaking to the user.
 </tool_use_instructions>`;
+};
 
-/**
- * The tool-call mechanics are provider-gated: OpenAI-compatible providers
- * (DeepSeek, Kimi, GLM, MiniMax, …) need the schema/JSON/multi_tool_use
- * guardrails and the sequential-call constraint (Google/DeepSeek thought-
- * signature batching assumes ordered follow-ups). A model that issues
- * parallel tool calls natively (`issuesParallelToolCalls`) gets the parallel
- * encouragement instead of the weak-model boilerplate.
- */
-const PARALLEL_TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
-Do not create excessive markdown files or documentation unless explicitly requested.`;
-const SEQUENTIAL_TOOL_CALLS = `When using a tool, follow the JSON schema exactly and include all required properties.
-Always produce valid JSON when calling a tool.
-Do not call tools that are not provided or any multi_tool_use variants.
-Call tools sequentially and wait for the output before calling another.`;
+/** How a step that offers tools may issue its calls, and, when one of them
+ *  creates files, which files not to create. */
+const toolCalls = (offered: readonly string[]) =>
+  [
+    'Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.',
+    ...(['write_file', 'bash'].some((name) => offered.includes(name))
+      ? [
+          'Do not create excessive markdown files or documentation unless explicitly requested.',
+        ]
+      : []),
+  ].join('\n');
 
 /**
  * The context a step renders: the tools it offers and the sections it adds
- * after the run's recorded prompt, by name, in order: the tool-call
- * mechanics of the step's model (`parallelToolCalls`: it issues independent
- * calls together natively), the skills the step lists, then each pinned plugin's
- * section, in plugin id order. They are built from the step (its model,
- * settings, offered tools and pinned contributors) and the skill catalog it
- * discovers, so a model switch or a setting change reaches the next request,
- * and a resume rebuilds them.
+ * after the run's recorded prompt, by name, in order: how to issue tool
+ * calls, the skills the step lists, then each pinned plugin's section, in
+ * plugin id order. They are built from the step (its settings, offered tools
+ * and pinned contributors) and the skill catalog it discovers, so a setting
+ * change reaches the next request, and a resume rebuilds them.
  */
 export function stepInstructions(
   plugins: readonly Pick<Plugin, 'id' | 'prompt'>[],
   skills: readonly SkillCatalogEntry[],
   ctx: Parameters<PromptSection>[0],
-  parallelToolCalls: boolean,
 ): PromptSections {
   const sections = Object.fromEntries([
     // A step that offers no tool (a document reviser, the critic) has no
     // calls to make.
-    ...(ctx.offered.length > 0
-      ? [
-          [
-            'tool-call',
-            parallelToolCalls ? PARALLEL_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
-          ],
-        ]
-      : []),
+    ...(ctx.offered.length > 0 ? [['tool-call', toolCalls(ctx.offered)]] : []),
     ...(skills.length > 0
       ? [
           [
@@ -137,6 +137,9 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
       roots: WorkspaceRoots;
       /** A persona that declares no tools: no tool-use suffix. */
       textOnly: boolean;
+      /** The tools the run's first step offers, by name: the suffix names
+       *  only those. */
+      offered: readonly string[];
     },
   ): Effect.fn.Return<
     string,
@@ -151,7 +154,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
         loadAgentsMd(roots.workspace, roots.storageRoot),
         options.textOnly
           ? Effect.succeed('')
-          : buildWorkspaceInfoBlock(roots.workspace),
+          : buildWorkspaceInfoBlock(roots.workspace, options.offered),
       ],
       { concurrency: 'unbounded' },
     );
@@ -161,7 +164,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     ].join('\n');
     if (options.textOnly) return systemPrompt;
     const suffix = yield* renderPrompt(
-      [TOOL_USE_INSTRUCTIONS, workspaceInfo].join('\n'),
+      [toolUseInstructions(options.offered), workspaceInfo].join('\n'),
       inputs,
     );
     return [systemPrompt, suffix].filter(Boolean).join('\n');

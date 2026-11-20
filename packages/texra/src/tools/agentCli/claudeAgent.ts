@@ -29,6 +29,7 @@ import {
   ToolError,
   type AgentTrace,
   defineTool,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,
@@ -75,21 +76,22 @@ const ClaudeAgentInputSchema = Schema.Struct({
     description:
       'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
   }),
-  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.literals.join(', ')}. Defaults to the user-configured model.`,
-  }),
-  effort: Schema.optional(Schema.NullOr(AgentCliEffortSchema)).annotate({
-    description:
-      "Reasoning effort; overrides the model's @effort suffix. Defaults to the user-configured effort (medium unless changed). A level the model lacks becomes the nearest one it has.",
-  }),
-  session_id: Schema.optional(Schema.NullOr(Schema.NonEmptyString)).annotate({
-    description:
-      'Continue an existing Claude Code session with a follow-up instruction, as its next turn. A session whose turn is still running refuses another until that turn is delivered.',
-  }),
-  fork_session: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'When true, branch from session_id into a new Claude session and leave the original session unchanged. Defaults to false.',
-  }),
+  model: optionalInput(
+    Schema.String,
+    `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.literals.join(', ')}. Defaults to the user-configured model.`,
+  ),
+  effort: optionalInput(
+    AgentCliEffortSchema,
+    "Reasoning effort; overrides the model's @effort suffix. Defaults to the user-configured effort (medium unless changed). A level the model lacks becomes the nearest one it has.",
+  ),
+  session_id: optionalInput(
+    Schema.NonEmptyString,
+    'Continue an existing Claude Code session with a follow-up instruction, as its next turn. A session whose turn is still running refuses another until that turn is delivered.',
+  ),
+  fork_session: optionalInput(
+    Schema.Boolean,
+    'When true, branch from session_id into a new Claude session and leave the original session unchanged. Defaults to false.',
+  ),
 }).check(
   Schema.makeFilter((input) =>
     input.fork_session !== true || input.session_id != null
@@ -214,7 +216,7 @@ const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
   return {
     response: responseParts.join('\n\n'),
     usage,
-    attributes: [{ name: 'session-id', value: sessionId || null }],
+    attributes: sessionId ? [{ name: 'session-id', value: sessionId }] : [],
     ...(typeof totalCostUsd === 'number' &&
       totalCostUsd > 0 && {
         lines: [`<cost-usd>${totalCostUsd.toFixed(4)}</cost-usd>`],

@@ -1,6 +1,7 @@
 import path from 'node:path';
 
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, Option, PlatformError } from 'effect';
+import { Flag } from 'effect/cli';
 
 import {
   parseGitHubSlug,
@@ -27,10 +28,9 @@ import {
 } from '../runtime/platform/logSinks';
 import { gh, ghAvailable, git } from '../runtime/gitOps';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { optString } from './_helpers/globalArgs';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { CliContext } from '../runtime/platform/cliContext';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 
 const WORKFLOW_RELATIVE_PATH = '.github/workflows/texra-code-review.yml';
 const DEFAULT_BRANCH_NAME = 'texra/add-code-review';
@@ -183,10 +183,9 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
 
   // The command commits with the user's own git identity.
   if (!(yield* isGitRepository(cwd))) {
-    writeTextStderr(
+    return yield* failUsage(
       'Not inside a git repository. Run this from a cloned GitHub repo.',
     );
-    return CliExitCode.Usage;
   }
 
   const root = (yield* repositoryRoot(cwd)) ?? cwd;
@@ -198,10 +197,9 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     pathExists(fs, workflowAbsPath),
   );
   if (workflowExists && !opts.force) {
-    writeTextStderr(
+    return yield* failUsage(
       `${WORKFLOW_RELATIVE_PATH} already exists. Re-run with --force to overwrite it.`,
     );
-    return CliExitCode.Usage;
   }
 
   const url = yield* originUrl(root);
@@ -212,18 +210,16 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
 
   const branchExists = yield* localBranchExists(root, branch);
   if (branchExists && !opts.force) {
-    writeTextStderr(
+    return yield* failUsage(
       `Branch "${branch}" already exists. Pass --branch <name> or --force.`,
     );
-    return CliExitCode.Usage;
   }
 
   const baseRef = branchExists ? base : yield* resolveBaseRef(root, base);
   if (!baseRef) {
-    writeTextStderr(
+    return yield* failUsage(
       `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
     );
-    return CliExitCode.Usage;
   }
 
   // Only once the command is committed to writing the workflow file: the
@@ -392,40 +388,41 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
   printSecretChecklist(slug);
 });
 
-export const installGithubActionCommand = defineCliCommand({
-  meta: {
-    name: 'install-github-action',
-    description: 'Install the TeXRA GitHub App and scaffold code review',
-  },
+export const installGithubActionCommand = cliCommand('install-github-action', {
+  description: 'Install the TeXRA GitHub App and scaffold code review',
   // The command brings no platform up: it only scaffolds a workflow file in a
   // git repository.
   layer: cliSecretsLayer,
-  args: {
-    branch: {
-      type: 'string',
-      description: `Branch to create for the PR (default: ${DEFAULT_BRANCH_NAME})`,
-    },
-    base: {
-      type: 'string',
-      description: 'Base branch for the PR (default: the repo default branch)',
-    },
-    force: {
-      type: 'boolean',
-      description: 'Overwrite an existing workflow file / reuse the branch',
-    },
-    pr: {
-      type: 'boolean',
-      default: true,
-      negativeDescription: 'Only scaffold and commit; do not push or open a PR',
-      description: 'Push the branch and open a pull request',
-    },
+  config: {
+    branch: Flag.String('branch').pipe(
+      Flag.withDescription(
+        `Branch to create for the PR (default: ${DEFAULT_BRANCH_NAME})`,
+      ),
+      Flag.optional,
+    ),
+    base: Flag.String('base').pipe(
+      Flag.withDescription(
+        'Base branch for the PR (default: the repo default branch)',
+      ),
+      Flag.optional,
+    ),
+    force: boolFlag(
+      'force',
+      'Overwrite an existing workflow file / reuse the branch',
+    ),
+    pr: Flag.Boolean('pr').pipe(
+      Flag.withDefault(true),
+      Flag.withDescription(
+        'Push the branch and open a pull request; --no-pr: only scaffold and commit; do not push or open a PR',
+      ),
+    ),
   },
-  run: (context, ctx) =>
+  run: (context, input) =>
     runInstallGithubAction(context, {
-      branch: optString(ctx.args.branch),
-      base: optString(ctx.args.base),
-      force: ctx.args.force === true,
-      openPr: ctx.args.pr !== false,
+      branch: Option.getOrUndefined(input.branch),
+      base: Option.getOrUndefined(input.base),
+      force: input.force,
+      openPr: input.pr,
     }),
   catchExitCode: CliExitCode.AgentError,
 });

@@ -10,7 +10,7 @@
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type {
   ChildRunDelivery,
-  FollowUpContent,
+  FollowUpMessageContent,
   ScriptDeliverySummary,
 } from '@shared/schemas';
 import { formatScriptTally, tallyTotal } from '@shared/transcript/scriptCall';
@@ -18,6 +18,7 @@ import {
   formatCompactDuration,
   formatCostUsd,
   formatResultCount,
+  formatWallTime,
   stripControlCharacters,
 } from '@utils/text/stringUtils';
 
@@ -87,13 +88,11 @@ function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
 function deliverySummary(delivery: ChildRunDelivery): string {
   if (delivery.summary !== undefined)
     return formatScriptDeliverySummary(delivery.summary);
-  const attribute = (name: string): string | undefined => {
-    const value = delivery.attributes?.find(
-      (attr) => attr.name === name,
-    )?.value;
-    return value == null ? undefined : String(value);
-  };
-  const { exit, message, wallTime } = delivery;
+  const attribute = (name: string): string | undefined =>
+    delivery.attributes?.find((attr) => attr.name === name)?.value;
+  const { exit, message, wallTimeMs } = delivery;
+  const wallTime =
+    wallTimeMs === undefined ? undefined : formatWallTime(wallTimeMs);
 
   // A background shell command (bashDelivery.ts) is named by the model's
   // description, else its command, and judged by its exit: it carries
@@ -134,8 +133,7 @@ function deliverySummary(delivery: ChildRunDelivery): string {
     );
     return preview ? `${head}\n${preview}` : head;
   }
-  const retryable = attribute('retryable') === 'true';
-  const head = `✗ ${name} failed${wall}${retryable ? ' (retryable)' : ''}`;
+  const head = `✗ ${name} failed${wall}`;
   return message ? `${head}\n${message}` : head;
 }
 
@@ -149,7 +147,9 @@ interface FollowUpDisplay {
  *  of its facts, a script's with its summary typed beside it, so no
  *  renderer reads it from text; a message as its `displayText`, else its
  *  text. */
-export function followUpDisplay(content: FollowUpContent): FollowUpDisplay {
+export function followUpDisplay(
+  content: FollowUpMessageContent,
+): FollowUpDisplay {
   if (!('delivery' in content))
     return { text: content.displayText ?? content.text };
   const { delivery } = content;

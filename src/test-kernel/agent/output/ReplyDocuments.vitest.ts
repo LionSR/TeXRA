@@ -3,8 +3,6 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { createExternalLocation } from '@texra-ai/harness/host';
-
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { FakeHost } from '@test/support/testKernel';
@@ -70,11 +68,12 @@ const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
   yield* write('output.xml', output.join('\n'));
   const { outputs } = yield* extractReplyDocuments(
     replyContext(host.roots, inputFiles, options),
-    createExternalLocation(host.path('tmp/run/output.xml')),
+    { kind: 'external', absolutePath: host.path('tmp/run/output.xml') },
     0,
-    options.baseFiles?.map((name) =>
-      createExternalLocation(host.path('tmp/run', name)),
-    ) ?? [],
+    options.baseFiles?.map((name) => ({
+      kind: 'external',
+      absolutePath: host.path('tmp/run', name),
+    })) ?? [],
   );
   return outputs;
 });

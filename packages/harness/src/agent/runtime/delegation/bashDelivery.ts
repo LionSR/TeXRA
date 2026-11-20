@@ -14,7 +14,7 @@ import type {
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendTail, headTail } from '@utils/text/appendTail';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { formatCount, splitContentLines } from '@utils/text/stringUtils';
 
 /** Last N lines of output for the delivery preview. */
 const OUTPUT_PREVIEW_LINES = 20;
@@ -82,7 +82,7 @@ export function bashResultDelivery(
       if (head) lines.push(`<${name}-head>${escapeText(head)}</${name}-head>`);
       if (elided > 0) {
         lines.push(
-          `<${name}-elided>${elided.toLocaleString()} characters elided</${name}-elided>`,
+          `<${name}-elided>${formatCount(elided)} characters elided</${name}-elided>`,
         );
       }
     }
@@ -101,7 +101,7 @@ export function bashResultDelivery(
     runId,
     attributes: callAttributes(call),
     exit,
-    wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+    wallTimeMs,
     lines,
   };
 }

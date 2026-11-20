@@ -33,6 +33,9 @@
  *   attachment's stream and the window answers (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
  *   reads and writes here rather than opening the project's store itself.
+ * - `file.write`: a window's write of a project file on a person's word
+ *   (the editor's save, the accept of a task's output), which the service
+ *   runs so it takes the write lane its tasks' edits take.
  */
 import { hash } from 'node:crypto';
 
@@ -55,6 +58,7 @@ import {
   RunResultSchema,
   RunWorkspaceFileSchema,
   OutcomeSchema,
+  Rejected,
   RequestErrorSchema,
   RuntimeCommandSchema,
   SessionViewSchema,
@@ -70,6 +74,7 @@ import {
   SubscribeSchema,
 } from '@texra/shared/session/sessionFrames';
 import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
+import { ExpectedFileSchema } from '@texra/common/files/projectFileWrite';
 import {
   HostCapabilitySchema,
   HostAttachFrameSchema,
@@ -349,6 +354,23 @@ export const TexraRpcs = RpcGroup.make(
     },
     success: Schema.Boolean,
     error: ProjectStateFailed,
+  }),
+  /** `writeFileIfUnchanged` in the service: write the file at the absolute
+   *  `path` while it is as `expected`. Answers whether it was written. The
+   *  service is not a containment boundary: it runs as the user whose
+   *  windows connect over a socket only that user can open, and a window can
+   *  write any file the user can. Which path a surface may name is decided
+   *  in the window before the call (`resolveWritable`, an agent definition
+   *  by catalog name), and an accept may name a file outside the workspace,
+   *  as a task's tools may. */
+  Rpc.make('file.write', {
+    payload: {
+      path: Schema.String,
+      contents: Schema.String,
+      expected: ExpectedFileSchema,
+    },
+    success: Schema.Boolean,
+    error: Rejected,
   }),
   Rpc.make('host.focus', { payload: { attachment: Schema.String } }),
   /** A window's reply to one of the service's calls on it (`WindowRpcs`),

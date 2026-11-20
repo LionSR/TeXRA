@@ -36,10 +36,12 @@ its kind is its `type` column.
 - **Storage root**: One directory holding one store file.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
-- **Aggregate**: A keyed sequence of rows. Kinds are `run` (keyed by run id) and
-  `plugin` (keyed `<plugin>:<key>`); in memory a run's key is its run id and
-  a plugin's is its key behind `plugin:`
-  (`shared/schemas/identifiers.ts#AggregateIdSchema`).
+- **Aggregate**: A keyed sequence of rows. Every aggregate this build writes is
+  a run's, stored as kind `run` and its run id; in memory its key is the run
+  id (`controllers/session/rowCodec.ts#aggregateColumns`). A row under any
+  other kind (a plugin's own aggregate, which an earlier build wrote) is an
+  earlier build's, and the run it hangs under reads as one
+  (`controllers/session/rowCodec.ts#EARLIER_AGGREGATE_PARENTS`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
   no `run.removed` has closed it
   (`controllers/session/databaseLayer.ts#A run must begin with exactly one run.start`,
@@ -104,7 +106,7 @@ on (`controllers/session/storeSchema.ts#prepareStore`). Every transaction the
 store runs MUST begin with `BEGIN IMMEDIATE`, so it holds the write lock from its
 first statement and never upgrades a read lock: it is the SQLite client's own
 transaction, which begins that way on a writable connection
-(`controllers/session/databaseLayer.ts#sql.withTransaction`). File maintenance
+(`controllers/session/storeConnection.ts#sql.withTransaction`). File maintenance
 runs outside these: the one-time `VACUUM` at setup and page reclaim in
 autocommit `incremental_vacuum` steps, neither of which writes a row
 (`controllers/session/storeSchema.ts#incrementalVacuum`, `#reclaimFreePages`).
@@ -144,7 +146,7 @@ is one SQLite transaction followed by the publication of its rows, and it
 SHALL run where it is called as one uninterrupted turn: the driver is
 synchronous, the job awaits nothing, and the scheduler does not take the
 fiber off between its steps (`agent/runtime/sessionEventsLayer.ts#commit`,
-`controllers/session/databaseLayer.ts#PreventSchedulerYield`). So jobs run one
+`controllers/session/storeConnection.ts#PreventSchedulerYield`). So jobs run one
 at a time, the table's commit order is the order of the calls, and a job's
 appends commit together or not at all
 (`controllers/session/databaseLayer.ts#job`).
@@ -174,12 +176,19 @@ given after close is a defect; a detached one is logged and dropped
 Once a job's transaction commits, the publisher SHALL publish what the job
 wrote, from memory, to the session's subscribers, one batch per job in commit
 order: the batch's display rows as a display read of the same commits returns
-them, and the commit it reached (`agent/runtime/sessionEventsLayer.ts#publish`,
+them, the commit before it and the commit it reached
+(`agent/runtime/sessionEventsLayer.ts#publish`,
 `controllers/session/databaseLayer.ts#displayRows`). Nothing in the session reads
-its own writes back to learn what it committed. A tail reads from the store only
-the rows it starts behind the publisher's last published commit, then follows
-the batches (`agent/runtime/sessionEventsLayer.ts#all`); the session's view takes its
-rows the same way (`controllers/session/sessionInputsLayer.ts#sessionInputsLayer`).
+its own writes back to learn what it committed. The publisher MUST NOT wait
+for a subscriber: it keeps a bounded number of batches for one that is behind
+and drops the oldest past that (`agent/runtime/sessionEventsLayer.ts#KEPT_BATCHES`).
+A reader MUST NOT lose a row to that: a batch whose commit before is past the
+last commit the reader saw shows the gap, and the reader reads the commits
+between from the store. So a tail reads from the store only the rows it starts
+behind the publisher's last published commit and any stretch it fell too far
+behind to be handed, and otherwise follows the batches
+(`agent/runtime/sessionEventsLayer.ts#batches`); the session's view takes its
+rows the same way (`controllers/session/sessionInputsLayer.ts#dropped`).
 Every projection is caught up when the store opens, and each append keeps it
 current in its own transaction, so a read never checks it
 (`controllers/session/databaseLayer.ts#upkeep.catchUp`,
@@ -212,7 +221,7 @@ known kind at a version above the one this build reads
 build lacks passes the gate; its rows read as written, marked unavailable
 (below). The
 gate MUST run at open, so no build opens a store holding core rows it cannot
-read, or writes beside them (`controllers/session/databaseLayer.ts#storeGate`); a
+read, or writes beside them (`controllers/session/databaseLayer.ts#store.gate`); a
 project store's one writer is the process that opened it (section 7), so what
 the store holds cannot change under it. A core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts#readableVersion`). Kinds a build deleted are
@@ -251,8 +260,9 @@ not (`controllers/session/rowReader.ts#RowReader`). A listing or a tail leaves
 an earlier build's or a corrupt row out with one warning; when the row is on a
 `run` aggregate it also marks that run unreadable and replaces a damaged
 `run.start` with a bare one of `unknown` identity, so the run still lists
-(`controllers/session/rowReader.ts#warnOnce`, `#bareStart`), and a bad row on a
-`plugin` aggregate marks no run (`controllers/session/rowReader.ts#mark`); a
+(`controllers/session/rowReader.ts#warnOnce`, `#bareStart`), and a row under
+another aggregate kind marks the run it hangs under as an earlier build's
+(`controllers/session/rowReader.ts#EARLIER_AGGREGATE_PARENTS`); a
 row of a known kind at a version above this build's fails any read that selects
 it, listing and tail included, because it means a newer build now writes this
 store; a read whose query does not select that row (a display tail of display
@@ -282,14 +292,19 @@ selects only those kinds, and a row of any other kind is refused
 
 ### 3.1 Run history rows (private to the runtime)
 
-Read through the run history, and by the store's usage projection, which turns
-the priced usage on `response`, `failed` and `context.edit` rows, and on a
-model's `run.description`, into a projected `usage` row
+Read through the run history, by the store's usage projection, which sums the
+priced usage on `response`, `failed` and `context.edit` rows, and on a
+model's `run.description`, into each run's spend
 (`controllers/session/projections.ts#pricedUsage`), and by
-the display reader, which selects `tool.intent` and `tool.result` and shows
-each as its call's card row, a `tool.start` or a `tool.end`, in the private
-row's place (`controllers/session/rowReader.ts#DISPLAY_READ_TYPES`,
-`#callCard`). Each display row is shown from one stored row, so a display read
+the display reader, which selects the rows it shows something of and shows
+each in the private row's place: a `tool.intent` or a `tool.result` as its
+call's card row, a `tool.start` or a `tool.end`
+(`controllers/session/rowReader.ts#callCard`), and a priced row as its `usage`
+row (`controllers/session/projections.ts#usageRows`). One function says what a
+row shows, for a committed batch and a cold read alike, and it reads decoded
+rows only: no statement reads inside a stored row
+(`controllers/session/databaseLayer.ts#shown`, `#DISPLAY_READ_TYPES`). Each
+display row is shown from one stored row, so a display read
 may end a page at any row (`controllers/session/databaseLayer.ts#DISPLAY_PAGE_END`).
 The private rows themselves are never sent to a renderer
 (`shared/schemas/sessionEvent.ts#isDisplayRow`).
@@ -373,7 +388,7 @@ also read by `applyRunRows`.
   changes nothing: nothing continues from either until the next open.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
-- `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
+- `plugin.fact` (folded: no): A plugin's own kind about its run; core never reads `value`.
 - `followup.queued` (folded: no): Input not taken yet, whole: a message's
   text, or a child's delivery with its facts typed, rendered as its envelope
   where it becomes the run's message.
@@ -719,7 +734,11 @@ another process makes to it is seen through a 250 ms poll of SQLite's
 `data_version`
 (`controllers/session/globalDatabaseLayer.ts#'PRAGMA data_version'`), and
 since that process can be a newer build, the store gate runs again in each
-of its writes (`#Effect.andThen(gate, body)`). A project store runs no poll: its holder learns what it committed from its own
+of its writes (`controllers/session/storeConnection.ts#Effect.andThen(gate, body)`).
+A read of whether something changed (that poll, a values change feed) that
+keeps failing is retried for about a minute and then reported as a change,
+so its reader's own read meets the failure
+(`controllers/session/currentValues.ts#changeRead`). A project store runs no poll: its holder learns what it committed from its own
 publisher.
 
 ### 7.1 Aggregates
@@ -758,11 +777,16 @@ resume a wake took follows it itself, whoever opened it,
 `effect/sessionPrograms.ts#redirectedFrom`).
 
 The activation is one transaction: it folds the stored rows and commits a
-`request.decided` `cancel` for every request the previous process left open
-that blocks its caller, then the activation rows
+`request.decided` `cancel` for every request the previous process left open,
+then the activation rows
 (`agent/runtime/makeRunHistory.ts#activate`). What was in flight counts as not
-done: the call or turn that asked asks again under a new id. A request that
-does not block its caller stays open.
+done: the call or turn that asked asks again under a new id. The one request
+the activation does not cancel is one a person answered while no process held
+the run: the decide door resumes the run for that answer, and the activation
+commits its `request.decided` after its `run.activate`
+(`agent/runtime/loop/runLoop.ts#heldAnswers`), so the call that asked starts
+again and takes the decision from the row when it asks the same thing
+(`agent/runtime/loop/toolGuard.ts#askOf`).
 
 ### 7.3 Refusals
 
@@ -779,28 +803,27 @@ run a launch here holds that would need the run stopped first is refused as
 
 ### 8.1 Kinds
 
-The request kinds are the harness's own six and one plugin case
-(`shared/schemas/request.ts#RequestPayloadSchema`):
+The request kinds are a closed set the harness declares
+(`shared/schemas/request.ts#RequestPayloadSchema`), each with the answers it
+takes besides the three refusals (`shared/schemas/request.ts#REQUEST_ANSWERS`):
 
-| Kind           | Asks                                    | Blocks its caller |
-| -------------- | --------------------------------------- | ----------------- |
-| `toolEdit`     | approval of a file edit                 | yes               |
-| `bash`         | approval of a command                   | yes               |
-| `retry`        | whether to retry a failed model attempt | yes               |
-| `proposal`     | approval of a proposed agent run        | yes               |
-| `planApproval` | approval of a plan                      | yes               |
-| `userQuestion` | answers to questions                    | yes               |
-| `plugin`       | whatever its plugin asks, in its `data` | as declared       |
+| Kind           | Asks                                    | Answered with                 |
+| -------------- | --------------------------------------- | ----------------------------- |
+| `toolEdit`     | approval of a file edit                 | `approve`                     |
+| `bash`         | approval of a command                   | `approve`                     |
+| `retry`        | whether to retry a failed model attempt | `retry`                       |
+| `proposal`     | approval of a proposed agent run        | `approve`                     |
+| `planApproval` | approval of a plan                      | `approve`, `approve_and_goal` |
+| `userQuestion` | answers to questions                    | `submit`, `skip`              |
 
-Every own kind blocks its caller (the tool call that opened it, or for
-`retry` the model invocation). A plugin's request declares whether it does
-(`blocksCaller`) and which actions answer it (`answers`); its plugin's
-decision hook records each answer (`shared/schemas/request.ts#blocksCaller`).
+Every request blocks its caller (the tool call that opened it, or for
+`retry` the model invocation), and one decision answers it and lets that
+one waiting call go on.
 
 ### 8.2 Decisions
 
-A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
-`skip`, `retry`, `reject`, `deny` and `cancel`
+A decision is one of `approve`, `approve_and_goal`, `submit`, `skip`,
+`retry`, `reject`, `deny` and `cancel`
 (`shared/schemas/request.ts#RequestDecisionSchema`).
 
 ### 8.3 Protocol
@@ -809,8 +832,8 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requests.ts#const { requestId } = payload.data`). A tool call's
   request id is derived from the response, call, attempt and ordinal, so a
   call's requests are found from its rows
-  (`shared/session/inFlight.ts#callRequestId`). No request is joined across a
-  stop: a resumed call asks again under the next ordinal.
+  (`shared/session/inFlight.ts#callRequestId`). A request cancelled by a stop
+  or a resume is not joined: a resumed call asks again under the next ordinal.
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, through the asker's cell, so no surface lists it pending
   (`agent/runtime/requests.ts#openRequest`); a grant turned on answers every
@@ -818,7 +841,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
 - Who answers a request is decided once, as it opens, and stored as its
   `answeredBy`: a person when a `PreToolUse` hook asked or the request asks
-  about no operation (a question, a retry, a plugin's request), else the grant
+  about no operation (a question or a retry), else the grant
   its operation takes (`agent/runtime/requests.ts#answererOf`, `#OPERATIONS`).
   The policy's answer at open and a grant turned on while it waits both read
   it, so a grant answers a waiting request exactly when it would have approved
@@ -835,20 +858,15 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#'The run ended.'`);
   one a dead process left is the next resume's to cancel. Both cancel the
-  same requests, the open ones that block their caller
+  same requests, every open one
   (`shared/session/runState.ts#cancelRequestRows`).
 - A request is a row, so it outlives its process. A resume cancels every open
-  one that blocks its caller (section 7.2), and the call that asked asks again
-  (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not
-  block its caller is not cancelled: it
-  stays open until its `request.decided` commits, or until `run.removed`
-  closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#accept`). Its plugin's decision
-  hook records an answer outside the store first, idempotently; the decision,
-  the facts the hook returns and the input it sends a run (the external
-  inquiry's follow-up) then commit in one checked transaction, after which
-  that run is woken (`agent/runtime/requests.ts#decideRequest`,
-  `controllers/session/SessionRequests.ts#wakeIfOwed`).
+  one (section 7.2), and the call that asked asks again
+  (`shared/session/inFlight.ts#resumedAttempt`). A decision for a request
+  while no process holds its run MUST resume the run, itself or through the
+  parent whose open call owns it, and commit with that run's activation; a
+  resume that is refused rejects the decision with the resume's reason
+  (`controllers/session/SessionRequests.ts#decideSurfaceRequest`).
 
 ## 9. Crash guarantees
 
@@ -919,7 +937,9 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.intent`, no result: If the last request the call opened was answered
   by nobody (open, or cancelled by a stop or a resume), the call was waiting
   on it: it runs again from its start and asks again
-  (`shared/session/inFlight.ts#resumedAttempt`). Otherwise it is re-run only if
+  (`shared/session/inFlight.ts#resumedAttempt`). One answered after the run's
+  latest activation was answered while no process held the run: the call runs
+  again from its start and takes that decision. Otherwise it is re-run only if
   both the stored and the current tool declare `replay: 'safe'` and the stored
   arguments validate, however often it started before; else settled as outcome
   unknown (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,
@@ -977,7 +997,7 @@ its title.
   `packages/harness/test/shared/session/runHistory.vitest.ts#'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted'`;
   `src/test-kernel/controllers/session/goldenStore.vitest.ts#'folds to the pinned session view and run states'`
 - **6 retry**:
-  `src/test-kernel/agent/runtime/RetryState.vitest.ts#'admits a manual retry through a durable approval'`,
+  `packages/harness/test/agent/runtime/RetryState.vitest.ts#'admits a manual retry through a durable approval'`,
   `#'stops automatic attempts at the configured limit'`;
   `packages/harness/test/agent/runtime/ModelRetryGate.vitest.ts#'admits one recovery probe and releases siblings after success'`
 - **7 one process per store**:

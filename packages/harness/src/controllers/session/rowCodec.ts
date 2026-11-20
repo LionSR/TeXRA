@@ -22,16 +22,16 @@
  *   same address; the draft brings the bytes beside the row (`WithBlobs`),
  *   stored under their address or linked when the store holds them. No
  *   read inflates them: the invocation resolves them before the call.
- * - **Aggregates.** An `AggregateId` is stored as two columns, `kind` and
- *   `logical_id`, and composed back from them here.
+ * - **Aggregates.** A row's aggregate is its run: stored as two columns,
+ *   `kind` (`run`) and `logical_id` (the run id). A row under another kind
+ *   (a plugin's own aggregate, which an earlier build wrote) is an earlier
+ *   build's.
  */
 import { constants, zstdCompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 import { Effect, Predicate, Result, Schema } from 'effect';
 import {
-  aggregateTarget,
   CURRENT_VALUE_VERSION,
-  pluginAggregateId,
   RunIdSchema,
   RETIRED_PLUGIN_FACTS,
   RETIRED_ROW_KINDS,
@@ -39,7 +39,7 @@ import {
   SessionRowDraftSchema,
   SessionRowSchema,
   unavailableFactReason,
-  type AggregateId,
+  type RunId,
   type SessionRow,
   type SessionRowDraft,
   factName,
@@ -103,26 +103,15 @@ export interface EncodedRow {
   readonly references: readonly string[];
 }
 
-/** An aggregate as its two columns. */
-export function aggregateColumns(
-  id: AggregateId,
-): readonly [kind: string, logicalId: string] {
-  const target = aggregateTarget(id);
-  return [target.kind, target.id];
-}
+/** A run's aggregate as its two columns. */
+export const aggregateColumns = (
+  id: RunId,
+): readonly [kind: string, logicalId: string] => ['run', id];
 
 /** Aggregates as the JSON array of `[kind, logicalId]` pairs a statement
  *  binds with `json_each(?)`. */
-export const aggregateList = (ids: readonly AggregateId[]): string =>
+export const aggregateList = (ids: readonly RunId[]): string =>
   JSON.stringify(ids.map(aggregateColumns));
-
-/** The `AggregateId` two columns name. */
-export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
-  if (kind === 'run') return Schema.decodeUnknownSync(RunIdSchema)(logicalId);
-  if (kind === 'plugin' && typeof logicalId === 'string')
-    return pluginAggregateId(logicalId);
-  throw new Error(`Unknown aggregate: ${String(kind)} ${String(logicalId)}`);
-}
 
 const hasKind = (type: string): type is SessionRowDraft['type'] =>
   Object.hasOwn(ROW_KINDS, type);
@@ -140,8 +129,8 @@ function rowRefusal({ commit, type, version: stored }: typeof RowSchema.Type) {
   if (retired === 'execution') return new DatabaseRowEarlier({ commit, type });
   if (!hasKind(type))
     return new DatabaseRowCorrupt({ commit, type, detail: 'an unknown kind' });
-  // A row a read derives (a priced row's `usage` row, the listing's
-  // spend) has no version: this build wrote the read.
+  // The listing's spend, read off `run_usage`, has no version: this
+  // build's projection wrote it.
   const { version } = ROW_KINDS[type];
   const at = stored ?? version;
   if (at > version) return new DatabaseStoreNewer({ type, version: at });
@@ -175,6 +164,21 @@ export const EARLIER_RUNS: readonly [string, readonly unknown[]] =
       ),
     ]),
   ]);
+
+/**
+ * The runs an aggregate of another kind than a run's hangs under (a
+ * plugin's own aggregate an earlier build wrote, collected with its run),
+ * each with that aggregate's first row: what the run decided from those
+ * rows is not in this build's view of it, so the run reads as an earlier
+ * build's.
+ */
+export const EARLIER_AGGREGATE_PARENTS = `SELECT p.logical_id AS logicalId,
+    min(e."commit") AS "commit", e.type AS type
+  FROM event_sequence s
+  JOIN event_sequence p ON p.id = s.parent_id AND p.kind = 'run'
+  JOIN event e ON e.aggregate = s.id
+  WHERE s.kind <> 'run'
+  GROUP BY p.logical_id`;
 
 /** Validate a draft and encode it at its kind's current version, with the
  *  blobs it brings. Throws on a draft that does not parse, is not JSON, or
@@ -294,6 +298,11 @@ export function decodeRow(
         detail: causeOf(error),
       }),
     );
+  // Every aggregate this build writes is a run's.
+  if (row.kind !== 'run')
+    return Result.fail(
+      new DatabaseRowEarlier({ commit: row.commit, type: row.type }),
+    );
   const refused = rowRefusal(row);
   if (refused === 'retired') return Result.succeed(undefined);
   if (refused !== null) return Result.fail(refused);
@@ -312,7 +321,7 @@ export function decodeRow(
   }
   const parsed = Schema.decodeUnknownResult(SessionRowSchema)({
     ...data,
-    aggregateId: aggregateOf(row.kind, row.logicalId),
+    aggregateId: row.logicalId,
     seq: row.seq,
     commit: row.commit,
     at: row.at,

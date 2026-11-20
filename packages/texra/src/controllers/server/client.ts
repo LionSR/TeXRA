@@ -454,7 +454,10 @@ export const reachBundledService = (
  * with `drain`) and wait until it is gone. The answer is the socket closing
  * under this connection: the service exits ahead of any response, so the
  * ask is sent without awaiting one (`discard`: it completes as the handler
- * starts). A socket nobody accepts on is a service already gone.
+ * starts). The service closes its socket after it has released every
+ * project store (`serve`), so its process may still be exiting, but the
+ * next opener of a project is not refused. A socket nobody accepts on is a
+ * service already gone.
  */
 export const stopService = (
   socket: string,
@@ -699,7 +702,7 @@ export const SERVICE_OFFLINE =
 
 /** What a window is told when a newer TeXRA's service replaced the one it
  *  spoke to: it cannot reconnect until it is reloaded or updated. */
-export const WINDOW_OUTDATED =
+const WINDOW_OUTDATED =
   'This window is older than the running TeXRA service; reload or update TeXRA.';
 
 /** A value as its readers follow it: what it is now, and each value from

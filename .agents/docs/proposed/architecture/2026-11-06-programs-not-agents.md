@@ -14,7 +14,8 @@ status: proposed
 
 正文里的"今天"和各处度量说的是基线 `d173e42`。此后第 1、2、6 期已随
 #14968 落地（2026-11-17 对照 `c78e9f9` 的源码核对过，逐项见"分期"）；第
-3、4、5 期没有动，第 7 期等"负责人问题"2。
+3 期随 #15020 落地，第 4 期已实现（见"分期"第 4 条）；第 5 期没有动，
+第 7 期等"负责人问题"2。
 
 ## 摘要
 
@@ -460,6 +461,25 @@ store。
 - **用哪个插件的界面**：视图上的 `recipe` 换成程序名；documents 的界面
   （diff、accept、Pass N of M）认 run 上有没有 documents 的 fact，不认名
   字，这样包了一层的程序照样有界面。
+
+已落地（2026-11-19）：不另存记录，也不加表；三个谓词都在
+`packages/harness/src/shared/schemas/runRecords.ts`，每处读它要问的那个，
+没有一处再直接测 `config.script` 或 `kind` 字面量。
+
+- `programOf`：受不受信（`step.ts` 固定工具、`proposalFlow.ts` 批准委派、
+  `AgentTool.ts` 文件照传），以及插件的界面读的程序名和参数（视图的
+  `program`、`documentState.ts`、`readProgramResult`、CLI）。受信今天和
+  "是程序"是同一个式子，所以没有单独的受信谓词。
+- `runsScript`：形状。不渲染 prompt、不激活 skill、一个周期就结束、
+  `Stop` hook 视为已激活、不能 fork 也不能从它开 goal（`executeAgent.ts`、
+  `hooks.ts`、`templateInputs.ts`、`forkRun.ts`、`PlanTool.ts`、`self`）。
+  后台脚本和程序在每一处答得一样，所以是一个事实。
+- `backgroundScriptOf`：后台脚本，它的结束作为脚本投递交给启动它的对话，
+  它的 `self()` 是那个对话（`childDelivery.ts`、`SelfTool.ts`）。
+
+形状里有两条今天只认程序：花费含子运行（`runOwnership.ts`）和结束后不再
+从行恢复（`continuesFromRows`，读视图的 `program`）。后台脚本在这两处答
+得不同，这次没改行为；它们和视图上的 `program` 字段一起随第 5 期定。
 
 ### 入口只有一个 agent
 
@@ -947,9 +967,11 @@ commands、agents、MCP server 和 hooks，不进脚本的模块表。让它带
   `packages/harness/src/common/plugins/pluginTrust.ts`）。它的程序和模块
   叫 `<插件名>:<名字>`，和它的 skills、agents 今天的叫法一样；插件不能叫
   `builtIn`（今天已经不能叫 agent source 的名字）。
-- **描述和工具从文件里读。** 加载器从文件里的 `export const description`
-  和 `export const tools` 两行静态读出，不求值。这是加载器的约定，内核
-  拿到的仍是值。加载器不跟符号链接（摘要记的是链接文本）。
+- **描述和工具从文件里读。** 加载器从文件开头的 `export const description`
+  和 `export const uses` 两行静态读出，不求值。这是加载器的约定，内核
+  拿到的仍是值。加载器不跟符号链接（摘要记的是链接文本）。第二行不叫
+  `tools`：模块里自己的 `tools` 绑定会盖住沙箱的全局 `tools`，程序里的
+  `tools.read_file(...)` 就调不到工具（实现第 4 期时由端到端验证发现）。
 - **信任用已有的那一套。** 按内容摘要记在用户的全局状态里：启用时列出它
   带的东西让人审阅，改了任何文件摘要就变，整个插件收回，直到重新审阅。
   程序进这份清单，并写明"它启动的子运行不再逐个问你"。不受信的插件什么
@@ -982,7 +1004,7 @@ custom 扩展 bundled 的方式是启动它，不是覆盖它。只想换一句 
 ```js
 // my-programs/programs/review-and-fix.js
 export const description = 'Annotate, then apply the annotations.';
-export const tools = ['program'];
+export const uses = ['program'];
 export default async (args) => {
   const annotated = await program('annotate', args);
   return program('apply', { ...args, files: annotated.files });
@@ -1006,20 +1028,20 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 | 请求                  | `proposal`（子运行的启动审批）显示 agent 名和 persona                                                         | 留；显示程序名，或 label 和 system 文本                                                                         |
 | `docs/guide`（32 页） | 16 页提到 `texra run`、`--agent`、`texra team`、`texra agents` 或 `texra skills`                              | `built-in-agents`、`custom-agents`、`multi-agent-workflows`、`agent-architecture`、`texra-cli` 重写，其余改措辞 |
 | GitHub action         | `texra-ai/texra-action/review@v2` 调 `texra run`，默认装最新的 CLI                                            | `run` 的参数换义要和 action 一起发                                                                              |
-| harness 的打包示例    | `packages/harness/example/` 的 `07-programmed-path.ts`、`10-external-plugin.ts`、`acme-notes` 用 agent 文件   | 改为插件带程序；R9（随包提供 agent 文件）改为随包提供程序                                                       |
+| harness 的打包示例    | `07-programmed-path.ts` 用 agent 文件；`10-external-plugin.ts` 和 `acme-notes` 已改为插件带程序（2026-11-20） | 改为插件带程序；R9（随包提供 agent 文件）改为随包提供程序                                                       |
 | 测试                  | 引用 bundled 名字的套件和 golden store（`golden-1.0.sql` 里有一次 `polish` 的 task run）                      | 套件改写或删除，golden store 随两次存法变更各重生成一次                                                         |
 
 ## 删除清单
 
-| 删什么                                                                                                   | 行数（量于 `d173e42`） | 留什么                              |
-| -------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
-| 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、TeXRA 自己的 skill                            | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段    |
-| harness：agent 索引、catalog follower、workspace 选择、persona schema、`AgentBlock`                      | 约 2800                | skills 子系统                       |
-| team：预设、启动、CLI、标签页、`apply_team`（已删，2026-11-17）                                          | 1647                   | 无                                  |
-| agent 设置页（前端和后端）                                                                               | 1353                   | Skills 标签页；Plugins 页多一列程序 |
-| documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成 | 约 1000 of 2271        | 文档工具本身和 `revise`             |
-| CLI：`texra agents`（`team` 已计入上面）                                                                 | 271                    | `texra run`、`texra skills`         |
-| `latex-extract` 插件：`extract_figures`、`extract_tikz_figures`、`extract_bib_entries`                   | 514                    | 无                                  |
+| 删什么                                                                                                     | 行数（量于 `d173e42`） | 留什么                              |
+| ---------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
+| 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、TeXRA 自己的 skill                              | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段    |
+| harness：agent 索引、catalog follower、workspace 选择、persona schema、`AgentBlock`                        | 约 2800                | skills 子系统                       |
+| team：预设、启动、CLI、标签页、`apply_team`（已删，2026-11-17）                                            | 1647                   | 无                                  |
+| agent 设置页（前端和后端）                                                                                 | 1353                   | Skills 标签页；Plugins 页多一列程序 |
+| documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成   | 约 1000 of 2271        | 文档工具本身和 `revise`             |
+| CLI：`texra agents`（`team` 已计入上面）                                                                   | 271                    | `texra run`、`texra skills`         |
+| `latex-extract` 插件：`extract_figures`、`extract_tikz_figures`、`extract_bib_entries`（已删，2026-11-19） | 514                    | 无                                  |
 
 删掉的代码约 7600 行（"约"的两项是估计），提示词和 TeXRA 自己的 skill
 文本 5409 行。
@@ -1128,7 +1150,9 @@ history 的行。
 1. **工具是 CLI，bespoke 工具要有理由。** 一个插件工具只在三种情况下有资
    格存在：需要审批语义、需要写 run history 的行、需要结构化结果供脚本分
    支。其余的（arxiv、Zotero）变成随包的 CLI，模型用 bash 调。
-   `latex-extract` 的三个工具负责人已定直接去掉。是负责人问题 2。
+   `latex-extract` 的三个工具负责人已定直接去掉，已于 2026-11-19 删除：
+   agent 用 `grep`、`read_file`（图片和 PDF 作为附件返回）和 `bash` 读图和
+   文献，程序仍用 `autoExtractFigure` 等参数自己附图。其余是负责人问题 2。
 2. **headless 走文本流。** `texra run` 已经输出 NDJSON；再让它从 stdin 读
    文件列表、向 stdout 打产物路径，shell 组合就免费了。
 3. **缓存是一等机制。** 子运行结果的内容寻址复用今天已经覆盖任何子运行
@@ -1188,8 +1212,8 @@ history 的行。
 ## 分期
 
 每一期独立可合，存法只变两次，各自落在需要它的那一期。第 1、2、6 期
-已随 #14968 落地，每一期末尾写了核对到什么、还剩什么；第 3、4、5 期未
-做，第 7 期等"负责人问题"2。
+已随 #14968 落地，每一期末尾写了核对到什么、还剩什么；第 3 期随 #15020
+落地，第 4 期已实现；第 5 期未做，第 7 期等"负责人问题"2。
 
 1. **按名启动和它的存法**（harness 加 documents 的启动路径；用户看不到
    变化）。`Plugin.programs`；`script` 的 `recipe` 成员换成 `program` 成
@@ -1227,14 +1251,27 @@ history 的行。
    有记录；步骤工具对模型写的程序开放，等第 1 期剩下的那一项。
 3. **`lean4` 插件的两个程序**。它的 agent 和 skill 留到第 5 期：team 已
    先删，不再有名单指着它们，留着只因为 agent 目录整体在那一期删。
+   **已落地（#15020；程序列表跟着插件的探测是 #15072）。**
 4. **安装式插件带程序**，即"用户自己的程序"一节。要在第 5 期之前，否
    则删掉 custom agent 时用户自己的东西没处放。
+   **已实现。** `programs/<name>.js` 由
+   `packages/harness/src/common/plugins/pluginPrograms.ts` 只按文本读
+   出（文件开头的 `description` 和 `uses` 两个带引号的字面量，别的形状按
+   文件名拒绝，同一插件的其他程序照常加载），按步进模块表
+   （`packages/harness/src/tools/sessionTools.ts`），名字是
+   `<插件名>:<名字>`；信任审阅列出每个程序和被拒绝的文件
+   （`pluginTrust.ts`）；它列的工具看开关，它交给子运行的文件照
+   模型脚本解析，这两处从名字里有没有冒号推出（`isInstalledProgram`），
+   不另存。`texra run <插件名>:<名字>` 能启动，`texra plugin list` 和设
+   置页的插件行列出程序。还剩：`programs/` 里不带声明的辅助模块不加
+   载；安装式插件没有探测，"跟着探测"在这里就是"插件此刻加载（启用且
+   摘要受信）"；没有无界面的命令能拨工具开关。
 5. **删 agent 文件和补偿层，聊天的存法变更**。`run.chat` 去掉 persona 和
    agent 名（第二次存法变更），`agent()` 和 `StartRequest` 改签名；
    agents 目录（含 lean4 的）、agent 索引和 schema、workspace 选
    择（team 删后剩 `all` 和 `custom` 两种）、`AgentConfig` 上已无人写的
    `delegationAgentScope`、TeXRA 自己的 skill、customize、`agents` 这个
-   CLI 命令、`latex-extract` 插件、launch form 的 agent 列表；聊天
+   CLI 命令、launch form 的 agent 列表；聊天
    的 system 文本改由 app 的基础文本和插件的段拼出，根聊天能调的改为
    "开着的"、声明的改为一张短表，MCP 改为配了就能调；测试套件改写或
    删；文档、迁移说明和 `texra-action`。只有入口 agent 的 launch form 到
@@ -1258,6 +1295,12 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
 这个字段（app 里已经没有写它的地方；它是 `run.config` 的一部分，随第二
 次存法变更一起删，不为它单独升一次行版本）。过渡期的代价：一个没有手动
 勾选过的 workspace，picker 里是全部 agent。
+
+**`latex-extract` 插件已从第 5 期提前删除（2026-11-19）。** 它不依赖负
+责人问题 1：删掉的是插件登记、三个工具和它们共用的
+`figureExtractionShared.ts`、只有 `extract_bib_entries` 用的
+`extractBibliography.ts`，九个 bundled agent 的工具表和提示词里对它们的
+引用。存法没有变：存过这些调用的 run 照旧能读，卡片用通用图标。
 
 ## 负责人问题
 

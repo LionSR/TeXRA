@@ -430,7 +430,7 @@ type HealthEntry = Extract<
 >;
 
 /** A dependency the setup assistant and the settings view both probe. */
-type ProbedLatexTool = EntryWith<'required' | 'image'>['name'];
+export type ProbedLatexTool = EntryWith<'required' | 'image'>['name'];
 
 /** One of the interchangeable image tools. */
 type ImageLatexTool = EntryWith<'image'>['name'];

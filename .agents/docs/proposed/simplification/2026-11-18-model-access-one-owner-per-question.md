@@ -81,3 +81,24 @@ each waits on the decision its last sentence names. None can land without it.
 - `packages/cli/src/runtime/models/browser.ts`: which OS launcher opens a
   URL (`xdg-open`, `open`, `rundll32`, WSL interop); its failure is the
   app's `HostFailed`.
+
+## Kept as llm exports, and why
+
+Checked on 2026-11-19, before the first npm publish of `@texra-ai/llm`,
+against the 2026-11-04 model-layer review's list of exports to withdraw.
+
+- `codexBackendModelId` stays. Its one consumer outside llm,
+  `packages/texra/src/tools/agentCli/codexConfig.ts`, needs the model id the
+  Codex backend uses for a Codex binary that signs in by itself. llm decides
+  no route for that launch, so there is no higher-level question to ask it:
+  `routeConfig`'s ChatGPT case keeps `config.id`, and only
+  `responsesConfiguration` strips the date pin. Withdrawing the export would
+  either copy the date-pin pattern into the app or have the app build a
+  ChatGPT route it never uses.
+
+Withdrawn the same day: `acceptedEfforts` and `wireEffort` (one
+`reasoningOnRoute`, which reads a route's controls once), and the two Kimi
+predicates (one `kimiCodeServing`, the three-way fact they spelled in two).
+The picker still tests the model, not the decided route: with the plan off a
+dual-backend Kimi model's route is a plain Moonshot key route, so reading the
+route would drop its "Via Moonshot" badge.

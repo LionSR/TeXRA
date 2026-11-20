@@ -11,9 +11,8 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import { ModelError, PLAN_ROUTES } from '../errors.js';
 import { routeConfig } from '../models/modelRoute.js';
 import {
-  acceptedEfforts,
   chooseReasoning,
-  wireEffort,
+  reasoningOnRoute,
 } from '../models/reasoningChoice.js';
 import { BACKEND_PROTOCOLS } from '../providers/providerPlugins.js';
 import {
@@ -60,9 +59,9 @@ export interface Facts {
     /** Null where the request takes no temperature: the route then sends none. */
     readonly temperature: number | null;
   };
-  /** The effort values the route accepts on the wire (see {@link acceptedEfforts}). */
+  /** The effort values the route accepts on the wire (see {@link reasoningOnRoute}). */
   readonly acceptedEfforts: readonly ReasoningEffort[];
-  /** The effort the route sends for the bind's reasoning (see {@link wireEffort}). */
+  /** The effort the route sends for the bind's reasoning (see {@link reasoningOnRoute}). */
   readonly effort: ReasoningEffort | null;
 }
 
@@ -193,6 +192,7 @@ export function configurationFor(spec: BindSpec): Result.Result<
     route.kind === 'api-key'
       ? [route.provider, route.kind]
       : [PLAN_ROUTES[route.plan].provider, route.plan];
+  const onRoute = reasoningOnRoute(config, route);
   const configuration = CONFIGURE[protocol]({
     spec: { ...spec, model: config, options },
     config,
@@ -208,8 +208,8 @@ export function configurationFor(spec: BindSpec): Result.Result<
       maxOutputTokens: options.maxOutputTokens,
       temperature: sampled ? (options.temperature ?? null) : null,
     },
-    acceptedEfforts: acceptedEfforts(config, route),
-    effort: wireEffort(config, route, options.reasoning),
+    acceptedEfforts: onRoute.acceptedEfforts,
+    effort: onRoute.wireEffort(options.reasoning),
   });
   // The configuration knows which media its route carries; the config the
   // binding reports says the same, so a caller never sends a document the
@@ -230,15 +230,12 @@ export function configurationFor(spec: BindSpec): Result.Result<
 }
 
 /** Whether the configuration takes a tool choice naming one function. */
-export function forcedToolChoice(
-  configuration: ModelConfiguration,
-  config: ModelConfig,
-): boolean {
+export function forcedToolChoice(configuration: ModelConfiguration): boolean {
   switch (configuration.protocol) {
     case 'openai-responses':
       return configuration.supportsForcedToolChoice;
     case 'google-interactions':
-      return config.capabilities.supportsFunctionCalling;
+      return true;
     case 'anthropic-messages':
       return false;
   }

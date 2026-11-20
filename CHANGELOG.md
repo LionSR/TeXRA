@@ -6,6 +6,69 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Two SDK shapes lose a field nothing read.** `ownKeyCredential` on
+  `@texra-ai/harness/host` resolves to `{ bearer, endpoint }`: the credential
+  no longer carries its provider or route, since a binding keys its retry
+  gate from the route it already holds. `ChildRunsShape` on
+  `@texra-ai/harness/plugins` has no `requested`; its only caller was the
+  external inquiry tool, removed above.
+
+- **The `texra` command line has new help and stricter flags.** Help at
+  every level has a new layout: a subcommand's help lists its own flags and
+  points to `texra --help` for the global ones. `texra help <command>` is
+  removed; use `texra <command> --help`. A usage error now prints the
+  command's help and the error, both on stderr. `texra auth` or another
+  group named with no subcommand prints its help and exits 0, where it
+  exited 2. `texra --version` prints `texra v<version>`; `texra version`
+  and `-v` still print the bare version (and JSON with `--output-format
+  json`). A flag that takes one value, given twice (`--output a --output
+  b`), is a usage error, where the last one won. `-V` is no longer a
+  version shortcut. A flag that is off by default no longer takes a
+  `--no-` form (`--no-all`, `--no-yes`, `--no-force`). `--source` is accepted
+  only by `chat`, `run`, `resume`, `skills list` and bare `texra`, after
+  the command name. A mistyped flag now gets a "Did you mean" suggestion,
+  `texra history -n 5` works like `texra history list -n 5`, and a global
+  flag between two command names (`texra auth --output-format json chatgpt
+  status`) is no longer dropped.
+
+- **The LaTeX Extraction plugin is removed**, with its three tools:
+  `extract_figures`, `extract_tikz_figures` and `extract_bib_entries`. An
+  agent reads a document's figures and bibliography with the file tools it
+  already has: `grep` for `\includegraphics` or a citation key, `read_file`
+  on an image or PDF (returned as an attachment), and `bash` to compile a
+  TikZ picture. The document programs still attach figures themselves
+  (`autoExtractFigure`, `autoExtractTikzFigure`, `autoCompileInputPdf`), and
+  **TeXRA: Compile TikZ Figures from Current File** is unchanged. A custom
+  agent whose `tools:` names one of the three still loads, without that tool;
+  remove the name. A stored run that called them opens as before: each call
+  keeps its card, input and result, drawn with the generic tool icon.
+
+- **The external inquiry is removed.** The `inquiry` tool, which had an
+  agent draft a question for you to paste into an outside chat
+  subscription (ChatGPT, Claude, Gemini, Grok) and paste the answer back,
+  is gone with its **External Inquiry** plugin (Settings → Plugins), its
+  card in the progress view and its threads in **Background tasks**. The
+  `assistant`, `orchestrator` and `progressCheck` agents no longer carry
+  it; `ask_user_question` still asks you directly. A custom agent file that
+  lists `inquiry` still loads, with the warning that it names a tool this
+  build does not have. Stored thread records are kept and no longer read.
+  The premium-pricing hint on Pro models no longer points to the tool.
+  A stored run that holds any request, an inquiry or an approval, a
+  question or a retry, now reads as written by an earlier build: it opens
+  read-only (export, copy, delete) and does not resume. SDK: a plugin opens
+  no request of its own. The `plugin` request kind (`PluginRequest`),
+  `CallRequests.post`, `Plugin.decision` (`RequestDecisionHook`,
+  `RequestDecisionRecord`) and the `answer` decision are removed; every
+  request blocks the call that opened it.
+
+- **A session row's aggregate is its run.** SDK: a plugin's fact is about
+  the run whose call states it; `ToolFact.aggregate`, `FactKind.accepts`,
+  `FactKind.supersedes`, `PluginFactRow`, `SessionView.pluginFacts` and the
+  `AggregateId` type (now `RunId`) are removed, and a `plugin.fact` row
+  carries no `parent`. A store an earlier build wrote still opens: a row of
+  a plugin's own aggregate (an external inquiry's thread) is an earlier
+  build's, and the run it hangs under opens read-only and does not resume.
+
 - **The run listing says a run continues, not that it is resumable.** The
   listing entry's `resumable` and `resumeBlocked` are now `continues` and
   `continueBlocked`, and `records(id).readResumable` is `readContinues`: the
@@ -76,6 +139,21 @@ All notable changes to this project will be documented in this file.
 - **A script imports modules by their exact specifier.** A relative
   specifier no longer reaches a module. `describeTool(name)` also returns
   the source of a module or program.
+- **SDK: the helpers TeXRA's own plugins use leave `@texra-ai/harness/host`.**
+  `@texra-ai/harness/plugins` now exports `pathToLocationIn`, the lanes
+  (`withPerKeyLane`, `PerKeyLane`, `PerKeyLanes`, `withFileWriteLane`), the
+  diff engine (`buildDiffHunks`, `countLineChanges`, `reportDiffTimeout`,
+  `unifiedDiffText`, `DiffHunks`, `Hunk`) and `AgentDirectories`;
+  `@texra-ai/harness/node` exports the path helpers (`getPathSegments`,
+  `isPathWithin`, `isStrictlyWithin`, `toPosixPath`). None of them is on
+  `/host` any more, and `isModuleNotFoundError` is removed.
+- **SDK: a `FileLocation` is written as its object.** `createWorkspaceLocation`,
+  `createRunStorageLocation` and `createExternalLocation` are removed from
+  the SDK (they were on `@texra-ai/harness/host`): write
+  `{ kind: 'workspace', absolutePath, relativePath }`,
+  `{ kind: 'runStorage', absolutePath, relativePath, runId }` or
+  `{ kind: 'external', absolutePath }`. `pathToLocationIn` still resolves a
+  path against a workspace root.
 - **SDK: a program is called with its launch's instruction and files.** A
   program module's default export is `async (args, launch) => result`, the
   second argument `{ instruction, inputFiles, contextFiles, mediaFiles }`;
@@ -88,7 +166,8 @@ All notable changes to this project will be documented in this file.
   `@texra-ai/harness/host`) builds the config that starts one.
   `AgentConfig.script` of kind `program` holds `{ name, args }` where kind
   `recipe` held source, a block and options; `isTaskConfig` and
-  `recipeBlockOf` are `programOf`, and `RunView.recipe` is
+  `recipeBlockOf` are `programOf`, which returns that program
+  (`{ kind, name, args }`) or null, and `RunView.recipe` is
   `RunView.program`. `AgentBlock`, `agentBlockOf`, `boundFile`,
   `AgentEntry.blocks`, `ITool.launchesTasks`, `ChildRuns.launch`,
   `CALL_FIELDS` and `fileList` are removed.
@@ -1334,6 +1413,49 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A goal completes only when a judge confirms it.** A round that says
+  the objective is done no longer ends the goal on its own word: the same
+  agent runs again with no earlier conversation, as a judge that did not do
+  the work, derives the requirements from the objective and checks each
+  one itself with the tools the conversation's agent has. It answers with
+  one claim per requirement: `verified`, `failed` or `unverified`, the
+  check anyone can run again, and what it showed. The goal completes when
+  no claim failed; otherwise the next round is told what the judge found.
+  The goal's result carries the latest judge's `claims`, so you need read
+  only the unverified and failed ones, and a judge that fails or gives no
+  verdict pauses the goal with `judge_failed`. A goal now costs one more
+  agent run per claim that it is done, counted in its spend and its cap.
+  SDK: `builtIn:goal` exports `judge(objective, { report })` and
+  `claimSchema` beside `goal`, so any script can check work with a judge,
+  or several, its own way; `GoalResultSchema` gains the optional `claims`
+  (the strategy's own shape, which the harness stores and does not read)
+  and the `judge_failed` pause.
+- **A script caps what a child run spends, and `self()` takes a model.**
+  Every child a script waits for (`agent()`, `program()`, `self()`) takes
+  `maxCostUsd`, a spend cap in USD on the child and every run it starts:
+  once they have spent it the child is stopped and the call rejects with an
+  Error named `BudgetExceeded`, beside `TimedOut`. The cap is read after
+  each reply, so the spend can pass it by the replies then in flight.
+  `self()` now takes `model` (with an `@effort` suffix), `timeoutMs` and
+  `maxCostUsd` as `agent()` does, so a script gets a second model's check
+  with the same prompt and tools; a forked `self()` takes only a model that
+  can continue the conversation. A call that runs in the background, where
+  `timeoutMs` was accepted and never applied, now rejects both limits.
+- **A plugin you install can carry programs.** Put `programs/<name>.js` in
+  a Claude Code or Codex plugin folder and each file is a program started as
+  `<plugin>:<name>`: `texra run my-programs:todo-list --input paper.tex`,
+  or an agent starts it, told of it beside the built-in programs. The file
+  begins with `export const description = '...';` and
+  `export const uses = ['...'];` (the tools its run is offered), which TeXRA
+  reads from the text without running the file; its default export
+  `async (args, launch) => result` runs in the script sandbox with those
+  tools only. `texra plugin enable` lists each program with its description
+  and tools for the trust review, and `texra plugin list` and Settings →
+  Plugins name them. The tools a plugin's program lists are withheld while
+  their plugin is switched off. A file that does not begin with the two
+  declarations is refused by name and the plugin's other programs load. See
+  "Programs in a plugin" in the CLI guide. SDK: `programsNow` on
+  `@texra-ai/harness/host`; `ProgramNotRegistered` gains `withheld`.
 - **Lean programs: `prove` and `blueprint`.** The Lean plugin registers two
   programs. `prove` completes the proofs in the `.lean` files you pass and
   checks each round with Lean's diagnostics (no error, no `sorry`) and for an
@@ -1894,6 +2016,29 @@ All notable changes to this project will be documented in this file.
   Compilation, Indent, TeX Count and Compile TikZ took only `.tex`.
 
 ### Bug Fixes
+
+- **A child run keeps its parent's model when that model is not an
+  enabled one.** A sub-agent or program started from a run on a model the
+  person never enabled (an SDK embedder names its run's model) fell back to
+  the first enabled model, or was refused with "No models are currently
+  available for delegation" when the enabled list was empty. The parent's
+  model is now judged by its own route; the enabled list only supplies the
+  default.
+
+- **Answering a request of a task that is not running continues the task.**
+  An approval, a plan or a question left pending by a task whose process
+  exited used to refuse the answer with "resume it to answer this request",
+  and its card showed a Resume button in place of its actions. The answer now
+  resumes the task, and the tool that asked takes it without asking again; if
+  the task cannot be resumed, the answer is refused with that reason. SDK:
+  `requestAnswerability` and `RequestAnswerability` are gone from
+  `@texra-ai/harness/schemas`; every pending request can be answered.
+
+- **A run's message to a run you stopped is refused, not silently queued.**
+  `executions send` to a run its user stopped used to answer "Queued" while
+  nothing would read the message until you continued that run yourself. The
+  sender is now told the run was stopped by its user. A child's report to a
+  stopped parent is still kept for when you continue the parent.
 
 - **Codex on Windows installs where TeXRA looks for it.** **Install in
   terminal** ran `wsl --install`, but TeXRA looks for a native `codex.exe`,

@@ -21,7 +21,6 @@ import {
   Result,
   Schema,
   ScopedRef,
-  Ref,
 } from 'effect';
 
 import type { FollowUpBatch } from '@agent/followUp/FollowUpReader';
@@ -39,6 +38,7 @@ import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
 import {
+  runsScript,
   type HookOutcomePayload,
   type ToolDefinition,
   type ToolResult,
@@ -46,6 +46,7 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import { type RunCell, SessionLog } from '@shared/session/runHistory';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { workAutoApproved } from '../requests';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -158,7 +159,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   const { workspace, globalStorage } = yield* SessionRoots;
   if (matched.length > 0 && workspace === undefined)
     run.logger.warn(
-      `Not running ${matched.length} ${event} hook(s): this run has no workspace to run them in.`,
+      `Not running ${formatResultCount(matched.length, `${event} hook`)}: this run has no workspace to run them in.`,
     );
   const stdin = encodeHookInput(input);
   const ran = yield* Effect.forEach(
@@ -357,7 +358,7 @@ export function stepHooks(
       const blocked = state.hookOutcomes[`Stop:${state.turn - 1}`] ?? [];
       const common = {
         stop_hook_active:
-          run.config.script != null || blocked.some((o) => o.context !== null),
+          runsScript(run.config) || blocked.some((o) => o.context !== null),
         last_assistant_message: lastMessage,
       } as const;
       const { rows, context: text } = yield* at(
@@ -471,6 +472,6 @@ export type StepHooks = ReturnType<typeof stepHooks>;
 /** The hooks of `run`'s current step; none before its first step opens. */
 export const hooksOf = (run: AgentRunShape) =>
   Effect.map(
-    Ref.get(run.steps),
+    ScopedRef.get(run.steps),
     (open) => open?.tools.hooks ?? stepHooks(run, new Map(), null),
   );

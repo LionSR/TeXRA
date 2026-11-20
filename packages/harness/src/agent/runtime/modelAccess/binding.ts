@@ -161,6 +161,9 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     });
   }
   const credential = yield* routeCredential(route);
+  // What the credential is: a provider key (a key plan's included), or the
+  // session plan it signs in to.
+  const credentialKind = route.kind === 'session' ? route.plan : route.kind;
   const reasoning = yield* reasoningOf(plan, requested);
   const bound = yield* bindWireModel({
     model: requested,
@@ -190,20 +193,18 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     ...commonOf(plan),
     ...bound,
     route,
-    ...(credential.route === 'chatgpt-subscription' && credential.plan
-      ? { plan: credential.plan }
-      : {}),
+    ...(credential.plan ? { plan: credential.plan } : {}),
     routes: routePolicies(
       [
         bound.config.provider,
-        credential.route,
+        credentialKind,
         route.endpoint,
         // A key cools its own route; a session is one per signed-in
         // account, whose token rotates under it.
         typeof credential.bearer === 'string'
           ? hash(
               'sha256',
-              `${credential.route}\0${credential.bearer}`,
+              `${credentialKind}\0${credential.bearer}`,
               'base64url',
             )
           : 'session',

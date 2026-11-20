@@ -16,7 +16,6 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
-  isInterrupted,
   isWorking,
   type RunId,
   formatCompactDuration,
@@ -284,18 +283,15 @@ export class StageList extends LitElement {
 
   /**
    * Paint one transcript row, guarded against re-render while the row stays
-   * the same object and its run's interrupted fact holds. A row is replaced
-   * (never patched) whenever its source entry changes, so reference identity
-   * is the freshness test for the row itself. The host's tool display is no
+   * the same object. A row is replaced (never patched) whenever its source
+   * entry changes or its run is interrupted, so reference identity is the
+   * freshness test. The host's tool display is no
    * part of the guard: it comes from the process's plugin list, is in the
    * first host snapshot before any row paints, and every host frame decodes
    * a fresh copy of the same record.
    */
   private renderLogEntry(row: TranscriptRow) {
-    const interrupted = this.run !== null && isInterrupted(this.run);
-    return guard([row, interrupted], () =>
-      formatLogEntry(row, interrupted, this.tools),
-    );
+    return guard([row], () => formatLogEntry(row, this.tools));
   }
 
   private revealOlder(
@@ -344,8 +340,8 @@ export class StageList extends LitElement {
     const formattedStartTime = getTimeFormatter().format(
       new Date(stage.startTime),
     );
-    const durationText = stage.endTime
-      ? formatCompactDuration(stage.endTime - stage.startTime)
+    const durationText = stage.end
+      ? formatCompactDuration(stage.end.at - stage.startTime)
       : '';
 
     const status = stageStatus(stage, this.run);

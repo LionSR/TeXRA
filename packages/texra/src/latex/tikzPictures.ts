@@ -5,11 +5,13 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
   renderPrompt,
   withLogChannel,
   Settings,
+  type SettingsStores,
+  WorkspaceFs,
+  pathToLocationIn,
 } from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils
@@ -17,7 +19,6 @@ import { readUncommentedLatex } from './latexParsingUtils';
 import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/harness/schemas';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settings/texraSettings';
 
 /**
@@ -101,22 +102,23 @@ export const extractTikzPictures = Effect.fn('tikzPictures.extract')(function* (
  * Compile the TikZ pictures {@link extractTikzPictures} found in a LaTeX file
  * @param latexFile Location of the LaTeX file
  * @param labeledTikzPictures What {@link extractTikzPictures} returned for it
- * @param roots The session's roots: the TikZ template and the compile's LaTeX
- *   settings come from its configuration, and the products are located in its
- *   workspace
+ * @param stores The session's setting slots: the TikZ template and the
+ *   compile's LaTeX settings. The products are located in the workspace of
+ *   the {@link WorkspaceFs} in context.
  * @returns Array of FileLocations for compiled PDF files
  */
 export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
   latexFile: FileLocation,
   labeledTikzPictures: readonly (readonly [string, readonly string[]])[],
-  roots: WorkspaceRoots,
+  stores: SettingsStores,
 ) {
   const fs = yield* FileSystem.FileSystem;
+  const workspaceRoot = (yield* WorkspaceFs).root;
   const buildDir = perInputBuildDirectory(latexFile.absolutePath);
 
   yield* fs.makeDirectory(buildDir, { recursive: true });
 
-  const template = Settings.getConfig(roots.config, TIKZ_TEMPLATE_SETTING);
+  const template = yield* Settings.get(stores, TIKZ_TEMPLATE_SETTING);
   const compiledFiles: FileLocation[] = [];
 
   for (const [label, tikzPictures] of labeledTikzPictures) {
@@ -131,10 +133,10 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
         tikzpictures,
         label,
         buildDir,
-        roots.workspace,
+        workspaceRoot,
         suffix,
       );
-      const compiled = yield* compileLatex2Pdf(texLocation, roots, {
+      const compiled = yield* compileLatex2Pdf(texLocation, stores, {
         compiler: 'pdflatex',
       });
       if (!compiled.ok) {
@@ -151,7 +153,7 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
         );
         continue;
       }
-      compiledFiles.push(pathToLocationIn(roots.workspace, compiled.pdfPath));
+      compiledFiles.push(pathToLocationIn(workspaceRoot, compiled.pdfPath));
       yield* Effect.logDebug(`Successfully compiled: ${compiled.pdfPath}`).pipe(
         withLogChannel(CHANNEL),
       );

@@ -24,23 +24,22 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   runEndErrorMessage,
   AGENT_SOURCE,
+  AgentConfigSchema,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
   type RunEnd,
   type RunId,
   type ToolResult,
+  isInstalledProgram,
   programOf,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
-import {
-  RunHistory,
-  SessionLog,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -49,12 +48,15 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import {
   agentChildRunId,
+  type ChildLimits,
   countLaunch,
   earlierChild,
   fingerprint,
+  limitResult,
   recoverAgentChild,
   reusable,
   treeCostOf,
+  withinLimits,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { executeSubagentInBand } from './childLaunch';
@@ -74,13 +76,7 @@ import {
   launchDetachedSubagent,
 } from './subagentRun';
 
-/** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
-class AgentTimedOut extends Schema.TaggedError<AgentTimedOut>()(
-  'AgentTimedOut',
-  { timeoutMs: Schema.Number },
-) {}
-
-/** The fields that name what an `agent` call runs and with which model. */
+/** The fields that name what an `agent` call runs. */
 const LAUNCH_FIELDS = {
   prompt: Schema.NonEmptyString.annotate({
     description:
@@ -90,16 +86,10 @@ const LAUNCH_FIELDS = {
     description: 'The agent to run. It works with its own tools.',
   }),
   persona: personaField,
-  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Model reference, `@effort` suffix allowed (`@low` … `@max`, `@none`). Defaults to your current model when available.',
-  }),
-  schema: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-  ).annotate({
-    description:
-      'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
-  }),
+  schema: optionalInput(
+    Schema.Record(Schema.String, Schema.Unknown),
+    'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
+  ),
   mediaFiles: fileList(
     'Images, figures, PDFs or audio attached to the prompt.',
   ),
@@ -128,37 +118,38 @@ type ChildLaunch = {
   readonly memories: readonly string[];
   readonly workingDirectory: string | null | undefined;
   readonly id: string | null | undefined;
-  readonly timeoutMs: number | null | undefined;
   readonly background: boolean | null | undefined;
-} & (
-  | {
-      readonly program: null;
-      readonly agentName: string;
-      /** An agent the call defines, named `agentName`: no catalog entry. */
-      readonly persona?: InlineAgent['persona'] | null;
-      readonly schema: Record<string, unknown> | null | undefined;
-      readonly mediaFiles: readonly string[];
-    }
-  | {
-      readonly program: {
-        readonly name: string;
-        readonly args: Readonly<Record<string, Schema.Json>>;
-      };
-      readonly files: {
-        readonly inputFiles: readonly string[];
-        readonly contextFiles: readonly string[];
+} & ChildLimits &
+  (
+    | {
+        readonly program: null;
+        readonly agentName: string;
+        /** An agent the call defines, named `agentName`: no catalog entry. */
+        readonly persona?: InlineAgent['persona'] | null;
+        readonly schema: Record<string, unknown> | null | undefined;
         readonly mediaFiles: readonly string[];
-        readonly outputFiles: readonly string[];
-      };
-    }
-);
+      }
+    | {
+        readonly program: {
+          readonly name: string;
+          readonly args: Readonly<Record<string, Schema.Json>>;
+        };
+        readonly files: {
+          readonly inputFiles: readonly string[];
+          readonly contextFiles: readonly string[];
+          readonly mediaFiles: readonly string[];
+          readonly outputFiles: readonly string[];
+        };
+      }
+  );
 
 /**
  * One request shared by a script's `agent` calls and all its attempts
  * (attempt 0), read from the run's rows: the script's calls wait together
  * on the one that is open (`decisionOf`) and take the answer a person gave
- * it; a stop or a resume cancels it, and the next request takes the next
- * ordinal through the call's requests.
+ * it, one given while no process held the run included (the resume's
+ * activation commits it); a stop or a resume cancels an open one, and the
+ * next request takes the next ordinal through the call's requests.
  */
 const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
@@ -171,9 +162,11 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
     callId: script.callId,
     attempt: 0,
   };
-  const from = (yield* SessionLog).now();
-  const state = yield* (yield* RunHistory).load(runId);
-  const { raised, last } = attemptRequests(state?.requests ?? {}, shared);
+  const log = yield* SessionLog;
+  const from = log.now();
+  // The run's request rows alone, as a decision reads them.
+  const { requests } = yield* log.runRows(runId, 'requests');
+  const { raised, last } = attemptRequests(requests, shared);
   if (last !== null) {
     const { decision } = last.request;
     if (decision === null)
@@ -257,18 +250,44 @@ export const launchChildAgent = (launch: ChildLaunch) =>
     Effect.withSpan('AgentTool.call'),
   );
 
-/** A child's run failed the call: timed out, or ended without an answer. */
+/** A child's run failed the call: past a limit of the call, or ended
+ *  without an answer. */
 export function failedResult(agentName: string, error: Error): ToolResult {
-  if (error instanceof AgentTimedOut)
-    return errorResult(
-      `'${agentName}' did not finish within ${error.timeoutMs} ms; its run was stopped.`,
-      { name: 'TimedOut', summary: `'${agentName}' timed out` },
-    );
-  return errorResult(toErrorMessage(error), {
-    name: 'AgentFailed',
-    summary: `'${agentName}' failed`,
-  });
+  return (
+    limitResult(agentName, error) ??
+    errorResult(toErrorMessage(error), {
+      name: 'AgentFailed',
+      summary: `'${agentName}' failed`,
+    })
+  );
 }
+
+/**
+ * The model a child of `call` runs on: the one its call names, else the
+ * calling run's, else the first available, checked against the models that
+ * can run now. A model the call names that cannot is the call's error,
+ * which a script may catch.
+ */
+export const childModel = Effect.fn('AgentTool.childModel')(function* (
+  call: RunToolCall,
+  requested: string | null | undefined,
+) {
+  const { run } = call;
+  const selected = yield* Effect.result(
+    selectAvailableDelegationModel({
+      requestedModel: requested,
+      parentModel: (yield* ScopedRef.get(run.model)).modelId,
+      settings: call.env.roots,
+    }),
+  );
+  if (Result.isFailure(selected))
+    return errorResult(toErrorMessage(selected.failure), {
+      name: 'ModelUnavailable',
+    });
+  if (selected.success._tag === 'Fallback')
+    run.logger.warn(selected.success.notice);
+  return selected.success.model;
+});
 
 const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   call: RunToolCall,
@@ -326,8 +345,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   // The call's files, the program's file arguments among them: a
   // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a program's files pass as named.
-  const trusted = programOf(run.config) !== null;
+  // completed child of it; a registered program's files pass as named, an
+  // installed plugin's program's are resolved like a model's.
+  const caller = programOf(run.config);
+  const trusted = caller !== null && !isInstalledProgram(caller.name);
   const fileArgs =
     program === null
       ? []
@@ -363,13 +384,21 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = noLaterTurn(run);
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
+  // Only the call that waits for a child holds it to a limit: a background
+  // child has no such call, and a limit nothing enforces is rejected.
+  if (!awaited && (launch.timeoutMs != null || launch.maxCostUsd != null))
+    return errorResult(
+      '`timeoutMs` and `maxCostUsd` limit a child its call waits for, and this call runs in the background. Call it from a script without `background: true`, or drop the limit.',
+    );
   // A program's launch, a structured call and a call from a program reach
   // the child verbatim; any other is handed off with the parent's
   // instruction.
   const handsOff = program === null && outputSchema === undefined && !trusted;
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
-  // does not depend on which credentials are configured now.
+  // does not depend on which credentials are configured now. The call's
+  // limits are no part of it: a completed result answers the call under
+  // any of them, and reusing it spends nothing.
   const key =
     awaited && script !== undefined
       ? sha256({
@@ -399,16 +428,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   }
 
   const notify = printSubagentProgress(agent.name, call.emit);
-  const timeoutMs = launch.timeoutMs ?? undefined;
-  const running = <A, R>(
-    work: Effect.Effect<A, Error, R>,
-  ): Effect.Effect<A, Error, R> =>
-    timeoutMs === undefined
-      ? work
-      : Effect.timeoutOrElse(work, {
-          duration: timeoutMs,
-          orElse: () => Effect.fail(new AgentTimedOut({ timeoutMs })),
-        });
 
   // The child an earlier attempt of this call launched answers it, before
   // anything about a launch is decided again: it was approved and
@@ -425,7 +444,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       };
   } else {
     const recovered = yield* Effect.result(
-      recoverAgentChild(call, { notify, running }),
+      recoverAgentChild(call, { notify, limits: launch }),
     );
     if (Result.isFailure(recovered))
       return failedResult(agent.name, recovered.failure);
@@ -434,26 +453,14 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       return yield* childResult(call, agent.name, settled, key);
   }
 
-  // An unavailable model fails this call, which a script may catch.
-  const selected = yield* Effect.result(
-    selectAvailableDelegationModel({
-      requestedModel: launch.model,
-      parentModel: (yield* ScopedRef.get(run.model)).modelId,
-      settings: call.env.roots,
-    }),
-  );
-  if (Result.isFailure(selected))
-    return errorResult(toErrorMessage(selected.failure), {
-      name: 'ModelUnavailable',
-    });
-  if (selected.success._tag === 'Fallback')
-    run.logger.warn(selected.success.notice);
+  const model = yield* childModel(call, launch.model);
+  if (typeof model !== 'string') return model;
   const workingDirectory = launch.workingDirectory ?? call.env.workingDirectory;
   const proposal: AgentProposal = Schema.decodeUnknownSync(AgentProposalSchema)(
     {
       agent: agent.name,
       agentSource: agent.source,
-      model: selected.success.model,
+      model,
       memories: launch.memories,
       ...(workingDirectory !== undefined && { workingDirectory }),
       task: program !== null,
@@ -487,24 +494,27 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // below; the options are the program's arguments, shown for approval.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
   // A program's run is the program's own, whatever agent an approval named.
-  // The plugin table is constant for the process and the check above found
-  // the program, so this launch cannot fail.
-  const programConfig =
+  // An installed plugin's program can be gone since the check above (its
+  // plugin disabled or changed while the approval waited).
+  const relaunched =
     program === null
       ? null
-      : yield* programLaunch(program.name, program.args, approved).pipe(
-          Effect.orDie,
+      : yield* Effect.result(
+          programLaunch(program.name, program.args, approved),
         );
+  if (relaunched !== null && Result.isFailure(relaunched))
+    return errorResult(relaunched.failure.message);
+  const programConfig = relaunched?.success ?? null;
   const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
-  const configPayload = {
+  const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
     ...programConfig,
-  };
+  });
+  const runId = agentChildRunId(call);
   if (!awaited) {
-    const runId = agentChildRunId(call);
-    const receipt = yield* launchDetachedSubagent(call, configPayload, {
+    const receipt = yield* launchDetachedSubagent(call, config, {
       runId,
       grants,
       approvalMeta: decided.approvalMeta,
@@ -513,11 +523,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return { ...receipt, value: { runId } };
   }
   const launched = yield* Effect.result(
-    running(
+    withinLimits(
+      runId,
+      launch,
       executeSubagentInBand({
-        runId: agentChildRunId(call),
+        runId,
         parentId,
-        configPayload,
+        config,
         parentCall: { callId: call.callId, card: call.logId },
         grants,
         notify,
@@ -544,7 +556,7 @@ export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
       "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
     description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
 
-From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, \`Skipped\` (the user stopped the child), \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
+From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\` (past \`timeoutMs\`), \`BudgetExceeded\` (the child and the runs it started spent \`maxCostUsd\` before it finished; the cap is read after each reply, so the spend can pass it by the replies then in flight), \`Skipped\` (the user stopped the child), \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
 
@@ -564,6 +576,7 @@ Its result is the agent's final reply, or a \`schema\` value. Pick the agent who
         workingDirectory: input.working_directory,
         id: input.id,
         timeoutMs: input.timeoutMs,
+        maxCostUsd: input.maxCostUsd,
         background: input.background,
         mediaFiles: input.mediaFiles,
         program: null,

@@ -54,13 +54,8 @@ import {
   DocumentProposeTool,
 } from './documents/documentTools';
 import { DocumentReviewTool } from './documents/DocumentReviewTool';
-import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
-import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
-import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { githubActivity } from './github/plugin';
-import { externalInquiry } from './inquiry/plugin';
 import { lean4 } from './lean/plugin';
-import { LeanLoogleTool } from './lean/LoogleTool';
 import { OpenPdfTool } from './OpenPdfTool';
 /**
  * Setup-assistant tools: a narrow set for the onboarding agent, one per
@@ -104,7 +99,6 @@ import {
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
-import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -166,25 +160,6 @@ const serves = (capabilities: (storage: string) => Iterable<string>) =>
     of: (storage) => new Set(capabilities(storage)),
   });
 
-const latexExtract: TexraPlugin = texraPlugin({
-  id: 'latex-extract',
-  tools: [
-    ExtractLatexFiguresTool,
-    ExtractTikzFiguresTool,
-    ExtractBibliographyTool,
-  ],
-  icons: {
-    extract_figures: 'image',
-    extract_tikz_figures: 'image',
-    extract_bib_entries: 'book',
-  },
-  dashboard: {
-    name: 'LaTeX Extraction',
-    description:
-      'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
-  },
-});
-
 /** The editor's diagnostics, offered while an editor attached for the
  *  session reads them: the plugin serves `HostCapabilities` from the same
  *  registry its tool reads. */
@@ -207,15 +182,18 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
   },
 });
 
-const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).\nFor math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
+const FIND_TEX_SOURCES = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).`;
+
+const MATH_IN_REPLIES = `For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
 
 /**
  * Tools that need no setup and that no dashboard card lists: review
  * annotations and the PDF viewer (each offered where the host serves it),
- * the user-question dialog, and Loogle search (network only, so not gated
- * on the Lean 4 plugin's probe). Its
- * prompt section, at every step that offers a tool, finds the TeX sources, says how
- * replies write math, and names the configured default bibliography.
+ * and the user-question dialog. Its
+ * prompt section, at every step that offers a tool, says how replies write
+ * math and names the configured default bibliography; how to find the TeX
+ * sources and read the bibliography is said only to a step offered a tool
+ * that does it.
  */
 const core = (
   editors: EditorRegistry,
@@ -223,21 +201,24 @@ const core = (
 ): TexraPlugin => ({
   ...definePlugin<EditorHost>({
     id: 'core',
-    tools: [
-      InlineCommentTool,
-      OpenPdfTool,
-      AskUserQuestionTool,
-      LeanLoogleTool,
-    ],
-    // The section finds sources with bash and writes math for a rendered
-    // reply: a run that writes a document, with no tool offered, gets none
-    // of it (`$$\\begin{align}` inside a .tex file does not compile).
+    tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
+    // The section writes math for a rendered reply: a run that writes a
+    // document, with no tool offered, gets none of it (`$$\\begin{align}`
+    // inside a .tex file does not compile).
     prompt: ({ config, offered }) => {
       if (offered.length === 0) return '';
+      const offers = (...names: string[]) =>
+        names.some((name) => offered.includes(name));
       const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
-      return bibPath
-        ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
-        : TEX_INSTRUCTIONS;
+      return [
+        ...(offers('bash') ? [FIND_TEX_SOURCES] : []),
+        MATH_IN_REPLIES,
+        ...(bibPath
+          ? [
+              `The default bibliography file is ${bibPath}.${offers('grep', 'read_file', 'bash') ? ' You can grep or read this file to search for citations and references.' : ''}`,
+            ]
+          : []),
+      ].join('\n');
     },
     // The editor's PDF viewer, where `open_pdf` is offered while one is
     // attached; the host's Comments UI, for the one host that has one,
@@ -257,7 +238,6 @@ const core = (
       ),
     },
   }),
-  icons: { lean_loogle: 'magnifying-glass' },
 });
 
 /** The onboarding agent's narrow set, one concern per tool, over the host's
@@ -354,9 +334,6 @@ export const texraPlugins = (host: {
   /** What the composition's windows offer the editor tools (its window
    *  table's `editors`); none offered when absent. */
   readonly editors?: EditorRegistry;
-  /** The host shows external inquiries (VS Code, desktop): the `inquiry`
-   *  tool is offered only there. */
-  readonly inquiryPanel?: true;
 }): readonly TexraPlugin[] => {
   const editors = host.editors ?? editorRegistry(() => ({}));
   const plugins: readonly TexraPlugin[] = [
@@ -376,7 +353,6 @@ export const texraPlugins = (host: {
           'Read, write, edit files and run shell commands. Includes glob/grep search.',
       },
     },
-    latexExtract,
     latexDiagnostics(editors),
     arxiv,
     {
@@ -426,16 +402,6 @@ export const texraPlugins = (host: {
       },
     },
     githubActivity,
-    host.inquiryPanel
-      ? {
-          ...externalInquiry,
-          processLayer: {
-            layer: serves(() => [
-              'inquiry-panel' satisfies InquiryPanelCapability,
-            ]),
-          },
-        }
-      : externalInquiry,
     codex,
     claudeAgent,
     core(editors, host.inlineComments),

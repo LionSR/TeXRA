@@ -66,7 +66,6 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 
 import { layer } from '@effect/vitest';
 import {
@@ -91,10 +90,8 @@ import {
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
 import { decideRequest, SessionRequests } from '@agent/runtime/requests';
-import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   AgentConfigSchema,
-  aggregateTarget,
   SessionRowSchema,
   type RunId,
 } from '@shared/schemas';
@@ -109,6 +106,7 @@ import {
   answerOf,
   crashAt,
   persistentTestSession,
+  readStoreSnapshot,
   storedRows as rowsOf,
   type StoredRow as Row,
   validationHost,
@@ -135,7 +133,9 @@ const payload = (row: Row) => decodeFields(json(row).payload);
 const followUpOf = Schema.decodeUnknownSync(
   Schema.Struct({
     followUpId: Schema.String,
-    control: Schema.optional(Schema.Struct({ kind: Schema.String })),
+    content: Schema.Struct({
+      control: Schema.optional(Schema.Struct({ kind: Schema.String })),
+    }),
   }),
 );
 const configOf = Schema.decodeUnknownSync(
@@ -233,7 +233,10 @@ function outcome(rows: readonly Row[], root: string) {
     // Each request the user made, queued once and consumed once; and the
     // model the run ends on.
     requests: of(root, 'followup.queued').flatMap((row) => {
-      const { followUpId, control } = followUpOf(json(row));
+      const {
+        followUpId,
+        content: { control },
+      } = followUpOf(json(row));
       if (control === undefined) return [];
       const consumed = of(root, 'followup.consumed').filter(
         (done) => json(done).followUpId === followUpId,
@@ -330,9 +333,7 @@ const approveAll = (session: Context.Context<SessionServices>, after = 0) =>
       ),
     (event) => {
       if (event.type !== 'request.opened') return Effect.void;
-      const target = aggregateTarget(event.aggregateId);
-      if (target.kind !== 'run') return Effect.void;
-      return decideRequest(target.id, event.requestId, {
+      return decideRequest(event.aggregateId, event.requestId, {
         action: 'approve',
       }).pipe(Effect.provide(session), Effect.ignore);
     },
@@ -373,7 +374,7 @@ const liveRows = (
       }
       const ids = [
         ...new Set((yield* db.readListing()).map((row) => row.aggregateId)),
-      ].filter((id) => aggregateTarget(id).kind === 'run');
+      ];
       for (const id of ids) {
         const known = cache.get(id) ?? { rows: [], nextSeq: 1, parent: null };
         const fresh = yield* db.readAggregate(id, known.nextSeq, ALL_TYPES);
@@ -384,7 +385,7 @@ const liveRows = (
           const { type, aggregateId, commit, seq, at: _at, ...data } = event;
           known.rows.push({
             commit,
-            run: aggregateTarget(aggregateId).id,
+            run: aggregateId,
             parent: known.parent,
             type,
             data: JSON.stringify(data),
@@ -418,7 +419,11 @@ const editsOf = (rows: readonly Row[], root: string) =>
     .map((row) => payload(row).cause);
 
 /** The root waits for input with `count` answers, after its last view edit. */
-const waitingAfter = (rows: readonly Row[], root: string, count: number) => {
+const waitingPastLastEdit = (
+  rows: readonly Row[],
+  root: string,
+  count: number,
+) => {
   const mine = rows.filter((row) => row.run === root);
   const last = mine.findLast((row) => row.type === 'run.position');
   const edit = mine.findLast((row) => row.type === 'context.edit');
@@ -439,7 +444,7 @@ const requested = (rows: readonly Row[], root: string, kind: string) =>
     (row) =>
       row.run === root &&
       row.type === 'followup.queued' &&
-      followUpOf(json(row)).control?.kind === kind,
+      followUpOf(json(row)).content.control?.kind === kind,
   );
 
 /**
@@ -456,14 +461,15 @@ const userSteps = (
     // A switch, then a compaction, each asked for once: a request whose
     // row is committed is the resumed run's to apply.
     if (!requested(yield* liveRows(storage), root, 'model')) {
-      yield* until(storage, (rows) => waitingAfter(rows, root, 1));
-      const controls = Context.get(session, RunRegistry).get(root)?.controls;
-      if (controls === undefined)
-        return yield* Effect.die('the waiting run has no live controls');
-      yield* controls.switchModel(SWITCH_TO);
+      yield* until(storage, (rows) => waitingPastLastEdit(rows, root, 1));
+      yield* Context.get(session, SessionRequests).request({
+        kind: 'run.model',
+        runId: root,
+        model: SWITCH_TO,
+      });
     }
     if (!requested(yield* liveRows(storage), root, 'compact')) {
-      yield* until(storage, (rows) => waitingAfter(rows, root, 1));
+      yield* until(storage, (rows) => waitingPastLastEdit(rows, root, 1));
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.compact',
         runId: root,
@@ -474,7 +480,7 @@ const userSteps = (
         storage,
         (rows) =>
           editsOf(rows, root).includes('compaction') &&
-          waitingAfter(rows, root, 2),
+          waitingPastLastEdit(rows, root, 2),
       );
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.fork',
@@ -745,12 +751,7 @@ const cleanPass = (
       }),
     );
     const clean = join(roots.storage, 'clean.db');
-    const db = new DatabaseSync(join(roots.storage, 'texra.db'));
-    try {
-      db.exec(`VACUUM INTO '${clean}'`);
-    } finally {
-      db.close();
-    }
+    readStoreSnapshot(roots.storage, (db) => db.exec(`VACUUM INTO '${clean}'`));
     return { points, clean };
   });
 

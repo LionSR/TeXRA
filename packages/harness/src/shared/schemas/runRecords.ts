@@ -82,19 +82,48 @@ export function serializeFilteredConfig(
   return JSON.stringify(filtered, null, 2);
 }
 
-/** The name of the registered program the run opened on (`script.name`),
- *  or null for any other run. A program's run is a script that ends: its
+/** Whether the run is a script's (`config.script`, a background script or a
+ *  program): its one response is its script call. It renders no prompt and
+ *  activates no skill, ends when that call does (no later turn, and its
+ *  `Stop` hook runs as already active), and is no conversation to fork or
+ *  start a goal from. */
+export const runsScript = (config: Pick<AgentConfig, 'script'>): boolean =>
+  config.script != null;
+
+/** A script a parent sent to the background, the one script its run is,
+ *  or null for any other run. Its end is delivered to the conversation that
+ *  launched it as a script's delivery, not a subagent's report, and its
+ *  `self()` is that conversation as the script found it. */
+export const backgroundScriptOf = (
+  config: Pick<AgentConfig, 'script'>,
+): Extract<AgentConfig['script'], { kind: 'background' }> | null =>
+  config.script?.kind === 'background' ? config.script : null;
+
+/** The registered program the run opened on (its `name` and `args`), or
+ *  null for any other run. A program's run is a script that ends: its
  *  value and its children's spend are its output, its end its record, and
  *  it takes no later message. A plugin wrote the program, not a model, so
  *  the launch that chose it granted it: tools fixed past any switch, its
  *  delegations under the launch's approval, its prompts and files passed
- *  as written, and no skill activated by its instruction. */
+ *  as written, and no skill activated by its instruction. An installed
+ *  plugin's program gets less ({@link isInstalledProgram}). */
 export const programOf = (
-  config: typeof RunRecordFieldsSchema.Encoded,
-): string | null =>
+  config: Pick<AgentConfig, 'script'> | typeof RunRecordFieldsSchema.Encoded,
+): Extract<AgentConfig['script'], { kind: 'program' }> | null =>
   'script' in config && config.script?.kind === 'program'
-    ? config.script.name
+    ? config.script
     : null;
+
+/**
+ * Whether the program `name` is one an installed plugin carries
+ * (`<plugin>:<name>`), not one the app's plugin list registers (a bare
+ * name). A person reviewed an installed plugin's programs when they enabled
+ * it, so a launch and the agents it starts stand approved like a registered
+ * program's; but its text is a third party's, so the tools it lists still
+ * pass the user's switches, and the files it hands a child are resolved as
+ * a model's script's are.
+ */
+export const isInstalledProgram = (name: string): boolean => name.includes(':');
 
 /**
  * Why a run stops. `user` is an explicit stop of the work (a stop button,
@@ -154,9 +183,9 @@ export function emptyRunEndOutput(): RunEndOutput {
 }
 
 /**
- * A run's terminal result as every reader sees it. `error` is present only
- * on a failed outcome; `usage` once a round recorded usage, including on
- * failures. Cost is `usage.cost` and nothing else. Derived on read
+ * A run's terminal result as every reader sees it. `error` is present on a
+ * failed outcome, and on a cancelled one whose stop cut a failure short;
+ * `usage` once a round recorded usage, including on failures. Cost is `usage.cost` and nothing else. Derived on read
  * (`readRunEnd`): the usage is the run history's fold of its priced response
  * rows, the output as {@link RunEndOutputSchema} says.
  */
@@ -234,16 +263,17 @@ export const AgentRunListingEntrySchema = Schema.Struct({
   /** The model the run is on, as the view folds it: its newest
    *  `run.config`'s. */
   model: Schema.optional(Schema.String),
-  /** The stored rows hold a point to continue from in this process
-   *  (`deriveContinuation`), whatever the outcome: true for a finished
-   *  conversation, which takes another message, as for an interrupted run.
-   *  Ownership and loadability are finished when the run is opened. */
-  continues: Schema.Boolean,
-  /** Why the run cannot continue in this build although it may have rows to
-   *  continue from: they could not be read, an earlier build wrote them, or
-   *  they hold a fact of a plugin this process does not load. Absent when
-   *  it continues or simply has nothing to continue from. */
-  continueBlocked: Schema.optional(Schema.String),
+  /** Whether the run continues in this process (`deriveContinuation`),
+   *  whatever its outcome: `continues` for a finished conversation, which
+   *  takes another message, as for an interrupted run; `finished` for a
+   *  program whose result is in; `blocked` with why its rows cannot be
+   *  continued in this build (they could not be read, an earlier build
+   *  wrote them, or they hold a fact of a plugin this process does not
+   *  load). Ownership and loadability are decided when the run is opened. */
+  continuation: Schema.Union([
+    Schema.Struct({ kind: Schema.Literals(['continues', 'finished']) }),
+    Schema.Struct({ kind: Schema.Literal('blocked'), cause: Schema.String }),
+  ]),
   /** What the run is: the durable authority, stamped at registration. */
   identity: RunIdentitySchema.members[0],
   record: AgentConfigSchema,

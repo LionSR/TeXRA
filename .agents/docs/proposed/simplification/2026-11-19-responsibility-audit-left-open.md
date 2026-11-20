@@ -55,12 +55,12 @@ The items below each need a decision or were judged not worth a change.
    themselves are proposed for deletion in
    `2026-11-14-llm-history-lowering-and-reply-document-recovery.md`, so
    split the file when that lands, not before.
-5. **`utils/text/xmlExtraction.ts` is not general XML code.** It parses the
-   output-document tag for `agent/output/` and nothing else, apart from
-   `extractTextFromTag`. Move it under `agent/output/extraction/` with the
-   change in item 4.
 
-Landed since: `formatCliHistoryDeletionSummary` moved from app copy to the
+Landed since: the output-document tag parser moved from `utils/text/` to
+`packages/texra/src/agent/output/extraction/xmlExtraction.ts`, beside its
+consumers, and `extractTextFromTag`, the one helper `agent/runtime/` used,
+became file-local in `textEnhancement.ts`; it did not need item 4's split.
+`formatCliHistoryDeletionSummary` moved from app copy to the
 terminal's history labels (`packages/cli/src/runtime/historyLabels.ts`),
 beside its one consumer, and `ui/copy/runHistory.ts` is gone.
 

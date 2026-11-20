@@ -6,10 +6,12 @@ import { Writable } from 'node:stream';
 import { Effect, LogLevel, Predicate, Schema } from 'effect';
 
 // Local imports
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  entryChannel,
-  entryMessage,
+  ensureError,
+  entryLine,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
+import {
   setLogSink,
   type LogEntry,
   type LogSink as HostLogSink,
@@ -31,7 +33,7 @@ function isCliPipeClosureError(error: unknown): boolean {
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 
-export function installCliPipeErrorHandlers(): void {
+function installCliPipeErrorHandlers(): void {
   for (const key of ['stdout', 'stderr'] as const) {
     process[key].on('error', (error) => {
       if (isCliPipeClosureError(error)) {
@@ -166,8 +168,8 @@ class CliEntryCrashed extends Schema.TaggedError<CliEntryCrashed>()(
  *
  * The process owns its diagnostic sink from here: the harness's console
  * fallback sends DEBUG and INFO to stdout, where under `--output-format
- * ndjson` a line would break the stream. Until citty has parsed the argv,
- * diagnostics go to stderr at the default level; `defineCliCommand` then
+ * ndjson` a line would break the stream. Until the argv is parsed,
+ * diagnostics go to stderr at the default level; `cliCommand`'s launch then
  * installs the sink at the level the context decides (`--quiet`,
  * `--verbose`) for the command's whole life.
  */
@@ -309,10 +311,7 @@ export function stderrDiagnosticSink(
         LogLevel.isLessThan(ENTRY_LOG_LEVEL[entry.level], minimumLogLevel)
       )
         return;
-      const channel = entryChannel(entry);
-      writeTextStderr(
-        `${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
-      );
+      writeTextStderr(entryLine(entry));
     },
   });
 }

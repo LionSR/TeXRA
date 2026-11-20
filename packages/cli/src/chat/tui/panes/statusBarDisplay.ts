@@ -37,7 +37,7 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
-import { runStatus, type RunTone } from '@ui/copy/runStatus';
+import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import {
   AGENT_LIST,
@@ -53,12 +53,11 @@ import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runViewOf } from '../state/sessionView';
 import type {
-  ApprovalBypassKind,
   ApprovalPolicy,
+  RequestKind,
   RunView,
   SessionView,
 } from '@texra-ai/harness/schemas';
-import type { PendingRequestKind } from '../state/approvalQueue';
 
 /** Which approval bypasses are on for a run, its own or inherited. */
 export type BypassState = ReturnType<typeof runBypasses>;
@@ -67,7 +66,7 @@ export type BypassState = ReturnType<typeof runBypasses>;
 type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 function statusKindForApproval(
-  kind: PendingRequestKind,
+  kind: RequestKind,
 ): Exclude<ApprovalQueueStatusKind, 'request'> {
   switch (kind) {
     case 'userQuestion':
@@ -84,7 +83,7 @@ function statusKindForApproval(
 }
 
 export function approvalQueueStatusKind(
-  kinds: Iterable<PendingRequestKind>,
+  kinds: Iterable<RequestKind>,
 ): ApprovalQueueStatusKind {
   let sawApproval = false;
   let sawQuestion = false;
@@ -574,11 +573,6 @@ export function statusBarRunTarget({
   };
 }
 
-// A grant's badge tone: agent work approves everything below it.
-const BYPASS_BADGE_TONE: Readonly<
-  Record<ApprovalBypassKind, 'warning' | 'danger'>
-> = { toolEdit: 'warning', bash: 'warning', superYolo: 'danger' };
-
 // Which text occupies the bindings row is a priority order, not a single
 // condition: a resumable exit confirmation always wins, then an actual
 // foreground surface, then the child list, and only then normal chat shortcuts.
@@ -789,7 +783,7 @@ export function buildStatusBarDisplay(
     if (bypasses?.[kind] === true) {
       left.push({
         text: RUN_GRANT_COPY.label(kind),
-        badgeColor: TONE_PAINT[BYPASS_BADGE_TONE[kind]].color,
+        badgeColor: TONE_PAINT[RUN_GRANT_TONE].color,
         priority: STATUS_BAR_PRIORITY.bypassBadge,
         policy: 'keep',
       });

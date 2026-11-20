@@ -1,0 +1,111 @@
+// Suite for the annotation-page path of @tools/github (checkRunsClient
+// pagination before level filtering).
+
+// Third-party imports
+import { it } from '@effect/vitest';
+import { Effect, Layer } from 'effect';
+import { describe, expect } from 'vitest';
+
+// Local imports - platform
+import { Secrets } from '@texra-ai/harness/plugins';
+
+// Local imports - test support
+import { FakeSecrets } from '@test/support/FakePlatform';
+import {
+  jsonResponse,
+  scriptedHttpClientLayer,
+} from '@test/support/fetchTestUtils';
+
+// Local imports - tools
+import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
+import type { GhCheckAnnotation } from '@texra/tools/github/prTypes';
+import { HARNESS_APP } from '@test/support/FakePlatform';
+
+/**
+ * The GitHub API as the client sees it: `pages[n - 1]` answers page `n`
+ * of the annotation walk, over a process secret store holding no token.
+ */
+function githubServing(pages: readonly unknown[]) {
+  const http = scriptedHttpClientLayer((request) => {
+    const page = Number(new URL(request.url).searchParams.get('page'));
+    return jsonResponse(pages[page - 1]);
+  });
+  return {
+    layer: Layer.merge(
+      Secrets.layer(new FakeSecrets(), HARNESS_APP.client),
+      http.layer,
+    ),
+    /** Each request's path and query, as `ghGet` was handed it. */
+    paths: () =>
+      http.requests.map(({ url }) => {
+        const { pathname, search } = new URL(url);
+        return pathname + search;
+      }),
+  };
+}
+
+function annotation(
+  level: GhCheckAnnotation['annotation_level'],
+  index: number,
+): GhCheckAnnotation {
+  return {
+    path: 'blueprint/src/chapter.tex',
+    start_line: index + 1,
+    end_line: index + 1,
+    annotation_level: level,
+    message: `${level} ${index}`,
+  };
+}
+
+/** A full 100-entry warning page, which keeps pagination going. */
+function fullWarningPage(): GhCheckAnnotation[] {
+  return Array.from({ length: 100 }, (_, index) =>
+    annotation('warning', index),
+  );
+}
+
+describe('check-run annotation pagination', () => {
+  it.effect('fetches later annotation pages before level filtering runs', () =>
+    Effect.gen(function* () {
+      const github = githubServing([
+        fullWarningPage(),
+        [annotation('failure', 100)],
+      ]);
+
+      const annotations = yield* fetchAnnotations(
+        'owner',
+        'repo',
+        42,
+        Effect.void,
+      ).pipe(Effect.provide(github.layer));
+
+      expect(annotations).toHaveLength(101);
+      expect(annotations.at(-1)?.annotation_level).toBe('failure');
+      expect(github.paths()).toEqual([
+        '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=1',
+        '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',
+      ]);
+    }),
+  );
+  // Failure mode: GitHub answers a page with a 200 whose body is not an
+  // annotation list. That one optional response must not end the PR's
+  // subscription; the walk keeps what it read and stops.
+  it.effect('keeps earlier pages when a later page body is malformed', () =>
+    Effect.gen(function* () {
+      const github = githubServing([
+        fullWarningPage(),
+        { message: 'not an annotation list' },
+      ]);
+
+      const annotations = yield* fetchAnnotations(
+        'owner',
+        'repo',
+        42,
+        Effect.void,
+      ).pipe(Effect.provide(github.layer));
+
+      expect(annotations).toHaveLength(100);
+      expect(github.paths()).toHaveLength(2);
+    }),
+  );
+});

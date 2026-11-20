@@ -3,26 +3,38 @@
  * (`AgentConfig.script`) makes, and what a completed program's run reports.
  * A background script records its call whole. A program records its name
  * and arguments; its call is two generated lines over the module its plugin
- * registers (`Plugin.programs`), and its tools are that registration's.
+ * registers (`Plugin.programs`) or, for an installed plugin's program
+ * (`<plugin>:<name>`), the module read from its file, and its tools are the
+ * ones that plugin lists for it.
  */
-import { Effect, Result, Schema, SchemaIssue } from 'effect';
+import { Effect, FileSystem, Result, Schema, SchemaIssue } from 'effect';
 
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
+import { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_SOURCE,
+  backgroundScriptOf,
   factName,
+  isInstalledProgram,
+  programOf,
   type AgentConfig,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { SessionLog } from '@shared/session/runHistory';
 import { escapeAttr } from '@shared/utils/xmlEscape';
-import { ToolRegistry, type ProgramChange } from '@tools/toolTable';
+import {
+  ToolRegistry,
+  type Program,
+  type ProgramChange,
+} from '@tools/toolTable';
 
 /**
- * The script a program's run makes: import the module registered under
- * `name` and call its default export with its own `args` and the launch's
+ * The script a program's run makes: import the program's module (a
+ * registered one is `builtIn:<name>`, an installed plugin's is its own
+ * name) and call its default export with its own `args` and the launch's
  * instruction and files. What that resolves to is the script's return, so
  * the run ends with it as its output.
  */
@@ -34,7 +46,7 @@ const programScript = (
     'instruction' | 'inputFiles' | 'contextFiles' | 'mediaFiles'
   >,
 ): string =>
-  `const { default: program } = await import(${JSON.stringify(`builtIn:${name}`)});
+  `const { default: program } = await import(${JSON.stringify(isInstalledProgram(name) ? name : `builtIn:${name}`)});
 return await program(${JSON.stringify(args)}, ${JSON.stringify({
     instruction: launch.instruction,
     inputFiles: launch.inputFiles,
@@ -51,27 +63,74 @@ interface ScriptCall {
   readonly timeoutMs?: number | null;
 }
 
-/** A run names a program no listed plugin registers: an earlier build's
- *  run, or one of a plugin this process does not load. */
+/** A run names a program no plugin offers: an earlier build's run, one of
+ *  a plugin this process does not load, or one of an installed plugin that
+ *  is not loaded now (`withheld` says why). */
 export class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistered>()(
   'ProgramNotRegistered',
-  { name: Schema.String, registered: Schema.Array(Schema.String) },
+  {
+    name: Schema.String,
+    registered: Schema.Array(Schema.String),
+    withheld: Schema.Array(Schema.String),
+  },
 ) {
   override get message() {
-    return `No plugin registers a program named '${this.name}'. The programs are: ${this.registered.join(', ') || 'none'}.`;
+    return [
+      `No plugin registers a program named '${this.name}'. The programs are: ${this.registered.join(', ') || 'none'}.`,
+      ...this.withheld,
+    ].join(' ');
   }
 }
 
-/** The program a plugin registers under `name`. */
+/**
+ * Every program a run can open on now, by name: those the plugin list
+ * registers, and those of the installed plugins that load now (enabled, and
+ * trusted as they are), each under `<plugin>:<name>` with the description
+ * and tools read from its file. `withheld` says why an enabled plugin or
+ * one of its program files is not loaded.
+ */
+export const programsNow = Effect.fn('programsNow')(function* () {
+  const { programs } = yield* ToolRegistry;
+  const installed = yield* readInstalledPluginLoad({
+    globalState: yield* AppState,
+  });
+  return {
+    programs: new Map<string, Program>([
+      ...programs,
+      ...installed.loadable.flatMap(({ plugin }) =>
+        plugin.programs.loaded.map(
+          ({ name, description, tools }) =>
+            [name, { description, tools }] as const,
+        ),
+      ),
+    ]),
+    withheld: [
+      ...installed.withheld.map(({ reason }) => reason),
+      ...installed.loadable.flatMap(({ plugin }) => plugin.programs.refused),
+    ],
+  };
+});
+
+/** The program started by `name`. The installed plugins are read only for
+ *  a name of theirs. */
 const registeredProgram = Effect.fn('registeredProgram')(function* (
   name: string,
-) {
-  const { programs } = yield* ToolRegistry;
+): Effect.fn.Return<
+  Program,
+  ProgramNotRegistered,
+  ToolRegistry | AppState | FileSystem.FileSystem
+> {
+  const registered = (yield* ToolRegistry).programs.get(name);
+  if (registered !== undefined) return registered;
+  const { programs, withheld } = isInstalledProgram(name)
+    ? yield* programsNow()
+    : { programs: (yield* ToolRegistry).programs, withheld: [] };
   const program = programs.get(name);
   if (program === undefined)
     return yield* new ProgramNotRegistered({
       name,
       registered: [...programs.keys()],
+      withheld,
     });
   return program;
 });
@@ -103,15 +162,20 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
  *  for a run that asks its model. */
 export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
   config: AgentConfig,
-): Effect.fn.Return<ScriptCall | null, ProgramNotRegistered, ToolRegistry> {
-  const { script } = config;
-  if (script == null) return null;
-  if (script.kind === 'background') return script;
-  const program = yield* registeredProgram(script.name);
+): Effect.fn.Return<
+  ScriptCall | null,
+  ProgramNotRegistered,
+  ToolRegistry | AppState | FileSystem.FileSystem
+> {
+  const background = backgroundScriptOf(config);
+  if (background !== null) return background;
+  const program = programOf(config);
+  if (program === null) return null;
+  const { tools } = yield* registeredProgram(program.name);
   return {
-    code: programScript(script.name, script.args, config),
-    title: script.name,
-    tools: program.tools,
+    code: programScript(program.name, program.args, config),
+    title: program.name,
+    tools,
   };
 });
 
@@ -141,9 +205,9 @@ export const readProgramResult = Effect.fn('readProgramResult')(function* (
   DatabaseReadFailed,
   ToolRegistry | SessionLog
 > {
-  const script = config?.script;
-  if (script?.kind !== 'program') return undefined;
-  const { name } = script;
+  const program = config === null ? null : programOf(config);
+  if (program === null) return undefined;
+  const { name } = program;
   const refused = (reason: string) =>
     Effect.logWarning(
       `Run ${runId} of the program '${name}' reports nothing its registration reads: ${reason}`,
@@ -155,10 +219,20 @@ export const readProgramResult = Effect.fn('readProgramResult')(function* (
         changes: [],
       }),
     );
-  const registered = yield* Effect.result(registeredProgram(name));
-  if (Result.isFailure(registered))
-    return yield* refused(registered.failure.message);
-  const { result } = registered.success;
+  // An installed plugin's program registers no result: its run delivers
+  // its reply alone.
+  if (isInstalledProgram(name)) return { name, delivery: [], changes: [] };
+  const { programs } = yield* ToolRegistry;
+  const registered = programs.get(name);
+  if (registered === undefined)
+    return yield* refused(
+      new ProgramNotRegistered({
+        name,
+        registered: [...programs.keys()],
+        withheld: [],
+      }).message,
+    );
+  const { result } = registered;
   if (result === undefined) return { name, delivery: [], changes: [] };
   const { schema } = result.fact;
   const fact = factName(result.fact);

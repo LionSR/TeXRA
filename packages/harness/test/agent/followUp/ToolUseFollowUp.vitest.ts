@@ -12,6 +12,7 @@ import { Inbox } from '@agent/followUp/Inbox';
 import type { FollowUpReader } from '@agent/followUp/FollowUpReader';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
 import { startedRun } from '@test/support/scriptedRunLayers';
 import { holdTestRun } from '@test/support/sessionTestUtils';
@@ -41,9 +42,8 @@ const queuedTexts = (session: Context.Context<SessionServices>, runId: RunId) =>
 /** What `input` takes now without blocking (nothing is consumed). */
 const taken = (input: FollowUpReader) =>
   Effect.gen(function* () {
-    const batch = (yield* input.hasPending('idle'))
-      ? yield* input.next('idle')
-      : null;
+    const seen = yield* input.read;
+    const batch = seen.pending('idle') ? yield* input.next('idle', seen) : null;
     return batch?.kind !== 'followUps'
       ? []
       : batch.followUps.flatMap(({ content }) =>
@@ -116,22 +116,42 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
     );
 
     it.effect(
+      "refuses a run's message to a run its user stopped, and queues nothing",
+      () =>
+        Effect.gen(function* () {
+          const session = yield* isolatedTestSession();
+          const runId = yield* startedRun(session);
+          yield* Context.get(session, RunRegistry).stop(runId, 'user');
+          const peer = {
+            kind: 'run' as const,
+            runId: RunIdSchema.make('c41dc41dc41d'),
+          };
+
+          const result = yield* submitFollowUp(
+            runId,
+            { text: 'carry on', from: peer },
+            {},
+          ).pipe(Effect.provide(session));
+
+          // The sender is told; a row nobody wakes the run for would have
+          // read as delivered.
+          expect(result).toMatchObject({ status: 'failed' });
+          expect(yield* queuedTexts(session, runId)).toEqual([]);
+        }),
+    );
+
+    it.effect(
       'delivers a successor reader every row still queued, in commit order',
       () =>
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
           const inbox = Context.get(session, Inbox);
           const id = yield* startedRun(session);
-          yield* Effect.scoped(
-            Effect.andThen(
-              inbox.open(id),
-              inbox.send(id, user('during the first generation')),
-            ),
-          );
+          yield* inbox.send(id, user('during the first generation'));
           yield* inbox.send(id, user('between generations'));
           yield* inbox.owesResume(id);
 
-          const input = yield* inbox.open(id);
+          const input = yield* inbox.reader(id);
           expect(yield* taken(input)).toEqual([
             'during the first generation',
             'between generations',
@@ -139,33 +159,26 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
         }),
     );
 
-    it.effect(
-      'a closed run refuses senders from its rows until a reader opens here',
-      () =>
-        Effect.gen(function* () {
-          // The close is the run's `followup.closed` row, not an in-memory
-          // mark: the session reads only the rows.
-          const session = yield* isolatedTestSession();
-          const inbox = Context.get(session, Inbox);
-          const closed = yield* startedRun(session);
-          const open = yield* startedRun(session);
-          yield* inbox.closeInput(closed);
-          yield* Context.get(session, SessionLog).drained;
+    it.effect('a closed run refuses senders from its rows', () =>
+      Effect.gen(function* () {
+        // The close is the run's `followup.closed` row, not an in-memory
+        // mark: the session reads only the rows.
+        const session = yield* isolatedTestSession();
+        const inbox = Context.get(session, Inbox);
+        const closed = yield* startedRun(session);
+        const open = yield* startedRun(session);
+        yield* inbox.closeInput(closed);
+        yield* Context.get(session, SessionLog).drained;
 
-          expect(yield* inbox.send(closed, user('still closed'))).toEqual({
-            kind: 'refused',
-          });
-          expect(yield* queuedTexts(session, closed)).toEqual([]);
-          expect(yield* inbox.send(open, user('never closed'))).toMatchObject({
-            kind: 'queued',
-          });
-
-          // The generation that reactivates it reads its input again.
-          yield* inbox.open(closed);
-          expect(yield* inbox.send(closed, user('reopened'))).toMatchObject({
-            kind: 'queued',
-          });
-        }),
+        expect(yield* inbox.send(closed, user('still closed'))).toEqual({
+          kind: 'refused',
+          reason: 'closed',
+        });
+        expect(yield* queuedTexts(session, closed)).toEqual([]);
+        expect(yield* inbox.send(open, user('never closed'))).toMatchObject({
+          kind: 'queue',
+        });
+      }),
     );
 
     // #9531: the second send of a delivery must not be told `duplicate`
@@ -179,7 +192,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
           const faults = yield* sessionStoreFaults(roots.storage);
           const inbox = Context.get(session, Inbox);
           const id = yield* startedRun(session);
-          yield* inbox.open(id);
           yield* faults.failNext('appendAll', 'followup.queued');
           const delivery = childResult('exec-2:turn:1:delivery');
 
@@ -192,7 +204,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
           );
 
           expect(Exit.isFailure(first)).toBe(true);
-          expect(second).toEqual(Exit.succeed({ kind: 'queued' }));
+          expect(second).toEqual(Exit.succeed({ kind: 'queue' }));
           expect(yield* queuedTexts(session, id)).toEqual(['child result']);
         }),
     );

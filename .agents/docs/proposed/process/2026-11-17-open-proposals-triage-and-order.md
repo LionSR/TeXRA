@@ -68,6 +68,16 @@ Started on 2026-11-19, one pull request each:
   records it as accepted (its ruling 7); it had been treated as waiting on
   that note's question 1, which holds only two slices of phase 5.
 
+Read again on 2026-11-20: all but one have merged. Requests and input
+(#15109), one writer per project file and #15083 (#15088, #15110), the
+terminal and the web (#15092), storage (#15085), run lifecycle shapes
+(#15087), the `latex-extract` removal (#15086), CLI and memory tool
+(#15089), programs phase 4 (#15091). The TUI validator still sleeps a fixed
+delay per key (`delayMs`, `keyDelayMs` in
+`packages/cli/scripts/validate-tui.mjs`). Also merged since this note was
+written: the external inquiry tool's retirement (#15098) and the `texra`
+command tree on `effect/cli` (#15111).
+
 ## Decided on 2026-11-19
 
 The owner's instruction for this pass was to use best judgment. Each ruling
@@ -100,6 +110,57 @@ started, unless listed under "In flight".
 | Request nouns come from one table keyed by request kind                                            | no decision was needed; only the badge's source is one                                                                                                             | S    |
 | The file-tool text leaves the prompt of a run without file tools (I-C16)                           | the earlier triage's "safe at any time"; review as the resolved prompt                                                                                             | S    |
 | R17 gets one kernel case that interrupts inside its handoff window                                 | the evidence of 2026-11-19 (`release-acceptance-rows`) covers either side and says the window itself is hit by no check; a small check is better than a waived one | S    |
+
+Landed since, checked against the tree on 2026-11-20: `RunCell.commit`,
+the key-pages link and `wallTimeMs` (#15103); `SessionKey` reading only
+`storage` (#15099); the MCP client name, now the app's client id from
+`SubscriptionAccounts` (#15106); the request noun table, `REQUEST_NOUN` in
+`packages/texra/src/ui/copy/requestCards.ts` (#15106). Store debts C7:
+the `leanServerPool` module mock went in #15096, the `SqliteClient` spread
+in #15122. Landed on 2026-11-20 (`claude/upkeep-2026-11-20-ruled-run-items`):
+`run.steps` is a `ScopedRef`; a model switch for a run no process holds is
+queued, and the loop applies it or drops one it cannot take, named in the
+run's trace (`RunControls.switchModel` is gone); the full `validate:tui`
+runs nightly (the `tui-validation` job). Landed in #15122: store debts A8
+(`appendAll` no longer reports a malformed draft as `DatabaseWriteFailed`)
+and C6 (no suite asserts a `DatabaseRowCorrupt` or `DatabaseStoreNewer`
+cause shape); `IMAGE_LIMITS` in `packages/llm/src/protocol.ts`, a row per
+protocol read by the tool attachments and the message media (its OpenAI
+Responses and Google Interactions rows repeat the Anthropic numbers until a
+citable source gives theirs, item 2 of
+`simplification/2026-11-19-layer-audit-left-open.md`); the status table's
+word in the run header; and the R17 kernel case,
+`packages/harness/test/effect/sessionPrograms.vitest.ts` "R17: a launch
+interrupted after its run answered, before its caller has the handle,
+leaves the run held, stoppable and released". I-C16: #15106 gave the bash
+and glob/grep sentences and the external directories to the runs offered
+those tools, and on 2026-11-20 the other sentences that name a tool the run
+may lack followed: the markdown-files line of the tool-call section
+(`write_file` or `bash`), the core plugin's `find` for the TeX sources
+(`bash`) and its "grep or read" of the bibliography, and the
+`<workspace_info>` advice before a git command (`bash`). Still open: the
+`./host` helpers (fourteen files under `packages/texra/src/tools` still
+import `@texra-ai/harness/host`, #15120 moves them) and the `./plugins`
+split. M4 and H9 were not re-read.
+
+The earlier version's list of work "safe at any time", read again on
+2026-11-19:
+
+- Landed in one pull request: `RunCell.commit` applies its batch once,
+  inside the store's job; the key-pages links read `KEY_PAGES` from
+  `packages/texra/src/shared/model/keyPages.ts`; the rejected-token notice
+  is worded at its one follower; R6-T7 b, by correcting the store review
+  (its codec ratchet is gone and SQL reads a payload field).
+- Already on `main`: the tool-edit diff title (`toolEditDiffLabel`), the
+  one symbol table (`MATH_SYMBOL_SPELLINGS`), the `script` tool's
+  description (#15024), and the `model.useGoogleBackgroundResponses`
+  deletion (#15081).
+- Waiting for open pull requests on their files: deriving
+  `referencedAggregates` (`shared/schemas/sessionEvent.ts`). Store debts A6
+  (#15099) and A8 (#15122) have landed.
+- Not to be done: the media classifier (below). Left to whoever owns the
+  bundled prompts: I-C4, and I-C16 as ruled above. Left to the UI work:
+  tooltip ids carried by the data.
 
 **Keep what the code does; close the item.**
 
@@ -146,7 +207,8 @@ started, unless listed under "In flight".
   review F14): a pull request that commits no dump fails the suite that
   reads it until the job runs, so the design has a gap.
 - The script delivery's `stopped` literal: one note renames it, the delivery
-  note keeps it. It rides with the delivery union.
+  note keeps it. The delivery union it rode with was kept as one struct
+  (2026-11-19), so it stays as it is.
 - `definition.ts` ending a run through `readCause`; the TUI's local rows
   through `LocalSession.emit`; a slot-agnostic `rowDefault` export: none has
   a recommendation, and none blocks other work.
@@ -237,12 +299,18 @@ first, as its phase 7).
    each green broke `main` together on 2026-11-19.
 2. **The work this note's rulings unblock**, grouped by the files it shares:
    stop and resume (one stop-or-failure decider, one rejection decider per
-   resume, the model switch as a queued row); the store's small rulings; the
-   delivery shape with its one row bump; the app's entries (`./host`
-   helpers, the MCP client name, the `./plugins` split); the dispatcher
-   split (tech debt T1, PRD row 10), which waits for the requests work to
-   leave the run loop.
-3. **Programs.** Phase 4 is in flight. Phase 5 follows on the owner's answer
+   resume, the model switch as a queued row); the store's small rulings;
+   the app's entries (`./host` helpers, the MCP client name, the
+   `./plugins` split); the dispatcher split (tech debt T1, PRD row 10),
+   which waits for the requests work to leave the run loop. The row-version
+   pass is done (2026-11-19): `finishEvidence` and `refusalEvidence` were
+   already gone (`model.message` v21, #15017); the delivery stores
+   `wallTimeMs` and its prompt as a cut attribute (`followup.queued` v11);
+   the delivery union was compared and kept as one struct
+   (`refuted-candidates.json`, `DELIVERY-union-on-family-and-outcome`); and
+   the recorded request is held under the `context.blob` version (store
+   debts B5).
+3. **Programs.** Phase 4 merged (#15091). Phase 5 follows on the owner's answer
    to question 1; its slices that do not depend on the answer can be
    prepared.
 4. **Evidence that needs no key**: the `unified-latex` spike, the tar
@@ -252,6 +320,10 @@ first, as its phase 7).
    request before it edits notes. Done on 2026-11-19: the finished note is
    deleted, the items above that are not to be done are recorded in
    `refuted-candidates.json` (whose entries were re-read against the code),
-   and the ledger's publishing line (D11) is fixed.
+   and the ledger's publishing line (D11) is fixed. On 2026-11-20 the
+   landed items found in the simplification notes and in two architecture
+   notes were marked in place, and three settled notes moved to
+   `implemented/simplification/`; the other architecture, feature and
+   process notes were not re-read item by item.
 6. **The freeze and the first publish**, on the owner's date, after the two
    live routes pass.

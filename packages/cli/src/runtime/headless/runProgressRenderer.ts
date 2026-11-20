@@ -31,7 +31,7 @@ import {
   truncateSummaryToWidth,
 } from '../terminal/terminalText';
 import { getStderrColumns, writeRawStderr } from '../platform/logSinks';
-import type { CliContext } from '../platform/cliContext';
+import { isQuiet, type CliContext } from '../platform/cliContext';
 import type { Session } from '@texra-ai/harness';
 
 const CLEAR_LINE = '\r\x1b[2K';
@@ -48,7 +48,9 @@ interface RunProgressSession {
  *  run's own handle does, as does the chat for every run it lists). */
 export function finishedToolCalls(run: RunView): number {
   return run.transcript.rows.filter(
-    (row) => row.kind === 'tool' && row.model.status !== 'in_progress',
+    (row) =>
+      row.kind === 'tool' &&
+      (row.model.status === 'completed' || row.model.status === 'failed'),
   ).length;
 }
 
@@ -67,9 +69,9 @@ interface RunProgressRenderer {
 }
 
 export function shouldRenderRunProgress(
-  context: Pick<CliContext, 'outputFormat' | 'quietLogs'>,
+  context: Pick<CliContext, 'outputFormat' | 'minimumLogLevel'>,
 ): boolean {
-  return !context.quietLogs && context.outputFormat !== 'ndjson';
+  return !isQuiet(context) && context.outputFormat !== 'ndjson';
 }
 
 export function createRunProgressRenderer(

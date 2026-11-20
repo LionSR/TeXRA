@@ -13,6 +13,7 @@ import { findCommand } from '@texra/utils/system/binaryResolver';
 import { directLeanLanguageServices } from './direct/leanServerPool';
 import { LeanLanguageServices } from './leanLanguageServices';
 import { isLeanServerActive, summarizeLeanServers } from './leanServerInfo';
+import { LeanLoogleTool } from './LoogleTool';
 import { LEAN4_EXTENSION_ID } from './leanTypes';
 import { LEAN_MODULES, LEAN_PROGRAMS } from './programs';
 import {
@@ -36,6 +37,7 @@ export const lean4: TexraPlugin = texraPlugin({
       LeanFileTool,
       LeanProjectTool,
       LeanInspectTool,
+      LeanLoogleTool,
     ],
     // The script tool's description lists the programs; a run offered
     // `program` without it reads them here.
@@ -82,11 +84,12 @@ export const lean4: TexraPlugin = texraPlugin({
     lean_file: 'file-code',
     lean_project: 'folder-tree',
     lean_inspect: 'magnifying-glass-chart',
+    lean_loogle: 'magnifying-glass',
   },
   dashboard: {
     name: 'Lean 4 Proof Assistant',
     description:
-      'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below. (lean_loogle needs only network access and is always available.)',
+      'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below.',
     setup: {
       installGuide:
         'TeXRA spawns `lake env lean --server` itself, one process per\n' +

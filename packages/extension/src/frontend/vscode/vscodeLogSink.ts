@@ -8,6 +8,7 @@
  * the transcript's to render, not a per-run output channel's.
  */
 // Third-party imports
+<<<<<<< HEAD
 import { Predicate, Record } from 'effect';
 import * as vscode from 'vscode';
 
@@ -31,6 +32,13 @@ function detail(entry: LogEntry): string {
   ].filter(Predicate.isNotUndefined);
   return parts.length === 0 ? '' : `\n${parts.join('\n')}`;
 }
+=======
+import * as vscode from 'vscode';
+
+// Local imports
+import type { LogSink } from '@texra-ai/harness/node';
+import { entryDetail, entryLine } from '@texra-ai/harness/schemas';
+>>>>>>> origin/main
 
 export function createVsCodeLogSink(): LogSink {
   let output: vscode.LogOutputChannel | undefined;
@@ -38,9 +46,10 @@ export function createVsCodeLogSink(): LogSink {
   return {
     write(entry) {
       output ??= vscode.window.createOutputChannel('TeXRA', { log: true });
-      const channel = entryChannel(entry);
-      const prefix = channel === undefined ? '' : `[${channel}] `;
-      const line = `${prefix}${entryMessage(entry)}${detail(entry)}`;
+      // Every annotation arrives rendered and bounded by the write path, so
+      // the detail shows them on the entries the channel's level filter let
+      // through.
+      const line = [entryLine(entry), ...entryDetail(entry)].join('\n');
       switch (entry.level) {
         case 'FATAL':
         case 'ERROR':

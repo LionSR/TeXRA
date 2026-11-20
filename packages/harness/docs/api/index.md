@@ -172,7 +172,8 @@ interface Composition {
   readonly plugins: readonly Plugin[];
   /** The app the process signs in and sends model requests as: OpenAI shows
    *  its `name` for a ChatGPT sign-in, and its `id` attributes a Grok
-   *  sign-in and namespaces a ChatGPT plan's tools. */
+   *  sign-in, namespaces a ChatGPT plan's tools and is the client name an
+   *  MCP server is told. */
   readonly client: ClientIdentity;
   readonly skills?: HostSkillOptions;
 }
@@ -789,8 +790,18 @@ interface Session {
 
 ## SessionCloseReport
 
+What closing a session ended, and what it did not: the answer of the
+session owner's close (`Sessions.close`, the SDK's `closeSession`). New
+executions were refused and the owned live ones interrupted. `abandoned`
+names the executions still live when the close budget ran out, empty when
+every one ended inside it: the session stays open, refusing new work,
+until they actually end, and the caller must not treat a close with
+abandoned executions as complete disposal.
+
 ```ts
-type SessionCloseReport = typeof SessionCloseReportSchema.Type;
+interface SessionCloseReport {
+  readonly abandoned: readonly string[];
+}
 ```
 
 ## SessionHost

@@ -35,14 +35,6 @@ const IMAGE_MIME_PREFIX = 'image/';
 const turndownService = createHtmlToMarkdown();
 
 /**
- * Parse an EML file's raw text content into a human-readable representation,
- * and extract any image attachments.
- *
- * Extracts key headers (From, To, CC, Subject, Date) and the text body.
- * When no plain-text part exists, falls back to a Markdown conversion of the HTML body.
- * Non-image attachment filenames are listed at the end of the text.
- */
-/**
  * `postal-mime` rejected the message. It is a parser over a string this
  * process already holds, not a host port, so there is one reason and it
  * carries the library's own error.
@@ -55,6 +47,14 @@ class EmlParseFailed extends Schema.TaggedError<EmlParseFailed>()(
   },
 ) {}
 
+/**
+ * Parse an EML file's raw text content into a human-readable representation,
+ * and extract any image attachments.
+ *
+ * Extracts key headers (From, To, CC, Subject, Date) and the text body.
+ * When no plain-text part exists, falls back to a Markdown conversion of the HTML body.
+ * Non-image attachment filenames are listed at the end of the text.
+ */
 export const parseEml = Effect.fn('parseEml')(function* (
   rawEml: string,
 ): Effect.fn.Return<EmlParseResult, EmlParseFailed> {

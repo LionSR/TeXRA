@@ -8,6 +8,9 @@
  * parentage or a task list a second time.
  */
 
+// Node imports
+import * as nodePath from 'node:path';
+
 // Third-party imports
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
@@ -23,7 +26,7 @@ import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RunsShape } from '@agent/runtime/runs';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
-import { findExistingRunStoragePathUnder } from '@common/storage/storageLayout';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
   isRunId,
@@ -36,12 +39,13 @@ import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 import { formatConversation } from '@shared/transcript/conversationFormat';
 import { assertNoParentTraversal } from '@tools/pathResolution';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@agent/storage/completedRunArchive';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { getPathSegments } from '@utils/core/pathCore';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { formatCount, splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -139,7 +143,7 @@ interface SizedEntry {
  */
 function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
   return entries.map(({ isDirectory, size, path }) => {
-    const bytes = `${size.toLocaleString('en-US')} bytes`;
+    const bytes = `${formatCount(size)} bytes`;
     return `${(isDirectory ? '<dir>' : bytes).padStart(8)}  ${path}`;
   });
 }
@@ -545,8 +549,10 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     limit: number,
   ) {
     const records = getRunRecords(runId);
-    const { config } = yield* SessionRoots;
-    const conversation = yield* readCompletedRunConversation(runId, config);
+    const conversation = yield* readCompletedRunConversation(
+      runId,
+      yield* SessionRoots,
+    );
 
     if (conversation.length === 0) {
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
@@ -602,16 +608,17 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
 ) {
   const displayPath = `/executions/${runId}/files/${filePath}`;
   yield* assertNoParentTraversal(filePath);
-  const fullPath = yield* findExistingRunStoragePathUnder(
-    (yield* SessionRoots).storage,
+  const storageFs = yield* StorageFs;
+  const storagePath = nodePath.posix.join(
+    WORKSPACE_STORAGE_LAYOUT.runs,
     runId,
     filePath,
   );
-  if (!fullPath) {
+  if (!(yield* entryExists(storageFs, storagePath))) {
     return yield* new ToolError(`File not found: ${displayPath}`);
   }
 
-  return yield* readFileContent(yield* StorageFs, fullPath, {
+  return yield* readFileContent(storageFs, storagePath, {
     directoryErrorPath: displayPath,
     resultPath: displayPath,
     viewRange,

@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
-import { Effect, absurd } from 'effect';
+import { Effect, Option, absurd } from 'effect';
+import { Argument, Command, Flag } from 'effect/cli';
 
 import { type RunId } from '@texra-ai/harness/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
@@ -11,7 +11,6 @@ import {
   formatCliHistoryDetailsText,
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
-  formatInvalidExportFormatText,
   listCliHistoryEntries,
   parseCliHistoryId,
   readCliHistoryDetails,
@@ -24,23 +23,19 @@ import {
   cliErrorMessage,
   writeErrorStderr,
   writeRawStdout,
-  writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
-
-function parseHistoryListLimit(value: string | undefined): number | undefined {
-  if (!value || !/^\d+$/.test(value)) return undefined;
-  const limit = Number(value);
-  return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
-}
+import {
+  CliUsageError,
+  failUsage,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
   limit?: number;
@@ -74,8 +69,7 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
     { includeFullConversation: options.full === true },
   );
   if (!details) {
-    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-    return CliExitCode.Usage;
+    return yield* failUsage(formatCliHistoryNotFoundText(id, context.cwd));
   }
 
   yield* emitCliResult(
@@ -108,15 +102,13 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
       id,
     );
     if (exportResult.status === 'not_found') {
-      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-      return CliExitCode.Usage;
+      return yield* failUsage(formatCliHistoryNotFoundText(id, context.cwd));
     }
     if (exportResult.status === 'incomplete') {
-      writeTextStderr(
+      return yield* failUsage(
         `Run ${id} exists but has nothing to export yet (no stored ` +
           `config and/or conversation). Run \`texra history show ${id}\` to see what is available.`,
       );
-      return CliExitCode.Usage;
     }
     writeRawStdout(formatChatAsMarkdown(exportResult.exportInput));
     return;
@@ -131,37 +123,29 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
       TraceUnavailable: ({ status }) => {
         switch (status) {
           case 'no_record':
-            writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-            break;
+            return failUsage(formatCliHistoryNotFoundText(id, context.cwd));
           case 'no_rows':
-            writeTextStderr(
+            return failUsage(
               `Run ${id} exists but has no transcript to replay (it produced no output).`,
             );
-            break;
           default:
-            absurd(status);
+            return absurd(status);
         }
-        return Effect.succeed(null);
       },
-      TraceViewerMissing: () => {
-        writeTextStderr(
+      TraceViewerMissing: () =>
+        failUsage(
           'The bundled trace-viewer standalone template was not found in this ' +
             'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
             'packages/trace-viewer builds.',
-        );
-        return Effect.succeed(null);
-      },
+        ),
       // Any other failure to read the bundle (EACCES, a transient I/O
       // error) is not "rebuild the CLI": it names the real cause.
       PlatformError: (error) =>
-        Effect.fail(
-          new CliUsageError({
-            message: `history export: cannot read the trace-viewer bundle: ${cliErrorMessage(error)}`,
-          }),
+        failUsage(
+          `history export: cannot read the trace-viewer bundle: ${cliErrorMessage(error)}`,
         ),
     }),
   );
-  if (page === null) return CliExitCode.Usage;
   writeRawStdout(page.html);
 });
 
@@ -174,10 +158,9 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
   if (options.target === 'all' && !options.yes) {
-    writeTextStderr(
+    return yield* failUsage(
       `Refusing to delete every stored task in ${context.cwd}. Re-run with --yes to confirm.`,
     );
-    return CliExitCode.Usage;
   }
 
   // A deletion that fails reports its error and exits Usage, the way
@@ -202,14 +185,14 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // found" usefully.
   if (result.deleted === 'one' && context.outputFormat === 'text') {
     if (result.status === 'not-found') {
-      writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
-      return CliExitCode.Usage;
+      return yield* failUsage(
+        formatCliHistoryNotFoundText(result.id, context.cwd),
+      );
     }
     if (result.status === 'active') {
-      writeTextStderr(
+      return yield* failUsage(
         `Task ${result.id} is active in TeXRA and was not deleted.`,
       );
-      return CliExitCode.Usage;
     }
   }
 
@@ -232,118 +215,90 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
     : CliExitCode.Success;
 });
 
-const historyListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List stored tasks' },
-  args: {
-    limit: {
-      type: 'string',
-      alias: 'n',
-      valueHint: 'count',
-      description: 'Show at most this many tasks',
-    },
-  },
-  // The argument parses are the builder's, above the program: a refusal is
-  // `CliUsageError`, which `runCli` reports as the same stderr line and exit
-  // 2 the program would have returned — and refuses before `defineCliCommand`
-  // installs a process runtime this command would never bring a platform up
-  // to dispose.
-  run: (_, ctx) => {
-    const limitValue = optString(ctx.args.limit);
-    const limit = parseHistoryListLimit(limitValue);
-    if (limitValue !== undefined && limit === undefined) {
-      throw new CliUsageError({
-        message: `Invalid history limit: ${limitValue}`,
-      });
-    }
-    return runHistoryList({ limit });
-  },
-});
+const TASK_ID_DESCRIPTION = 'Task id from `texra history list`';
 
-const historyShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one stored task' },
-  args: {
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Task id from `texra history list`',
-    },
-    full: {
-      type: 'boolean',
-      description:
-        'Show the full stored conversation instead of only the final preview',
-    },
-    export: {
-      type: 'string',
-      valueHint: 'html|md',
-      description:
+// `texra history` on its own is `texra history list`: the group takes the
+// listing's flags and runs it.
+const historyList = {
+  config: {
+    limit: Flag.Int('limit').pipe(
+      Flag.filter(
+        (count) => count >= 1,
+        (count) => `Expected at least 1 task, got ${count}`,
+      ),
+      Flag.withAlias('n'),
+      Flag.withMetavar('count'),
+      Flag.withDescription('Show at most this many tasks'),
+      Flag.optional,
+    ),
+  },
+  run: (_: CliContext, input: { readonly limit: Option.Option<number> }) =>
+    runHistoryList({ limit: Option.getOrUndefined(input.limit) }),
+};
+
+const historyShowCommand = cliCommand('show', {
+  description: 'Show one stored task',
+  config: {
+    id: Argument.String('id').pipe(
+      Argument.withDescription(TASK_ID_DESCRIPTION),
+    ),
+    full: boolFlag(
+      'full',
+      'Show the full stored conversation instead of only the final preview',
+    ),
+    export: Flag.Literals('export', ['html', 'md']).pipe(
+      Flag.withDescription(
         'Export the run to stdout: html is a self-contained trace-viewer replay, md is the conversation as Markdown',
-    },
+      ),
+      Flag.optional,
+    ),
   },
-  run: (context, ctx) => {
-    const id = parseCliHistoryId(ctx.args.id);
+  run: (context, input) => {
+    const id = parseCliHistoryId(input.id);
     if (!id) {
-      throw new CliUsageError({ message: `Invalid task id: ${ctx.args.id}` });
+      throw new CliUsageError({ message: `Invalid task id: ${input.id}` });
     }
-    const exportFormat = optString(ctx.args.export);
-    if (exportFormat !== undefined) {
-      if (exportFormat !== 'html' && exportFormat !== 'md') {
-        throw new CliUsageError({
-          message: formatInvalidExportFormatText(exportFormat),
-        });
-      }
+    const exportFormat = Option.getOrUndefined(input.export);
+    if (exportFormat !== undefined)
       return runHistoryExport(context, id, exportFormat);
-    }
-    return runHistoryShow(context, id, { full: ctx.args.full === true });
+    return runHistoryShow(context, id, { full: input.full });
   },
 });
 
-const historyDeleteCommand = defineCliCommand({
-  meta: { name: 'delete', description: 'Delete stored tasks' },
-  args: {
-    id: {
-      type: 'positional',
-      required: false,
-      description: 'Task id from `texra history list`',
-    },
-    all: {
-      type: 'boolean',
-      description: 'Delete all stored tasks (requires --yes to confirm)',
-    },
-    yes: {
-      type: 'boolean',
-      alias: 'y',
-      description:
-        'Confirm destructive deletes (required with --all; ignored otherwise)',
-    },
+const historyDeleteCommand = cliCommand('delete', {
+  description: 'Delete stored tasks',
+  config: {
+    id: Argument.String('id').pipe(
+      Argument.withDescription(TASK_ID_DESCRIPTION),
+      Argument.optional,
+    ),
+    all: boolFlag('all', 'Delete all stored tasks (requires --yes to confirm)'),
+    yes: boolFlag(
+      'yes',
+      'Confirm destructive deletes (required with --all; ignored otherwise)',
+    ).pipe(Flag.withAlias('y')),
   },
-  run: (context, ctx) => {
-    const rawId = optString(ctx.args.id);
+  run: (context, input) => {
+    const rawId = Option.getOrUndefined(input.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
       throw new CliUsageError({ message: `Invalid task id: ${rawId}` });
     }
-    const target = ctx.args.all === true ? 'all' : id;
+    const target = input.all ? 'all' : id;
     if (!target) {
       throw new CliUsageError({ message: 'Expected a task id, or --all.' });
     }
-    return runHistoryDelete(context, {
-      target,
-      yes: ctx.args.yes === true,
-    });
+    return runHistoryDelete(context, { target, yes: input.yes });
   },
 });
 
-export const historyCommand = defineCommand({
-  meta: { name: 'history', description: 'Inspect stored tasks' },
-  args: {
-    ...GLOBAL_ARGS,
-  },
-  // Bare `texra history` is the obvious history listing command. Keep it as
-  // an alias of `history list` so global flags continue to work at the parent.
-  default: 'list',
-  subCommands: {
-    list: historyListCommand,
-    show: historyShowCommand,
-    delete: historyDeleteCommand,
-  },
-});
+export const historyCommand = cliCommand('history', {
+  description: 'Inspect stored tasks',
+  ...historyList,
+}).pipe(
+  Command.withSubcommands([
+    cliCommand('list', { description: 'List stored tasks', ...historyList }),
+    historyShowCommand,
+    historyDeleteCommand,
+  ]),
+);

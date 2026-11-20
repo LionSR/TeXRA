@@ -182,9 +182,6 @@ export async function makeExampleWorkspace(
   turns: readonly ScriptedTurn[] = [],
   /** An existing workspace to reuse, as a second process does. */
   existing?: string,
-  /** The agent directory the platform serves, a plugin package's own;
-   *  absent, the workspace's `agents/`. */
-  agents?: string,
 ): Promise<{
   readonly workspace: string;
   readonly agentsDir: string;
@@ -208,7 +205,7 @@ export async function makeExampleWorkspace(
 
   const workspace =
     existing ?? (await mkdtemp(join(tmpdir(), 'texra-harness-example-')));
-  const agentsDir = agents ?? join(workspace, 'agents');
+  const agentsDir = join(workspace, 'agents');
   await mkdir(agentsDir, { recursive: true });
   const platform = nodePlatform({
     agentsDir,

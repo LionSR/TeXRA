@@ -43,10 +43,16 @@ import {
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
+  logFailure,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 import { activationView, replayTrace } from '@texra-ai/harness/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
 import { requestErrorText } from '@ui/copy/requestErrors';
+import {
+  writeFileIfUnchanged,
+  type WriteProjectFile,
+} from '@texra/common/files/projectFileWrite';
 
 import { attachWindowHost } from './windowHost';
 import {
@@ -68,6 +74,8 @@ import {
   type TaskRecordsFailed,
 } from './protocol';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
+
+const CHANNEL = 'serviceSession';
 
 const isRpcClientError = (
   error: unknown,
@@ -100,6 +108,31 @@ const callService = <A, E, F>(
 /** A failure to reach an answer: the link holds no service, or the
  *  service did not answer. */
 const failedCall = (reason: string) => new ServiceUnavailable({ reason });
+
+/**
+ * A project file's write as a window of the service makes it
+ * (`GuiSession.writeFile`): the service's, where the project's tasks write,
+ * so the write and a task's edit of the file take one write lane. While the
+ * link holds no service, or the service does not answer, the write runs in
+ * this process instead, so a save never waits on the link; the file then has
+ * two writers until the link is back, which is said at warn here and by the
+ * window's offline banner.
+ */
+export const serviceFileWrite =
+  (link: ServiceLink): WriteProjectFile =>
+  (path, contents, expected) =>
+    callService(link, failedCall, (client) =>
+      client['file.write']({ path, contents, expected }),
+    ).pipe(
+      Effect.catchTag('ServiceUnavailable', (away) =>
+        Effect.logWarning(
+          `Writing ${path} in this window's process, where an edit of it by a task in the TeXRA service is not seen: ${away.message}`,
+        ).pipe(
+          withLogChannel(CHANNEL),
+          Effect.andThen(writeFileIfUnchanged(path, contents, expected)),
+        ),
+      ),
+    );
 
 /** How many times a change to project state keys is tried again while
  *  another writer moves one between its read and its write. */
@@ -289,9 +322,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         Cause.hasInterruptsOnly(cause)
           ? Stream.empty
           : Stream.fromEffect(
-              Effect.logWarning(
+              logFailure(
+                CHANNEL,
                 `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
-              ).pipe(Effect.annotateLogs({ data: cause })),
+              )(cause),
             ).pipe(Stream.drain),
       ),
     ),
@@ -325,10 +359,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       Effect.catch((error) =>
         Predicate.isTagged(error, 'TaskFailed')
           ? Effect.fail(runFailure(error.message))
-          : Effect.logWarning(
+          : logFailure(
+              CHANNEL,
               `The TeXRA service stopped before task ${runId} ended`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
+            )(error).pipe(
               Effect.andThen(link.state.get),
               // Why the link is away, or offline when it has not heard yet.
               Effect.flatMap((state) =>

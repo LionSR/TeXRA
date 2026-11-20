@@ -22,6 +22,7 @@ import {
   Settings,
   type AgentTrace,
   sourceLocationUnder,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import {
   fileLocationDisplayPath,
@@ -146,7 +147,7 @@ const rejectOversizedBibAttachments = Effect.fn(
     if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
 
     const sizeBytes = Number(stats.size);
-    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then start the program again without the full .bib file.`;
+    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. If citations are needed, write the entries the document cites to a smaller .bib file (find each key with grep, then copy its whole record, which spans several lines), and start the program again with that file in place of the full one.`;
     return yield* new ToolError(message, {
       summary: 'Rejected oversized BibTeX attachment',
     });
@@ -224,9 +225,6 @@ const openTask = Effect.fn('documents.openTask')(function* (
   logCategory('Context Files', contexts);
 });
 
-const optionalFlag = (description: string) =>
-  Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({ description });
-
 /** `document_context`: the prompt and media of one revision. */
 export const DocumentContextTool = defineTool({
   name: 'document_context',
@@ -242,31 +240,36 @@ export const DocumentContextTool = defineTool({
         description:
           'What each revision is asked, in order: one revision per request.',
       }),
-    intro: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-      description: 'What the prompt opens with, before the documents.',
-    }),
-    critique: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-      description: 'What a check or a critic said of the last revision.',
-    }),
-    templates: Schema.optional(
-      Schema.NullOr(Schema.Array(Schema.String.check(Schema.isMinLength(1)))),
-    ).annotate({
-      description:
-        "TeXRA's template files the revisions read as documents, by file name.",
-    }),
-    creates: optionalFlag(
+    intro: optionalInput(
+      Schema.String,
+      'What the prompt opens with, before the documents.',
+    ),
+    critique: optionalInput(
+      Schema.String,
+      'What a check or a critic said of the last revision.',
+    ),
+    templates: optionalInput(
+      Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+      "TeXRA's template files the revisions read as documents, by file name.",
+    ),
+    creates: optionalInput(
+      Schema.Boolean,
       'The program writes new documents (a deck, a transcript), not rewrites of its inputs.',
     ),
-    attachTeXCount: optionalFlag(
+    attachTeXCount: optionalInput(
+      Schema.Boolean,
       "Add each document's texcount statistics to the prompt.",
     ),
-    autoExtractFigure: optionalFlag(
+    autoExtractFigure: optionalInput(
+      Schema.Boolean,
       'Attach the figures the input LaTeX includes as media.',
     ),
-    autoExtractTikzFigure: optionalFlag(
+    autoExtractTikzFigure: optionalInput(
+      Schema.Boolean,
       'Compile the input LaTeX TikZ figures and attach them.',
     ),
-    autoCompileInputPdf: optionalFlag(
+    autoCompileInputPdf: optionalInput(
+      Schema.Boolean,
       'Compile each input LaTeX file and attach its PDF.',
     ),
   }),

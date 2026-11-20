@@ -5,11 +5,6 @@ import path from 'node:path';
 import { Effect, FileSystem, Option } from 'effect';
 
 // Local imports
-import {
-  pathToLocationIn,
-  reportDiffTimeout,
-  unifiedDiffText,
-} from '@texra-ai/harness/host';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import {
   runDirUnder,
@@ -17,6 +12,9 @@ import {
   type AppSignals,
   type StorageFs,
   type WorkspaceFs,
+  pathToLocationIn,
+  reportDiffTimeout,
+  unifiedDiffText,
 } from '@texra-ai/harness/plugins';
 import {
   meansAbsent,
@@ -39,6 +37,7 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import type { latexdiffVerbs } from '@texra/controllers/session/latexdiffVerbs';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
+import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 
 const CHANNEL = 'ProgressDocumentTaskFileActions';
 
@@ -88,6 +87,8 @@ interface ProgressDocumentTaskFileActionsControllerDeps {
   runs: Pick<HostRunActions, 'merge' | 'followUpLauncher'>;
   /** The window's latexdiff of two files. */
   latexdiff: ReturnType<typeof latexdiffVerbs>['file'];
+  /** The session's writer of project files (`GuiSession.writeFile`). */
+  writeFile: WriteProjectFile;
 }
 
 export class ProgressDocumentTaskFileActionsController {
@@ -179,7 +180,7 @@ export class ProgressDocumentTaskFileActionsController {
   ) => FileAction<void> = Effect.fn(
     'ProgressDocumentTaskFileActionsController.acceptFile',
   )({ self: this }, function* (file: string, base: string, activeRun?: RunId) {
-    const { host, workspace } = this.deps;
+    const { host, workspace, writeFile } = this.deps;
     // The content the accept wrote, read once by the write itself, so the
     // diff the launching chat is told of is exactly what was accepted.
     const written = yield* acceptEditedFileReplace(
@@ -188,6 +189,7 @@ export class ProgressDocumentTaskFileActionsController {
       {
         confirm: (message) => host.confirm({ message, action: 'Replace file' }),
         showInfo: host.showInfo,
+        write: writeFile,
       },
     );
     if (Option.isNone(written) || !activeRun) return;

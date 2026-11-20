@@ -13,6 +13,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts } from '@shared/schemas';
 import type { HistoryMessage } from '@shared/session/historyTurns';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 /** One local call of a pending response. */
 interface LocalCall {
@@ -78,7 +79,7 @@ export function dispatchFactsFor(
     parsed.length > 1 ? partitionDuplicateCalls(parsed, isParallel) : null;
   if (duplicates !== null && duplicates.size > 0) {
     logger.debug(
-      `Deduplicated ${duplicates.size} parallel tool call(s) with identical name and arguments`,
+      `Deduplicated ${formatResultCount(duplicates.size, 'parallel tool call')} with identical name and arguments`,
     );
   }
   return parsed.map((call) => {

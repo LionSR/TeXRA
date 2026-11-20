@@ -8,6 +8,7 @@ import stableStringify from 'safe-stable-stringify';
 import { Inbox } from '@agent/followUp/Inbox';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
+import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
@@ -52,10 +53,11 @@ function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
-/** A child that cannot register under its parent: the parent is gone, or
- *  was stopped. */
-class ParentRunClosed extends Schema.TaggedError<ParentRunClosed>()(
-  'ParentRunClosed',
+/** A run that cannot open: a child under a parent that is gone or was
+ *  stopped, a resume with no state to continue from, a fresh launch onto a
+ *  run that has some, or a conversation with no task. */
+export class RunOpenRejected extends Schema.TaggedError<RunOpenRejected>()(
+  'RunOpenRejected',
   { message: Schema.String },
 ) {}
 
@@ -140,11 +142,11 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const log = yield* SessionLog;
     const parent = yield* log.facts(parentId);
     if (parent === null)
-      return yield* new ParentRunClosed({
+      return yield* new RunOpenRejected({
         message: `Parent run ${parentId} is unavailable.`,
       });
     if (parent.stop !== null || parent.end !== null)
-      return yield* new ParentRunClosed({
+      return yield* new RunOpenRejected({
         message: `Cannot launch child run ${runId} under run ${parentId}: that run was stopped.`,
       });
   }
@@ -208,6 +210,8 @@ type EndServices = SessionLog | Inbox | RunHistory;
 
 /** The caller's {@link EndServices}, for the end's transaction job. Picked
  *  when asked: the inbox's module and this one import each other. */
+const CHANNEL = 'agentRunLifecycle';
+
 const endServices = Effect.suspend(() =>
   Effect.map(
     Effect.context<EndServices>(),
@@ -246,9 +250,10 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
   const inbox = yield* Inbox;
   const undelivered = (why: string, error?: Error) =>
     Effect.as(
-      Effect.logWarning(
+      logFailure(
+        CHANNEL,
         `Run ${runId}: its report was not delivered; ${why}. The report stays on the run.`,
-      ).pipe(Effect.annotateLogs({ data: error })),
+      )(error),
       [],
     );
   const input = yield* Effect.result(inbox.read(runId));

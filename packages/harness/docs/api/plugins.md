@@ -22,6 +22,7 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
   [`executed`](#executed), [`errorResult`](#errorresult),
   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
+  [`optionalInput`](#optionalinput),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
   ([`requestToolEditApproval`](#requesttooleditapproval),
   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
@@ -43,8 +44,6 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
-  decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
   [`FactKind`](#factkind), and [`Program`](#program) (how its run
   reads: [`ProgramResult`](#programresult)).
 
@@ -54,6 +53,22 @@ The tool that runs a named agent as a child of the calling run.
 
 ```ts
 const AGENT_TOOL_NAME: "agent"
+```
+
+## AgentDirectories
+
+The process's agent directories as an Effect service, provided once by the
+composition root through `processLayer`. The shape is the port itself: a
+program that resolves one of the three local agent directories yields the
+port's own readers instead of reaching for the process platform's copy.
+A root holds its port before it installs the runtime that serves it, so the
+layer is `Layer.succeed(AgentDirectories)(port)`.
+
+```ts
+class AgentDirectories extends Context.Service<
+  AgentDirectories,
+  AgentDirectoriesPort
+>()('@texra-ai/harness/platform/AgentDirectories')
 ```
 
 ## AgentTrace
@@ -73,7 +88,7 @@ interface AgentTrace {
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
   /** A chunk of a process run's output, on its stream (`process.output`). */
-  output(stream: 'stdout' | 'stderr', text: string): void;
+  output(stream: ProcessOutputStream, text: string): void;
 
   // ─── Stages and stream handles ──────────────────────────────────────
   /**
@@ -420,6 +435,21 @@ function buildApprovalRejectedResult(
 ): ToolResult
 ```
 
+## buildDiffHunks
+
+Unified-diff hunks between two texts — the one diff engine behind every
+count, every rendered diff body, and every patch note in the product.
+
+On timeout this reports a whole-file replacement rather than an empty diff:
+"everything changed" is a true (if verbose) description of the edit, while
+an empty hunk list would read as "nothing changed". The returned `timeout`
+names the cause, and the caller that owns the edit reports it through
+{@link reportDiffTimeout}, so a degraded diff is never silent.
+
+```ts
+function buildDiffHunks(oldText: string, newText: string): DiffHunks
+```
+
 ## buildFileAttachment
 
 Build a tool attachment by reading a workspace file and packaging metadata.
@@ -451,7 +481,9 @@ interface BuildFileAttachmentOptions {
 
 The requests one tool call raises, opened through its run's loop. Each
 carries an id its attempt derives. A request still open when its run
-stops is cancelled, and the resumed call asks again under a new id.
+stops is cancelled, and the resumed call asks again under a new id. One a
+person answers while no process holds the run resumes the run, and the
+call takes that answer when it asks the same thing again.
 
 ```ts
 interface CallRequests {
@@ -480,20 +512,6 @@ interface CallRequests {
     },
     DatabaseAggregateClosed | CellError
   >;
-  /**
-   * Open a plugin's request the call does not wait on, under its
-   * `data.requestId`: its `request.opened` commits on the run's history
-   * through the one door every request opens at, with `data` stored as
-   * the JSON it writes, and the plugin's decision hook takes each answer
-   * when it lands (`Plugin.decision`). A person answers it. A failed
-   * commit is not proof that nothing landed: the run's rows decide.
-   */
-  readonly post: (
-    request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
-      readonly blocksCaller: false;
-      readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
-    },
-  ) => Effect.Effect<void, CellError>;
   /** Show the person something on the session's host (a file opened
    *  beside what they are looking at, a notice), answered by nothing. */
   readonly present: <K extends RuntimePresentationEvent>(
@@ -537,9 +555,8 @@ class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
 A plugin tool's one door to the session's runs. It launches an external
 process as a child of its call's run (`launchProcess`: its run id,
 outside the child-run budget); a plugin's tool reaches no other launch.
-And it reaches a run of the session by id: its input, records, whether
-it holds a request, and the plugin's own facts on it, each over the
-call's run.
+And it reaches a run of the session by id: its input, its records and
+the plugin's own facts on it, each over the call's run.
 
 ```ts
 interface ChildRunsShape {
@@ -569,12 +586,6 @@ interface ChildRunsShape {
    *  since a grant may land mid-run: what a child's own sandbox or
    *  permissions follow. */
   readonly autoApproved: Effect.Effect<boolean, Error>;
-  /** Whether the run holds the request `requestId`, open or decided: what
-   *  a tool that posted one reads after a failed post. */
-  readonly requested: (
-    runId: RunId,
-    requestId: string,
-  ) => Effect.Effect<boolean, Error>;
 }
 ```
 
@@ -604,11 +615,20 @@ interface ConfigProvider {
    * (`catalog.configDefault`); a key no row owns reads as `undefined` when
    * absent.
    *
-   * It is synchronous, and it casts: the value it returns is whatever the
-   * store holds. A reader that needs the value checked reads through
-   * `Settings.get`, which safe-parses the stored value against the row's
-   * schema; a hand-edited `"false"` in a
-   * boolean row is a truthy string here and silently means the opposite.
+   * It is synchronous because some readers cannot wait for an Effect: the
+   * replacement engine's rule sets, a tool's `prompt` callback, the
+   * approval `policy` callback, the VS Code status bar's paint, the host
+   * snapshot's projection and the CLI's startup rows, read before its
+   * runtime exists. A read is cheap: each scope's JSON store it consults
+   * (workspace, global, and local for a local row) stats its file (inode,
+   * mtime, size) and re-reads it only when that changed, so another
+   * process's edit is seen without a watcher.
+   *
+   * It casts: the value it returns is whatever the store holds. A reader
+   * that needs the value checked reads through `Settings.get`, which
+   * safe-parses the stored value against the row's schema; a hand-edited
+   * `"false"` in a boolean row is a truthy string here and silently means
+   * the opposite.
    * Nothing may cache what either read returns: a setting the user changes
    * mid-process is read on the next call.
    *
@@ -657,6 +677,17 @@ class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
 )
 ```
 
+## countLineChanges
+
+Added/removed line counts applied over hunks a caller already holds.
+
+```ts
+function countLineChanges(hunks: readonly Hunk[]): {
+  added: number;
+  removed: number;
+}
+```
+
 ## CurrentValues
 
 A root's current values (`current_value`): one row per family and key,
@@ -697,7 +728,9 @@ interface CurrentValues {
   /**
    * Emits as subscribed, then after each value write, by this process or
    * (on the global store) another, that changed one of `keys`' values. A
-   * read that fails is logged and retried, so no change is missed.
+   * read of them that fails is logged and retried for about a minute, then
+   * emits as a change would: no change is missed, and the reader's own read
+   * meets the failure.
    */
   readonly changes: (
     family: Pick<ValueFamily<unknown>, 'name'>,
@@ -709,19 +742,11 @@ interface CurrentValues {
 ## DecisionOf
 
 The decisions a request of kind `K` takes: its own actions and the three
-refusals. A plugin's request declares its actions on its row, so its
-type accepts any decision.
+refusals.
 
 ```ts
-type DecisionOf<K extends RequestPayload['kind']> =
-  | Extract<
-      RequestDecision,
-      {
-        action: (typeof OWN_ANSWERS & {
-          readonly plugin: PluginRequest['answers'];
-        })[K][number];
-      }
-    >
+type DecisionOf<K extends RequestKind> =
+  | Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>
   | RefusalDecision;
 ```
 
@@ -812,6 +837,18 @@ type DefineToolOptions<T, R = never> = Required<
   };
 ```
 
+## DiffHunks
+
+One diff pass: its hunks, and — when the pass hit its bound — the warning
+naming why the hunks are a whole-file replacement.
+
+```ts
+interface DiffHunks {
+  readonly hunks: StructuredPatchHunk[];
+  readonly timeout: string | undefined;
+}
+```
+
 ## DraftBlob
 
 A string a draft stores with its row under its address (`blobAddress`):
@@ -887,22 +924,9 @@ interface FactKind {
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
   /** What a fork of a run (a conversation's, or a script's `self()` child)
-   *  starts with of the run's own row of the kind: `copy` the row the run
-   *  held at the cut, `drop` none. A row about the plugin's own aggregate
-   *  belongs to that aggregate and stays with it. */
+   *  starts with of the run's row of the kind: `copy` the row the run held
+   *  at the cut, `drop` none. */
   readonly fork: 'copy' | 'drop';
-  /** The kind's own transition rule, checked by its writer in the job that
-   *  appends the row (`ownFactsChecked`) against the aggregate's latest row
-   *  of the kind (none before the first): the rejection's reason, or null
-   *  to accept. */
-  readonly accepts?: (
-    previous: PluginFactRow | undefined,
-    next: PluginFactRow,
-  ) => string | null;
-  /** Whether the aggregate's `latest` row already says more than `next`
-   *  (a call's fact that lagged behind a later writer): the call's batch
-   *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
@@ -1026,6 +1050,16 @@ class HostCapabilities extends Context.Service<
 >()('@texra-ai/harness/agent/HostCapabilities')
 ```
 
+## Hunk
+
+A hunk as its readers see it: jsdiff's, or one carried as data.
+
+```ts
+type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
+  readonly lines: readonly string[];
+};
+```
+
 ## InboxItem
 
 One message a producer sends: a text, with what surfaces show instead
@@ -1042,13 +1076,13 @@ type InboxItem = (
       readonly blobs?: readonly DraftBlob[];
     }
   | { readonly delivery: ChildRunDelivery }
+  /** A request of the run's own (`/compact`, a model switch), not a message. */
+  | { readonly control: FollowUpControl }
 ) & {
   readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
-  /** A request of the run's own (`/compact`, a model switch), not a message. */
-  readonly control?: QueuedFollowUp['control'];
 };
 ```
 
@@ -1136,12 +1170,12 @@ interface ITool<E = Error, R = never> {
    * re-runs a call only when that saved word and the current one both say
    * `'safe'`.
    */
-  readonly replay?: 'safe' | 'unsafe';
+  readonly replay?: DispatchFacts['replay'];
   /**
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, a plugin's request), which answers what the call's hooks
+   * question), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */
@@ -1421,6 +1455,31 @@ function nullishWithDefault<S extends Schema.Top>(
 ): Schema.decodeTo<Schema.toType<S>, Schema.optional<Schema.NullOr<S>>>
 ```
 
+## optionalInput
+
+An optional, nullable tool-input field with no default. The decoded value
+stays nullish: it is `undefined` when the field is absent and `null` when the
+model sends an explicit `null`, so `execute` coalesces it with `?? fallback`
+(which covers both) or tests `== null`.
+
+Like {@link nullishWithDefault}, the encoded side is
+`Schema.optional(Schema.NullOr(schema))`, not `Schema.optional(schema)`:
+OpenAI-compatible providers (DeepSeek, Kimi, …) send an omitted optional
+field as an explicit `null` in structured output, so the field must be
+nullable as well as optional, and plain `Schema.optional(schema)` would fail
+to decode that `null`. Unlike `nullishWithDefault`, this applies no decoding
+transformation, so a `null` is kept rather than replaced by a fallback.
+Naming the shape keeps every tool-input field that takes no default on the
+one rule. `description` is written on the encoded side, which is where the
+model's JSON Schema is generated from.
+
+```ts
+function optionalInput<S extends Schema.Top>(
+  schema: S,
+  description: string,
+): Schema.optional<Schema.NullOr<S>>
+```
+
 ## parseWorkingDirectory
 
 Trim and validate a working_directory value. Must be absolute if provided.
@@ -1429,6 +1488,58 @@ Trim and validate a working_directory value. Must be absolute if provided.
 function parseWorkingDirectory(
   raw: string | null | undefined,
 ): Result.Result<string | undefined, ToolError>
+```
+
+## pathToLocationIn
+
+Convert a string path to a FileLocation against the workspace root its
+caller holds as data: `undefined` with no folder open, which resolves every
+path as external.
+
+NOT run-storage aware — it can only create workspace or external locations.
+For run-storage awareness, use `sourceLocationUnder`.
+
+Path normalization is handled internally - you can pass paths with either
+forward slashes or backslashes. It's safe to pass already-normalized paths
+(path.normalize() is idempotent).
+
+- `@param` workspaceRoot - The session's workspace root
+- `@param` target - Absolute or workspace-relative path
+- `@returns` FileLocation (workspace or external, never runStorage)
+
+```ts
+function pathToLocationIn(
+  workspaceRoot: string | undefined,
+  target: string,
+): FileLocation
+```
+
+## PerKeyLane
+
+One in-process exclusive lane per key for Effect programs: the key's
+`Semaphore`, and the number of fibers holding or waiting on it. The count
+is what lets the entry leave its map once the last fiber is done.
+
+```ts
+interface PerKeyLane {
+  readonly lock: Semaphore.Semaphore;
+  fibers: number;
+}
+```
+
+## PerKeyLanes
+
+Where the lanes live. A `Map` is the usual choice; a `WeakMap` keyed by an
+owning object works too and does not need the idle cleanup (its entries'
+lifetime is the key's own), which is why only these three methods are
+required.
+
+```ts
+interface PerKeyLanes<Key> {
+  get(key: Key): PerKeyLane | undefined;
+  set(key: Key, lane: PerKeyLane): unknown;
+  delete(key: Key): unknown;
+}
 ```
 
 ## PlatformSecrets
@@ -1505,8 +1616,6 @@ interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request it opened, on or off. */
-  readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
   /** Script module sources by name, imported as `builtIn:<name>`. */
@@ -1553,18 +1662,6 @@ interface PluginDefinition<ROut> extends Omit<
    *  require only the process's probe services. Its own process services
    *  are offered while its layer is up, read with `Effect.serviceOption`. */
   readonly availability?: ToolAvailabilityChecks;
-}
-```
-
-## PluginFactRow
-
-One stored row of a plugin's kind, as its fact kind's transition rule reads
-it: the row's decoded value and the run it is parented to, if any.
-
-```ts
-interface PluginFactRow {
-  readonly value: Schema.Json;
-  readonly parent: RunId | null;
 }
 ```
 
@@ -1637,6 +1734,14 @@ interface ProcessChildLaunch {
     readonly runId: RunId;
   }) => ProcessTurn;
 }
+```
+
+## ProcessOutputStream
+
+The stream a process run's output chunk came from.
+
+```ts
+type ProcessOutputStream = typeof ProcessOutputStreamSchema.Type;
 ```
 
 ## ProcessPluginLayer
@@ -1775,8 +1880,8 @@ interface ProgramResult<R = unknown> {
 
 ## PromptRenderFailed
 
-A prompt that did not render: the template's own error, or `nunjucks`
-failing to load.
+A prompt that did not render: the template's own error, `nunjucks`
+failing to load, or an `AGENTS.md` that is there and could not be read.
 
 ```ts
 class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
@@ -1830,42 +1935,14 @@ Render a prompt string using nunjucks templating.
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
 ```
 
-## RequestDecisionHook
+## reportDiffTimeout
 
-A plugin's side of a decision on a pending request it opened (a
-`PluginRequest` naming it), run before the decision commits: what the
-plugin records outside the session's store, and what commits with the
-decision in its one checked transaction ({@link RequestDecisionRecord}).
-The outside record must be idempotent: an answer tried again after a
-failure, or raced by another, records nothing twice, and the second
-reads the first's. A process that exits before the transaction leaves
-the request pending and answerable.
+Warn that a diff pass fell back to a whole-file replacement, if it did.
 
 ```ts
-interface RequestDecisionHook {
-  readonly record: (request: {
-    readonly payload: PluginRequest;
-    readonly decision: RequestDecision;
-  }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>;
-}
-```
-
-## RequestDecisionRecord
-
-What commits with a plugin request's decision, in its transaction
-({@link RequestDecisionHook}).
-
-```ts
-interface RequestDecisionRecord {
-  /** Facts about the plugin's own aggregates, hung under the request's run
-   *  and checked in the transaction: one its kind refuses is logged and
-   *  left out. */
-  readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, accepted in the
-   *  transaction (one the run's closed input refuses is logged), the run
-   *  woken for it once that commits. */
-  readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
-}
+function reportDiffTimeout(
+  timeout: string | undefined,
+): Effect.Effect<void>
 ```
 
 ## requestToolEditApproval
@@ -1991,12 +2068,12 @@ interface RootedFileSystem extends FileSystem.FileSystem {
 ## RoutePolicy
 
 One route a binding's calls go through: its key, and the scope of the
-failures that cool it (llm's `ModelError.scope`).
+failures that cool it.
 
 ```ts
 interface RoutePolicy {
   readonly key: string;
-  readonly scope: 'model' | 'route';
+  readonly scope: NonNullable<ModelError['scope']>;
 }
 ```
 
@@ -2777,6 +2854,22 @@ interface ToolTable {
 }
 ```
 
+## unifiedDiffText
+
+Unified-diff body between two texts (`text` is undefined when they are
+identical), with the pass's {@link DiffHunks.timeout} for the caller to
+report.
+
+Carries no `---`/`+++` file header: every consumer already names the file in
+its own surrounding prose.
+
+```ts
+function unifiedDiffText(
+  oldText: string,
+  newText: string,
+): { readonly text: string | undefined; readonly timeout: string | undefined }
+```
+
 ## ValueFamily
 
 One family of current values: its stored name and the schema its value
@@ -2797,6 +2890,15 @@ The web: `web_search` and `web_fetch`.
 const web: Plugin
 ```
 
+## withFileWriteLane
+
+Run `self`, a read, decision and write of `file`, as the file's one
+writer in this process. `file` is absolute.
+
+```ts
+const withFileWriteLane: (file: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, FileSystem | R>
+```
+
 ## withLogChannel
 
 Name the channel every `Effect.log*` inside `self` belongs to. Annotations
@@ -2805,6 +2907,30 @@ for the entries that don't.
 
 ```ts
 const withLogChannel: (channel: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, R>
+```
+
+## withPerKeyLane
+
+Run `self` holding `key`'s one permit. The exclusion, the queue and its
+release under interruption are the `Semaphore`'s: a fiber joins the key's
+queue and enters in the order it joined, and a waiter that is interrupted
+leaves the queue. What this adds is the keyed map: the lane is created on
+first use, counted while a fiber holds or waits on it, and deleted from
+`lanes` when the count returns to zero. The count is taken and given back
+as one acquire and release, so no exit leaves a key counted.
+
+Order is the order fibers join the semaphore's queue, a few steps after
+they call this. Two fibers that call within those steps of each other,
+with the scheduler taking the first one off in between, can enter in the
+other order (measured at 8 of 2101 step offsets at the default budget,
+against 2 for a bare `Semaphore`). A caller that must keep the order of
+its calls puts them through one consumer, not a lane.
+
+```ts
+function withPerKeyLane<Key>(
+  lanes: PerKeyLanes<Key>,
+  key: Key,
+): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
 ```
 
 ## withRequestTimeout

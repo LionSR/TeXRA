@@ -7,13 +7,10 @@ import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons/faArrowsRotate
 import { faArrowUp } from '@fortawesome/free-solid-svg-icons/faArrowUp';
 import { faArrowUpRightFromSquare } from '@fortawesome/free-solid-svg-icons/faArrowUpRightFromSquare';
 import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
-import { faBan } from '@fortawesome/free-solid-svg-icons/faBan';
 import { faBolt } from '@fortawesome/free-solid-svg-icons/faBolt';
 import { faBook } from '@fortawesome/free-solid-svg-icons/faBook';
-import { faBookmark } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faBox } from '@fortawesome/free-solid-svg-icons/faBox';
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons/faBoxArchive';
-import { faBullseye } from '@fortawesome/free-solid-svg-icons/faBullseye';
 import { faCaretDown } from '@fortawesome/free-solid-svg-icons/faCaretDown';
 import { faChartPie } from '@fortawesome/free-solid-svg-icons/faChartPie';
 import { faCheck } from '@fortawesome/free-solid-svg-icons/faCheck';
@@ -27,10 +24,8 @@ import { faCircleCheck } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
 import { faCircleDot } from '@fortawesome/free-solid-svg-icons/faCircleDot';
 import { faCircleExclamation } from '@fortawesome/free-solid-svg-icons/faCircleExclamation';
 import { faCircleInfo } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
-import { faCircleQuestion } from '@fortawesome/free-solid-svg-icons/faCircleQuestion';
 import { faCircleStop } from '@fortawesome/free-solid-svg-icons/faCircleStop';
 import { faCircleUser } from '@fortawesome/free-solid-svg-icons/faCircleUser';
-import { faCircleXmark } from '@fortawesome/free-solid-svg-icons/faCircleXmark';
 import { faClock } from '@fortawesome/free-solid-svg-icons/faClock';
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown';
@@ -65,7 +60,6 @@ import { faForwardStep } from '@fortawesome/free-solid-svg-icons/faForwardStep';
 import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faGem } from '@fortawesome/free-solid-svg-icons/faGem';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons/faGlobe';
-import { faHashtag } from '@fortawesome/free-solid-svg-icons/faHashtag';
 import { faImage } from '@fortawesome/free-solid-svg-icons/faImage';
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
 import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
@@ -96,7 +90,6 @@ import { faThumbtackSlash } from '@fortawesome/free-solid-svg-icons/faThumbtackS
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation';
 import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
-import { faUsers } from '@fortawesome/free-solid-svg-icons/faUsers';
 import { faVideo } from '@fortawesome/free-solid-svg-icons/faVideo';
 import { faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons/faWandMagicSparkles';
 import { faWindowMaximize } from '@fortawesome/free-solid-svg-icons/faWindowMaximize';
@@ -141,13 +134,10 @@ const icons = {
   'arrow-up-right-from-square': faArrowUpRightFromSquare,
   'arrows-rotate': faArrowsRotate,
   'backward-step': faBackwardStep,
-  ban: faBan,
   bolt: faBolt,
   book: faBook,
-  bookmark: faBookmark,
   box: faBox,
   'box-archive': faBoxArchive,
-  bullseye: faBullseye,
   'caret-down': faCaretDown,
   'chart-pie': faChartPie,
   check: faCheck,
@@ -161,10 +151,8 @@ const icons = {
   'circle-dot': faCircleDot,
   'circle-exclamation': faCircleExclamation,
   'circle-info': faCircleInfo,
-  'circle-question': faCircleQuestion,
   'circle-stop': faCircleStop,
   'circle-user': faCircleUser,
-  'circle-xmark': faCircleXmark,
   clock: faClock,
   'clock-rotate-left': faClockRotateLeft,
   'cloud-arrow-down': faCloudArrowDown,
@@ -199,7 +187,6 @@ const icons = {
   gear: faGear,
   gem: faGem,
   globe: faGlobe,
-  hashtag: faHashtag,
   image: faImage,
   key: faKey,
   lightbulb: faLightbulb,
@@ -230,7 +217,6 @@ const icons = {
   trash: faTrash,
   'triangle-exclamation': faTriangleExclamation,
   user: faUser,
-  users: faUsers,
   video: faVideo,
   'wand-magic-sparkles': faWandMagicSparkles,
   'window-maximize': faWindowMaximize,

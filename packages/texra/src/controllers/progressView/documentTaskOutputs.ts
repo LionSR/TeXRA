@@ -12,8 +12,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Path, PlatformError, Schema } from 'effect';
 
 // Local imports
-import { toPosixPath } from '@texra-ai/harness/host';
-import { meansAbsent, isNotADirectoryError } from '@texra-ai/harness/node';
+import {
+  meansAbsent,
+  isNotADirectoryError,
+  toPosixPath,
+} from '@texra-ai/harness/node';
 import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import {
   finalDocumentOutput,

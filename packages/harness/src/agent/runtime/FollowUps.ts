@@ -42,7 +42,7 @@ import {
   type StoredInputPart,
 } from '@shared/schemas';
 import { consumedRow, isInstruction } from '@shared/session/runFacts';
-import type { QueuedFollowUp } from '@shared/session/runRows';
+import type { QueuedMessage } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { followUpDisplay } from '@shared/subagentFollowup';
@@ -84,11 +84,9 @@ interface ConsumeOptions {
 
 export interface FollowUps {
   /** The run's reader: what is pending, read from its rows. */
-  readonly reader: Pick<
-    FollowUpReader,
-    'hasPending' | 'controls' | 'read' | 'next'
-  >;
-  /** End the reader: the run stays recoverable, or takes no more input. */
+  readonly reader: Pick<FollowUpReader, 'read' | 'next'>;
+  /** The run's loop ended: it stays recoverable, or takes no more input
+   *  (which the inbox's observers hear). */
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
    * Commit a batch through the run's cell: its `followup.consumed` rows, its
@@ -107,16 +105,15 @@ export interface FollowUps {
   >;
 }
 
-/** Open `run`'s own reader for the enclosing scope. */
+/** `run`'s own reader, for the enclosing scope, and the one way its
+ *  batches leave the queue. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
 ): Effect.fn.Return<FollowUps, never, Scope.Scope | Inbox | SessionLog> {
   const { runId, logger } = run;
   const inbox = yield* Inbox;
   const log = yield* SessionLog;
-  // Ended with the scope; the run's finishRun ends it first, saying
-  // whether the run takes more input.
-  const reader = yield* inbox.open(runId);
+  const reader = yield* inbox.reader(runId);
 
   /** The canonical user message of one batch: every item's text as its
    *  own part, media parts after it; `kinds[i]` is item i's badges. A
@@ -128,7 +125,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
    *  (`skippedMediaPart`): the model is told, in the row that carries the
    *  message. */
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
-    followUps: readonly QueuedFollowUp[],
+    followUps: readonly QueuedMessage[],
   ) {
     const { capabilities } = (yield* ScopedRef.get(run.model)).config;
     const parts: (InputPart | StoredInputPart)[] = [];
@@ -169,7 +166,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   });
 
   const logFollowUps = (
-    followUps: readonly QueuedFollowUp[],
+    followUps: readonly QueuedMessage[],
     kinds: readonly (readonly MediaAttachmentKind[])[],
   ): void => {
     for (const [i, { content }] of followUps.entries()) {
@@ -294,12 +291,9 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   return {
     reader,
     // A child takes no more input once its loop ends: its parent resumes it.
-    release: (next) =>
-      inbox.release(
-        runId,
-        reader,
-        next === 'terminal' || run.entry.parent !== null,
-      ),
+    release: (next) => {
+      if (next === 'terminal' || run.entry.parent !== null) inbox.ended(runId);
+    },
     consume,
   };
 });

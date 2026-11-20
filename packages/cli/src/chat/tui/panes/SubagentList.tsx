@@ -11,7 +11,6 @@ import { truncateSummaryToWidth } from '@cli/runtime/terminal/terminalText';
 import { nestedRollupLabel } from '@ui/copy/nestedRuns';
 import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
 
-import { childElapsed } from '../state/childControls';
 import { killableRunId } from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
@@ -25,13 +24,16 @@ import {
   highlightChildListRun,
   type SessionListRow,
 } from '../state/cliState';
-import {
-  pendingApprovalKindsByRun,
-  type PendingRequestKind,
-} from '../state/approvalQueue';
+import { pendingApprovalKindsByRun } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
-import type { RunId, RunView } from '@texra-ai/harness/schemas';
-import { formatResultCount, FACT_SEPARATOR } from '@texra-ai/harness/schemas';
+import {
+  FACT_SEPARATOR,
+  formatCompactDuration,
+  formatResultCount,
+  type RequestKind,
+  type RunId,
+  type RunView,
+} from '@texra-ai/harness/schemas';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
@@ -103,11 +105,16 @@ function SessionRow({
   readonly expanded: boolean;
   readonly metadataColumn: boolean;
   readonly nowMs: number;
-  readonly pendingKinds: readonly PendingRequestKind[] | undefined;
+  readonly pendingKinds: readonly RequestKind[] | undefined;
   readonly run: RunView;
 }): React.JSX.Element {
   const statusLabel = runStatus(run).word;
-  const elapsed = childElapsed(run.runStartedAt ?? undefined, nowMs);
+  // The turn's clock, while the view says one runs; a child between turns
+  // or waiting on a person shows none.
+  const elapsed =
+    run.runStartedAt === null
+      ? undefined
+      : formatCompactDuration(nowMs - run.runStartedAt);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   const positionLabel = formatLoopPositionLabel(run.turn);
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;

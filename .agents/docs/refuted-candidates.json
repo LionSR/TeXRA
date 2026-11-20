@@ -4,7 +4,7 @@
     {
       "id": "EFF-ADOPT-config-provider",
       "candidate": "the platform config providers onto an Effect ConfigProvider",
-      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the Zod catalog row that owns it is a dual schema system with a ConfigError where Settings.get's validation already stands. Settings stay synchronous by ruling; Effect Config is for process.env reads, a separate lane.",
+      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the catalog row whose Effect Schema owns it is a dual schema system with a ConfigError where Settings.get's validation already stands. Settings stay synchronous: six readers cannot wait (named on ConfigProvider.get), and a read is a stat of each scope's config file it consults. Effect Config is for process.env reads, a separate lane.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
@@ -88,11 +88,11 @@
     {
       "id": "RT-install-cli-process-runtime",
       "candidate": "installCliProcessRuntime as an Effect program",
-      "why": "It is the bootstrap edge itself, so there is no runtime to run it on; an Effect face forces a bare Effect.run* at every citty action and grows BARE_EFFECT_RUN_SITES from 7 to about 20. What changed (wave 3): its one await was the package manifest read, which is now synchronous, so the install is a plain function returning the runtime and its Promise face is gone; nothing to lift into Effect. What changed (K4): the install is per command, `makeCliProcessRuntime` at the one citty edge (`defineCliCommand`), with no process memo; it is still a plain function returning the runtime.",
+      "why": "Still refused, for the platform's reasons, not the framework's. A command's runtime is a ManagedRuntime built at the Promise edge (`launchCliCommand` in cliCommand.ts) because the platform hands that same runtime to the modules that run programs at a Promise edge (`CliPlatformServices.runtime`, `makeCliProcessRuntime`'s `() => runtime`), `runChat` mounts the TUI on it after the command's program has finished, and a headless run started from inside a default-runtime fiber never finished its Ctrl-C shutdown drain. What changed (effect/cli, 2026-11-19): the old reason, a bare Effect.run* at every citty action, is gone: a command's handler is an Effect that builds its context in the parse fiber, and the binary runs one Effect.runPromise for the parse before the launch.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
       "symbols": [
         {
-          "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
+          "file": "packages/cli/src/runtime/platform/cliProcessRuntime.ts",
           "symbol": "makeCliProcessRuntime",
           "signature": "export function makeCliProcessRuntime( context: CliRuntimeContext, platform: CliPlatformOptions = {}, ): CliProcessRuntime {…}"
         }
@@ -101,13 +101,13 @@
     {
       "id": "SCOPE-external-roots-standalone-service",
       "candidate": "ExternalRoots as a standalone service",
-      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today; recorded as a hazard on #12071.",
+      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today. The hazard of module state is a test that leaves a registration behind; a registration returns its own removal, which such a test runs.",
       "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-externalroots-stays-a-module-ruled-2026-09-20",
       "symbols": [
         {
           "file": "packages/harness/src/utils/files/externalRoots.ts",
           "symbol": "registerExternalRoot",
-          "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): void {…}"
+          "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): () => void {…}"
         }
       ]
     },
@@ -273,14 +273,14 @@
     },
     {
       "id": "RT-cli-exit-code-one-function",
-      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting setExitCode, settleExitCode, CliConfigExecuteResult.exitCode and ChatExit.signal's code",
-      "why": "citty 0.2.2's runCommand discards a nested subcommand's run() result and passes no data down, and every command, root's direct subcommands included, runs nested, so no return value reaches texra.ts. The other names are not edge decisions: defineCliCommand already turns every command's result into the code (only doctor, which cannot use it, and help, which re-enters runCli as the non-interactive default, set it themselves); settleExitCode is the chat's run-claim code returned through runChat; CliConfigExecuteResult.exitCode is a headless run's program result; and a signal exit with a waiting run calls process.exit because that run holds the event loop open. runOutcomeExitCode is already the one outcome-to-code mapping. What landed instead: runCli and texraServe share runCommandForExitCode.",
+      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting CliConfigExecuteResult.exitCode and ChatExit.signal's code",
+      "why": "The names left are not edge decisions: CliConfigExecuteResult.exitCode is a headless run's program result; a signal exit with a waiting run calls process.exit because that run holds the event loop open; runOutcomeExitCode is already the one outcome-to-code mapping. What changed (effect/cli, 2026-11-19): the command line already ends in one code. The parse answers a launch or a code through `CliSelection`, `runCliCommandLine` runs the launch and answers the code for both binaries, and setExitCode with its module slot is deleted, so the citty half of this candidate is done and only the names above remain refused.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
       "symbols": [
         {
-          "file": "packages/cli/src/commands/_helpers/exitCode.ts",
-          "symbol": "setExitCode",
-          "signature": "export function setExitCode(code: number): void {…}"
+          "file": "packages/cli/src/commands/_helpers/cliCommand.ts",
+          "symbol": "runCliCommandLine",
+          "signature": "export async function runCliCommandLine<Name extends string, I, CI, E>( command: Command.Command<Name, I, CI, E, CliSelection | Command.Environment>, argv: readonly string[], ): Promise<{ exitCode: number }> {…}"
         }
       ]
     },
@@ -427,7 +427,7 @@
     {
       "id": "UI-request-card-declaration-record",
       "candidate": "BaseRequestPanel's hooks replaced by a declaration record (ask, primary, decline, grant, keys) that each card returns to one request-card element",
-      "why": "Every card stays an element either way: the inquiry card holds its form and validation, the proposal card its model picker and edit form, the tool-edit card its preview verbs, and the base its note. A record of callbacks moves each override into a record field one for one: the four hooks one card fills (primaryIcon for retry, notePrompt for the user question, declineTakesNote for the inquiry, emitRuntimeArm for the tool edit) become four optional fields with the same defaults, read at the same points. No decision moves to its owner and no code goes; the class keeps the one action row, keyboard routing and read-only gate in one place. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "why": "Every card stays an element either way: the proposal card holds its model picker and edit form, the tool-edit card its preview verbs, and the base its note. A record of callbacks moves each override into a record field one for one: the hooks one card fills (primaryIcon for retry, notePrompt for the user question, emitRuntimeArm for the tool edit) become optional fields with the same defaults, read at the same points. No decision moves to its owner and no code goes; the class keeps the one action row, keyboard routing and read-only gate in one place. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
       "symbols": [
         {
@@ -460,19 +460,6 @@
           "file": "packages/texra/src/ui/progress/components/TerminalOutput.ts",
           "symbol": "writeTerminalText",
           "signature": "private async writeTerminalText( terminal: Terminal, text: string, ): Promise<void> {…}"
-        }
-      ]
-    },
-    {
-      "id": "UI-inquiry-decode-by-reference",
-      "candidate": "ExternalInquiryPanel stops decoding permission.data with Schema.decodeUnknownSync and caching the result by reference",
-      "why": "A plugin request's payload is opaque JSON to the harness and its view (the plugin owns the shape), so the panel is the boundary where the inquiry plugin's data is decoded. The reference compare is that decode done once per request, not a second cache; moving it to willUpdate keeps the same decode and adds a field that is undefined before the first update. A typed plugin payload in the session view would delete it, and is the change to make if that lands. Found in round 2 (J-ui-kit.md, batched items); refused in round 3, package B.",
-      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
-      "symbols": [
-        {
-          "file": "packages/texra/src/ui/progress/components/ExternalInquiryPanel.ts",
-          "symbol": "ExternalInquiryPanel.inquiry",
-          "signature": "private get inquiry(): InquiryRequest {…}"
         }
       ]
     },
@@ -625,14 +612,14 @@
     },
     {
       "id": "RUN-trusted-script-launch-grants",
-      "candidate": "a task's recipe run's trust (isTrustedScript, five reads in four files: fixed tools and offered approval tools in step.ts, catalog agents and approved delegation in proposalFlow.ts, verbatim files and prompt in AgentTool.ts, no activated skills in templateInputs.ts) recorded as launch grants, either (a) stored on the run's run.start or run.config or (b) derived once into a grants record each site reads (E4's trust half)",
-      "why": "(a) stores a second copy of a fact run.config already stores as script.kind, which the documents plugin, recipeResult and isTaskConfig read: two owners that a resume or a fork could see disagree, for a run.config/run.start row-version bump and no deleted branch. A goal grant on the run's approval.policy is not that record either: goal grants pass down the run's ancestry (resolveBypass), so a recipe's children would start auto-approving their own delegations, and only one of the four grants is an approval. (b) is a table with two rows (task's recipe, anything else) whose four or five columns are always equal: a column derivable across its rows is the special case written as data (root AGENTS.md 'No option for a special case'), and every site keeps its branch. Resume and fork need no stored grant: a resume re-reads the run's run.config, and forkRun refuses a script run. What did hold is one fact under two names: isTrustedScript (agent/core/definition/RunRecord.ts) and the public isTaskConfig (shared/schemas/runRecords.ts) both test script.kind === 'recipe'. simplify/e4-launch-grants deletes isTrustedScript; the five reads call isTaskConfig, whose doc lists what a task's launch grants. Re-verified on main at 80a0153.",
+      "candidate": "a program run's trust (programOf(config) !== null, three reads in three files: fixed tools and offered approval tools in step.ts, approved delegation in proposalFlow.ts, verbatim files and prompt in AgentTool.ts) recorded as launch grants, either (a) stored on the run's run.start or run.config or (b) derived once into a grants record each site reads (E4's trust half)",
+      "why": "(a) stores a second copy of a fact run.config already stores as script.kind, which the documents plugin, readProgramResult and programOf read: two owners that a resume or a fork could see disagree, for a run.config/run.start row-version bump and no deleted branch. A goal grant on the run's approval.policy is not that record either: goal grants pass down the run's ancestry (resolveBypass), so a program's children would start auto-approving their own delegations, and only one of the grants is an approval. (b) is a table with two rows (a program, anything else) whose columns are always equal: a column derivable across its rows is the special case written as data (root AGENTS.md 'No option for a special case'), and every site keeps its branch. Resume and fork need no stored grant: a resume re-reads the run's run.config, and forkRun refuses a script run (runsScript). The trust reads call programOf (shared/schemas/runRecords.ts), whose doc lists what a program's launch grants; a separate trust predicate would be the same expression. No activated skill is not a trust read: templateInputs asks runsScript, which a background script answers the same. Re-verified on main at f7469ff.",
       "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/E-loop-tools.md#finding-4-a-script-run-is-a-model-less-run-dressed-as-a-tool-use-run-and-the-costume-shows-in-five-loop-branches",
       "symbols": [
         {
           "file": "packages/harness/src/shared/schemas/runRecords.ts",
-          "symbol": "isTaskConfig",
-          "signature": "export const isTaskConfig = ( config: typeof RunRecordFieldsSchema.Encoded, ): boolean => recipeBlockOf(config) !== null;"
+          "symbol": "programOf",
+          "signature": "export const programOf = ( config: Pick<AgentConfig, 'script'> | typeof RunRecordFieldsSchema.Encoded, ): Extract<AgentConfig['script'], { kind: 'program' }> | null =>"
         }
       ]
     },
@@ -799,19 +786,6 @@
       ]
     },
     {
-      "id": "RF-TT-11-locate-tool-module",
-      "candidate": "Move locateTool into ProbeEnvironmentTool.ts and delete tools/setup/toolProbing.ts (TT-11 item 4, second half, of the 2026-11-15 design red-flag audit)",
-      "why": "toolProbing.ts is the vi.mock target of src/test-kernel/tools/setup/CredentialReporting.vitest.ts, its only stub for locateTool. Folding the function into the tool would make that suite mock lower modules (toolChecks, binaryResolver) instead, a larger and more brittle change than the one-export file it deletes. The other half of the item (the subscription probe beside its one reader) landed.",
-      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/TT-app-tools.md",
-      "symbols": [
-        {
-          "file": "packages/texra/src/tools/setup/toolProbing.ts",
-          "symbol": "locateTool",
-          "signature": "export const locateTool = …"
-        }
-      ]
-    },
-    {
       "id": "RUNEND-child-report-from-launch",
       "candidate": "a child's end report supplied by its launch (a report builder the launch hands its run), so `childEndReport` has no switch on `config.script.kind`",
       "why": "A launch knows the kind, but a run is launched more than once: a resume (`resumeRun`, `resumeOwnedChild`) is the same `executeAgent` over the run's stored configuration, with no launcher's closure behind it, and a background script stopped by a person is resumed exactly that way. The only durable carrier of the kind is `config.script`, so a supplied builder would be chosen from `config.script.kind` again where the launch is built (`executeAgent`), and would add a `RunLaunch` field plus an option threaded through `startChildRun` and `ExecuteAgentOptions` to carry the answer: the same decision, in a new place, with two more elements. The two reports also share nothing to factor (a script's reads its calls from the view, a subagent's its output and program result). What landed instead (2026-11-19): the fallback for a report that cannot be built, which read the kind a second time in `endRun`, is inside `childEndReport`, so one function owns the decision. Found in PR 1's record (§3) and carried as lane 9's last open item.",
@@ -922,6 +896,76 @@
           "file": "packages/harness/src/agent/runtime/loop/runLoop.ts",
           "symbol": "foreignProtocol",
           "signature": "const foreignProtocol = ( runId: RunId, state: RunState, bound: Pick<BoundModel, 'backend' | 'origin'>, ): RunHistoryRefused | null => {…};"
+        }
+      ]
+    },
+    {
+      "id": "LLM-codex-backend-model-id-export",
+      "candidate": "withdrawing codexBackendModelId from the public exports of @texra-ai/llm (the app asking llm a higher-level question, or reading a decided route, for the Codex backend's model id)",
+      "why": "Its consumer outside llm, the app's Codex launch configuration, starts a Codex binary that signs in by itself: llm decides no route for that launch, so there is no decided route to read. routeConfig's ChatGPT case keeps config.id and only responsesConfiguration strips the date pin, so making routeConfig answer would change every reader of config.id, and the app would have to build a ChatGPT route it never uses. Withdrawing the export would copy the date-pin pattern into the app, a second owner for it.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-18-model-access-one-owner-per-question.md#kept-as-llm-exports-and-why",
+      "reopenWhen": "The app's Codex launch goes through a route llm decides.",
+      "symbols": [
+        {
+          "file": "packages/llm/src/models/modelRoute.ts",
+          "symbol": "codexBackendModelId",
+          "signature": "export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {…}"
+        }
+      ]
+    },
+    {
+      "id": "DELIVERY-union-on-family-and-outcome",
+      "candidate": "ChildRunDelivery as a union on family and outcome: typed background, script and subagent cases with an outcome discriminant in place of the optional `message`, beside one generic case for a plugin's family (tool card note, section 3)",
+      "why": "A plugin's case must stay generic: its family is open (DELIVERY_FAMILY_PATTERN) and the agent-CLI tools set prompt, ids, wall time, response, usage, lines and message, which is the union of the harness's facts, so the three typed cases would be a second spelling of the generic one. An `outcome` field beside `message` removes no state: `message` present already decides the envelope tag in formatDelivery and the summary in deliverySummary, and endProcessChild turns a returned report into an error by adding `message` while keeping its response, so a failed case would carry every completed field. What landed instead (2026-11-19, followup.queued v11): the wall time stored as `wallTimeMs`, the prompt as an attribute its builder cuts, and attribute values that are strings, never null.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-14-tool-card-result-and-delivery-shapes.md#3-childrundelivery-a-union-on-family-and-outcome",
+      "reopenWhen": "When a plugin's delivery no longer needs a generic case, or a reader branches on a fact the struct cannot state.",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/deliveryEnvelope.ts",
+          "symbol": "formatDelivery",
+          "signature": "export function formatDelivery(delivery: ChildRunDelivery): string {…}"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/processRun.ts",
+          "symbol": "endProcessChild",
+          "signature": "const endProcessChild = ( runId: RunId, { logger, turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.Effect<void, Error, AgentRunServices> => {…};"
+        }
+      ]
+    },
+    {
+      "id": "STORE-fact-version-one-reader",
+      "candidate": "One shared reader of a plugin fact's version for factKindOf (the store's row codec) and readTraceFacts (the trace import), which each write the retired, unknown, newer and earlier branches",
+      "why": "The two readers agree on the four cases and on nothing they do with them. The store fails a newer fact as DatabaseStoreNewer and an earlier or retired one as DatabaseRowEarlier, each carrying the commit; the trace import has no commit, throws one message for any other version and a different one for a retired kind. A shared classifier returns a four-literal standing that each caller switches over again, so both keep four branches and the classifier and its union are added: tried twice (an earlier attempt, and again on 2026-11-19), the diff came out no shorter, and routing the trace import through the store's errors changed its wording. Until a third reader appears, or the two outcomes converge, the eight short branches are the smaller design.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md#2-storage-one-classifier-for-a-run-that-cannot-be-read",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/rowCodec.ts",
+          "symbol": "factKindOf",
+          "signature": "export function factKindOf(fact: { readonly plugin: string; readonly kind: string; readonly version: number; }, commit: number, factKinds: FactKinds): Result.Result<FactKinds[FactName] | undefined, DatabaseStoreNewer | DatabaseRowEarlier> {…}"
+        },
+        {
+          "file": "packages/harness/src/shared/schemas/traceDocument.ts",
+          "symbol": "readTraceFacts",
+          "signature": "export function readTraceFacts(document: TraceDocument, appFactKinds: readonly TraceFactKind[]): TraceDocument {…}"
+        }
+      ]
+    },
+    {
+      "id": "GUARD-arxiv-download-zotero-add",
+      "candidate": "an approval guard on download_arxiv_source and zotero_add, so the loop asks before the download writes into the workspace and before an item is added to the Zotero library",
+      "why": "The repo owner ruled on 2026-11-19 that these two tools do not need approval (comments on #15107: \"no approval\", \"They don't need approval\"). Both act only on what the person asked the agent to fetch or file: the download writes a paper's source under References/ (or the workspace root when asked) and skips one already present, and zotero_add adds items to the person's own library. #15107 added the guards and was merged before the ruling was read; they were removed again in the next PR. The other half of #15107 (lean_loogle offered with the Lean plugin) stands.",
+      "ruling": "https://github.com/LionSR/TeXRA/pull/15107",
+      "reopenWhen": "the owner asks for an approval on either tool, or a tool of this kind starts writing outside the workspace or deleting anything",
+      "symbols": [
+        {
+          "file": "packages/texra/src/tools/arxiv/ArxivDownloadTool.ts",
+          "symbol": "ArxivDownloadTool",
+          "signature": "export const ArxivDownloadTool = defineTool({…})"
+        },
+        {
+          "file": "packages/texra/src/tools/zotero/ZoteroAddTool.ts",
+          "symbol": "ZoteroAddTool",
+          "signature": "export const ZoteroAddTool = defineTool({…})"
         }
       ]
     }

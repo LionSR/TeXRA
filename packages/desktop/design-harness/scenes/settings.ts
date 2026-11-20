@@ -22,9 +22,7 @@ const ROWS: PluginRow[] = [
         { name: 'lean_project' },
         { name: 'lean_inspect' },
       ],
-      status: 'available',
-      requiresSetup: true,
-      installActions: [],
+      setup: { status: 'available', installActions: [] },
       switch: 'always-on',
     },
     usedBy: ['lean-prover', 'assistant'],
@@ -41,19 +39,20 @@ const ROWS: PluginRow[] = [
         { name: 'zotero_search' },
         { name: 'zotero_add' },
       ],
-      status: 'not-found',
-      statusLabel: 'Needs Zotero running',
-      requiresSetup: true,
-      installActions: [
-        {
-          kind: 'guide',
-          text: 'Requires Zotero with the Better BibTeX plugin installed.',
-        },
-        {
-          kind: 'url',
-          url: 'https://retorque.re/zotero-better-bibtex/installation/',
-        },
-      ],
+      setup: {
+        status: 'not-found',
+        statusLabel: 'Needs Zotero running',
+        installActions: [
+          {
+            kind: 'guide',
+            text: 'Requires Zotero with the Better BibTeX plugin installed.',
+          },
+          {
+            kind: 'url',
+            url: 'https://retorque.re/zotero-better-bibtex/installation/',
+          },
+        ],
+      },
       switch: 'off',
     },
     usedBy: ['assistant'],
@@ -71,6 +70,7 @@ const ROWS: PluginRow[] = [
       skillCount: 2,
       commandCount: 0,
       agentCount: 0,
+      programs: [],
       mcpServers: ['mathlib-search'],
     },
     usedBy: ['lean-prover'],

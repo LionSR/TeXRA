@@ -50,13 +50,11 @@ export {
   attentionOf,
   descendantRuns,
   needsUser,
-  requestAnswerability,
   rollupOf,
   sessionActivity,
   SessionViewSchema,
   type Attention,
   type PendingRequest,
-  type RequestAnswerability,
   type RunView,
   type SessionTitleState,
   type SessionView,
@@ -76,7 +74,7 @@ export type {
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
 export type { RunStanding } from '@shared/session/runRowReads';
-// A follow-up queued for a run, as its row holds it (`InboxItem.control`).
+// A follow-up queued for a run, as its row holds it (a message, a delivery, or the run's own `control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
@@ -97,6 +95,8 @@ export type {
   FileListEntry,
   FileLocation,
   FinishedToolResult,
+  FollowUpContent,
+  FollowUpControl,
   FollowUpSender,
   HookEvent,
   InlinePersona,
@@ -199,8 +199,6 @@ export {
 export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
 // A trace event by its row type: the members of the root's `AgentEvent`.
 export type { TraceRow } from '@shared/session/agentEvent';
-// The owner of a session row: a run, the session, or a plugin's key.
-export type { AggregateId } from '@shared/schemas';
 // An exported run, as a static viewer parses it back.
 export {
   AssembleTraceResultSchema,
@@ -291,6 +289,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatWallTime,
   joinFacts,
   pluralize,
   previewLabel,
@@ -299,6 +298,9 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// How a host that prints log entries as text words one: its line and what
+// it carries beyond it.
+export { entryDetail, entryLine } from '@logger/logSink';
 // A model call's failure as a run records it (its verdict), its plain
 // words and a run end's, and the used-up plan it names, for an app that
 // words it itself.
@@ -373,7 +375,6 @@ export {
   type PlanApprovalRequest,
   planOf,
   planSummaryLine,
-  type PluginRequest,
   type RequestKind,
   // Who answers a request: a person, or the run grant that answers it.
   type AnsweredBy,

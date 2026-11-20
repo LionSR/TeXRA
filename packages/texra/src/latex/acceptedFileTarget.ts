@@ -1,5 +1,4 @@
 // Node imports
-import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
   normalizeFilePath,
@@ -10,24 +9,19 @@ import {
 import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 
 // Local imports
-import {
-  pathToLocationIn,
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-  withFileWriteLane,
-} from '@texra-ai/harness/host';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   WorkspaceFs,
   emitAppSignal,
   type AppSignals,
+  pathToLocationIn,
 } from '@texra-ai/harness/plugins';
 import {
   generateDiffFileName,
   WORKSPACE_DIFF_SUFFIX,
 } from '@latex/latexdiff/diffFileNameManager';
+import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 
 const CHANNEL = 'AcceptedFileTarget';
@@ -46,19 +40,24 @@ function siblingLocation(
     targetFileName,
   );
   if (baseLocation.kind === 'external') {
-    return createExternalLocation(targetAbsolutePath);
+    return { kind: 'external', absolutePath: targetAbsolutePath };
   }
   const targetRelativePath = normalizeFilePath(
     path.join(path.dirname(baseLocation.relativePath), targetFileName),
   );
   if (baseLocation.kind === 'workspace') {
-    return createWorkspaceLocation(targetAbsolutePath, targetRelativePath);
+    return {
+      kind: 'workspace',
+      absolutePath: targetAbsolutePath,
+      relativePath: targetRelativePath,
+    };
   }
-  return createRunStorageLocation(
-    targetAbsolutePath,
-    targetRelativePath,
-    baseLocation.runId,
-  );
+  return {
+    kind: 'runStorage',
+    absolutePath: targetAbsolutePath,
+    relativePath: targetRelativePath,
+    runId: baseLocation.runId,
+  };
 }
 
 /**
@@ -113,6 +112,10 @@ function buildAcceptSuccessMessage(
  */
 interface CommitAcceptedFilePorts<E = never> {
   showInfo: (message: string) => Effect.Effect<void, E>;
+  /** The session's writer of project files (`GuiSession.writeFile`). */
+  write: (
+    ...write: Parameters<WriteProjectFile>
+  ) => Effect.Effect<boolean, E, FileSystem.FileSystem>;
 }
 
 /**
@@ -165,38 +168,13 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   // The confirmation was given to the target as it was when the dialog
   // opened; the dialog can stay open for minutes. A save to the target
   // meanwhile (the user's editor, a run) is not replaced on that answer.
-  // The check and the write hold the file's write lane, shared with every
-  // other writer that reads, decides and writes it (an approved edit, the
-  // desktop editor's save). The new content is staged beside the file and
-  // renamed over it, so a write that fails partway leaves the user's file as
-  // it was. An existing target is replaced where a symlink points, with the
-  // mode it had.
-  const written = yield* Effect.gen(function* () {
-    const current = yield* contentOrMissing(fs, targetPath);
-    if (current !== confirmedAgainst) return false;
-    const real =
-      current === undefined ? targetPath : yield* fs.realPath(targetPath);
-    const mode =
-      current === undefined ? undefined : (yield* fs.stat(real)).mode & 0o7777;
-    const staged = path.join(
-      path.dirname(real),
-      `.${path.basename(real)}.${randomUUID()}.tmp`,
-    );
-    yield* fs.writeFileString(staged, editedContent).pipe(
-      Effect.andThen(mode === undefined ? Effect.void : fs.chmod(staged, mode)),
-      Effect.andThen(fs.rename(staged, real)),
-      Effect.onError(() =>
-        fs.remove(staged, { force: true }).pipe(
-          Effect.ignore({
-            log: 'Warn',
-            message: `A staged accept file stays behind: ${staged}`,
-          }),
-        ),
-      ),
-      Effect.uninterruptible,
-    );
-    return true;
-  }).pipe(withFileWriteLane(targetPath));
+  const written = yield* ports.write(
+    targetPath,
+    editedContent,
+    confirmedAgainst === undefined
+      ? { kind: 'absent' }
+      : { kind: 'holds', contents: confirmedAgainst },
+  );
   if (!written) {
     yield* ports.showInfo(
       `${targetFileName} changed while the confirmation was open; nothing was written. Accept again to replace the current content.`,
@@ -239,7 +217,8 @@ const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
     absolutePath: string,
   ): Effect.fn.Return<string | undefined, PlatformError.PlatformError> {
     if (!(yield* fs.exists(absolutePath))) return undefined;
-    return yield* fs.readFileString(absolutePath);
+    // As the write checks it again (`writeFileIfUnchanged`).
+    return yield* readNormalizedFile(fs, absolutePath);
   },
 );
 
@@ -313,17 +292,17 @@ function staleDiffFileLocation(
 
 /**
  * Remove stale diff companions after accepting workspace outputs, keeping
- * successful paths. `workspaceRoot` is the accepting session's folder, carried
- * as data; the deletions go through that session's own confined view.
+ * successful paths. The companions are located in, and deleted through, the
+ * accepting session's own confined workspace view.
  */
 export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   'acceptedFileTarget.cleanupDiffFiles',
 )(function* (
-  workspaceRoot: string | undefined,
   entries: readonly { outputPath: string; originalPath: string }[],
 ): Effect.fn.Return<string[], never, WorkspaceFs> {
+  const workspaceFs = yield* WorkspaceFs;
   const stale = entries.flatMap(({ outputPath, originalPath }) => {
-    const original = pathToLocationIn(workspaceRoot, originalPath);
+    const original = pathToLocationIn(workspaceFs.root, originalPath);
     if (original.kind === 'external') return [];
     const diffLocation = staleDiffFileLocation(original, outputPath);
     if (!diffLocation || diffLocation.kind === 'external') return [];
@@ -334,11 +313,9 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // sweep keeps every deletion that worked and names the ones that did not
   // rather than dropping them silently. `force` keeps an already-absent
   // companion a success: there is nothing left to remove.
-  return yield* removeBestEffort(
-    yield* WorkspaceFs,
-    stale,
-    'stale diff file',
-  ).pipe(withLogChannel(CHANNEL));
+  return yield* removeBestEffort(workspaceFs, stale, 'stale diff file').pipe(
+    withLogChannel(CHANNEL),
+  );
 });
 
 /** Where accepted content goes: over the base when the extensions match,

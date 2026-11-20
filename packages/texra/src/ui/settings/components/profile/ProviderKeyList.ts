@@ -21,6 +21,7 @@ import type {
 } from '@texra/shared/settingsView/profileViewMessages';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { TickerController } from '@ui/litControllers/TickerController';
+import { PROVIDER_KEY_COPY } from '@ui/copy/credentials';
 import { planCreditsHint, type PlanCredits } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import {
@@ -97,7 +98,7 @@ export class ProviderKeyList extends LitElement {
         ${renderIconActionButton({
           id: `provider-key-set-${provider}`,
           icon: 'key',
-          label: `Set ${displayName} API key`,
+          label: PROVIDER_KEY_COPY.set(displayName),
           tooltip: 'Set API key',
           onClick: () =>
             postToHost({

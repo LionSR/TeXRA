@@ -33,6 +33,7 @@ import {
 import {
   GOAL_PLAN_KIND,
   RunIdSchema,
+  runsScript,
   type Plan,
   type RunId,
   type ToolFact,
@@ -107,7 +108,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // A goal forks a conversation and reports to its later turns: a run no
   // later turn reaches has none, and a script's run is no conversation to
   // fork.
-  if (noLaterTurn(call.run) || call.run.config.script != null)
+  if (noLaterTurn(call.run) || runsScript(call.run.config))
     return executed(
       'A goal runs from a conversation, forks it and reports to its later turns; this run is not one: work on the approved plan in this run instead.',
       'Plan approved: no goal outside a conversation',
@@ -170,11 +171,13 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     ...launched,
     output:
       `The user approved this plan and runs it as a goal: a background ` +
-      `script runs you again in rounds until a round verifies the stopping ` +
-      `condition or the goal pauses.\n\n` +
+      `script runs you again in rounds until a round says the stopping ` +
+      `condition holds and a separate judge's checks confirm it, or the goal ` +
+      `pauses.\n\n` +
       `${launched.output ?? ''}\n\n` +
       `Leave the objective to the goal's rounds: end this turn, and report ` +
-      `the goal's result to the user when it arrives.`,
+      `the goal's result to the user when it arrives, with each of its ` +
+      `claims that is not verified.`,
     summary: 'Plan approved: running as a goal',
   } satisfies ToolResult;
 });

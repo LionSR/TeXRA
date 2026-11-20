@@ -19,7 +19,6 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentConfig,
   DispatchFacts,
-  PluginRequest,
   RequestPayload,
   DecisionOf,
   RunId,
@@ -125,12 +124,12 @@ export interface ITool<E = Error, R = never> {
    * re-runs a call only when that saved word and the current one both say
    * `'safe'`.
    */
-  readonly replay?: 'safe' | 'unsafe';
+  readonly replay?: DispatchFacts['replay'];
   /**
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, a plugin's request), which answers what the call's hooks
+   * question), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */
@@ -166,7 +165,9 @@ export interface ITool<E = Error, R = never> {
 /**
  * The requests one tool call raises, opened through its run's loop. Each
  * carries an id its attempt derives. A request still open when its run
- * stops is cancelled, and the resumed call asks again under a new id.
+ * stops is cancelled, and the resumed call asks again under a new id. One a
+ * person answers while no process holds the run resumes the run, and the
+ * call takes that answer when it asks the same thing again.
  */
 export interface CallRequests {
   /** The id the call's next request opens under: the attempt's next
@@ -194,20 +195,6 @@ export interface CallRequests {
     },
     DatabaseAggregateClosed | CellError
   >;
-  /**
-   * Open a plugin's request the call does not wait on, under its
-   * `data.requestId`: its `request.opened` commits on the run's history
-   * through the one door every request opens at, with `data` stored as
-   * the JSON it writes, and the plugin's decision hook takes each answer
-   * when it lands (`Plugin.decision`). A person answers it. A failed
-   * commit is not proof that nothing landed: the run's rows decide.
-   */
-  readonly post: (
-    request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
-      readonly blocksCaller: false;
-      readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
-    },
-  ) => Effect.Effect<void, CellError>;
   /** Show the person something on the session's host (a file opened
    *  beside what they are looking at, a notice), answered by nothing. */
   readonly present: <K extends RuntimePresentationEvent>(

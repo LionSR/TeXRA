@@ -2,11 +2,25 @@ import { Effect, Schema } from 'effect';
 
 import { helperCall, normalizeProviderError } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
+import { removeCDATA } from '@texra/utils/text/xmlCdata';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'TextEnhancement';
+
+/**
+ * Extract text content from within a specific XML tag.
+ * Returns the content of the last matching tag found.
+ */
+function extractTextFromTag(inputContent: string, tagName: string): string {
+  // Find all matches and get the last one using matchAll
+  const regex = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 'gs');
+  const matches = [...inputContent.matchAll(regex)];
+  const lastContent = matches.at(-1)?.[1] ?? '';
+
+  // Use centralized CDATA removal
+  return removeCDATA(lastContent);
+}
 
 /**
  * The polish instruction. The raw user text is appended after it verbatim;

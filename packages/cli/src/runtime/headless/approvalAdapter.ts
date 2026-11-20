@@ -34,7 +34,6 @@ import {
   formatBashApprovalSummary,
   formatRetryRequestMessage,
   formatUserQuestionPrompt,
-  toolEditAsk,
 } from '../approval/approvalSummaries';
 import {
   parseUserQuestionAnswer,
@@ -46,8 +45,8 @@ import {
   REQUEST_ACTIONS,
 } from '@texra/shared/session/surfaceDecision';
 import { CliInvocation } from '../platform/cliContext';
-import { formatLineChanges } from '@ui/copy/format';
 import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import { CliPromptFailed, writeTextStderr } from '../platform/logSinks';
 import type { Session, SessionHost, HostInteractions } from '@texra-ai/harness';
 
@@ -122,7 +121,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
 ): Effect.fn.Return<SessionHost, never, CliInvocation> {
   const invocation = yield* CliInvocation;
   /** The prompt content for a tool edit: the session's preview of it, else
-   *  the payload's own summary and why there is no diff. */
+   *  the diff's label and why there is no diff. */
   const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
     function* (
       runId: RunId,
@@ -133,16 +132,12 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       if (read.kind === 'preview')
         return buildToolEditApprovalContent({ ...data, ...read.content });
       return {
-        summary: `${toolEditAsk({ path: data.relativePath, sourceTool: data.sourceTool })}: ${formatLineChanges(data.addedLines, data.removedLines)}\nPreview unavailable: ${read.reason}`,
+        summary: `${toolEditDiffLabel(data).title}\nPreview unavailable: ${read.reason}`,
       } satisfies CliApprovalContent;
     },
   );
 
-  /** One request, answered by the prompt. A plugin's request is not this
-   *  host's to answer: the plugin that opens one, the external inquiry, is
-   *  unavailable on the CLI, so one listed was opened by another host in a
-   *  shared session and is answered there; this handler waits until the
-   *  view drops the request (the answerer interrupts it then). */
+  /** One request, answered by the prompt. */
   const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
     payload: RequestPayload,
@@ -182,8 +177,6 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       }
       case 'userQuestion':
         return yield* askHeadlessUserQuestion(payload.data, hooks);
-      case 'plugin':
-        return yield* Effect.never;
     }
   });
 

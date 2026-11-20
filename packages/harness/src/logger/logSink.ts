@@ -17,7 +17,7 @@
  * persisted nor exported.
  */
 // Third-party imports
-import { Logger, type LogLevel } from 'effect';
+import { Logger, Record, type LogLevel } from 'effect';
 
 // Local imports
 import { formatLogData } from '@logger/formatLogData';
@@ -84,7 +84,9 @@ export interface LogSink {
  * An unattributed entry lands on the host's shared surface, which is the right
  * home for it.
  */
-export function entryChannel(entry: LogEntry): string | undefined {
+export function entryChannel(
+  entry: Pick<LogEntry, 'annotations'>,
+): string | undefined {
   const channel = entry.annotations[LOG_CHANNEL];
   return typeof channel === 'string' ? channel : undefined;
 }
@@ -94,11 +96,32 @@ export function entryChannel(entry: LogEntry): string | undefined {
  * hands `message` through as a single value or an array of them, so both
  * shapes fold here rather than at each host.
  */
-export function entryMessage(entry: LogEntry): string {
+export function entryMessage(entry: Pick<LogEntry, 'message'>): string {
   const parts = Array.isArray(entry.message) ? entry.message : [entry.message];
   return parts
     .map((part) => (typeof part === 'string' ? part : JSON.stringify(part)))
     .join(' ');
+}
+
+/** An entry as one line of text, `[channel] message`, for a host that
+ *  prints its entries as lines. */
+export function entryLine(
+  entry: Pick<LogEntry, 'message' | 'annotations'>,
+): string {
+  const channel = entryChannel(entry);
+  return `${channel === undefined ? '' : `[${channel}] `}${entryMessage(entry)}`;
+}
+
+/** What an entry carries beyond its line, one string each: its cause, then
+ *  its annotations other than the channel as one JSON object. */
+export function entryDetail(
+  entry: Pick<LogEntry, 'annotations'> & Partial<Pick<LogEntry, 'cause'>>,
+): string[] {
+  const extra = Record.remove(entry.annotations, LOG_CHANNEL);
+  return [
+    ...(entry.cause === undefined || entry.cause === '' ? [] : [entry.cause]),
+    ...(Record.isEmptyRecord(extra) ? [] : [JSON.stringify(extra)]),
+  ];
 }
 
 function redactEntry(entry: LogEntry): LogEntry {
@@ -149,8 +172,7 @@ function truncateAnnotations(entry: LogEntry): LogEntry {
  */
 const consoleLogSink: LogSink = {
   write(entry) {
-    const channel = entryChannel(entry);
-    const line = `${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`;
+    const line = entryLine(entry);
     switch (entry.level) {
       case 'FATAL':
       case 'ERROR':

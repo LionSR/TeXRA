@@ -53,11 +53,13 @@ Landed 2026-11-16 with finding 1: `RunWork.turnStartedAt`, written where
 
 `LatexSettingsStatusSchema`
 (`packages/texra/src/shared/settingsView/settingsViewMessages.ts`) keys
-`installed` by dependency and the seven paths by tool. Which tool belongs to
-which dependency is `LATEX_DEPENDENCIES[dep].needs`
+`installed` by dependency and `paths` by probed tool (one record since
+2026-11-19; it was seven `*Path` fields). Which tool belongs to which
+dependency is `LATEX_DEPENDENCIES[dep].needs`
 (`packages/texra/src/shared/constants/latexToolchain.ts`), and the LaTeX tab
-restates it as a `pathKeys` column
-(`packages/texra/src/ui/settings/tabs/LaTeXTab.ts`).
+restates it as a `pathLines` column
+(`packages/texra/src/ui/settings/tabs/LaTeXTab.ts`), which is where the
+three display rules below now live.
 
 Proposed: `dependencies: Record<LatexDependency, { installed; paths }>`, built
 by mapping over `LATEX_DEPENDENCIES`.
@@ -128,6 +130,9 @@ the readers that needed the stated texts read them from the log
   (`packages/llm/src/turn.ts`): each belongs to one protocol, a filter enforces
   it, and nothing reads their contents. They are stored in every
   `model.message` response, so deleting them is a row version bump.
+  Landed 2026-11-17 (#15017, confirmed 2026-11-19): both fields, their
+  codec producers and the stored-turn schema fields are gone
+  (`model.message` v21).
 - `AgentConfig`'s `agent`, `agentSource` and `persona`
   (`packages/harness/src/shared/schemas/agentConfig.ts`) are a union written
   as optional fields plus a filter, with the name stored twice. Stored on

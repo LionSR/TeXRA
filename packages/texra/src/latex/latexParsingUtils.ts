@@ -1,7 +1,7 @@
 /**
- * Shared LaTeX content parsing utilities: comment stripping, citation and
- * bibliography directive matching, and the path resolution the LaTeX
- * dependency extractors share.
+ * Shared LaTeX content parsing utilities: comment stripping, bibliography
+ * directive matching, and the path resolution the LaTeX dependency
+ * extractors share.
  */
 
 import * as path from 'node:path';
@@ -10,7 +10,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
-import { ensureError, hasExtension } from '@texra-ai/harness/schemas';
+import { hasExtension } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'LatexParsing';
 
@@ -40,42 +40,6 @@ export function ensureExtension(filePath: string, extension: string): string {
 }
 
 /**
- * Every citation macro TeXRA recognizes, natbib and biblatex alike, in both
- * lowercase and sentence-case (`\Citep`) spellings. One list, read by
- * citation-key extraction (`extractBibliography`) and latexdiff's
- * `--exclude-textcmd` (`latexdiff`), where a macro known to one but not the other means
- * either a citation key silently missed or a bibliography marked up as prose.
- *
- * Sentence-case forms are generated, not listed: the ones no package defines
- * (`\Nocite`) are inert in both consumers, an unmatched regex alternative and
- * an unknown `--exclude-textcmd` entry respectively.
- */
-const CITATION_COMMAND_STEMS = [
-  'cite',
-  'citet',
-  'citep',
-  'citealp',
-  'citealt',
-  'citeauthor',
-  'citeyear',
-  'citeyearpar',
-  'textcite',
-  'parencite',
-  'footcite',
-  'autocite',
-  'supercite',
-  'smartcite',
-  'nocite',
-] as const;
-
-export const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
-  ...CITATION_COMMAND_STEMS,
-  ...CITATION_COMMAND_STEMS.map(
-    (name) => `${name[0].toUpperCase()}${name.slice(1)}`,
-  ),
-]);
-
-/**
  * A comment, or a URL argument to keep whole. A `%` starts a comment unless
  * an odd number of backslashes precedes it (`\%` is a percent sign, `\\%` a
  * line break and then a comment). Inside the argument of `\url`, `\path`,
@@ -102,9 +66,7 @@ export const LATEX_PROBE_CONCURRENCY = 8;
 export const readUncommentedLatex = Effect.fn('latex.readUncommentedLatex')(
   function* (absolutePath: string) {
     const fs = yield* FileSystem.FileSystem;
-    const content = yield* readNormalizedFile(fs, absolutePath).pipe(
-      Effect.mapError(ensureError),
-    );
+    const content = yield* readNormalizedFile(fs, absolutePath);
     return content.replaceAll(
       COMMENT_PATTERN,
       (_match, url: string | undefined) => url ?? '',
@@ -195,9 +157,7 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
 export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
   function* (absolutePath: string) {
     const fs = yield* FileSystem.FileSystem;
-    const exists = yield* pathExists(fs, absolutePath).pipe(
-      Effect.mapError(ensureError),
-    );
+    const exists = yield* pathExists(fs, absolutePath);
     return exists ? absolutePath : null;
   },
 );
@@ -209,7 +169,7 @@ export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
  * to the result set, so callers can resolve tokens to paths or leave them as
  * plain keys.
  */
-export function collectCommaSeparatedMatches(
+function collectCommaSeparatedMatches(
   content: string,
   pattern: RegExp,
   transform: (token: string) => string = (token) => token,
@@ -235,6 +195,23 @@ export function collectCommaSeparatedMatches(
     }
   }
   return [...tokens];
+}
+
+const USEPACKAGE_PATTERN =
+  /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+
+/** The packages `\usepackage` and `\RequirePackage` load in `content`,
+ *  whatever options they take. */
+export function loadedPackages(content: string): string[] {
+  return collectCommaSeparatedMatches(content, USEPACKAGE_PATTERN);
+}
+
+const DOCUMENTCLASS_PATTERN = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/;
+
+/** The class `\documentclass` names in `content`, whatever options it
+ *  takes; `undefined` when there is none. */
+export function documentClass(content: string): string | undefined {
+  return DOCUMENTCLASS_PATTERN.exec(content)?.[1]?.trim();
 }
 
 /**

@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -15,11 +15,10 @@ import {
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import {
-  AgentConfigSchema,
   ToolError,
+  type AgentConfig,
   type RunId,
   type SubagentProgressUpdate,
-  type AgentConfigPayload,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
@@ -129,7 +128,7 @@ export interface ApprovalMeta {
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
     parent: RunToolCall,
-    childConfigPayload: AgentConfigPayload,
+    childConfig: AgentConfig,
     launch: {
       readonly runId: RunId;
       /** The grants the child is registered with. */
@@ -139,12 +138,10 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   ) {
     const { runId, grants } = launch;
     const { runId: parentId } = parent.run;
-    const agentName = childConfigPayload.agent;
+    const agentName = childConfig.agent;
     // Like every child, it ends with its reply, and a follow-up to it is
     // a resume with a message.
-    const definition = yield* prepareAgentDefinition({
-      config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
-    });
+    const definition = yield* prepareAgentDefinition({ config: childConfig });
     const { config } = definition;
     // The child registers with its opening, which commits here.
     yield* startChildRun(runId, definition, {
@@ -161,7 +158,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     if (meta) {
       const modelInfo = meta.model
         ? `Model: ${meta.model.chosen} (overridden from ${meta.model.proposed})`
-        : `Model: ${childConfigPayload.model}`;
+        : `Model: ${childConfig.model}`;
       const agentInfo = meta.agent
         ? ` Agent: ${meta.agent.chosen} (overridden from ${meta.agent.proposed}).`
         : '';

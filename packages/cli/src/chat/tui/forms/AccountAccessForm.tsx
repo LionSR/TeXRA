@@ -140,6 +140,26 @@ function buildAccountAccessFormItems(
   return [...toggleItems, ...accountItems, API_KEY_ITEM];
 }
 
+/** Each subscription's first-run row, by the provider it signs in to. */
+const CONNECT_CHOICES = Object.freeze({
+  chatgpt: ONBOARDING_CHOICE_CHATGPT,
+  grok: {
+    label: 'Use Grok subscription',
+    description: 'Grok models through SuperGrok; no API key needed',
+  },
+} satisfies Record<
+  SubscriptionProviderId,
+  { readonly label: string; readonly description: string }
+>);
+
+/** The key row of both panels: in `/login` it comes last, so the
+ *  subscription rows keep their number hotkeys. */
+const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
+  value: { kind: 'key' },
+  label: 'Add a provider API key',
+  description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
+};
+
 /**
  * The first-run panel: only what can connect a model, worded as what it does.
  * Nothing is signed in yet (that is why the panel is open), so each
@@ -147,34 +167,14 @@ function buildAccountAccessFormItems(
  * runs; account management (sign-out) stays in `/login`.
  */
 const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
-  {
-    value: {
-      kind: 'access',
-      selection: {
-        provider: 'chatgpt',
-        state: 'on',
-      },
-    },
-    label: ONBOARDING_CHOICE_CHATGPT.label,
-    description: ONBOARDING_CHOICE_CHATGPT.description,
-  },
-  {
-    value: {
-      kind: 'access',
-      selection: {
-        provider: 'grok',
-        state: 'on',
-      },
-    },
-    label: 'Use Grok subscription',
-    description: 'Grok models through SuperGrok; no API key needed',
-  },
-  {
-    value: { kind: 'key' },
-    label: 'Add a provider API key',
-    description:
-      'Anthropic, OpenAI, Google, DeepSeek, Kimi Code, GLM, and more',
-  },
+  ...SUBSCRIPTION_AUTH_PROVIDERS.map(
+    (provider): SelectItem<AccountAccessFormValue> => ({
+      value: { kind: 'access', selection: { provider, state: 'on' } },
+      label: CONNECT_CHOICES[provider].label,
+      description: CONNECT_CHOICES[provider].description,
+    }),
+  ),
+  API_KEY_ITEM,
   signInItem({
     target: 'chatgpt --device',
     label: SUBSCRIPTION_AUTH_COPY.chatgpt.deviceCodeLabel,
@@ -186,13 +186,6 @@ const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
     description: DEVICE_CODE_DESCRIPTION,
   }),
 ];
-
-// Last, so the subscription rows keep their number hotkeys.
-const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
-  value: { kind: 'key' },
-  label: 'Add a provider API key',
-  description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
-};
 
 export function AccountAccessForm(
   props: AccountAccessFormProps,

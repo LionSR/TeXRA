@@ -1,5 +1,5 @@
-import { defineCommand } from 'citty';
 import { Effect } from 'effect';
+import { Argument, Command } from 'effect/cli';
 
 import { MODELS } from '@texra-ai/llm';
 
@@ -25,18 +25,18 @@ import {
   type CliModelListOptions,
 } from '../runtime/models/modelAccess';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import type { CliContext } from '../runtime/platform/cliContext';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 
 /**
  * The report every model command gives when its runtime, platform or model
  * read fails: one stderr line and `ModelOrNetworkError`. Each command hands
- * it to `defineCliCommand` as its `catchExitCode`, which receives every
+ * it to `cliCommand` as its `catchExitCode`, which receives every
  * failure of the runtime build and of the program. Opening the platform
  * and reading the model options touch only local stores, so no failure here
  * is a network one.
@@ -79,8 +79,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
   const entry = yield* loadCliModelAccessEntry(id, services);
 
   if (!entry) {
-    writeTextStderr(`Model not found: ${id}`);
-    return CliExitCode.Usage;
+    return yield* failUsage(`Model not found: ${id}`);
   }
 
   // A reference with `@effort` or `+mode` is valid when a run's bind takes
@@ -91,8 +90,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
       ? verdict.reasoning?.sent
       : undefined;
   if (sent !== undefined && 'refused' in sent) {
-    writeTextStderr(`A run cannot use ${id}: ${sent.refused}`);
-    return CliExitCode.Usage;
+    return yield* failUsage(`A run cannot use ${id}: ${sent.refused}`);
   }
 
   const record = cliModelRecord(entry);
@@ -101,29 +99,26 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
   );
 });
 
-const modelsListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List available models' },
-  args: {
-    all: {
-      type: 'boolean',
-      description: 'Include unavailable models with their access status',
-    },
+const modelsListCommand = cliCommand('list', {
+  description: 'List available models',
+  config: {
+    all: boolFlag('all', 'Include unavailable models with their access status'),
   },
-  run: (context, ctx) =>
-    listModels(context, { includeUnavailable: ctx.args.all === true }),
+  run: (context, input) =>
+    listModels(context, { includeUnavailable: input.all }),
   catchExitCode: reportModelPlatformFailure,
 });
 
-const modelsShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one model' },
-  args: {
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Model id from `texra models list` (case-insensitive)',
-    },
+const modelsShowCommand = cliCommand('show', {
+  description: 'Show one model',
+  config: {
+    id: Argument.String('id').pipe(
+      Argument.withDescription(
+        'Model id from `texra models list` (case-insensitive)',
+      ),
+    ),
   },
-  run: (_, ctx) => showModel(ctx.args.id),
+  run: (_, input) => showModel(input.id),
   catchExitCode: reportModelPlatformFailure,
 });
 
@@ -171,67 +166,51 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
           : `Disabled ${result.model} in the model picker.`,
       }),
     ),
-    Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        writeTextStderr(toErrorMessage(cause));
-        return CliExitCode.Usage;
-      }),
-    ),
+    Effect.catchCause((cause) => failUsage(toErrorMessage(cause))),
   );
 });
 
-const modelsEnabledCommand = defineCliCommand({
-  meta: {
-    name: 'enabled',
-    description:
-      'List models enabled for pickers (`/model`, lead model). Use enable/disable to change.',
-  },
-  run: listEnabledModels,
+const modelsEnabledCommand = cliCommand('enabled', {
+  description:
+    'List models enabled for pickers (`/model`, lead model). Use enable/disable to change.',
+  config: {},
+  run: () => listEnabledModels(),
   catchExitCode: reportModelPlatformFailure,
 });
 
-const modelsEnableCommand = defineCliCommand({
-  meta: {
-    name: 'enable',
-    description: 'Add a model to the picker',
+const modelsEnableCommand = cliCommand('enable', {
+  description: 'Add a model to the picker',
+  config: {
+    id: Argument.String('id').pipe(
+      Argument.withDescription(
+        'Model id, as `texra models list --all` shows it',
+      ),
+    ),
   },
-  args: {
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Model id, as `texra models list --all` shows it',
-    },
-  },
-  run: (_, ctx) => setModelEnabled(ctx.args.id, true),
+  run: (_, input) => setModelEnabled(input.id, true),
   catchExitCode: reportModelPlatformFailure,
 });
 
-const modelsDisableCommand = defineCliCommand({
-  meta: {
-    name: 'disable',
-    description: 'Remove a model from the picker',
+const modelsDisableCommand = cliCommand('disable', {
+  description: 'Remove a model from the picker',
+  config: {
+    id: Argument.String('id').pipe(
+      Argument.withDescription(
+        'Model id currently shown by `texra models enabled`',
+      ),
+    ),
   },
-  args: {
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Model id currently shown by `texra models enabled`',
-    },
-  },
-  run: (_, ctx) => setModelEnabled(ctx.args.id, false),
+  run: (_, input) => setModelEnabled(input.id, false),
   catchExitCode: reportModelPlatformFailure,
 });
 
-export const modelsCommand = defineCommand({
-  meta: {
-    name: 'models',
-    description: 'Inspect and manage TeXRA models',
-  },
-  subCommands: {
-    list: modelsListCommand,
-    show: modelsShowCommand,
-    enabled: modelsEnabledCommand,
-    enable: modelsEnableCommand,
-    disable: modelsDisableCommand,
-  },
-});
+export const modelsCommand = Command.make('models').pipe(
+  Command.withDescription('Inspect and manage TeXRA models'),
+  Command.withSubcommands([
+    modelsListCommand,
+    modelsShowCommand,
+    modelsEnabledCommand,
+    modelsEnableCommand,
+    modelsDisableCommand,
+  ]),
+);
