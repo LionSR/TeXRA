@@ -16,8 +16,9 @@ import {
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
-import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 import {
   approvalDecisionDelivery,
   type SurfaceDecision,
@@ -335,7 +336,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
             />
           </Box>
         )}
-        {notice && <Text color={COLOR_WARNING}>{notice}</Text>}
+        {notice && <ToneLine tone="warning" text={notice} />}
       </FormFrame>
       {presentable && pending && (
         <ApprovalModal
