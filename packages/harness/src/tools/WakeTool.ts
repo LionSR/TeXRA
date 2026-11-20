@@ -17,7 +17,10 @@ import { Clock, DateTime, Effect, Option, Schema } from 'effect';
 // Local imports
 import { wakeNotes } from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/Inbox';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  submitFollowUp,
+  waitForWakeNotes,
+} from '@agent/followUp/ToolUseFollowUp';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import { ToolError, type RunId } from '@shared/schemas';
 import { conversationOf } from '@tools/codemode/SelfTool';
@@ -144,6 +147,9 @@ const runWake = Effect.fn('wake.call')(function* (
       return yield* new ToolError(
         `No pending wake has the id ${input.id}. \`list\` answers the pending ones.`,
       );
+    // A run no fiber drives (a background script's conversation) waits
+    // for the notes it has left, not the one dropped.
+    yield* waitForWakeNotes(runId);
     return yield* answer(runId, {
       text: `Cancelled the wake due ${formatLocalTime(dropped.due)}.`,
       summary: 'Cancelled a wake',

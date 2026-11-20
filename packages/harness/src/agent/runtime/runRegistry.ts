@@ -117,6 +117,14 @@ export interface RunRegistryInit {
   /** No fiber here drives the run any more: wake it, and the parent its
    *  last batch delivered to, for the input each holds (`wakeIfOwed`). */
   readonly wake: (runId: RunId) => void;
+  /** Run `effect` as the run's one wake timer, on the session's own
+   *  fibers, in place of the timer it had: its close interrupts it. */
+  readonly wakeTimer: (
+    runId: RunId,
+    effect: Effect.Effect<void, never, CapturedServices>,
+  ) => void;
+  /** Interrupt the run's wake timer, if it has one. */
+  readonly endWakeTimer: (runId: RunId) => void;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -246,6 +254,16 @@ export class SessionRunRegistry implements RunsShape {
    *  waits for it, and the session's close interrupts it. */
   background(effect: Effect.Effect<void, never, AgentRunServices>): void {
     this.init.background(this.provided(effect));
+  }
+
+  /** Run `effect` as the run's one wake timer, in place of the one it had,
+   *  on the session's own fibers. The run's next start interrupts it: a run
+   *  a fiber here drives waits for its own notes. */
+  wakeTimer(
+    runId: RunId,
+    effect: Effect.Effect<void, never, AgentRunServices>,
+  ): void {
+    this.init.wakeTimer(runId, this.provided(effect));
   }
 
   /** Hold a person's `decision` on request `requestId` of a run no fiber here
@@ -575,6 +593,7 @@ export class SessionRunRegistry implements RunsShape {
     };
     this.entries.set(runId, live);
     this.publishHeld();
+    this.init.endWakeTimer(runId);
     return live;
   }
 

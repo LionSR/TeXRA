@@ -53,6 +53,8 @@ function createRegistry(
     fork,
     background: () => {},
     wake: () => {},
+    wakeTimer: () => {},
+    endWakeTimer: () => {},
   });
 }
 
