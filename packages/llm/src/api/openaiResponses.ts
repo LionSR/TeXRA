@@ -38,6 +38,7 @@ import {
   openaiFailure,
   responseEvents,
   responsesWire,
+  RUNNING_SNAPSHOT_EVENTS,
   sdkEvents,
   terminalParts,
 } from './openaiResponsesCodec.js';
@@ -217,11 +218,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
           }),
         );
       if (
-        ![
-          'response.created',
-          'response.queued',
-          'response.in_progress',
-        ].includes(type) ||
+        !RUNNING_SNAPSHOT_EVENTS.has(type) ||
         !['queued', 'in_progress'].includes(response.status)
       )
         return yield* new ModelError({
