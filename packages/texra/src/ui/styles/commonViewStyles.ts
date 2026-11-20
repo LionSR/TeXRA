@@ -131,7 +131,7 @@ const busyIconButtonStyles: CSSResult = css`
 `;
 
 /**
- * The one drag-over skin for a file drop target driven by `FileDropHandler`:
+ * The one drag-over skin for a file drop target driven by `FileDropController`:
  * the target takes `.is-drag-active` while files are over it, and may render
  * a `.drop-cue` naming what the drop does. The target needs
  * `position: relative` when it renders the cue.
