@@ -274,10 +274,16 @@ const openStep = Effect.fn('Step.open')(function* (
     // All of them load; the description names the first by name. The run
     // of a program a plugin ships loads none: what it imports would run
     // under the approval its launch gave it, which the agent's own text
-    // never gets. It can still start one, as a run of its own.
-    const own = delegatesApproved(run.config)
-      ? { loaded: [], refused: [] }
-      : yield* readOwnPrograms(roots.storage);
+    // never gets. It can still start one, as a run of its own. A step that
+    // offers neither `script` nor `program` can import or start none, so it
+    // reads none and does not wait on the directory listing.
+    const runsPrograms =
+      resolved.registry.has(SCRIPT_TOOL_NAME) ||
+      resolved.registry.has(PROGRAM_TOOL_NAME);
+    const own =
+      delegatesApproved(run.config) || !runsPrograms
+        ? { loaded: [], refused: [] }
+        : yield* readOwnPrograms(roots.storage);
     const unlisted = new Set(
       own.loaded.slice(OWN_PROGRAMS_LISTED).map(({ name }) => name),
     );
