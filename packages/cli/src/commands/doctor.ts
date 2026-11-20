@@ -20,6 +20,7 @@ import { pruneStorage } from '../runtime/pruneStorage';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
+import { boolFlag } from './_helpers/flags';
 import {
   readCliGlobalArgs,
   selectCliCommand,
@@ -78,18 +79,12 @@ const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
   );
 
 const DOCTOR_CONFIG = {
-  pruneStorage: Flag.Boolean('prune-storage').pipe(
-    Flag.withoutNegation,
-    Flag.withDefault(false),
-    Flag.withDescription(
-      'List the workspace stores whose project is gone and the aside copies of session stores, and delete them once confirmed',
-    ),
+  pruneStorage: boolFlag(
+    'prune-storage',
+    'List the workspace stores whose project is gone and the aside copies of session stores, and delete them once confirmed',
   ),
-  yes: Flag.Boolean('yes').pipe(
-    Flag.withoutNegation,
-    Flag.withDefault(false),
+  yes: boolFlag('yes', 'Delete what --prune-storage lists without asking').pipe(
     Flag.withAlias('y'),
-    Flag.withDescription('Delete what --prune-storage lists without asking'),
   ),
 };
 

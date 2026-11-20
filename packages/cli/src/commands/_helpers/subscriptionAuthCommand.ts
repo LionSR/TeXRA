@@ -1,5 +1,5 @@
 import { Cause, Effect } from 'effect';
-import { Command, Flag } from 'effect/cli';
+import { Command } from 'effect/cli';
 
 import { CliInvocation } from '@cli/runtime/platform/cliContext';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
@@ -19,6 +19,7 @@ import {
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
 import { cliCommand } from './cliCommand';
+import { boolFlag } from './flags';
 import { cliProgressWriter, emitCliResult } from './output';
 
 /**
@@ -104,19 +105,13 @@ export function defineSubscriptionAuthCommand(
   const loginCommand = cliCommand('login', {
     description: options.loginDescription,
     config: {
-      device: Flag.Boolean('device').pipe(
-        Flag.withoutNegation,
-        Flag.withDefault(false),
-        Flag.withDescription(
-          'For SSH, containers, or any headless shell: sign in with a one-time device code where the provider has one, otherwise print the browser sign-in URL',
-        ),
+      device: boolFlag(
+        'device',
+        'For SSH, containers, or any headless shell: sign in with a one-time device code where the provider has one, otherwise print the browser sign-in URL',
       ),
-      noBrowser: Flag.Boolean('no-browser').pipe(
-        Flag.withoutNegation,
-        Flag.withDefault(false),
-        Flag.withDescription(
-          'Print the loopback sign-in URL instead of opening a browser',
-        ),
+      noBrowser: boolFlag(
+        'no-browser',
+        'Print the loopback sign-in URL instead of opening a browser',
       ),
     },
     run: (_, input) => runLogin(input),

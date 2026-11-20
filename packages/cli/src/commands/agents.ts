@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Argument, Command, Flag } from 'effect/cli';
+import { Argument, Command } from 'effect/cli';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
 import { AGENT_SOURCE, agentKey, agentName } from '@texra-ai/harness/schemas';
@@ -19,6 +19,7 @@ import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag } from './_helpers/flags';
 import {
   cliResult,
   emitCliResult,
@@ -196,12 +197,9 @@ const agentsKeepCommand = cliCommand('keep', {
 const agentsListCommand = cliCommand('list', {
   description: 'List available agents',
   config: {
-    all: Flag.Boolean('all').pipe(
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription(
-        'Show every agent, including agents hidden by workspace visibility settings',
-      ),
+    all: boolFlag(
+      'all',
+      'Show every agent, including agents hidden by workspace visibility settings',
     ),
   },
   run: (context, input) => listAgents(context, { includeHidden: input.all }),

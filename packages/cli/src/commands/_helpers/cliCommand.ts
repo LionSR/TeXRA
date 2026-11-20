@@ -55,18 +55,12 @@ import {
 } from '@cli/runtime/platform/logSinks';
 
 import { cliPresenterLayer } from './cliHelp';
+import { boolFlag } from './flags';
 import { loadConfigAndWarn } from './loadConfigAndWarn';
 
 // ---------------------------------------------------------------------------
 // The global flags: every command takes them, before or after its name.
 // ---------------------------------------------------------------------------
-
-const boolFlag = (name: string, description: string) =>
-  Flag.Boolean(name).pipe(
-    Flag.withoutNegation,
-    Flag.withDefault(false),
-    Flag.withDescription(description),
-  );
 
 const Print = GlobalFlag.Setting('print')({
   flag: boolFlag(

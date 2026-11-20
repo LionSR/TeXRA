@@ -14,6 +14,7 @@ import {
   SKILL_SOURCES_CONFIG,
   type CliCommandOptions,
 } from './_helpers/cliCommand';
+import { modelFlag } from './_helpers/flags';
 
 const chatConfig = {
   ...SKILL_SOURCES_CONFIG,
@@ -21,11 +22,7 @@ const chatConfig = {
     Flag.withDescription('Agent for the session'),
     Flag.optional,
   ),
-  model: Flag.String('model').pipe(
-    Flag.withAlias('m'),
-    Flag.withDescription('Model for the session'),
-    Flag.optional,
-  ),
+  model: modelFlag('Model for the session'),
 };
 
 /** The chat, which bare `texra` also starts on an interactive terminal. */

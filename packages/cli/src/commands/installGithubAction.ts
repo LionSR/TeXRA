@@ -29,6 +29,7 @@ import {
 import { gh, ghAvailable, git } from '../runtime/gitOps';
 
 import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag } from './_helpers/flags';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from '../runtime/platform/cliContext';
 
@@ -410,12 +411,9 @@ export const installGithubActionCommand = cliCommand('install-github-action', {
       ),
       Flag.optional,
     ),
-    force: Flag.Boolean('force').pipe(
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription(
-        'Overwrite an existing workflow file / reuse the branch',
-      ),
+    force: boolFlag(
+      'force',
+      'Overwrite an existing workflow file / reuse the branch',
     ),
     pr: Flag.Boolean('pr').pipe(
       Flag.withDefault(true),

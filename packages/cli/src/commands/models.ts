@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Argument, Command, Flag } from 'effect/cli';
+import { Argument, Command } from 'effect/cli';
 
 import { MODELS } from '@texra-ai/llm';
 
@@ -26,6 +26,7 @@ import {
 } from '../runtime/models/modelAccess';
 
 import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag } from './_helpers/flags';
 import {
   cliResult,
   emitCliResult,
@@ -104,13 +105,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
 const modelsListCommand = cliCommand('list', {
   description: 'List available models',
   config: {
-    all: Flag.Boolean('all').pipe(
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription(
-        'Include unavailable models with their access status',
-      ),
-    ),
+    all: boolFlag('all', 'Include unavailable models with their access status'),
   },
   run: (context, input) =>
     listModels(context, { includeUnavailable: input.all }),
