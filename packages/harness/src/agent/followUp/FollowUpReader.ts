@@ -195,7 +195,6 @@ export class FollowUpReader {
   private readonly runId: RunId;
   private readonly log: ReaderLog;
   private readonly closed = Latch.makeUnsafe(false);
-  private ended = false;
 
   constructor(runId: RunId, log: ReaderLog) {
     this.runId = runId;
@@ -205,7 +204,6 @@ export class FollowUpReader {
   /** The run takes no more input (it was deleted, its input closed, or its
    *  session closes): a wait ends, now or when it starts. */
   end(): void {
-    this.ended = true;
     Latch.openUnsafe(this.closed);
   }
 
@@ -229,7 +227,7 @@ export class FollowUpReader {
   ): Effect.Effect<FollowUpBatch | null> =>
     Effect.gen({ self: this }, function* () {
       for (let input = seen; ; input = yield* this.read) {
-        if (this.ended) return null;
+        if (Latch.isOpen(this.closed)) return null;
         const readable = input.batch(at);
         if (readable !== null) return readable;
         if (input.pending(at))

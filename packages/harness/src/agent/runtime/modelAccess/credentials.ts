@@ -8,14 +8,12 @@ import { absurd, Effect } from 'effect';
 
 import {
   apiKey,
-  type ApiKeyProviderId,
   type CredentialRoute,
   decideModelRoute,
   exposeApiKey,
   type ModelConfig,
   ModelError,
   OWN_KEY_ROUTE_FACTS,
-  PLAN_ROUTES,
 } from '@texra-ai/llm';
 import { type SessionToken, SubscriptionAccounts } from '@texra-ai/llm/node';
 import { HttpClient } from 'effect/http';
@@ -29,25 +27,20 @@ import type { SettingsStores } from '@shared/config/settings';
 type SessionRoute = Extract<CredentialRoute, { kind: 'session' }>['plan'];
 
 /**
- * The credential of one route. `bearer` is what the transport sends: a key,
+ * The credential of one route: `bearer` is what the transport sends, a key
  * or a session's token, which llm reads per request and renews once when
- * the provider rejects it.
+ * the provider rejects it. A ChatGPT session also names the plan its token
+ * carries (`plan`, display-only). Which route it bills is the route's own.
  */
-type RouteCredential = {
-  readonly provider: ApiKeyProviderId;
-} & (
-  | { readonly route: 'api-key'; readonly bearer: string }
-  | { readonly route: 'xai-subscription'; readonly bearer: SessionToken }
-  | {
-      readonly route: 'chatgpt-subscription';
-      readonly bearer: SessionToken;
-      /** The ChatGPT plan the session's token names; display-only. */
-      readonly plan: string | undefined;
-    }
-);
+interface RouteCredential {
+  readonly bearer: string | SessionToken;
+  readonly plan?: string;
+}
 
 /** An API-key route's credential: its key. */
-type KeyCredential = Extract<RouteCredential, { readonly route: 'api-key' }>;
+interface KeyCredential {
+  readonly bearer: string;
+}
 
 /**
  * The OAuth session a subscription route bills. The decision already found the preference on, the model eligible
@@ -67,7 +60,6 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   const accounts = yield* SubscriptionAccounts;
   const account = accounts[route];
   const http = yield* HttpClient.HttpClient;
-  const { provider } = PLAN_ROUTES[route];
   const unavailable = (error: Error) =>
     RouteUnavailable.ofSession(route, error);
   /** A read of the session inside a request: its failures llm's
@@ -98,11 +90,13 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
         accounts[route].getFreshSession(),
         unavailable,
       );
-      return { route, provider, bearer, plan: fresh.planType };
+      return fresh.planType === undefined
+        ? { bearer }
+        : { bearer, plan: fresh.planType };
     }
     case 'xai-subscription':
       yield* Effect.mapError(account.getFreshSession(), unavailable);
-      return { route, provider, bearer };
+      return { bearer };
     default:
       return absurd(route);
   }
@@ -132,7 +126,7 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
       message: `Missing API key for ${provider}. Set a provider API key in settings.`,
     });
   }
-  return { route: route.kind, provider, bearer: exposeApiKey(key) };
+  return { bearer: exposeApiKey(key) };
 });
 
 /** The credential `route` bills. */
@@ -157,7 +151,7 @@ export const ownKeyCredential = Effect.fn('ownKeyCredential')(function* (
   stores: SettingsStores,
   config: ModelConfig,
 ): Effect.fn.Return<
-  KeyCredential & { readonly endpoint: string },
+  { readonly bearer: string; readonly endpoint: string },
   RouteUnavailable,
   Secrets
 > {

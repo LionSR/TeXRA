@@ -1,6 +1,6 @@
-// Shared clipboard-image extraction for webview paste handlers (main view +
-// progress-view follow-up). Browser-only — relies on File/DataTransfer
-// and has no Node imports, so it is safe in both webview bundles.
+// Clipboard-image extraction for the composer's paste handler
+// (`SessionComposer`). Browser-only: relies on File/DataTransfer and has no
+// Node imports.
 
 import * as Base64 from 'effect/encoding/Base64';
 

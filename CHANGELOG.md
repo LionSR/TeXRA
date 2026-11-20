@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Two SDK shapes lose a field nothing read.** `ownKeyCredential` on
+  `@texra-ai/harness/host` resolves to `{ bearer, endpoint }`: the credential
+  no longer carries its provider or route, since a binding keys its retry
+  gate from the route it already holds. `ChildRunsShape` on
+  `@texra-ai/harness/plugins` has no `requested`; its only caller was the
+  external inquiry tool, removed above.
+
 - **The `texra` command line has new help and stricter flags.** Help at
   every level has a new layout: a subcommand's help lists its own flags and
   points to `texra --help` for the global ones. `texra help <command>` is

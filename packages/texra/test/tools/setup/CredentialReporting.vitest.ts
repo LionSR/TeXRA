@@ -14,7 +14,7 @@ import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
 
 // Local file imports
-import { createFakeSetupPlatform, withSetup } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from '@test/tools/setup/fixtures';
 
 /** The process environment a case runs under: it holds a provider key. */
 const ENV = { [apiKeyEnvName('deepseek')]: 'private-test-value' };

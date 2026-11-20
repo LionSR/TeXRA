@@ -1,7 +1,8 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 import { clampModalWidth, isCompactRows } from '@cli/tui/ui/theme';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 
@@ -99,9 +100,10 @@ export function ToolEditRequest(
               `source: ${data.sourceTool}`,
             ])}
           </Text>
-          <Text color={COLOR_WARNING}>
-            Preview unavailable: {props.payload.tui.reason}
-          </Text>
+          <ToneLine
+            tone="warning"
+            text={`Preview unavailable: ${props.payload.tui.reason}`}
+          />
         </>
       )}
     </ConfirmCard>

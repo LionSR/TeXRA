@@ -389,7 +389,7 @@ interface RequestOpening {
    *  them back for as long as the row lives. */
   readonly blobs?: readonly DraftBlob[];
   /** What the call's `PreToolUse` hooks said. */
-  readonly hook?: 'allow' | 'ask';
+  readonly hook?: HookAnswer;
   /** What the request asks permission for, where its kind does not say:
    *  a command's operation. */
   readonly operation?: ApprovalOperation;

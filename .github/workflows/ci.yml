@@ -21,9 +21,9 @@ concurrency:
 # wall-time is bounded by the slowest job, not the sum of a serial chain. Each
 # job repeats the cheap cached setup (~30s) to buy that parallelism.
 #
-# The nightly `schedule` run carries the two jobs nothing else covers: the
-# runtime-validation timing run and the Windows kernel shards, which no PR or
-# push runs (see the `test` matrix). Every push to main already validates Linux,
+# The nightly `schedule` run carries the three jobs nothing else covers: the
+# runtime-validation timing run, the full TUI frame validation and the
+# Windows kernel shards, which no PR or push runs (see the `test` matrix). Every push to main already validates Linux,
 # so the remaining heavy jobs stay gated off `schedule` rather than
 # re-validating an unchanged tree nightly (the macOS jobs bill at 10x Linux
 # rates).
@@ -503,6 +503,36 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
+  # PR CI runs only the scenarios tagged `smoke` (the `build` job); every
+  # scenario runs here, nightly and on manual dispatch.
+  tui-validation:
+    name: TUI frames (linux)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Validate every CLI TUI frame scenario
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          pnpm --filter @texra-ai/cli validate:tui -- \
+            --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames"
+
+      - name: Upload CLI TUI frames
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-cli-tui-frames
+          path: artifacts/tui-frames
+          if-no-files-found: warn
+          retention-days: 14
+
   docs-check:
     name: docs build
     needs: changes
@@ -546,6 +576,7 @@ jobs:
       - desktop-e2e
       - vscode-host-e2e
       - runtime-validation
+      - tui-validation
       - packed-example
       - docs-check
     if: always()
@@ -564,7 +595,8 @@ jobs:
         # - always: change detection (if it fails, everything skips) and the
         #   ungated docs checks;
         # - a code change: the Linux jobs, of which the nightly schedule runs
-        #   only the kernel shards (with runtime validation and Windows);
+        #   only the kernel shards (with runtime validation, the full TUI
+        #   frames and Windows);
         # - a docs-only PR: the docs build, which gates in their place.
         #
         # What fails this step is also the job's `problems` output, which the
@@ -588,7 +620,7 @@ jobs:
           if [ -n "$missing" ]; then report "$missing"; fi
 
   # Nobody watches a schedule, and the nightly run carries jobs no pull request
-  # runs (the Windows kernel shards, runtime validation): it failed three
+  # runs (the Windows kernel shards, runtime validation, the full TUI frames): it failed three
   # nights running before anyone looked. So a failing night opens one issue,
   # each further failing night comments on it, and the first passing night
   # closes it. The issue is found by its label, which nothing else uses.

@@ -169,8 +169,8 @@ const GLOBAL_VALUE_FLAGS: ReadonlySet<string> = new Set(
 );
 
 /**
- * The root's two shortcuts, ahead of any command name: `-v` is `texra
- * version`, `--resume <id>` is `texra resume <id>`.
+ * The root's shortcuts, ahead of any command name: `-v` and `--version` are
+ * `texra version`, `--resume <id>` is `texra resume <id>`.
  */
 function expandRootShortcuts(argv: readonly string[]): readonly string[] {
   // An index loop: a global flag's value is skipped with its flag.
@@ -180,7 +180,8 @@ function expandRootShortcuts(argv: readonly string[]): readonly string[] {
     if (arg === undefined || arg === '--' || !arg.startsWith('-')) return argv;
     const before = argv.slice(0, index);
     const after = argv.slice(index + 1);
-    if (arg === '-v') return [...before, 'version', ...after];
+    if (arg === '-v' || arg === '--version')
+      return [...before, 'version', ...after];
     if (arg === '--resume') return [...before, 'resume', ...after];
     if (arg.startsWith('--resume=')) {
       return [...before, 'resume', arg.slice('--resume='.length), ...after];

@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 97
+Exports: 98
 
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
 - `API_KEY_PROVIDER_IDS` — `const API_KEY_PROVIDER_IDS: readonly ("anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai")[]`
@@ -39,6 +39,7 @@ Exports: 97
 - `findModelProviderPlugin` — `function findModelProviderPlugin: (id: string) => ModelProviderPlugin | undefined`
 - `hasUsableApiKey` — `function hasUsableApiKey: (credentials: CredentialStore, provider: "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai") => Effect<boolean, SecretsFailed, never>`
 - `hint` — `function hint: (model: ModelConfig | string) => string`
+- `IMAGE_LIMITS` — `const IMAGE_LIMITS: Readonly<{ 'anthropic-messages': Readonly<{ manyImageMaxDimension: 2000; maxDimension: 8000; }>; 'google-interactions': Readonly<{ manyImageMaxDimension: 2000; maxDimension: 8000; }>; 'openai-responses': Readonly<{ manyImageMaxDimension: 2000; maxDimension: 8000; }>; }>`
 - `InputPart` — `type InputPart = Extract<ResolvedTurn['messages'][number], { role: 'user'; }>['content'][number]; ≡ { readonly base64: string; readonly detail?: "high" | "low" | "medium" | "ultra-high" | undefined; readonly kind: "image"; readonly mimeType: string; } | { readonly base64: string; readonly kind: "audio" | "document" | "video"; readonly mimeType: string; } | { readonly kind: "text"; readonly text: string; }`
 - `isApiProvider` — `function isApiProvider: (provider: string) => provider is "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai"`
 - `isAuthFailureStatus` — `const isAuthFailureStatus: (status: number | undefined) => boolean`

@@ -35,13 +35,10 @@
 import {
   Context,
   Effect,
-  Exit,
   type FileSystem,
   Record,
   Schema,
-  Scope,
   ScopedRef,
-  Ref,
 } from 'effect';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
@@ -54,6 +51,7 @@ import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import type { Plugin } from '@tools/plugins';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
@@ -114,13 +112,13 @@ export interface StepTools extends ResolvedTools {
   readonly modules: { readonly [specifier: string]: string };
 }
 
-/** The run's current step, the scope that holds its pin, and the tools it
- *  withheld for approval. `holding` while only waits
+/** The run's current step and the tools it withheld for approval. Its pin
+ *  and services live in the scope `run.steps` holds it in, closed when the
+ *  next step replaces it. `holding` while only waits
  *  have opened steps in a resumed activation: its hold on the record is not
  *  spent yet. */
 export interface OpenStep {
   readonly tools: StepTools;
-  readonly scope: Scope.Closeable;
   readonly withheld: readonly string[];
   /** The installed plugins it accepted and the plugins whose skills it
    *  draws on: what a skill the user activates meanwhile resolves against
@@ -132,6 +130,12 @@ export interface OpenStep {
   /** The recorded skills it left out: named at the step that first does. */
   readonly notOffered: readonly string[];
   readonly holding: boolean;
+  /** What opening it raised, reported once it replaced the previous step. */
+  readonly warnings: readonly string[];
+  /** The skills its system text lists. */
+  readonly listed: readonly SkillCatalogEntry[];
+  /** The plugins whose sections its system text renders, by id. */
+  readonly contributing: readonly Plugin[];
 }
 
 /** Whether `b` is the set `a` records: the same tools, as the same
@@ -229,8 +233,13 @@ const openStep = Effect.fn('Step.open')(function* (
   recordedHooks: readonly string[] | null,
 ) {
   const roots = yield* SessionRoots;
-  const scope = yield* Scope.fork(run.scope);
-  const step = yield* Effect.gen(function* () {
+  const previous = yield* ScopedRef.get(run.steps);
+  // The ref acquires the step in a scope of its own and closes the previous
+  // step's once this one is open; a failed open leaves the previous step in
+  // place. The ref masks its acquisition, so a stop must still cut an open
+  // in progress (a plugin's start).
+  const acquire = Effect.gen(function* () {
+    const scope = yield* Effect.scope;
     // A registered program's tools are fixed; anyone else's, those of a
     // program read from a file among them, follow the switches read live.
     const program = programOf(run.config);
@@ -238,9 +247,10 @@ const openStep = Effect.fn('Step.open')(function* (
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
-    const pinned = yield* (yield* ProjectTools)
-      .pin(off, { installed: true, held: run.toolInputs.held })
-      .pipe(Scope.provide(scope));
+    const pinned = yield* (yield* ProjectTools).pin(off, {
+      installed: true,
+      held: run.toolInputs.held,
+    });
     const { policy, ...gates } = yield* liveToolGates(run);
     // The step resolves against the table it read, as its calls do.
     const resolved = yield* resolveStepTools(pinned.entries, {
@@ -324,7 +334,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...tools.offered.map(({ plugin }) => plugin),
       ...contributing.map(({ id }) => id),
     ]);
-    const services = yield* pinned.services(used).pipe(Scope.provide(scope));
+    const services = yield* pinned.services(used);
     // The skills: the built-in plugins on and the installed ones the step
     // accepted contribute, as it accepted them, so a plugin enabled or
     // updated since reaches this step's text. A step held to the record
@@ -406,22 +416,18 @@ const openStep = Effect.fn('Step.open')(function* (
       skills,
       listed,
       notOffered: [...notOffered],
+      holding,
       contributing: contributing.toSorted(
         (a, b) => Number(a.id > b.id) - Number(a.id < b.id),
       ),
-    };
-  }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
-  const { listed } = step;
-  const tools: StepTools = step.tools;
-  const previous = yield* Ref.getAndSet(run.steps, {
-    tools,
-    scope,
-    withheld: step.withheld,
-    skills: step.skills,
-    notOffered: step.notOffered,
-    holding,
+    } satisfies OpenStep;
   });
-  if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
+  yield* ScopedRef.set(run.steps, Effect.interruptible(acquire));
+  // The run's loop is the only writer of its step, so the step read back is
+  // the one just opened.
+  const step = yield* ScopedRef.get(run.steps);
+  if (step === null) return yield* Effect.die('the step just opened is gone');
+  const { listed, tools } = step;
   const toolsChanged = !sameSet(state.offeredTools, tools.offered);
   const skills = listed.map(({ name }) => name);
   const skillsChanged =
@@ -470,7 +476,7 @@ export const dispatchTools = Effect.fn('Step.dispatch')(function* (
   run: AgentRunShape,
   state: RunState,
 ) {
-  const open = yield* Ref.get(run.steps);
+  const open = yield* ScopedRef.get(run.steps);
   if (open !== null) return open.tools;
   const step = yield* openStep(
     run,
@@ -505,7 +511,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     FileSystem.FileSystem | ChildProcessSpawner
   >,
 ) {
-  const open = yield* Ref.get(run.steps);
+  const open = yield* ScopedRef.get(run.steps);
   const held = open === null || open.holding;
   const step = yield* openStep(
     run,
@@ -581,7 +587,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
 /** What `run`'s current step offers: the tools a background script it
  *  launches now declares. */
 export const offeredBy = (run: Pick<AgentRunShape, 'steps'>) =>
-  Effect.map(Ref.get(run.steps), (open) => open?.tools.offered ?? []);
+  Effect.map(ScopedRef.get(run.steps), (open) => open?.tools.offered ?? []);
 
 /**
  * The skills of `names` a user just activated that `run`'s current step
@@ -592,7 +598,7 @@ export const offeredBy = (run: Pick<AgentRunShape, 'steps'>) =>
  */
 export const resolveActivations = Effect.fn('Step.resolveActivations')(
   function* (run: AgentRunShape, names: readonly string[]) {
-    const open = yield* Ref.get(run.steps);
+    const open = yield* ScopedRef.get(run.steps);
     if (open === null || names.length === 0) return [...names];
     const roots = yield* SessionRoots;
     const { named } = yield* loadRuntimeSkillCatalog({

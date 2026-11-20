@@ -58,8 +58,8 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   workspaceRoot: string | undefined,
   latexindentConfig: string,
 ) {
-  // Resolve workspace-relative paths to absolute so cleanup works correctly.
-  // Some callers (latexCommands, housekeeping/indent) pass relative paths.
+  // Resolve a workspace-relative path to absolute so cleanup works correctly:
+  // VS Code's indent command passes one.
   const absolutePath =
     path.isAbsolute(filePath) || !workspaceRoot
       ? filePath

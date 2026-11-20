@@ -16,7 +16,7 @@ import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { matchesEditedFile } from '@texra/shared/launcher/editedFileMatch';
+import { matchesEditedFile } from '@ui/progress/editedFileMatch';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

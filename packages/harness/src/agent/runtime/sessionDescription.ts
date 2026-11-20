@@ -7,7 +7,7 @@
  * can quickly understand each session.
  */
 
-import { Cause, Context, Effect, Exit, Fiber, Option } from 'effect';
+import { Context, Effect, Exit, Fiber, Option } from 'effect';
 
 import { helperCall } from '@agent/runtime/helperModel';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -16,6 +16,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import {
+  outcomeFromCause,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,
@@ -49,7 +50,7 @@ function cleanSessionDescription(text: string): string {
   return cleaned;
 }
 
-const SYSTEM_PROMPT = `Generate a short session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
+const SYSTEM_PROMPT = `Generate a short session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Refactoring the retry logic").`;
 
 /**
  * Build a user prompt for session description generation.
@@ -225,11 +226,9 @@ export const withSessionDescription =
       ),
       () => flow,
       (description, exit) =>
-        (
-          Exit.isSuccess(exit)
-            ? exit.value.outcome === RUN_OUTCOME.CANCELLED
-            : Cause.hasInterrupts(exit.cause)
-        )
+        (Exit.isSuccess(exit)
+          ? exit.value.outcome
+          : outcomeFromCause(exit.cause)) === RUN_OUTCOME.CANCELLED
           ? Fiber.interrupt(description)
           : Fiber.join(description),
     );

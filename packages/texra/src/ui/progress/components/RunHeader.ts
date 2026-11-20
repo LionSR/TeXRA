@@ -11,11 +11,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import {
-  acceptsFollowUp,
-  resolveBypass,
-  joinFacts,
-} from '@texra-ai/harness/schemas';
+import { resolveBypass, joinFacts } from '@texra-ai/harness/schemas';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
@@ -292,11 +288,6 @@ export class RunHeader extends LitElement {
     const run = this.run;
     if (!run) return nothing;
     const status = runStatus(run);
-    const canContinue =
-      status.section !== 'running' &&
-      status.section !== 'waiting' &&
-      acceptsFollowUp(run);
-    const statusLabel = canContinue ? 'Ready' : status.word;
     // The header offers exactly what the session view's `actions` licenses.
     const canStop = run.actions.includes('stop');
     const canGrant = run.actions.includes('grant');
@@ -310,20 +301,16 @@ export class RunHeader extends LitElement {
         <span
           id=${ELEMENT_IDS.STATUS_INDICATOR}
           role="img"
-          aria-label=${statusLabel}
+          aria-label=${status.word}
           class=${classMap({
             'status-indicator': true,
-            [`tone-${canContinue ? 'neutral' : status.tone}`]: true,
+            [`tone-${status.tone}`]: true,
           })}
         ></span>
         <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-          ${
-            canContinue
-              ? `${status.word}. Send a message to continue.`
-              : (runNoticeText(run) ?? statusLabel)
-          }
+          ${runNoticeText(run) ?? status.word}
         </wa-tooltip>
-        <span class="status-label" aria-hidden="true">${statusLabel}</span>
+        <span class="status-label" aria-hidden="true">${status.word}</span>
         ${this.renderRunElapsed(run)} ${this.renderPassBadge(passLabel)}
         <span class="header-spacer"></span>
         ${
@@ -354,7 +341,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         <slot name="end"></slot>
-        ${this.renderMenu(run, statusLabel, passLabel)}
+        ${this.renderMenu(run, status.word, passLabel)}
       </div>
     `;
   }

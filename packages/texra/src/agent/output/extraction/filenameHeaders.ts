@@ -14,7 +14,7 @@ import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@texra/utils/files/outputFileUtils';
-import type { NamedDocument } from '@texra/utils/text/xmlExtraction';
+import type { NamedDocument } from '@texra/agent/output/extraction/xmlExtraction';
 import { OUTPUT_DOCUMENTS_TAG } from '@texra/shared/plugins/documentOutputs';
 
 import {

@@ -68,6 +68,16 @@ Started on 2026-11-19, one pull request each:
   records it as accepted (its ruling 7); it had been treated as waiting on
   that note's question 1, which holds only two slices of phase 5.
 
+Read again on 2026-11-20: all but one have merged. Requests and input
+(#15109), one writer per project file and #15083 (#15088, #15110), the
+terminal and the web (#15092), storage (#15085), run lifecycle shapes
+(#15087), the `latex-extract` removal (#15086), CLI and memory tool
+(#15089), programs phase 4 (#15091). The TUI validator still sleeps a fixed
+delay per key (`delayMs`, `keyDelayMs` in
+`packages/cli/scripts/validate-tui.mjs`). Also merged since this note was
+written: the external inquiry tool's retirement (#15098) and the `texra`
+command tree on `effect/cli` (#15111).
+
 ## Decided on 2026-11-19
 
 The owner's instruction for this pass was to use best judgment. Each ruling
@@ -100,6 +110,21 @@ started, unless listed under "In flight".
 | Request nouns come from one table keyed by request kind                                            | no decision was needed; only the badge's source is one                                                                                                             | S    |
 | The file-tool text leaves the prompt of a run without file tools (I-C16)                           | the earlier triage's "safe at any time"; review as the resolved prompt                                                                                             | S    |
 | R17 gets one kernel case that interrupts inside its handoff window                                 | the evidence of 2026-11-19 (`release-acceptance-rows`) covers either side and says the window itself is hit by no check; a small check is better than a waived one | S    |
+
+Landed since, checked against the tree on 2026-11-20: `RunCell.commit`,
+the key-pages link and `wallTimeMs` (#15103); `SessionKey` reading only
+`storage` (#15099); the MCP client name, now the app's client id from
+`SubscriptionAccounts` (#15106); the request noun table, `REQUEST_NOUN` in
+`packages/texra/src/ui/copy/requestCards.ts` (#15106). Half of store debts
+C7: the `leanServerPool` module mock went in #15096, the `SqliteClient`
+spread stays. Landed on 2026-11-20 (`claude/upkeep-2026-11-20-ruled-run-items`):
+`run.steps` is a `ScopedRef`; a model switch for a run no process holds is
+queued, and the loop applies it or drops one it cannot take, named in the
+run's trace (`RunControls.switchModel` is gone); the full `validate:tui`
+runs nightly (the `tui-validation` job). Still open: C6, A8, the `./host` helpers
+(fourteen files under `packages/texra/src/tools` still import
+`@texra-ai/harness/host`), the `./plugins` split, the image limits, I-C16
+and the R17 case. M4, H9 and the follow-up status word were not re-read.
 
 The earlier version's list of work "safe at any time", read again on
 2026-11-19:
@@ -268,7 +293,7 @@ first, as its phase 7).
    (`refuted-candidates.json`, `DELIVERY-union-on-family-and-outcome`); and
    the recorded request is held under the `context.blob` version (store
    debts B5).
-3. **Programs.** Phase 4 is in flight. Phase 5 follows on the owner's answer
+3. **Programs.** Phase 4 merged (#15091). Phase 5 follows on the owner's answer
    to question 1; its slices that do not depend on the answer can be
    prepared.
 4. **Evidence that needs no key**: the `unified-latex` spike, the tar
@@ -278,6 +303,10 @@ first, as its phase 7).
    request before it edits notes. Done on 2026-11-19: the finished note is
    deleted, the items above that are not to be done are recorded in
    `refuted-candidates.json` (whose entries were re-read against the code),
-   and the ledger's publishing line (D11) is fixed.
+   and the ledger's publishing line (D11) is fixed. On 2026-11-20 the
+   landed items found in the simplification notes and in two architecture
+   notes were marked in place, and three settled notes moved to
+   `implemented/simplification/`; the other architecture, feature and
+   process notes were not re-read item by item.
 6. **The freeze and the first publish**, on the owner's date, after the two
    live routes pass.

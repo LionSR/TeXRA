@@ -11,7 +11,6 @@ import {
   formatCliHistoryDetailsText,
   formatCliHistoryNotFoundText,
   formatCliHistoryText,
-  formatInvalidExportFormatText,
   listCliHistoryEntries,
   parseCliHistoryId,
   readCliHistoryDetails,
@@ -27,19 +26,13 @@ import {
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
 import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
-
-function parseHistoryListLimit(value: string | undefined): number | undefined {
-  if (!value || !/^\d+$/.test(value)) return undefined;
-  const limit = Number(value);
-  return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
-}
 
 const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
   limit?: number;
@@ -231,39 +224,25 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
     : CliExitCode.Success;
 });
 
-const boolFlag = (name: string, description: string) =>
-  Flag.Boolean(name).pipe(
-    Flag.withoutNegation,
-    Flag.withDefault(false),
-    Flag.withDescription(description),
-  );
-
 const TASK_ID_DESCRIPTION = 'Task id from `texra history list`';
 
 // `texra history` on its own is `texra history list`: the group takes the
 // listing's flags and runs it.
 const historyList = {
   config: {
-    limit: Flag.String('limit').pipe(
+    limit: Flag.Int('limit').pipe(
+      Flag.filter(
+        (count) => count >= 1,
+        (count) => `Expected at least 1 task, got ${count}`,
+      ),
       Flag.withAlias('n'),
       Flag.withMetavar('count'),
       Flag.withDescription('Show at most this many tasks'),
       Flag.optional,
     ),
   },
-  // The argument parses are the builder's, above the program: a refusal is
-  // `CliUsageError`, raised before a runtime this command would never bring
-  // a platform up to dispose.
-  run: (_: CliContext, input: { readonly limit: Option.Option<string> }) => {
-    const limitValue = Option.getOrUndefined(input.limit);
-    const limit = parseHistoryListLimit(limitValue);
-    if (limitValue !== undefined && limit === undefined) {
-      throw new CliUsageError({
-        message: `Invalid history limit: ${limitValue}`,
-      });
-    }
-    return runHistoryList({ limit });
-  },
+  run: (_: CliContext, input: { readonly limit: Option.Option<number> }) =>
+    runHistoryList({ limit: Option.getOrUndefined(input.limit) }),
 };
 
 const historyShowCommand = cliCommand('show', {
@@ -276,8 +255,7 @@ const historyShowCommand = cliCommand('show', {
       'full',
       'Show the full stored conversation instead of only the final preview',
     ),
-    export: Flag.String('export').pipe(
-      Flag.withMetavar('html|md'),
+    export: Flag.Literals('export', ['html', 'md']).pipe(
       Flag.withDescription(
         'Export the run to stdout: html is a self-contained trace-viewer replay, md is the conversation as Markdown',
       ),
@@ -290,14 +268,8 @@ const historyShowCommand = cliCommand('show', {
       throw new CliUsageError({ message: `Invalid task id: ${input.id}` });
     }
     const exportFormat = Option.getOrUndefined(input.export);
-    if (exportFormat !== undefined) {
-      if (exportFormat !== 'html' && exportFormat !== 'md') {
-        throw new CliUsageError({
-          message: formatInvalidExportFormatText(exportFormat),
-        });
-      }
+    if (exportFormat !== undefined)
       return runHistoryExport(context, id, exportFormat);
-    }
     return runHistoryShow(context, id, { full: input.full });
   },
 });
