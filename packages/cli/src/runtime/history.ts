@@ -20,6 +20,7 @@ import {
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
+import { formatBytes } from '@ui/copy/format';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
 
@@ -405,7 +406,8 @@ export function formatCliHistoryDetailsText(
       )
     : '{}';
   const files = details.files.map(
-    (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
+    (file) =>
+      `${file.isDirectory ? '<dir>' : formatBytes(file.size)}\t${file.path}`,
   );
   lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
   lines.push(...(files.length ? files : ['(none)']));
