@@ -104,6 +104,64 @@ again in the tree. The line references below are still those of
   `followUpMessages.ts` no longer has a read-then-tail. What is left of B is
   reading the input once per loop step.
 
+**On `main` at `8439d64` (2026-11-19): findings 1 and 2 implemented.** The
+sections below keep the note's analysis as written; this paragraph says what
+the code does now and where it departs from the design.
+
+- **Finding 1, the decision as a wake: landed, by a different mechanism.**
+  #14943 ("a resume restarts the step") had removed the guard's re-entry
+  after this note was written: an activation cancels every open request
+  that blocks its caller and the call asks again under a new id, so there
+  was no open request left for a later decision to land on. The decide door
+  (`controllers/session/SessionRequests.ts`, `decideSurfaceRequest`) now
+  hands the answer to the run registry (`RunRegistry.holdAnswer`) and
+  resumes the run (`resumeOwner`, following the parent whose open call owns
+  it). The asking run's activation commits the `request.decided` after its
+  `run.activate`, in place of the cancellation
+  (`agent/runtime/loop/runLoop.ts`, `agent/runtime/makeRunHistory.ts`), and
+  `resumedAttempt` reads a decision newer than the latest activation as one
+  nothing has read: the call starts again and takes it when it asks the
+  same thing (`callRequests`, compared by payload, so an answer never lands
+  on a different question). No row changed. A resume that is refused
+  rejects the decision with the resume's reason. `requestAnswerability`,
+  `RequestAnswerability` and the panels' resume state are deleted.
+  Left: the held answer is in memory until the activation, so a process
+  that dies between the two loses it and the request stays pending (the
+  person answers again). Past the commit, the rule every decision already
+  follows holds: one older than the run's latest activation counts as read,
+  so a crash between the activation and the call's next step leaves the
+  call to `mayHaveRun`, as it would a live answer; the variant that
+  records the decision at once
+  takes the `request.decided` version bump named above. An answer to a
+  child's request is acknowledged once its parent has resumed, before the
+  child's own activation commits it.
+- **Finding 1, one request switch: half.** The script's shared request no
+  longer reloads its run (it reads the request rows, as a decision does)
+  and takes a held answer through the same rows. Its lookup stays its own:
+  the request is keyed to the script (attempt 0 of the script's call), not
+  to the asking call's attempt, and serving it from `callRequests` means a
+  shared-attempt id on the public `CallRequests` and the dispatcher's state
+  passed into it, which waits for the split of `loop/toolUseDispatch.ts`.
+- **Finding 1, the cancel rule and its regression test: moot.** #15098
+  retired the external inquiry and with it the plugin request kind and
+  `blocksCaller`: every request blocks its caller, so there is no request
+  that outlives its run's end and no second cancel rule to test.
+- **Finding 2 A: landed.** `sendVerdict`
+  (`agent/followUp/FollowUpReader.ts`) is the one rule of a send, read in
+  the job that commits it: `queue`, `replay` or `refused` with its reason
+  (`closed`, `stopped`). It shares one predicate with `needsWake`, so a
+  run's message to a run its user stopped is refused and the sender told. A
+  child's report is exempt and still queues for the user's resume: refusing
+  it would drop the child's result. `Inbox.send` answers the verdict and
+  `SubmitFollowUpResult` is the one answer a sender gets. `readers` and
+  `disposed` are gone: the run the registry holds reads its own rows, waits
+  on the log's tail for the next message, and hears a closed input through
+  the inbox's observers. `owesResume` is `needsWake` over one read; whether
+  a fiber drives the run is the registry's answer (`wakeIfOwed`).
+- **Finding 2 B: landed.** The reader hands a loop step one reading
+  (`InputReading`); `runLoop.ts` reads the input once per turn step, once at an
+  idle wait (which then waits from that reading) and once at a turn's end.
+
 ## What picks the targets
 
 **pi's newest change.** pi `473515f` ("suspendable work") gives every
@@ -411,7 +469,10 @@ response only (`dsh:packages/core/tools/src/batch.ts`).
 
 ### The design
 
-Two choices; the owner picks one.
+Two choices; the owner picks one. The first landed in #15024, checked
+2026-11-19: the description says calls start in the order issued, names the
+declared tools that run alongside the calls around them, and says the rest
+wait. The second stays the owner's.
 
 - **Say what happens.** The description names the tools whose calls run
   together and says the rest run in the order issued. No behavior
@@ -514,18 +575,11 @@ other cases stand.
 ## Order
 
 0. **Finding 4**, with its regression test. No owner decision.
-1. **Finding 1's cancel rule**: in the code (`cancelRequestRows` leaves a
-   non-blocking request open at a run's end and at an activation). Its one
-   regression test (a non-blocking request across a clean close) is still
-   to write.
-2. **Finding 1's decision as a wake and one request switch.** No stored
-   change in the first variant.
-3. **Finding 2's design A**, less the `takesFollowUps` rule, which #14986
-   ruled stays a read of the view in `submitFollowUp`: what is left is the
-   one verdict the sending job, `owesResume` and `openResume` read, the
-   rejection of a run's message after a user's stop, one answer shape, and
-   `readers` and `disposed`. Then design B, whose receipt half is gone:
-   one input reading per loop step.
+1. **Finding 1's cancel rule**: moot since #15098 (no request outlives its
+   run's end).
+2. **Finding 1's decision as a wake**: landed, with the answer held for the
+   asking run's activation. Left: the script request's own lookup.
+3. **Finding 2's designs A and B**: landed.
 4. **Finding 3**: the description now; the guest's order if the owner
    wants it; the launch count from rows.
 5. **Finding 5's deletions** at any time. `holdUntil: 'instruction'` is

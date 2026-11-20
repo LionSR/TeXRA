@@ -27,19 +27,6 @@ catalogs, route decisions, reasoning selection, turn cost, and `ModelError`.
 Binding a model to its wire protocol (`bindModel`) and running subscription
 OAuth flows live in [`@texra-ai/llm/node`](./node).
 
-## acceptedEfforts
-
-The effort values `route` may send for a model: the levels it accepts
-while thinking, plus `none` where `none` is how thinking is turned off.
-Without a route, the model's own.
-
-```ts
-function acceptedEfforts(
-  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route?: ModelRoute,
-): ReasoningEffort[]
-```
-
 ## API_KEY_ENV_NAMES
 
 Every environment variable read as a provider API key, derived from the
@@ -446,50 +433,28 @@ Runtime-checked narrowing for provider strings.
 function isApiProvider(provider: string): provider is ApiKeyProviderId
 ```
 
-## isKimiCodeExclusiveModel
+## isAuthFailureStatus
 
-Whether the coding endpoint ALONE serves `model`: llm-zoo pins its `baseUrl`
-there, so no open-platform route exists.
-
-```ts
-function isKimiCodeExclusiveModel(
-  model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): boolean
-```
-
-## isKimiSubscriptionEligible
-
-Whether the Kimi Code coding endpoint serves `model`: the llm-zoo
-`kimiSubscription` flag on a Moonshot model. Serving status is a fact about
-the Kimi Code backend, not derivable from other model fields.
+Whether an HTTP status is 401 or 403, the statuses an API answers a
+credential it refuses with. The one reading of that status test, for a
+model provider, an OAuth token endpoint and any other HTTP API a TeXRA
+package calls. A caller whose API gives a 403 another meaning refines it
+first: GitHub answers a valid token over its rate limit with a 403 and
+rate-limit headers.
 
 ```ts
-function isKimiSubscriptionEligible(
-  model: Pick<ModelConfig, 'provider' | 'kimiSubscription'>,
-): boolean
-```
-
-## issuesParallelToolCalls
-
-Whether the model issues independent tool calls together in one response
-and handles their results in any order. The prompt tells such a model it
-may batch calls; every other model is told to call one tool at a time.
-Only Anthropic's models are known to; llm-zoo carries no flag for it.
-
-```ts
-function issuesParallelToolCalls(
-  config: Pick<ModelConfig, 'provider'>,
-): boolean
+const isAuthFailureStatus: (status: number | undefined) => boolean
 ```
 
 ## isUnservedModel
 
-Whether no route TeXRA reaches serves `config`: llm-zoo retired the model,
-or only OpenRouter serves it, which TeXRA does not call.
+Whether TeXRA serves no run on `config`: llm-zoo retired the model, only
+OpenRouter serves it, which TeXRA does not call, or it cannot call
+functions, which every run does (its tools, or `script` in code mode).
 
 ```ts
 function isUnservedModel(
-  config: Pick<ModelConfig, 'retired' | 'openRouterOnly'>,
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'capabilities'>,
 ): boolean
 ```
 
@@ -511,6 +476,21 @@ type KeyPlanRoute = {
     ? P
     : never;
 }[PlanRoute];
+```
+
+## kimiCodeServing
+
+How the Kimi Code coding endpoint serves `model`: `only` it (llm-zoo pins
+the model's `baseUrl` there, so no open-platform route exists),
+`with-plan` beside the Moonshot open platform (the coding endpoint takes it
+only with the plan on), or `undefined` when it does not serve it. Serving
+status is the llm-zoo `kimiSubscription` flag on a Moonshot model: a fact
+about the Kimi Code backend, not derivable from other model fields.
+
+```ts
+function kimiCodeServing(
+  model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+): 'only' | 'with-plan' | undefined
 ```
 
 ## listCost
@@ -1051,6 +1031,27 @@ Request modes beyond the provider default. OpenAI's Responses API accepts `reaso
 type ReasoningMode = 'pro';
 ```
 
+## reasoningOnRoute
+
+What `route` carries of a model's reasoning, over its controls there
+(without a route, the model's own):
+
+- `acceptedEfforts`: the effort values it may send, the levels it accepts
+  while thinking plus `none` where `none` is how thinking is turned off;
+- `wireEffort`: the effort it sends for a {@link chooseReasoning} choice,
+  the chosen level, or `none` when thinking is off and `none` is how the
+  route says so.
+
+```ts
+function reasoningOnRoute(
+  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
+  route?: ModelRoute,
+): {
+  readonly acceptedEfforts: readonly ReasoningEffort[];
+  readonly wireEffort: (choice: ReasoningChoice) => ReasoningEffort | null;
+}
+```
+
 ## ReasoningRequest
 
 The part of a selection that says how to run the model.
@@ -1331,17 +1332,4 @@ const TurnResultSchema: Struct<{ readonly providerResponseId: NullOr<NonEmptyStr
 
 ```ts
 type TurnUsage = typeof TurnUsageSchema.Type;
-```
-
-## wireEffort
-
-The effort `route` sends for `config`: the chosen level, or `none` when
-thinking is off and `none` is how the route says so.
-
-```ts
-function wireEffort(
-  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: ModelRoute | undefined,
-  reasoning: ReasoningChoice,
-): ReasoningEffort | null
 ```

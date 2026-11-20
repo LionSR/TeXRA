@@ -10,11 +10,11 @@
 import { zstdDecompressSync } from 'node:zlib';
 
 import { Effect, Result, Schema, Struct } from 'effect';
+import type { SqlError } from 'effect/sql/SqlError';
 
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  DISPLAY_ROW_TYPES,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   TOOL_CALL_STATUS,
@@ -34,6 +34,7 @@ import { sha256Hex } from '@utils/core/idHash';
 
 import {
   decodeRow,
+  EARLIER_AGGREGATE_PARENTS,
   EARLIER_RUNS,
   factKindOf,
   EVENT_COLUMNS,
@@ -44,43 +45,15 @@ import {
   type SqlRow,
 } from './rowCodec';
 import { StoreCheckFailed } from './storeAside';
+import type { StoreConnection } from './storeConnection';
 
 /** One aggregate's surrogate, from its two columns. */
 export const AGGREGATE =
   '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
-/** A priced row's usage, where its stored JSON holds it: a model call's
- *  response or failure, a compaction summary, a model's title. */
-const PRICED_USAGE = `CASE
-  WHEN e.type = 'run.description' THEN e.data -> '$.usage'
-  WHEN e.type = 'context.edit' THEN e.data -> '$.payload.usage'
-  WHEN e.data ->> '$.payload.kind' IN ('response', 'failed')
-    THEN e.data -> '$.payload.usage' END`;
-/**
- * The `usage` display row a priced row shows, read off that row on its
- * envelope and at the current version: its counts, cost, route and plan,
- * without the call's surface and response time (`usageRows`, which a
- * committed batch's display rows come from, states the same rule). Nothing
- * stores it: the priced row is the one record of the spend.
- */
-export const USAGE_ROWS = `SELECT e."commit" AS "commit", s.kind AS kind,
-  s.logical_id AS logicalId, e.seq AS seq, 'usage' AS type,
-  NULL AS version, e.at AS at,
-  json_object('usage',
-    json_remove(${PRICED_USAGE}, '$.provider', '$.responseTimeMs')) AS data
-  FROM event e
-  JOIN event_sequence s ON s.id = e.aggregate
-  WHERE e.type IN ('model.message', 'context.edit', 'run.description')
-    AND json_type(${PRICED_USAGE}) = 'object'`;
 /** The call rows a display read shows as tool cards: {@link callCard} has
  *  a case for each, which the compiler checks. */
-const CARD_ROW_TYPES = ['tool.intent', 'tool.result'] as const;
+export const CARD_ROW_TYPES = ['tool.intent', 'tool.result'] as const;
 const CARD_KINDS: readonly string[] = CARD_ROW_TYPES;
-/** The kinds a display read selects, as the JSON list it binds: the display
- *  rows, and the call rows it shows as tool cards. */
-export const DISPLAY_READ_TYPES = JSON.stringify([
-  ...DISPLAY_ROW_TYPES,
-  ...CARD_ROW_TYPES,
-]);
 /** The listing (each aggregate's `listing_entry` rows and each run's spend
  *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
  *  store is never `ANALYZE`d), each by its event's primary key. */
@@ -141,8 +114,8 @@ const INLINE_BLOBS = `SELECT DISTINCT b.digest AS digest, b.value AS value
   FROM event_blob l JOIN blob b ON b.digest = l.digest
   WHERE l.inline = 1 AND l."commit" IN (SELECT value FROM json_each(?))`;
 const decodeCommit = Schema.decodeUnknownSync(Schema.Int);
-
-/** An earlier-build run row, as `EARLIER_RUNS` selects it. */
+/** An earlier-build run row, as `EARLIER_RUNS` and
+ *  `EARLIER_AGGREGATE_PARENTS` select it. */
 const EarlierRowSchema = Schema.Struct({
   logicalId: Schema.String,
   commit: Schema.Int,
@@ -170,14 +143,8 @@ const factHeader = (data: unknown) => {
   return Result.getOrUndefined(header);
 };
 
-/** A statement runner over the reader's connection. */
-type Exec<E> = (
-  statement: string,
-  params: readonly unknown[],
-) => Effect.Effect<readonly SqlRow[], E>;
-
 /** A selected row's reader, and the runs it found it cannot open. */
-export interface RowReader<E> {
+export interface RowReader {
   /** The events of `rows`. A newer row fails the read; one that does not
    *  decode fails a strict read (`whole`: a run's history and its records),
    *  so no decision is made from part of a run's rows, and is left out of a
@@ -190,29 +157,28 @@ export interface RowReader<E> {
    *  the store lacks fails the read. */
   readonly blobs: (
     digests: readonly string[],
-  ) => Effect.Effect<StoredBlobs, E | StoreCheckFailed>;
+  ) => Effect.Effect<StoredBlobs, SqlError | StoreCheckFailed>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
   ) => Effect.Effect<
     readonly SessionRow[],
-    E | DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
+    SqlError | DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
   >;
   /** Every run found unopenable so far, with why: shown read-only. */
-  readonly damaged: Effect.Effect<readonly UnreadableRun[], E>;
+  readonly damaged: Effect.Effect<readonly UnreadableRun[], SqlError>;
 }
 
 /**
- * The reader of the store at `path`, over the process's plugin `factKinds`. Its
- * first strict read or `damaged` finds, through `exec`, every run holding an
+ * The reader of a store's rows, over the process's plugin `factKinds`. Its
+ * first strict read or `damaged` finds, on the connection, every run holding an
  * earlier build's row, which the listing (it never reads a run's history)
  * would not meet: one finding, read by the listing, history and resume alike.
  */
-export function rowReader<E>(
-  path: string,
+export function rowReader(
+  { exec, path }: Pick<StoreConnection, 'exec' | 'path'>,
   factKinds: FactKinds,
-  exec: Exec<E>,
-): RowReader<E> {
+): RowReader {
   const warned = new Set<string>();
   const unopenable = new Map<RunId, UnreadableRun['reason']>();
   // The runs an earlier build wrote, each with the first such row.
@@ -241,7 +207,10 @@ export function rowReader<E>(
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
-    for (const row of yield* exec(...EARLIER_RUNS)) {
+    for (const row of [
+      ...(yield* exec(...EARLIER_RUNS)),
+      ...(yield* exec(EARLIER_AGGREGATE_PARENTS, [])),
+    ]) {
       const { logicalId, commit, type } =
         Schema.decodeUnknownSync(EarlierRowSchema)(row);
       markEarlier(
@@ -320,8 +289,9 @@ export function rowReader<E>(
       if (refusal !== undefined) return yield* refusal;
     }
     // The batch's blobs in one statement: a row carries addresses only. A
-    // `usage` row read off a priced row (no version) holds none, and its
-    // commit is that row's, whose strings it would fetch for nothing.
+    // run's spend read off `run_usage` (no version) holds none, and its
+    // commit is its newest priced row's, whose strings it would fetch for
+    // nothing.
     const texts: Blobs = yield* inflated(
       INLINE_BLOBS,
       rows.flatMap((row) =>

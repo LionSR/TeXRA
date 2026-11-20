@@ -107,9 +107,6 @@ const ToolFactSchema = Schema.Struct({
   /** The fact kind's version `value` is written at. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: Schema.Json,
-  /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung
-   *  under the calling run; absent, the fact is about the run itself. */
-  aggregate: Schema.optional(Schema.NonEmptyString),
 });
 /** A fact a tool's call states about its run (`ToolFactSchema`). */
 export type ToolFact = typeof ToolFactSchema.Type;

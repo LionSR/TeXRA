@@ -28,6 +28,7 @@ import {
   streamingTextRow,
   toolRow,
   type LogRowPayload,
+  type RowRunFacts,
   type ToolCallFacts,
 } from '@shared/transcript/projectTranscriptRow';
 
@@ -161,6 +162,9 @@ type DraftArrays = {
 export interface TranscriptWork {
   readonly ix: TranscriptIndexes;
   readonly owned: WeakSet<object>;
+  /** Nobody drives the run's turn: a card still open paints as
+   *  interrupted. A cold read, which knows no holder, says false. */
+  readonly interrupted: boolean;
 }
 
 /** `transcript[key]`, writable: copied into `transcript` unless this call
@@ -297,7 +301,7 @@ export function takesLiveText(slot: RowState): boolean {
 export function slotRow(
   slot: RowState,
   live: string | undefined,
-  runLabels: RunLabels | undefined,
+  run: RowRunFacts,
 ): TranscriptRow | undefined {
   switch (slot.kind) {
     case 'text': {
@@ -313,7 +317,7 @@ export function slotRow(
         : plainLogRow(slot.base, text);
     }
     case 'tool':
-      return toolRow(slot.base, slot.log, live, runLabels, slot.call);
+      return toolRow(slot.base, slot.log, live, run, slot.call);
     case 'log':
       return logPayloadRow(slot.base, slot.text, slot.payload, slot.forkAt);
   }
@@ -335,11 +339,10 @@ export function paint(d: TranscriptUpdate, slot: RowState): void {
   if (takesLive && slot.kind === 'text' && slot.text && !ix.live.has(id)) {
     ix.live.set(id, slot.text);
   }
-  const row = slotRow(
-    slot,
-    takesLive ? ix.live.get(id) : undefined,
-    d.ctx.runLabels,
-  );
+  const row = slotRow(slot, takesLive ? ix.live.get(id) : undefined, {
+    runLabels: d.ctx.runLabels,
+    interrupted: d.interrupted,
+  });
   if (row) upsertRow(d, next, row);
   const at = ix.rowIndex.get(id);
   const current = at === undefined ? undefined : next.rows[at];

@@ -67,8 +67,8 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
         ),
       );
       // The installed plugins a step loads: the enabled, trusted ones, and
-      // why each other enabled one loads nothing. One that ships only
-      // skills loads with no servers.
+      // why each other enabled one loads nothing or leaves a program file
+      // out. One that ships only skills or programs loads with no servers.
       const installed = Effect.gen(function* () {
         const {
           loadable,
@@ -93,7 +93,10 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
           }),
           warnings: [
             ...withheld.map(({ reason }) => reason),
-            ...loadable.flatMap(({ plugin }) => plugin.warnings),
+            ...loadable.flatMap(({ plugin }) => [
+              ...plugin.warnings,
+              ...plugin.programs.refused,
+            ]),
           ],
         };
       });

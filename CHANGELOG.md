@@ -6,6 +6,36 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The `texra` command line has new help and stricter flags.** Help at
+  every level has a new layout: a subcommand's help lists its own flags and
+  points to `texra --help` for the global ones. `texra help <command>` is
+  removed; use `texra <command> --help`. A usage error now prints the
+  command's help and the error, both on stderr. `texra auth` or another
+  group named with no subcommand prints its help and exits 0, where it
+  exited 2. `texra --version` prints `texra v<version>`; `texra version`
+  and `-v` still print the bare version (and JSON with `--output-format
+  json`). A flag that takes one value, given twice (`--output a --output
+  b`), is a usage error, where the last one won. `-V` is no longer a
+  version shortcut. A flag that is off by default no longer takes a
+  `--no-` form (`--no-all`, `--no-yes`, `--no-force`). `--source` is accepted
+  only by `chat`, `run`, `resume`, `skills list` and bare `texra`, after
+  the command name. A mistyped flag now gets a "Did you mean" suggestion,
+  `texra history -n 5` works like `texra history list -n 5`, and a global
+  flag between two command names (`texra auth --output-format json chatgpt
+  status`) is no longer dropped.
+
+- **The LaTeX Extraction plugin is removed**, with its three tools:
+  `extract_figures`, `extract_tikz_figures` and `extract_bib_entries`. An
+  agent reads a document's figures and bibliography with the file tools it
+  already has: `grep` for `\includegraphics` or a citation key, `read_file`
+  on an image or PDF (returned as an attachment), and `bash` to compile a
+  TikZ picture. The document programs still attach figures themselves
+  (`autoExtractFigure`, `autoExtractTikzFigure`, `autoCompileInputPdf`), and
+  **TeXRA: Compile TikZ Figures from Current File** is unchanged. A custom
+  agent whose `tools:` names one of the three still loads, without that tool;
+  remove the name. A stored run that called them opens as before: each call
+  keeps its card, input and result, drawn with the generic tool icon.
+
 - **The external inquiry is removed.** The `inquiry` tool, which had an
   agent draft a question for you to paste into an outside chat
   subscription (ChatGPT, Claude, Gemini, Grok) and paste the answer back,
@@ -22,8 +52,15 @@ All notable changes to this project will be documented in this file.
   no request of its own. The `plugin` request kind (`PluginRequest`),
   `CallRequests.post`, `Plugin.decision` (`RequestDecisionHook`,
   `RequestDecisionRecord`) and the `answer` decision are removed; every
-  request blocks the call that opened it, and `requestAnswerability` takes
-  the run alone.
+  request blocks the call that opened it.
+
+- **A session row's aggregate is its run.** SDK: a plugin's fact is about
+  the run whose call states it; `ToolFact.aggregate`, `FactKind.accepts`,
+  `FactKind.supersedes`, `PluginFactRow`, `SessionView.pluginFacts` and the
+  `AggregateId` type (now `RunId`) are removed, and a `plugin.fact` row
+  carries no `parent`. A store an earlier build wrote still opens: a row of
+  a plugin's own aggregate (an external inquiry's thread) is an earlier
+  build's, and the run it hangs under opens read-only and does not resume.
 
 - **The run listing says a run continues, not that it is resumable.** The
   listing entry's `resumable` and `resumeBlocked` are now `continues` and
@@ -1365,6 +1402,21 @@ All notable changes to this project will be documented in this file.
   with the same prompt and tools; a forked `self()` takes only a model that
   can continue the conversation. A call that runs in the background, where
   `timeoutMs` was accepted and never applied, now rejects both limits.
+- **A plugin you install can carry programs.** Put `programs/<name>.js` in
+  a Claude Code or Codex plugin folder and each file is a program started as
+  `<plugin>:<name>`: `texra run my-programs:todo-list --input paper.tex`,
+  or an agent starts it, told of it beside the built-in programs. The file
+  begins with `export const description = '...';` and
+  `export const uses = ['...'];` (the tools its run is offered), which TeXRA
+  reads from the text without running the file; its default export
+  `async (args, launch) => result` runs in the script sandbox with those
+  tools only. `texra plugin enable` lists each program with its description
+  and tools for the trust review, and `texra plugin list` and Settings →
+  Plugins name them. The tools a plugin's program lists are withheld while
+  their plugin is switched off. A file that does not begin with the two
+  declarations is refused by name and the plugin's other programs load. See
+  "Programs in a plugin" in the CLI guide. SDK: `programsNow` on
+  `@texra-ai/harness/host`; `ProgramNotRegistered` gains `withheld`.
 - **Lean programs: `prove` and `blueprint`.** The Lean plugin registers two
   programs. `prove` completes the proofs in the `.lean` files you pass and
   checks each round with Lean's diagnostics (no error, no `sorry`) and for an
@@ -1925,6 +1977,21 @@ All notable changes to this project will be documented in this file.
   Compilation, Indent, TeX Count and Compile TikZ took only `.tex`.
 
 ### Bug Fixes
+
+- **Answering a request of a task that is not running continues the task.**
+  An approval, a plan or a question left pending by a task whose process
+  exited used to refuse the answer with "resume it to answer this request",
+  and its card showed a Resume button in place of its actions. The answer now
+  resumes the task, and the tool that asked takes it without asking again; if
+  the task cannot be resumed, the answer is refused with that reason. SDK:
+  `requestAnswerability` and `RequestAnswerability` are gone from
+  `@texra-ai/harness/schemas`; every pending request can be answered.
+
+- **A run's message to a run you stopped is refused, not silently queued.**
+  `executions send` to a run its user stopped used to answer "Queued" while
+  nothing would read the message until you continued that run yourself. The
+  sender is now told the run was stopped by its user. A child's report to a
+  stopped parent is still kept for when you continue the parent.
 
 - **Codex on Windows installs where TeXRA looks for it.** **Install in
   terminal** ran `wsl --install`, but TeXRA looks for a native `codex.exe`,

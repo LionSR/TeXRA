@@ -72,8 +72,8 @@ Each item is independent and small enough for one PR.
 4. **Settings search.** Each settings catalog has its own search field
    (`SettingsCatalog.ts`); there is still no filter across the tabs.
    The example once given for descriptions that expose internals,
-   "Interactions (submit + poll)" in `stateSettings.ts`, belongs to
-   `model.useGoogleBackgroundResponses`, which no settings UI shows. The owner has not
+   "Interactions (submit + poll)", belonged to
+   `model.useGoogleBackgroundResponses`, deleted in #15081. The owner has not
    decided whether the Agents › Advanced switches stay, so wait on that
    before polishing them.
 5. **Loading and failure placeholders.** "Error loading content"

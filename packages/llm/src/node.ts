@@ -194,7 +194,7 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
       configuration.protocol === 'openai-responses'
         ? configuration.defaults.serviceTier
         : null,
-    forcedToolChoice: wire.forcedToolChoice(configuration, config),
+    forcedToolChoice: wire.forcedToolChoice(configuration),
   };
 });
 

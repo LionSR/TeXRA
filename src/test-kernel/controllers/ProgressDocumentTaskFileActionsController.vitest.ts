@@ -1,3 +1,4 @@
+import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
 import { layer } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
@@ -21,6 +22,7 @@ function createDeps(
   overrides: Partial<ProgressDocumentTaskFileActionsControllerDeps['host']>,
 ): ProgressDocumentTaskFileActionsControllerDeps {
   return {
+    writeFile: writeFileIfUnchanged,
     rounds: () => [
       {
         round: 0,
@@ -117,8 +119,10 @@ layer(SessionGraph.hosted)(
                 writeFileString: () => Effect.void,
                 rename: () => Effect.void,
                 remove: () => Effect.void,
-                // The file the user changed before accepting, and the model's
-                // copy the revision kept in the run's storage.
+                // The file the user changed before accepting; the model's copy
+                // the revision kept in the run's storage; and the target, as
+                // the confirmation saw it and the write checks it again:
+                // unchanged between the two.
                 readFile: (file) =>
                   Effect.succeed(
                     new TextEncoder().encode(
@@ -127,9 +131,6 @@ layer(SessionGraph.hosted)(
                         : 'original model output\n',
                     ),
                   ),
-                // The target as the confirmation saw it and as the write
-                // checks it again: unchanged between the two.
-                readFileString: () => Effect.succeed('base content\n'),
               }),
               AppSignals.layer,
             ).pipe(

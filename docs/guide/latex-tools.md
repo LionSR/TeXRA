@@ -17,7 +17,6 @@ Rather than asking a language model to format LaTeX source, count words, or comp
 | <wa-icon library="texra" name="symbol-numeric"></wa-icon> Document statistics | `texcount`                 |
 | <wa-icon library="texra" name="file-media"></wa-icon> Figure extraction       | Built-in                   |
 | <wa-icon library="texra" name="symbol-structure"></wa-icon> TikZ compilation  | Built-in                   |
-| <wa-icon library="texra" name="book"></wa-icon> Bibliography resolution       | Built-in                   |
 | <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math      | `wolframscript`            |
 
 All are configured from **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>) or **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>), where each tool shows its status.
@@ -78,29 +77,17 @@ TeXRA extracts figures from your LaTeX so vision-capable models can see them.
 
 ### Standard figures
 
-The `extract_figures` tool finds `\includegraphics` references and returns the images as attachments.
-
-**Auto-extraction:** a program attaches the figures of its input files when an agent starts it with `args: { autoExtractFigure: true }`. Read the [figures guide](./working-with-figures.md).
+A program attaches the images its input files include with `\includegraphics` when an agent starts it with `args: { autoExtractFigure: true }`. In a chat, an agent opens a figure file with `read_file`, which returns it as an attachment. Read the [figures guide](./working-with-figures.md).
 
 ### TikZ figures
 
-The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick), each with a setup guide when it is missing. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
+A program started with `args: { autoExtractTikzFigure: true }` finds the `tikzpicture` environments of its input files, compiles each to a standalone PDF, and attaches the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick), each with a setup guide when it is missing. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
 
 <TikzDepsHero />
 
 <p class="hero-caption">TikZ extraction needs the compiler and, for rasterising, Ghostscript with GraphicsMagick or ImageMagick. Here <strong>Image Processing</strong> is <strong>Not found</strong>; its <strong>Setup guide</strong> holds the install steps.</p>
 
 Read the [TikZ figures guide](./tikz-figures.md) for workflows and the [installation guide](./installation.md) for dependency setup.
-
-## <wa-icon library="texra" name="book"></wa-icon> Bibliography extraction
-
-The `extract_bib_entries` tool resolves citation context for your LaTeX document:
-
-1. Finds `\bibliography{}` and `\addbibresource{}` directives
-2. Loads the referenced `.bib` files
-3. Returns BibTeX entries for every cited key
-
-Useful whenever an agent needs exact citation records to edit, format, or validate references.
 
 ## <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math with Wolfram
 

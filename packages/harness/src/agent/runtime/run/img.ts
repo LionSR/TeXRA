@@ -84,20 +84,16 @@ const PDF_RASTER_MAX_SIZE: [number, number] = [1024, 1024];
 /**
  * A media file that could not be turned into model input for a reason other
  * than the filesystem's own (`PlatformError`): missing or empty, unmeasurable,
- * or an image tool that failed. The message is the one the run
- * transcript shows.
+ * an image tool that failed, a PDF whose pages did not render, or a file of
+ * no medium a model takes. The message is the one the run transcript shows.
  */
-class MediaConversionFailed extends Schema.TaggedError<MediaConversionFailed>()(
+export class MediaConversionFailed extends Schema.TaggedError<MediaConversionFailed>()(
   'MediaConversionFailed',
   {
     message: Schema.String,
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
-
-/** A throw or rejection from outside Effect, carrying its own message. */
-const conversionFailure = (cause: unknown): MediaConversionFailed =>
-  new MediaConversionFailed({ message: toErrorMessage(cause), cause });
 
 /** Base64 of file bytes, without copying them. */
 function toBase64(bytes: Uint8Array): string {
@@ -127,17 +123,12 @@ function removeTemporary(
 const getImageDimensions = (bytes: Uint8Array) =>
   Effect.try({
     try: () => imageSize(bytes),
-    catch: conversionFailure,
-  }).pipe(
-    Effect.catchTag('MediaConversionFailed', (error) =>
-      Effect.fail(
-        new MediaConversionFailed({
-          message: `Failed to get image dimensions: ${error.message}`,
-          cause: error,
-        }),
-      ),
-    ),
-  );
+    catch: (cause) =>
+      new MediaConversionFailed({
+        message: `Failed to get image dimensions: ${toErrorMessage(cause)}`,
+        cause,
+      }),
+  });
 
 /** Maximum image dimension (pixels) accepted by provider APIs. */
 const API_MAX_IMAGE_DIMENSION = 8000;

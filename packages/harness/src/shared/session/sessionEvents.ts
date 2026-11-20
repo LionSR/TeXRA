@@ -15,9 +15,8 @@ import {
 } from 'effect';
 
 import type {
-  AggregateId,
-  CommitOrdinal,
   RunId,
+  CommitOrdinal,
   SessionRow,
   DisplayRow,
   SessionRowDraft,
@@ -32,9 +31,14 @@ import type { RunStateRowType } from './runState';
 import type { WithBlobs } from './historyTurns';
 
 /** One committed job as the publisher publishes it: its display rows, as
- *  a display read of the store returns them, and the commit it reached. */
+ *  a display read of the store returns them, and the commits it covers,
+ *  every one above `from` through `through`. Batches follow each other with
+ *  no commit between: a reader handed a batch whose `from` is past the
+ *  `through` it last saw missed the commits between, and reads them from
+ *  the store. */
 export interface CommittedBatch {
   readonly rows: readonly DisplayRow[];
+  readonly from: CommitOrdinal;
   readonly through: CommitOrdinal;
 }
 
@@ -63,9 +67,9 @@ export type UnfoldedDraft = WithBlobs<
 
 /** Rows another owner decides inside a job, appended with the job's own
  *  batch so both commit or neither. */
-export type Alongside<E = never> = Effect.Effect<
+export type Alongside = Effect.Effect<
   readonly UnfoldedDraft[],
-  E,
+  never,
   Scope.Scope
 >;
 
@@ -144,24 +148,35 @@ export class SessionEvents extends Context.Service<
      *  and nothing has closed since, in first-appearance order: each until
      *  its `stream.end` or a phase move that pauses or ends its run. What a
      *  run's wait or end closes. It counts every job that has returned. */
-    readonly openWork: (aggregateId: AggregateId) => readonly string[];
+    readonly openWork: (aggregateId: RunId) => readonly string[];
     /** The last commit this publisher published; the store's commit when
      *  it opened, before any. Where a reader that starts now begins. */
     readonly head: () => CommitOrdinal;
-    /** Subscribe, for the caller's scope, to every job committed from here
+    /** Subscribe, for the caller's scope, to the jobs committed from here
      *  on, one batch per job in commit order, published from what the job
      *  wrote (nothing is read back); it ends (a final `Take`) when the
      *  publisher closes. A subscriber that must not miss a batch subscribes
-     *  before it reads {@link head}. */
+     *  before it reads {@link head}. The publisher never waits for a
+     *  subscriber, and keeps a bounded number of batches for one that is
+     *  behind: past that the oldest are dropped, which the next batch's
+     *  `from` shows ({@link CommittedBatch}). A reader that needs every row
+     *  reads {@link batches} or {@link all}, which read the store then. */
     readonly subscribe: Effect.Effect<
       PubSub.Subscription<Take.Take<CommittedBatch>>,
       never,
       Scope.Scope
     >;
+    /** Every commit above `fromCommit` as batches in commit order, none
+     *  missed and none twice, then the tail, which ends when the session
+     *  closes: what the reader starts behind {@link head}, and any stretch
+     *  it fell too far behind to be handed, is read from the store; the
+     *  rest is the publisher's batches. */
+    readonly batches: (
+      fromCommit: CommitOrdinal,
+    ) => Stream.Stream<CommittedBatch, DatabaseReadFailed>;
     /** Every event with commit above `fromCommit`, in commit order across
-     *  aggregates, then the tail, which ends when the session closes: what
-     *  the reader starts behind {@link head} is read from the store, the rest
-     *  is the publisher's batches. Transcript rows of unsubscribed
+     *  aggregates, then the tail, which ends when the session closes: the
+     *  rows of {@link batches}. Transcript rows of unsubscribed
      *  aggregates included: the live tail and the frozen NDJSON projection
      *  read it.
      *  `drained`, when given, receives the commit each read or batch

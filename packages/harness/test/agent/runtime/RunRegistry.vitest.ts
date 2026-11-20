@@ -51,6 +51,7 @@ function createRegistry(
     runsHere: () => {},
     inSession: (effect) => testRunInSession(Effect.provide(effect, session)),
     fork,
+    background: () => {},
     wake: () => {},
   });
 }

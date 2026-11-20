@@ -30,6 +30,10 @@ import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
 import { scriptEndDelivery, scriptStopNotice } from './scriptRun';
 
+/** The run lifecycle's log channel (`AgentRunLifecycle.ts`, which imports
+ *  this module, names the same). */
+const CHANNEL = 'agentRunLifecycle';
+
 /** A subagent's context lines, after its wall time: its working directory,
  *  then the memories its launch named and could not attach. */
 function contextLines(
@@ -94,7 +98,7 @@ export const childEndReport = Effect.fn('childEndReport')(
     const delivery = {
       family: DELIVERY_FAMILY.subagent,
       runId,
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTimeMs,
       lines: contextLines(ctx.workingDirectory, report.memoryMisses ?? []),
     };
     const agent = { name: 'agent', value: config.agent };
@@ -133,7 +137,7 @@ export const childEndReport = Effect.fn('childEndReport')(
             // the two reports apart.
             ...(record?.report == null
               ? []
-              : [{ name: 'continued', value: true }]),
+              : [{ name: 'continued', value: 'true' }]),
           ],
           ...(program !== undefined && program.delivery.length > 0
             ? { lines: [...delivery.lines, ...program.delivery] }
@@ -146,9 +150,12 @@ export const childEndReport = Effect.fn('childEndReport')(
     Effect.catch(built, (unbuilt) =>
       Effect.as(
         logFailure(
-          'agentRunLifecycle',
+          CHANNEL,
           `Run ${runId}: its report could not be built`,
-        )({ runId, error: unbuilt }),
+        )({
+          runId,
+          error: unbuilt,
+        }),
         {
           family:
             backgroundScriptOf(config) === null

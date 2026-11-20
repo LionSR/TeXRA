@@ -3,8 +3,8 @@ import { Effect, Schema } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { Environment } from 'nunjucks';
 
-/** A prompt that did not render: the template's own error, or `nunjucks`
- *  failing to load. */
+/** A prompt that did not render: the template's own error, `nunjucks`
+ *  failing to load, or an `AGENTS.md` that is there and could not be read. */
 export class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
   'PromptRenderFailed',
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },

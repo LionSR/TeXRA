@@ -54,12 +54,8 @@ import {
   DocumentProposeTool,
 } from './documents/documentTools';
 import { DocumentReviewTool } from './documents/DocumentReviewTool';
-import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
-import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
-import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { githubActivity } from './github/plugin';
 import { lean4 } from './lean/plugin';
-import { LeanLoogleTool } from './lean/LoogleTool';
 import { OpenPdfTool } from './OpenPdfTool';
 /**
  * Setup-assistant tools: a narrow set for the onboarding agent, one per
@@ -164,25 +160,6 @@ const serves = (capabilities: (storage: string) => Iterable<string>) =>
     of: (storage) => new Set(capabilities(storage)),
   });
 
-const latexExtract: TexraPlugin = texraPlugin({
-  id: 'latex-extract',
-  tools: [
-    ExtractLatexFiguresTool,
-    ExtractTikzFiguresTool,
-    ExtractBibliographyTool,
-  ],
-  icons: {
-    extract_figures: 'image',
-    extract_tikz_figures: 'image',
-    extract_bib_entries: 'book',
-  },
-  dashboard: {
-    name: 'LaTeX Extraction',
-    description:
-      'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
-  },
-});
-
 /** The editor's diagnostics, offered while an editor attached for the
  *  session reads them: the plugin serves `HostCapabilities` from the same
  *  registry its tool reads. */
@@ -210,8 +187,7 @@ const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.
 /**
  * Tools that need no setup and that no dashboard card lists: review
  * annotations and the PDF viewer (each offered where the host serves it),
- * the user-question dialog, and Loogle search (network only, so not gated
- * on the Lean 4 plugin's probe). Its
+ * and the user-question dialog. Its
  * prompt section, at every step that offers a tool, finds the TeX sources, says how
  * replies write math, and names the configured default bibliography.
  */
@@ -221,12 +197,7 @@ const core = (
 ): TexraPlugin => ({
   ...definePlugin<EditorHost>({
     id: 'core',
-    tools: [
-      InlineCommentTool,
-      OpenPdfTool,
-      AskUserQuestionTool,
-      LeanLoogleTool,
-    ],
+    tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
     // The section finds sources with bash and writes math for a rendered
     // reply: a run that writes a document, with no tool offered, gets none
     // of it (`$$\\begin{align}` inside a .tex file does not compile).
@@ -255,7 +226,6 @@ const core = (
       ),
     },
   }),
-  icons: { lean_loogle: 'magnifying-glass' },
 });
 
 /** The onboarding agent's narrow set, one concern per tool, over the host's
@@ -371,7 +341,6 @@ export const texraPlugins = (host: {
           'Read, write, edit files and run shell commands. Includes glob/grep search.',
       },
     },
-    latexExtract,
     latexDiagnostics(editors),
     arxiv,
     {

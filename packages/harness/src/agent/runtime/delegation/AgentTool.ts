@@ -30,15 +30,12 @@ import {
   type RunEnd,
   type RunId,
   type ToolResult,
+  isInstalledProgram,
   programOf,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
-import {
-  RunHistory,
-  SessionLog,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
@@ -150,8 +147,9 @@ type ChildLaunch = {
  * One request shared by a script's `agent` calls and all its attempts
  * (attempt 0), read from the run's rows: the script's calls wait together
  * on the one that is open (`decisionOf`) and take the answer a person gave
- * it; a stop or a resume cancels it, and the next request takes the next
- * ordinal through the call's requests.
+ * it, one given while no process held the run included (the resume's
+ * activation commits it); a stop or a resume cancels an open one, and the
+ * next request takes the next ordinal through the call's requests.
  */
 const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
@@ -164,9 +162,11 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
     callId: script.callId,
     attempt: 0,
   };
-  const from = (yield* SessionLog).now();
-  const state = yield* (yield* RunHistory).load(runId);
-  const { raised, last } = attemptRequests(state?.requests ?? {}, shared);
+  const log = yield* SessionLog;
+  const from = log.now();
+  // The run's request rows alone, as a decision reads them.
+  const { requests } = yield* log.runRows(runId, 'requests');
+  const { raised, last } = attemptRequests(requests, shared);
   if (last !== null) {
     const { decision } = last.request;
     if (decision === null)
@@ -345,8 +345,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   // The call's files, the program's file arguments among them: a
   // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a program's files pass as named.
-  const trusted = programOf(run.config) !== null;
+  // completed child of it; a registered program's files pass as named, an
+  // installed plugin's program's are resolved like a model's.
+  const caller = programOf(run.config);
+  const trusted = caller !== null && !isInstalledProgram(caller.name);
   const fileArgs =
     program === null
       ? []
@@ -492,14 +494,17 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // below; the options are the program's arguments, shown for approval.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
   // A program's run is the program's own, whatever agent an approval named.
-  // The plugin table is constant for the process and the check above found
-  // the program, so this launch cannot fail.
-  const programConfig =
+  // An installed plugin's program can be gone since the check above (its
+  // plugin disabled or changed while the approval waited).
+  const relaunched =
     program === null
       ? null
-      : yield* programLaunch(program.name, program.args, approved).pipe(
-          Effect.orDie,
+      : yield* Effect.result(
+          programLaunch(program.name, program.args, approved),
         );
+  if (relaunched !== null && Result.isFailure(relaunched))
+    return errorResult(relaunched.failure.message);
+  const programConfig = relaunched?.success ?? null;
   const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
   const configPayload = {
     ...approved,

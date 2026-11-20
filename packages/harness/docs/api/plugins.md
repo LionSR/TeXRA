@@ -449,7 +449,9 @@ interface BuildFileAttachmentOptions {
 
 The requests one tool call raises, opened through its run's loop. Each
 carries an id its attempt derives. A request still open when its run
-stops is cancelled, and the resumed call asks again under a new id.
+stops is cancelled, and the resumed call asks again under a new id. One a
+person answers while no process holds the run resumes the run, and the
+call takes that answer when it asks the same thing again.
 
 ```ts
 interface CallRequests {
@@ -690,7 +692,9 @@ interface CurrentValues {
   /**
    * Emits as subscribed, then after each value write, by this process or
    * (on the global store) another, that changed one of `keys`' values. A
-   * read that fails is logged and retried, so no change is missed.
+   * read of them that fails is logged and retried for about a minute, then
+   * emits as a change would: no change is missed, and the reader's own read
+   * meets the failure.
    */
   readonly changes: (
     family: Pick<ValueFamily<unknown>, 'name'>,
@@ -872,22 +876,9 @@ interface FactKind {
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
   /** What a fork of a run (a conversation's, or a script's `self()` child)
-   *  starts with of the run's own row of the kind: `copy` the row the run
-   *  held at the cut, `drop` none. A row about the plugin's own aggregate
-   *  belongs to that aggregate and stays with it. */
+   *  starts with of the run's row of the kind: `copy` the row the run held
+   *  at the cut, `drop` none. */
   readonly fork: 'copy' | 'drop';
-  /** The kind's own transition rule, checked by its writer in the job that
-   *  appends the row (`ownFactsChecked`) against the aggregate's latest row
-   *  of the kind (none before the first): the rejection's reason, or null
-   *  to accept. */
-  readonly accepts?: (
-    previous: PluginFactRow | undefined,
-    next: PluginFactRow,
-  ) => string | null;
-  /** Whether the aggregate's `latest` row already says more than `next`
-   *  (a call's fact that lagged behind a later writer): the call's batch
-   *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
@@ -1539,18 +1530,6 @@ interface PluginDefinition<ROut> extends Omit<
 }
 ```
 
-## PluginFactRow
-
-One stored row of a plugin's kind, as its fact kind's transition rule reads
-it: the row's decoded value and the run it is parented to, if any.
-
-```ts
-interface PluginFactRow {
-  readonly value: Schema.Json;
-  readonly parent: RunId | null;
-}
-```
-
 ## PluginHold
 
 Keep the session layer that provides this service up until `until` ends:
@@ -1758,8 +1737,8 @@ interface ProgramResult<R = unknown> {
 
 ## PromptRenderFailed
 
-A prompt that did not render: the template's own error, or `nunjucks`
-failing to load.
+A prompt that did not render: the template's own error, `nunjucks`
+failing to load, or an `AGENTS.md` that is there and could not be read.
 
 ```ts
 class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(

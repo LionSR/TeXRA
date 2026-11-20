@@ -104,7 +104,6 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   AgentProposalRequestSchema,
-  aggregateTarget,
   describeRefusal,
   LOG_LEVELS,
   TOOL_CALL_STATUS,
@@ -447,17 +446,13 @@ function publish(...drafts: SeedRow[]): void {
     Effect.gen(function* () {
       if (unfolded.length > 0) yield* log.transact(unfolded);
       for (const draft of drafts) {
-        const target = aggregateTarget(draft.aggregateId);
-        if (draft.type === 'run.activate' && target.kind === 'run')
-          yield* runHistory.open(target.id, {
+        if (draft.type === 'run.activate')
+          yield* runHistory.open(draft.aggregateId, {
             activation: () => Effect.succeed([draft]),
           });
       }
       for (const [key, rows] of Map.groupBy(folded, (row) => row.aggregateId)) {
-        const target = aggregateTarget(key);
-        if (target.kind !== 'run')
-          return yield* Effect.die(new Error(`${key} is not a run`));
-        const cell = yield* runHistory.open(target.id);
+        const cell = yield* runHistory.open(key);
         yield* cell.append(rows);
       }
     }),
@@ -936,16 +931,13 @@ function seedSubagentFollowupTranscript(): void {
         { name: 'agent', value: 'leanSolver' },
         { name: 'status', value: 'completed' },
       ],
-      wallTime: '2min, 3sec',
+      wallTimeMs: 123_000,
       response: 'Proved </response> is escaped & visible.',
     },
     {
       family: 'subagent',
       runId: 'child-c',
-      attributes: [
-        { name: 'agent', value: 'reviewer' },
-        { name: 'retryable', value: 'true' },
-      ],
+      attributes: [{ name: 'agent', value: 'reviewer' }],
       message: 'rate limit: <tokens> & retries exhausted',
     },
   ];
@@ -1498,7 +1490,6 @@ if (SHOW_PLAN) {
     plugin: 'goal',
     kind: 'plan',
     version: 1,
-    parent: null,
     value: {
       objective: [
         'Coordinate a small math proof through nested CLI work.',

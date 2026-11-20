@@ -14,8 +14,13 @@ const dual = {
 } as const;
 
 const asConfig = (fields: object) =>
-  // cast: a route reads only the provider, id and subscription fields a case names.
-  ({ openRouterOnly: false, capabilities: {}, ...fields }) as ModelConfig;
+  // cast: a route reads only the provider, id, function calling and the
+  // subscription fields a case names.
+  ({
+    openRouterOnly: false,
+    capabilities: { supportsFunctionCalling: true },
+    ...fields,
+  }) as ModelConfig;
 
 /** `planOn`: the "Kimi Code subscription" switch is on and a key is stored. */
 const kimiRoute = (fields: object, planOn: boolean) =>

@@ -37,7 +37,7 @@ import {
 } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { descriptionRow } from '@shared/session/runFacts';
-import { factRow } from '@tools/plugins';
+import { factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
 import { configRow, positionRow } from './loop/rows';
@@ -205,9 +205,8 @@ const forkedFacts = Effect.fn('forkRun.facts')(function* (
         ? [{ plugin, kind, version, value }]
         : [],
   );
-  // Copied onto the fork as the rows the run held at the cut: no plugin's
-  // own aggregate among them, and no rule to apply to a copy.
-  return kept.map((fact) => factRow(fact, runId));
+  // Copied onto the fork as the rows the run held at the cut.
+  return factRows(kept, runId);
 });
 
 /**

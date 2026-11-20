@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { Command } from 'effect/cli';
 
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import {
@@ -6,14 +7,12 @@ import {
   interactiveTerminalFailure,
 } from '../runtime/terminal/terminalRequirements';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { withUsageSections } from './_helpers/dispatch';
+import { cliCommand } from './_helpers/cliCommand';
 import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 /** The command's program builder; the command's `run` is its only caller. */
 function runSetup(context: CliContext) {
-  // Refused in the builder, before the runtime is built (see
-  // `defineCliCommand`).
+  // Refused before the runtime is built (see `cliCommand`).
   const terminalFailure = interactiveTerminalFailure(context);
   if (terminalFailure) {
     throw new CliUsageError({
@@ -33,28 +32,26 @@ function runSetup(context: CliContext) {
   return Effect.succeed({ chat: { agentOverride: SETUP_AGENT_NAME } });
 }
 
-export const setupCommand = withUsageSections(
-  defineCliCommand({
-    meta: {
-      name: 'setup',
-      description:
-        'Guided setup with the setup agent: environment, agents, and your first task (a ChatGPT or Grok subscription, or an API key, first)',
-    },
-    // The same chat platform as `texra chat`.
-    platform: { startsService: true, presentsStoreMovedAside: true },
-    run: runSetup,
-  }),
-  [
+export const setupCommand = cliCommand('setup', {
+  description:
+    'Guided setup with the setup agent: environment, agents, and your first task (a ChatGPT or Grok subscription, or an API key, first)',
+  config: {},
+  // The same chat platform as `texra chat`.
+  platform: { startsService: true, presentsStoreMovedAside: true },
+  run: runSetup,
+}).pipe(
+  Command.withExamples([
     {
-      title: 'EXAMPLES',
-      rows: [
-        ['texra setup', 'agent-led setup: environment, agents, first task'],
-        ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
-        [
-          'texra auth chatgpt status',
-          'show ChatGPT subscription sign-in status',
-        ],
-      ],
+      command: 'texra setup',
+      description: 'agent-led setup: environment, agents, first task',
     },
-  ],
+    {
+      command: 'texra auth chatgpt login',
+      description: 'sign in with a ChatGPT subscription',
+    },
+    {
+      command: 'texra auth chatgpt status',
+      description: 'show ChatGPT subscription sign-in status',
+    },
+  ]),
 );

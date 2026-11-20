@@ -68,7 +68,7 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
   yield* commands
     .invoke(commandId)
     .pipe(
-      Effect.catchTag('SetupCommandFailed', (failure) =>
+      Effect.catchTag('HostFailed', (failure) =>
         Effect.fail(
           new ToolError(
             `VS Code command "${commandId}" failed: ${failure.message}`,

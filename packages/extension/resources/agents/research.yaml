@@ -7,9 +7,6 @@ tools:
   - edit_file
   - glob
   - grep
-  - extract_figures
-  - extract_bib_entries
-  - extract_tikz_figures
 
 prompt: |
   Handle analytical derivations and numerical programming with the Wolfram Language for symbolic mathematics, numerical computation, and scientific programming. Reason carefully and verify calculations.

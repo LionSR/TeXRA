@@ -50,13 +50,11 @@ export {
   attentionOf,
   descendantRuns,
   needsUser,
-  requestAnswerability,
   rollupOf,
   sessionActivity,
   SessionViewSchema,
   type Attention,
   type PendingRequest,
-  type RequestAnswerability,
   type RunView,
   type SessionTitleState,
   type SessionView,
@@ -199,8 +197,6 @@ export {
 export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
 // A trace event by its row type: the members of the root's `AgentEvent`.
 export type { TraceRow } from '@shared/session/agentEvent';
-// The owner of a session row: a run, the session, or a plugin's key.
-export type { AggregateId } from '@shared/schemas';
 // An exported run, as a static viewer parses it back.
 export {
   AssembleTraceResultSchema,
@@ -291,6 +287,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatWallTime,
   joinFacts,
   pluralize,
   previewLabel,

@@ -121,7 +121,6 @@ const persistCompletedChild = (
       {
         type: 'plugin.fact',
         aggregateId: childRunId,
-        parent: null,
         ...documentsOutputFact(
           { intro: '', requests: ['Revise.'], templates: [], creates: false },
           workflowRounds(absolutePath),

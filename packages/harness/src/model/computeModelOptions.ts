@@ -70,7 +70,7 @@ const UNAVAILABLE_REASON_BUILDERS: {
   retired: ({ model }) =>
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   unserved: ({ model }) =>
-    `Model "${model}" is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
+    `Model "${model}" is served only through OpenRouter or GitHub Copilot, which this build no longer supports, or cannot call tools, which every run needs. Choose another model.`,
   'missing-key': ({ model, source }) =>
     `Model "${model}" requires your ${providerDisplayName(source)} API key. Provide it to continue.`,
   'key-unreadable': ({ model, source }) =>
@@ -311,7 +311,7 @@ const reportInvalid = (invalid: Schema.SchemaError | undefined) =>
         invalid.message,
       );
 
-/** A registry model that no provider this build reaches serves. */
+/** A registry model this build serves no run on (`isUnservedModel`). */
 function isUnservedModelId(model: string): boolean {
   const config = modelConfig(model);
   return config !== undefined && isUnservedModel(config);
@@ -383,7 +383,7 @@ export function setModelEnabled(input: {
   if (input.enabled && isUnservedModelId(input.model)) {
     return Effect.fail(
       refuse(
-        `Model "${input.model}" is no longer available from any provider this build reaches and cannot be enabled.`,
+        `Model "${input.model}" is not available for runs and cannot be enabled.`,
       ),
     );
   }

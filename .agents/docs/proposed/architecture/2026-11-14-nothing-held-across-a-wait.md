@@ -48,7 +48,7 @@ Surface at `7547ab0`, non-test source, 1339 files:
 | `Effect.uninterruptible`, `uninterruptibleMask`            | 50    | durable terminals and row 5 only (45 on 2026-11-18)         |
 | Hand-made `Deferred` and `Latch`                           | 34    | rows 3 and 16                                               |
 | `Effect.forkDetach`                                        | 25    | 0                                                           |
-| `Queue.unbounded`, `PubSub.unbounded`                      | 15    | 0 (row 20; 2 on 2026-11-18)                                 |
+| `Queue.unbounded`, `PubSub.unbounded`                      | 15    | 0 (row 20; 2 on 2026-11-18, 1 on 2026-11-19)                |
 
 ## Rulings this note follows
 
@@ -534,8 +534,32 @@ Left, with the reason:
   scope deletes the files they read, so its close waits for them) and its
   approval, a session request.
 
-Open: the remaining buffers (row 20: the session events' gap read) and
-slice 7. What the passes learned:
+- Row 20, the session events, on 2026-11-19: the hub is
+  `PubSub.sliding(1024)` (`KEPT_BATCHES`, `sessionEventsLayer.ts`). The
+  publisher still never waits; a subscriber more than 1024 batches behind
+  loses the oldest. Each batch names the commit before it (`from`), so the
+  loss shows as a gap, and the readers that need every row read the commits
+  between from the store, with a warning: `SessionEvents.batches` (which
+  `all`, the store's text feed and its presenter feed read) and the view's
+  input reader (`sessionInputsLayer.ts`, the same `readInputBatch` as the
+  stretch it starts behind). A gap read that fails fails `all` as its first
+  read does; it ends the store's two feeds as a logged defect (the presenter's
+  end fails `log.drained`), and the session's owner tells the person through
+  the host's error notice (`SessionStore.feedStopped`). `appSignals.ts` is the one `PubSub.unbounded`
+  left, for the reason above.
+- Row 19, on 2026-11-19. `READ_RETRY` ends after eight tries, about a
+  minute (`currentValues.ts`): a change read that still fails then answers
+  as a change would (`changeRead`), so the values feed emits and the global
+  store's poll wakes its readers, whose own reads meet the failure typed;
+  nothing waits on a read that may never succeed. The request answerer asks
+  its handler once and records the decision again on one schedule, twelve
+  times in about two and a half minutes, while the view lists the request
+  (`requestAnswerer.ts`, `DECIDE_RETRY`); "the next view" is no longer what
+  a retry waits for. When the retries end the failure is logged, the person is told
+  through the host's error notice, and the request stays open for another
+  surface or its run's end.
+
+Open: slice 7. What the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
   opening removed the `opening` state and the detached scope but not
@@ -553,10 +577,10 @@ slice 7. What the passes learned:
   completing fiber's step, so a launcher woken by the answer ran before
   the run reached its loop and found no controls (`crashConformanceResume`
   3 and 4: a model switch right after a resume); the launcher yields once,
-  uninterruptibly, after the answer. Still left in this path: the wake's
-  `forkDetach` (`wakeIfOwed`, row 14's list): it now only waits for the
-  resume's answer to log a refusal, and moving it to the session's
-  `FiberSet` is that row's work.
+  uninterruptibly, after the answer. The wake's `forkDetach` (`wakeIfOwed`,
+  row 14's list) is gone since 2026-11-19: a wake runs on the session's own
+  `FiberSet` (`RunRegistry.background`), which the session's close
+  interrupts.
 - Row 21, the close deadline: the step with no bound is
   `Fiber.interruptAll` in the run `FiberMap`'s finalizer, which waits for
   a run that does not unwind. No such run was reproduced, and a bounded
