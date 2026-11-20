@@ -16,7 +16,6 @@ import {
   Result,
   ScopedRef,
   Stream,
-  Ref,
 } from 'effect';
 import {
   ModelError,
@@ -333,7 +332,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
           localCallsOf(turn.content),
-          (yield* Ref.get(run.steps))?.tools.registry,
+          (yield* ScopedRef.get(run.steps))?.tools.registry,
           logger,
         );
         // The completed turn, committed once before any local tool runs; it

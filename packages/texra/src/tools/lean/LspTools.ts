@@ -211,7 +211,7 @@ function executeLeanDiagnosticsTool(
 
 const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   file: string,
-  command: 'list' | 'count',
+  command: LeanDiagnosticsInput['command'],
 ) {
   const call = yield* ToolContext;
   const services = yield* LeanLanguageServices;

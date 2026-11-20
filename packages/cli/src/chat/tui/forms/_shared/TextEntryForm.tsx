@@ -5,7 +5,7 @@
 import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
 
-import { BACK_HINT, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { BACK_HINT, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 
@@ -45,7 +45,14 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
     props.hint && <Text dimColor>{props.hint}</Text>
   );
   return (
-    <FormFrame title={props.title} showCloseHint={false}>
+    <FormFrame
+      title={props.title}
+      hints={[
+        { key: 'Enter', action: 'save' },
+        ...(props.extraHints ?? []),
+        BACK_HINT,
+      ]}
+    >
       {props.helper}
       <Box marginTop={props.helper === undefined ? 0 : 1}>
         <Text>{`${POINTER} `}</Text>
@@ -76,16 +83,6 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
           {props.saving ? <Text dimColor>Saving…</Text> : null}
         </Box>
       ) : null}
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: 'Enter', action: 'save' },
-            ...(props.extraHints ?? []),
-            BACK_HINT,
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
     </FormFrame>
   );
 }

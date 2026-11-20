@@ -22,8 +22,11 @@ import {
   commitProviderKey,
   removeProviderKey,
 } from '@texra/controllers/settingsView/providerKeyActions';
-import { getProviderKeyUrl } from '@texra/model/providerPresentation';
-import { credentialOriginLabel } from '@ui/copy/credentials';
+import {
+  getProviderDisplayName,
+  getProviderKeyUrl,
+} from '@texra/model/providerPresentation';
+import { credentialOriginLabel, PROVIDER_KEY_COPY } from '@ui/copy/credentials';
 
 const CHANNEL = 'ApiKeyCommands';
 
@@ -38,18 +41,18 @@ interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
  * interrupted.
  */
 function promptForApiKey(
-  provider: ApiKeyProviderId,
+  displayName: string,
   keyUrl: string | undefined,
 ): Effect.Effect<string | undefined> {
   const ib = vscode.window.createInputBox();
-  ib.title = `Set ${provider} API key`;
-  ib.prompt = `Enter ${provider} API key`;
+  ib.title = PROVIDER_KEY_COPY.set(displayName);
+  ib.prompt = PROVIDER_KEY_COPY.enter(displayName);
   ib.password = true;
   ib.placeholder = '************************************';
   ib.ignoreFocusOut = true;
   const getKeyButton: vscode.QuickInputButton = {
     iconPath: new vscode.ThemeIcon('link-external'),
-    tooltip: `Get ${provider} API key`,
+    tooltip: `Get ${displayName} API key`,
     location: vscode.QuickInputButtonLocation?.Input,
   };
   ib.buttons = [getKeyButton];
@@ -88,17 +91,22 @@ function promptForApiKey(
 }
 
 const pickApiProvider = Effect.fn('pickApiProvider')(function* (
+  stores: SettingsStores,
   placeHolder: string,
   prompt: string,
 ) {
   // One batched read of the key statuses: the pick shows each provider's
   // stored/environment state.
   const origins = yield* apiKeyOrigins(yield* Secrets);
-  const providerItems = API_KEY_PROVIDER_IDS.map((provider) => ({
-    label: provider,
-    description: credentialOriginLabel(origins[provider], 'key'),
-    provider,
-  }));
+  const providerItems = yield* Effect.forEach(
+    API_KEY_PROVIDER_IDS,
+    (provider) =>
+      Effect.map(getProviderDisplayName(stores, provider), (label) => ({
+        label,
+        description: credentialOriginLabel(origins[provider], 'key'),
+        provider,
+      })),
+  );
   const providerPick = yield* quickPick<ApiProviderQuickPickItem>(
     providerItems,
     { placeHolder, prompt },
@@ -117,6 +125,7 @@ export const setApiKey = Effect.fn('setApiKey')(function* (
   const target =
     provider ??
     (yield* pickApiProvider(
+      stores,
       'Select API provider',
       'Keys stay on this machine, in an owner-only folder (~/.texra/secrets).',
     ));
@@ -124,7 +133,10 @@ export const setApiKey = Effect.fn('setApiKey')(function* (
   if (!target) return;
 
   const keyUrl = yield* getProviderKeyUrl(stores, target);
-  const apiKey = yield* promptForApiKey(target, keyUrl);
+  const apiKey = yield* promptForApiKey(
+    yield* getProviderDisplayName(stores, target),
+    keyUrl,
+  );
   if (!apiKey) return;
 
   // The same write the settings view's Profile tab makes, so the two
@@ -141,6 +153,7 @@ export const removeApiKey = Effect.fn('removeApiKey')(function* (
   stores: SettingsStores,
 ) {
   const provider = yield* pickApiProvider(
+    stores,
     'Select API provider to remove key',
     'Only removes the key from TeXRA — does not delete it from the provider.',
   );

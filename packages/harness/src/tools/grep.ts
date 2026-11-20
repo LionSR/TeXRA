@@ -34,7 +34,7 @@ const GrepInputSchema = Schema.Struct({
     description: 'File or directory to search in.',
   }),
   glob: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'Glob filter for file names (e.g. "*.tex").',
+    description: 'Glob filter for file names (e.g. "*.md").',
   }),
   output_mode: nullishWithDefault(
     Schema.Literals(OUTPUT_MODES),

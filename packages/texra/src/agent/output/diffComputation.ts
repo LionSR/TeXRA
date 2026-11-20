@@ -85,7 +85,11 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
 const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
   workspace: string | undefined,
   loc: FileLocation | null,
-): Effect.fn.Return<FileLocation | null, Error, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  FileLocation | null,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   const fs = yield* FileSystem.FileSystem;
   if (!loc || loc.kind !== 'runStorage') return loc;
   const resolved = pathToLocationIn(workspace, loc.relativePath);

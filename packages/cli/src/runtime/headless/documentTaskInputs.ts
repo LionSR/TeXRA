@@ -10,6 +10,7 @@ import {
   type TaskFileSource,
   type TaskFiles,
   type TaskFilesReason,
+  type TaskKind,
 } from '@texra/controllers/session/taskFiles';
 
 const STDIN_INPUT_TOKEN = '-';
@@ -96,7 +97,7 @@ export function withExpandedRunInputs<T, E, R = never>(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
-  task: 'program' | 'agent',
+  task: TaskKind,
   run: (inputs: TaskFiles) => Effect.Effect<T, E, R>,
 ): Effect.Effect<T, E | Error, R | FileSystem.FileSystem> {
   if (inputSpecs.some(isStdinSpec) && contextSpecs.some(isStdinSpec)) {

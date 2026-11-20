@@ -87,6 +87,10 @@ export class TaskFilesRejected extends Schema.TaggedError<TaskFilesRejected>()(
   }
 }
 
+/** What the files are for: a program reads files from anywhere and needs
+ *  an input; an agent works inside its project. */
+export type TaskKind = 'program' | 'agent';
+
 /** The run's files, each in the launcher's form. */
 export interface TaskFiles {
   /** The inputs the run reads as text. */
@@ -129,7 +133,7 @@ const projectPath = Effect.fn('taskFiles.projectPath')(function* (
   candidate: string,
   role: TaskFileRole,
   root: string,
-  task: 'program' | 'agent',
+  task: TaskKind,
 ) {
   const absolutePath = path.resolve(root, candidate);
   const relative = relativeToRoot(root, absolutePath);
@@ -150,7 +154,7 @@ const expandSpec = Effect.fn('taskFiles.expandSpec')(function* (
   spec: string,
   role: TaskFileRole,
   root: string,
-  task: 'program' | 'agent',
+  task: TaskKind,
 ): Effect.fn.Return<string[], TaskFilesFailure, FileSystem.FileSystem> {
   const trimmed = spec.trim();
   if (!trimmed) return [];
@@ -237,7 +241,7 @@ const writeText = Effect.fn('taskFiles.writeText')(function* (
 export const resolveTaskFiles = Effect.fn('resolveTaskFiles')(function* (
   sources: readonly TaskFileSource[],
   root: string,
-  task: 'program' | 'agent',
+  task: TaskKind,
 ): Effect.fn.Return<
   TaskFiles,
   TaskFilesFailure,

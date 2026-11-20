@@ -5,10 +5,12 @@ import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
 import { createContext, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import {
+  BORDERED_PANEL_CHROME_COLUMNS,
+  BorderedPanel,
+} from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, keyHintSpans, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 import {
   declineDecision,
@@ -108,7 +110,7 @@ export function ConfirmCard({
   } else {
     hints = confirmCardKeyHintsForWidth({
       ...keyOptions,
-      maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
+      maxColumns: Math.max(0, columns - BORDERED_PANEL_CHROME_COLUMNS),
     });
   }
   const stackedCompactHints = compactHintLayout?.stackedHints ?? hints;
@@ -134,7 +136,7 @@ export function ConfirmCard({
               <Text bold color={color} wrap="truncate-end">
                 {pulsedTitle}
               </Text>
-              <KeyHints hints={stackedCompactHints} confirmCancel={false} />
+              <KeyHints hints={stackedCompactHints} />
             </>
           ) : (
             <Text bold color={color} wrap="truncate-end">
@@ -150,7 +152,7 @@ export function ConfirmCard({
           borderStyle="double"
           color={color}
           title={pulsedTitle}
-          footer={<KeyHints hints={hints} confirmCancel={false} />}
+          footer={<KeyHints hints={hints} />}
         >
           {children}
           {feedbackMode ? feedbackInput(1) : null}
