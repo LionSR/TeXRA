@@ -339,7 +339,7 @@ function applyStandingToTranscript(
     slot.call = { ...slot.call, cutByRunEnd: true };
     write(d, slot);
   }
-  const compactions = finalizeCompactionActivities(ix.compactionState, d.at);
+  const compactions = finalizeCompactionActivities(ix.compactionState);
   if (compactions.length > 0) {
     upsertCompactionRows(d, d.next, compactions);
     d.touched = true;
