@@ -529,7 +529,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // A message typed while the turn ran joins the request after the tool
       // results (past a context update), never a user message: read before
       // the step opens, so a skill it activates is the step's, and before
-      // the boundary's compaction, whose summary then covers it.
+      // the boundary's compaction, whose summary then covers it. One sent
+      // after a `/compact` still pending waits for a later request.
       const tail = state.messages.findLast((m) => m.role !== 'system');
       if (state.invocation === null && tail?.role === 'tool') {
         const queued = input.batch('request');

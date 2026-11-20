@@ -126,8 +126,9 @@ export function sendVerdict(
 
 /**
  * What a run reads from its input: the messages readable at this point, or
- * a text the loop itself supplies (a `/compact` with nothing else queued, a
- * Stop hook's block), which never shares a batch with messages.
+ * a text the loop itself supplies (a `/compact` committed before any
+ * readable message, a Stop hook's block), which never shares a batch with
+ * messages.
  */
 export type FollowUpBatch =
   | {
@@ -143,7 +144,8 @@ export type FollowUpBatch =
 interface InputReading {
   /** The run's own pending requests (`/compact`, a model switch). */
   readonly controls: readonly QueuedFollowUp[];
-  /** The messages readable at `at`, when there are any; nothing is taken. */
+  /** The messages readable at `at`, when there are any and no `/compact`
+   *  committed before the first of them waits; nothing is taken. */
   readonly batch: (
     at: InputPoint,
   ) => Extract<FollowUpBatch, { kind: 'followUps' }> | null;
@@ -164,11 +166,19 @@ const inputOf = (
   from: CommitOrdinal,
   now: number,
 ): InputReading => {
+  // The earliest pending `/compact`. One committed before the first
+  // readable message is answered first: no message is read until it is, so
+  // which comes first follows commit order, not when the run looks. One
+  // committed after lands at the request boundary of the message's turn.
+  const compact = rows.find((f) => controlOf(f)?.kind === 'compact')?.commit;
   const batch: InputReading['batch'] = (at) => {
     const followUps = readableMessages(rows, at, now);
-    return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
+    const first = followUps[0]?.commit;
+    if (first === undefined || (compact !== undefined && compact < first))
+      return null;
+    return { kind: 'followUps', followUps };
   };
-  const compacting = rows.some((f) => controlOf(f)?.kind === 'compact');
+  const compacting = compact !== undefined;
   const later = rows.flatMap((f) => {
     const due = dueOf(f);
     return due !== undefined && due > now ? [due] : [];
