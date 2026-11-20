@@ -19,7 +19,9 @@
  * - the person is not asked to trust the native code, or the question does
  *   not say it runs inside the process;
  * - a policy or a grant that approves every call trusts native code with no
- *   person asked.
+ *   person asked;
+ * - a native tool that declares no approval runs without asking, where an
+ *   MCP server's tool would ask.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -222,13 +224,19 @@ describe(
                 'call rev1',
                 'done rev1',
               ]);
-              // The person was asked once, and told what the code is.
-              const [trust, ...more] = decided.opened;
+              // The person was asked to trust it, and told what the code
+              // is; then the call asked as an MCP tool's does, though the
+              // tool declares no approval.
+              const [trust, echo, ...more] = decided.opened;
               expect(more).toStrictEqual([]);
               expect(JSON.stringify(trust)).toContain(
                 'runs inside this process, as you',
               );
               expect(JSON.stringify(trust)).toContain('tools native_echo');
+              expect(echo?.answeredBy).toBe('superYolo');
+              expect(JSON.stringify(echo?.payload)).toContain(
+                'plugin echoes native_echo {}',
+              );
               expect(answersOf(roots.storage, runId)).toStrictEqual([
                 'Echoed.',
               ]);

@@ -1411,7 +1411,8 @@ All notable changes to this project will be documented in this file.
   again: a call already running finishes on the version it started with,
   and the old version's services are released when the last step using
   them ends. A version that fails to load is left out with its reason, and
-  nothing else changes. Agents get a `plugin_manager` tool to list,
+  nothing else changes. Each call of a native tool asks under your approval
+  policy, as an MCP server's tool does, whatever the module declares. Agents get a `plugin_manager` tool to list,
   install, enable, disable and remove plugins themselves, each change but a
   listing or an install asked of you first; trusting native code is always
   your own answer, whatever the approval policy, so a run that cannot ask

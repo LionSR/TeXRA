@@ -246,7 +246,8 @@ An installed plugin may also carry native code,
 `harness.mjs` (`packages/harness/src/common/plugins/nativeEntry.ts`): once
 trusted at its digest it runs in the process and returns a `Plugin`, which
 joins the plugin table from the next step of every run
-(`packages/harness/src/tools/nativePlugins.ts`). The plugin table is not
+(`packages/harness/src/tools/nativePlugins.ts`), its tools gated by the host
+as an MCP server's are. The plugin table is not
 fixed: the listed plugins are, and each read of the installed plugins adds
 the native ones loaded now; a step pins the table it read.
 

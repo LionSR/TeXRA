@@ -157,7 +157,7 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
   if (plugin.native === null) lines.push('Native code: none');
   else
     lines.push(
-      `Native code (${NATIVE_ENTRY_FILE}: ${plugin.native.description}): a module that runs inside this process, as you, with everything the process can reach (your files, the network, your credentials and every open session). It is not sandboxed, and it decides itself which of its tools ask before they run.`,
+      `Native code (${NATIVE_ENTRY_FILE}: ${plugin.native.description}): a module that runs inside this process, as you, with everything the process can reach (your files, the network, your credentials and every open session). It is not sandboxed. Each call of its tools asks under your approval policy, as an MCP server’s tool does, whatever the module declares.`,
       `  It contributes ${describeProvides(plugin.native.provides)}; a module that contributes anything else is not loaded.`,
     );
   const { hooks, unsupported } = plugin.hooks;

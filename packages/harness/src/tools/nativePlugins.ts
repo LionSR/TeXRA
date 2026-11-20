@@ -22,6 +22,11 @@
  * runs that take installed plugins' tools) and a program result (it reads a
  * row kind). A module that fails any of it, or throws, is withheld with the
  * reason; it never fails a step or another plugin.
+ *
+ * The host, not the module, decides how its tools run ({@link hostRun}):
+ * every call asks under the session's approval policy, as an MCP server's
+ * tool does (`@tools/mcp/mcpServer`), whatever the tool's own definition
+ * declares about approval, concurrency or scripts.
  */
 // Node imports
 import { pathToFileURL } from 'node:url';
@@ -35,6 +40,8 @@ import type { NativeEntry } from '@common/plugins/nativeEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { installedPluginId } from '@common/plugins/pluginTrust';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { Plugin } from '@tools/plugins';
 import * as plugins from '@tools/pluginSurface';
 import type { NativePlugin } from '@tools/toolTable';
@@ -132,6 +139,36 @@ const contributions = (plugin: Plugin): readonly string[] => [
   ...(plugin.prompt === undefined ? [] : ['prompt']),
 ];
 
+/**
+ * The tool `tool` of the native plugin `name` as the host runs it: the
+ * same gate an MCP server's tool gets. Each call is a command the loop's
+ * one guard puts to the session's approval policy (no standing grant but
+ * the delegated-work one answers it, and the prompt names no directory),
+ * every call is a barrier, and it is not a script function. Kept from the
+ * definition: its contract, whether a repeat is safe, the host capability
+ * it needs and the paths it writes, which only narrow what it may do.
+ */
+const hostRun = (
+  name: string,
+  tool: ITool<Error, PluginToolServices>,
+): ITool<Error, PluginToolServices> => {
+  const { definition, replay, hostCapability, guard } = tool;
+  return {
+    definition,
+    ...(replay !== undefined && { replay }),
+    ...(hostCapability !== undefined && { hostCapability }),
+    guard: {
+      ...(guard?.writes !== undefined && { writes: guard.writes }),
+      command: {
+        text: (input: unknown) =>
+          `plugin ${name} ${definition.name} ${JSON.stringify(input)}`,
+        cwd: 'unknown',
+      },
+    },
+    call: (input) => tool.call(input),
+  };
+};
+
 /** `value` as the plugin `source`'s native entry may return it, or why
  *  not. */
 const checked = (
@@ -184,7 +221,13 @@ const checked = (
             ]),
       ].join('; '),
     );
-  return Result.succeed({ ...plugin, id: installedPluginId(name) });
+  return Result.succeed({
+    ...plugin,
+    id: installedPluginId(name),
+    ...(plugin.tools !== undefined && {
+      tools: plugin.tools.map((tool) => hostRun(name, tool)),
+    }),
+  });
 };
 
 /** The plugin `source`'s native entry is not loaded, for `reason`. */
