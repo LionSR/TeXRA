@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { Layer } from 'effect';
 import { ModelFetch, type AgentPlatform } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
-import type { ExportNode } from '@texra-ai/harness/schemas';
+import { settingsCatalog, type ExportNode } from '@texra-ai/harness/schemas';
 
 /** The app the examples sign in and send model requests as: the harness and
  *  llm name no client of their own. */
@@ -182,9 +182,6 @@ export async function makeExampleWorkspace(
   turns: readonly ScriptedTurn[] = [],
   /** An existing workspace to reuse, as a second process does. */
   existing?: string,
-  /** The agent directory the platform serves, a plugin package's own;
-   *  absent, the workspace's `agents/`. */
-  agents?: string,
 ): Promise<{
   readonly workspace: string;
   readonly agentsDir: string;
@@ -208,12 +205,21 @@ export async function makeExampleWorkspace(
 
   const workspace =
     existing ?? (await mkdtemp(join(tmpdir(), 'texra-harness-example-')));
-  const agentsDir = agents ?? join(workspace, 'agents');
+  const agentsDir = join(workspace, 'agents');
   await mkdir(agentsDir, { recursive: true });
+  const model = realModel ?? 'anthropic/claude-sonnet-5-5';
   const platform = nodePlatform({
     agentsDir,
     storageDir: join(workspace, 'storage'),
     workspaceDir: workspace,
+    // The models a person starts with enabled. The harness curates none, and
+    // a child run (an `agent()` or `program()` call) takes its model from
+    // this list: without one, nothing can be delegated.
+    settings: settingsCatalog({
+      namespace: 'example',
+      rows: [],
+      curatedModels: [model],
+    }),
   });
   return {
     workspace,
@@ -221,7 +227,7 @@ export async function makeExampleWorkspace(
     requests,
     platform,
     route: {
-      model: realModel ?? 'anthropic/claude-sonnet-5-5',
+      model,
       transport: scripted
         ? Layer.succeed(ModelFetch)(scriptedFetch(turns, requests))
         : Layer.empty,
