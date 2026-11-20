@@ -115,8 +115,10 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
   // The same read the edit tools make, so a line read here is a line an
   // edit can match, a leading BOM included.
   const content = yield* readNormalizedFile(fs, resolved.absolute);
+  // A leading BOM hides an email's headers from the MIME parser, which then
+  // reads the whole message as its body.
   const { text, images: emlImages } = isEml
-    ? yield* parseEml(content)
+    ? yield* parseEml(content.replace(/^\uFEFF/, ''))
     : { text: content, images: [] };
   const lines = splitContentLines(text);
 
