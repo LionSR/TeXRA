@@ -30,6 +30,13 @@ The areas are already on the Effect modules. These landed with this note:
 - `texra --version` at the root is `texra version`, as `-v` already was, so
   both print the same and both honor `--output-format`.
 
+- The stdio MCP client is effect/ai's `McpClient` on MCP 2025-11-25
+  (`packages/harness/src/tools/mcp/mcpServer.ts`), and the JSON-RPC
+  connection keeps only the Content-Length framing. A server on an older
+  revision no longer starts; its failure says to update it. The official
+  TypeScript SDK has answered 2025-11-25 since 1.25 (December 2025). The
+  refusal `EFF-ADOPT-mcp-client` is deleted.
+
 ## Open
 
 1. **Lean's stderr tail is cut by hand.**
@@ -47,15 +54,6 @@ The areas are already on the Effect modules. These landed with this note:
   server speaks. `RpcClient` needs a static `RpcGroup`; MCP tool names and
   LSP methods are open strings, and the connection also answers the peer's
   requests and sends each protocol's cancel notification.
-- **Its line reader onto `effect/encoding` `Ndjson`.** `NdjsonError` carries
-  only a kind, so the close reason would lose the offending text. A bare
-  `\r` ends a line, an unterminated last line is parsed and not dropped,
-  and invalid UTF-8 fails the stream.
-- **`McpSchema` codecs for the result structs in
-  `packages/harness/src/tools/mcp/mcpServer.ts`.** The strictness that
-  refused the client lives in the schemas: a closed content-block union,
-  optional fields that reject `null`, image data decoded to bytes nothing
-  reads.
 - **The service wire protocol and child-output line splitting** are already
   `RpcServer` / `RpcClient` over a socket with NDJSON, and
   `Stream.splitLines`.
