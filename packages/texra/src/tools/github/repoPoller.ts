@@ -91,7 +91,7 @@ const MAX_PR_STATE_ENTRIES = 500;
 // or comment will bubble them back to the top of the updated-at order.
 const MAX_MERGEABLE_PROBES_PER_TICK = 5;
 
-type PullStateName = 'open' | 'closed' | 'merged';
+type PullStateName = GhPullsListEntry['state'] | 'merged';
 
 /** What a repository's next poll starts from. */
 export interface RepoState {

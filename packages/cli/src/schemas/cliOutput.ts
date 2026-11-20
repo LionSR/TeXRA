@@ -16,10 +16,8 @@ import { Schema, Struct } from 'effect';
 
 import {
   InstalledPluginSchema,
-  RUN_OUTCOME,
   RunEndSchema,
   RunIdSchema,
-  type RunOutcome,
 } from '@texra-ai/harness/schemas';
 import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
 
@@ -27,11 +25,11 @@ import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
  * The CLI output contract version, stamped on every NDJSON line as
  * `contract` (`version` is the `texra version` record's own field). Version 3
  * is 1.0's: `kind: "progress"` records carry a session row verbatim (`event`
- * is the row's `type`, `payload` the rest of it), results carry `runId`, and
- * `CliRunStatus` is the only renamed vocabulary. Version 3 has no stage for
- * a run, a turn or a script (read `run.activate`, `run.position` and
- * `run.end`; a script's calls are the cards whose `stageId` is its card),
- * and no `stage.end` a run's end wrote for a stage it left open.
+ * is the row's `type`, `payload` the rest of it) and results carry `runId`.
+ * Version 3 has no stage for a run, a turn or a script (read `run.activate`,
+ * `run.position` and `run.end`; a script's calls are the cards whose
+ * `stageId` is its card), and no `stage.end` a run's end wrote for a stage it
+ * left open.
  */
 export const CLI_NDJSON_CONTRACT = 3;
 
@@ -136,33 +134,3 @@ export type CliNdjsonRecord =
       readonly kind: 'result';
       readonly result: CliDocumentTaskResult | CliCommandResult;
     };
-
-/** The run-status vocabulary the headless text status line prints. History
- *  records carry the run's `outcome` itself. */
-const CLI_RUN_STATUS = {
-  COMPLETED: 'completed',
-  INTERRUPTED: 'interrupted',
-  ERROR: 'error',
-} as const;
-
-type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
-
-/**
- * Project the canonical outcome onto the frozen public run-status
- * vocabulary of the headless text status line. The only production
- * mapping; hosts must not hand-roll their own. An out-of-vocabulary value
- * (stale fixture, unparsed legacy data) fails with a named error instead of
- * an undefined-property crash downstream.
- */
-export function runOutcomeToCliRunStatus(outcome: RunOutcome): CliRunStatus {
-  switch (outcome) {
-    case RUN_OUTCOME.COMPLETED:
-      return CLI_RUN_STATUS.COMPLETED;
-    case RUN_OUTCOME.CANCELLED:
-      return CLI_RUN_STATUS.INTERRUPTED;
-    case RUN_OUTCOME.FAILED:
-      return CLI_RUN_STATUS.ERROR;
-    default:
-      throw new Error(`Unhandled run outcome: ${String(outcome)}`);
-  }
-}

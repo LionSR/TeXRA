@@ -77,7 +77,7 @@ function chooseItem(
       items={labels.map((label) => ({ value: label, label }))}
       description={detail ? <Text dimColor>{detail}</Text> : undefined}
       action="select"
-      escapeAction="dismiss"
+      escape={{ key: 'Esc', action: 'dismiss' }}
       onSelect={answer}
       onCancel={() => answer(undefined)}
     />

@@ -52,7 +52,6 @@ export function EnabledModelsForm(
         </Text>
       }
       action="toggle"
-      showTransientCloseHint={false}
       onSelect={(id, { data: models, update }) => {
         const row = models.find((candidate) => candidate.id === id);
         // A refused write (e.g. disabling the last remaining model) keeps the

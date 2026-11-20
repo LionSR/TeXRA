@@ -1,7 +1,5 @@
-import {
-  confirmCardContentWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '@cli/tui/ui/theme';
+import { BORDERED_PANEL_CHROME_COLUMNS } from '@cli/tui/ui/BorderedPanel';
+import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { confirmCardPulsedTitle } from './ConfirmCardState';
 
@@ -24,7 +22,7 @@ export function confirmCardFeedbackRows({
 }): number {
   const text = value.length > 0 ? value : placeholder;
   const width =
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION - FEEDBACK_PREFIX_COLUMNS;
+    columns - BORDERED_PANEL_CHROME_COLUMNS - FEEDBACK_PREFIX_COLUMNS;
   return FEEDBACK_MARGIN_ROWS + wrappedRowCount(text, width);
 }
 

@@ -3,7 +3,7 @@ import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { pathExists } from '@texra-ai/harness/node';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import {
@@ -59,9 +59,7 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const exists = yield* pathExists(fs, filePath).pipe(
-    Effect.mapError(ensureError),
-  );
+  const exists = yield* pathExists(fs, filePath);
   if (!exists) {
     const reason = `File ${filePath} does not exist.`;
     yield* Effect.logWarning(reason);

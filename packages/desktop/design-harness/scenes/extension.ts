@@ -596,7 +596,8 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = viewOf([...events, ...priced, local({ runsHere: ALL_RUNS })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
-  // A document task past its second pass: the header's "Pass 2 of 3" chip.
+  // A document task past its second revision: the header's "Revision 2 of
+  // 3" chip.
   'ext-workflow-pass': () => {
     const log = new Log();
     log.emit(ROOT, T.root, {

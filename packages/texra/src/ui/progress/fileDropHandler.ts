@@ -98,7 +98,8 @@ function extractDroppedFilePaths(dataTransfer: DataTransfer | null): string[] {
  * Drag-and-drop lifecycle for a file drop target. Tracks nested
  * dragenter/dragleave pairs so child elements don't flicker the highlight,
  * and hands validated drop payloads to `onDrop`. Bind all four handlers on
- * the drop target and drive the visual state from `isDragActive`.
+ * the drop target and set its `.is-drag-active` class (`dropTargetStyles`)
+ * from `isDragActive`.
  */
 export class FileDropController implements ReactiveController {
   private dragDepth = 0;

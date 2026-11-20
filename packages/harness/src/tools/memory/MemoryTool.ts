@@ -28,7 +28,6 @@ import {
   memoryPathExists,
   onMemoryTreeLane,
   readMemoryFile,
-  renameMemoryPath,
   pinMemory,
   unpinMemory,
   walkMemoryDirectory,
@@ -445,7 +444,7 @@ const rename = Effect.fn('MemoryTool.rename')(function* (
     );
   }
 
-  yield* renameMemoryPath(resolvedOldPath, resolvedNewPath);
+  yield* (yield* StorageFs).rename(resolvedOldPath, resolvedNewPath);
   return executed(
     `Successfully renamed ${oldPathInput} to ${newPathInput}`,
     `Renamed: ${oldPathInput} to ${newPathInput}`,
