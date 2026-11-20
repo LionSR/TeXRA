@@ -45,7 +45,11 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { executed } from '@tools/core/result';
-import { previewLabel, stripControlCharacters } from '@utils/text/stringUtils';
+import {
+  formatWallTime,
+  previewLabel,
+  stripControlCharacters,
+} from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { headTail } from '@utils/text/appendTail';
 
@@ -329,7 +333,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   }
 
   const elapsedMs = (yield* Clock.currentTimeMillis) - startedAt;
-  const duration = `${(elapsedMs / 1000).toFixed(1)}s`;
+  const duration = formatWallTime(elapsedMs);
 
   if (result.success) {
     const preview = previewLabel(command);
