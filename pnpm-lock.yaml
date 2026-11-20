@@ -90,9 +90,6 @@ catalogs:
     pretty-bytes:
       specifier: 7.2.0
       version: 7.2.0
-    pretty-ms:
-      specifier: ^10.0.0
-      version: 10.0.0
     quickjs-emscripten-core:
       specifier: 0.32.0
       version: 0.32.0
@@ -444,9 +441,6 @@ importers:
       postal-mime:
         specifier: 'catalog:'
         version: 4.2.1
-      pretty-ms:
-        specifier: 'catalog:'
-        version: 10.0.0
       safe-stable-stringify:
         specifier: 'catalog:'
         version: 3.0.1
@@ -635,9 +629,6 @@ importers:
       pretty-bytes:
         specifier: 'catalog:'
         version: 7.2.0
-      pretty-ms:
-        specifier: 'catalog:'
-        version: 10.0.0
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7
@@ -4015,10 +4006,6 @@ packages:
   pretty-bytes@7.2.0:
     resolution: {integrity: sha512-T2kroepGB5DRVbkN/nOpW03+VRWqdtJhZNuCW3wYk3chdPjgi4GcTBOaxWfHq1MIM0ypidxsSWbQaAiRpxnXmg==}
     engines: {node: '>=20'}
-
-  pretty-ms@10.0.0:
-    resolution: {integrity: sha512-6BWuxY2dCNgT45VnGzZcfNy7WeLqXiZqhhy4aHThTE6KI56R2ZBw9HQ7spPFKYchDizvJbPxTEknIpmW4FSmQA==}
-    engines: {node: '>=22'}
 
   proc-log@6.1.0:
     resolution: {integrity: sha512-iG+GYldRf2BQ0UDUAd6JQ/RwzaQy6mXmsk/IzlYyal4A4SNFw54MeH4/tLkF4I5WoWG9SQwuqWzS99jaFQHBuQ==}
@@ -8020,8 +8007,6 @@ snapshots:
     optional: true
 
   pretty-bytes@7.2.0: {}
-
-  pretty-ms@10.0.0: {}
 
   proc-log@6.1.0: {}
 
