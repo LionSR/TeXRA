@@ -28,6 +28,13 @@
  *   with a message that does not name its plugin;
  * - a revision whose process layer fails to build fails the step, or is
  *   offered with no reason given;
+ * - a native plugin's session layer or program is not served, or its
+ *   program cannot reach its tools;
+ * - disabling a plugin interrupts its running call, or leaves its tool
+ *   offered or its layer up;
+ * - a resumed run reruns a call its row finished, or reruns an unfinished
+ *   call on a revision other than the one it was issued to, or does not
+ *   offer the revision loaded now;
  * - a native plugin that runs on another native plugin is withheld when its
  *   name sorts before that plugin's.
  */
@@ -40,6 +47,8 @@ import { TestClock } from 'effect/testing';
 import { assert, describe, expect, it } from 'vitest';
 
 import { InstalledPlugins } from '@common/plugins/installedPlugins';
+import { resumeRun } from '@agent/runtime/resumeRun';
+import { SKIPPED_OUTCOME_UNKNOWN } from '@agent/runtime/run/tools';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   AgentConfigSchema,
@@ -70,7 +79,18 @@ interface EntryOptions {
   /** Tools that fail, die, throw and never finish, and a fiber in its
    *  process layer that dies once the layer is up. */
   readonly faulty?: boolean;
+  /** A session layer, the tool `native_session` that answers what it
+   *  serves, and the program `echo_program`, which echoes and says so. */
+  readonly session?: boolean;
 }
+
+/** The program `session` adds: it calls `native_echo` and says what it
+ *  answered. */
+const ECHO_PROGRAM = `export default async () => {
+  const echoed = await tools.native_echo({});
+  return 'program ran: ' + echoed.output;
+};
+`;
 
 /** The plugin's `harness.mjs` at `revision`: a tool that answers the
  *  revision its process layer serves, waiting for `../release-<n>` when
@@ -81,7 +101,7 @@ const entry = (
   options: EntryOptions = {},
 ) => `// A test plugin.
 export const description = 'Echoes the revision that serves the call.';
-export const provides = ['tool:native_echo', ${options.faulty ? `'tool:native_fail', 'tool:native_die', 'tool:native_throw', 'tool:native_raw', 'tool:native_hang', ` : ''}'processLayer'];
+export const provides = ['tool:native_echo', ${options.faulty ? `'tool:native_fail', 'tool:native_die', 'tool:native_throw', 'tool:native_raw', 'tool:native_hang', ` : ''}${options.session ? `'tool:native_session', 'sessionLayer', 'module:echo_program', 'program:echo_program', ` : ''}'processLayer'];
 
 import { appendFileSync, existsSync } from 'node:fs';
 
@@ -106,9 +126,17 @@ export default ({ plugins, effect }) => {
     }`
     },
   );
+  class Session extends Context.Service()('echoes/Session') {}
+  const sessionLayer = Layer.effect(Session)(
+    Effect.acquireRelease(
+      Effect.sync(() => (note('session acquire ${revision}'), 'session ${revision}')),
+      () => Effect.sync(() => note('session release ${revision}')),
+    ),
+  );
   const native_echo = plugins.defineTool({
     name: 'native_echo',
     description: 'Answer the revision of the plugin that served this call.',
+    replay: 'safe',
     schema: Schema.Struct({ wait: Schema.optional(Schema.NullOr(Schema.String)) }),
     execute: ({ wait }) =>
       Effect.gen(function* () {
@@ -154,8 +182,30 @@ export default ({ plugins, effect }) => {
       ),`
           : ''
       }
+      ${
+        options.session
+          ? `plugins.defineTool({
+        name: 'native_session',
+        description: 'Answer what the session layer serves.',
+        schema: Schema.Struct({}),
+        execute: () =>
+          Effect.gen(function* () {
+            return yield* Session;
+          }),
+      }),`
+          : ''
+      }
     ],
     processLayer: { layer },
+    ${
+      options.session
+        ? `sessionLayer,
+    scriptModules: { echo_program: ${JSON.stringify(ECHO_PROGRAM)} },
+    programs: {
+      echo_program: { description: 'Echo, and say so.', tools: ['native_echo'] },
+    },`
+        : ''
+    }
   });
 };
 `;
@@ -196,7 +246,9 @@ const eventsIn = (file: string): string[] =>
 const toolOutputs = (storage: string, runId: RunId): string[] =>
   storedRows(storage).flatMap((row) => {
     if (row.run !== runId || row.type !== 'tool.result') return [];
-    const echoed = /echo rev\d/.exec(row.data)?.[0];
+    const echoed = /(?:session |program ran: )?echo rev\d|session rev\d/.exec(
+      row.data,
+    )?.[0];
     if (echoed !== undefined) return [echoed];
     if (row.data.includes('Installed echoes')) return ['installed'];
     if (row.data.includes('Enabled echoes')) return ['enabled'];
@@ -272,6 +324,41 @@ const replaceDuringCall = Effect.fn('replaceDuringCall')(function* (
   files.write(revision, options);
   yield* InstalledPlugins.enable('echoes', roots, () => Effect.succeed(true));
   files.release(n);
+});
+
+/** A run that pinned revision 1: its reply's first call finished on it,
+ *  and its second was waiting on it when the run's session closed. */
+const interruptedOnRevision1 = Effect.gen(function* () {
+  const { roots } = yield* FakeHost;
+  const files = yield* pluginFiles;
+  files.write('rev1');
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const session = yield* persistentTestSession();
+      const { runId } = yield* start(
+        session,
+        'Echo, then echo waiting, in one reply.',
+        false,
+      );
+      yield* until(
+        roots.storage,
+        () =>
+          eventsIn(files.events).filter((line) => line === 'call rev1')
+            .length >= 2,
+      );
+      return runId;
+    }),
+  );
+});
+
+/** Resume `runId` in a session of its own, approving what it asks, and
+ *  wait for its answer. */
+const resumeOver = Effect.fn('resumeOver')(function* (runId: RunId) {
+  const { roots } = yield* FakeHost;
+  const session = yield* persistentTestSession();
+  yield* autoDecideRequests(session, () => ({ action: 'approve' }));
+  yield* resumeRun(runId, {}).pipe(Effect.provide(session));
+  yield* until(roots.storage, waitingAfter(runId, 1, roots.storage));
 });
 
 describe(
@@ -447,6 +534,155 @@ describe(
                       row.data.includes('rev1 cannot reach its service'),
                   ),
                 ).toBe(true);
+              }),
+          );
+
+          it.effect(
+            'serves its session layer, and starts its program by name with its tools',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const files = yield* pluginFiles;
+                files.write('rev1', { session: true });
+                yield* setTestApprovalPolicy('yolo');
+                const session = yield* persistentTestSession();
+                const { runId } = yield* start(
+                  session,
+                  'Call native_session in turn.',
+                );
+                expect(toolOutputs(roots.storage, runId)).toStrictEqual([
+                  'installed',
+                  'enabled',
+                  'session rev1',
+                  'echo rev1',
+                ]);
+                // The program, started by name as its own run.
+                const program = generateRunId();
+                yield* rootRun({
+                  runId: program,
+                  interactive: true,
+                  config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                    agent: 'echo_program',
+                    agentSource: { kind: 'inline', persona: {} },
+                    model: 'openai/gpt-5.6-sol',
+                    script: { kind: 'program', name: 'echo_program', args: {} },
+                  }),
+                }).pipe(Effect.provide(session), Effect.forkScoped);
+                yield* until(roots.storage, (rows) =>
+                  rows.some(
+                    (row) => row.run === program && row.type === 'run.end',
+                  ),
+                );
+                const end = storedRows(roots.storage).find(
+                  (row) => row.run === program && row.type === 'run.end',
+                );
+                expect(end?.data).toContain('program ran: echo rev1');
+                // Its call of the plugin's tool, then its script's answer.
+                expect(toolOutputs(roots.storage, program)).toStrictEqual([
+                  'echo rev1',
+                  'program ran: echo rev1',
+                ]);
+                // One session layer for the session, beside the process
+                // layer.
+                expect(
+                  eventsIn(files.events).filter((line) =>
+                    /^(session )?acquire/.test(line),
+                  ),
+                ).toStrictEqual(['acquire rev1', 'session acquire rev1']);
+              }),
+          );
+
+          it.effect(
+            'lets a running call finish when its plugin is disabled, then offers none of it and releases its layer',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const files = yield* pluginFiles;
+                files.write('rev1');
+                const session = yield* persistentTestSession();
+                const { runId } = yield* start(
+                  session,
+                  'Echo twice, the first waiting.',
+                  false,
+                );
+                yield* until(roots.storage, () =>
+                  eventsIn(files.events).includes('call rev1'),
+                );
+                yield* InstalledPlugins.disable('echoes', roots);
+                files.release(1);
+                yield* until(
+                  roots.storage,
+                  waitingAfter(runId, 1, roots.storage),
+                );
+                expect(toolOutputs(roots.storage, runId)).toStrictEqual([
+                  'installed',
+                  'enabled',
+                  'echo rev1',
+                ]);
+                const [answer] = answersOf(roots.storage, runId);
+                expect(answer).toContain('native_echo is not offered');
+                expect(eventsIn(files.events)).toStrictEqual([
+                  'acquire rev1',
+                  'call rev1',
+                  'done rev1',
+                  'release rev1',
+                ]);
+              }),
+          );
+
+          it.effect(
+            'resumes a run that pinned revision 1 after revision 2 is trusted: a finished call is handed back, an unfinished one is not run again, and the next step runs revision 2',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const files = yield* pluginFiles;
+                const runId = yield* interruptedOnRevision1;
+                files.write('rev2');
+                yield* InstalledPlugins.enable('echoes', roots, () =>
+                  Effect.succeed(true),
+                );
+                yield* resumeOver(runId);
+                // The first call's result is its row's; the second, which
+                // the stop cut, ran on a revision the run no longer has, so
+                // its outcome is unknown and the model decides, on the
+                // revision loaded now.
+                expect(toolOutputs(roots.storage, runId)).toStrictEqual([
+                  'installed',
+                  'enabled',
+                  'echo rev1',
+                  'other',
+                  'echo rev2',
+                ]);
+                expect(toolErrors(roots.storage, runId)).toStrictEqual([
+                  SKIPPED_OUTCOME_UNKNOWN,
+                ]);
+                expect(
+                  eventsIn(files.events).filter((line) =>
+                    line.startsWith('call'),
+                  ),
+                ).toStrictEqual(['call rev1', 'call rev1', 'call rev2']);
+              }),
+          );
+
+          it.effect(
+            'resumes a run whose plugin was disabled: the unfinished call is not run again and the tool is gone',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const runId = yield* interruptedOnRevision1;
+                yield* InstalledPlugins.disable('echoes', roots);
+                yield* resumeOver(runId);
+                expect(toolOutputs(roots.storage, runId)).toStrictEqual([
+                  'installed',
+                  'enabled',
+                  'echo rev1',
+                  'other',
+                ]);
+                expect(toolErrors(roots.storage, runId)).toStrictEqual([
+                  SKIPPED_OUTCOME_UNKNOWN,
+                ]);
+                const [answer] = answersOf(roots.storage, runId);
+                expect(answer).toContain('native_echo is not offered');
               }),
           );
 

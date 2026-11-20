@@ -458,16 +458,28 @@ function goldenTurn(
       ...(named === null
         ? []
         : named.split(', ').map((name) => () => [call(name, {})])),
-      ...(said.includes('Echo twice, the first waiting.')
-        ? [echo({ wait: '1' }), echo({})]
-        : said.includes('Echo three times, the first two waiting.')
-          ? [
-              echo({ wait: '1' }),
-              () => [call('plugin_manager', { command: 'list' })],
-              echo({ wait: '2' }),
-              echo({}),
-            ]
-          : [echo({})]),
+      ...(said.includes('Echo, then echo waiting, in one reply.')
+        ? [
+            // Two calls of one tool in one reply, each its own id.
+            () =>
+              [call('native_echo', {}), call('native_echo', { wait: '1' })].map(
+                (each, n) =>
+                  each.kind === 'local-call'
+                    ? { ...each, providerCallId: `${each.providerCallId}-${n}` }
+                    : each,
+              ),
+            echo({}),
+          ]
+        : said.includes('Echo twice, the first waiting.')
+          ? [echo({ wait: '1' }), echo({})]
+          : said.includes('Echo three times, the first two waiting.')
+            ? [
+                echo({ wait: '1' }),
+                () => [call('plugin_manager', { command: 'list' })],
+                echo({ wait: '2' }),
+                echo({}),
+              ]
+            : [echo({})]),
     ];
     const step = steps[results.length];
     return Effect.succeed(step === undefined ? text('Echoed.') : step());

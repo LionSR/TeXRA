@@ -101,7 +101,10 @@ import, its value, the table's check or its layers) is not tried again
 until its trust digest changes, and the revision of that plugin the table
 held before it stays in use, in memory only, until the plugin is fixed,
 disabled or removed (`standing`, `toolCatalogLayer`); with none, the
-plugin is withheld. Either way the step says why. Trusting a native
+plugin is withheld. Either way the step says why. A call's tool is its
+plugin's revision as its step recorded it (`sameIdentity`), so a resume
+after a replacement or a disable runs no unfinished call of the old
+revision again: it ends with its outcome unknown. Trusting a native
 module is a person's own answer whatever the policy, and so is enabling
 again one a person trusted and then disabled: `plugin_manager` opens that
 request, a `pluginTrust` request (what the plugin is, where, what it
