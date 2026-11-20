@@ -13,7 +13,7 @@ import {
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import { sleepUntil, type SendVerdict } from './FollowUpReader';
-import { wakeNoteOf, wakeNotes } from './followUpMessages';
+import { wakeNotes } from './followUpMessages';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's acceptance and its wake read of the session. */
@@ -201,20 +201,18 @@ export const waitForWakeNotes = Effect.fn('waitForWakeNotes')(function* (
 /**
  * The notes runs wrote to themselves that an earlier process left pending,
  * waited for here ({@link waitForWakeNotes}): one already due resumes its
- * run at once. Run once as a session opens, over the listing, which holds
- * every queued follow-up no row consumed.
+ * run at once. Run once as a session opens, for each run the view lists
+ * with a queued message, a note among them; the timer reads which are
+ * notes from the run's own input rows.
  */
 export const wakePendingNotes: Effect.Effect<
   void,
   never,
-  RunRegistry | SessionLog
+  RunRegistry | SessionViewAccess
 > = Effect.gen(function* () {
-  const listed = yield* (yield* SessionLog).listing();
-  const waiting = new Set<RunId>();
-  for (const row of listed)
-    if (row.type === 'followup.queued' && wakeNoteOf(row) !== undefined)
-      waiting.add(row.aggregateId);
-  for (const runId of waiting) yield* waitForWakeNotes(runId);
+  const { runs } = yield* (yield* SessionViewAccess).read([]);
+  for (const run of runs.values())
+    if (run.queuedFollowUps.length > 0) yield* waitForWakeNotes(run.id);
 }).pipe(
   Effect.catch(
     logFailure(
