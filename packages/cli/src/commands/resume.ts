@@ -1,4 +1,4 @@
-import { Argument, Flag } from 'effect/cli';
+import { Argument } from 'effect/cli';
 
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -6,7 +6,11 @@ import { CliUsageError } from '../runtime/platform/cliContext';
 import { parseCliHistoryId } from '../runtime/history';
 import { runResumeCommand } from './resumeRun';
 
-import { cliCommand, SKILL_SOURCES_CONFIG } from './_helpers/cliCommand';
+import {
+  boolFlag,
+  cliCommand,
+  SKILL_SOURCES_CONFIG,
+} from './_helpers/cliCommand';
 
 /** The task id `texra resume` was given, refused as a usage error when it
  *  does not parse, before the run opens anything. */
@@ -28,12 +32,9 @@ export const resumeCommand = cliCommand('resume', {
     id: Argument.String('id').pipe(
       Argument.withDescription('Task id from `texra history list`'),
     ),
-    fork: Flag.Boolean('fork').pipe(
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription(
-        'Continue a new task holding this conversation, leaving it unchanged',
-      ),
+    fork: boolFlag(
+      'fork',
+      'Continue a new task holding this conversation, leaving it unchanged',
     ),
   },
   // A conversation continues in the service: the platform starts it.
