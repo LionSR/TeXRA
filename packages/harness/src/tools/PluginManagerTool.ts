@@ -23,7 +23,7 @@ import {
   describeProvides,
   NATIVE_ENTRY_FILE,
 } from '@common/plugins/nativeEntry';
-import type { PluginListing } from '@common/plugins/pluginTrust';
+import type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
 import {
   inRunSession,
   RunCall,
@@ -31,7 +31,7 @@ import {
 } from '@agent/runtime/RunCall';
 import { refusalCopy } from '@shared/session/approvalDecision';
 import { Approvals } from '@shared/session/runHistory';
-import { ToolError } from '@shared/schemas';
+import { ToolError, type RequestPayload, type RunId } from '@shared/schemas';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 
@@ -97,19 +97,25 @@ const listingLine = (plugin: PluginListing): string => {
   ].join('\n');
 };
 
+/** What a plugin change asks a person: a command, or trusting a plugin. */
+type PluginChangeRequest = Extract<
+  RequestPayload,
+  { kind: 'bash' | 'pluginTrust' }
+>;
+
 /**
- * Whether the person approves `text` for this call: the session's policy
- * first, as for any call (`Approvals.permission`), and then the person,
- * asked once. A refusal is the call's failure, with its reason. Trusting
- * the native module of `native` is a person's own answer, whatever the
- * policy and grants: the request opens as one a `PreToolUse` hook asked
- * about (`hook: 'ask'`), which the harness routes to a person
+ * Whether the person approves what `ask` asks for this call: the session's
+ * policy first, as for any call (`Approvals.permission`), and then the
+ * person, asked once. A refusal is the call's failure, with its reason.
+ * Trusting the native module of `native` is a person's own answer,
+ * whatever the policy and grants: the request opens as one a `PreToolUse`
+ * hook asked about (`hook: 'ask'`), which the harness routes to a person
  * (`answeredBy: 'person'`) and no policy or grant answers. Where no person
  * can be asked, the call fails and says who can enable it.
  */
 const approved = Effect.fn('plugin_manager.approved')(function* (
   call: RunToolCall,
-  text: string,
+  ask: (requestId: string, runId: RunId) => PluginChangeRequest,
   native: string | null = null,
 ) {
   const { runId } = call.run;
@@ -123,13 +129,7 @@ const approved = Effect.fn('plugin_manager.approved')(function* (
   const decision =
     answer === 'ask'
       ? (yield* call.requests
-          .open(
-            {
-              kind: 'bash',
-              data: { requestId: call.requests.nextId(), command: text, runId },
-            },
-            { operation: 'call' },
-          )
+          .open(ask(call.requests.nextId(), runId), { operation: 'call' })
           .pipe(Effect.updateService(RunCall, (open) => ({ ...open, hook }))))
           .decision
       : answer;
@@ -139,6 +139,39 @@ const approved = Effect.fn('plugin_manager.approved')(function* (
     [copy.summary, copy.detail, copy.feedback].filter(Boolean).join(': '),
   );
 });
+
+/** A change asked as a command: a disable or a removal. */
+const asCommand =
+  (command: string) =>
+  (requestId: string, runId: RunId): PluginChangeRequest => ({
+    kind: 'bash',
+    data: { requestId, command, runId },
+  });
+
+/** Trusting `review`'s plugin as it is now, asked as itself. */
+const asTrust =
+  (review: PluginReview) =>
+  (requestId: string, runId: RunId): PluginChangeRequest => ({
+    kind: 'pluginTrust',
+    data: {
+      requestId,
+      runId,
+      plugin: review.name,
+      ...(review.version !== null && { version: review.version }),
+      digest: review.digest,
+      path: review.path,
+      skills: review.skills,
+      programs: review.programs,
+      servers: review.servers,
+      ...(review.native !== null && {
+        native: {
+          description: review.native.description,
+          provides: review.native.provides,
+        },
+      }),
+      review: review.lines,
+    },
+  });
 
 /** What a change answers: what happened, and when it reaches the run. */
 const NEXT_STEP = 'It takes effect from your next step.';
@@ -194,10 +227,7 @@ const runPluginManager = Effect.fn('plugin_manager.call')(function* (
         shown.push(...review.lines);
         return approved(
           call,
-          [
-            `Trust and load the plugin ${review.name}${review.version ? ` ${review.version}` : ''}, as this agent asks:`,
-            ...review.lines.map((line) => `  ${line}`),
-          ].join('\n'),
+          asTrust(review),
           review.native === null ? null : review.name,
         );
       }).pipe(
@@ -222,7 +252,7 @@ const runPluginManager = Effect.fn('plugin_manager.call')(function* (
     case 'disable': {
       yield* approved(
         call,
-        `Disable the plugin ${input.name}, as this agent asks.`,
+        asCommand(`Disable the plugin ${input.name}, as this agent asks.`),
       );
       yield* InstalledPlugins.disable(input.name, roots).pipe(
         Effect.mapError(fail),
@@ -236,7 +266,9 @@ const runPluginManager = Effect.fn('plugin_manager.call')(function* (
     case 'remove': {
       yield* approved(
         call,
-        `Remove the plugin ${input.name} and the trust given to it, as this agent asks.`,
+        asCommand(
+          `Remove the plugin ${input.name} and the trust given to it, as this agent asks.`,
+        ),
       );
       const removed = yield* InstalledPlugins.remove(input.name, roots).pipe(
         Effect.mapError(fail),

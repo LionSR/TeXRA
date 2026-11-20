@@ -263,7 +263,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v17: no `plugin` kind: every request is one the harness declares,
     // and blocks the call that opened it (an earlier build's plugin request
     // would fail as damaged).
-    'request.opened': Object.freeze({ version: 17, listing: 'request' }),
+    // v18: a `pluginTrust` kind: trusting an installed plugin is asked as
+    // itself, not as a command (an earlier build would read it as damaged).
+    'request.opened': Object.freeze({ version: 18, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
     // v3: a decision's optional fields are absent when unset, never `null`

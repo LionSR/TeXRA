@@ -79,7 +79,7 @@ export const REQUEST_ACTIONS = Object.freeze({
     k: Object.freeze({ action: 'retry', credentials: 'personal' }),
   }),
   userQuestion: Object.freeze({ n: 'skip' }),
-  plugin: Object.freeze({ n: 'skip' }),
+  pluginTrust: Object.freeze({ y: APPROVE, n: 'reject' }),
 }) satisfies {
   readonly [K in RequestPayload['kind']]: {
     readonly n: RequestDecline;

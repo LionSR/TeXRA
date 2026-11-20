@@ -104,6 +104,15 @@ const describeServer = (server: McpServerConfig) =>
 export interface PluginReview {
   readonly name: string;
   readonly version: string | null;
+  /** The digest trusting it records. */
+  readonly digest: string;
+  /** Its folder. */
+  readonly path: string;
+  readonly skills: number;
+  /** Its programs, by the name each is started by. */
+  readonly programs: readonly string[];
+  /** Its MCP servers, by name. */
+  readonly servers: readonly string[];
   /** What the plugin declares, one line each, for the prompt. */
   readonly lines: readonly string[];
   /** Its native entry, which runs inside the process once trusted: only a
@@ -227,6 +236,11 @@ export const enablePlugin = Effect.fn('enablePlugin')(function* <E, R>(
     const accepted = yield* confirm({
       name,
       version: key.version,
+      digest: key.digest,
+      path: record.path,
+      skills: yield* pluginSkillCount(record, plugin),
+      programs: plugin.programs.loaded.map((program) => program.name),
+      servers: plugin.mcpServers.map((server) => server.name),
       lines: yield* reviewLines(record, plugin),
       native: plugin.native,
     });

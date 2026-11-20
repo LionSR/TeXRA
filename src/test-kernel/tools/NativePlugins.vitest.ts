@@ -16,8 +16,8 @@
  *   built more than once;
  * - a revision that fails to import fails the step or the other tools, or
  *   the step falls back to the previous revision;
- * - the person is not asked to trust the native code, or the question does
- *   not say it runs inside the process;
+ * - the person is not asked to trust the native code, the question does
+ *   not say it runs inside the process, or it is asked as a shell command;
  * - a policy or a grant that approves every call trusts native code with no
  *   person asked;
  * - a native tool that declares no approval runs without asking, where an
@@ -29,7 +29,7 @@ import * as path from 'node:path';
 import { layer } from '@effect/vitest';
 import { type Context, Effect, Schema } from 'effect';
 import { TestClock } from 'effect/testing';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
 import { InstalledPlugins } from '@common/plugins/installedPlugins';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
@@ -233,6 +233,23 @@ describe(
                 'runs inside this process, as you',
               );
               expect(JSON.stringify(trust)).toContain('tools native_echo');
+              // Asked as trusting a plugin, not as a command.
+              assert(trust?.payload.kind === 'pluginTrust');
+              const {
+                plugin,
+                version,
+                path: folder,
+                native,
+              } = trust.payload.data;
+              expect({ plugin, version, folder, native }).toStrictEqual({
+                plugin: 'echoes',
+                version: '1.0.0',
+                folder: files.dir,
+                native: {
+                  description: 'Echoes the revision that serves the call.',
+                  provides: ['tool:native_echo', 'processLayer'],
+                },
+              });
               expect(echo?.answeredBy).toBe('superYolo');
               expect(JSON.stringify(echo?.payload)).toContain(
                 'plugin echoes native_echo {}',

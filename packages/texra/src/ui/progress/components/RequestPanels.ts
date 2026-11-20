@@ -33,6 +33,7 @@ import './RetryRequestPanel';
 import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
 import './UserQuestionPanel';
+import './PluginTrustRequestPanel';
 
 type CardTag = ReturnType<typeof literal>;
 
@@ -44,6 +45,7 @@ const CARD_TAG: Record<RequestPayload['kind'], CardTag> = {
   proposal: literal`proposal-request-panel`,
   planApproval: literal`plan-approval-request-panel`,
   userQuestion: literal`user-question-panel`,
+  pluginTrust: literal`plugin-trust-request-panel`,
 };
 
 /** Marks every rendered card so keyboard routing can find it. */

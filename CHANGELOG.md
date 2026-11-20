@@ -1414,8 +1414,10 @@ All notable changes to this project will be documented in this file.
   nothing else changes. Each call of a native tool asks under your approval
   policy, as an MCP server's tool does, whatever the module declares. Agents get a `plugin_manager` tool to list,
   install, enable, disable and remove plugins themselves, each change but a
-  listing or an install asked of you first; trusting native code is always
-  your own answer, whatever the approval policy, so a run that cannot ask
+  listing or an install asked of you first. Trusting a plugin is asked as
+  its own card in the progress view and the terminal, naming the plugin,
+  its version, its folder, what it contributes and whether it carries
+  native code; trusting native code is always your own answer, whatever the approval policy, so a run that cannot ask
   you leaves it to `texra plugin enable`. Listing, installing or reviewing a
   plugin runs none of its code.
 - **An agent can write a program for itself.** A file an agent creates with
