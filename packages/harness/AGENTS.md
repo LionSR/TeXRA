@@ -108,8 +108,10 @@ revision again: it ends with its outcome unknown. Trusting a native
 module is a person's own answer whatever the policy, and so is enabling
 again one a person trusted and then disabled: `plugin_manager` opens that
 request, a `pluginTrust` request (what the plugin is, where, what it
-contributes and whether it carries native code), as one a hook asked about
-(`hook: 'ask'`, so `answeredBy: 'person'`).
+contributes and whether it carries native code). One that carries native
+code asks the `trust` operation (`operationOf`, `agent/runtime/requests.ts`),
+which only a person answers (`answeredBy: 'person'`), and where no person
+can be asked it is denied.
 
 ## Event channels and cards
 
