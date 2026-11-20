@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 144
+Exports: 145
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentTrace` — `interface AgentTrace { emit(event: AgentEvent): void; debug(message: string, options?: LogOptions): void; info(message: string, options?: LogOptions): void; warn(message: string, options?: LogOptions): void; error(message: string, options?: LogOptions): void; output(stream: 'stdout' | 'stderr', text: string): void; stage<A, E, R>(label: string, use: (trace: AgentTrace) => Effect.Effect<A, E, R>): Effect.Effect<A, E, R>; openStream(kind: MessageType): StreamHandle; openToolCard(log: ToolUseLog): ToolCardHandle; }`
@@ -69,6 +69,7 @@ Exports: 144
 - `multiAgent` — `const multiAgent: Plugin`
 - `noLaterTurn` — `const noLaterTurn: (run: Pick<ToolRun, "entry" | "toolPolicy">) => boolean`
 - `nullishWithDefault` — `function nullishWithDefault: <S extends Schema.Top>(schema: S, fallback: S["Type"], description: string) => decodeTo<toType<S>, optional<NullOr<S>>, never, never>`
+- `optionalInput` — `function optionalInput: <S extends Schema.Top>(schema: S, description: string) => optional<NullOr<S>>`
 - `parseWorkingDirectory` — `function parseWorkingDirectory: (raw: null | string | undefined) => Result<string | undefined, ToolError>`
 - `PlatformSecrets` — `interface PlatformSecrets extends CredentialStore { listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed>; }`
 - `Plugin` — `interface Plugin { readonly id: string; readonly tools?: readonly ITool<Error, PluginToolServices>[]; readonly availability?: ToolAvailabilityChecks; readonly toggle?: 'on' | 'off'; readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>; readonly prompt?: PromptSection; readonly processLayer?: ProcessPluginLayer; readonly sessionLayer?: SessionPluginLayer; readonly factKinds?: readonly FactKind[]; readonly scriptModules?: Readonly<Record<string, string>>; readonly programs?: Readonly<Record<string, Program>>; readonly requires?: readonly string[]; }`

@@ -15,7 +15,7 @@ import {
 } from '@shared/toolUse';
 
 // Local file imports
-import { nullishWithDefault } from '../core/inputSchema';
+import { nullishWithDefault, optionalInput } from '../core/inputSchema';
 import { LineRangeSchema } from '../formatting';
 
 /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
@@ -36,10 +36,10 @@ const ViewActionSchema = Schema.Struct({
     'Read run data (returns immediately). Default action.',
   ),
 
-  view_range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({
-    description:
-      'Line range for paginating file and background-command output. Conversation pagination uses offset and limit.',
-  }),
+  view_range: optionalInput(
+    LineRangeSchema,
+    'Line range for paginating file and background-command output. Conversation pagination uses offset and limit.',
+  ),
 
   /** Zero-based offset for list or conversation pagination. */
   offset: nullishWithDefault(

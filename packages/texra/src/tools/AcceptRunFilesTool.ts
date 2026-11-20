@@ -33,6 +33,7 @@ import {
   approvedWriteConflict,
   buildApprovalRejectedResult,
   requestToolEditApproval,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import {
   meansAbsent,
@@ -144,10 +145,10 @@ const FileMapping = Schema.Struct({
    * Original workspace path to restore to (matches `original` attribute in
    * subagent-result XML). If omitted, defaults to path.
    */
-  original: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Original workspace path to write to (matches original attribute in delivery). Defaults to path if omitted.',
-  }),
+  original: optionalInput(
+    Schema.String,
+    'Original workspace path to write to (matches original attribute in delivery). Defaults to path if omitted.',
+  ),
 });
 
 /**
@@ -186,10 +187,10 @@ const AcceptRunFilesInputSchema = Schema.Struct({
     .check(Schema.isMinLength(1))
     .annotate({ description: 'Files to copy from run storage to workspace' }),
   /** If true, strip `\criticize{...}{...}{...}` annotations before approval. */
-  strip_criticize: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'If true, remove all \\criticize{...}{...}{...} LaTeX annotations from each file before approval. Use when accepting output from critique-style agents that embed review markers.',
-  }),
+  strip_criticize: optionalInput(
+    Schema.Boolean,
+    'If true, remove all \\criticize{...}{...}{...} LaTeX annotations from each file before approval. Use when accepting output from critique-style agents that embed review markers.',
+  ),
 });
 
 type AcceptRunFilesInput = typeof AcceptRunFilesInputSchema.Type;

@@ -5,6 +5,7 @@ import {
   executed,
   defineTool,
   withLogChannel,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import {
   UserQuestionAnswersSchema,
@@ -36,9 +37,10 @@ const AskUserQuestionInputSchema = Schema.Struct({
       description:
         'One to three questions for the user, each worded differently. Keep each question short and provide two to four clear options.',
     }),
-  context: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'Optional short context explaining why the answer is needed.',
-  }),
+  context: optionalInput(
+    Schema.String,
+    'Optional short context explaining why the answer is needed.',
+  ),
 });
 
 type AskUserQuestionInput = typeof AskUserQuestionInputSchema.Type;

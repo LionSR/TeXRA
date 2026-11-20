@@ -18,6 +18,7 @@ import {
   toFetchToolError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
@@ -38,10 +39,10 @@ const WebFetchInputSchema = Schema.Struct({
       { message: 'URL must use HTTP or HTTPS protocol' },
     ),
   ).annotate({ description: 'Public HTTP or HTTPS URL to fetch.' }),
-  prompt: Schema.optional(Schema.NullOr(Schema.NonEmptyString)).annotate({
-    description:
-      'Optional note on what you need from the page, echoed above the fetched text as a reminder; nothing extracts for you.',
-  }),
+  prompt: optionalInput(
+    Schema.NonEmptyString,
+    'Optional note on what you need from the page, echoed above the fetched text as a reminder; nothing extracts for you.',
+  ),
 });
 
 type WebFetchInput = typeof WebFetchInputSchema.Type;

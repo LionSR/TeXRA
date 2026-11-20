@@ -51,7 +51,7 @@ import { headTail } from '@utils/text/appendTail';
 
 // Local file imports
 import { defineTool } from './core/definition';
-import { nullishWithDefault } from './core/inputSchema';
+import { nullishWithDefault, optionalInput } from './core/inputSchema';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const SHELL_BACKGROUNDING_PATTERN =
@@ -100,10 +100,10 @@ function boundedOutput(streamName: 'stdout' | 'stderr') {
 
 const BashInputSchema = Schema.Struct({
   command: Schema.String,
-  description: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'A short description of what the command does, in 5-10 words (e.g. "Run the unit tests"). It names the call in the transcript and the background task list; execution ignores it.',
-  }),
+  description: optionalInput(
+    Schema.String,
+    'A short description of what the command does, in 5-10 words (e.g. "Run the unit tests"). It names the call in the transcript and the background task list; execution ignores it.',
+  ),
   timeout: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
       Schema.isLessThanOrEqualTo(600_000),

@@ -22,6 +22,7 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
   [`executed`](#executed), [`errorResult`](#errorresult),
   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
+  [`optionalInput`](#optionalinput),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
   ([`requestToolEditApproval`](#requesttooleditapproval),
   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
@@ -1395,6 +1396,28 @@ function nullishWithDefault<S extends Schema.Top>(
   fallback: S['Type'],
   description: string,
 ): Schema.decodeTo<Schema.toType<S>, Schema.optional<Schema.NullOr<S>>>
+```
+
+## optionalInput
+
+An optional tool-input field with no default: an absent, `undefined` or
+`null` value all decode to `undefined`, and `execute` coalesces it with
+`?? fallback` or tests `== null`.
+
+Like {@link nullishWithDefault}, the encoded side is
+`Schema.optional(Schema.NullOr(schema))`, not `Schema.optional(schema)`:
+OpenAI-compatible providers (DeepSeek, Kimi, …) send an omitted optional
+field as an explicit `null` in structured output, so the field must be
+nullable as well as optional, and plain `Schema.optional(schema)` would fail
+to decode that `null`. Naming the shape keeps every tool-input field that
+takes no default on the one rule. `description` is written on the encoded
+side, which is where the model's JSON Schema is generated from.
+
+```ts
+function optionalInput<S extends Schema.Top>(
+  schema: S,
+  description: string,
+): Schema.optional<Schema.NullOr<S>>
 ```
 
 ## parseWorkingDirectory

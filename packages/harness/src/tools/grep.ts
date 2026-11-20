@@ -19,7 +19,7 @@ import { withLogChannel } from '@logger/effectLog';
 
 // Local file imports
 import { defineTool } from './core/definition';
-import { nullishWithDefault } from './core/inputSchema';
+import { nullishWithDefault, optionalInput } from './core/inputSchema';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
@@ -30,47 +30,44 @@ const GrepInputSchema = Schema.Struct({
   pattern: Schema.NonEmptyString.annotate({
     description: 'Regex pattern.',
   }),
-  path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'File or directory to search in.',
-  }),
-  glob: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'Glob filter for file names (e.g. "*.tex").',
-  }),
+  path: optionalInput(Schema.String, 'File or directory to search in.'),
+  glob: optionalInput(
+    Schema.String,
+    'Glob filter for file names (e.g. "*.tex").',
+  ),
   output_mode: nullishWithDefault(
     Schema.Literals(OUTPUT_MODES),
     'content',
     'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
   ),
-  '-B': Schema.optional(Schema.NullOr(NonNegativeIntSchema)).annotate({
-    description:
-      'Lines of context BEFORE each match (only with output_mode "content").',
-  }),
-  '-A': Schema.optional(Schema.NullOr(NonNegativeIntSchema)).annotate({
-    description:
-      'Lines of context AFTER each match (only with output_mode "content").',
-  }),
-  '-C': Schema.optional(Schema.NullOr(NonNegativeIntSchema)).annotate({
-    description: 'Lines of context before AND after each match.',
-  }),
-  '-n': Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description: 'Show line numbers.',
-  }),
-  '-i': Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description: 'Case-insensitive search.',
-  }),
-  type: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'Ripgrep file type filter (e.g. "tex", "py").',
-  }),
+  '-B': optionalInput(
+    NonNegativeIntSchema,
+    'Lines of context BEFORE each match (only with output_mode "content").',
+  ),
+  '-A': optionalInput(
+    NonNegativeIntSchema,
+    'Lines of context AFTER each match (only with output_mode "content").',
+  ),
+  '-C': optionalInput(
+    NonNegativeIntSchema,
+    'Lines of context before AND after each match.',
+  ),
+  '-n': optionalInput(Schema.Boolean, 'Show line numbers.'),
+  '-i': optionalInput(Schema.Boolean, 'Case-insensitive search.'),
+  type: optionalInput(
+    Schema.String,
+    'Ripgrep file type filter (e.g. "tex", "py").',
+  ),
   offset: nullishWithDefault(NonNegativeIntSchema, 0, 'Skip first N results.'),
-  head_limit: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
-  ).annotate({ description: 'Limit to first N results.' }),
-  multiline: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description: 'Enable multiline matching (pattern can span lines).',
-  }),
-  literal: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description: 'Exact string, not regex.',
-  }),
+  head_limit: optionalInput(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+    'Limit to first N results.',
+  ),
+  multiline: optionalInput(
+    Schema.Boolean,
+    'Enable multiline matching (pattern can span lines).',
+  ),
+  literal: optionalInput(Schema.Boolean, 'Exact string, not regex.'),
 });
 
 type GrepInput = typeof GrepInputSchema.Type;
