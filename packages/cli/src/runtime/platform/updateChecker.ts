@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Cause, Effect, Exit, Option, Result, Schema } from 'effect';
 import { executeCommand, envFlag } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import {
   fetchJsonStringField,
   UPDATE_CHECK_SKIP_ENV,
@@ -320,10 +320,10 @@ export function notifyCliUpdate(
       ),
       Effect.catchCause((cause) =>
         Cause.hasDies(cause)
-          ? Effect.logWarning('The update check failed unexpectedly').pipe(
-              Effect.annotateLogs({ data: cause }),
-              Effect.as(undefined),
-            )
+          ? logFailure(
+              'updateCheck',
+              'The update check failed unexpectedly',
+            )(cause).pipe(Effect.as(undefined))
           : Effect.undefined,
       ),
     );

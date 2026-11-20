@@ -16,6 +16,7 @@ import { getGitignoreMatcher } from '@tools/gitignore';
 import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
 import { withLogChannel } from '@logger/effectLog';
+import { formatCount } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/definition';
@@ -163,7 +164,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
 
   if (result.end._tag === 'LimitExceeded') {
     return yield* new ToolError(
-      `Search output exceeded the ${GREP_MAX_BUFFER_CHARS.toLocaleString()}-character retained-output ceiling.\n` +
+      `Search output exceeded the ${formatCount(GREP_MAX_BUFFER_CHARS)}-character retained-output ceiling.\n` +
         `Narrow the search path or pattern, or use glob/type filters. ` +
         `Pagination with offset/head_limit does not avoid draining the total ripgrep output.`,
     );

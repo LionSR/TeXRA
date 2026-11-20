@@ -31,7 +31,7 @@ import {
   type ToolResult,
   Secrets,
 } from '@texra-ai/harness/plugins';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { formatResultCount, type RunId } from '@texra-ai/harness/schemas';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -321,7 +321,7 @@ const execList = Effect.fn('GitHubSubscriptionTool.list')(function* (
   }
   return executed(
     bound.map((path) => `- ${path}`).join('\n'),
-    `${bound.length} active subscription(s).`,
+    `${formatResultCount(bound.length, 'active subscription')}.`,
   );
 });
 

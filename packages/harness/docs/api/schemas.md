@@ -677,6 +677,28 @@ instance.
 function ensureError(err: unknown): Error
 ```
 
+## entryDetail
+
+What an entry carries beyond its line, one string each: its cause, then
+its annotations other than the channel as one JSON object.
+
+```ts
+function entryDetail(
+  entry: Pick<LogEntry, 'annotations'> & Partial<Pick<LogEntry, 'cause'>>,
+): string[]
+```
+
+## entryLine
+
+An entry as one line of text, `[channel] message`, for a host that
+prints its entries as lines.
+
+```ts
+function entryLine(
+  entry: Pick<LogEntry, 'message' | 'annotations'>,
+): string
+```
+
 ## escapeAttr
 
 Escape for use inside a double-quoted HTML/XML attribute value.

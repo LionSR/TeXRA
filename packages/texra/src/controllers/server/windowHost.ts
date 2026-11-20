@@ -18,7 +18,7 @@ import {
 import { RpcServer, type RpcMessage } from 'effect/rpc';
 
 import type { HostInteractions } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { serveOverMessages } from '@texra/shared/rpcOverMessages';
@@ -102,9 +102,10 @@ const told = (
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : Effect.logWarning(
+        : logFailure(
+            CHANNEL,
             `This window could not carry out a host call (${kind})`,
-          ).pipe(Effect.annotateLogs({ data: cause })),
+          )(cause),
     ),
     withLogChannel(CHANNEL),
   );
@@ -268,9 +269,10 @@ function attachTo(
       onFailure: (cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.void
-          : Effect.logWarning(
+          : logFailure(
+              CHANNEL,
               `The TeXRA service stopped asking this window of ${workspace}; tasks there run without its editor until it reconnects`,
-            ).pipe(Effect.annotateLogs({ data: cause })),
+            )(cause),
     }),
     Effect.ensuring(Deferred.succeed(attached, undefined)),
     Effect.scoped,
