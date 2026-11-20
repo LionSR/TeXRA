@@ -181,7 +181,7 @@ string parameter, which it already does: `controllers/session/SessionView.ts:147
 
 **What we give up.** The ability to swap one layer in a test
 (`src/test-kernel/controllers/session/sessionEvents.vitest.ts` and
-`src/test-kernel/controllers/session/sessionStore.vitest.ts` build `sessionEventsLayer` and `makeSessionStore`
+`packages/harness/test/controllers/session/sessionStore.vitest.ts` build `sessionEventsLayer` and `makeSessionStore`
 alone; they would build the one session layer over an ephemeral store). Risk:
 teardown order mistakes are exactly what the current prose documents; the
 replacement must put the run stop before the store's finalizer in the same

@@ -187,7 +187,7 @@ cannot tell "reads the setting" from "ignores it". Churn rank:
 
 **Evidence.**
 
-- `src/test-kernel/agent/runtime/RetryState.vitest.ts:523-531` builds the
+- `packages/harness/test/agent/runtime/RetryState.vitest.ts:523-531` builds the
   host with
   `caseHost(Schema.decodeUnknownSync(MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema)(undefined))`,
   which is 2, the decoding default (`stateSettings.ts:227-229`).
