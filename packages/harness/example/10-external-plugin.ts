@@ -3,27 +3,29 @@
  * and restored.
  *
  * `acme-notes` is its own npm package (`acme-notes/`, packed and installed
- * beside the harness): a tool, a script module, a versioned fact kind and an
- * agent file it ships, all over the public entries.
+ * beside the harness): a tool, a script module, a program over that module
+ * and a versioned fact kind, all over the public entries. It ships no agent:
+ * the persona that uses it is the embedder's own, written inline.
  *
- * 1. With the plugin: starts the package's agent by name from its agent
- *    directory (`nodePlatform({ agentsDir })`). Its script imports
- *    `builtIn:notes`, which calls the plugin's tool, whose result states a
- *    `note` fact on the run.
- * 2. Reopens the store without the plugin or its agents. The exported trace
+ * 1. With the plugin: the persona's script imports `builtIn:notes`, which
+ *    calls the plugin's tool, whose result states a `note` fact on the run.
+ * 2. Reopens the store without the plugin. The exported trace
  *    still holds the fact, as written: its plugin, kind, version, run and
  *    commit, its value, and why it is not interpreted (`unavailable`). A
  *    resume of the run is refused as `pluginUnavailable`, naming the plugin,
  *    and the run listing shows the same reason.
  * 3. Reopens with the plugin again: the same fact reads interpreted, its
- *    value unchanged, and the run resumes with a message queued for it,
- *    calls the tool, records the next note and ends.
+ *    value unchanged, and the run resumes with a message queued for it. Its
+ *    script starts the package's `notes` program by name
+ *    (`program('notes', { args })`): a child run that asks no model, whose
+ *    module calls the tool, so the next note is a fact of the program's run,
+ *    and whose return is the script's result.
  */
 import { Effect, Layer, Schema } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
-import type { RunId } from '@texra-ai/harness/schemas';
-import { acmeNotes, agentsDir as packageAgents, NoteSchema } from 'acme-notes';
+import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import { acmeNotes, NoteSchema } from 'acme-notes';
 
 import {
   EXAMPLE_CLIENT,
@@ -36,6 +38,16 @@ const { add } = await import('builtIn:notes');
 return await add('Lemma 2 needs a citation.');`;
 const FIRST = { text: 'Lemma 2 needs a citation.' };
 const SECOND = { text: 'Section 3 is done.' };
+const PROGRAM_CODE = `
+const { runId, structured } = await program('notes', { args: { notes: [${JSON.stringify(SECOND.text)}] } });
+return { runId, kept: structured };`;
+/** The embedder's persona: the package ships tools and a program, no agent. */
+const NOTE_TAKER = {
+  name: 'note_taker',
+  description: 'Keeps notes on a draft.',
+  prompt: 'Keep notes on the draft with a script.',
+  tools: ['script', 'program', 'note_add'],
+};
 
 const turns = [
   {
@@ -48,16 +60,14 @@ const turns = [
     toolCalls: [
       {
         name: 'script',
-        input: {
-          code: `return await tools.note_add(${JSON.stringify(SECOND)});`,
-        },
+        input: { code: PROGRAM_CODE },
       },
     ],
   },
   { expect: 'The script returned', text: 'Both noted.' },
 ];
-const withPlugin = await makeExampleWorkspace(turns, undefined, packageAgents);
-// The same workspace and store, its agent directory its own (no agents).
+const withPlugin = await makeExampleWorkspace(turns);
+// The same workspace and store.
 const withoutPlugin = await makeExampleWorkspace([], withPlugin.workspace);
 const { route } = withPlugin;
 
@@ -88,9 +98,12 @@ const runId = await Effect.runPromise(
       persistent: true,
     });
     const run = yield* session.start({
-      agent: 'note_taker',
+      agent: NOTE_TAKER,
       instruction: 'Note the draft.',
       model: route.model,
+      // Starting a program asks a person first; nobody is attached here to
+      // answer, so the embedder approves the run's work at its start.
+      approval: 'autoApprove',
     });
     const end = yield* run.result;
     const returned = scriptReturnsOf(
@@ -102,7 +115,7 @@ const runId = await Effect.runPromise(
     )
       throw new Error(`first run: ${JSON.stringify({ end, returned })}`);
     console.log(
-      `[10] with acme-notes: agent note_taker from the package, script returned ${JSON.stringify(returned[0])}`,
+      `[10] with acme-notes: the script imported builtIn:notes and returned ${JSON.stringify(returned[0])}`,
     );
     return run.runId;
   }).pipe(
@@ -181,16 +194,24 @@ await Effect.runPromise(
     const resumed = yield* session.resume(runId);
     const end = yield* resumed.result.pipe(Effect.timeout('10 seconds'));
     yield* session.drained;
-    const { notes: after } = yield* notesOf(withPlugin.platform, runId);
+    const returned = Schema.decodeUnknownSync(
+      Schema.Struct({ runId: RunIdSchema, kept: Schema.Unknown }),
+    )(scriptReturnsOf(yield* session.records(runId).readConversation).at(-1));
+    // The note is the program's: a fact of its own run.
+    const { notes: kept } = yield* notesOf(withPlugin.platform, returned.runId);
+    const programEnd = yield* session.records(returned.runId).readRunEnd;
     if (
       end.outcome !== 'completed' ||
-      JSON.stringify(after.at(-1)?.value) !== JSON.stringify(SECOND)
+      programEnd?.outcome !== 'completed' ||
+      JSON.stringify(returned.kept) !== JSON.stringify([SECOND]) ||
+      JSON.stringify(kept.map(({ value }) => value)) !==
+        JSON.stringify([SECOND])
     )
       throw new Error(
-        `resume with the plugin: ${JSON.stringify({ end, after })}`,
+        `resume with the plugin: ${JSON.stringify({ end, returned, programEnd, kept })}`,
       );
     console.log(
-      `[10] with it again: the fact reads interpreted, value unchanged; the resumed run noted ${JSON.stringify(SECOND)}`,
+      `[10] with it again: the fact reads interpreted, value unchanged; the resumed run started program notes as run ${returned.runId}, which noted ${JSON.stringify(SECOND)}`,
     );
   }).pipe(
     Effect.scoped,
