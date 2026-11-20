@@ -110,7 +110,7 @@ export const claimSchema = ${JSON.stringify(CLAIM_SCHEMA)};
 // requirement of objective its own way; report is the worker's claim, shown to it as a hint only.
 // Resolves to { claims, failed, spent }: one claim per requirement, the claims that failed, and what
 // this run has spent in all. Rejects as self() does, or with an Error named NoVerdict (its reply as
-// the message) when the judge submits no claims.
+// the message, and spent as above) when the judge submits no claims.
 export const judge = async (objective, { report, label } = {}) => {
   const reply = await self(judgeBrief + tagged('objective', objective) + (report ? tagged('report', report) : ''), {
     fork: false, label: label ?? 'Judge',
@@ -119,6 +119,7 @@ export const judge = async (objective, { report, label } = {}) => {
   if (reply.structured == null) {
     const error = new Error(reply.response);
     error.name = 'NoVerdict';
+    error.spent = reply.spent;
     throw error;
   }
   const { claims } = reply.structured;
@@ -154,6 +155,7 @@ export const goal = async (objective, { maxCostUsd }) => {
       try {
         verdict = await judge(objective, { report, label: 'Judge round ' + round });
       } catch (error) {
+        spent = error.spent ?? spent;
         return paused({ reason: 'judge_failed', error: { name: error.name, message: error.message } });
       }
       ({ claims, spent } = verdict);
