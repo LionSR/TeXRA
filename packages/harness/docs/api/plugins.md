@@ -1238,8 +1238,8 @@ class JsonRpcConnectionDisposed extends Schema.TaggedError<JsonRpcConnectionDisp
 
 ## JsonRpcConnectionOptions
 
-What {@link makeJsonRpcConnection} connects: the peer's byte streams,
-their framing, and the owner's handlers.
+What {@link makeJsonRpcConnection} connects: the peer's byte streams
+and the owner's handlers.
 
 ```ts
 interface JsonRpcConnectionOptions {
@@ -1251,11 +1251,6 @@ interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<void>;
-  /**
-   * `'content-length'` (the default): LSP frames. `'newline'`: one JSON
-   * message per line, no embedded newlines (MCP stdio).
-   */
-  readonly framing?: 'content-length' | 'newline';
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
    * with `MethodNotFound`.
