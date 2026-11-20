@@ -147,7 +147,7 @@ malformed project value counts too, and fails closed"
 local `"texra.approvalPolicy": "nevr"` over a user `"yolo"` reads `ask` (the
 default, `shared/approvalPolicy.ts:23`) in VS Code and `yolo` on the CLI.
 The only CLI test of the project telemetry value uses a real `false`
-(`src/test-kernel/cli/CliContext.vitest.ts:64-84`).
+(`packages/cli/test/cli/CliContext.vitest.ts:64-84`).
 
 **The design decision behind it.** "What does a value the row rejects mean?"
 is answered by whoever reads, not by the read. `Settings` already owns the

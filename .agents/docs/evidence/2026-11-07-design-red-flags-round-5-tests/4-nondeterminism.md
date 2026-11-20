@@ -39,7 +39,7 @@ and general code mixed (live clock for the block, test clock per case).
 
 **Evidence.**
 
-- `src/test-kernel/agent/runtime/RetryState.vitest.ts:108-112` (churn 13):
+- `packages/harness/test/agent/runtime/RetryState.vitest.ts:108-112` (churn 13):
   ```ts
   const pumpClock = Effect.forkChild(
     Effect.forever(

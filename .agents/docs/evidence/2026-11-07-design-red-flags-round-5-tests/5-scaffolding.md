@@ -48,7 +48,7 @@ compiler walk) is 23% over all suites (7,967 of 34,179 lines).
 | ------------------------------------------------------------- | ----- | ----- | ------------ | --------------- |
 | `src/test-kernel/controllers/session/sessionEvents.vitest.ts` | 1,560 | 14    | 27% (418)    | 13              |
 | `src/test-kernel/controllers/session/goldenStore.vitest.ts`   | 784   | 8     | 24% (187)    | 11              |
-| `src/test-kernel/agent/runtime/RetryState.vitest.ts`          | 700   | 10    | 35% (246)    | 13              |
+| `packages/harness/test/agent/runtime/RetryState.vitest.ts`    | 700   | 10    | 35% (246)    | 13              |
 | `packages/desktop/tests/e2e/workspaceTabs.spec.ts`            | 649   | 9     | 17% (112)    | 1               |
 | `packages/llm/test/api/AnthropicMessages.vitest.ts`           | 639   | 7     | 37% (238)    | 3               |
 
