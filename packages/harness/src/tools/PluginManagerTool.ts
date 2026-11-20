@@ -88,12 +88,15 @@ type PluginManagerInput = typeof PluginManagerInputSchema.Type;
  *  it stands in. */
 const nativeState = (plugin: PluginListing, table: ToolTable): string[] => {
   if (plugin.native === null) return [];
-  const inUse = table.revisionOf(installedPluginId(plugin.name));
+  const id = installedPluginId(plugin.name);
+  const inUse = table.natives.find(
+    (native) => native.plugin.id === id,
+  )?.revision;
   const trustedNow =
     plugin.enabled && plugin.trusted && plugin.trust !== undefined
       ? nativeRevision(plugin.native.file, plugin.trust.digest)
       : null;
-  if (inUse === 'builtin')
+  if (inUse === undefined)
     return trustedNow === null ? [] : ['  native module: not loaded'];
   return [
     `  native module: revision ${inUse.slice(0, 12)} in use`,

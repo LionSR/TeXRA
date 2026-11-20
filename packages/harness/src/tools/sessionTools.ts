@@ -9,7 +9,7 @@
  * builds its tools and its plugin table from that read alone, so a run's
  * tools change only there. Each resource is an `RcMap` entry: one build per
  * key, stopped by its last release, at once. A plugin's layers are keyed by
- * its id and revision (`layerKey`), so a replaced native plugin builds its
+ * its id and revision (`LayerKey`), so a replaced native plugin builds its
  * new revision beside the old one, which a step that pinned the old keeps
  * until that step ends; nothing is interrupted. An interrupted build is
  * dropped; a failed one answers its failure to every holder until its last
@@ -19,7 +19,9 @@
 import {
   Context,
   Effect,
+  Equal,
   Exit,
+  Hash,
   Layer,
   RcMap,
   Scope,
@@ -141,18 +143,31 @@ export interface ProcessCatalog {
     native: NativePlugin,
     reason: string,
   ) => Effect.Effect<void>;
-  /** The plugin a layer key names: a listed one, or any native revision
-   *  this process loaded. */
-  readonly pluginOf: (key: string) => Plugin | undefined;
-  readonly processLayers: RcMap.RcMap<string, PluginContext>;
+  readonly processLayers: RcMap.RcMap<LayerKey, PluginContext>;
   readonly spawner: ChildProcessSpawner['Service'];
   readonly loader: PluginLoader;
 }
 
-/** The key a plugin's layers are kept under: its id, and for a native
- *  plugin the revision it was loaded at (`ToolTable.revisionOf`). */
-export const layerKey = (id: string, revision: string): string =>
-  revision === 'builtin' ? id : `${id}@${revision}`;
+/** The key a plugin's layers are kept under, with the plugin they are
+ *  built from: its id, and for a native plugin the revision it was loaded
+ *  at (`ToolTable.revisionOf`). Two keys of one revision are equal. */
+export class LayerKey implements Equal.Equal {
+  readonly name: string;
+  readonly plugin: Plugin;
+
+  constructor(plugin: Plugin, revision: string) {
+    this.plugin = plugin;
+    this.name = revision === 'builtin' ? plugin.id : `${plugin.id}@${revision}`;
+  }
+
+  [Equal.symbol](that: Equal.Equal): boolean {
+    return that instanceof LayerKey && that.name === this.name;
+  }
+
+  [Hash.symbol](): number {
+    return Hash.string(this.name);
+  }
+}
 
 /**
  * The keys of the plugins whose `pick` layer is held outside any step: a
@@ -162,7 +177,7 @@ export const layerKey = (id: string, revision: string): string =>
 export const heldKeys = (
   shared: Pick<ProcessCatalog, 'on' | 'live'>,
   pick: (plugin: Plugin) => unknown,
-): Stream.Stream<ReadonlySet<string>> =>
+): Stream.Stream<ReadonlySet<LayerKey>> =>
   Stream.zipLatest(
     SubscriptionRef.changes(shared.on),
     SubscriptionRef.changes(shared.live),
@@ -170,19 +185,21 @@ export const heldKeys = (
     Stream.map(
       ([on, table]) =>
         new Set(
-          [...table.entries.values()].flatMap((plugin) =>
-            pick(plugin) !== undefined &&
-            (on.has(plugin.id) || table.revisionOf(plugin.id) !== 'builtin')
-              ? [layerKey(plugin.id, table.revisionOf(plugin.id))]
-              : [],
-          ),
+          [
+            ...[...table.entries.values()]
+              .filter(({ id }) => on.has(id))
+              .map((plugin) => new LayerKey(plugin, 'builtin')),
+            ...table.natives.map(
+              ({ plugin, revision }) => new LayerKey(plugin, revision),
+            ),
+          ].filter(({ plugin }) => pick(plugin) !== undefined),
         ),
     ),
   );
 
 /** What a step pins of its session. */
 interface SessionResources {
-  readonly layers: RcMap.RcMap<string, PluginContext>;
+  readonly layers: RcMap.RcMap<LayerKey, PluginContext>;
   readonly holdServer: ProjectServers['holdServer'];
 }
 
@@ -190,14 +207,14 @@ interface SessionResources {
  *  coming up and going down logged where the use that caused it is. Asking
  *  for a key with no layer is a defect. */
 export const buildPluginLayer = <R>(
-  key: string,
+  { name }: LayerKey,
   layer: Layer.Layer<never, never, R> | undefined,
 ): Effect.Effect<PluginContext, never, Scope.Scope | R> => {
   if (layer === undefined)
-    return Effect.die(new Error(`Plugin ${key} has no such layer.`));
+    return Effect.die(new Error(`Plugin ${name} has no such layer.`));
   return Effect.acquireRelease(
-    Effect.logDebug(`Plugin ${key}: services up.`),
-    () => Effect.logDebug(`Plugin ${key}: services down.`),
+    Effect.logDebug(`Plugin ${name}: services up.`),
+    () => Effect.logDebug(`Plugin ${name}: services down.`),
   ).pipe(
     Effect.andThen(Layer.build(layer)),
     // cast: erased; a plugin's layer serves its own code, which names its tags.
@@ -217,8 +234,8 @@ export const buildPluginLayer = <R>(
  * cannot.
  */
 export const follow = (
-  keys: Stream.Stream<ReadonlySet<string>>,
-  hold: (key: string) => Effect.Effect<unknown, never, Scope.Scope>,
+  keys: Stream.Stream<ReadonlySet<LayerKey>>,
+  hold: (key: LayerKey) => Effect.Effect<unknown, never, Scope.Scope>,
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     const scope = yield* Effect.scope;
@@ -238,7 +255,7 @@ export const follow = (
               Effect.sandbox,
               Effect.ignore({
                 log: 'Error',
-                message: `Plugin ${key}'s services did not come up; the next step that uses them builds them again.`,
+                message: `Plugin ${key.name}'s services did not come up; the next step that uses them builds them again.`,
               }),
             ),
           { concurrency: 'unbounded', discard: true },
@@ -273,15 +290,11 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
         ? shared.read
         : // Without the installed plugins, no native one: the listed
           // plugins' table.
-          Effect.succeed({
-            installed: {
-              plugins: [],
-              warnings: [],
-              enabled: new Set<string>(),
-            },
+          Effect.map(NONE, (installed) => ({
+            installed,
             table: shared.listed,
             warnings: [],
-          }),
+          })),
     ],
     { concurrency: 'unbounded' },
   );
@@ -295,12 +308,9 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   for (;;) {
     const { table } = read;
     const built = yield* Effect.forEach(
-      [...table.entries.values()].filter(
-        ({ id }) => table.revisionOf(id) !== 'builtin',
-      ),
-      (plugin) => {
-        const revision = table.revisionOf(plugin.id);
-        const key = layerKey(plugin.id, revision);
+      table.natives,
+      ({ plugin, revision }) => {
+        const key = new LayerKey(plugin, revision);
         return Effect.all(
           [
             plugin.processLayer
@@ -334,9 +344,7 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   const builtIn = shared.builtIn.filter(({ plugin }) =>
     switchedOn.has(plugin.id),
   );
-  const natives = [...table.entries.values()].filter(
-    ({ id }) => table.revisionOf(id) !== 'builtin',
-  );
+  const natives = table.natives.map(({ plugin }) => plugin);
   const plugins = [...builtIn.map(({ plugin }) => plugin), ...natives];
   // Each installed plugin's servers, started with this project's
   // variables, for the step's scope.
@@ -412,11 +420,9 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
         // cast: the step's table is the one service every call reads; the
         // plugins' own are erased.
         () => Context.make(ToolRegistry, table) as PluginContext,
-        Effect.fnUntraced(function* (
-          services,
-          { id, processLayer, sessionLayer },
-        ) {
-          const key = layerKey(id, table.revisionOf(id));
+        Effect.fnUntraced(function* (services, plugin) {
+          const { id, processLayer, sessionLayer } = plugin;
+          const key = new LayerKey(plugin, table.revisionOf(id));
           const forProcess = processLayer
             ? yield* RcMap.get(shared.processLayers, key)
             : Context.empty();
@@ -437,7 +443,7 @@ export const sessionTools = Effect.fnUntraced(function* (
   // A hold on one plugin revision's build, taken now, released when
   // `until` ends (or the session closes).
   const holdFor =
-    (key: string) =>
+    (key: LayerKey) =>
     (until: Effect.Effect<void>): Effect.Effect<void> =>
       Effect.gen(function* () {
         const hold = yield* Scope.fork(scope);
@@ -447,9 +453,9 @@ export const sessionTools = Effect.fnUntraced(function* (
           Effect.forkIn(scope),
         );
       });
-  const layers: RcMap.RcMap<string, PluginContext> = yield* RcMap.make({
-    lookup: (key: string) =>
-      buildPluginLayer(key, shared.pluginOf(key)?.sessionLayer).pipe(
+  const layers: RcMap.RcMap<LayerKey, PluginContext> = yield* RcMap.make({
+    lookup: (key: LayerKey) =>
+      buildPluginLayer(key, key.plugin.sessionLayer).pipe(
         Effect.provideService(PluginHold, holdFor(key)),
       ),
   });

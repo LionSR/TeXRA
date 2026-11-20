@@ -187,6 +187,10 @@ export interface ToolTable {
    *  its tools' rows record: `builtin` for a listed plugin, and for a
    *  native one the revision it was loaded at (`NativePlugin`). */
   readonly revisionOf: (id: string) => string;
+  /** The native plugins among `entries`, each with its revision, in the
+   *  order they were accepted: what tells a native plugin from a listed
+   *  one. */
+  readonly natives: readonly NativePlugin[];
 }
 
 /**
@@ -293,6 +297,7 @@ const tableOf = (
     programs,
     factKinds: Object.fromEntries(factKinds),
     revisionOf: (id) => revisions.get(id) ?? 'builtin',
+    natives,
   });
 };
 

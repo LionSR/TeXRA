@@ -84,7 +84,7 @@ listed table outside any run (a native plugin contributes nothing read
 there: no row kinds, switch, probe or injected tools), the table a run's
 launch read on its fiber (`executeAgent`), and the table a step read for
 that step's calls (`ToolStep.services`). A plugin's layers are `RcMap`
-entries keyed by id and revision (`layerKey`), so a replaced native plugin's
+entries keyed by id and revision (`LayerKey`), so a replaced native plugin's
 new revision comes up beside the old one, which goes down when the last step
 that pinned it ends; a swap interrupts nothing. A native module is imported
 only when a step or a launch reads the table; a change to the install record
@@ -100,7 +100,7 @@ brings a native plugin's layers up before it offers anything of it
 import, its value, the table's check or its layers) is not tried again
 until its trust digest changes, and the revision of that plugin the table
 held before it stays in use, in memory only, until the plugin is fixed,
-disabled or removed (`standing`, `toolCatalogLayer`); with none, the
+disabled or removed (`previous`, `toolCatalogLayer`); with none, the
 plugin is withheld. Either way the step says why. A call's tool is its
 plugin's revision as its step recorded it (`sameIdentity`), so a resume
 after a replacement or a disable runs no unfinished call of the old

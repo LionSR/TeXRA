@@ -148,18 +148,29 @@ export interface NativeEntryModule {
 
 const HOST: NativePluginHost = Object.freeze({ plugins, effect: EFFECT });
 
-/** A native entry that did not load: the message names the plugin and
- *  why (`reason`), and `revision` the revision that did not load, when it
- *  has one. */
+/** A native entry that did not load: the message names the plugin, the
+ *  revision and why ({@link notLoaded}). */
 export class NativePluginFailed extends Schema.TaggedError<NativePluginFailed>()(
   'NativePluginFailed',
   {
     message: Schema.String,
-    reason: Schema.String,
-    revision: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
+
+/** The native code of the plugin `id` at `revision` (when it has one) is
+ *  not loaded, for `reason`: whether its import, its value, the table's
+ *  check or its layers refused it. */
+export const notLoaded = (
+  id: string,
+  revision: string | undefined,
+  reason: string,
+  cause?: unknown,
+): NativePluginFailed =>
+  new NativePluginFailed({
+    message: `The native code of ${id}${revision === undefined ? '' : ` at revision ${revision.slice(0, 12)}`} is not loaded: ${reason}`,
+    ...(cause === undefined ? {} : { cause }),
+  });
 
 // External values the harness only checks the kind of: a layer, an
 // effect, a function.
@@ -348,21 +359,6 @@ const checked = (
   });
 };
 
-/** The plugin `source`'s native entry (at `revision`) is not loaded, for
- *  `reason`. */
-const failure = (
-  source: LoadablePlugin,
-  reason: string,
-  revision?: string,
-  cause?: unknown,
-) =>
-  new NativePluginFailed({
-    message: `The native code of plugin ${source.record.name} is not loaded: ${reason}`,
-    reason,
-    ...(revision === undefined ? {} : { revision }),
-    ...(cause === undefined ? {} : { cause }),
-  });
-
 /** Import `entry` of `source` as `revision` and call its default export;
  *  a failure is logged once, as the load is kept. */
 const importEntry = (
@@ -371,7 +367,7 @@ const importEntry = (
   revision: string,
 ): Effect.Effect<NativePlugin, NativePluginFailed> => {
   const failed = (reason: string, cause?: unknown) =>
-    failure(source, reason, revision, cause);
+    notLoaded(installedPluginId(source.record.name), revision, reason, cause);
   const url = `${pathToFileURL(entry.file).href}?rev=${revision}`;
   return Effect.gen(function* () {
     const module: unknown = yield* Effect.tryPromise({
@@ -436,9 +432,10 @@ class EntryRevision implements Equal.Equal {
  * The process's native plugin loader: each installed plugin's entry at
  * each trust digest is imported and checked once (`load`; concurrent loads
  * of one revision share the import), its plugin (or why it did not load)
- * kept for the life of the process, as the module itself is. `imported`
- * answers the plugin a load already gave, and imports nothing: what a
- * reader that must run no plugin's code reads.
+ * kept for the life of the process, as the module itself is, and so is a
+ * revision whose services did not come up (`reject`): `load` answers its
+ * failure from then on. `imported` answers the plugin a load already gave,
+ * and imports nothing: what a reader that must run no plugin's code reads.
  */
 export const nativeLoader = Effect.map(
   Cache.make({
@@ -455,18 +452,43 @@ export const nativeLoader = Effect.map(
     readonly imported: (
       source: LoadablePlugin,
     ) => Effect.Effect<Option.Option<NativePlugin>>;
-  } => ({
-    load: (source) => {
-      const entry = source.plugin.native;
-      return entry === null
-        ? Effect.fail(failure(source, 'it has no native entry'))
-        : Cache.get(cache, new EntryRevision(source, entry));
-    },
-    imported: (source) => {
-      const entry = source.plugin.native;
-      return entry === null
-        ? Effect.succeedNone
-        : Cache.getSuccess(cache, new EntryRevision(source, entry));
-    },
-  }),
+    readonly reject: (
+      native: NativePlugin,
+      reason: string,
+    ) => Effect.Effect<void>;
+    /** Whether `native` was rejected. */
+    readonly rejected: (native: NativePlugin) => boolean;
+  } => {
+    const rejected = new Map<string, NativePluginFailed>();
+    return {
+      load: (source) =>
+        Effect.suspend(() => {
+          const entry = source.plugin.native;
+          if (entry === null)
+            return Effect.fail(
+              notLoaded(
+                installedPluginId(source.record.name),
+                undefined,
+                'it has no native entry',
+              ),
+            );
+          const key = new EntryRevision(source, entry);
+          const failed = rejected.get(key.revision);
+          return failed === undefined
+            ? Cache.get(cache, key)
+            : Effect.fail(failed);
+        }),
+      imported: (source) => {
+        const entry = source.plugin.native;
+        return entry === null
+          ? Effect.succeedNone
+          : Cache.getSuccess(cache, new EntryRevision(source, entry));
+      },
+      reject: ({ plugin, revision }, reason) =>
+        Effect.sync(() =>
+          rejected.set(revision, notLoaded(plugin.id, revision, reason)),
+        ),
+      rejected: ({ revision }) => rejected.has(revision),
+    };
+  },
 );
