@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Registers the `api-report` merge driver that `.gitattributes` names for the
-// generated API reports (`config/api-reports/`, `packages/*/docs/api/`). Two
+// generated API reports (`config/api-reports/`, `packages/{harness,llm}/docs/api/`,
+// the paths `GENERATED_DIRS` and `PACKAGES` in `check-api-report.mjs` write). Two
 // branches that both change the public surface conflict in those files on
 // every merge, and the right result is never either side: it is what
 // `npm run docgen` writes from the merged sources. The driver keeps this

@@ -4,7 +4,9 @@ config/storage/** text eol=lf
 src/test-kernel/fixtures/storage/** text eol=lf
 
 # Generated API reports: a merge keeps this branch's copy and `npm run docgen`
-# rewrites them from the merged sources (scripts/git-merge-drivers.mjs).
+# rewrites them from the merged sources (scripts/git-merge-drivers.mjs). Keep
+# these paths in step with GENERATED_DIRS and PACKAGES in
+# scripts/check-api-report.mjs.
 config/api-reports/** merge=api-report
 packages/harness/docs/api/** merge=api-report
 packages/llm/docs/api/** merge=api-report
