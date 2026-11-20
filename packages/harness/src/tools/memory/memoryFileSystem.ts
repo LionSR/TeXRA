@@ -137,13 +137,6 @@ export const deleteMemoryPath = Effect.fn('memoryFileSystem.deleteMemoryPath')(
   },
 );
 
-/** Rename one memory path inside the session's storage root. */
-export const renameMemoryPath = Effect.fn('memoryFileSystem.renameMemoryPath')(
-  function* (source: string, destination: string) {
-    yield* (yield* StorageFs).rename(source, destination);
-  },
-);
-
 /** Read at most `maxBytes` from the head of a memory file. */
 const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
   function* (storagePath: string, maxBytes: number, stats?: { size: number }) {
