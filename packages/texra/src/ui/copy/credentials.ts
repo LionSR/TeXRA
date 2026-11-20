@@ -1,7 +1,8 @@
 /**
- * Canonical copy for a credential's origin (llm's `CredentialOrigin`) and the
- * GitHub token's actions, so the settings webviews, the VS Code quick pick
- * and the CLI forms word them the same way.
+ * Canonical copy for a credential's origin (llm's `CredentialOrigin`), a
+ * provider key's prompt and the GitHub token's actions, so the settings
+ * webviews, the VS Code quick pick and the CLI forms word them the same
+ * way.
  */
 import type { CredentialOrigin } from '@texra-ai/llm';
 
@@ -22,6 +23,13 @@ export function credentialOriginLabel(
       return 'Not set';
   }
 }
+
+/** Setting a provider's API key, named by its display name, wherever a
+ *  surface offers it or asks for the key. */
+export const PROVIDER_KEY_COPY = Object.freeze({
+  set: (provider: string): string => `Set ${provider} API key`,
+  enter: (provider: string): string => `Enter ${provider} API key`,
+});
 
 /** The GitHub token's actions, wherever they are offered. */
 export const TOKEN_ACTION_COPY = Object.freeze({

@@ -1,9 +1,11 @@
 import { Effect, Result, Stream } from 'effect';
 
 import {
+  isInterrupted,
   planOf,
   runBypasses,
   formatResultCount,
+  type RunView,
 } from '@texra-ai/harness/schemas';
 import { type Session } from '@texra-ai/harness';
 import { readModelOptions } from '@texra-ai/harness/host';
@@ -32,7 +34,6 @@ import {
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatus } from '@ui/copy/runStatus';
-import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { formatSlashCommandHelp } from '../helpText';
@@ -134,6 +135,19 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
   });
 }
 
+/** The root tasks this window can resume that no process holds and that
+ *  did not end, newest first. */
+function interruptedTasks(): RunView[] {
+  return [...currentView().runs.values()]
+    .filter(
+      (run) =>
+        run.parentId === null &&
+        isInterrupted(run) &&
+        run.actions.includes('resume'),
+    )
+    .toSorted((a, b) => b.createdAt - a.createdAt);
+}
+
 /**
  * `/resume all`: every interrupted task resumes beside this chat
  * (`resumeTask`) and joins the agent list (Tab); one a resume refuses says
@@ -143,7 +157,7 @@ export function resumeInterruptedTasks(
   resumeTask: SlashCommandContext['resumeTask'],
 ): SlashCommandEffect {
   return Effect.suspend(() => {
-    const tasks = interruptedTasks(currentView());
+    const tasks = interruptedTasks();
     if (tasks.length === 0) {
       setTransientNotice('No interrupted tasks to resume.');
       return Effect.void;
@@ -156,13 +170,13 @@ export function resumeInterruptedTasks(
     return Effect.forEach(
       tasks,
       (task) =>
-        resumeTask(task.runId).pipe(
+        resumeTask(task.id).pipe(
           Effect.catch((refusal) =>
             Effect.sync(() => {
               if (refusal._tag === 'Cancelled') return;
               appendLocalErrorTranscript(
                 `Could not resume ${task.title}: ${requestErrorText(refusal)}`,
-                task.runId,
+                task.id,
               );
             }),
           ),

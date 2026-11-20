@@ -8,7 +8,7 @@ import { isEscapeInput } from '@cli/tui/inputKeys';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
-import { CANCEL_HINT, KeyHints } from '@cli/tui/ui/KeyHints';
+import { CANCEL_HINT } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
@@ -117,7 +117,7 @@ function FormBusyFrame(props: {
     <FormFrame
       color={progress.status === 'failed' ? COLOR_ERROR : undefined}
       title={title}
-      showCloseHint={false}
+      hints={hints}
     >
       {progress.status === 'running' && !spinnerFrozen ? (
         <LoadingIndicator label={displayMessage ?? 'working…'} />
@@ -131,9 +131,6 @@ function FormBusyFrame(props: {
             <Text>{liveCopyable}</Text>
           </Box>
         )}
-      <Box marginTop={1}>
-        <KeyHints hints={hints} confirmCancel={false} />
-      </Box>
     </FormFrame>
   );
 }

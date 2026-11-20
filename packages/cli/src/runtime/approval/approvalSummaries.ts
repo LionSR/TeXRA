@@ -14,6 +14,7 @@ import { hiddenRowsText } from '@cli/tui/overflowText';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
+import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -238,8 +239,12 @@ export function formatBashApprovalSummary(payload: BashRequest): string {
   return `${REQUEST_ASK.command}:\n${cwd}${payload.command}`;
 }
 
-/** What a tool edit's prompt shows: its path and tool, and the diff. */
-type ToolEditPrompt = Pick<ToolEditRequest, 'path' | 'sourceTool'> &
+/** What a tool edit's prompt shows: its diff's label (the tool, the file
+ *  relative to the workspace, the line counts), and the diff. */
+type ToolEditPrompt = Pick<
+  ToolEditRequest,
+  'relativePath' | 'sourceTool' | 'addedLines' | 'removedLines'
+> &
   Pick<ToolEditContent, 'hunks'>;
 
 function toolEditDiffLines(request: ToolEditPrompt): readonly string[] {
@@ -247,8 +252,8 @@ function toolEditDiffLines(request: ToolEditPrompt): readonly string[] {
   if (hunks.length === 0) return [];
 
   return [
-    `--- ${request.path}`,
-    `+++ ${request.path}`,
+    `--- ${request.relativePath}`,
+    `+++ ${request.relativePath}`,
     ...formatHunkLines(hunks),
   ];
 }
@@ -265,23 +270,16 @@ function boundedToolEditDiffLines(
   });
 }
 
-/** `Edit draft.tex (from edit_file)`: the ask, and the tool that asked. */
-export function toolEditAsk(
-  request: Pick<ToolEditRequest, 'path' | 'sourceTool'>,
-): string {
-  return `${REQUEST_ASK.edit} ${request.path} (from ${request.sourceTool})`;
-}
-
 function toolEditApprovalSummary(
   request: ToolEditPrompt,
   diffLines: readonly string[],
 ): string {
-  const header = toolEditAsk(request);
+  const header = toolEditDiffLabel(request).title;
   if (diffLines.length === 0) {
     return `${header}\nNo content changes proposed.`;
   }
 
-  return `${header}\nProposed diff:\n${diffLines.join('\n')}`;
+  return `${header}\n${diffLines.join('\n')}`;
 }
 
 export function buildToolEditApprovalContent(

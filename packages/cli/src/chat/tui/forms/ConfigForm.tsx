@@ -13,6 +13,7 @@ import { Text, useInput } from 'ink';
 import { useState } from 'react';
 
 import { isCtrlInput } from '@cli/tui/inputKeys';
+import { BACK_HINT } from '@cli/tui/ui/KeyHints';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import {
   settingEnumChoices,
@@ -267,7 +268,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         activeValue={typeof current === 'string' ? current : undefined}
         action="select"
         extraHints={RESET_HINTS}
-        escapeAction="back"
+        escape={BACK_HINT}
         onSelect={(value) => {
           commit(entry, value);
           setMode({ kind: 'list', category: mode.category });
@@ -378,7 +379,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       availableRows={props.availableRows}
       items={items}
       action="toggle / edit / open"
-      escapeAction="back"
+      escape={BACK_HINT}
       onSelect={handleSelect}
       onCancel={() => setMode({ kind: 'categories' })}
     />

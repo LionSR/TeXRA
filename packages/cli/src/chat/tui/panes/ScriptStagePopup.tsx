@@ -254,7 +254,7 @@ export function ScriptStagePopup({
 
   return (
     <ReaderPanel
-      footer={<KeyHints hints={hints} confirmCancel={false} wrap />}
+      footer={<KeyHints hints={hints} wrap />}
       layout={layout}
       title={title}
     >

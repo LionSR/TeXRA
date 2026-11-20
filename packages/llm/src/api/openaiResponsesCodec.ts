@@ -334,12 +334,17 @@ const TERMINAL_EVENTS = new Set<string>([
   'response.incomplete',
   'response.failed',
 ] satisfies StreamEventType[]);
+const RUNNING_SNAPSHOT_EVENTS = new Set<string>([
+  'response.created',
+  'response.queued',
+  'response.in_progress',
+] satisfies StreamEventType[]);
+/** Whether an event carries the snapshot of a response still running: the
+ *  stream's opening ones, and a background submission's acceptance. */
+export const isRunningSnapshotEvent = (type: string): boolean =>
+  RUNNING_SNAPSHOT_EVENTS.has(type);
 const SNAPSHOT_EVENTS = new Set<string>([
-  ...([
-    'response.created',
-    'response.queued',
-    'response.in_progress',
-  ] satisfies StreamEventType[]),
+  ...RUNNING_SNAPSHOT_EVENTS,
   ...TERMINAL_EVENTS,
 ]);
 const DELTA_CHANNELS = new Map<string, Append['channel']>([
