@@ -213,14 +213,7 @@ export const wakePendingNotes: Effect.Effect<
   const { runs } = yield* (yield* SessionViewAccess).read([]);
   for (const run of runs.values())
     if (run.queuedFollowUps.length > 0) yield* waitForWakeNotes(run.id);
-}).pipe(
-  Effect.catch(
-    logFailure(
-      CHANNEL,
-      "The pending wake notes could not be read; each is delivered at its run's next resume",
-    ),
-  ),
-);
+});
 
 /**
  * The one acceptance of a message to a run: every host and tool sends
