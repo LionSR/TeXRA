@@ -3,7 +3,7 @@
  * custom-endpoint row of each provider with an HTTP endpoint of its own, and
  * the China-region toggle of each provider with two platforms. The catalog
  * (`@texra-ai/llm`) owns the provider data; these rows are the host's, read
- * into `RouteFacts.endpoints` by `readModelSettings` and listed in the
+ * into `RouteFacts` by `readEndpointFacts` and listed in the
  * settings catalog (`stateSettings.ts`). A row's title names the provider
  * as the catalog does. The rows cover the catalog exactly, which
  * `modelSettings.ts` checks at compile time.
@@ -32,10 +32,6 @@ const endpointRow = <const Id extends string>(id: Id) =>
     slot: 'globalState',
   }) as const satisfies SettingRow<string> & { readonly id: Id };
 
-/** GLM's custom-endpoint row, which also decides whether the Coding Plan
- *  route applies (`readModelSettings`). */
-export const GLM_ENDPOINT_SETTING = endpointRow('glm');
-
 /** The providers' custom-endpoint rows, in catalog order. */
 export const PROVIDER_ENDPOINT_SETTINGS = Object.freeze([
   endpointRow('openai'),
@@ -46,7 +42,7 @@ export const PROVIDER_ENDPOINT_SETTINGS = Object.freeze([
   endpointRow('moonshot'),
   endpointRow('dashscope'),
   endpointRow('minimax'),
-  GLM_ENDPOINT_SETTING,
+  endpointRow('glm'),
   endpointRow('meta'),
 ] as const);
 

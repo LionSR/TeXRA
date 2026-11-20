@@ -6,6 +6,7 @@ import {
   decideModelRoute,
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
+  OWN_KEY_ROUTE_FACTS,
   ModelProvider,
   ReasoningEffort,
   routeConfig,
@@ -86,9 +87,8 @@ describe('provider capabilities', () => {
       codexSubscription: undefined,
     };
     const route = decideModelRoute(glm, {
-      endpoints: { [ModelProvider.GLM]: 'https://glm.example/v1' },
+      ...OWN_KEY_ROUTE_FACTS,
       plans: ['glm-coding-plan-subscription'],
-      chatgptContextWindow: undefined,
     });
     expect(route).toMatchObject({ plan: 'glm-coding-plan-subscription' });
     expect(routeConfig(glm, route)).toMatchObject({

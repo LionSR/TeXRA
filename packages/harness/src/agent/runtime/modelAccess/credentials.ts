@@ -21,7 +21,7 @@ import { type SessionToken, SubscriptionAccounts } from '@texra-ai/llm/node';
 import { HttpClient } from 'effect/http';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import { readProviderEndpoint } from '@model/modelSettings';
+import { readEndpointFacts } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
 
@@ -162,10 +162,13 @@ export const ownKeyCredential = Effect.fn('ownKeyCredential')(function* (
   Secrets
 > {
   // The key and its endpoint only: no other model setting can refuse it.
-  const endpoints = yield* readProviderEndpoint(stores, config.provider).pipe(
+  const endpoints = yield* readEndpointFacts(stores).pipe(
     Effect.mapError(RouteUnavailable.of),
   );
-  const route = decideModelRoute(config, { ...OWN_KEY_ROUTE_FACTS, endpoints });
+  const route = decideModelRoute(config, {
+    ...OWN_KEY_ROUTE_FACTS,
+    ...endpoints,
+  });
   if (route.kind !== 'api-key') {
     return yield* new RouteUnavailable({
       message: `Model "${config.label}" has no direct API-key provider.`,

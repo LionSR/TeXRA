@@ -263,7 +263,6 @@ export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
 // own, if it has them.
 export {
   DASHSCOPE_REGION_SETTING,
-  GLM_ENDPOINT_SETTING,
   GLM_REGION_SETTING,
   MINIMAX_REGION_SETTING,
   MOONSHOT_REGION_SETTING,

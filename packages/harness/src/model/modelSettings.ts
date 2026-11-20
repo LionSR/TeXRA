@@ -7,9 +7,7 @@ import { Array as Arr, Effect, Struct } from 'effect';
 
 import {
   type BackendProviderId,
-  findModelProviderPlugin,
   hasUsableApiKey,
-  MODEL_PROVIDER_PLUGINS,
   type PlanRoute,
   type ReasoningEffort,
   type RegionalProviderId,
@@ -31,11 +29,8 @@ import {
 } from '@shared/model/subscriptionAuth';
 import { type DeclinableUsageRoute } from '@shared/schemas';
 import {
-  GLM_ENDPOINT_SETTING,
   PROVIDER_ENDPOINT_SETTINGS,
   PROVIDER_REGION_SETTINGS,
-  providerEndpointSetting,
-  providerRegionSetting,
 } from '@shared/state/providerSettings';
 
 import { reasoningEffortOverrides } from './reasoningLevel';
@@ -98,55 +93,48 @@ export interface ModelSettings {
 }
 
 /**
- * The endpoint the user chose for each provider: a dashboard URL, else the
- * default of the region its toggle picks. A provider with neither takes the
- * catalog default when the route resolves.
+ * The route's endpoint facts as the user set them: a custom endpoint per
+ * provider and the regional providers switched to their China platform.
+ * Which URL a provider then takes is llm's decision (`decideModelRoute`).
  */
-const readEndpoints = Effect.fn('modelSettings.endpoints')(function* (
+export const readEndpointFacts = Effect.fn('readEndpointFacts')(function* (
   stores: SettingsStores,
-) {
-  const entries = yield* Effect.forEach(
-    MODEL_PROVIDER_PLUGINS,
-    (plugin) => readEndpointEntries(stores, plugin),
+): Effect.fn.Return<
+  Pick<RouteFacts, 'endpoints' | 'chinaPlatforms'>,
+  StateReadFailed
+> {
+  const [endpoints, regions] = yield* Effect.all(
+    [
+      Effect.forEach(
+        PROVIDER_ENDPOINT_SETTINGS,
+        (row) =>
+          Effect.map(
+            Settings.get(stores, row),
+            (url) => [row.id, url] as const,
+          ),
+        { concurrency: 'unbounded' },
+      ),
+      Effect.forEach(
+        PROVIDER_REGION_SETTINGS,
+        (row) =>
+          Effect.map(
+            Settings.get(stores, row),
+            (china) => [row.provider, china] as const,
+          ),
+        { concurrency: 'unbounded' },
+      ),
+    ],
     { concurrency: 'unbounded' },
   );
-  return Object.fromEntries(entries.flat());
+  return {
+    endpoints: Object.fromEntries(
+      endpoints.flatMap(([id, url]) =>
+        url ? [[id, `https://${hostPath(url)}`] as const] : [],
+      ),
+    ),
+    chinaPlatforms: regions.flatMap(([id, china]) => (china ? [id] : [])),
+  };
 });
-
-/** One provider's endpoint entry: its dashboard URL, else its region's default. */
-const readEndpointEntries = Effect.fn('modelSettings.endpoint')(function* (
-  stores: SettingsStores,
-  plugin: (typeof MODEL_PROVIDER_PLUGINS)[number],
-) {
-  const { id } = plugin;
-  const endpoint = providerEndpointSetting(id);
-  const custom = endpoint ? yield* Settings.get(stores, endpoint) : '';
-  if (custom) return [[id, `https://${hostPath(custom)}`] as const];
-  if (plugin.kind !== 'backend' || typeof plugin.baseUrl === 'string')
-    return [];
-  const { baseUrl } = plugin;
-  const regionToggle = providerRegionSetting(id);
-  const region =
-    regionToggle && (yield* Settings.get(stores, regionToggle))
-      ? 'china'
-      : 'international';
-  return [[id, baseUrl[region]] as const];
-});
-
-/**
- * `provider`'s endpoint alone, as the route facts' `endpoints` hold it, for a
- * request that needs no other model setting (audio transcription).
- */
-export const readProviderEndpoint = Effect.fn('readProviderEndpoint')(
-  function* (
-    stores: SettingsStores,
-    provider: string,
-  ): Effect.fn.Return<Readonly<Record<string, string>>, StateReadFailed> {
-    const plugin = findModelProviderPlugin(provider);
-    if (plugin === undefined) return {};
-    return Object.fromEntries(yield* readEndpointEntries(stores, plugin));
-  },
-);
 
 /** A URL-like endpoint as `host/path`, without protocol or trailing slashes. */
 function hostPath(input: string): string {
@@ -189,68 +177,68 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
   const secrets = yield* Secrets;
   // One read decides both the route and how an unreadable key fails.
   const preferKimiCode = yield* Settings.get(stores, KIMI_CODE_PREFER_SETTING);
-  const [
-    { chatgpt, xai, glm, glmEndpoint, kimiCodeKey, ...route },
-    rest,
-    wire,
-  ] = yield* Effect.all(
-    [
-      Effect.all(
-        {
-          chatgpt: subscriptionOn(stores, 'chatgpt'),
-          xai: subscriptionOn(stores, 'grok'),
-          glm: Settings.get(stores, GLM_CODING_PLAN_SETTING),
-          glmEndpoint: Settings.get(stores, GLM_ENDPOINT_SETTING),
-          // Under the Kimi Code preference the key picks the billing route,
-          // so an unreadable one fails the read rather than routing to the
-          // pay-per-token key. Otherwise it reads as absent and warns, the
-          // rule the picker applies to every key status.
-          kimiCodeKey: hasUsableApiKey(secrets, 'kimiCode').pipe(
-            Effect.catchTag('SecretsFailed', (failure) =>
-              preferKimiCode
-                ? Effect.fail(failure)
-                : Effect.logWarning(
-                    'Failed to read Kimi Code API key status; treating it as unavailable.',
-                    failure.cause,
-                  ).pipe(Effect.as(false)),
+  const [{ chatgpt, xai, glm, kimiCodeKey, endpoints, ...route }, rest, wire] =
+    yield* Effect.all(
+      [
+        Effect.all(
+          {
+            chatgpt: subscriptionOn(stores, 'chatgpt'),
+            xai: subscriptionOn(stores, 'grok'),
+            glm: Settings.get(stores, GLM_CODING_PLAN_SETTING),
+            // Under the Kimi Code preference the key picks the billing route,
+            // so an unreadable one fails the read rather than routing to the
+            // pay-per-token key. Otherwise it reads as absent and warns, the
+            // rule the picker applies to every key status.
+            kimiCodeKey: hasUsableApiKey(secrets, 'kimiCode').pipe(
+              Effect.catchTag('SecretsFailed', (failure) =>
+                preferKimiCode
+                  ? Effect.fail(failure)
+                  : Effect.logWarning(
+                      'Failed to read Kimi Code API key status; treating it as unavailable.',
+                      failure.cause,
+                    ).pipe(Effect.as(false)),
+              ),
             ),
-          ),
-          // Stored in thousands of tokens; this is its only reader.
-          chatgptContextWindow: Effect.map(
-            Settings.get(stores, CHATGPT_CODEX_CONTEXT_WINDOW_SETTING),
-            (thousands) => (thousands === null ? undefined : thousands * 1000),
-          ),
-          endpoints: readEndpoints(stores),
-        },
-        { concurrency: 'unbounded' },
-      ),
-      Effect.all({
-        reasoningLevels: reasoningEffortOverrides(stores.globalState),
-        automaticRetries: Settings.get(
-          stores,
-          MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+            // Stored in thousands of tokens; this is its only reader.
+            chatgptContextWindow: Effect.map(
+              Settings.get(stores, CHATGPT_CODEX_CONTEXT_WINDOW_SETTING),
+              (thousands) =>
+                thousands === null ? undefined : thousands * 1000,
+            ),
+            endpoints: readEndpointFacts(stores),
+          },
+          { concurrency: 'unbounded' },
         ),
-      }),
-      Effect.all({
-        serverState: Settings.get(
-          stores,
-          GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
-        ),
-        fastTier: Settings.get(stores, OPENAI_FAST_TIER_SETTING),
-        webSocket: Settings.get(stores, WEBSOCKET_OPENAI_SETTING),
-      }),
-    ],
-    { concurrency: 'unbounded' },
-  );
+        Effect.all({
+          reasoningLevels: reasoningEffortOverrides(stores.globalState),
+          automaticRetries: Settings.get(
+            stores,
+            MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+          ),
+        }),
+        Effect.all({
+          serverState: Settings.get(
+            stores,
+            GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
+          ),
+          fastTier: Settings.get(stores, OPENAI_FAST_TIER_SETTING),
+          webSocket: Settings.get(stores, WEBSOCKET_OPENAI_SETTING),
+        }),
+      ],
+      { concurrency: 'unbounded' },
+    );
   const on = {
     'chatgpt-subscription': chatgpt,
     'xai-subscription': xai,
     'kimi-code-subscription': preferKimiCode && kimiCodeKey,
-    // A dashboard GLM endpoint outranks the Coding Plan's path.
-    'glm-coding-plan-subscription': glm && !glmEndpoint,
+    'glm-coding-plan-subscription': glm,
   } satisfies Record<PlanRoute, boolean>;
   return {
-    route: { ...route, plans: Struct.keys(on).filter((plan) => on[plan]) },
+    route: {
+      ...route,
+      ...endpoints,
+      plans: Struct.keys(on).filter((plan) => on[plan]),
+    },
     kimiCodeKey,
     wire,
     ...rest,
