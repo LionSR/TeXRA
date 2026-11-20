@@ -15,7 +15,7 @@
  * - a cancelled wake fires anyway.
  */
 import { layer } from '@effect/vitest';
-import { type Context, Effect, Schema } from 'effect';
+import { type Context, DateTime, Effect, Option, Schema } from 'effect';
 import { TestClock } from 'effect/testing';
 import { assert, describe, expect } from 'vitest';
 
@@ -78,6 +78,19 @@ const arrange = Effect.fn('arrange')(function* (
   return runId;
 });
 
+/** The times a stored note's frame names, as instants: each written with
+ *  its UTC offset and its zone named, or it is left out. */
+const frameTimes = (note: string): Record<string, number> =>
+  Object.fromEntries(
+    [...note.matchAll(/(asked|due|delivered)=\\"([^"\\]+\])\\"/g)].flatMap(
+      ([, name, shown]) =>
+        Option.match(DateTime.makeZonedFromString(shown ?? ''), {
+          onNone: () => [],
+          onSome: (time) => [[name, DateTime.toEpochMillis(time)]],
+        }),
+    ),
+  );
+
 /** The user messages `runId` stored that carry a note to itself. */
 const notesRead = (storage: string, runId: RunId): string[] =>
   storedRows(storage).flatMap((row) =>
@@ -112,9 +125,11 @@ describe('a run that arranges a wake', { timeout: REAL_RUN_TIMEOUT }, () => {
           assert(note !== undefined, 'the note became a message');
           expect(more).toStrictEqual([]);
           // Asked at the clock's zero, due and delivered an hour later.
-          expect(note).toContain(
-            '<wake-note asked=\\"1970-01-01T00:00:00.000Z\\" due=\\"1970-01-01T01:00:00.000Z\\" delivered=\\"1970-01-01T01:00:00.000Z\\">',
-          );
+          expect(frameTimes(note)).toStrictEqual({
+            asked: 0,
+            due: 3_600_000,
+            delivered: 3_600_000,
+          });
           expect(note).toContain('You wrote this note to yourself');
           expect(note).toContain('Check the build.');
         }),
@@ -142,9 +157,11 @@ describe('a run that arranges a wake', { timeout: REAL_RUN_TIMEOUT }, () => {
             const [note, ...more] = notesRead(roots.storage, runId);
             assert(note !== undefined, 'the note became a message');
             expect(more).toStrictEqual([]);
-            expect(note).toContain(
-              'due=\\"1970-01-01T01:00:00.000Z\\" delivered=\\"1970-01-01T03:00:00.000Z\\"',
-            );
+            expect(frameTimes(note)).toStrictEqual({
+              asked: 0,
+              due: 3_600_000,
+              delivered: 10_800_000,
+            });
             // A later open delivers nothing more: the next turn is the
             // person's, and it still holds the one note.
             const session = yield* persistentTestSession();

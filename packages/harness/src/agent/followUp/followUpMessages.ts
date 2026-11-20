@@ -5,6 +5,7 @@ import { isInstruction } from '@shared/session/runFacts';
 import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { escapeText } from '@shared/utils/xmlEscape';
+import { formatLocalTime } from '@utils/text/stringUtils';
 import type { InboxItem } from './Inbox';
 
 /** What the run was asked to do, joined from its instructing input. */
@@ -79,9 +80,6 @@ export const wakeNoteOf = ({
 export const wakeNotes = (rows: readonly QueuedFollowUp[]): WakeNote[] =>
   rows.flatMap((row) => wakeNoteOf(row) ?? []);
 
-/** A time as the model reads it. */
-export const iso = (time: number): string => new Date(time).toISOString();
-
 /**
  * A wake note as its run's model reads it, rendered where the row becomes
  * the run's message: it says the run wrote the note itself, when it asked,
@@ -94,7 +92,7 @@ export const wakeNoteText = (
   now: number,
 ): string =>
   [
-    `<wake-note asked="${iso(asked)}" due="${iso(due)}" delivered="${iso(now)}">`,
+    `<wake-note asked="${formatLocalTime(asked)}" due="${formatLocalTime(due)}" delivered="${formatLocalTime(now)}">`,
     'You wrote this note to yourself when you arranged to be continued at the due time. No person sent it: read it as your own reminder and decide what to do now.',
     '',
     escapeText(note),

@@ -8,7 +8,7 @@
  * same answer.
  */
 // Third-party imports
-import { Clock, DateTime, Effect, Schema, Struct } from 'effect';
+import { Clock, Effect, Schema, Struct } from 'effect';
 import { PLAN_ROUTES, type ModelConfig } from '@texra-ai/llm';
 import type { PlanUsageWindow } from '@texra-ai/llm/node';
 
@@ -28,12 +28,7 @@ import {
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 import { defineTool } from '@tools/core/definition';
-
-/** A time in the process's own zone, with its UTC offset. */
-const zoned = (millis: number): string =>
-  DateTime.formatIsoOffset(
-    DateTime.makeZonedUnsafe(millis, { timeZone: DateTime.zoneMakeLocal() }),
-  );
+import { formatLocalTime } from '@utils/text/stringUtils';
 
 /** A model's listed prices, USD per million tokens. */
 const listedPrices = (config: ModelConfig) => {
@@ -74,7 +69,9 @@ const modelsNow = Effect.fn('resources.models')(function* (call: RunToolCall) {
 const windowOf = (window: PlanUsageWindow) => ({
   name: window.name,
   remainingPercent: window.percentRemaining,
-  ...(window.resetAt !== undefined && { resetsAt: zoned(window.resetAt) }),
+  ...(window.resetAt !== undefined && {
+    resetsAt: formatLocalTime(window.resetAt),
+  }),
   ...(window.windowMinutes !== undefined && {
     windowMinutes: window.windowMinutes,
   }),
@@ -86,20 +83,20 @@ const quotaOf = (quota: PlanQuota) => {
     case 'read':
       return {
         source: 'quota endpoint',
-        asOf: zoned(quota.at),
+        asOf: formatLocalTime(quota.at),
         ...(quota.planName !== undefined && { planName: quota.planName }),
         windows: quota.windows.map(windowOf),
       };
     case 'failed':
       return {
         source: 'quota endpoint',
-        asOf: zoned(quota.at),
+        asOf: formatLocalTime(quota.at),
         failed: quota.reason,
       };
     case 'observed':
       return {
         source: 'reply headers',
-        asOf: zoned(quota.at),
+        asOf: formatLocalTime(quota.at),
         windows: quota.windows.map(windowOf),
       };
     case 'unobserved':
@@ -195,9 +192,9 @@ const spendNow = Effect.fn('resources.spend')(function* (call: RunToolCall) {
 });
 
 /** The answer as lines. */
-const text = (now: string, timeZone: string, parts: Parts): string => {
+const text = (now: string, parts: Parts): string => {
   const usd = (n: number) => `$${Number(n.toPrecision(4))}`;
-  const lines = [`Now: ${now} (${timeZone})`];
+  const lines = [`Now: ${now}`];
   if (parts.models.ok) {
     lines.push(
       'Models that can run now (billing; listed USD per million tokens input/cached input/output):',
@@ -271,8 +268,7 @@ const runResources = Effect.fn('resources.call')(function* (call: RunToolCall) {
     { concurrency: 'unbounded' },
   );
   const value = {
-    now: zoned(now),
-    timeZone: DateTime.zoneToString(DateTime.zoneMakeLocal()),
+    now: formatLocalTime(now),
     ...(parts.models.ok
       ? { models: parts.models.value }
       : { modelsUnknown: parts.models.error }),
@@ -283,7 +279,7 @@ const runResources = Effect.fn('resources.call')(function* (call: RunToolCall) {
   };
   return {
     status: 'executed' as const,
-    output: text(value.now, value.timeZone, parts),
+    output: text(value.now, parts),
     summary: 'Read resources',
     value: toJsonValue(value),
   };
@@ -295,11 +291,11 @@ export const ResourcesTool = defineTool({
   replay: 'safe',
   lane: 'parallel',
   scriptReturns:
-    '{ now: string; timeZone: string; models?: { id: string; billing: string; listedUsdPerMillionTokens: { input: number; cachedInput: number; output: number; aboveInputTokens?: { tokens: number; input: number; cachedInput: number; output: number } } }[]; modelsUnknown?: string; plans?: { plan: string; on: boolean; quota: { source: string; asOf?: string; planName?: string; windows?: { name: string; remainingPercent: number; resetsAt?: string; windowMinutes?: number }[]; failed?: string; unknown?: string } }[]; plansUnknown?: string; spend: { runUsd: number; treeUsd: number; caps: { runId: string; maxCostUsd: number; spentUsd: number }[] } }',
+    '{ now: string; models?: { id: string; billing: string; listedUsdPerMillionTokens: { input: number; cachedInput: number; output: number; aboveInputTokens?: { tokens: number; input: number; cachedInput: number; output: number } } }[]; modelsUnknown?: string; plans?: { plan: string; on: boolean; quota: { source: string; asOf?: string; planName?: string; windows?: { name: string; remainingPercent: number; resetsAt?: string; windowMinutes?: number }[]; failed?: string; unknown?: string } }[]; plansUnknown?: string; spend: { runUsd: number; treeUsd: number; caps: { runId: string; maxCostUsd: number; spentUsd: number }[] } }',
   description: `Read the resources you have now. Takes no arguments and changes nothing.
 
 It answers:
-- \`now\`: the current time, ISO 8601 with its UTC offset, and \`timeZone\`, the zone it is in.
+- \`now\`: the current time in this machine's zone: ISO 8601 with its UTC offset, then the zone's name in brackets. Every time in the answer is written the same way.
 - \`models\`: the models a run can use now, each with \`billing\` (the subscription plan its next request is paid by, or \`api-key:<provider>\`) and its listed prices in US dollars per million tokens (input, cached input, output; \`aboveInputTokens\` when a longer prompt is billed at other rates). A request paid by a plan costs nothing per token; the listed prices are what the provider's API key is billed.
 - \`plans\`: each subscription plan, whether it carries requests now (\`on\`), and what is known of its quota: each window's share remaining and when it resets, with \`asOf\`, when that was learned and from which \`source\`. A plan's quota endpoint is asked at most every 30 seconds; a plan whose replies state its quota is known only as of its last reply, which may be long ago. \`failed\` names why a quota read gave nothing; \`unknown\` says why nothing is known.
 - \`spend\`: what this run has spent in US dollars (\`runUsd\`), and with every run it started (\`treeUsd\`), and \`caps\`: each spend cap a waiting call holds this run or a run it belongs to to; that run and the runs it started are stopped once their spend reaches \`maxCostUsd\`.
