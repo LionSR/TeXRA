@@ -46,6 +46,7 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import { type RunCell, SessionLog } from '@shared/session/runHistory';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { workAutoApproved } from '../requests';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -158,7 +159,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   const { workspace, globalStorage } = yield* SessionRoots;
   if (matched.length > 0 && workspace === undefined)
     run.logger.warn(
-      `Not running ${matched.length} ${event} hook(s): this run has no workspace to run them in.`,
+      `Not running ${formatResultCount(matched.length, `${event} hook`)}: this run has no workspace to run them in.`,
     );
   const stdin = encodeHookInput(input);
   const ran = yield* Effect.forEach(

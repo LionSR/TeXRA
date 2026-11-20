@@ -151,11 +151,11 @@ export function formatCheckAnnotations(
   const remaining = total - shown.length;
   const overflow =
     remaining > 0
-      ? `…and ${remaining} more annotation(s). See ${run.html_url} for the full list.`
+      ? `…and ${formatResultCount(remaining, 'more annotation')}. See ${run.html_url} for the full list.`
       : run.html_url;
   return wrap(
     sections(
-      `Check "${run.name}" reported ${total} matching inline annotation(s) on ${targetPath(pr)}. Each annotation is tagged with its level (${formatCheckAnnotationLevelList(annotations)}); investigate and determine what action (if any) is needed.`,
+      `Check "${run.name}" reported ${formatResultCount(total, 'matching inline annotation')} on ${targetPath(pr)}. Each annotation is tagged with its level (${formatCheckAnnotationLevelList(annotations)}); investigate and determine what action (if any) is needed.`,
       shown.map(annotationBlock).join('\n\n'),
       overflow,
     ),

@@ -7,6 +7,7 @@ import {
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 import {
+  formatResultCount,
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
   type UserQuestionRequest,
@@ -98,7 +99,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
 
   return executed(
     JSON.stringify({ answers }, null, 2),
-    `Answered ${answerCount} user question(s).`,
+    `Answered ${formatResultCount(answerCount, 'user question')}.`,
   );
 });
 
