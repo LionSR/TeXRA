@@ -16,6 +16,7 @@ import {
   PROVIDER_ENDPOINT_SETTINGS,
   PROVIDER_REGION_SETTINGS,
 } from '@shared/state/providerSettings';
+import type { ConfigTarget } from '@shared/config/settings';
 
 /**
  * The settings catalog, by owner. This module declares the row shape and the
@@ -70,7 +71,7 @@ export interface SettingRow<A = unknown> extends StateKey<A> {
   /** Human-readable description, shared across every host that renders it. */
   readonly description: string;
   /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
-  readonly configTarget?: 'global' | 'workspace' | 'local';
+  readonly configTarget?: ConfigTarget;
   /**
    * A `global` row a project file may still switch off: its project value
    * counts unless it is `true`, so a repository can opt out (telemetry) but
