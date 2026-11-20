@@ -1,7 +1,8 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
 import {
-  truncateSummary,
+  collapseWhitespace,
+  previewLabel,
   type TokenUsageStats,
   type ToolUseLog,
   type ToolCallStatus,
@@ -139,8 +140,6 @@ export const readClaudeCodeRun = Effect.fn('claudeAgent.readClaudeCodeRun')(
   },
 );
 
-const SUMMARY_MAX_LENGTH = 60;
-
 /** The Claude counts in the one usage shape; zero cache counts are omitted. */
 function claudeUsageStats(
   inputTokens: number,
@@ -209,9 +208,8 @@ export function buildClaudeToolUseLog(params: {
   const { toolName, input } = params;
   const log: ToolUseLog = {
     toolName: `claude:${toolName}`,
-    summary: truncateSummary(
-      describeToolInput(toolName, input),
-      SUMMARY_MAX_LENGTH,
+    summary: previewLabel(
+      collapseWhitespace(describeToolInput(toolName, input)),
     ),
     input: Predicate.isObject(input) ? input : undefined,
     status: params.status,

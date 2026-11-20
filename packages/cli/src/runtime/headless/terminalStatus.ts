@@ -3,11 +3,8 @@ import { Effect } from 'effect';
 import { InstalledPlugins } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { RUN_OUTCOME, type RunOutcome } from '@texra-ai/harness/schemas';
-import {
-  runOutcomeToCliRunStatus,
-  type CliPluginPin,
-  type CliRunResult,
-} from '@cli/schemas/cliOutput';
+import type { CliPluginPin, CliRunResult } from '@cli/schemas/cliOutput';
+import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { CliExitCode } from '../platform/exitCodes';
 
@@ -31,11 +28,11 @@ export function readCliPluginPins(stores: SettingsStores) {
 }
 
 /** Display text for a finished chat run: the last response if present,
- *  otherwise a terse status/run-id summary. */
+ *  otherwise its status, worded as every host words it, and its run id. */
 export function toolUseResultText(result: CliRunResult): string {
   return (
     result.output.response.trim() ||
-    `${runOutcomeToCliRunStatus(result.outcome)}\nRun: ${result.runId}`
+    `${runStatusLabel(result.outcome)}\nRun: ${result.runId}`
   );
 }
 

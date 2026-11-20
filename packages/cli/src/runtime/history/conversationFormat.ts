@@ -1,4 +1,4 @@
-import type { ExportNode } from '@texra-ai/harness/schemas';
+import { formatResultCount, type ExportNode } from '@texra-ai/harness/schemas';
 import { formatConversationMessage } from '@texra-ai/harness/host';
 
 import type {
@@ -86,14 +86,16 @@ export function formatConversation(
     shown =
       messages.length === messageCount
         ? 'all messages'
-        : `${messages.length} non-empty messages`;
+        : formatResultCount(messages.length, 'non-empty message');
   } else {
     shown =
       messages.length === 1
         ? `${messages[0]?.role ?? 'message'} message ${messages[0]?.index ?? '?'}`
         : `${messages.length} recent messages`;
   }
-  const lines = [`Conversation (${messageCount} messages; showing ${shown}):`];
+  const lines = [
+    `Conversation (${formatResultCount(messageCount, 'message')}; showing ${shown}):`,
+  ];
   for (const message of messages) {
     lines.push('', `[${message.role} #${message.index}]`, message.content);
   }

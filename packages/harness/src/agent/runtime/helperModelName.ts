@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { modelRefOf } from '@texra-ai/llm';
-import type { AgentConfig } from '@shared/schemas';
 import { withLogChannel } from '@logger/effectLog';
 import { getEnabledModels, readModelOptions } from '@model/computeModelOptions';
 import { Settings } from '@shared/config/settings';
@@ -41,34 +40,31 @@ export const getHelperModelName = Effect.fn('getHelperModelName')(function* (
 });
 
 /**
- * Helper-model preference for launches that opt in with
- * `helperModel`: small, quick fix-up actions a host runs on the
- * configured helper model rather than the heavyweight model the user has
- * selected. Every other launch (a direct run, an orchestrator delegation)
- * leaves the flag off and keeps the chosen model.
+ * The model a helper task runs on: the helper model ({@link getHelperModelName})
+ * while it can serve, else `fallback`, the model the asking run or launch
+ * already has. A user who can reach only that model's provider still gets
+ * the helper task without the setting being rewritten for them; the swap is
+ * logged. With no helper model the answer is `fallback`, and with neither
+ * `undefined`.
  *
- * Swap `config`'s model for the configured helper model, or return it unchanged
- * when none is configured, the helper model already equals it, or the helper
- * model is unavailable.
- *
- * `stores` are the setting slots the launching run already holds, so the
- * preference and the availability answer are read from the same stores as
- * the run itself.
+ * The one decision for both helper uses: a launch that opts in with
+ * `helperModel` (small, quick fix-up actions a host runs off the user's
+ * heavyweight model) and a helper call (`helperCall`). `stores` are the
+ * setting slots the caller holds, so the preference and the availability
+ * answer are read from the same stores as the run itself.
  */
-export const applyHelperModelPreference = Effect.fn(
-  'applyHelperModelPreference',
-)(function* (config: AgentConfig, stores: SettingsStores) {
+export const servableHelperModel = Effect.fn('servableHelperModel')(function* (
+  stores: SettingsStores,
+  fallback: string | undefined,
+) {
   const helperModel = yield* getHelperModelName(stores);
-  if (helperModel === undefined || helperModel === config.model) return config;
-
+  if (helperModel === undefined) return fallback;
+  if (fallback === undefined || fallback === helperModel) return helperModel;
   const [option] = yield* readModelOptions(stores, [helperModel]);
   const unavailable = option?.unavailableReason;
-  if (unavailable) {
-    yield* Effect.logWarning(
-      `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} is unavailable. ${unavailable}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return config;
-  }
-
-  return { ...config, model: helperModel };
+  if (!unavailable) return helperModel;
+  yield* Effect.logWarning(
+    `Using ${fallback}: helper model ${helperModel} is unavailable. ${unavailable}`,
+  ).pipe(withLogChannel(CHANNEL));
+  return fallback;
 });
