@@ -16,10 +16,10 @@ another open PR to merge first.
    (`logLifecycleWarning`) and
    `packages/harness/src/controllers/session/deletionCleanup.ts` (two inline
    pipes). Both files are rewritten by the open #14944; convert them after it
-   merges.
+   merges. Landed 2026-11-16 (see below).
 4. **`replyDocuments.ts` reads three files with `readFileString` and a CRLF
    replace**, the body of `readNormalizedFile`. Left for the same reason: the
-   open #14941 edits that file.
+   open #14941 edits that file. Landed 2026-11-16 (see below).
 5. **`import.meta.dirname`.** Every script now reads its directory from
    `import.meta.dirname`; the last one, `packages/harness/scripts/publish-npm.mjs`,
    followed on 2026-11-19 (checked with its `--dry-run`). What is left is the
