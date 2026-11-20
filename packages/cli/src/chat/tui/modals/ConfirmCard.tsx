@@ -5,10 +5,12 @@ import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
 import { createContext, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import {
+  BORDERED_PANEL_CHROME_COLUMNS,
+  BorderedPanel,
+} from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, keyHintSpans, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 import {
   declineDecision,
@@ -108,7 +110,7 @@ export function ConfirmCard({
   } else {
     hints = confirmCardKeyHintsForWidth({
       ...keyOptions,
-      maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
+      maxColumns: Math.max(0, columns - BORDERED_PANEL_CHROME_COLUMNS),
     });
   }
   const stackedCompactHints = compactHintLayout?.stackedHints ?? hints;
