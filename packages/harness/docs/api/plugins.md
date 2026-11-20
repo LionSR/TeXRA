@@ -54,6 +54,22 @@ The tool that runs a named agent as a child of the calling run.
 const AGENT_TOOL_NAME: "agent"
 ```
 
+## AgentDirectories
+
+The process's agent directories as an Effect service, provided once by the
+composition root through `processLayer`. The shape is the port itself: a
+program that resolves one of the three local agent directories yields the
+port's own readers instead of reaching for the process platform's copy.
+A root holds its port before it installs the runtime that serves it, so the
+layer is `Layer.succeed(AgentDirectories)(port)`.
+
+```ts
+class AgentDirectories extends Context.Service<
+  AgentDirectories,
+  AgentDirectoriesPort
+>()('@texra-ai/harness/platform/AgentDirectories')
+```
+
 ## AgentTrace
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
@@ -418,6 +434,21 @@ function buildApprovalRejectedResult(
 ): ToolResult
 ```
 
+## buildDiffHunks
+
+Unified-diff hunks between two texts — the one diff engine behind every
+count, every rendered diff body, and every patch note in the product.
+
+On timeout this reports a whole-file replacement rather than an empty diff:
+"everything changed" is a true (if verbose) description of the edit, while
+an empty hunk list would read as "nothing changed". The returned `timeout`
+names the cause, and the caller that owns the edit reports it through
+{@link reportDiffTimeout}, so a degraded diff is never silent.
+
+```ts
+function buildDiffHunks(oldText: string, newText: string): DiffHunks
+```
+
 ## buildFileAttachment
 
 Build a tool attachment by reading a workspace file and packaging metadata.
@@ -652,6 +683,44 @@ class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
 )
 ```
 
+## countLineChanges
+
+Added/removed line counts applied over hunks a caller already holds.
+
+```ts
+function countLineChanges(hunks: readonly Hunk[]): {
+  added: number;
+  removed: number;
+}
+```
+
+## createExternalLocation
+
+```ts
+function createExternalLocation(
+  absolutePath: string,
+): ExternalFileLocation
+```
+
+## createRunStorageLocation
+
+```ts
+function createRunStorageLocation(
+  absolutePath: string,
+  relativePath: string,
+  runId: RunId,
+): RunStorageFileLocation
+```
+
+## createWorkspaceLocation
+
+```ts
+function createWorkspaceLocation(
+  absolutePath: string,
+  relativePath: string,
+): WorkspaceFileLocation
+```
+
 ## CurrentValues
 
 A root's current values (`current_value`): one row per family and key,
@@ -799,6 +868,18 @@ type DefineToolOptions<T, R = never> = Required<
      *  an `Error` and the model reads its message as the tool's error. */
     execute: (input: T) => Effect.Effect<ToolResult | string, Error, R>;
   };
+```
+
+## DiffHunks
+
+One diff pass: its hunks, and — when the pass hit its bound — the warning
+naming why the hunks are a whole-file replacement.
+
+```ts
+interface DiffHunks {
+  readonly hunks: StructuredPatchHunk[];
+  readonly timeout: string | undefined;
+}
 ```
 
 ## DraftBlob
@@ -1000,6 +1081,16 @@ class HostCapabilities extends Context.Service<
   HostCapabilities,
   { readonly of: (storage: string) => ReadonlySet<string> }
 >()('@texra-ai/harness/agent/HostCapabilities')
+```
+
+## Hunk
+
+A hunk as its readers see it: jsdiff's, or one carried as data.
+
+```ts
+type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
+  readonly lines: readonly string[];
+};
 ```
 
 ## InboxItem
@@ -1407,6 +1498,58 @@ function parseWorkingDirectory(
 ): Result.Result<string | undefined, ToolError>
 ```
 
+## pathToLocationIn
+
+Convert a string path to a FileLocation against the workspace root its
+caller holds as data: `undefined` with no folder open, which resolves every
+path as external.
+
+NOT run-storage aware — it can only create workspace or external locations.
+For run-storage awareness, use `sourceLocationUnder`.
+
+Path normalization is handled internally - you can pass paths with either
+forward slashes or backslashes. It's safe to pass already-normalized paths
+(path.normalize() is idempotent).
+
+- `@param` workspaceRoot - The session's workspace root
+- `@param` target - Absolute or workspace-relative path
+- `@returns` FileLocation (workspace or external, never runStorage)
+
+```ts
+function pathToLocationIn(
+  workspaceRoot: string | undefined,
+  target: string,
+): FileLocation
+```
+
+## PerKeyLane
+
+One in-process exclusive lane per key for Effect programs: the key's
+`Semaphore`, and the number of fibers holding or waiting on it. The count
+is what lets the entry leave its map once the last fiber is done.
+
+```ts
+interface PerKeyLane {
+  readonly lock: Semaphore.Semaphore;
+  fibers: number;
+}
+```
+
+## PerKeyLanes
+
+Where the lanes live. A `Map` is the usual choice; a `WeakMap` keyed by an
+owning object works too and does not need the idle cleanup (its entries'
+lifetime is the key's own), which is why only these three methods are
+required.
+
+```ts
+interface PerKeyLanes<Key> {
+  get(key: Key): PerKeyLane | undefined;
+  set(key: Key, lane: PerKeyLane): unknown;
+  delete(key: Key): unknown;
+}
+```
+
 ## PlatformSecrets
 
 Provider for secure secret storage (API keys, tokens).
@@ -1790,6 +1933,16 @@ Render a prompt string using nunjucks templating.
 
 ```ts
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
+```
+
+## reportDiffTimeout
+
+Warn that a diff pass fell back to a whole-file replacement, if it did.
+
+```ts
+function reportDiffTimeout(
+  timeout: string | undefined,
+): Effect.Effect<void>
 ```
 
 ## requestToolEditApproval
@@ -2701,6 +2854,22 @@ interface ToolTable {
 }
 ```
 
+## unifiedDiffText
+
+Unified-diff body between two texts (`text` is undefined when they are
+identical), with the pass's {@link DiffHunks.timeout} for the caller to
+report.
+
+Carries no `---`/`+++` file header: every consumer already names the file in
+its own surrounding prose.
+
+```ts
+function unifiedDiffText(
+  oldText: string,
+  newText: string,
+): { readonly text: string | undefined; readonly timeout: string | undefined }
+```
+
 ## ValueFamily
 
 One family of current values: its stored name and the schema its value
@@ -2721,6 +2890,15 @@ The web: `web_search` and `web_fetch`.
 const web: Plugin
 ```
 
+## withFileWriteLane
+
+Run `self`, a read, decision and write of `file`, as the file's one
+writer in this process. `file` is absolute.
+
+```ts
+const withFileWriteLane: (file: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, FileSystem | R>
+```
+
 ## withLogChannel
 
 Name the channel every `Effect.log*` inside `self` belongs to. Annotations
@@ -2729,6 +2907,30 @@ for the entries that don't.
 
 ```ts
 const withLogChannel: (channel: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, R>
+```
+
+## withPerKeyLane
+
+Run `self` holding `key`'s one permit. The exclusion, the queue and its
+release under interruption are the `Semaphore`'s: a fiber joins the key's
+queue and enters in the order it joined, and a waiter that is interrupted
+leaves the queue. What this adds is the keyed map: the lane is created on
+first use, counted while a fiber holds or waits on it, and deleted from
+`lanes` when the count returns to zero. The count is taken and given back
+as one acquire and release, so no exit leaves a key counted.
+
+Order is the order fibers join the semaphore's queue, a few steps after
+they call this. Two fibers that call within those steps of each other,
+with the scheduler taking the first one off in between, can enter in the
+other order (measured at 8 of 2101 step offsets at the default budget,
+against 2 for a bare `Semaphore`). A caller that must keep the order of
+its calls puts them through one consumer, not a lane.
+
+```ts
+function withPerKeyLane<Key>(
+  lanes: PerKeyLanes<Key>,
+  key: Key,
+): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
 ```
 
 ## withRequestTimeout
