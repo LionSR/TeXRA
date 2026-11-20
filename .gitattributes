@@ -2,3 +2,9 @@
 # with what the code generates: a checkout must not rewrite their line ends.
 config/storage/** text eol=lf
 src/test-kernel/fixtures/storage/** text eol=lf
+
+# Generated API reports: a merge keeps this branch's copy and `npm run docgen`
+# rewrites them from the merged sources (scripts/git-merge-drivers.mjs).
+config/api-reports/** merge=api-report
+packages/harness/docs/api/** merge=api-report
+packages/llm/docs/api/** merge=api-report
