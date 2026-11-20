@@ -48,6 +48,7 @@ import {
 } from '@common/plugins/mcpServers';
 import { readJsonFile } from '@common/plugins/pluginManifest';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import type { NativePlugin } from '@tools/toolTable';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
@@ -118,7 +119,8 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
 /**
  * An installed plugin a step loads while it is enabled and trusted: its MCP
  * servers, if any, whose tools the catalog contributes under its one id and every
- * tool-use run is offered, and the plugin as read, whose
+ * tool-use run is offered, the plugin its native entry returned, if any and
+ * it loaded, and the plugin as read, whose
  * skills the step lists. Its servers are held under its trust digest
  * (`source.trust.digest`), which changes exactly when what it would start
  * or ship does, and so replaces them.
@@ -126,13 +128,15 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
 interface InstalledToolPlugin {
   readonly id: string;
   readonly servers: readonly McpServerPlugin[];
+  readonly native: NativePlugin | null;
   readonly source: LoadablePlugin;
 }
 
 /**
  * The installed plugins that load now, read at each step, each with the
- * servers it starts (none for one that ships only skills), and why each
- * enabled one that does not load is held back.
+ * servers it starts (none for one that ships only skills) and its native
+ * plugin, and why each enabled one that does not load, or whose native
+ * entry does not, is held back.
  */
 export type InstalledToolReader = Effect.Effect<{
   readonly plugins: readonly InstalledToolPlugin[];

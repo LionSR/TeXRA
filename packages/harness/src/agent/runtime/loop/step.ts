@@ -71,6 +71,7 @@ import {
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { readDisabledTools } from '@shared/state/disabledTools';
 import type { SessionTools } from '@tools/sessionTools';
+import { ToolRegistry } from '@tools/toolTable';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -239,13 +240,14 @@ const openStep = Effect.fn('Step.open')(function* (
       .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));
     const { policy, ...gates } = yield* liveToolGates(run);
+    // The step resolves against the table it read, as its calls do.
     const resolved = yield* resolveStepTools(pinned.entries, {
       ...run.toolInputs,
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
       directToolCalls: keepsDirectToolCalls(yield* ScopedRef.get(run.model)),
       ...(program !== null && { approvalPromptsUnavailable: false }),
-    });
+    }).pipe(Effect.provideService(ToolRegistry, pinned.table));
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     // A plugin whose dependency is missing gives the step no program and no
     // prompt section, as it gives it no tool.

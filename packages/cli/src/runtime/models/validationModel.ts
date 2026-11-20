@@ -387,6 +387,30 @@ function goldenTurn(
         : [step()],
     );
   }
+  // The native plugin run: it installs and enables the plugin its task
+  // names, then calls its `native_echo` once, or twice with the first
+  // waiting for its release. A step that does not
+  // offer `native_echo` says so, with what it does offer.
+  if (system.includes('GOLDEN-NATIVE')) {
+    const offered = turn.tools.map(({ name }) => name);
+    const source = /Install the plugin at (\S+?)\. /.exec(said)?.[1];
+    const echo = (input: object) => () =>
+      offered.includes('native_echo')
+        ? [call('native_echo', input)]
+        : text(`native_echo is not offered; offered: ${offered.join(', ')}`);
+    const steps = [
+      () =>
+        offered.includes('native_echo')
+          ? [call('native_echo', {})]
+          : [call('plugin_manager', { command: 'install', source })],
+      () => [call('plugin_manager', { command: 'enable', name: 'echoes' })],
+      ...(said.includes('Echo twice, the first waiting.')
+        ? [echo({ wait: true }), echo({})]
+        : [echo({})]),
+    ];
+    const step = steps[results.length];
+    return Effect.succeed(step === undefined ? text('Echoed.') : step());
+  }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),

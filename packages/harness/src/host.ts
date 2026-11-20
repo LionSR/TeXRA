@@ -193,6 +193,7 @@ export {
   PluginRequestError,
 } from '@common/plugins/pluginManifest';
 export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
+export type { NativeEntry } from '@common/plugins/nativeEntry';
 export type { ConfiguredHook } from '@common/plugins/hookConfig';
 export type { InstalledPlugin } from '@shared/schemas';
 // The files a run left in its storage directory, under a session's storage

@@ -1,7 +1,8 @@
 /**
  * The process's plugin catalog: the `ToolRegistry` over the `ToolTable`
  * `processLayer` validated at build, the tool catalog over it, the
- * user's MCP servers and the installed plugins, following the switches.
+ * user's MCP servers and the installed plugins with the native plugins they
+ * load, following the switches and the install record.
  */
 
 // Third-party imports
@@ -17,6 +18,7 @@ import {
 } from 'effect';
 
 // Local imports
+import { INSTALLED_PLUGINS_KEY } from '@common/plugins/installRecord';
 import { revisionKey } from '@common/plugins/mcpServers';
 import {
   installedPluginId,
@@ -26,7 +28,8 @@ import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
-import type { ToolTable } from '@tools/toolTable';
+import { nativeLoader, type NativePluginFailed } from '@tools/nativePlugins';
+import type { NativePlugin, ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DISABLED_TOOLS_KEY,
@@ -44,9 +47,10 @@ const SWITCH_READ = Schedule.exponential('200 millis');
  * that `processLayer` serves, to read that file, and its
  * `AppState`, which holds the key MCP env values are digested under, the
  * switches and the plugin install record. A switch flipped or a plugin
- * disabled in any process sharing that state reaches the catalog at once
- * (`AppState.changes`), not only at a run's next step, so what follows the
- * catalog outside a run (a plugin layer's lifetime) follows the switch.
+ * enabled or disabled in any process sharing that state reaches the catalog
+ * at once (`AppState.changes`), not only at a run's next step, so what
+ * follows the catalog outside a run (a plugin layer's lifetime) follows the
+ * switch and the record.
  */
 export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
   Layer.unwrap(
@@ -68,7 +72,10 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
       );
       // The installed plugins a step loads: the enabled, trusted ones, and
       // why each other enabled one loads nothing or leaves a program file
-      // out. One that ships only skills or programs loads with no servers.
+      // or its native entry out. One that ships only skills or programs
+      // loads with no servers; one with a native entry loads the plugin it
+      // returns, imported once per trust digest for the process.
+      const loadNative = nativeLoader();
       const installed = Effect.gen(function* () {
         const {
           loadable,
@@ -77,9 +84,22 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
         } = yield* readInstalledPluginLoad({
           globalState: appState,
         }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+        const natives = yield* Effect.forEach(
+          loadable,
+          (
+            source,
+          ): Effect.Effect<
+            Result.Result<NativePlugin | null, NativePluginFailed>
+          > =>
+            source.plugin.native === null
+              ? Effect.succeed(Result.succeed(null))
+              : Effect.result(loadNative(source)),
+          { concurrency: 'unbounded' },
+        );
         return {
-          plugins: loadable.map((source) => {
+          plugins: loadable.map((source, index) => {
             const id = installedPluginId(source.record.name);
+            const native = natives[index];
             return {
               id,
               servers:
@@ -88,6 +108,10 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
                   : source.plugin.mcpServers.map((server) =>
                       mcpPlugin(server, installedKey, id),
                     ),
+              native:
+                native !== undefined && Result.isSuccess(native)
+                  ? native.success
+                  : null,
               source,
             };
           }),
@@ -97,6 +121,9 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
               ...plugin.warnings,
               ...plugin.programs.refused,
             ]),
+            ...natives.flatMap((native) =>
+              Result.isFailure(native) ? [native.failure.message] : [],
+            ),
           ],
         };
       });
@@ -126,6 +153,7 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
       return toolCatalogLayer(table, {
         loader: mcpPluginLoader(fs, mcpConfigPath, envKey),
         installed,
+        installedChanges: appState.changes([INSTALLED_PLUGINS_KEY.key]),
         switches,
       });
     }),

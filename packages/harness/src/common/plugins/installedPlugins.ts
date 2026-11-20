@@ -29,6 +29,7 @@ import {
   type PluginEnv,
 } from './installRecord';
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
+import { describeProvides } from './nativeEntry';
 import { pluginDataDir } from './pluginHooks';
 import {
   describeHook,
@@ -483,4 +484,6 @@ export const InstalledPlugins = Object.freeze({
     ),
   /** A hook's event, matcher and command, as the trust review shows it. */
   describeHook,
+  /** What a native entry's `provides` declares, as the trust review says it. */
+  describeNative: describeProvides,
 } as const);

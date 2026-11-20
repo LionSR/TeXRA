@@ -21,6 +21,7 @@ import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { GOAL_MODULE } from '@tools/plan/goalScript';
 import { PlanTool } from '@tools/plan/PlanTool';
+import { PluginManagerTool } from '@tools/PluginManagerTool';
 import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
 import { WakeTool } from '@tools/WakeTool';
@@ -71,13 +72,20 @@ export const web: Plugin = definePlugin({
   tools: [WebSearchTool, WebFetchTool],
 });
 
-/** Memory, past runs and later ones: the `memory` tool, offered while
- *  memory is on; `executions`; and `wake`, with which a run arranges to be
- *  continued at a later time, offered to every agent with tools. */
+/** Memory, past runs and later ones, and the run's own equipment: the
+ *  `memory` tool, offered while memory is on; `executions`; `wake`, with
+ *  which a run arranges to be continued at a later time; and
+ *  `plugin_manager`, with which it installs and enables the plugins it
+ *  loads, each change approved by the person. The last two are offered to
+ *  every agent with tools. */
 export const memoryWorkflow: Plugin = definePlugin({
   id: 'memory-workflow',
-  tools: [MemoryTool, ExecutionsTool, WakeTool],
-  injectedWhen: { memory: MEMORY_ENABLED_SETTING, wake: true },
+  tools: [MemoryTool, ExecutionsTool, WakeTool, PluginManagerTool],
+  injectedWhen: {
+    memory: MEMORY_ENABLED_SETTING,
+    wake: true,
+    plugin_manager: true,
+  },
   prompt: memoryPromptSection,
 });
 

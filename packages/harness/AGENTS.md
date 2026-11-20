@@ -72,6 +72,22 @@ A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, with 
 - **Interruption is the fiber's.** A durable append is uninterruptible; there is no `AbortSignal` threading inside the loop.
 - **Lifecycle**: a run is one fiber from its launch's first step: `RunRegistry.start` forks it under the run's id on the session's context, and the fiber opens the run (its resources in a scope the fiber owns, then its registration or activation batch) and answers the launcher, which only waits for that answer; every exit of the run after its opening reaches the one terminal, `endRun` (`AgentRunLifecycle.ts`), which commits the `run.end` in one transaction (`endRunRows`, `agent/storage/runLifecycle.ts`); an end the store refuses fails the fiber, and the run reads as interrupted at its next open. A stop is a `run.stop` row (`user`, or `released` by the call that awaited the run) followed by the fiber's interruption (`RunRegistry.stop`); a stop that cuts a run's opening refuses its launch and ends the rows that opening committed, and a run no fiber drives ends CANCELLED in the batch that records the stop. A process that exits stops nothing: the session's close interrupts every fiber (`RunRegistry.interruptAll`) and the terminal writes no end for a run nobody stopped, so a quit leaves what a crash leaves, a run that reads as interrupted and resumes from its rows. A resume (`resumeRun`) is the same launch over the run's rows. The loop only executes.
 
+## Plugin table
+
+The plugins a run sees are the app's listed plugins (`processLayer`'s
+`plugins`, validated once by `toolTable`) and the native plugins the
+installed plugins load now (`harness.mjs`, `tools/nativePlugins.ts`, each
+judged against the table by `withNatives`). The catalog owns the current
+table (`ProcessCatalog.live`, `tools/liveTools.ts`), republished by every
+read of the installed plugins. `ToolRegistry` holds one snapshot: the
+listed table outside any run (a native plugin contributes nothing read
+there: no row kinds, switch, probe or injected tools), the table a run's
+launch read on its fiber (`executeAgent`), and the table a step read for
+that step's calls (`ToolStep.services`). A plugin's layers are `RcMap`
+entries keyed by id and revision (`layerKey`), so a replaced native plugin's
+new revision comes up beside the old one, which goes down when the last step
+that pinned it ends; a swap interrupts nothing.
+
 ## Event channels and cards
 
 - Facts a run's trace emits extend `AgentEvent` and reach the session log through `runEventDraft` and the log's `publish`. Facts the session authors (lifecycle, status, approvals) extend `SessionRow` (`packages/harness/src/shared/schemas/sessionEvent.ts`) and commit through the log's `transact` (`SessionLogShape`, `packages/harness/src/shared/session/sessionLog.ts`). No `bus.emit` from a VS Code-free zone and no new subscribe surface (`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`); `emitAppSignal(...)` stays within its documented scope.

@@ -1391,6 +1391,22 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A plugin you install can carry native code, loaded while TeXRA runs.**
+  Put `harness.mjs` at the root of a Claude Code or Codex plugin folder: it
+  begins with `export const description = '...';` and
+  `export const provides = ['tool:<name>', ...];`, and its default export
+  takes `{ plugins, effect }` (the `@texra-ai/harness/plugins` surface and
+  the `effect` TeXRA runs on) and returns a plugin with tools, process or
+  session services, a prompt section, script modules and programs. It runs
+  inside the process as you, so `texra plugin enable` says so and lists what
+  it provides; once trusted at its digest it loads from every run's next
+  step, with no restart. An edit replaces it the same way once trusted
+  again: a call already running finishes on the version it started with,
+  and the old version's services are released when the last step using
+  them ends. A version that fails to load is left out with its reason, and
+  nothing else changes. Agents get a `plugin_manager` tool to list,
+  install, enable, disable and remove plugins themselves, each change but a
+  listing or an install asked of you first.
 - **A script caps what a child run spends, and `self()` takes a model.**
   Every child a script waits for (`agent()`, `program()`, `self()`) takes
   `maxCostUsd`, a spend cap in USD on the child and every run it starts:

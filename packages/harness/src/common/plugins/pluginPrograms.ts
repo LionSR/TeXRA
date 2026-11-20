@@ -60,8 +60,21 @@ export interface PluginPrograms {
   readonly refused: readonly string[];
 }
 
-const HEADER_FORM =
-  "it must begin with `export const description = '...';` and `export const uses = ['...'];` (the tools it is offered), each a quoted literal";
+/** The list a file's header declares beside its `description`: a
+ *  program's `uses` (the tools it is offered), or a native entry's
+ *  `provides` (what its plugin contributes, `./nativeEntry`). */
+export interface HeaderList {
+  readonly name: 'uses' | 'provides';
+  /** What the list holds, and an example, for a refusal. */
+  readonly holds: string;
+  readonly example: string;
+}
+
+const USES: HeaderList = {
+  name: 'uses',
+  holds: 'the tools it is offered',
+  example: "['read_file', 'agent']",
+};
 
 /** The escapes a quoted literal may hold, by the character after `\`. */
 const ESCAPES: Readonly<Record<string, string>> = {
@@ -78,9 +91,14 @@ const ESCAPES: Readonly<Record<string, string>> = {
  * `export const` statements and stops there: the rest of the file is never
  * looked at.
  */
-function readDeclarations(
+export function readDeclarations(
   source: string,
-): Result.Result<Pick<PluginProgram, 'description' | 'tools'>, string> {
+  list: HeaderList = USES,
+): Result.Result<
+  { readonly description: string; readonly names: readonly string[] },
+  string
+> {
+  const headerForm = `it must begin with \`export const description = '...';\` and \`export const ${list.name} = ['...'];\` (${list.holds}), each a quoted literal`;
   let at = 0;
   const refuse = (reason: string) => Result.fail(reason);
   /** Advance past `pattern` when the text at the cursor matches it. */
@@ -128,18 +146,20 @@ function readDeclarations(
   const wrong = {
     description:
       '`description` must be one quoted string on one line (\'...\' or "...") followed by `;`, not a template or an expression',
-    uses: "`uses` must be an array of quoted tool names (['read_file', 'agent']) followed by `;`, not an expression",
+    list: `\`${list.name}\` must be an array of quoted names (${list.example}) followed by \`;\`, not an expression`,
   };
   while (description === undefined || tools === undefined) {
     skip();
-    const declared = take(/export\s+const\s+(description|uses)\b\s*=/);
+    const declared = take(
+      new RegExp(`export\\s+const\\s+(description|${list.name})\\b\\s*=`),
+    );
     if (declared === null) {
       const missing = [
         ...(description === undefined ? ['description'] : []),
-        ...(tools === undefined ? ['uses'] : []),
+        ...(tools === undefined ? [list.name] : []),
       ];
       return refuse(
-        `${HEADER_FORM}; ${missing.map((name) => `\`${name}\``).join(' and ')} ${missing.length === 1 ? 'is' : 'are'} not declared there`,
+        `${headerForm}; ${missing.map((name) => `\`${name}\``).join(' and ')} ${missing.length === 1 ? 'is' : 'are'} not declared there`,
       );
     }
     skip();
@@ -159,28 +179,29 @@ function readDeclarations(
           `\`description\` is longer than ${DESCRIPTION_MAX_LENGTH} characters`,
         );
     } else {
-      if (tools !== undefined) return refuse('`uses` is declared twice');
-      if (take(/\[/) === null) return refuse(wrong.uses);
+      if (tools !== undefined)
+        return refuse(`\`${list.name}\` is declared twice`);
+      if (take(/\[/) === null) return refuse(wrong.list);
       const names: string[] = [];
       for (;;) {
         skip();
         if (take(/\]/) !== null) break;
         const name = quoted();
         if (name === undefined || !/^\S+$/.test(name))
-          return refuse(wrong.uses);
+          return refuse(wrong.list);
         names.push(name);
         skip();
         if (take(/,/) !== null) continue;
         if (take(/\]/) !== null) break;
-        return refuse(wrong.uses);
+        return refuse(wrong.list);
       }
       skip();
       // As above: `[...].concat(more)` is an expression.
-      if (take(/;/) === null) return refuse(wrong.uses);
+      if (take(/;/) === null) return refuse(wrong.list);
       tools = names;
     }
   }
-  return Result.succeed({ description, tools });
+  return Result.succeed({ description, names: tools });
 }
 
 /**
@@ -255,7 +276,8 @@ export const readPluginPrograms = Effect.fn('readPluginPrograms')(function* (
         return Result.succeed({
           name: `${plugin}:${base}`,
           file,
-          ...declared.success,
+          description: declared.success.description,
+          tools: declared.success.names,
           source: text.success,
         } satisfies PluginProgram);
       }),

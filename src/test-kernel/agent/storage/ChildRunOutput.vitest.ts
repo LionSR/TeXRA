@@ -183,6 +183,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const result = yield* programTool()
               .call({ name: 'merge', args: { editedFile: forbidden } })
               .pipe(
+                // The table the call reads is its step's; this step's holds
+                // the theory plugin.
+                Effect.provide(resolveLayer),
                 Effect.provide(
                   nativeToolTestLayer({
                     run: { runId: parentRunId, toolPolicy: {}, session },

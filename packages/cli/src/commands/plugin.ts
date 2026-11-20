@@ -87,7 +87,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
       const unloaded = [...plugin.code, ...plugin.ignored];
       return [
         ...lines,
-        `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), programs (${plugin.programs.length === 0 ? 'none' : plugin.programs.join(', ')}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')}), hooks (${plugin.hooks.length})`,
+        `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), programs (${plugin.programs.length === 0 ? 'none' : plugin.programs.join(', ')}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')}), hooks (${plugin.hooks.length}), native code (${plugin.native === null ? 'none' : InstalledPlugins.describeNative(plugin.native.provides)})`,
         `  not loaded: ${unloaded.length === 0 ? 'none' : unloaded.join(', ')}`,
       ].join('\n');
     })

@@ -30,6 +30,11 @@ import {
   type PluginEnv,
 } from './installRecord';
 import { revisionKey, type McpServerConfig } from './mcpServers';
+import {
+  describeProvides,
+  NATIVE_ENTRY_FILE,
+  type NativeEntry,
+} from './nativeEntry';
 import { externalFiles, pluginDigest } from './pluginDigest';
 import { hookShell, NO_SHELL, pinHook } from './pluginHooks';
 import {
@@ -146,6 +151,12 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
       );
     for (const line of refused) lines.push(`  ${line}`);
   }
+  if (plugin.native === null) lines.push('Native code: none');
+  else
+    lines.push(
+      `Native code (${NATIVE_ENTRY_FILE}: ${plugin.native.description}): a module that runs inside this process, as you, with everything the process can reach (your files, the network, your credentials and every open session). It is not sandboxed, and it decides itself which of its tools ask before they run.`,
+      `  It contributes ${describeProvides(plugin.native.provides)}; a module that contributes anything else is not loaded.`,
+    );
   const { hooks, unsupported } = plugin.hooks;
   if (hooks.length === 0) lines.push('Hooks: none');
   else {
@@ -240,6 +251,8 @@ export interface PluginListing extends InstalledPlugin {
   readonly programs: readonly string[];
   /** Its MCP servers' names, as its tools carry them. */
   readonly mcpServers: readonly string[];
+  /** Its native entry, as its file declares it. */
+  readonly native: NativeEntry | null;
   /** Whether the user trusts it as it is now. */
   readonly trusted: boolean;
   /** Its command hooks, and the configured ones the harness does not run. */
@@ -271,6 +284,7 @@ export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
           agentCount: plugin.agents.length,
           programs: plugin.programs.loaded.map(({ name }) => name),
           mcpServers: plugin.mcpServers.map((server) => server.name),
+          native: plugin.native,
           trusted: trusts(record, key),
           hooks: plugin.hooks.hooks,
           unsupportedHooks: plugin.hooks.unsupported,
@@ -286,6 +300,7 @@ export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
             agentCount: 0,
             programs: [],
             mcpServers: [],
+            native: null,
             trusted: false,
             hooks: [],
             unsupportedHooks: [],
