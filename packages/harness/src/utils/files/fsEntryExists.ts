@@ -24,6 +24,15 @@ export const meansAbsent = (error: unknown): boolean =>
       (Predicate.hasProperty(error, 'code') && error.code === 'ENOENT');
 
 /**
+ * Whether the stat of an entry a walk just listed failed because the path no
+ * longer names something a stat can follow: it vanished in between
+ * ({@link meansAbsent}), or any `BadResource` (a link that now loops, say).
+ * A walk drops such an entry; any other stat failure is real.
+ */
+export const listedEntryGone = (error: PlatformError.PlatformError): boolean =>
+  meansAbsent(error) || error.reason._tag === 'BadResource';
+
+/**
  * Restart schedule for an `fs.watch` stream: up to 5 retries, 1 s doubling,
  * and only for `Unknown` platform errors (a missing or denied directory will
  * not fix itself, so those end the stream).

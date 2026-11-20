@@ -60,7 +60,9 @@ export const RuntimeCommandSchema = Schema.Union([
     ...runScoped,
     at: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
   }),
-  /** Switch a live run to `model` from its next model boundary. */
+  /** Switch a run to `model` from its next model boundary: queued on its
+   *  input, where its loop applies or refuses it, here or at its next
+   *  resume. A run held here refuses a model it cannot take at once. */
   Schema.Struct({
     kind: Schema.Literal('run.model'),
     ...runScoped,

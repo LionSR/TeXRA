@@ -32,7 +32,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';
 import { freshRunState } from '@shared/session/runState';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { nativeToolTestLayer, noStep } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import {
   scriptedModel,
@@ -137,6 +137,7 @@ const openFixtureStep = (session: Context.Context<SessionServices>) =>
         model: yield* ScopedRef.make(() =>
           testBinding(scriptedModel([textTurn('')]).model),
         ),
+        steps: yield* noStep(),
         scope: yield* Effect.scope,
       },
       {

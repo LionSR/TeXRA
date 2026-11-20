@@ -152,6 +152,14 @@ const CONNECT_CHOICES = Object.freeze({
   { readonly label: string; readonly description: string }
 >);
 
+/** The key row of both panels: in `/login` it comes last, so the
+ *  subscription rows keep their number hotkeys. */
+const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
+  value: { kind: 'key' },
+  label: 'Add a provider API key',
+  description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
+};
+
 /**
  * The first-run panel: only what can connect a model, worded as what it does.
  * Nothing is signed in yet (that is why the panel is open), so each
@@ -166,12 +174,7 @@ const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
       description: CONNECT_CHOICES[provider].description,
     }),
   ),
-  {
-    value: { kind: 'key' },
-    label: 'Add a provider API key',
-    description:
-      'Anthropic, OpenAI, Google, DeepSeek, Kimi Code, GLM, and more',
-  },
+  API_KEY_ITEM,
   signInItem({
     target: 'chatgpt --device',
     label: SUBSCRIPTION_AUTH_COPY.chatgpt.deviceCodeLabel,
@@ -183,13 +186,6 @@ const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
     description: DEVICE_CODE_DESCRIPTION,
   }),
 ];
-
-// Last, so the subscription rows keep their number hotkeys.
-const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
-  value: { kind: 'key' },
-  label: 'Add a provider API key',
-  description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
-};
 
 export function AccountAccessForm(
   props: AccountAccessFormProps,

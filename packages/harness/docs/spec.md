@@ -1008,7 +1008,7 @@ its title.
   `packages/harness/test/shared/session/runHistory.vitest.ts#'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted'`;
   `src/test-kernel/controllers/session/goldenStore.vitest.ts#'folds to the pinned session view and run states'`
 - **6 retry**:
-  `src/test-kernel/agent/runtime/RetryState.vitest.ts#'admits a manual retry through a durable approval'`,
+  `packages/harness/test/agent/runtime/RetryState.vitest.ts#'admits a manual retry through a durable approval'`,
   `#'stops automatic attempts at the configured limit'`;
   `packages/harness/test/agent/runtime/ModelRetryGate.vitest.ts#'admits one recovery probe and releases siblings after success'`
 - **7 one process per store**:

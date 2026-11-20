@@ -57,7 +57,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     config: OpenAIResponsesConfiguration,
     origin: ResponseOrigin,
     input: ResolvedTurn,
-    mode: 'foreground' | 'background',
+    mode: ResolvedTurn['mode'],
     uploads: UploadCache | null,
   ) {
     const turn = yield* boundTurn(input, origin, mode);

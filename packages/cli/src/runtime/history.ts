@@ -20,6 +20,7 @@ import {
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
+import { formatBytes } from '@ui/copy/format';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
 
@@ -333,27 +334,20 @@ export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
   ].join('\n');
 }
 
-/**
- * `--export ''` (or any non-`html`/`md` value) reports this. `JSON.stringify`
- * keeps the reported value unambiguous — an empty string reads as `""`
- * instead of collapsing into a confusing double space after the colon.
- */
-export function formatInvalidExportFormatText(raw: string): string {
-  return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
-}
-
 /** What a run that continues can take: a finished conversation another
  *  message, anything else (interrupted, failed, cancelled) a resume. */
 function continueNote(outcome: RunOutcome | null): string {
   return outcome === 'completed' ? 'can continue' : 'can resume';
 }
 
-/** How a listed run stands in `texra history`'s text: its outcome, else
- *  none, and whether `texra resume` continues it. */
+/** How a listed run stands in `texra history`'s text and the `/resume`
+ *  form: its outcome in the word every host gives it, else none, and
+ *  whether `texra resume` continues it. */
 export function historyStanding(
   entry: Pick<CliHistoryEntry, 'outcome' | 'continues'>,
 ): string {
-  const outcome = entry.outcome ?? 'no outcome';
+  const outcome =
+    entry.outcome === null ? 'No outcome' : runStatusLabel(entry.outcome);
   return entry.continues
     ? `${outcome} (${continueNote(entry.outcome)})`
     : outcome;
@@ -412,7 +406,8 @@ export function formatCliHistoryDetailsText(
       )
     : '{}';
   const files = details.files.map(
-    (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
+    (file) =>
+      `${file.isDirectory ? '<dir>' : formatBytes(file.size)}\t${file.path}`,
   );
   lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
   lines.push(...(files.length ? files : ['(none)']));

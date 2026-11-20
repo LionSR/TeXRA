@@ -187,7 +187,7 @@ type StoreMode = 'persistent' | 'existing' | 'ephemeral';
 
 /** Why a project store did not open: another process holds it. */
 export const STORE_HELD_MESSAGE =
-  'Another TeXRA process holds this project; close it there first.';
+  'Another process already has this project open; close it there first.';
 
 export const databaseLayer = (
   mode: StoreMode,
@@ -631,11 +631,10 @@ export const databaseLayer = (
           ),
         appendAll: Effect.fn('Database.appendAll')(function* (input) {
           if (input.length === 0) return [];
-          // Validate and encode before BEGIN IMMEDIATE. The batch shares one clock.
-          const prepared = yield* Effect.try({
-            try: () => input.map(prepareEventDraft),
-            catch: writeFailed,
-          });
+          // Encode before BEGIN IMMEDIATE; the batch shares one clock. Drafts
+          // are typed and plugin facts were checked at their call
+          // (`checkOwnFacts`), so a draft that fails here is a defect.
+          const prepared = input.map(prepareEventDraft);
           const at = yield* Clock.currentTimeMillis;
           return yield* transact(appendRows(prepared, at));
         }),

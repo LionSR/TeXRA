@@ -8,12 +8,10 @@ import { imageSize } from 'image-size';
 
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
-import { Settings, type ConfigProvider } from '@shared/config/settings';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
-import { MAX_IMAGE_DIMENSION_SETTING } from '@shared/state/stateSettings';
 
 const CHANNEL = 'ImgUtils';
 
@@ -23,6 +21,8 @@ const IMAGE_TOOL_COMMANDS = {
   magick: ['magick', '--version'],
   gm: ['gm', 'version'],
 } as const;
+/** One of the two interchangeable image processors. */
+type ImageTool = keyof typeof IMAGE_TOOL_COMMANDS;
 
 /** Whether `command` answers: it exits 0, or prints a version (some tools
  *  exit non-zero for their version command). A `--version` probe answers
@@ -41,10 +41,10 @@ const answers = (command: readonly string[]) =>
 /** The image processor found, kept for the process: every image resize and
  *  PDF conversion asks, and each probe spawns two processes. A miss is not
  *  kept, so a tool installed mid-session is found on the next ask. */
-const FoundImageTool = Context.Reference<Ref.Ref<'magick' | 'gm' | undefined>>(
+const FoundImageTool = Context.Reference<Ref.Ref<ImageTool | undefined>>(
   '@texra-ai/harness/FoundImageTool',
   {
-    defaultValue: () => Ref.makeUnsafe<'magick' | 'gm' | undefined>(undefined),
+    defaultValue: () => Ref.makeUnsafe<ImageTool | undefined>(undefined),
   },
 );
 
@@ -55,11 +55,7 @@ const FoundImageTool = Context.Reference<Ref.Ref<'magick' | 'gm' | undefined>>(
  * installed, and how to install it, are the app's.
  */
 const detectImageTool = Effect.fn('img.detectImageTool')(
-  function* (): Effect.fn.Return<
-    'magick' | 'gm' | null,
-    never,
-    ChildProcessSpawner
-  > {
+  function* (): Effect.fn.Return<ImageTool | null, never, ChildProcessSpawner> {
     const found = yield* FoundImageTool;
     const kept = yield* Ref.get(found);
     if (kept !== undefined) return kept;
@@ -130,23 +126,12 @@ const getImageDimensions = (bytes: Uint8Array) =>
       }),
   });
 
-/** Maximum image dimension (pixels) accepted by provider APIs. */
-const API_MAX_IMAGE_DIMENSION = 8000;
-
-/**
- * Bytes of an image, resized when it exceeds the maximum dimensions. The limit
- * comes from the configuration of the workspace the caller is reading for,
- * held as data, not from whichever roots the calling fiber carries.
- */
+/** Bytes of an image, resized when a side is longer than `maxDimension`. */
 const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
   imagePath: string,
-  config: ConfigProvider,
+  maxDimension: number,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const maxDimension = Math.min(
-    Settings.getConfig(config, MAX_IMAGE_DIMENSION_SETTING),
-    API_MAX_IMAGE_DIMENSION,
-  );
   // One read: the bytes that are measured are the bytes returned.
   const bytes = yield* fs.readFile(imagePath);
   const { width, height } = yield* getImageDimensions(bytes);
@@ -200,19 +185,19 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
 });
 
 /**
- * Base64 of a media file at an absolute path, resizing an oversized image
- * first. A missing or empty file fails with {@link MediaConversionFailed}. A
+ * Base64 of a media file at an absolute path, resizing an image with a side
+ * longer than `maxImageDimension` first. A missing or empty file fails with {@link MediaConversionFailed}. A
  * non-image file that exists but cannot be read fails with the filesystem's
  * `PlatformError`; an image whose bytes cannot be measured fails with
  * {@link MediaConversionFailed}.
  */
 export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
-  function* (mediaPath: string, config: ConfigProvider) {
+  function* (mediaPath: string, maxImageDimension: number) {
     const fs = yield* FileSystem.FileSystem;
     // The read answers whether the file exists: no separate probe.
     const mediaBytes = yield* (
       isImageMimeType(getMimeType(mediaPath))
-        ? resizeImageIfNeeded(mediaPath, config)
+        ? resizeImageIfNeeded(mediaPath, maxImageDimension)
         : fs.readFile(mediaPath)
     ).pipe(
       Effect.catchIf(meansAbsent, () =>
@@ -246,7 +231,7 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
   absolutePath: string,
   pageNum: number,
   tempDir: string,
-  tool: 'magick' | 'gm',
+  tool: ImageTool,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const outputPath = path.join(tempDir, `page-${pageNum}.png`);

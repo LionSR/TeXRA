@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { tryOpenBrowser } from '@cli/runtime/models/browser';
+import { BACK_HINT } from '@cli/tui/ui/KeyHints';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import {
   GITHUB_TOKEN_CREATE_URL,
@@ -143,7 +144,7 @@ export function GitHubTokenForm(
       detailRows={errorNode ? 1 : 0}
       compactDetail={errorNode}
       action="select"
-      escapeAction="back"
+      escape={BACK_HINT}
       onSelect={(action) => {
         if (saving) return;
         setError(undefined);

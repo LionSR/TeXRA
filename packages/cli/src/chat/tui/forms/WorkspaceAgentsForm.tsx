@@ -15,6 +15,7 @@ import {
 import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { TICK } from '@cli/tui/ui/glyphs';
+import { BACK_HINT } from '@cli/tui/ui/KeyHints';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import type { SelectItem } from '@cli/tui/ui/Select';
 
@@ -133,7 +134,7 @@ export function WorkspaceAgentsForm(
       detail={notices}
       detailRows={notices.length}
       action="select"
-      escapeAction="back"
+      escape={BACK_HINT}
       onSelect={onSelect}
       onCancel={onCancel}
     />

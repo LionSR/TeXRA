@@ -73,7 +73,7 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running or completed, yellow while waiting on you or interrupted, gray when ready for your next message or stopped, red on error.</p>
 
 - **Token and cost summary**: A footer below the log shows the task's input and output token counts and its estimated cost, including the agents it started.
-- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for a multi-pass program run), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
+- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Revision 2 of 3** for a multi-revision program run), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
 - **Task actions menu (`⋯`)**:
   - **All tasks**:
     - **Rename…**: Change the task title.

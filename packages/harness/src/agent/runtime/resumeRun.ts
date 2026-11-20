@@ -12,15 +12,12 @@ import { Effect, Result, Schema } from 'effect';
 
 import { REFUSED } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
-import { checkpointRefusal } from '@agent/storage/continuation';
-import {
-  getRunRecords,
-  owningCall,
-  persistedParentId,
-} from '@agent/storage/runOwnership';
+import { continuationOf } from '@agent/storage/continuation';
+import { getRunRecords, owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
 import {
   type CommitOrdinal,
+  isAgentRunRecord,
   type ResumeRefusal,
   ResumeRefusalSchema,
   type RunId,
@@ -192,30 +189,38 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   const refuse = (answer: ResumeRefusalAnswer) =>
     Effect.fail(new ResumeNotOpened({ answer }));
   const inbox = yield* Inbox;
-  const store = getRunRecords(runId);
-  const records = yield* Effect.result(
-    Effect.all([store.readConfig(), store.exists()]),
-  );
-  // A record read fails on a row this build cannot use, wherever it sits.
-  if (Result.isFailure(records))
-    return yield* Effect.flatMap(refusalFor(records.failure, runId), refuse);
-  const [config, exists] = records.success;
-  if (!config || !exists) {
+  // The run's facts, read once: every decision below is made from them.
+  // The read fails on a row this build cannot use, wherever it sits.
+  const read = yield* Effect.result((yield* SessionLog).facts(runId));
+  if (Result.isFailure(read))
+    return yield* Effect.flatMap(refusalFor(read.failure, runId), refuse);
+  const facts = read.success;
+  const config =
+    facts?.config != null && isAgentRunRecord(facts.config)
+      ? facts.config
+      : null;
+  if (config === null) {
     // A run whose records are gone: with nothing queued its input ends.
     yield* inbox.closeInput(runId);
     return yield* refuse(REFUSED);
   }
-  // Deleted, or its input closed, while those reads ran.
+  // Deleted, or its input closed, while that read ran.
   if ((yield* inbox.read(runId)).inputClosed) return yield* refuse(REFUSED);
   // Whether an open call owns it: that call's parent resumes instead.
   const owning = yield* owningCall(runId);
   if (owning !== null && owning.parentId !== owner)
     return yield* refuse({ ownedBy: owning.parentId });
-  // Nothing to continue from, or rows this build cannot use.
-  const rejected = yield* checkpointRefusal(runId);
-  if (rejected !== null) return yield* refuse({ failed: rejected });
-  // Its parent, read once: the run's edge for this activation.
-  const parentId = yield* persistedParentId(runId);
+  // Nothing to continue from.
+  const continuation = continuationOf(facts);
+  if (continuation.kind !== 'checkpoint')
+    return yield* refuse({ failed: continuation });
+  // Its parent, less one the store no longer lists: the run's edge for
+  // this activation, taken from its rows, never from its caller.
+  const edge = facts?.start?.parent?.id;
+  const parentId =
+    edge !== undefined && (yield* getRunRecords(edge).exists())
+      ? edge
+      : undefined;
   const definition = yield* prepareAgentDefinition({ config }).pipe(
     // An agent or plugin this process cannot run now refuses the resume
     // with the reason; the run stays interrupted, never failed, and

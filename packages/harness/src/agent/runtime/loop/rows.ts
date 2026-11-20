@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Ref } from 'effect';
+import { Effect, ScopedRef } from 'effect';
 
 import {
   type FollowUpDisposition,
@@ -22,6 +22,7 @@ import {
   type RunRecord,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
+import type { ModelMessagePayload } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { dispatchFactsFor } from '../run/tools';
@@ -74,7 +75,10 @@ export function appendRow(
   options: {
     readonly sourceResponse?: string | null;
     readonly input?: RunInput;
-    readonly reason?: 'blank-continuation' | 'final-tool';
+    readonly reason?: Extract<
+      ModelMessagePayload,
+      { kind: 'append' }
+    >['reason'];
   } = {},
 ): RunHistoryDraft {
   const { sourceResponse = null, input, reason } = options;
@@ -136,7 +140,7 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
   });
   const [facts] = dispatchFactsFor(
     [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
-    (yield* Ref.get(run.steps))?.tools.registry,
+    (yield* ScopedRef.get(run.steps))?.tools.registry,
     run.logger,
   );
   if (facts === undefined)

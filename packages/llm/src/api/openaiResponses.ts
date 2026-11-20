@@ -38,6 +38,7 @@ import {
   openaiFailure,
   responseEvents,
   responsesWire,
+  isRunningSnapshotEvent,
   sdkEvents,
   terminalParts,
 } from './openaiResponsesCodec.js';
@@ -119,7 +120,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
-    mode: 'foreground' | 'background',
+    mode: ResolvedTurn['mode'],
   ) {
     const { turn, parameters } = yield* responseParameters(
       config,
@@ -217,11 +218,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
           }),
         );
       if (
-        ![
-          'response.created',
-          'response.queued',
-          'response.in_progress',
-        ].includes(type) ||
+        !isRunningSnapshotEvent(type) ||
         !['queued', 'in_progress'].includes(response.status)
       )
         return yield* new ModelError({

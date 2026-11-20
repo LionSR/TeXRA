@@ -492,6 +492,7 @@ describe('the golden 1.0 store', () => {
       // A newer build's `model.message` (one version past this build's),
       // committed as that build would: the row, its sequence, `stored_kind`.
       const storage = goldenRoot();
+      const version = ROW_KINDS['model.message'].version + 1;
       raw(storage, (db) => {
         const { id, seq } = Schema.decodeUnknownSync(
           Schema.Struct({ id: Schema.Number, seq: Schema.Number }),
@@ -500,7 +501,6 @@ describe('the golden 1.0 store', () => {
             .prepare('SELECT id, seq FROM event_sequence WHERE logical_id = ?')
             .get('a00000000004'),
         );
-        const version = ROW_KINDS['model.message'].version + 1;
         db.exec('BEGIN');
         db.prepare(
           `INSERT INTO event (aggregate, seq, type, version, at, data)
@@ -529,7 +529,9 @@ describe('the golden 1.0 store', () => {
           ),
         ).toMatchObject({
           _tag: 'DatabaseOpenFailed',
-          cause: { _tag: 'DatabaseStoreNewer', type: 'model.message' },
+          message: expect.stringContaining(
+            `holds model.message rows at version ${version}, which this build does not read`,
+          ),
         });
         expect(stored()).toEqual(before);
       });

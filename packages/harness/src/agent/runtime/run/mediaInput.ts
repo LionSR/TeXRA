@@ -16,7 +16,8 @@ import { Effect, Exit, FileSystem } from 'effect';
 
 import { pathToLocationIn } from '@common/storage/fileLocation';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { ConfigProvider } from '@shared/config/settings';
+import { Settings, type ConfigProvider } from '@shared/config/settings';
+import { MAX_IMAGE_DIMENSION_SETTING } from '@shared/state/stateSettings';
 import {
   fileLocationDisplayPath,
   type FileLocation,
@@ -38,7 +39,8 @@ import {
   rasterizePdfPages,
 } from './img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { InputPart } from '@texra-ai/llm';
+import { IMAGE_LIMITS, type InputPart } from '@texra-ai/llm';
+import type { BoundModel } from '../modelAccess/ModelAccess';
 
 interface MediaCapabilities {
   readonly supportsVision: boolean;
@@ -51,6 +53,11 @@ interface MediaInputParts {
   /** What was inserted, for the transcript's attachment badges. */
   readonly kinds: readonly MediaAttachmentKind[];
 }
+
+/** The longest side an image is sent at: the project's setting, within what
+ *  the protocol accepts (`wireLimit`). */
+const imageSideLimit = (config: ConfigProvider, wireLimit: number) =>
+  Math.min(Settings.getConfig(config, MAX_IMAGE_DIMENSION_SETTING), wireLimit);
 
 /** What the model is told, in the message's own row, of a file it was
  *  attached but not sent: the file's name and why. */
@@ -110,7 +117,7 @@ export const storedPdfPages = Effect.fn('mediaInput.storedPdfPages')(function* (
 const partsForFile = Effect.fn('mediaInput.file')(function* (
   location: FileLocation,
   capabilities: MediaCapabilities,
-  config: ConfigProvider,
+  maxImageDimension: number,
 ): Effect.fn.Return<
   MediaInputParts,
   Error,
@@ -131,7 +138,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     // after this branch, never before, so a PDF the image tool cannot read still
     // reaches a model that could read it.
     if (capabilities.supportsNativePdf) {
-      const base64 = yield* getBase64EncodedMedia(path, config);
+      const base64 = yield* getBase64EncodedMedia(path, maxImageDimension);
       return {
         parts: [{ kind: 'document', mimeType: 'application/pdf', base64 }],
         kinds: ['document'],
@@ -141,7 +148,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
   }
   if (mimeType !== null && mimeType.startsWith('audio/')) {
     if (!capabilities.supportsNativeAudio) return skipped('audio');
-    const base64 = yield* getBase64EncodedMedia(path, config);
+    const base64 = yield* getBase64EncodedMedia(path, maxImageDimension);
     return { parts: [{ kind: 'audio', mimeType, base64 }], kinds: [] };
   }
   if (!isImageMimeType(mimeType) || mimeType === null) {
@@ -150,28 +157,35 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     });
   }
   if (!capabilities.supportsVision) return skipped('images');
-  const base64 = yield* getBase64EncodedMedia(path, config);
+  const base64 = yield* getBase64EncodedMedia(path, maxImageDimension);
   return { parts: [{ kind: 'image', mimeType, base64 }], kinds: ['image'] };
 });
 
 /**
- * Input parts for a list of attached files, in order. `config` is the
- * configuration of the run's own session, held as data: the image size limit
- * answers for that project, not for whichever roots the calling fiber carries.
+ * Input parts for a list of attached files, in order, for the model `bound`:
+ * what it accepts, and images within its protocol's size limit. `config` is
+ * the configuration of the run's own session, held as data: the image size
+ * setting answers for that project, not for whichever roots the calling
+ * fiber carries.
  */
 export const mediaInputParts = Effect.fn('mediaInput')(function* (
   locations: readonly FileLocation[],
-  capabilities: MediaCapabilities,
+  bound: Pick<BoundModel, 'config' | 'origin'>,
   config: ConfigProvider,
 ): Effect.fn.Return<
   MediaInputParts,
   Error,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
+  const maxImageDimension = imageSideLimit(
+    config,
+    IMAGE_LIMITS[bound.origin.protocol].maxDimension,
+  );
   // Files load at once; the parts keep the attachment order.
   const loaded = yield* Effect.forEach(
     locations,
-    (location) => partsForFile(location, capabilities, config),
+    (location) =>
+      partsForFile(location, bound.config.capabilities, maxImageDimension),
     { concurrency: 4 },
   );
   return {
@@ -182,8 +196,9 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
 
 /**
  * What a message attaches, as its row names it (none: nothing): a file is
- * read here, once, where it enters (an image resized to the project's
- * limit), its bytes stored under their address with the row; media the
+ * read here, once, where it enters, its bytes stored under their address with
+ * the row. The stored bytes may reach any binding (a model switch, a fork),
+ * so an image is resized to the project's limit within every protocol's; media the
  * store holds already (a fork's) is linked. A file that is missing, empty
  * or of no medium a model takes refuses the send.
  */
@@ -197,6 +212,12 @@ export const attachedMedia = Effect.fn('mediaInput.attached')(
     FileSystem.FileSystem | ChildProcessSpawner
   > {
     if (entries.length === 0) return {};
+    const maxImageDimension = imageSideLimit(
+      roots.config,
+      Math.min(
+        ...Object.values(IMAGE_LIMITS).map((limits) => limits.maxDimension),
+      ),
+    );
     const read = yield* Effect.forEach(
       entries,
       Effect.fnUntraced(function* (entry) {
@@ -208,7 +229,7 @@ export const attachedMedia = Effect.fn('mediaInput.attached')(
           return yield* new MediaConversionFailed({
             message: `Unsupported media file: ${entry}`,
           });
-        const base64 = yield* getBase64EncodedMedia(path, roots.config);
+        const base64 = yield* getBase64EncodedMedia(path, maxImageDimension);
         const digest = blobAddress(base64);
         return {
           media: { name: getBasename(path), mimeType, digest },

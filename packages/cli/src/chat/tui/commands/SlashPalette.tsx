@@ -181,7 +181,6 @@ export function SlashPalette(
             CLOSE_HINT,
             { key: 'Tab', action: 'complete' },
           ]}
-          confirmCancel={false}
         />
       }
     >

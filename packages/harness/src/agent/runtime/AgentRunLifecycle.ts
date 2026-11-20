@@ -45,10 +45,7 @@ interface EndVerdict {
 export function endVerdict(exit: Exit.Exit<RunOutcome, unknown>): EndVerdict {
   if (Exit.isSuccess(exit)) return { outcome: exit.value };
   const { cause } = exit;
-  const outcome =
-    outcomeFromCause(cause) === RUN_OUTCOME.CANCELLED
-      ? RUN_OUTCOME.CANCELLED
-      : RUN_OUTCOME.FAILED;
+  const outcome = outcomeFromCause(cause);
   return Cause.hasInterruptsOnly(cause)
     ? { outcome }
     : { outcome, error: Cause.squash(cause) };
@@ -87,9 +84,11 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
   const { runId } = ending;
   // The process is going, and nobody stopped the run: it gets no end, and
   // reads as interrupted, resumable, at the next open, as after a crash.
+  // Whether it stopped is the outcome the caller's verdict reached
+  // (`endVerdict`), not asked of the exit again.
   if (
     Exit.isFailure(exit) &&
-    Cause.hasInterrupts(exit.cause) &&
+    ending.outcome === RUN_OUTCOME.CANCELLED &&
     (yield* RunRegistry).closing &&
     (yield* (yield* SessionLog).facts(runId))?.stop == null
   )

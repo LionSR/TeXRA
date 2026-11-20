@@ -248,34 +248,24 @@ const openProjects = Effect.fn('server.openProjects')(function* (
     );
     // A run at work holds the project through a lease of the project's
     // own (not one waiting for its next message, which the service's close
-    // stops, resumable).
-    let hold: Scope.Closeable | null = null;
-    const follow = (busy: boolean) =>
-      Effect.gen(function* () {
-        if (busy === (hold !== null)) return;
-        if (busy) {
-          hold = yield* Scope.make();
-          // The entry exists: this runs inside its own lookup's scope.
-          yield* RcMap.get(projects, root).pipe(
-            Scope.provide(hold),
-            Effect.orDie,
-          );
-          yield* count(0, 1);
-          return;
-        }
-        const held = hold;
-        hold = null;
-        if (held !== null) yield* Scope.close(held, Exit.void);
-        yield* count(0, -1);
-      });
+    // stops, resumable). The lease closes before the count drops, and the
+    // view ending counts as idle.
+    const held = Effect.acquireRelease(count(0, 1), () => count(0, -1)).pipe(
+      // The entry exists: this runs inside its own lookup's scope.
+      Effect.andThen(RcMap.get(projects, root)),
+      Effect.orDie,
+      Effect.andThen(Effect.never),
+      Stream.fromEffect,
+      Stream.scoped,
+    );
     yield* Effect.forkScoped(
-      Stream.runForEach(
-        session.view.changes.pipe(
-          Stream.map(() => runsAtWork(session) > 0),
-          Stream.changes,
-        ),
-        follow,
-      ).pipe(Effect.ensuring(follow(false))),
+      session.view.changes.pipe(
+        Stream.map(() => runsAtWork(session) > 0),
+        Stream.concat(Stream.succeed(false)),
+        Stream.changes,
+        Stream.switchMap((busy) => (busy ? held : Stream.empty)),
+        Stream.runDrain,
+      ),
     );
     return session;
   });

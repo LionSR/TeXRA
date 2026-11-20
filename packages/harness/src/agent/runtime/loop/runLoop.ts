@@ -34,7 +34,6 @@ import {
   type BoundModel,
   ModelAccess,
 } from '@agent/runtime/modelAccess/ModelAccess';
-import { Inbox } from '@agent/followUp/Inbox';
 import { activationRows, RunOpenRejected } from '@agent/storage/runLifecycle';
 import { SessionRoots } from '@platform/rootedFs';
 import {
@@ -407,7 +406,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
           run.config.mediaFiles.length
             ? mediaInputParts(
                 run.config.mediaFiles.map((p) => sourceLocationUnder(roots, p)),
-                bound.config.capabilities,
+                bound,
                 roots.config,
               )
             : Effect.succeed({ parts: [], kinds: [] }),
@@ -467,12 +466,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const compaction = { runId, logger, invoker, cell, stores: roots };
 
   // ------------------------------------------------------------ host port
-  const controls: RunControls = modelSwitchPort(
-    run,
-    access,
-    yield* Inbox,
-    cell,
-  );
+  const controls: RunControls = modelSwitchPort(run, access, cell);
 
   /** A turn's exit, and a handed-down call's run's at its park: a failed
    *  call's error fails it and is the reply (`turnResponse`). */
