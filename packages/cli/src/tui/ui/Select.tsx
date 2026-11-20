@@ -233,7 +233,7 @@ function selectIndexForHotkey(input: string): number | undefined {
  * Longer chunks are likely pasted text or a slash command racing a closing
  * form, so treating their first letter as a row shortcut is surprising.
  */
-export function selectIndexForHotkeyInput(input: string): number | undefined {
+function selectIndexForHotkeyInput(input: string): number | undefined {
   if (input.length > 2) return undefined;
   const first = input.at(0);
   return first == null ? undefined : selectIndexForHotkey(first);

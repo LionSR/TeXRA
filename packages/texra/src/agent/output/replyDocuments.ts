@@ -29,7 +29,7 @@ import {
   bareLatexDocument,
   extractDocuments,
   type NamedDocument,
-} from '@texra/utils/text/xmlExtraction';
+} from '@texra/agent/output/extraction/xmlExtraction';
 import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,

@@ -177,8 +177,33 @@ export const fileList = (
 ): ReturnType<typeof nullishWithDefault<Schema.$Array<Schema.String>>> =>
   nullishWithDefault(Schema.Array(Schema.String), [], description);
 
-/** The fields every child launch takes beside its own: memories, the call's
- *  reuse id and card label, its time limit, and whether a script waits. */
+/**
+ * The fields every child launch takes, `self()` included: the model the
+ * child runs on, its card label, and the limits the call that waits for it
+ * holds it to (`withinLimits`, `agentChild.ts`).
+ */
+export const CHILD_FIELDS = Object.freeze({
+  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
+      'Model reference, `@effort` suffix allowed (`@low` … `@max`, `@none`). Defaults to your current model when available.',
+  }),
+  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'A short title for the call’s card.',
+  }),
+  timeoutMs: timeoutMsField.annotate({
+    description:
+      'Stops the child after this many milliseconds: `TimedOut`. Only for a call that waits for its child.',
+  }),
+  maxCostUsd: Schema.optional(
+    Schema.NullOr(Schema.Finite.check(Schema.isGreaterThan(0))),
+  ).annotate({
+    description:
+      'A spend cap in USD on the child and every run it starts: once they have spent it, the child is stopped: `BudgetExceeded`. Only for a call that waits for its child.',
+  }),
+});
+
+/** The fields an `agent` or `program` launch takes beside its own: those of
+ *  every child, memories, the call's reuse id, and whether a script waits. */
 export const CALL_FIELDS = Object.freeze({
   memories: memoriesField,
   working_directory: workingDirectoryField,
@@ -186,15 +211,10 @@ export const CALL_FIELDS = Object.freeze({
     description:
       'Tells apart two otherwise identical calls: a completed call is reused by a later one with the same prompt, options and files.',
   }),
-  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'A short title for the call’s card.',
-  }),
-  timeoutMs: timeoutMsField.annotate({
-    description: 'Stops the agent after this many milliseconds: `TimedOut`.',
-  }),
+  ...CHILD_FIELDS,
   background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
     description:
-      'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run.',
+      'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run. A background child takes no `timeoutMs` or `maxCostUsd`.',
   }),
 });
 

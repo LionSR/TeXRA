@@ -1401,6 +1401,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A script caps what a child run spends, and `self()` takes a model.**
+  Every child a script waits for (`agent()`, `program()`, `self()`) takes
+  `maxCostUsd`, a spend cap in USD on the child and every run it starts:
+  once they have spent it the child is stopped and the call rejects with an
+  Error named `BudgetExceeded`, beside `TimedOut`. The cap is read after
+  each reply, so the spend can pass it by the replies then in flight.
+  `self()` now takes `model` (with an `@effort` suffix), `timeoutMs` and
+  `maxCostUsd` as `agent()` does, so a script gets a second model's check
+  with the same prompt and tools; a forked `self()` takes only a model that
+  can continue the conversation. A call that runs in the background, where
+  `timeoutMs` was accepted and never applied, now rejects both limits.
 - **A plugin you install can carry programs.** Put `programs/<name>.js` in
   a Claude Code or Codex plugin folder and each file is a program started as
   `<plugin>:<name>`: `texra run my-programs:todo-list --input paper.tex`,

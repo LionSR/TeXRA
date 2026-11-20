@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   bareLatexDocument,
   extractDocuments,
-} from '@texra/utils/text/xmlExtraction';
+} from '@texra/agent/output/extraction/xmlExtraction';
 
-describe('extractDocuments (packages/texra/src/utils/text/xmlExtraction.ts)', () => {
+describe('extractDocuments (packages/texra/src/agent/output/extraction/xmlExtraction.ts)', () => {
   it('reads <documents><document name> children', () => {
     const xml =
       '<documents><document name="a.tex">Body A</document>' +

@@ -105,8 +105,11 @@ other. Flatten, map, and filter do not need a barrier.
 
 - A failed call rejects with an Error whose `name` is `AgentFailed`; a call
   the user stopped rejects with `Skipped`, one past its `timeoutMs` with
-  `TimedOut`, and one whose model is unavailable with `ModelUnavailable`.
-  Check `error.name` in a `catch`.
+  `TimedOut`, one whose child (with the runs it started) spent its
+  `maxCostUsd` with `BudgetExceeded`, and one whose model is unavailable
+  with `ModelUnavailable`. Check `error.name` in a `catch`. Both limits
+  belong to a call the script waits for: a `background: true` call takes
+  neither.
 - `Promise.all` rejects on the first failure, but the other calls keep
   running and their results are lost to it. For tolerant fan-out, catch
   inside each branch (`async (s) => { try { ... } catch (e) { return
