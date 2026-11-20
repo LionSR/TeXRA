@@ -76,7 +76,20 @@ The one failure in each state-wait run is `multi-agent-toggle`, which failed
 the same way on `main` once a plugin's removal moved its row's hotkey; it is
 fixed in the same PR, and the merged tree then ran 143/143 in 245 s. No
 scenario failed in only some runs. An earlier round, before the async-list
-waits below, lost `model-form-buffered-hotkey` in 2 of 7 runs.
+waits, lost `model-form-buffered-hotkey` in 2 of 7 runs.
+
+**An async `/` list acts on the keys typed while it loads.** Those runs
+exposed it: a key read after the commit that ends `loading` and before the
+list's `Select` subscribes (that commit's passive effects run in a later
+task) reached neither the form's loading buffer nor the list, and the
+buffer took only one printable key. `useAsyncListForm`
+(`packages/cli/src/chat/tui/forms/_shared/useAsyncListForm.ts`) now holds
+every key but Esc and Ctrl chords until its own passive effect on the
+commit that shows the list, which React runs after the list's, and
+replays them in order through Ink's input events. `model-form-buffered-hotkey`
+and `skills-form-buffered-hotkey` press their hotkey as soon as the opening
+Enter is read (`untilRead`). With every CPU busy they failed 5 of 20 runs
+before the fix and passed 20 of 20 after.
 
 ## Open
 
@@ -84,33 +97,15 @@ waits below, lost `model-form-buffered-hotkey` in 2 of 7 runs.
    That changes CI cost, so it is the repo owner's call: a nightly `schedule`
    run of `validate:tui` without `--smoke` at least, or every PR. Only then
    do the `smoke` tag and the split go.
-2. **A key typed while an async `/` list loads is dropped (product).** Six
-   scenarios answer a list right after opening it (`config-form`,
-   `config-category-back-responsive`, `model-form-selectable-submit`,
-   `model-form-buffered-hotkey`, `skills-form-select-submit`,
-   `skills-form-buffered-hotkey`). On `main` they passed because the fixed
-   500 ms delay after the opening Enter let the list load first, so the two
-   `buffered-hotkey` scenarios never exercised the buffering they are named
-   for. Sent as soon as the opening key is answered, the next key lands
-   while the list is still loading: an Enter or arrow is dropped by design
-   (`shouldBufferAsyncListFormInput` buffers only printable keys), and a
-   buffered hotkey was lost in 4 of the 6 tries that landed in the loading
-   frame (`/skills`, all CPUs saturated). The probable cause, not
-   confirmed: between the commit that ends `loading` and the passive effect
-   that subscribes `Select`'s `useInput`, a key reaches neither the form's
-   buffer (no longer loading) nor the list. The scenarios now wait for the
-   loaded rows, which is what the delay covered.
-   - Two more, `api-form-chatgpt-hotkey` and `api-form-kimi-hotkey`, press
-     a `/login` row's hotkey right after opening it. That list mounts at
-     once, but its rows read "Loading current preference" until the account
-     state loads, and the loaded rows are not the same set; they now wait
-     for a loaded row too. They did not fail in the measured runs.
-   - Proposed: the form holds every key that arrives before its list is
-     listening (Enter and arrows included) and replays it once `Select`
-     subscribes, owned in `useAsyncListForm`
-     (`packages/cli/src/chat/tui/forms/_shared/useAsyncListForm.ts`); then
-     `model-form-buffered-hotkey` and `skills-form-buffered-hotkey` press
-     their hotkey without waiting, and so test the buffering.
+2. **`/login`'s rows while its account state loads.** Its list mounts and
+   listens at once, but the subscription rows are disabled until the
+   account state loads, so a hotkey typed in that window selects nothing.
+   No key is lost between listeners (the case the async `/` lists had);
+   the rows are not actionable yet. `api-form-chatgpt-hotkey` and
+   `api-form-kimi-hotkey` wait for a loaded row (`LOGIN_FORM_KEYS`).
+   Proposed only if it shows up in use: hold keys until the account state
+   loads, as `useAsyncListForm` does, with the list not listening
+   meanwhile.
 3. **The packaged desktop smoke is a second launch harness.**
    `scripts/verify-desktop.mjs`'s `smoke-package` stage (with
    `scripts/smoke-process-utils.mjs`) launches the packaged app, decides

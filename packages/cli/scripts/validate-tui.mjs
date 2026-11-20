@@ -97,9 +97,9 @@ const ESC_CHORD_WINDOW_MS = 700;
 // redraws from the top.
 const CLEAR_SCROLLBACK = `${ESC}[3J`;
 // Open a `/` form whose list loads asynchronously, and wait for its loaded
-// rows. A key that reaches the form before its list shows is dropped (the
-// test-launches note), so a scenario that answers the list opens it with
-// one of these; one that only asserts the list need not.
+// rows, so the keys that follow answer the list as shown. A key typed while
+// the list loads is held and acts once the list listens; the two
+// `*-buffered-hotkey` scenarios press theirs that early instead.
 // `/plugins`: the one plugin list, which replaced `/config` → Tools.
 const PLUGINS_FORM_KEYS = ['/plugins', { input: '\r', until: 'switch on/off' }];
 const CONFIG_FORM_KEYS = [
@@ -875,7 +875,10 @@ const SCENARIOS = [
       HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
-    keys: [...MODEL_PICKER_KEYS, '21'],
+    // The hotkey goes in as soon as the opening Enter is read, while the
+    // list loads or just after; on an idle machine the load finishes inside
+    // Ink's frame throttle, so no loading frame is ever painted to wait on.
+    keys: ['/model', { input: '\r', untilRead: true }, '21'],
     frame: 'viewport',
     // The pick reaches `/model`'s own handler, which answers for the
     // harness's stored root.
@@ -1090,7 +1093,8 @@ const SCENARIOS = [
   {
     name: 'skills-form-buffered-hotkey',
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
-    keys: [...SKILLS_FORM_KEYS, '21'],
+    // As `model-form-buffered-hotkey`: the hotkey lands while the list loads.
+    keys: ['/skills', { input: '\r', untilRead: true }, '21'],
     frame: 'viewport',
     expect: ['Harness skill selected:'],
     unexpect: [
@@ -3687,12 +3691,16 @@ async function runScenario(scenario, index) {
   // answered) is in that frame when it ran without waiting on anything, and
   // when the session wrote it (`caughtUp`). A key whose answer waits on I/O
   // or a timer names the text it waits `until`, or waits to see `untilGone`.
+  // A key marked `untilRead` waits only until Ink has read it, so the next
+  // key arrives before this one's answer is in (an async list still
+  // loading); the final frame still waits for the TUI to catch up.
   let bytesSent = 0;
-  const send = (input, { until, untilGone } = {}) => {
+  const send = (input, { until, untilGone, untilRead } = {}) => {
     const dispatchedBefore = keysDispatched;
     bytesSent += Buffer.byteLength(input);
     child.write(input);
     return waitFor((report, frame) => {
+      if (untilRead) return report.read >= bytesSent;
       keysDispatched = report.keys;
       return (
         report.read >= bytesSent &&
@@ -3715,7 +3723,9 @@ async function runScenario(scenario, index) {
         ? `showed ${JSON.stringify(awaited.until)}`
         : awaited.untilGone !== undefined
           ? `dropped ${JSON.stringify(awaited.untilGone)}`
-          : 'answered it';
+          : awaited.untilRead
+            ? 'read it'
+            : 'answered it';
     checkpointFailures.push(
       `after key ${JSON.stringify(input)}, the frame never ${missing}`,
     );
