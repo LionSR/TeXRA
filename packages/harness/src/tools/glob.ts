@@ -30,7 +30,7 @@ import { defineTool } from './core/definition';
 
 const GlobInputSchema = Schema.Struct({
   pattern: Schema.NonEmptyString.annotate({
-    description: 'Glob pattern to match, such as "**/*.tex" or "src/**/*.ts".',
+    description: 'Glob pattern to match, such as "**/*.md" or "src/**/*.ts".',
   }),
   path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description: 'Directory to search within. Defaults to the workspace root.',
@@ -62,7 +62,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   const patternError = (err: unknown) =>
     new ToolError(
       `Glob pattern error: ${toErrorMessage(err)}. ` +
-        `Check syntax: use ** for recursive, * for single level. Example: "**/*.tex"`,
+        `Check syntax: use ** for recursive, * for single level. Example: "**/*.md"`,
     );
   const walker = yield* Effect.try({
     try: () =>
@@ -82,7 +82,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   if (escaping !== undefined) {
     return yield* new ToolError(
       `Glob pattern must stay under the search directory: "${escaping}". ` +
-        `Put an outside base in "path" instead (for example path ".." with pattern "**/*.tex"); that path is still checked against the allowed roots.`,
+        `Put an outside base in "path" instead (for example path ".." with pattern "**/*.md"); that path is still checked against the allowed roots.`,
     );
   }
   const matches = yield* Effect.tryPromise({
@@ -156,7 +156,7 @@ export const GlobTool = defineTool({
   replay: 'safe',
   lane: 'parallel',
   description:
-    'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
+    'Find files matching glob patterns (e.g., "**/*.md", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,
   execute: runGlob,
 });
