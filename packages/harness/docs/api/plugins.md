@@ -690,33 +690,6 @@ function countLineChanges(hunks: readonly Hunk[]): {
 }
 ```
 
-## createExternalLocation
-
-```ts
-function createExternalLocation(
-  absolutePath: string,
-): ExternalFileLocation
-```
-
-## createRunStorageLocation
-
-```ts
-function createRunStorageLocation(
-  absolutePath: string,
-  relativePath: string,
-  runId: RunId,
-): RunStorageFileLocation
-```
-
-## createWorkspaceLocation
-
-```ts
-function createWorkspaceLocation(
-  absolutePath: string,
-  relativePath: string,
-): WorkspaceFileLocation
-```
-
 ## CurrentValues
 
 A root's current values (`current_value`): one row per family and key,

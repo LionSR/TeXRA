@@ -3,15 +3,19 @@ import { Schema } from 'effect';
 import {
   fileLocationDisplayPath,
   RunIdSchema,
+  type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
-import { createRunStorageLocation } from '@texra-ai/harness/plugins';
 import { latexdiffPairs } from '@latex/latexdiff/diffOperations';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
 describe('latexdiffPairs', () => {
   const runId = Schema.decodeSync(RunIdSchema)('abc123');
-  const file = (relativePath: string) =>
-    createRunStorageLocation(`/run/${relativePath}`, relativePath, runId);
+  const file = (relativePath: string): RunStorageFileLocation => ({
+    kind: 'runStorage',
+    absolutePath: `/run/${relativePath}`,
+    relativePath,
+    runId,
+  });
   const output = (round: number, source: string): OutputFileInfo => ({
     source,
     round,

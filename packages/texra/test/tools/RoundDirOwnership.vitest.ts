@@ -5,10 +5,7 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import {
-  runDirUnder,
-  createWorkspaceLocation,
-} from '@texra-ai/harness/plugins';
+import { runDirUnder } from '@texra-ai/harness/plugins';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/fakeHost';
@@ -46,9 +43,11 @@ describe('round-dir ownership', () => {
 
     const fileService = new RunWorkspace(runId, roots);
     await onNodeFs(
-      fileService.mirrorWorkspaceFile(
-        createWorkspaceLocation(stylePath, 'macros.sty'),
-      ),
+      fileService.mirrorWorkspaceFile({
+        kind: 'workspace',
+        absolutePath: stylePath,
+        relativePath: 'macros.sty',
+      }),
     );
 
     expect((await lstat(runFile)).isSymbolicLink()).toBe(false);
