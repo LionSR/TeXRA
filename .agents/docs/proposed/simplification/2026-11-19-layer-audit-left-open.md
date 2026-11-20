@@ -42,16 +42,27 @@ only when the bind asked for it and the route can carry it, and the harness
 keeps passing `background: request.textOnly`. It changes what is sent to
 OpenAI and Google, so it needs a live run with a key before it lands.
 
-## 2. Image size limits are one provider's, applied to all
+## 2. Image size limits are one provider's, applied to all (landed)
 
-`MANY_IMAGE_MAX_DIMENSION = 2000` (`packages/harness/src/tools/attachments.ts`)
-is Anthropic's multi-image limit. It drops the bytes of any tool-attachment
-image over 2000px for every provider, even a single image to GPT or Gemini.
-`API_MAX_IMAGE_DIMENSION = 8000` (`agent/runtime/run/img.ts`) caps the
-`maxImageDimension` setting below the 10,000 its schema allows. Both are wire
-limits, and `packages/llm` should state them per protocol, e.g.
-`imageLimits(config)`. Decision needed: does llm-zoo gain the field, or does
-llm keep a protocol table?
+`packages/llm` now states the image limits per protocol: `IMAGE_LIMITS` in
+`packages/llm/src/protocol.ts`, a frozen table with a row for every
+`TurnProtocolSchema` member (a new protocol does not compile without one),
+holding each protocol's largest image side and its largest side in a
+many-image request. The harness constants are gone. A tool attachment
+(`buildBytesAttachment`, `packages/harness/src/tools/attachments.ts`) reads
+the many-image limit of the protocol its call's run is bound to
+(`ToolContext` → `run.model`); an opening message's media
+(`mediaInputParts`) caps the `maxImageDimension` setting at the bound
+model's protocol limit; a follow-up's media (`attachedMedia`), stored once
+and replayable to any binding, at the smallest limit of all protocols.
+
+Only the Anthropic row is established (8000 px, from #2737, and 2000 px
+for many-image requests, from the harness's own comment on the 400 it
+returns). The OpenAI Responses and Google Interactions rows carry the same
+numbers over, marked in the table as not established for those protocols, so
+nothing sent changed. Open: replace those two rows with each provider's
+documented limits, read from a source this repo can cite; the GPT and Gemini
+behaviour then changes there and nowhere else.
 
 ## 3. The GLM Coding Plan's precedence is decided in two packages
 

@@ -101,9 +101,14 @@ export function nativeToolTestLayer(
           agent: 'test',
           model: 'test-model',
         }),
-        // cast: a tool reads only the id off the run's model cell.
+        // cast: a tool reads only the id and the protocol (for an image's
+        // size limit) off the run's model cell.
         model: yield* ScopedRef.make(
-          () => ({ modelId: 'test-model' }) as BoundModel,
+          () =>
+            ({
+              modelId: 'test-model',
+              origin: { protocol: 'anthropic-messages' },
+            }) as BoundModel,
         ),
         logger: noopTrace,
         steps: noStep(),

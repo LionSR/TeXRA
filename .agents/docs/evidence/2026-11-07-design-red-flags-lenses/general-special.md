@@ -548,7 +548,7 @@ share one decoder, but the controller change does not need it.
 What is deleted: four setters → 1 (`setTeam`, `setEnabledAgentKeys`,
 `setAll`, `setInherited`), `clearDefaultTeam`, the private `setSelection`,
 and the seven-branch dispatch at the two CLI sites.
-`src/test-kernel/controllers/WorkspaceAgentsController.vitest.ts` is renamed
+`packages/harness/test/controllers/WorkspaceAgentsController.vitest.ts` is renamed
 to the new calls.
 
 **What we give up.** The method names that read as sentences at the call
