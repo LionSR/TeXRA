@@ -235,7 +235,7 @@ TTY facts read from `process` globals where Effect's `Stdio` exists).
   unset (`~/.texra`); tests point it at a scratch directory".
   - The one production caller passes neither
     (`packages/cli/src/commands/_helpers/context.ts:24-26`).
-  - The only other caller is `src/test-kernel/cli/CliContext.vitest.ts:38-45`
+  - The only other caller is `packages/cli/test/cli/CliContext.vitest.ts:38-45`
     (13 `storageRoot` and 7 `ambient` references). The type is exported only
     for that test.
   - The home isolation every project's setup runs already points `~/.texra`
