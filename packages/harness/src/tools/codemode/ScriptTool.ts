@@ -30,6 +30,7 @@ import {
   SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
+import { WAKE_TOOL_NAME } from '@tools/WakeTool';
 
 import { defineTool } from '../core/definition';
 import { optionalInput, timeoutMsField } from '../core/inputSchema';
@@ -338,7 +339,7 @@ const SURFACE = [
     '- `section(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
   '`const { name } = await import(specifier)` loads a module by its specifier (`builtIn:<module>`, listed below when you may import any); a static `import` line does not parse in a function body.',
-  'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again. To continue at a later time, `tools.wake({ afterSeconds, note })` (where `wake` is offered) returns at once and arranges a later turn of the conversation, which starts from the note.',
+  'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',
 ].join('\n\n');
 
 export const ScriptTool = defineTool({
@@ -347,7 +348,7 @@ export const ScriptTool = defineTool({
   // each finished call is handed back from its row, never run twice.
   replay: 'safe',
   description: SURFACE,
-  describe: (declared, modules, programs) => {
+  describe: (declared, modules, programs, offered) => {
     // The declared tools whose calls run alongside others: the rest wait
     // their turn.
     const together = declared.flatMap(({ definition, lane }) =>
@@ -355,6 +356,12 @@ export const ScriptTool = defineTool({
     );
     return [
       SURFACE,
+      // Named only to a step that offers it.
+      ...(offered.includes(WAKE_TOOL_NAME)
+        ? [
+            'To continue at a later time, `tools.wake({ afterSeconds, note })` returns at once and arranges a later turn of the conversation, which starts from the note.',
+          ]
+        : []),
       // A module no tool's description names is found only here.
       ...(modules.length === 0
         ? []

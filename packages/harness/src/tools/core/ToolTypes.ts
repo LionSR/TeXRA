@@ -158,6 +158,9 @@ export interface ITool<E = Error, R = never> {
       readonly name: string;
       readonly description: string;
     }[],
+    /** The names of every tool the step offers, injected ones included:
+     *  the description names a tool only when it is among them. */
+    offered: readonly string[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
