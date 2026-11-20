@@ -19,9 +19,10 @@ import {
   AGENT_SOURCE,
   backgroundScriptOf,
   factName,
-  isInstalledProgram,
   programOf,
+  programOrigin,
   type AgentConfig,
+  type ProgramOrigin,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -48,7 +49,15 @@ const programScript = (
     'instruction' | 'inputFiles' | 'contextFiles' | 'mediaFiles'
   >,
 ): string =>
-  `const { default: program } = await import(${JSON.stringify(isInstalledProgram(name) ? name : `builtIn:${name}`)});
+  `const { default: program } = await import(${JSON.stringify(
+    (
+      {
+        listed: `builtIn:${name}`,
+        installed: name,
+        own: name,
+      } satisfies Record<ProgramOrigin, string>
+    )[programOrigin(name)],
+  )});
 return await program(${JSON.stringify(args)}, ${JSON.stringify({
     instruction: launch.instruction,
     inputFiles: launch.inputFiles,
@@ -134,9 +143,10 @@ const registeredProgram = Effect.fn('registeredProgram')(function* (
 > {
   const registered = (yield* ToolRegistry).programs.get(name);
   if (registered !== undefined) return registered;
-  const { programs, withheld } = isInstalledProgram(name)
-    ? yield* programsNow(roots)
-    : { programs: (yield* ToolRegistry).programs, withheld: [] };
+  const { programs, withheld } =
+    programOrigin(name) === 'listed'
+      ? { programs: (yield* ToolRegistry).programs, withheld: [] }
+      : yield* programsNow(roots);
   const program = programs.get(name);
   if (program === undefined)
     return yield* new ProgramNotRegistered({
@@ -235,7 +245,8 @@ export const readProgramResult = Effect.fn('readProgramResult')(function* (
     );
   // A program read from a file registers no result: its run delivers its
   // reply alone.
-  if (isInstalledProgram(name)) return { name, delivery: [], changes: [] };
+  if (programOrigin(name) !== 'listed')
+    return { name, delivery: [], changes: [] };
   const { programs } = yield* ToolRegistry;
   const registered = programs.get(name);
   if (registered === undefined)

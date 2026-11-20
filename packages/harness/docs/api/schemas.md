@@ -1767,15 +1767,46 @@ type ProcessExit = typeof ProcessExitSchema.Type;
 The registered program the run opened on (its `name` and `args`), or
 null for any other run. A program's run is a script that ends: its
 value and its children's spend are its output, its end its record, and
-it takes no later message. A plugin wrote the program, not a model, so
-the launch that chose it granted it: tools fixed past any switch, its
-delegations under the launch's approval, its prompts and files passed
-as written, and no skill activated by its instruction. A program read
-from a file gets less ({@link isInstalledProgram}), and one an agent
-wrote for itself less again ({@link delegatesApproved}).
+it takes no later message. What its launch grants it (its tools, the
+runs it starts, the files it hands them) follows from where the program
+comes from ({@link programOrigin}).
 
 ```ts
 const programOf: (config: { readonly name: string; readonly instruction: string; readonly workingDirectory?: string | undefined; readonly model?: string | undefined; } | { readonly agent: string; readonly model: string; readonly script?: { readonly kind: "background"; readonly title: string; readonly tools: readonly string[]; readonly code: string; readonly timeoutMs?: number | undefined; } | { readonly kind: "program"; readonly name: string; readonly args: { readonly [x: string]: Json; }; } | undefined; readonly workingDirectory?: string | undefined; readonly instruction?: string | undefined; readonly inputFiles?: readonly string[] | undefined; readonly contextFiles?: readonly string[] | undefined; readonly mediaFiles?: readonly string[] | undefined; readonly outputFiles?: readonly string[] | undefined; readonly agentSource?: { readonly kind: "custom" | "builtIn" | "plugin"; } | { readonly kind: "inline"; readonly persona: { readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; }; } | undefined; readonly asCaller?: boolean | undefined; readonly rootUserInstruction?: string | undefined; readonly displayInstruction?: string | undefined; readonly memories?: readonly string[] | undefined; readonly skills?: readonly string[] | undefined; readonly launch?: { readonly [x: string]: Json; } | undefined; readonly delegationAgentScope?: readonly string[] | undefined; readonly outputSchema?: { readonly [x: string]: unknown; } | undefined; } | Pick<{ readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly script?: { readonly kind: "background"; readonly title: string; readonly tools: readonly string[]; readonly code: string; readonly timeoutMs?: number | undefined; } | { readonly kind: "program"; readonly name: string; readonly args: { readonly [x: string]: Json; }; } | undefined; readonly workingDirectory?: string | undefined; readonly agentSource?: { readonly kind: "custom" | "builtIn" | "plugin"; } | { readonly kind: "inline"; readonly persona: { readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; }; } | undefined; readonly asCaller?: boolean | undefined; readonly rootUserInstruction?: string | undefined; readonly displayInstruction?: string | undefined; readonly skills?: readonly string[] | undefined; readonly launch?: { readonly [x: string]: Json; } | undefined; readonly delegationAgentScope?: readonly string[] | undefined; readonly outputSchema?: { readonly [x: string]: unknown; } | undefined; }, "script">) => { readonly kind: "program"; readonly name: string; readonly args: { readonly [x: string]: Json; }; } | null
+```
+
+## programOrigin
+
+Where the program `name` comes from, which decides what its launch
+grants its run:
+
+| origin      | name              | its tools            | what it starts         | a child's prompt, files |
+| ----------- | ----------------- | -------------------- | ---------------------- | ----------------------- |
+| `listed`    | `<name>`          | fixed past switches  | approved by its launch | passed as written       |
+| `installed` | `<plugin>:<name>` | through the switches | approved by the review | handed off, resolved    |
+| `own`       | `own:<name>`      | through the switches | asked about            | handed off, resolved    |
+
+A `listed` program is one the app's plugin list registers: the app wrote
+it. An `installed` one is read from an installed plugin's file, whose
+programs a person reviewed when they enabled it, but whose text is not
+the app's: its tools pass the user's switches, the prompt a child gets
+is handed off with the caller's instruction, and the files it hands that
+child are resolved as a model's script's are. An `own` one is a file the
+agent wrote into its memory, which nobody reviewed: beside that, what it
+starts is asked about under the approval policy as a model's own
+script's is, and where no prompt can show, the tools that ask are
+withheld from it.
+
+```ts
+const programOrigin: (name: string) => ProgramOrigin
+```
+
+## ProgramOrigin
+
+Where a program comes from ({@link programOrigin}).
+
+```ts
+type ProgramOrigin = 'listed' | 'installed' | 'own';
 ```
 
 ## ProposalFileFields

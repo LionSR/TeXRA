@@ -57,10 +57,10 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
-  delegatesApproved,
-  isInstalledProgram,
   PROGRAM_TOOL_NAME,
   programOf,
+  programOrigin,
+  type ProgramOrigin,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   SCRIPT_TOOL_NAME,
@@ -242,11 +242,25 @@ const openStep = Effect.fn('Step.open')(function* (
   // in progress (a plugin's start).
   const acquire = Effect.gen(function* () {
     const scope = yield* Effect.scope;
-    // A registered program's tools are fixed; anyone else's, those of a
-    // program read from a file among them, follow the switches read live.
+    // What a program's origin grants its step: a listed program's tools
+    // are fixed; anyone else's, a program read from a file among them,
+    // follow the switches read live. The runs a program a plugin ships
+    // starts, listed or installed, stand approved by its launch.
     const program = programOf(run.config);
-    const trusted = program !== null && !isInstalledProgram(program.name);
-    const off = trusted
+    const grants =
+      program === null
+        ? { toolsFixed: false, startsApproved: false }
+        : (
+            {
+              listed: { toolsFixed: true, startsApproved: true },
+              installed: { toolsFixed: false, startsApproved: true },
+              own: { toolsFixed: false, startsApproved: false },
+            } satisfies Record<
+              ProgramOrigin,
+              { toolsFixed: boolean; startsApproved: boolean }
+            >
+          )[programOrigin(program.name)];
+    const off = grants.toolsFixed
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
     const pinned = yield* (yield* ProjectTools).pin(off, {
@@ -265,7 +279,7 @@ const openStep = Effect.fn('Step.open')(function* (
       // approved by its launch, and any other call is still decided by the
       // approval policy when made. One the agent wrote for itself is
       // offered what the agent would be.
-      ...(delegatesApproved(run.config) && {
+      ...(grants.startsApproved && {
         approvalPromptsUnavailable: false,
       }),
     }).pipe(Effect.provideService(ToolRegistry, pinned.table));
@@ -281,7 +295,7 @@ const openStep = Effect.fn('Step.open')(function* (
       resolved.registry.has(SCRIPT_TOOL_NAME) ||
       resolved.registry.has(PROGRAM_TOOL_NAME);
     const own =
-      delegatesApproved(run.config) || !runsPrograms
+      grants.startsApproved || !runsPrograms
         ? { loaded: [], refused: [] }
         : yield* readOwnPrograms(roots.storage);
     const unlisted = new Set(

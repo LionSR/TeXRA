@@ -241,7 +241,9 @@ third-party code, so its description and tools are read from its text
 only in the script sandbox. An agent writes its own with the memory tool as
 `/memories/programs/<name>.js`, started as `own:<name>` from its next step
 (`packages/harness/src/agent/memory/ownPrograms.ts`); nobody reviews one, so
-what it starts is asked about as a model's script's is (`delegatesApproved`).
+what it starts is asked about as a model's script's is. Where a program
+comes from (`programOrigin`: listed, installed or own) decides what its
+launch grants it.
 An installed plugin may also carry native code,
 `harness.mjs` (`packages/harness/src/common/plugins/nativeEntry.ts`): once
 trusted at its digest it runs in the process and returns a `Plugin`, which

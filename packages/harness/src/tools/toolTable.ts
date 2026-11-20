@@ -27,7 +27,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
   factName,
-  isInstalledProgram,
+  programOrigin,
   type FactName,
   type RunId,
 } from '@shared/schemas';
@@ -258,9 +258,9 @@ const tableOf = (
   );
   if (new Set(modules).size !== modules.length)
     return Result.fail('two plugins ship a script module of one name.');
-  // `<plugin>:<name>` names an installed plugin's program, so a plugin's
-  // module can never be mistaken for one.
-  const qualified = modules.find(isInstalledProgram);
+  // A name with a colon is a program read from a file (`<plugin>:<name>`,
+  // `own:<name>`), so a plugin's module can never be mistaken for one.
+  const qualified = modules.find((name) => programOrigin(name) !== 'listed');
   if (qualified !== undefined)
     return Result.fail(`script module ${qualified} has a colon in its name.`);
   // A program is started by its module's name, which the check above keeps

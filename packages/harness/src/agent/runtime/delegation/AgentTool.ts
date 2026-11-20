@@ -31,8 +31,9 @@ import {
   type RunEnd,
   type RunId,
   type ToolResult,
-  isInstalledProgram,
   programOf,
+  programOrigin,
+  type ProgramOrigin,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
@@ -345,10 +346,17 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   // The call's files, the program's file arguments among them: a
   // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a registered program's files pass as named,
-  // those of a program read from a file are resolved like a model's.
+  // completed child of it; a listed program's files pass as named, those
+  // of a program read from a file are resolved like a model's.
   const caller = programOf(run.config);
-  const trusted = caller !== null && !isInstalledProgram(caller.name);
+  const verbatim =
+    caller !== null &&
+    (
+      { listed: true, installed: false, own: false } satisfies Record<
+        ProgramOrigin,
+        boolean
+      >
+    )[programOrigin(caller.name)];
   const fileArgs =
     program === null
       ? []
@@ -366,7 +374,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
             : [];
         }),
       ].map(([label, list]) =>
-        trusted
+        verbatim
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
           : resolveInvocationFileList(parentId, label, list),
       ),
@@ -390,10 +398,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(
       '`timeoutMs` and `maxCostUsd` limit a child its call waits for, and this call runs in the background. Call it from a script without `background: true`, or drop the limit.',
     );
-  // A program's launch, a structured call and a call from a program reach
-  // the child verbatim; any other is handed off with the parent's
+  // A program's launch, a structured call and a call from a listed program
+  // reach the child verbatim; any other is handed off with the parent's
   // instruction.
-  const handsOff = program === null && outputSchema === undefined && !trusted;
+  const handsOff = program === null && outputSchema === undefined && !verbatim;
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
   // does not depend on which credentials are configured now. The call's

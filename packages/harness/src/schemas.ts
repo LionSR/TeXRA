@@ -366,6 +366,8 @@ export {
   isRunId,
   isPlainAgentIdentity,
   programOf,
+  programOrigin,
+  type ProgramOrigin,
   LaunchNoticeSchema,
   NonNegativeIntSchema,
   listingTypeOf,

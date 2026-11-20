@@ -10,7 +10,7 @@
  * evaluated only in the script sandbox, its run is offered only the tools
  * its `uses` names, through the user's switches and approval policy, and the
  * agents and programs it starts are asked about as a model's script's are
- * (`delegatesApproved`).
+ * (`programOrigin`).
  */
 
 // Node imports
