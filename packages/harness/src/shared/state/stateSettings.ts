@@ -479,7 +479,7 @@ export const GLM_CODING_PLAN_SETTING = {
   schema: booleanWithDefault(false),
   title: 'GLM Coding Plan',
   description:
-    "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; TeXRA shows the plan's quota and reports its limits as plan limits. Ignored while a custom GLM endpoint is set.",
+    "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; the plan's quota is shown and its limits are reported as plan limits. Ignored while a custom GLM endpoint is set.",
 } as const satisfies SettingRow<boolean>;
 
 /**

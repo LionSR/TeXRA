@@ -42,12 +42,20 @@ The complete remaining instance set (layer-audit note item 8, left open):
   surfaced through typed errors an embedder can catch and reword with its own
   product name; this is the second commit, droppable on its own if the owner
   would rather thread a product display name as data (see below).
+- A harness-owned setting description → product-neutral:
+  `GLM_CODING_PLAN_SETTING.description` (`stateSettings.ts`) said "TeXRA shows
+  the plan's quota"; it now reads "the plan's quota is shown". The row is
+  exported and the app renders its copy verbatim, so an embedder surfacing the
+  row would have shown the app's name. Changing it regenerates the schemas API
+  report.
 
-The base system prompt (`PromptBuilder.ts`) and every other built-in tool
-description were already domain-neutral. The LaTeX vocabulary a run still
-sees comes from the app's own `TEX_INSTRUCTIONS`
+The base system prompt (`PromptBuilder.ts`) and every other built-in tool and
+setting description were already domain-neutral. The LaTeX vocabulary a run
+still sees comes from the app's own `TEX_INSTRUCTIONS`
 (`packages/texra/src/tools/registry.ts`), injected by TeXRA as a plugin would —
-which is correct and out of scope.
+which is correct and out of scope. (The "TeXRA" that remains in harness source
+is in code comments that name the reference app, not in any string sent to a
+model or shown to a user.)
 
 ## Open: needs an owner decision
 
