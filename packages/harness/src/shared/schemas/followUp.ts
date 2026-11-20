@@ -1,9 +1,10 @@
 /**
  * One follow-up: input put on a run's queue and read at its next turn
  * boundary. Every producer — the user's composer, a child's report, a
- * parent's or peer's message, a host notice — writes this one row, so
- * messaging between runs and subagent reporting are the same row: a
- * message's text, or a child's report as its typed delivery.
+ * parent's or peer's message, a host notice, the run's own note for a later
+ * time — writes this one row, so messaging between runs and subagent
+ * reporting are the same row: a message's text, or a child's report as its
+ * typed delivery.
  */
 import { Schema, Struct } from 'effect';
 
@@ -33,6 +34,11 @@ const FollowUpSenderSchema = Schema.Union([
      *  branches on it. */
     source: Schema.String,
   }),
+  /** The run itself, earlier: a note it arranged to read at a later time
+   *  (the `wake` tool). The row is queued when the run asks and is not read
+   *  before `due`, in epoch milliseconds (`readableMessages`). It reminds
+   *  the run of its own intent and never becomes its instruction. */
+  Schema.Struct({ kind: Schema.Literal('self'), due: Schema.Int }),
 ]);
 export type FollowUpSender = typeof FollowUpSenderSchema.Type;
 
@@ -107,7 +113,9 @@ export type FollowUpMessage = typeof FollowUpMessageSchema.Type;
  * delivery to its parent, whose facts are rendered once, as the envelope its
  * parent's model reads, where the row becomes the run's message. `from` is
  * the provenance a consumer reads: a user's or parent's text becomes the
- * run's instruction. A loop's own maintenance wake is never a follow-up row.
+ * run's instruction, and a run's own note (`self`) is framed as one where it
+ * becomes the message (`wakeNoteText`). A loop's own maintenance wake is
+ * never a follow-up row.
  */
 const FollowUpContentSchema = Schema.Union([
   FollowUpMessageSchema,
@@ -143,7 +151,8 @@ export const FollowUpRequestSchema = Schema.Struct({
  * result committed beside it; a control (`/compact`, `/model`) was applied
  * by the edit or `run.config` beside it; or it was dropped unread and
  * unapplied: a control that changed nothing (`noop`), the run's end
- * (`ended`) or its input's close (`closed`).
+ * (`ended`), its input's close (`closed`), or a wake note its run
+ * cancelled or a stop of its run ended (`cancelled`).
  */
 export const FollowUpDispositionSchema = Schema.Union([
   Schema.Struct({
@@ -154,7 +163,7 @@ export const FollowUpDispositionSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('applied') }),
   Schema.Struct({
     kind: Schema.Literal('dropped'),
-    reason: Schema.Literals(['noop', 'ended', 'closed']),
+    reason: Schema.Literals(['noop', 'ended', 'closed', 'cancelled']),
   }),
 ]);
 /** A `followup.consumed` row's `disposition`. */

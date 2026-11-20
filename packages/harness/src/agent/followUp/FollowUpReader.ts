@@ -7,9 +7,10 @@
  * `followup.consumed` rows its reader commits with the message it became.
  * A reader hands a step of the loop one reading of the input
  * ({@link InputReading}); with nothing to read it waits on the session log for
- * the next message queued for its run, or for the inbox to end it.
+ * the next message queued for its run, for the time a note the run wrote to
+ * itself is due, or for the inbox to end it.
  */
-import { Effect, Latch, Option, Stream } from 'effect';
+import { Clock, Effect, Latch, Option, Stream } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
@@ -21,17 +22,30 @@ import type { SessionLogShape } from '@shared/session/sessionLog';
  *  a turn, at the turn's end, or while it waits for input. */
 type InputPoint = 'request' | 'turn' | 'idle';
 
+/** When a run's own note for a later time (`from.kind: 'self'`) becomes
+ *  readable; undefined for every other row, which holds no time. */
+const dueOf = ({ content: { from } }: QueuedFollowUp): number | undefined =>
+  from.kind === 'self' ? from.due : undefined;
+
 /**
- * The pending messages a run reads at `at`, in commit order. A row held
- * until the turn ends is not read before a request inside the turn.
+ * The pending messages a run reads at `at` when the clock says `now`, in
+ * commit order. A row held until the turn ends is not read before a request
+ * inside the turn, and a run's own note for a later time is not read before
+ * it is due.
  */
 function readableMessages(
   rows: readonly QueuedFollowUp[],
   at: InputPoint,
+  now: number,
 ): QueuedFollowUp[] {
-  return rows.filter(
-    (f) => isMessage(f) && (f.holdUntil === undefined || at !== 'request'),
-  );
+  return rows.filter((f) => {
+    const due = dueOf(f);
+    return (
+      isMessage(f) &&
+      (due === undefined || due <= now) &&
+      (f.holdUntil === undefined || at !== 'request')
+    );
+  });
 }
 
 /**
@@ -43,7 +57,8 @@ function readableMessages(
  * then only the user's message committed after that stop wakes it, so no
  * run undoes a person's stop. A resumed run that crashed carries no end, so
  * no earlier Stop of it holds a message back. A host's notification wakes
- * nothing: it is read by a run already running.
+ * nothing: it is read by a run already running. A run's own note wakes it
+ * as a run's message does, once it is readable.
  */
 const wakes = (
   { end, stop }: RunRowsRead<'input'>,
@@ -58,13 +73,13 @@ const wakes = (
 /**
  * Whether a run's pending input obliges a resume of it when no fiber here
  * drives it, from its input rows (`followup.queued`, `followup.consumed`,
- * `run.activate`, `run.end`), over the messages readable at idle
- * ({@link wakes}). A closed input obliges none.
+ * `run.activate`, `run.end`), over the messages readable at idle when the
+ * clock says `now` ({@link wakes}). A closed input obliges none.
  */
-export function needsWake(input: RunRowsRead<'input'>): boolean {
+export function needsWake(input: RunRowsRead<'input'>, now: number): boolean {
   return (
     !input.inputClosed &&
-    readableMessages(input.followUps, 'idle').some(({ commit, content }) =>
+    readableMessages(input.followUps, 'idle', now).some(({ commit, content }) =>
       wakes(input, content.from, commit),
     )
   );
@@ -132,22 +147,31 @@ interface InputReading {
   readonly pending: (at: InputPoint) => boolean;
   /** Where the log stood before the read: a later row is above it. */
   readonly from: CommitOrdinal;
+  /** How long until the run's earliest note not yet due becomes readable,
+   *  in milliseconds; undefined when none waits for its time. */
+  readonly untilDue: number | undefined;
 }
 
 const inputOf = (
   rows: readonly QueuedFollowUp[],
   from: CommitOrdinal,
+  now: number,
 ): InputReading => {
   const batch: InputReading['batch'] = (at) => {
-    const followUps = readableMessages(rows, at);
+    const followUps = readableMessages(rows, at, now);
     return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
   };
   const compacting = rows.some((f) => f.control?.kind === 'compact');
+  const later = rows.flatMap((f) => {
+    const due = dueOf(f);
+    return due !== undefined && due > now ? [due - now] : [];
+  });
   return {
     controls: rows.filter((f) => f.control !== undefined),
     batch,
     pending: (at) => compacting || batch(at) !== null,
     from,
+    untilDue: later.length > 0 ? Math.min(...later) : undefined,
   };
 };
 
@@ -180,8 +204,11 @@ export class FollowUpReader {
   /** The run's input now, in one read of its committed rows. */
   readonly read: Effect.Effect<InputReading> = Effect.suspend(() => {
     const from = this.log.now();
-    return this.log.runRows(this.runId, 'input').pipe(
-      Effect.map(({ followUps }) => inputOf(followUps, from)),
+    return Effect.all([
+      this.log.runRows(this.runId, 'input'),
+      Clock.currentTimeMillis,
+    ]).pipe(
+      Effect.map(([{ followUps }, now]) => inputOf(followUps, from, now)),
       Effect.orDie,
     );
   });
@@ -199,7 +226,7 @@ export class FollowUpReader {
         if (readable !== null) return readable;
         if (input.pending(at))
           return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
-        const arrived = yield* Effect.raceFirst(
+        const arrived = yield* Effect.raceAllFirst([
           this.log.tail(input.from).pipe(
             Stream.filter(
               (event) =>
@@ -211,7 +238,12 @@ export class FollowUpReader {
             Effect.orDie,
           ),
           Effect.as(this.closed.await, false),
-        );
+          // A note the run wrote to itself becomes readable with no row
+          // committed: the wait ends when its time comes.
+          ...(input.untilDue === undefined
+            ? []
+            : [Effect.as(Effect.sleep(input.untilDue), true)]),
+        ]);
         if (!arrived) return null;
       }
     });

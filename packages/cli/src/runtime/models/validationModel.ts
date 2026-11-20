@@ -369,6 +369,24 @@ function goldenTurn(
       ? Effect.succeed([call('executions', { path: '/executions' })])
       : Effect.never;
   }
+  // The wake run: it arranges to be continued in an hour and, when its
+  // task says so, cancels that by the id the call answered. Every reply
+  // counts the notes to itself the conversation holds by then.
+  if (system.includes('GOLDEN-WAKE')) {
+    const id = /Its id is ([0-9a-f-]{36})/.exec(said)?.[1];
+    const steps = [
+      () => call('wake', { afterSeconds: 3600, note: 'Check the build.' }),
+      ...(said.includes('then cancel it') && id !== undefined
+        ? [() => call('wake', { command: 'cancel', id })]
+        : []),
+    ];
+    const step = steps[results.length];
+    return Effect.succeed(
+      step === undefined
+        ? text(`Notes read: ${said.split('<wake-note ').length - 1}`)
+        : [step()],
+    );
+  }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),

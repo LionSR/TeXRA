@@ -4,6 +4,7 @@ import type { FollowUpContent } from '@shared/schemas';
 import { isInstruction } from '@shared/session/runFacts';
 import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
+import { escapeText } from '@shared/utils/xmlEscape';
 import type { InboxItem } from './Inbox';
 
 /** What the run was asked to do, joined from its instructing input. */
@@ -27,7 +28,7 @@ export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
   skills?: readonly string[],
-): WithBlobs<Omit<QueuedFollowUp, 'commit'>> {
+): WithBlobs<Omit<QueuedFollowUp, 'commit' | 'at'>> {
   const { from, deliveryId, control } = item;
   const holdUntil = hold ?? (from.kind === 'notification' ? 'turn' : undefined);
   const row = {
@@ -50,3 +51,50 @@ export function queuedRow(
     },
   };
 }
+
+/** A wake note: what a run wrote to itself for a later time (the `wake`
+ *  tool), as its queued row holds it. Times are epoch milliseconds. */
+export interface WakeNote {
+  /** The row's `followUpId`: what a cancel names. */
+  readonly id: string;
+  readonly note: string;
+  /** When the run asked for it: the row's commit time. */
+  readonly asked: number;
+  readonly due: number;
+}
+
+/** The wake notes among a run's pending input, in the order it asked. */
+export const wakeNotes = (rows: readonly QueuedFollowUp[]): WakeNote[] =>
+  rows.flatMap(({ followUpId, at, content }) =>
+    'delivery' in content || content.from.kind !== 'self'
+      ? []
+      : [
+          {
+            id: followUpId,
+            note: content.text,
+            asked: at,
+            due: content.from.due,
+          },
+        ],
+  );
+
+const iso = (time: number): string => new Date(time).toISOString();
+
+/**
+ * A wake note as its run's model reads it, rendered where the row becomes
+ * the run's message: it says the run wrote the note itself, when it asked,
+ * when the note was due and when it is delivered (`now`), which is later
+ * than due when no process held the run then. Without the frame the model
+ * would read the note as a person's message.
+ */
+export const wakeNoteText = (
+  { note, asked, due }: Omit<WakeNote, 'id'>,
+  now: number,
+): string =>
+  [
+    `<wake-note asked="${iso(asked)}" due="${iso(due)}" delivered="${iso(now)}">`,
+    'You wrote this note to yourself when you arranged to be continued at the due time. No person sent it: read it as your own reminder and decide what to do now.',
+    '',
+    escapeText(note),
+    '</wake-note>',
+  ].join('\n');
