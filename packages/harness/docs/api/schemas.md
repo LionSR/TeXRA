@@ -883,7 +883,8 @@ function formatClippedList(
 Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
 
 Floored to whole seconds; zero, negative and sub-second durations read
-`0s` (elapsed displays start from zero: goal timings, server uptime).
+`0s` (elapsed displays start from zero: goal timings, server uptime). The
+largest unit is the day (`365d 2h`).
 
 ```ts
 function formatCompactDuration(durationMs: number): string
