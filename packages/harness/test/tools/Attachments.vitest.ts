@@ -1,8 +1,10 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, ScopedRef } from 'effect';
 import { describe, expect } from 'vitest';
 
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { buildBytesAttachment } from '@tools/attachments';
+import { ToolContext, type ToolContextShape } from '@tools/core/ToolTypes';
 
 /** Minimal PNG header (signature + IHDR) with the given dimensions. */
 function pngHeader(width: number, height: number): Buffer {
@@ -29,6 +31,19 @@ describe('buildBytesAttachment oversized-image handling', () => {
         });
         expect(attachment.bytes).toBeUndefined();
       }
-    }),
+    }).pipe(
+      // cast: the attachment reads only the protocol off the run's model.
+      Effect.provideServiceEffect(
+        ToolContext,
+        Effect.map(
+          ScopedRef.make(
+            () =>
+              ({ origin: { protocol: 'anthropic-messages' } }) as BoundModel,
+          ),
+          (model) => ({ env: { run: { model } } }) as ToolContextShape,
+        ),
+      ),
+      Effect.scoped,
+    ),
   );
 });

@@ -403,7 +403,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
           run.config.mediaFiles.length
             ? mediaInputParts(
                 run.config.mediaFiles.map((p) => sourceLocationUnder(roots, p)),
-                bound.config.capabilities,
+                bound,
                 roots.config,
               )
             : Effect.succeed({ parts: [], kinds: [] }),

@@ -44,6 +44,7 @@ export type {
 } from './turn.js';
 export type { InputPart } from './api/parts.js';
 export {
+  IMAGE_LIMITS,
   JsonObjectSchema,
   ModelOriginSchema,
   originOf,
