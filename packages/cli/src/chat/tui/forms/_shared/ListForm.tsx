@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { useEffect, useRef, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
@@ -8,11 +8,7 @@ import {
   type KeyHint,
   NAVIGATE_HINT,
 } from '@cli/tui/ui/KeyHints';
-import {
-  Select,
-  selectIndexForHotkeyInput,
-  type SelectItem,
-} from '@cli/tui/ui/Select';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { isCompactRows } from '@cli/tui/ui/theme';
 
 import { FormFrame, renderAsyncListFormTransient } from './FormFrame';
@@ -178,45 +174,6 @@ function listFormShortcutLabel(itemCount: number): string {
   return '1-9/a-z/Enter';
 }
 
-function usePendingListFormSelection<T>(args: {
-  readonly loading: boolean;
-  readonly error: string | undefined;
-  readonly pendingInput: string | undefined;
-  readonly clearPendingInput: () => void;
-  readonly items: ReadonlyArray<SelectItem<T>>;
-  readonly enabled?: boolean;
-  readonly onSelect: (value: T) => void;
-}): void {
-  const appliedInput = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (
-      args.loading ||
-      args.error !== undefined ||
-      args.enabled === false ||
-      !args.pendingInput ||
-      appliedInput.current === args.pendingInput
-    ) {
-      return;
-    }
-    appliedInput.current = args.pendingInput;
-    args.clearPendingInput();
-    const value = pendingListFormChoice({
-      input: args.pendingInput,
-      items: args.items,
-    });
-    if (value !== undefined) args.onSelect(value);
-  }, [args]);
-}
-
-function pendingListFormChoice<T>(args: {
-  readonly input: string;
-  readonly items: ReadonlyArray<SelectItem<T>>;
-}): T | undefined {
-  const index = selectIndexForHotkeyInput(args.input);
-  const choice = index == null ? undefined : args.items[index];
-  return choice?.disabled ? undefined : choice?.value;
-}
-
 interface AsyncListFormControls<TData> {
   readonly data: TData;
   /** Run a write, then reload the list, keeping the current data on screen
@@ -248,7 +205,7 @@ interface AsyncListFormProps<TData, TValue> extends Omit<
 
 /**
  * The async lifecycle every `/`-form picker runs, over the shared picker
- * layout: load once, buffer keystrokes typed before the list mounts, render
+ * layout: load once, hold keystrokes typed before the list listens, render
  * the loading/error frame, and turn a selection into the caller's handler (or
  * a close, for a read-only list).
  */
@@ -269,13 +226,12 @@ export function AsyncListForm<TData, TValue>(
     onSelect,
     ...listProps
   } = props;
-  const { data, loading, error, pendingInput, clearPendingInput, update } =
-    useAsyncListForm<TData>({
-      load,
-      onClose: listProps.onCancel,
-      isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
-      closeEmptyOnEnter: listProps.emptyClosesOnEnter,
-    });
+  const { data, loading, error, update } = useAsyncListForm<TData>({
+    load,
+    onClose: listProps.onCancel,
+    isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
+    closeEmptyOnEnter: listProps.emptyClosesOnEnter,
+  });
   const items = data === undefined ? [] : itemsFor(data);
   const select = (value: TValue): void => {
     if (!selectable) {
@@ -284,16 +240,6 @@ export function AsyncListForm<TData, TValue>(
     }
     if (data !== undefined) onSelect(value, { data, update });
   };
-  usePendingListFormSelection({
-    loading,
-    error,
-    pendingInput,
-    clearPendingInput,
-    items,
-    enabled: selectable,
-    onSelect: select,
-  });
-
   const transient = renderAsyncListFormTransient({
     loading,
     error,
