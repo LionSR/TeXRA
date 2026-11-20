@@ -155,9 +155,9 @@ const joinOpening = (
           Effect.gen(function* () {
             const held = runs.get(runId);
             if (held === undefined) return REFUSED;
-            const owner = yield* owningCall(runId);
-            if (owner !== null) return { ownedBy: owner.parentId };
             const facts = yield* (yield* SessionLog).facts(runId);
+            const owner = yield* owningCall(runId, facts);
+            if (owner !== null) return { ownedBy: owner.parentId };
             if (facts?.activation == null) return REFUSED;
             if (facts.end === null)
               return { activation: facts.activation.commit };
@@ -208,7 +208,7 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   // Deleted, or its input closed, while that read ran.
   if ((yield* inbox.read(runId)).inputClosed) return yield* refuse(REFUSED);
   // Whether an open call owns it: that call's parent resumes instead.
-  const owning = yield* owningCall(runId);
+  const owning = yield* owningCall(runId, facts);
   if (owning !== null && owning.parentId !== owner)
     return yield* refuse({ ownedBy: owning.parentId });
   // Nothing to continue from.

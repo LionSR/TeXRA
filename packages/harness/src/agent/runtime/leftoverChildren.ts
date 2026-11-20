@@ -70,7 +70,7 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   if ((yield* RunRegistry).get(run.id) !== undefined) return;
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || facts.end !== null) return;
-  if ((yield* owningCall(run.id)) !== null) return;
+  if ((yield* owningCall(run.id, facts)) !== null) return;
   const parentId = parent.runId;
   const report = (why: string) => reportInterrupted(run, why);
   const rejection = yield* checkpointRefusal(run.id);
