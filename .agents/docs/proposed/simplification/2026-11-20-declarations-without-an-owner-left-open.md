@@ -17,14 +17,13 @@ written out at each call site when it has, or should have, one owner.**
 The PR that adds this note lands the two instances of that species that are
 behaviour-preserving and need no decision:
 
-- **CLI flag declarations get one owner.** `packages/cli/src/commands/_helpers/flags.ts`
-  holds `boolFlag` (the off-by-default, no-`--no-` switch) and `modelFlag(description)`
-  (the optional `--model/-m`). The private `boolFlag` in `cliCommand.ts`, its
-  verbatim copy in `history.ts`, the ten inline copies (agents, doctor ×2, init
-  ×2, installGithubAction, models, resume, subscriptionAuthCommand ×2) and the
-  three re-authored `--model` definitions (chat, run, tasks, whose help text had
-  drifted "session" vs "agent", now the one wording each surface passes) all
-  read from it. `fileFlag` stays in `run.ts` (one file, four uses: moving it
+- **CLI flag declarations get one owner.** `boolFlag` (the off-by-default,
+  no-`--no-` switch) was consolidated into `cliCommand.ts` by #15135, which
+  merged first and converted the inline copies. This PR adds the companion
+  `modelFlag(description)` (the optional `--model/-m`) in the same owner and
+  reads the three re-authored `--model` definitions (chat, run, tasks, whose
+  help text had drifted "session" vs "agent", now the one wording each surface
+  passes) from it. `fileFlag` stays in `run.ts` (one file, four uses: moving it
   would be a single-caller extraction). The default-`true`/optional switches
   (`--color`, `--pr`, `--gitignore`) keep their own `Flag.Boolean`, since they
   are a different shape.
