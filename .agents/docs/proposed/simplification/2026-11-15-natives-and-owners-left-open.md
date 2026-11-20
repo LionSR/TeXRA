@@ -92,6 +92,8 @@ dedup, chunked `Promise.all`) found none left beyond the above.
 - **`walkFiles` on the recursive `readdirSync`**: recorded in
   `.agents/docs/refuted-candidates.json`
   (`SCRIPT-walkfiles-recursive-readdir`).
-- **`pretty-ms` in `packages/texra/src/tools/agentCli/codexShared.ts` replaced
-  by `formatCompactDuration`**: the latter shows two units at most, so an
-  hour-long wait would lose its seconds.
+- **The Codex card's duration in
+  `packages/texra/src/tools/agentCli/codexShared.ts` replaced by
+  `formatCompactDuration`**: the latter shows two units at most, so an
+  hour-long wait would lose its seconds. (The card words it with
+  `Duration.format` since `pretty-ms` went.)

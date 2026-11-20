@@ -98,10 +98,12 @@ export {
 // JSON-RPC 2.0 over a child process's stdio (a language server's framing,
 // or one message per line).
 export {
+  connectJsonRpcProcess,
   makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcConnectionOptions,
+  type JsonRpcProcessOptions,
   type JsonRpcRequestError,
 } from '@tools/jsonRpc';
 // What a request of each kind is answered with, and the three ways any

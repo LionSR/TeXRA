@@ -19,7 +19,7 @@
  * no tools, with a warning in the process log; the run that names it shows
  * the failure in its transcript.
  */
-import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
+import { Duration, Effect, Exit, Result, Schema, Scope } from 'effect';
 import { decodingDefault } from '@shared/schemas';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
@@ -31,14 +31,13 @@ import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
 import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
-import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
+import { connectJsonRpcProcess, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { thirdPartyCommand, withinDeadline } from '@tools/thirdPartyTool';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { envNameKey, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { appendTail } from '@utils/text/appendTail';
 
 import type { LoadedPluginTools } from './mcpConfig';
 
@@ -231,24 +230,13 @@ function mcpTool(
   };
 }
 
-/** SIGTERM the process and wait for it, escalating to SIGKILL. */
-const stopProcess = (handle: ChildProcessSpawner.ChildProcessHandle) =>
-  handle.kill({ forceKillAfter: STOP_TIMEOUT }).pipe(
-    Effect.catch((error) =>
-      Effect.logDebug(`kill failed: ${error.message}`).pipe(
-        withLogChannel(CHANNEL),
-      ),
-    ),
-    Effect.andThen(
-      Effect.ignore(handle.exitCode).pipe(Effect.timeoutOption(STOP_TIMEOUT)),
-    ),
-  );
-
 /** Spawn, initialize and list, in the caller's scope. */
 const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
   const handle = yield* ChildProcess.make(config.command, [...config.args], {
     env: yield* serverEnv(config),
     extendEnv: false,
+    // The scope's release: SIGTERM, then SIGKILL once this has passed.
+    forceKillAfter: STOP_TIMEOUT,
     ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
   }).pipe(
     Effect.mapError(
@@ -258,24 +246,8 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
         }),
     ),
   );
-  yield* Effect.addFinalizer(() => stopProcess(handle));
 
-  let stderrTail = '';
-  const stderrDrained = yield* Effect.forkScoped(
-    handle.stderr.pipe(
-      Stream.decodeText(),
-      Stream.runForEach((chunk) =>
-        Effect.sync(() => {
-          stderrTail = appendTail(stderrTail, chunk, STDERR_TAIL_LIMIT);
-        }),
-      ),
-      Effect.ignore,
-    ),
-  );
-
-  const rpc = yield* makeJsonRpcConnection({
-    input: handle.stdout,
-    output: handle.stdin,
+  const { connection: rpc } = yield* connectJsonRpcProcess(handle, {
     framing: 'newline',
     onNotification: (method) =>
       Effect.logDebug(`[${config.name}] ${method}`).pipe(
@@ -288,29 +260,21 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
       method === 'initialize'
         ? undefined
         : { method: 'notifications/cancelled', params: { requestId: id } },
-  });
-  // Once its output is read ('exit' can precede it), fail what waits on
-  // the process with its exit code. Its stderr (which may hold credentials)
-  // goes to the process log only, never into tool results.
-  yield* Effect.forkScoped(
-    Effect.gen(function* () {
-      const code = yield* Effect.orElseSucceed(
-        handle.exitCode,
-        () => 'unknown' as const,
-      );
-      yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
-        concurrency: 'unbounded',
-      }).pipe(Effect.timeoutOption(STOP_TIMEOUT));
+    stderrTailLimit: STDERR_TAIL_LIMIT,
+    drainTimeout: STOP_TIMEOUT,
+    // What waits on the process fails with its exit code. Its stderr (which
+    // may hold credentials) goes to the process log only, never into tool
+    // results.
+    end: Effect.fnUntraced(function* (exit, stderrTail) {
+      const code = Result.getOrElse(exit, () => 'unknown' as const);
       const tail = stderrTail.trim();
       if (tail)
         yield* Effect.logWarning(
           `MCP server "${config.name}" exited (code ${code}); its stderr:\n${tail}`,
         ).pipe(withLogChannel(CHANNEL));
-      yield* rpc.close(
-        `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the log (${CHANNEL})` : ''}`,
-      );
+      return `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the log (${CHANNEL})` : ''}`;
     }),
-  );
+  });
 
   const failed = (error: { readonly message: string }) =>
     new McpStartError({ message: error.message });

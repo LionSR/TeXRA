@@ -30,12 +30,10 @@ import {
   Deferred,
   Duration,
   Effect,
-  Fiber,
   FileSystem,
   Layer,
   Option,
   type PlatformError,
-  Ref,
   Result,
   Schema,
   type Scope,
@@ -46,8 +44,7 @@ import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  makeJsonRpcConnection,
-  type JsonRpcConnection,
+  connectJsonRpcProcess,
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
   withLogChannel,
@@ -261,7 +258,6 @@ const make = ({
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const startedAt = yield* Clock.currentTimeMillis;
-    const ended = yield* Deferred.make<ServerEnd>();
     const openFiles = new Map<
       string,
       SubscriptionRef.SubscriptionRef<FileState>
@@ -273,23 +269,6 @@ const make = ({
       '--server',
     ]).pipe(ChildProcess.setCwd(root), Effect.mapError(spawnFailure));
     yield* Effect.addFinalizer(() => stopProcess(handle));
-
-    const stderrTail = yield* Ref.make('');
-    const stderrDrained = yield* Effect.forkScoped(
-      handle.stderr.pipe(
-        Stream.decodeText(),
-        Stream.tap((text) => Effect.logWarning(`[${root}] ${text.trimEnd()}`)),
-        Stream.runForEach((chunk) =>
-          Ref.update(stderrTail, (tail) =>
-            (tail + chunk).slice(-STDERR_TAIL_LIMIT),
-          ),
-        ),
-        Effect.catch((error) =>
-          Effect.logDebug(`[${root}] stderr ended: ${error.message}`),
-        ),
-        withLogChannel(LOG_CHANNEL),
-      ),
-    );
 
     const handlePublishDiagnostics = Effect.fn('handlePublishDiagnostics')(
       function* (params: LspPublishDiagnosticsParams) {
@@ -329,9 +308,22 @@ const make = ({
         `[${root}] Ignored a malformed ${method} notification: ${error.message}`,
       ).pipe(withLogChannel(LOG_CHANNEL));
 
-    const rpc: JsonRpcConnection = yield* makeJsonRpcConnection({
-      input: handle.stdout,
-      output: handle.stdin,
+    // The connection closes with the server's end as its reason once the
+    // server is gone, and `exited` holds that end from then on.
+    const { connection: rpc, exited } = yield* connectJsonRpcProcess(handle, {
+      stderrTailLimit: STDERR_TAIL_LIMIT,
+      onStderr: (text) =>
+        Effect.logWarning(`[${root}] ${text.trimEnd()}`).pipe(
+          withLogChannel(LOG_CHANNEL),
+        ),
+      drainTimeout: SHUTDOWN_TIMEOUT,
+      end: Effect.fnUntraced(function* (exit, tail) {
+        const end = describeEnd(exit);
+        yield* Effect.logInfo(
+          `lake env lean --server ended (${end.message ?? 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,
+        ).pipe(withLogChannel(LOG_CHANNEL));
+        return end.message ?? 'Lean server stopped';
+      }),
       onNotification: (method, params) => {
         switch (method) {
           case 'textDocument/publishDiagnostics': {
@@ -360,28 +352,10 @@ const make = ({
       },
     });
 
-    // The server is gone: record its end and close the connection with the end as the reason. The exit can precede the end of
-    // its output, so the close waits for stdout and stderr to drain (bounded:
-    // a grandchild may hold the pipes): a reply already written still
-    // reaches its request instead of failing as disposed.
-    yield* Effect.forkScoped(
-      Effect.gen(function* () {
-        const end = describeEnd(yield* Effect.result(handle.exitCode));
-        yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
-          concurrency: 'unbounded',
-        }).pipe(Effect.timeoutOption(SHUTDOWN_TIMEOUT));
-        const tail = (yield* Ref.get(stderrTail)).slice(-1000);
-        yield* Effect.logInfo(
-          `lake env lean --server ended (${end.message ?? 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,
-        ).pipe(withLogChannel(LOG_CHANNEL));
-        yield* rpc.close(end.message ?? 'Lean server stopped');
-        yield* Deferred.succeed(ended, end);
-      }),
-    );
-
+    const ended = Effect.map(Deferred.await(exited), describeEnd);
     // The server ended before `initialize` completed. The cause is kept: the
     // pool's file-table retry matches EMFILE/ENFILE on it.
-    const endedBeforeReady = Deferred.await(ended).pipe(
+    const endedBeforeReady = ended.pipe(
       Effect.flatMap((end) =>
         Effect.fail(
           new LeanStartError({
@@ -449,16 +423,14 @@ const make = ({
         // The end watcher closes the connection with the exit as its reason;
         // wait for it so a caller sees the server fully ended, bounded like
         // every other step of the protocol.
-        yield* Deferred.await(ended).pipe(
-          Effect.timeoutOption(SHUTDOWN_TIMEOUT),
-        );
+        yield* Effect.timeoutOption(ended, SHUTDOWN_TIMEOUT);
       }).pipe(Effect.uninterruptible, Effect.withSpan('LeanServer.shutdown')),
     );
     yield* Effect.addFinalizer(() => shutdown);
 
     /** The live connection, or `LeanSessionNotRunning`. */
     const requireRpc = Effect.gen(function* () {
-      if (yield* Deferred.isDone(ended)) {
+      if (yield* Deferred.isDone(exited)) {
         return yield* new LeanSessionNotRunning();
       }
       return rpc;
@@ -522,7 +494,7 @@ const make = ({
       }).pipe(onFileLane(absolute));
 
     /** Fails with `LeanSessionNotRunning` once the server has ended. */
-    const serverEnded = Deferred.await(ended).pipe(
+    const serverEnded = ended.pipe(
       Effect.andThen(Effect.fail(new LeanSessionNotRunning())),
     );
 
@@ -621,19 +593,20 @@ const make = ({
 
     const base = { workspaceRoot: root };
     const info = Effect.flatMap(
-      Deferred.poll(ended),
+      Deferred.poll(exited),
       (end): Effect.Effect<LeanServerInfo> =>
         Option.isNone(end)
           ? Effect.succeed({ ...base, status: 'running', startedAt })
-          : Effect.map(end.value, ({ status, message }) =>
-              status === 'error'
+          : Effect.map(end.value, (exit) => {
+              const { status, message } = describeEnd(exit);
+              return status === 'error'
                 ? {
                     ...base,
                     status,
                     errorMessage: message ?? 'Lean server stopped',
                   }
-                : { ...base, status },
-            ),
+                : { ...base, status };
+            }),
     );
 
     return LeanServer.of({
