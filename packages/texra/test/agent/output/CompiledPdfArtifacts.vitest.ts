@@ -8,7 +8,6 @@ import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { createRunStorageLocation } from '@texra-ai/harness/plugins';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -48,11 +47,12 @@ layer(FakeHost.layer(), { excludeTestServices: true })(
               runId,
               round: 3,
               displayName: 'main.tex',
-              source: createRunStorageLocation(
-                path.join(runDirectory, relativePath),
+              source: {
+                kind: 'runStorage',
+                absolutePath: path.join(runDirectory, relativePath),
                 relativePath,
                 runId,
-              ),
+              },
               compiledPdfPath,
             });
           });
