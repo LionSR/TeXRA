@@ -139,6 +139,7 @@ export const rootRun = Effect.fn('rootRun')(function* (
     runId,
     executeAgent(
       runId,
+      null,
       Effect.gen(function* () {
         const config = launch.helperModel
           ? {

@@ -97,9 +97,13 @@ export interface SessionTools {
     options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
   ) => Effect.Effect<ToolStep, E, Scope.Scope>;
   /** The plugin table now: the listed plugins and the native ones the
-   *  installed plugins load as read now. A run's launch reads its
-   *  `ToolRegistry` here. */
+   *  installed plugins load as read now. A launch no run's step made reads
+   *  its `ToolRegistry` here. */
   readonly table: Effect.Effect<ToolTable>;
+  /** The table the latest read published, reading nothing: a child's
+   *  launch takes its `ToolRegistry` here, as its parent's step read the
+   *  installed plugins in the step that launched it. */
+  readonly published: Effect.Effect<ToolTable>;
   /** At a run's start (a root run first evicts failed starts): hold the
    *  configured MCP servers `declared` names, with the project variables. */
   readonly hold: (
@@ -471,6 +475,7 @@ export const sessionTools = Effect.fnUntraced(function* (
       options?: Parameters<SessionTools['pin']>[1],
     ) => pinStep(shared, resources, off, options),
     table: Effect.map(shared.read, ({ table }) => table),
+    published: SubscriptionRef.get(shared.live),
     hold: (declared, root) =>
       Effect.map(servers.hold(declared, root), ({ warnings, held }) => ({
         warnings,
