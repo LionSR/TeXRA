@@ -313,7 +313,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v12: a file list's entry has no `source`, which nothing read beside the
     // `sourceDisplay` it repeated (an earlier build's would be silently
     // stripped).
-    log: Object.freeze({ version: 12, listing: 'none' }),
+    // v13: a completed compaction's activity says how many messages an
+    // agent's own edit `replaced` (an earlier build would silently strip it
+    // and show the edit as a summary).
+    log: Object.freeze({ version: 13, listing: 'none' }),
     // v2: no `phase` kind and no `index`/`total` (an earlier build's script
     // phase stage would fail its run as damaged rather than read as that
     // build's).
@@ -424,7 +427,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // as damaged).
     // v8: no `base`: an edit is written by the fiber that holds the view it
     // edits (an earlier build's row would have the field silently dropped).
-    'context.edit': Object.freeze({ version: 8, listing: 'none' }),
+    // v9: an edit may have the cause `edit`, a replacement the agent wrote
+    // itself through its `context` tool (an earlier build would refuse the
+    // cause as damaged).
+    'context.edit': Object.freeze({ version: 9, listing: 'none' }),
     // v2: the intent names the card its attempt opens (`logId`, `toolName`,
     // the `input` the body runs on, the tool's `card`, a script's `section`),
     // which a display read shows as the call's `tool.start`; the run loop

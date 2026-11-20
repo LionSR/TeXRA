@@ -29,7 +29,7 @@ import {
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
 import { RunHistory } from '@shared/session/runHistory';
-import { NO_FACTS } from '@shared/session/runFacts';
+import { freshRunState } from '@shared/session/runState';
 import { AgentConfigSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { FakeHost, isolatedTestSession } from '@test/support/testKernel';
@@ -127,10 +127,10 @@ export function nativeToolTestLayer(
         logId: `log-${callId}`,
         // The run's rows as the store holds them: what a case seeds
         // (`seedEditedFiles`) is what the call reads.
-        facts: Context.get(session, RunHistory)
+        state: Context.get(session, RunHistory)
           .load(toolRun.runId)
           .pipe(
-            Effect.map((state) => state ?? NO_FACTS),
+            Effect.map((state) => state ?? freshRunState(0)),
             Effect.orDie,
           ),
         script: null,
