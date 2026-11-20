@@ -69,7 +69,7 @@ import {
 } from '@test/support/testKernel';
 
 // Local file imports
-import { autoDecideRequests } from '../progressTestUtils';
+import { autoDecideRequests } from '@test/agent/progressTestUtils';
 import type { BoundModel } from '@texra-ai/harness/plugins';
 
 /** A draw at the middle of [0, 1): the gate's ±20 % jitter scales by exactly
