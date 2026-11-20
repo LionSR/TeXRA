@@ -189,7 +189,8 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   const refuse = (answer: ResumeRefusalAnswer) =>
     Effect.fail(new ResumeNotOpened({ answer }));
   const inbox = yield* Inbox;
-  // The run's facts, read once: every decision below is made from them.
+  // The run's facts, read once: every decision below, and the opening's
+  // (`ExecuteAgentOptions.resumed`), is made from them.
   // The read fails on a row this build cannot use, wherever it sits.
   const read = yield* Effect.result((yield* SessionLog).facts(runId));
   if (Result.isFailure(read))
@@ -235,7 +236,7 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
       stopAfterCycle: options.stopAfterCycle,
       tools: options.tools,
       onProgress: options.onProgress,
-      parentId,
+      resumed: { parentId, start: facts?.start ?? null },
     },
   };
 });
