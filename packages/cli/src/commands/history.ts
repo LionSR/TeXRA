@@ -23,7 +23,6 @@ import {
   cliErrorMessage,
   writeErrorStderr,
   writeRawStdout,
-  writeTextStderr,
 } from '../runtime/platform/logSinks';
 
 import { boolFlag, cliCommand } from './_helpers/cliCommand';
@@ -32,7 +31,11 @@ import {
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
+import {
+  CliUsageError,
+  failUsage,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
   limit?: number;
@@ -66,8 +69,7 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
     { includeFullConversation: options.full === true },
   );
   if (!details) {
-    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-    return CliExitCode.Usage;
+    return yield* failUsage(formatCliHistoryNotFoundText(id, context.cwd));
   }
 
   yield* emitCliResult(
@@ -100,15 +102,13 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
       id,
     );
     if (exportResult.status === 'not_found') {
-      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-      return CliExitCode.Usage;
+      return yield* failUsage(formatCliHistoryNotFoundText(id, context.cwd));
     }
     if (exportResult.status === 'incomplete') {
-      writeTextStderr(
+      return yield* failUsage(
         `Run ${id} exists but has nothing to export yet (no stored ` +
           `config and/or conversation). Run \`texra history show ${id}\` to see what is available.`,
       );
-      return CliExitCode.Usage;
     }
     writeRawStdout(formatChatAsMarkdown(exportResult.exportInput));
     return;
@@ -123,37 +123,29 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
       TraceUnavailable: ({ status }) => {
         switch (status) {
           case 'no_record':
-            writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-            break;
+            return failUsage(formatCliHistoryNotFoundText(id, context.cwd));
           case 'no_rows':
-            writeTextStderr(
+            return failUsage(
               `Run ${id} exists but has no transcript to replay (it produced no output).`,
             );
-            break;
           default:
-            absurd(status);
+            return absurd(status);
         }
-        return Effect.succeed(null);
       },
-      TraceViewerMissing: () => {
-        writeTextStderr(
+      TraceViewerMissing: () =>
+        failUsage(
           'The bundled trace-viewer standalone template was not found in this ' +
             'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
             'packages/trace-viewer builds.',
-        );
-        return Effect.succeed(null);
-      },
+        ),
       // Any other failure to read the bundle (EACCES, a transient I/O
       // error) is not "rebuild the CLI": it names the real cause.
       PlatformError: (error) =>
-        Effect.fail(
-          new CliUsageError({
-            message: `history export: cannot read the trace-viewer bundle: ${cliErrorMessage(error)}`,
-          }),
+        failUsage(
+          `history export: cannot read the trace-viewer bundle: ${cliErrorMessage(error)}`,
         ),
     }),
   );
-  if (page === null) return CliExitCode.Usage;
   writeRawStdout(page.html);
 });
 
@@ -166,10 +158,9 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
   if (options.target === 'all' && !options.yes) {
-    writeTextStderr(
+    return yield* failUsage(
       `Refusing to delete every stored task in ${context.cwd}. Re-run with --yes to confirm.`,
     );
-    return CliExitCode.Usage;
   }
 
   // A deletion that fails reports its error and exits Usage, the way
@@ -194,14 +185,14 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // found" usefully.
   if (result.deleted === 'one' && context.outputFormat === 'text') {
     if (result.status === 'not-found') {
-      writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
-      return CliExitCode.Usage;
+      return yield* failUsage(
+        formatCliHistoryNotFoundText(result.id, context.cwd),
+      );
     }
     if (result.status === 'active') {
-      writeTextStderr(
+      return yield* failUsage(
         `Task ${result.id} is active in TeXRA and was not deleted.`,
       );
-      return CliExitCode.Usage;
     }
   }
 
