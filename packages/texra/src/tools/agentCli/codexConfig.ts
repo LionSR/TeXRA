@@ -19,6 +19,7 @@ import {
 } from './agentCliModel';
 import {
   type ToolError,
+  logFailure,
   withLogChannel,
   Settings,
   type SettingsStores,
@@ -219,12 +220,10 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
   }
   const efforts = catalogEfforts(result.stdout, slug);
   if (efforts == null) {
-    yield* Effect.logWarning(
+    yield* logFailure(
+      CHANNEL,
       'Codex reasoning-level probe returned unreadable catalog',
-    ).pipe(
-      Effect.annotateLogs({ data: { binaryPath, slug } }),
-      withLogChannel(CHANNEL),
-    );
+    )({ binaryPath, slug });
     return UNPROBED_ROUTE_EFFORTS;
   }
   codexRouteEffortsByKey.set(key, efforts);

@@ -19,6 +19,7 @@ import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { BASH_BACKGROUND_LOG_CAP_CHARS, elidedNote } from '@shared/toolUse';
 import { executed } from '@tools/core/result';
 import type { LineRange } from '@tools/formatting';
+import { formatCount } from '@utils/text/stringUtils';
 import { describeRunNotice, formatRunStatus } from '../executionFormatters';
 
 /** Lines returned by /executions/{id}/output when no view_range is given. */
@@ -153,7 +154,7 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
         `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
   const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
   const out: string[] = [
-    `Output for ${runId} (process, ${formatRunStatus(run)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+    `Output for ${runId} (process, ${formatRunStatus(run)}): ${formatCount(chars)} retained transcript chars; command-output cap ${formatCount(BASH_BACKGROUND_LOG_CAP_CHARS)} chars, ${formatCount(lines.length)} lines.`,
   ];
 
   if (lines.length === 0) {

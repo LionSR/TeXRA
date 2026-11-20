@@ -275,14 +275,14 @@ describe('the golden 1.0 store', () => {
         const applied = raw(storage, (db) =>
           db
             .prepare(
-              `SELECT json_extract(q.data, '$.control.kind') AS kind,
+              `SELECT json_extract(q.data, '$.content.control.kind') AS kind,
                (SELECT json_extract(c.data, '$.disposition.kind') FROM event c
                 WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
                   AND json_extract(c.data, '$.followUpId')
                     = json_extract(q.data, '$.followUpId')) AS disposition
              FROM event q JOIN event_sequence s ON s.id = q.aggregate
              WHERE s.logical_id = ? AND q.type = 'followup.queued'
-               AND json_extract(q.data, '$.control') IS NOT NULL
+               AND json_extract(q.data, '$.content.control') IS NOT NULL
              ORDER BY q."commit"`,
             )
             .all(CHAT),

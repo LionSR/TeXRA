@@ -7,7 +7,7 @@
 import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
 
 import { ToolAvailability } from '@texra-ai/harness/host';
-import { withLogChannel, ToolCatalog } from '@texra-ai/harness/plugins';
+import { logFailure, ToolCatalog } from '@texra-ai/harness/plugins';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
@@ -68,11 +68,10 @@ export function settingsToolCommands(ports: {
         );
       }).pipe(
         Effect.catch((error) =>
-          Effect.logWarning(
+          logFailure(
+            SETTINGS_LOG_CHANNEL,
             'The plugin rows could not be built; showing the page empty.',
-          ).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(SETTINGS_LOG_CHANNEL),
+          )(error).pipe(
             Effect.as({
               rows: [],
               mcpWarnings: [

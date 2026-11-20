@@ -13,7 +13,12 @@ import { Effect, Latch, Option, Stream } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
-import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
+import {
+  controlOf,
+  isMessage,
+  type QueuedFollowUp,
+  type QueuedMessage,
+} from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 
@@ -28,9 +33,10 @@ type InputPoint = 'request' | 'turn' | 'idle';
 function readableMessages(
   rows: readonly QueuedFollowUp[],
   at: InputPoint,
-): QueuedFollowUp[] {
+): QueuedMessage[] {
   return rows.filter(
-    (f) => isMessage(f) && (f.holdUntil === undefined || at !== 'request'),
+    (f): f is QueuedMessage =>
+      isMessage(f) && (f.holdUntil === undefined || at !== 'request'),
   );
 }
 
@@ -112,7 +118,7 @@ export function sendVerdict(
 export type FollowUpBatch =
   | {
       readonly kind: 'followUps';
-      readonly followUps: readonly QueuedFollowUp[];
+      readonly followUps: readonly QueuedMessage[];
     }
   | { readonly kind: 'synthetic'; readonly text: string };
 
@@ -142,9 +148,9 @@ const inputOf = (
     const followUps = readableMessages(rows, at);
     return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
   };
-  const compacting = rows.some((f) => f.control?.kind === 'compact');
+  const compacting = rows.some((f) => controlOf(f)?.kind === 'compact');
   return {
-    controls: rows.filter((f) => f.control !== undefined),
+    controls: rows.filter((f) => !isMessage(f)),
     batch,
     pending: (at) => compacting || batch(at) !== null,
     from,

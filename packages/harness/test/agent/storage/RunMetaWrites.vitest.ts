@@ -66,9 +66,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         Effect.gen(function* () {
           const session = yield* startedSession;
           yield* Context.get(session, Inbox).send(id, {
-            text: '/model gone',
-            from: { kind: 'user' },
             control: { kind: 'model', model: 'gone' },
+            from: { kind: 'user' },
           });
           expect(
             (yield* Context.get(session, Inbox).read(id)).followUps,

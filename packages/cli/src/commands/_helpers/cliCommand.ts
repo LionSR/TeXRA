@@ -69,6 +69,18 @@ export const boolFlag = (name: string, description: string) =>
     Flag.withDescription(description),
   );
 
+/**
+ * The optional `--model/-m` flag the commands that launch an agent share. The
+ * surface's own wording is the parameter: a session, a run or a task names what
+ * the model is for.
+ */
+export const modelFlag = (description: string) =>
+  Flag.String('model').pipe(
+    Flag.withAlias('m'),
+    Flag.withDescription(description),
+    Flag.optional,
+  );
+
 const Print = GlobalFlag.Setting('print')({
   flag: boolFlag(
     'print',

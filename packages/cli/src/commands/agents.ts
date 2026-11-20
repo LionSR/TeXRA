@@ -24,7 +24,7 @@ import {
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import type { CliContext } from '../runtime/platform/cliContext';
+import { isQuiet, type CliContext } from '../runtime/platform/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
   context: CliContext,
@@ -33,7 +33,7 @@ const listAgents = Effect.fn('listAgents')(function* (
   const services = yield* cliPlatform;
   const result = yield* loadCliAgentList(services, options);
 
-  if (!context.quietLogs) {
+  if (!isQuiet(context)) {
     const catalog = yield* AgentCatalog;
     const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
     if (hiddenNotice) writeTextStderr(hiddenNotice);
@@ -54,7 +54,7 @@ const listAgents = Effect.fn('listAgents')(function* (
       formatCliAgentList(result.agents, {
         showEmptyState:
           options.includeHidden !== true &&
-          !context.quietLogs &&
+          !isQuiet(context) &&
           context.outputFormat === 'text',
       }),
     ),
@@ -72,7 +72,7 @@ const showAgent = Effect.fn('showAgent')(function* (
     writeTextStderr(missingAgentMessage(name));
     return CliExitCode.Usage;
   }
-  if (!context.quietLogs && catalog.newerBuiltIn(entry)) {
+  if (!isQuiet(context) && catalog.newerBuiltIn(entry)) {
     writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
   }
 

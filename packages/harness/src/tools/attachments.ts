@@ -13,6 +13,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
+import { formatCount } from '@utils/text/stringUtils';
 
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
@@ -168,7 +169,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
 
   if (stats.size > BigInt(ATTACHMENT_MAX_BYTES)) {
     return yield* new ToolError(
-      `Attachment ${display} exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
+      `Attachment ${display} exceeds maximum size of ${formatCount(ATTACHMENT_MAX_BYTES)} bytes.`,
     );
   }
 

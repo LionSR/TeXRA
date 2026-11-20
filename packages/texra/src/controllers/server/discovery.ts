@@ -28,12 +28,14 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@texra-ai/harness';
-import { GlobalValues } from '@texra-ai/harness/plugins';
+import { GlobalValues, logFailure } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { TEXRA_SERVICE, type ServiceRecord } from './protocol';
 
 /** The longest Unix socket path every platform accepts (macOS: 104 bytes). */
+const CHANNEL = 'service';
+
 const MAX_UNIX_SOCKET_PATH = 100;
 
 /** The files of one storage root's service. */
@@ -227,11 +229,7 @@ export const releaseServiceRecord: (
       const fs = yield* FileSystem.FileSystem;
       yield* fs.remove(paths.socketFor(record.pid), { force: true });
     },
-    Effect.catch((error) =>
-      Effect.logWarning('Could not remove the service files').pipe(
-        Effect.annotateLogs({ data: error }),
-      ),
-    ),
+    Effect.catch(logFailure(CHANNEL, 'Could not remove the service files')),
   );
 
 /** Remove the sockets of services whose process is gone (one that was
@@ -256,11 +254,7 @@ export const removeDeadSockets: (
       { concurrency: 8, discard: true },
     );
   },
-  Effect.catch((error) =>
-    Effect.logWarning("Could not remove dead services' sockets").pipe(
-      Effect.annotateLogs({ data: error }),
-    ),
-  ),
+  Effect.catch(logFailure(CHANNEL, "Could not remove dead services' sockets")),
 );
 
 /** Whether process `pid` runs (one of another user counts as running). */

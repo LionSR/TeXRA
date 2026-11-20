@@ -31,7 +31,7 @@ import {
   truncateSummaryToWidth,
 } from '../terminal/terminalText';
 import { getStderrColumns, writeRawStderr } from '../platform/logSinks';
-import type { CliContext } from '../platform/cliContext';
+import { isQuiet, type CliContext } from '../platform/cliContext';
 import type { Session } from '@texra-ai/harness';
 
 const CLEAR_LINE = '\r\x1b[2K';
@@ -69,9 +69,9 @@ interface RunProgressRenderer {
 }
 
 export function shouldRenderRunProgress(
-  context: Pick<CliContext, 'outputFormat' | 'quietLogs'>,
+  context: Pick<CliContext, 'outputFormat' | 'minimumLogLevel'>,
 ): boolean {
-  return !context.quietLogs && context.outputFormat !== 'ndjson';
+  return !isQuiet(context) && context.outputFormat !== 'ndjson';
 }
 
 export function createRunProgressRenderer(

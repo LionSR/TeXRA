@@ -120,9 +120,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         tools: (plugin.tools ?? []).map(({ definition: { name } }) => ({
           name,
         })),
-        status: 'available' as const,
-        installActions: [],
-        requiresSetup: false,
+        setup: null,
         switch: 'always-on' as const,
         ...settingRows(card),
       }));
@@ -152,35 +150,36 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         name: card.name,
         description: card.description,
         tools: tools.map((name) => ({ name })),
-        status,
-        statusLabel,
-        requiresSetup: true,
-        installActions: [
-          ...(installGuide
-            ? [{ kind: 'guide' as const, text: installGuide }]
-            : []),
-          ...(installCommand
-            ? [{ kind: 'command' as const, command: installCommand }]
-            : []),
-          ...(authCommand
-            ? [{ kind: 'auth' as const, command: authCommand }]
-            : []),
-          // Only a host with an editor gets an "Install Extension" button;
-          // the install guide and URL still describe the standalone path
-          // (Lean 4's `lake` build, for one).
-          ...(installExtensionId && editor
-            ? [
-                {
-                  kind: 'extension' as const,
-                  extensionId: installExtensionId,
-                },
-              ]
-            : []),
-          ...(installUrl ? [{ kind: 'url' as const, url: installUrl }] : []),
-        ],
-        configNotes,
-        statusDetail,
-        authNote,
+        setup: {
+          status,
+          statusLabel,
+          installActions: [
+            ...(installGuide
+              ? [{ kind: 'guide' as const, text: installGuide }]
+              : []),
+            ...(installCommand
+              ? [{ kind: 'command' as const, command: installCommand }]
+              : []),
+            ...(authCommand
+              ? [{ kind: 'auth' as const, command: authCommand }]
+              : []),
+            // Only a host with an editor gets an "Install Extension" button;
+            // the install guide and URL still describe the standalone path
+            // (Lean 4's `lake` build, for one).
+            ...(installExtensionId && editor
+              ? [
+                  {
+                    kind: 'extension' as const,
+                    extensionId: installExtensionId,
+                  },
+                ]
+              : []),
+            ...(installUrl ? [{ kind: 'url' as const, url: installUrl }] : []),
+          ],
+          configNotes,
+          statusDetail,
+          authNote,
+        },
         switch:
           plugin.toggle === undefined
             ? 'always-on'

@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Cause, Effect, Exit, Option, Result, Schema } from 'effect';
 import { executeCommand, envFlag } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import {
   fetchJsonStringField,
   UPDATE_CHECK_SKIP_ENV,
@@ -12,6 +12,7 @@ import {
 
 import {
   cliEnvValue,
+  isQuiet,
   readCliAmbientState,
   readCliEntrypointPath,
   type CliContext,
@@ -260,7 +261,7 @@ export function notifyCliUpdate(
   // before it does.
   if (!ambient.stdinIsTty || !ambient.stdoutIsTty || !ambient.stderrIsTty)
     return Effect.undefined;
-  if (context.outputFormat === 'ndjson' || context.quietLogs === true)
+  if (context.outputFormat === 'ndjson' || isQuiet(context))
     return Effect.undefined;
   // A source checkout or `npm link` build runs from `packages/cli/dist`, not a
   // node_modules tree; an `npm install -g` prompt can't update it, so skip.
@@ -320,10 +321,10 @@ export function notifyCliUpdate(
       ),
       Effect.catchCause((cause) =>
         Cause.hasDies(cause)
-          ? Effect.logWarning('The update check failed unexpectedly').pipe(
-              Effect.annotateLogs({ data: cause }),
-              Effect.as(undefined),
-            )
+          ? logFailure(
+              'updateCheck',
+              'The update check failed unexpectedly',
+            )(cause).pipe(Effect.as(undefined))
           : Effect.undefined,
       ),
     );
