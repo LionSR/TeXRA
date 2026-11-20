@@ -142,8 +142,17 @@ The first two can take the product name from the catalog namespace. The
 examples can be neutral, which changes the tool descriptions a run records.
 
 Landed 2026-11-19 (#15106): the MCP client sends the app's client id as
-`clientInfo.name`, read from `SubscriptionAccounts` (`mcpServer.ts`). The
-other three are open.
+`clientInfo.name`, read from `SubscriptionAccounts` (`mcpServer.ts`).
+
+Landed 2026-11-20: the three model-facing LaTeX examples are neutral —
+`sessionDescription.ts`'s label-prompt example, and the `**/*.tex` examples
+in the `glob` and `grep` tool descriptions and hints — and the two
+user-facing store errors (`databaseLayer.ts`, `sessionStore.ts`) name no
+product. A general package now puts no embedder's domain or name in what it
+sends a model or shows a user. The remaining `texra` strings an embedder's
+users still see (the store file `texra.db`, `TEXRA_APPROVAL_POLICY`,
+`TEXRA_SKILL_DIR`) are persisted names and env keys, a format change
+deferred to the release (design doc, "Re-check (2026-11-19)").
 
 ## Checked and left alone
 
