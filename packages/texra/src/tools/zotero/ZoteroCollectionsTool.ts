@@ -202,7 +202,7 @@ const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* ({
 
   return executed(
     outputParts.join('\n'),
-    `Found ${formatResultCount(totalCollections, 'collection')}${context} across ${formatResultCount(librariesWithResults, 'library', 'libraries')}.`,
+    `Found ${formatResultCount(totalCollections, 'collection')}${context} across ${formatResultCount(librariesWithResults, 'library')}.`,
   );
 });
 

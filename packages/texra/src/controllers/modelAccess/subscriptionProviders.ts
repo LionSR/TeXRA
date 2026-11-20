@@ -37,7 +37,7 @@ import type { HttpClient } from 'effect/http';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import {
   emitAppSignal,
-  withLogChannel,
+  logFailure,
   type AppSignals,
   type SettingsStores,
   ConfigWriteFailed,
@@ -273,11 +273,10 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
                       error.cause === undefined
                         ? ''
                         : ` Cause: ${toErrorMessage(error.cause)}`;
-                    return Effect.logWarning(
+                    return logFailure(
+                      CHANNEL,
                       `${descriptor.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
-                    ).pipe(
-                      Effect.annotateLogs({ data: error }),
-                      withLogChannel(CHANNEL),
+                    )(error).pipe(
                       Effect.andThen(
                         deviceCodeLogin(signInWithDeviceCode, options),
                       ),

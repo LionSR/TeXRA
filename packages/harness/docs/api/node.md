@@ -126,29 +126,6 @@ freeze the setting for a whole session.
 const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>
 ```
 
-## entryChannel
-
-Which channel an entry belongs to, or `undefined` when it names none. An
-`Effect.log*` carries one only through `Effect.annotateLogs`; a tracer span
-opened by `Effect.withSpan` does not supply it, because the entry's `spans`
-field reads `CurrentLogSpans` (`Effect.withLogSpan`), a separate mechanism.
-An unattributed entry lands on the host's shared surface, which is the right
-home for it.
-
-```ts
-function entryChannel(entry: LogEntry): string | undefined
-```
-
-## entryMessage
-
-Render an entry's message for a host that wants one line of text. Effect
-hands `message` through as a single value or an array of them, so both
-shapes fold here rather than at each host.
-
-```ts
-function entryMessage(entry: LogEntry): string
-```
-
 ## entryTypeIn
 
 The entry's own type at `target`, or `undefined` when nothing is there, with
@@ -484,14 +461,6 @@ function localBranchExists(
   cwd: string,
   branch: string,
 ): Effect.Effect<boolean, never, ChildProcessSpawner>
-```
-
-## LOG_CHANNEL
-
-Annotation naming the logical channel an entry belongs to.
-
-```ts
-const LOG_CHANNEL: "channel"
 ```
 
 ## LogEntry

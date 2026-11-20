@@ -2,7 +2,8 @@ import { Deferred, Effect, Exit, References } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
 import { formatResultCount } from '@texra-ai/harness/schemas';
-import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/harness/node';
+import { entryLine } from '@texra-ai/harness/schemas';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
 import {
   SERVICE_SUBCOMMAND,
@@ -36,11 +37,10 @@ function installServiceLogSink(): void {
   setLogSink(
     {
       write(entry) {
-        const channel = entryChannel(entry);
         const data = entry.annotations.data;
         writeTextStderr(
           [
-            `${entry.timestamp} ${String(entry.level)} ${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
+            `${entry.timestamp} ${String(entry.level)} ${entryLine(entry)}`,
             // The cause and payload a warning carries are what makes a
             // service log answerable after the fact.
             ...(entry.cause === undefined

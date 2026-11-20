@@ -281,7 +281,6 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   cwd: HARNESS_CWD,
   mode: 'interactive',
   outputFormat: 'text',
-  quietLogs: true,
   minimumLogLevel: 'None',
   resourcesPath: HARNESS_RESOURCES_PATH,
   skillSourceOptions: {},

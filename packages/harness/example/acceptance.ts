@@ -11,8 +11,9 @@
  *    program that outlines a draft through the module, runs two `self()`
  *    review rounds (the second chosen from the first's structured result)
  *    and counts its finished children with SQL over `runs`.
- * 2. `plugin`: the `acme-notes` package's agent, tool and script module
- *    (example `10`), used by a script the model writes.
+ * 2. `plugin`: the `acme-notes` package's tool and script module (example
+ *    `10`), used by a script the model writes under the embedder's own
+ *    inline persona.
  * 3. `crash-resume`: a second process runs a model-written script that
  *    waits on a sign-off tool after its first `self()` round; once that
  *    child's result is committed the process is killed, and this one
@@ -46,7 +47,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { API_KEY_PROVIDER_IDS, apiKeyEnvName } from '@texra-ai/llm';
-import { acmeNotes, agentsDir as notesAgents, NoteSchema } from 'acme-notes';
+import { acmeNotes, NoteSchema } from 'acme-notes';
 
 import {
   check,
@@ -289,17 +290,26 @@ const codemode = (dir: string) =>
 const NOTES = ['Lemma 2 needs a citation.', 'Section 3 is done.'];
 const PLUGIN_INSTRUCTION = `Keep two notes on the draft, in one script program you write yourself, through the notes script module: ${JSON.stringify(NOTES[0])} and ${JSON.stringify(NOTES[1])}. Return what the module returned for each note.`;
 
+/** The embedder's persona over the package: it ships tools, a module and a
+ *  program, no agent. */
+const NOTE_TAKER = {
+  name: 'note_taker',
+  description: 'Keeps notes on a draft.',
+  prompt: 'Keep notes on the draft with a script over the notes module.',
+  tools: ['script', 'note_add'],
+};
+
 const plugin = (dir: string) =>
   Effect.gen(function* () {
     const { platform, workspace, route } = yield* Effect.promise(() =>
-      makeExampleWorkspace([], undefined, notesAgents),
+      makeExampleWorkspace(),
     );
     return yield* Effect.gen(function* () {
       const session = yield* (yield* Sessions).open(platform.roots, {
         persistent: true,
       });
       const run = yield* session.start({
-        agent: 'note_taker',
+        agent: NOTE_TAKER,
         instruction: PLUGIN_INSTRUCTION,
         model: route.model,
       });

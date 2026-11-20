@@ -57,8 +57,7 @@ function stageLine(
   status: ReturnType<typeof stageStatus>,
 ): DocumentTaskRunDetailLine {
   const duration =
-    stage.endTime !== undefined &&
-    formatCompactDuration(stage.endTime - stage.startTime);
+    stage.end !== null && formatCompactDuration(stage.end.at - stage.startTime);
   return {
     key: `stage:${stage.id}`,
     // Worded as the progress view's stage header words it, never with the

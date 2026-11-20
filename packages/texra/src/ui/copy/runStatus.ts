@@ -213,13 +213,13 @@ export function runAttentionLine(
  *  process died before the run's end closed the stage), else running. A
  *  transcript shown without its run (null) reads an open stage as running. */
 export function stageStatus(
-  stage: Pick<Stage, 'outcome'>,
+  stage: Pick<Stage, 'end'>,
   run: Pick<RunView, 'holder' | 'outcome' | 'position'> | null,
 ): Pick<RunStatus, 'word' | 'tone' | 'glyph'> & {
   readonly key: RunOutcome | 'running' | 'interrupted';
 } {
   const key =
-    stage.outcome ??
+    stage.end?.outcome ??
     (run !== null && isInterrupted(run) ? 'interrupted' : 'running');
   const { word, tone } = RUN_STATUS[key];
   return { key, word, tone, glyph: TONE_GLYPH[tone] };

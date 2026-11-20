@@ -15,6 +15,7 @@ import {
   RcMap,
 } from 'effect';
 
+import { logFailure } from '@logger/effectLog';
 import type { LocalRuntimeState } from '@shared/schemas';
 import {
   Database,
@@ -33,6 +34,8 @@ import { readReplay } from './sessionInputsLayer';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 
 /** A cold read holds no run. */
+const CHANNEL = 'sessionView';
+
 const NO_LOCAL_STATE: LocalRuntimeState = { runsHere: [] };
 
 /** Whether this cold read failed because no store is there: its directory
@@ -49,10 +52,10 @@ const absent = (
     Effect.map((exists) => !exists),
     // Unknown: the open's own failure stands.
     Effect.catch((cause) =>
-      Effect.logWarning(`Could not check whether ${error.path} exists`).pipe(
-        Effect.annotateLogs({ data: cause }),
-        Effect.as(false),
-      ),
+      logFailure(
+        CHANNEL,
+        `Could not check whether ${error.path} exists`,
+      )(cause).pipe(Effect.as(false)),
     ),
   );
 };

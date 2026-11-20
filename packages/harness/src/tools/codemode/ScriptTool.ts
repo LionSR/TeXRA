@@ -32,7 +32,7 @@ import {
 import { executed } from '@tools/core/result';
 
 import { defineTool } from '../core/definition';
-import { timeoutMsField } from '../core/inputSchema';
+import { optionalInput, timeoutMsField } from '../core/inputSchema';
 import { launchBackgroundScript } from './backgroundScript';
 import { declarationOf, globalDeclarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';
@@ -46,13 +46,14 @@ const ScriptInputSchema = Schema.Struct({
     description:
       'The body of an async JavaScript function: `await` at top level, `return` the result. Inputs are literals in the code.',
   }),
-  title: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'A short title for the script, shown on its card.',
-  }),
-  run_in_background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
-  }),
+  title: optionalInput(
+    Schema.String,
+    'A short title for the script, shown on its card.',
+  ),
+  run_in_background: optionalInput(
+    Schema.Boolean,
+    'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
+  ),
   timeoutMs: timeoutMsField.annotate({
     description:
       'Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default 60 min.',

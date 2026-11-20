@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 65
+Exports: 62
 
 - `APPROVAL_POLICY_ENV` — `const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"`
 - `canonicalizeWorkspaceRoot` — `function canonicalizeWorkspaceRoot: (workspaceRoot: string) => string`
@@ -12,8 +12,6 @@ Exports: 65
 - `createSymlink` — `const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>`
 - `currentBranch` — `function currentBranch: (cwd: string) => Effect<null | string, never, ChildProcessSpawner>`
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
-- `entryChannel` — `function entryChannel: (entry: LogEntry) => string | undefined`
-- `entryMessage` — `function entryMessage: (entry: LogEntry) => string`
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
 - `envVar` — `const envVar: (name: string) => Effect<string | undefined, never, never>`
@@ -36,7 +34,6 @@ Exports: 65
 - `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
 - `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, version: string | undefined) => JsonStore; static: open: (filePath: string) => Effect<JsonStore, Error, Path>; unreadable: (filePath: string) => Effect<JsonStore, never, Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
 - `localBranchExists` — `function localBranchExists: (cwd: string, branch: string) => Effect<boolean, never, ChildProcessSpawner>`
-- `LOG_CHANNEL` — `const LOG_CHANNEL: "channel"`
 - `LogEntry` — `type LogEntry = Omit<ReturnType<typeof Logger.formatStructured.log>, 'level'> & { readonly level: Uppercase<LogLevel.Severity>; }; ≡ LogEntry`
 - `LogSink` — `interface LogSink { write(entry: LogEntry): void; dispose?(): void; }`
 - `machineGit` — `const machineGit: (args: readonly string[], options?: undefined | { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; }) => Effect<{ code: ExitCode; stderr: string; stdout: string; }, PlatformError, ChildProcessSpawner>`

@@ -38,7 +38,6 @@ import {
 import {
   Settings,
   logFailure,
-  withLogChannel,
   type AppSignals,
   type Secrets,
   type SettingsStores,
@@ -490,13 +489,10 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           dirs.customConfigured(),
         ).pipe(
           Effect.catch((cause) =>
-            Effect.logWarning(
+            logFailure(
+              CHANNEL,
               'Whether a custom agent directory is set could not be read',
-            ).pipe(
-              Effect.annotateLogs({ data: cause }),
-              withLogChannel(CHANNEL),
-              Effect.as(false),
-            ),
+            )(cause).pipe(Effect.as(false)),
           ),
         );
         yield* write({ agentConfig: { agentName, customDirSet } });

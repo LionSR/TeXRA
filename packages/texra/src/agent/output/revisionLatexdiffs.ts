@@ -7,6 +7,7 @@ import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
+  formatResultCount,
   type RunId,
   type FileLocation,
   type RunStorageFileLocation,
@@ -185,7 +186,7 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     const pairs = candidatePairs.filter((_, i) => baseExists[i]);
     if (pairs.length < candidatePairs.length) {
       logger.debug(
-        `Skipping ${candidatePairs.length - pairs.length} latexdiff base pair(s): base file not present`,
+        `Skipping ${formatResultCount(candidatePairs.length - pairs.length, 'latexdiff base pair')}: base file not present`,
       );
     }
     logger.debug(

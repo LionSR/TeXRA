@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   buildCliContext,
+  isQuiet,
   type CliGlobalArgs,
 } from '@cli/runtime/platform/cliContext';
 import { writeTextStderr } from '@cli/runtime/platform/logSinks';
@@ -25,7 +26,7 @@ export const loadConfigAndWarn = Effect.fn('loadConfigAndWarn')(function* (
     globalArgs,
   });
   // Degradation reaches stderr even under `--quiet` (#11080).
-  const printed = context.quietLogs
+  const printed = isQuiet(context)
     ? context.configDegradations
     : [...context.configDegradations, ...context.configWarnings];
   if (options.printConfigWarnings !== false) {

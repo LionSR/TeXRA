@@ -11,6 +11,7 @@ import { Schema } from 'effect';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { PROGRAM_TOOL_NAME } from '@shared/schemas';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 
 import { launchChildAgent } from './AgentTool';
 import { CALL_FIELDS, fileList } from './inputFields';
@@ -19,10 +20,10 @@ const ProgramInputSchema = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1)).annotate({
     description: 'The program to start, by its name.',
   }),
-  prompt: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'The instruction the program follows, in plain prose: what to change, from which point of view, and what to keep. Omit for the program as written.',
-  }),
+  prompt: optionalInput(
+    Schema.String,
+    'The instruction the program follows, in plain prose: what to change, from which point of view, and what to keep. Omit for the program as written.',
+  ),
   inputFiles: fileList('The files it works on.'),
   contextFiles: fileList(
     'Read-only context (guidance, .bib, .sty). Say in the prompt what each is for.',
@@ -31,11 +32,10 @@ const ProgramInputSchema = Schema.Struct({
   outputFiles: fileList(
     'Output paths, used when one is not among `inputFiles`. Otherwise the program writes its own outputs, or revises the inputs when it names none.',
   ),
-  args: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
-  ).annotate({
-    description: "The program's own arguments, as its description names them.",
-  }),
+  args: optionalInput(
+    Schema.Record(Schema.String, Schema.Json),
+    "The program's own arguments, as its description names them.",
+  ),
   ...CALL_FIELDS,
 });
 type ProgramInput = typeof ProgramInputSchema.Type;

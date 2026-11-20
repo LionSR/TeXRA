@@ -46,9 +46,17 @@ Never mention tool names when speaking to the user.
 </tool_use_instructions>`;
 };
 
-/** How a step that offers tools may issue its calls. */
-const TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
-Do not create excessive markdown files or documentation unless explicitly requested.`;
+/** How a step that offers tools may issue its calls, and, when one of them
+ *  creates files, which files not to create. */
+const toolCalls = (offered: readonly string[]) =>
+  [
+    'Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.',
+    ...(['write_file', 'bash'].some((name) => offered.includes(name))
+      ? [
+          'Do not create excessive markdown files or documentation unless explicitly requested.',
+        ]
+      : []),
+  ].join('\n');
 
 /**
  * The context a step renders: the tools it offers and the sections it adds
@@ -66,7 +74,7 @@ export function stepInstructions(
   const sections = Object.fromEntries([
     // A step that offers no tool (a document reviser, the critic) has no
     // calls to make.
-    ...(ctx.offered.length > 0 ? [['tool-call', TOOL_CALLS]] : []),
+    ...(ctx.offered.length > 0 ? [['tool-call', toolCalls(ctx.offered)]] : []),
     ...(skills.length > 0
       ? [
           [

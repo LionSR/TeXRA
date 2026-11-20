@@ -22,11 +22,11 @@ import {
 
 import { withSessionFs } from '@texra-ai/harness/host';
 import {
+  logFailure,
+  pathToLocationIn,
   withLogChannel,
-  createExternalLocation,
-  createWorkspaceLocation,
 } from '@texra-ai/harness/plugins';
-import { meansAbsent, isStrictlyWithin } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
@@ -167,10 +167,10 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
       TEMP_EXTENSIONS,
     ).pipe(
       Effect.catch((error) =>
-        Effect.logWarning(`Failed to list the build files of ${filePath}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          Effect.as(new Set<string>()),
-        ),
+        logFailure(
+          CHANNEL,
+          `Failed to list the build files of ${filePath}`,
+        )(error).pipe(Effect.as(new Set<string>())),
       ),
       withLogChannel(CHANNEL),
     );
@@ -284,26 +284,6 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     return tempPath;
   },
 );
-function tempPathToLocation(
-  workspaceRoot: string | undefined,
-  tempPath: string,
-): FileLocation {
-  if (workspaceRoot == null) return createExternalLocation(tempPath);
-
-  const normalizedWorkspacePath = path.normalize(workspaceRoot);
-  const normalizedTempPath = path.normalize(tempPath);
-  const relativePath = path.relative(
-    normalizedWorkspacePath,
-    normalizedTempPath,
-  );
-
-  if (isStrictlyWithin(normalizedWorkspacePath, normalizedTempPath)) {
-    return createWorkspaceLocation(tempPath, relativePath);
-  }
-
-  return createExternalLocation(tempPath);
-}
-
 /** Preview the proposed LaTeX document by creating a temp file and building it */
 export const previewProposedLatex = (
   entry: LatexPreviewEntry,
@@ -324,7 +304,7 @@ export const previewProposedLatex = (
       );
 
       yield* options.openBuildDisplay(
-        tempPathToLocation(entry.request.roots.workspace, tempPath),
+        pathToLocationIn(entry.request.roots.workspace, tempPath),
         { preserveFocus: true },
       );
     }),
@@ -379,8 +359,8 @@ export const runLatexdiff = (
       );
 
       const diffPath = yield* latexdiff(
-        tempPathToLocation(entry.request.roots.workspace, originalPath),
-        tempPathToLocation(entry.request.roots.workspace, proposedPath),
+        pathToLocationIn(entry.request.roots.workspace, originalPath),
+        pathToLocationIn(entry.request.roots.workspace, proposedPath),
         {
           roots: entry.request.roots,
           cwd: entry.request.roots.workspace ?? outputDirectory,
@@ -391,7 +371,7 @@ export const runLatexdiff = (
         },
       ).pipe(withLogChannel('ToolEditApproval'));
 
-      const diffLocation = tempPathToLocation(
+      const diffLocation = pathToLocationIn(
         entry.request.roots.workspace,
         diffPath,
       );

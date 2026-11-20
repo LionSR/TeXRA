@@ -36,7 +36,7 @@ import {
 import { ChildProcessSpawner } from 'effect/process';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { pathExists } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { formatResultCount, toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
@@ -251,7 +251,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
     const failed = results.filter((r) => !r.success);
     if (failed.length > 0) {
       return yield* new LeanProjectCommandError({
-        message: `lake ${args.join(' ')} failed in ${failed.length} workspace(s):\n${failed
+        message: `lake ${args.join(' ')} failed in ${formatResultCount(failed.length, 'workspace')}:\n${failed
           .map((r) => r.stderr.trim() || r.stdout.trim())
           .join('\n---\n')}`,
       });

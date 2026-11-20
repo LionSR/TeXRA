@@ -131,8 +131,9 @@ describe(
               const { session, runId, storage } = yield* waitingRunAfterCrash();
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
-              // The resume reads the run's queued input and then its owning
-              // call (`owningCall`): that read fails.
+              // The resume reads the run's queued input, then, as its
+              // activation's batch commits, the run's records: that read
+              // fails.
               const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.flip(resume(runId, { session })),
@@ -156,21 +157,22 @@ describe(
             Effect.gen(function* () {
               const { session, runId, storage } = yield* waitingRunAfterCrash();
               const faults = yield* sessionStoreFaults(storage);
-              // The first records read finds the run's owner; the second, its
-              // config, is inside the resume.
-              const owner = yield* faults.holdNext('readRunRecord');
+              // The resume reads the run's queued input, then, as it opens
+              // the run, its history: input sent during that read is past
+              // the resume's own read of the input.
+              const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 resume(runId, { session }),
               );
-              yield* owner.reached;
-              const config = yield* faults.holdNext('readRunRecord');
-              yield* owner.release;
-              yield* config.reached;
+              yield* input.reached;
+              const history = yield* faults.holdNext('readAggregate');
+              yield* input.release;
+              yield* history.reached;
 
               expect(yield* send(session, runId, 'raced')).toEqual({
                 kind: 'queue',
               });
-              yield* config.release;
+              yield* history.release;
               expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);
               yield* untilStored(
                 storage,
