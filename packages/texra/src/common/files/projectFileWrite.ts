@@ -15,7 +15,7 @@ import path from 'node:path';
 
 import { Effect, FileSystem, Schema } from 'effect';
 
-import { withFileWriteLane } from '@texra-ai/harness/host';
+import { withFileWriteLane } from '@texra-ai/harness/plugins';
 import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
 import { Rejected } from '@texra-ai/harness/schemas';
 

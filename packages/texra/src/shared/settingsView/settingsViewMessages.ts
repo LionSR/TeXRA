@@ -265,13 +265,18 @@ const ToolDashboardItemSchema = Schema.Struct({
   name: Schema.String,
   description: Schema.String,
   tools: Schema.Array(ToolInfoSchema),
-  status: ToolDependencyStatusSchema,
-  requiresSetup: Schema.Boolean,
-  statusLabel: Schema.optional(Schema.String),
-  installActions: Schema.Array(ToolInstallActionSchema),
-  configNotes: Schema.optional(Schema.String),
-  statusDetail: Schema.optional(Schema.String),
-  authNote: Schema.optional(Schema.String),
+  /** What a probed plugin needs and how its probe found it; null for a
+   *  built-in plugin, which needs nothing outside TeXRA. */
+  setup: Schema.NullOr(
+    Schema.Struct({
+      status: ToolDependencyStatusSchema,
+      statusLabel: Schema.optional(Schema.String),
+      installActions: Schema.Array(ToolInstallActionSchema),
+      configNotes: Schema.optional(Schema.String),
+      statusDetail: Schema.optional(Schema.String),
+      authNote: Schema.optional(Schema.String),
+    }),
+  ),
   /** A built-in plugin is always on; one with a toggle is on or off. */
   switch: Schema.Literals(['always-on', 'on', 'off']),
   settings: Schema.optional(

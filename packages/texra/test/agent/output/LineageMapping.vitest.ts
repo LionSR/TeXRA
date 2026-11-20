@@ -4,19 +4,20 @@ import { describe, expect, it } from 'vitest';
 import {
   RunIdSchema,
   fileLocationDisplayPath,
+  type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
-import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { pairOutputsWithBases } from '@texra/agent/output/lineageMapping';
 
 describe('document task output lineage mapping', () => {
   const runId = Schema.decodeUnknownSync(RunIdSchema)('abc123');
 
-  function runStorageFile(relativePath: string) {
-    return createRunStorageLocation(
-      `/run/${relativePath}`,
+  function runStorageFile(relativePath: string): RunStorageFileLocation {
+    return {
+      kind: 'runStorage',
+      absolutePath: `/run/${relativePath}`,
       relativePath,
       runId,
-    );
+    };
   }
 
   it('matches extracted documents by relative path before basename fallbacks', () => {

@@ -24,6 +24,7 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   runEndErrorMessage,
   AGENT_SOURCE,
+  AgentConfigSchema,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
@@ -38,6 +39,7 @@ import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -84,12 +86,10 @@ const LAUNCH_FIELDS = {
     description: 'The agent to run. It works with its own tools.',
   }),
   persona: personaField,
-  schema: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-  ).annotate({
-    description:
-      'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
-  }),
+  schema: optionalInput(
+    Schema.Record(Schema.String, Schema.Unknown),
+    'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
+  ),
   mediaFiles: fileList(
     'Images, figures, PDFs or audio attached to the prompt.',
   ),
@@ -506,15 +506,15 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(relaunched.failure.message);
   const programConfig = relaunched?.success ?? null;
   const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
-  const configPayload = {
+  const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
     ...programConfig,
-  };
+  });
   const runId = agentChildRunId(call);
   if (!awaited) {
-    const receipt = yield* launchDetachedSubagent(call, configPayload, {
+    const receipt = yield* launchDetachedSubagent(call, config, {
       runId,
       grants,
       approvalMeta: decided.approvalMeta,
@@ -529,7 +529,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       executeSubagentInBand({
         runId,
         parentId,
-        configPayload,
+        config,
         parentCall: { callId: call.callId, card: call.logId },
         grants,
         notify,

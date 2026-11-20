@@ -749,7 +749,7 @@ async function generate(root) {
     'the queued follow-up',
     () =>
       chatRows(`e.type = 'followup.queued'
-        AND json_extract(e.data, '$.control') IS NULL`) === 4,
+        AND json_extract(e.data, '$.content.control') IS NULL`) === 4,
     tty,
   );
   writeFileSync(path.join(root, 'codex.release'), '');

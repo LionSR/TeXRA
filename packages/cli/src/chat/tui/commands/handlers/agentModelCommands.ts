@@ -9,6 +9,7 @@ import {
   setTransientNotice,
   setCliSessionModelOverride,
 } from '@cli/chat/tui/state/cliState';
+import { currentView, runViewOf } from '@cli/chat/tui/state/sessionView';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
@@ -92,6 +93,14 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
         }),
       );
     if (!switched) return;
+    // A run no session holds takes the switch at its next resume, which may
+    // still refuse it; its `run.config` then names the model it runs on.
+    if (runViewOf(currentView(), runId)?.holder !== 'here') {
+      appendLocalNotice(
+        `Model switch to ${nextModel} queued; it applies when this conversation resumes.`,
+      );
+      return;
+    }
     setCliSessionModelOverride(nextModel);
     appendLocalNotice(
       `Model switched to ${nextModel}. Future turns will use it.`,

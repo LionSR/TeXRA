@@ -32,7 +32,11 @@ import {
   type CliPlatformServices,
 } from '../runtime/platform/initPlatform';
 
-import { cliCommand, SKILL_SOURCES_CONFIG } from './_helpers/cliCommand';
+import {
+  cliCommand,
+  modelFlag,
+  SKILL_SOURCES_CONFIG,
+} from './_helpers/cliCommand';
 import { emitCliResult } from './_helpers/output';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
@@ -472,11 +476,7 @@ export const headlessRunCommand = cliCommand('run', {
       ),
       Flag.optional,
     ),
-    model: Flag.String('model').pipe(
-      Flag.withAlias('m'),
-      Flag.withDescription('Model for the agent'),
-      Flag.optional,
-    ),
+    model: modelFlag('Model for the agent'),
     instruction: Flag.String('instruction').pipe(
       Flag.withDescription(
         'Instruction passed to the agent or program (an agent needs this or --instruction-file)',

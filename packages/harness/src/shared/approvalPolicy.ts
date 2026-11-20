@@ -2,7 +2,11 @@ import { Result, Schema, SchemaGetter } from 'effect';
 
 import type { HookAnswer } from './session/sessionApprovals';
 
-export const APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
+export const APPROVAL_POLICIES = Object.freeze([
+  'never',
+  'ask',
+  'yolo',
+] as const);
 export const ApprovalPolicySchema = Schema.Literals(APPROVAL_POLICIES);
 export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
 /**

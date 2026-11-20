@@ -32,6 +32,7 @@ describe('ScriptTool.describe', () => {
       ],
       [],
       [],
+      ['script', 'diag'],
     );
     expect(text).toContain('command: "list"; path: string');
     expect(text).toContain('command: "count"; path: string');

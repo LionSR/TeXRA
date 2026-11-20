@@ -82,10 +82,11 @@ so this theme is not re-mined.
    the per-provider image-size limits (OpenAI and Google rows carry Anthropic's
    numbers, marked not-established); and the GLM Coding Plan precedence decided
    in two packages (needs a `RouteFacts` field for user-set endpoints).
-4. **Logger** (`2026-11-19-helpers-written-by-hand-left-open.md`, item 1): five
-   sites write `Effect.logWarning(...).annotateLogs({ data })` with no channel
-   and inherit the caller's. Deciding whether each names its own channel turns
-   them into `logFailure` calls.
+4. Landed 2026-11-20 (#15129): each of the five sites calls `logFailure` with
+   its own module's channel. Was: **Logger**
+   (`2026-11-19-helpers-written-by-hand-left-open.md`, item 1): five sites
+   wrote `Effect.logWarning(...).annotateLogs({ data })` with no channel and
+   inherited the caller's.
 
 ## Subagent boundaries
 
@@ -99,6 +100,29 @@ run that did not do the work (#15116), and the context tool lets a run edit its
 own view (#15123). No new split is proposed: the unit that would become an
 independent agent is already a run, and inventing a second orchestration layer
 beside the run loop is the shape the design doc rules out ("no flow engine").
+
+## Checked and declined (re-read at `e6ed188`)
+
+Every name the eight entries export (`@texra-ai/harness` and its five
+subpaths, `@texra-ai/llm` and `./node`) was matched against the named imports
+of every other package, the examples and the repo-root suites. The names no
+file outside the defining package imports are, apart from `./schemas` (which
+an open PR edits), the types the 2026-11-19 re-check of the design note read
+by hand, plus four values:
+
+- `buildFileAttachment` (`./plugins`): the builder of the attachment a tool
+  result carries (`ToolFileAttachment`), the authoring counterpart of a
+  public result type. Only `ReadTool` calls it today.
+- `EventInputSchema` (`./transcript`): one case of `SessionViewInputSchema`,
+  named in the entry's guide as the event batch a transport frames.
+- `TurnRequestSchema` and `BACKEND_PROTOCOLS` (`@texra-ai/llm`): the
+  sources the public `TurnRequest` and `BackendProviderId` are derived from.
+
+Dropping any of them shrinks the published surface by one line and deletes
+no code, so none is worth a public-surface change on its own. Inside the
+sources, another file names every export but four interfaces, each the
+field or element type of an exported shape in its own file (`PluginProgram`,
+`TakenFollowUp`, `EmlImageAttachment`, and `ToolUseOpening` in `runLoop.ts`).
 
 ## Verified
 

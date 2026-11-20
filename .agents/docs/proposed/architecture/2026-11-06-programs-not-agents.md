@@ -1028,7 +1028,7 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 | 请求                  | `proposal`（子运行的启动审批）显示 agent 名和 persona                                                         | 留；显示程序名，或 label 和 system 文本                                                                         |
 | `docs/guide`（32 页） | 16 页提到 `texra run`、`--agent`、`texra team`、`texra agents` 或 `texra skills`                              | `built-in-agents`、`custom-agents`、`multi-agent-workflows`、`agent-architecture`、`texra-cli` 重写，其余改措辞 |
 | GitHub action         | `texra-ai/texra-action/review@v2` 调 `texra run`，默认装最新的 CLI                                            | `run` 的参数换义要和 action 一起发                                                                              |
-| harness 的打包示例    | `packages/harness/example/` 的 `07-programmed-path.ts`、`10-external-plugin.ts`、`acme-notes` 用 agent 文件   | 改为插件带程序；R9（随包提供 agent 文件）改为随包提供程序                                                       |
+| harness 的打包示例    | `07-programmed-path.ts` 用 agent 文件；`10-external-plugin.ts` 和 `acme-notes` 已改为插件带程序（2026-11-20） | 改为插件带程序；R9（随包提供 agent 文件）改为随包提供程序                                                       |
 | 测试                  | 引用 bundled 名字的套件和 golden store（`golden-1.0.sql` 里有一次 `polish` 的 task run）                      | 套件改写或删除，golden store 随两次存法变更各重生成一次                                                         |
 
 ## 删除清单

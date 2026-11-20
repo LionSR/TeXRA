@@ -178,6 +178,7 @@ function describedAtFreeze<T extends ResolvedTools>(
       scriptGlobal: tools.registry.get(definition.name)?.scriptGlobal,
       lane: tools.registry.get(definition.name)?.lane,
     }));
+  const offered = tools.definitions.map(({ name }) => name);
   const recorded = (name: string) => {
     const shown =
       state.offeredContext === null
@@ -195,7 +196,8 @@ function describedAtFreeze<T extends ResolvedTools>(
       : {
           ...definition,
           description:
-            recorded(definition.name) ?? describe(declared, modules, programs),
+            recorded(definition.name) ??
+            describe(declared, modules, programs, offered),
         };
   });
   const shown = new Map(

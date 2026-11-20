@@ -6,8 +6,6 @@ export declare const PLUGIN_ID: 'acme-notes';
 export declare const NoteSchema: Schema.Struct<{
   readonly text: Schema.String;
 }>;
-/** The agent files this package ships, for `nodePlatform({ agentsDir })`. */
-export declare const agentsDir: string;
-/** The plugin: the `note_add` tool, the `builtIn:notes` script module and
- *  the `note` fact kind. */
+/** The plugin: the `note_add` tool, the `builtIn:notes` script module, the
+ *  `notes` program over it and the `note` fact kind. */
 export declare const acmeNotes: Plugin;

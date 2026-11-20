@@ -27,16 +27,13 @@ import {
   Rejected,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import {
-  AgentCatalog,
-  isPathWithin,
-  OFFICE_EXTENSIONS,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, OFFICE_EXTENSIONS } from '@texra-ai/harness/host';
 import {
   entryTypeIn,
   meansAbsent,
   readDirectoryTypedTolerant,
   readNormalizedFile,
+  isPathWithin,
 } from '@texra-ai/harness/node';
 import { WorkspaceFs } from '@texra-ai/harness/plugins';
 

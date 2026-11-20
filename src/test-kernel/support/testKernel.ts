@@ -41,7 +41,6 @@ import {
 } from '@texra-ai/harness';
 import {
   AgentCatalog,
-  AgentDirectories,
   processLayer,
   ToolAvailability,
   UsageLog,
@@ -59,6 +58,7 @@ import {
   StateStores,
   ToolCatalog,
   type StateStore,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,

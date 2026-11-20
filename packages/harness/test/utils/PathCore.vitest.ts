@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isPathWithin } from '@texra-ai/harness/host';
+import { isPathWithin } from '@texra-ai/harness/node';
 
 describe('isPathWithin', () => {
   it.each([

@@ -31,6 +31,7 @@ import {
 } from 'effect';
 
 import { stopRun } from '@agent/storage/runLifecycle';
+import { logFailure } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 import type { RequestDecision, RunId, RunStopReason } from '@shared/schemas';
@@ -41,6 +42,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { LiveRun, RunControls, RunsShape } from './runs';
 import type { RunServices } from './ToolServices';
 import type { SessionServices } from './rootLaunch';
+
+const CHANNEL = 'RunRegistry';
 
 /** A launch already has the run here: the one refusal for that fact. Hosts
  *  word it from `message`; a resume reads the tag to report the run
@@ -662,10 +665,11 @@ export class SessionRunRegistry implements RunsShape {
       const stop = entry?.kind === 'live' ? entry.stop : null;
       if (stop === null) return Effect.void;
       return this.inSession(stopRun(runId, stop.reason, true)).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
+        Effect.catchCause(
+          logFailure(
+            CHANNEL,
             `Run ${runId}: the stop that cut its opening was not recorded`,
-          ).pipe(Effect.annotateLogs({ data: cause })),
+          ),
         ),
         Effect.asVoid,
       );

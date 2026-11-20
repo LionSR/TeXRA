@@ -10,8 +10,7 @@ import {
   pickDefaultToolUseAgent,
 } from '@texra/shared/constants/agents';
 import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
-import { type CliContext } from '../runtime/platform/cliContext';
-import { CliExitCode } from '../runtime/platform/exitCodes';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 import {
   buildInitConfig,
   ensureTexraGitignored,
@@ -145,10 +144,9 @@ const runInit = Effect.fn('runInit')(function* (
     !opts.force &&
     (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, filePath)))
   ) {
-    writeTextStderr(
+    return yield* failUsage(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );
-    return CliExitCode.Usage;
   }
 
   const agents = implicitDefaultToolUseAgents(

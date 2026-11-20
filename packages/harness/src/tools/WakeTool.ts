@@ -190,9 +190,13 @@ const runWake = Effect.fn('wake.call')(function* (
   );
 });
 
+/** The name of the `wake` tool, which the script tool's description names
+ *  to a step that offers it. */
+export const WAKE_TOOL_NAME = 'wake';
+
 /** The `wake` tool. */
 export const WakeTool = defineTool({
-  name: 'wake',
+  name: WAKE_TOOL_NAME,
   // A wake starts a turn later, when nobody may be watching: a person, or
   // the grant they gave this run's work, approves the call.
   requiresApproval: true,

@@ -19,7 +19,7 @@ import {
   TOOL_CALL_STATUS,
   type RequestPayload,
   type RunId,
-  type Stage,
+  type RunOutcome,
 } from '@shared/schemas';
 import {
   acceptsFollowUp,
@@ -108,7 +108,7 @@ export interface ScriptStageView {
   /** The stage's id; its calls' cards carry it as their `stageId`. */
   readonly id: string;
   /** The outcome its stage closed with; null while it is open. */
-  readonly outcome: Stage['outcome'];
+  readonly outcome: RunOutcome | null;
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly sections: readonly ScriptSectionView[];
@@ -337,7 +337,7 @@ export function scriptStages(
     return [
       {
         id: stage.id,
-        outcome: stage.outcome,
+        outcome: stage.end?.outcome ?? null,
         calls,
         sections: sectionsOf(calls),
         agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,

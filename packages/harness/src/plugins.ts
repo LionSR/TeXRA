@@ -19,6 +19,7 @@
  *   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
  *   [`executed`](#executed), [`errorResult`](#errorresult),
  *   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
+ *   [`optionalInput`](#optionalinput),
  *   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
  *   ([`requestToolEditApproval`](#requesttooleditapproval),
  *   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),

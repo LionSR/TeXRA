@@ -44,7 +44,6 @@ import {
 } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   makeJsonRpcConnection,
@@ -52,6 +51,8 @@ import {
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
   withLogChannel,
+  type PerKeyLane,
+  withPerKeyLane,
 } from '@texra-ai/harness/plugins';
 import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { LeanServerInfo } from '../leanServerInfo';

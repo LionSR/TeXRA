@@ -29,15 +29,16 @@ export function queuedRow(
   hold: QueuedFollowUp['holdUntil'],
   skills?: readonly string[],
 ): WithBlobs<Omit<QueuedFollowUp, 'commit' | 'at'>> {
-  const { from, deliveryId, control } = item;
+  const { from, deliveryId } = item;
   const holdUntil = hold ?? (from.kind === 'notification' ? 'turn' : undefined);
   const row = {
     followUpId: deliveryId ?? randomUUID(),
     ...(holdUntil ? { holdUntil } : {}),
-    ...(control ? { control } : {}),
   };
   if ('delivery' in item)
     return { ...row, content: { delivery: item.delivery, from } };
+  if ('control' in item)
+    return { ...row, content: { control: item.control, from } };
   const { text, displayText, media, blobs } = item;
   return {
     ...row,
@@ -66,7 +67,7 @@ export interface WakeNote {
 /** The wake notes among a run's pending input, in the order it asked. */
 export const wakeNotes = (rows: readonly QueuedFollowUp[]): WakeNote[] =>
   rows.flatMap(({ followUpId, at, content }) =>
-    'delivery' in content || content.from.kind !== 'self'
+    !('text' in content) || content.from.kind !== 'self'
       ? []
       : [
           {

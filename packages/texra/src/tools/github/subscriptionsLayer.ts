@@ -19,6 +19,7 @@ import {
   AppSignals,
   emitAppSignal,
   SESSION_CLOSE_DEADLINE_MS,
+  logFailure,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -52,7 +53,8 @@ interface Subscription {
   readonly runs: Map<RunId, Binding>;
 }
 
-const inLogChannel = withLogChannel('github');
+const CHANNEL = 'github';
+const inLogChannel = withLogChannel(CHANNEL);
 
 const bindingsChanged = emitAppSignal('githubSubscriptionsChanged', undefined);
 
@@ -139,9 +141,10 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
       // sorted keys under a length bound, so beside an error's stack they
       // would be the part truncated away.
       const reportFailure = (err: unknown) =>
-        Effect.logWarning(
+        logFailure(
+          CHANNEL,
           `Failed to deliver subscription follow-up for ${path} (run ${runId})`,
-        ).pipe(Effect.annotateLogs({ data: { err } }), inLogChannel);
+        )({ err });
       return inbox
         .send({ ...event, from: { kind: 'notification', source: 'github' } })
         .pipe(

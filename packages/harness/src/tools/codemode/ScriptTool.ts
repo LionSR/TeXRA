@@ -30,9 +30,10 @@ import {
   SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
+import { WAKE_TOOL_NAME } from '@tools/WakeTool';
 
 import { defineTool } from '../core/definition';
-import { timeoutMsField } from '../core/inputSchema';
+import { optionalInput, timeoutMsField } from '../core/inputSchema';
 import { launchBackgroundScript } from './backgroundScript';
 import { declarationOf, globalDeclarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';
@@ -46,13 +47,14 @@ const ScriptInputSchema = Schema.Struct({
     description:
       'The body of an async JavaScript function: `await` at top level, `return` the result. Inputs are literals in the code.',
   }),
-  title: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'A short title for the script, shown on its card.',
-  }),
-  run_in_background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
-  }),
+  title: optionalInput(
+    Schema.String,
+    'A short title for the script, shown on its card.',
+  ),
+  run_in_background: optionalInput(
+    Schema.Boolean,
+    'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
+  ),
   timeoutMs: timeoutMsField.annotate({
     description:
       'Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default 60 min.',
@@ -337,7 +339,7 @@ const SURFACE = [
     '- `section(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
   '`const { name } = await import(specifier)` loads a module by its specifier (`builtIn:<module>`, listed below when you may import any); a static `import` line does not parse in a function body.',
-  'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again. To continue at a later time, `tools.wake({ afterSeconds, note })` (where `wake` is offered) returns at once and arranges a later turn of the conversation, which starts from the note.',
+  'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',
 ].join('\n\n');
 
 export const ScriptTool = defineTool({
@@ -346,7 +348,7 @@ export const ScriptTool = defineTool({
   // each finished call is handed back from its row, never run twice.
   replay: 'safe',
   description: SURFACE,
-  describe: (declared, modules, programs) => {
+  describe: (declared, modules, programs, offered) => {
     // The declared tools whose calls run alongside others: the rest wait
     // their turn.
     const together = declared.flatMap(({ definition, lane }) =>
@@ -354,6 +356,12 @@ export const ScriptTool = defineTool({
     );
     return [
       SURFACE,
+      // Named only to a step that offers it.
+      ...(offered.includes(WAKE_TOOL_NAME)
+        ? [
+            'To continue at a later time, `tools.wake({ afterSeconds, note })` returns at once and arranges a later turn of the conversation, which starts from the note.',
+          ]
+        : []),
       // A module no tool's description names is found only here.
       ...(modules.length === 0
         ? []

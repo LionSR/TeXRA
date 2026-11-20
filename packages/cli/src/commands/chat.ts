@@ -12,6 +12,7 @@ import { notifyCliUpdate } from '../runtime/platform/updateChecker';
 import {
   cliCommand,
   SKILL_SOURCES_CONFIG,
+  modelFlag,
   type CliCommandOptions,
 } from './_helpers/cliCommand';
 
@@ -21,11 +22,7 @@ const chatConfig = {
     Flag.withDescription('Agent for the session'),
     Flag.optional,
   ),
-  model: Flag.String('model').pipe(
-    Flag.withAlias('m'),
-    Flag.withDescription('Model for the session'),
-    Flag.optional,
-  ),
+  model: modelFlag('Model for the session'),
 };
 
 /** The chat, which bare `texra` also starts on an interactive terminal. */

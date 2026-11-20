@@ -41,6 +41,30 @@ export function nullishWithDefault<S extends Schema.Top>(
 }
 
 /**
+ * An optional, nullable tool-input field with no default. The decoded value
+ * stays nullish: it is `undefined` when the field is absent and `null` when the
+ * model sends an explicit `null`, so `execute` coalesces it with `?? fallback`
+ * (which covers both) or tests `== null`.
+ *
+ * Like {@link nullishWithDefault}, the encoded side is
+ * `Schema.optional(Schema.NullOr(schema))`, not `Schema.optional(schema)`:
+ * OpenAI-compatible providers (DeepSeek, Kimi, …) send an omitted optional
+ * field as an explicit `null` in structured output, so the field must be
+ * nullable as well as optional, and plain `Schema.optional(schema)` would fail
+ * to decode that `null`. Unlike `nullishWithDefault`, this applies no decoding
+ * transformation, so a `null` is kept rather than replaced by a fallback.
+ * Naming the shape keeps every tool-input field that takes no default on the
+ * one rule. `description` is written on the encoded side, which is where the
+ * model's JSON Schema is generated from.
+ */
+export function optionalInput<S extends Schema.Top>(
+  schema: S,
+  description: string,
+): Schema.optional<Schema.NullOr<S>> {
+  return Schema.optional(Schema.NullOr(schema)).annotate({ description });
+}
+
+/**
  * A tool call's optional time limit in milliseconds, from one second to a
  * day. Each tool annotates it with what the limit stops.
  */

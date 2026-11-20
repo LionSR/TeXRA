@@ -54,11 +54,6 @@ const rowsOf = (runId: RunId) => {
   );
 };
 
-/** The run's stored parent edge (`run.start.parent`), or null. */
-const parentEdge = Effect.fn('parentEdge')(function* (runId: RunId) {
-  return (yield* (yield* SessionLog).facts(runId))?.start?.parent ?? null;
-});
-
 /** The run one attempt of a parent's call launches (an `agent` child, a
  *  background script), named by its response too: call ids repeat. The id
  *  is a hash of these fields under these names, `parentRunId` among them:
@@ -112,10 +107,14 @@ const openCallChildren = (
   return open;
 };
 
-/** The open call that owns `runId`: the undetached parent call that
- *  launched it, unfinished in the parent's history; else null. */
-export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
-  const edge = yield* parentEdge(runId);
+/** The open call that owns `runId`, whose `facts` the caller has read:
+ *  the undetached parent call that launched it (`run.start.parent`),
+ *  unfinished in the parent's history; else null. */
+export const owningCall = Effect.fn('owningCall')(function* (
+  runId: RunId,
+  facts: RunRows | null,
+) {
+  const edge = facts?.start?.parent;
   if (edge?.call == null) return null;
   const { id } = edge;
   const { callId } = edge.call;
@@ -226,6 +225,14 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   } satisfies RunEnd;
 });
 
+/** The agent configuration in a run's facts: its latest `run.config` row
+ *  when that is an agent's, else null. For a caller that already holds
+ *  the facts; `getRunRecords(runId).readConfig()` reads them. */
+export const agentConfigOf = (facts: RunRows | null): AgentConfig | null => {
+  const record = facts?.config ?? null;
+  return record !== null && isAgentRunRecord(record) ? record : null;
+};
+
 /** Reads of a run's named records from the session database. */
 export function getRunRecords(runId: RunId) {
   const facts = SessionLog.use((log) => log.facts(runId));
@@ -259,12 +266,7 @@ export function getRunRecords(runId: RunId) {
      *  closed by its deletion marker, reads false. */
     exists: (): RecordRead<boolean> => read((held) => held !== null),
     readRunRecord: readRecord,
-    readConfig: (): RecordRead<AgentConfig | null> =>
-      readRecord().pipe(
-        Effect.map((record) =>
-          record && isAgentRunRecord(record) ? record : null,
-        ),
-      ),
+    readConfig: (): RecordRead<AgentConfig | null> => read(agentConfigOf),
     readReport: (): RecordRead<string | null> =>
       read((held) => held?.report ?? null),
     /** The workspace files the run edited, loaded from its finished calls

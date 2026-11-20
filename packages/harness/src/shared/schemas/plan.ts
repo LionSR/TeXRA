@@ -29,7 +29,9 @@ export const GOAL_PLAN_KIND = Object.freeze({
  * Why a goal stopped short of its objective, told apart by `reason`: a
  * round said it needs the user (its report says what for), a round failed
  * (the error its `self()` call rejected with), a round ended without a
- * verdict (its reply instead), or the goal reached its spend cap.
+ * verdict (its reply instead), the judge that checks a round's `done` gave
+ * no answer (the error its call rejected with, or `NoVerdict` and its reply),
+ * or the goal reached its spend cap.
  */
 const GoalPauseSchema = Schema.Union([
   Schema.Struct({ reason: Schema.Literal('needs_user') }),
@@ -40,6 +42,10 @@ const GoalPauseSchema = Schema.Union([
   Schema.Struct({
     reason: Schema.Literal('no_verdict'),
     response: Schema.String,
+  }),
+  Schema.Struct({
+    reason: Schema.Literal('judge_failed'),
+    error: Schema.Struct({ name: Schema.String, message: Schema.String }),
   }),
   Schema.Struct({
     reason: Schema.Literal('spend_cap'),
@@ -57,13 +63,21 @@ const GOAL_RESULT_FIELDS = {
   spent: Schema.Finite,
   /** The latest report a round submitted; empty before the first. */
   report: Schema.String,
+  /** What the strategy's latest judge answered, in the strategy's own
+   *  shape: the harness stores it and reads nothing in it. The default
+   *  strategy's is a list of claims, each as `claimSchema` in the module
+   *  `builtIn:goal` states. Absent when no judge ran (no round claimed
+   *  `done`, or the strategy has no judge). */
+  claims: Schema.optionalKey(Schema.Json),
 };
 
 /**
  * A goal's result: what its strategy, the `goal` export of the script
  * module the `goal.strategy` setting names, returns, and so the structured
- * output its run ends with. `completed` when a round verified the
- * objective, `paused` with the reason otherwise. A pause is a result, not a
+ * output its run ends with. `completed` when the strategy judged the
+ * objective met (the default strategy: a round claimed it done and a judge
+ * found no requirement `failed`; its `unverified` claims are for a person
+ * to check), `paused` with the reason otherwise. A pause is a result, not a
  * waiting run: work continues through a new goal or a new turn.
  */
 export const GoalResultSchema = Schema.Union([
