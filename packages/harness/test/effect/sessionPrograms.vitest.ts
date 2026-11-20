@@ -1,7 +1,7 @@
 /**
  * The package's `resume` (`sessionPrograms.ts`) and the `Run` it hands
  * back, over a real store on the validation model: the run hand-off
- * scenario of the harness 1.0 release acceptance (R14).
+ * scenarios of the harness 1.0 release acceptance (R14, R17).
  *
  * Failure modes:
  * - R14: a resumed child its parent's open call owns is activated on its
@@ -14,14 +14,27 @@
  *   and the run runs.
  * - A run whose end the store refused fails its result with "ended without
  *   a stored end" and nothing of why.
+ * - R17: a run whose handle was built and never handed over (its launcher
+ *   interrupted after the launch answered) cannot be stopped and is not
+ *   released by the session's close.
  */
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Fiber,
+  Option,
+  Schema,
+  Scope,
+  Stream,
+} from 'effect';
 import { assert, describe, expect } from 'vitest';
 
 import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
 import { AgentCatalog } from '@agent/index/agentCatalog';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   crashedCopy,
@@ -224,6 +237,82 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
               .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data));
             expect(stops).toStrictEqual([{ reason: 'user' }]);
             expect(ends).toStrictEqual([{ outcome: 'cancelled' }]);
+          }),
+      );
+
+      it.effect(
+        'R17: a launch interrupted after its run answered, before its caller has the handle, leaves the run held, stoppable and released',
+        () =>
+          Effect.gen(function* () {
+            const { roots } = yield* FakeHost;
+            const session = yield* persistentTestSession(roots);
+            const sdk = yield* packageSession(session);
+            const faults = yield* sessionStoreFaults(roots.storage);
+            const opening = yield* faults.holdNext('appendAll', 'run.start');
+            const launch = yield* Effect.forkChild(
+              sdk.start({
+                agent: 'golden_parent',
+                instruction: 'Read the notes, plan, delegate.',
+                model: MODEL,
+              }),
+            );
+            yield* opening.reached;
+            const held = sdk.held()[0];
+            assert(held !== undefined, 'the session holds the launch');
+            const { runId } = held;
+            const answered = Context.get(session, RunRegistry).opened(runId);
+            assert(answered !== undefined, 'a fiber here drives the run');
+            // The opening commits in one batch; the run's next position is
+            // its loop's first write, made after the opening answered.
+            const loop = yield* faults.holdNext('appendAll', 'run.position');
+            yield* opening.release;
+            yield* loop.reached;
+            // Inside the window: the launch has answered, and its caller
+            // has no handle yet.
+            const answer = yield* Effect.forkChild(answered, {
+              startImmediately: true,
+            });
+            expect(answer.pollUnsafe()).toBeDefined();
+            expect(launch.pollUnsafe()).toBeUndefined();
+            yield* Fiber.interrupt(launch);
+            const exit = yield* Fiber.await(launch);
+            expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+
+            // The run is the session's: listed, and a stop reaches it.
+            expect(sdk.held(runId)).toBeDefined();
+            const stopped = yield* Effect.forkChild(
+              sdk.request({ kind: 'run.stop', runId, reason: 'user' }),
+              { startImmediately: true },
+            );
+            yield* loop.release;
+            yield* Fiber.join(stopped);
+            yield* held.drained;
+            expect(sdk.held(runId)).toBeUndefined();
+            expect(
+              storedRows(roots.storage)
+                .filter((row) => row.run === runId && row.type === 'run.stop')
+                .map((row) => Schema.decodeUnknownSync(RunStopData)(row.data)),
+            ).toStrictEqual([{ reason: 'user' }]);
+            expect(endsOf(roots.storage, runId)).toStrictEqual(['cancelled']);
+
+            // The session closes, and a reopen holds nothing of the run.
+            yield* Sessions.use((sessions) => sessions.close(roots));
+            const reopened = yield* packageSession(
+              yield* persistentTestSession(roots),
+            );
+            expect(reopened.held()).toStrictEqual([]);
+            // The view fills in as the reopened session reads its store.
+            const shown = yield* Stream.concat(
+              Stream.succeed(reopened.view.current()),
+              reopened.view.changes,
+            ).pipe(
+              Stream.filter((view) => view.runs.has(runId)),
+              Stream.runHead,
+              Effect.timeout('10 seconds'),
+            );
+            const run = Option.getOrUndefined(shown)?.runs.get(runId);
+            expect(run?.outcome).toBe('cancelled');
+            expect(run?.holder).toBe('none');
           }),
       );
 

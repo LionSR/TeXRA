@@ -187,7 +187,7 @@ cannot tell "reads the setting" from "ignores it". Churn rank:
 
 **Evidence.**
 
-- `src/test-kernel/agent/runtime/RetryState.vitest.ts:523-531` builds the
+- `packages/harness/test/agent/runtime/RetryState.vitest.ts:523-531` builds the
   host with
   `caseHost(Schema.decodeUnknownSync(MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema)(undefined))`,
   which is 2, the decoding default (`stateSettings.ts:227-229`).
@@ -339,11 +339,11 @@ Each is a line or two, recorded so the fixes can ride with a nearby PR.
 - `src/test-kernel/latex/OverleafClone.vitest.ts`: port doubles whose calls
   are the effect. Each "clears the token" case has its control ("keeps the
   token" on a network failure and on a pre-git `mkdir` failure).
-- `src/test-kernel/latex/TexTools.vitest.ts:104-116`: a regression (exit 0,
+- `packages/texra/test/latex/TexTools.vitest.ts:104-116`: a regression (exit 0,
   no PDF), with real files and only the subprocess faked.
 - `packages/harness/test/tools/core/definition.vitest.ts`: names its
   failure mode, then asserts both the model-visible error and the log line.
-- `src/test-kernel/tools/setup/CredentialReporting.vitest.ts`: the host
+- `packages/texra/test/tools/setup/CredentialReporting.vitest.ts`: the host
   built with `it.layer(…, { buildPerTest: true })`, the wiring F1 lacks, and
   asserts the negative (`doesNotMatch(private-test-value)`) beside the
   positives.

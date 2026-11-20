@@ -117,9 +117,11 @@ the key-pages link and `wallTimeMs` (#15103); `SessionKey` reading only
 `SubscriptionAccounts` (#15106); the request noun table, `REQUEST_NOUN` in
 `packages/texra/src/ui/copy/requestCards.ts` (#15106). Half of store debts
 C7: the `leanServerPool` module mock went in #15096, the `SqliteClient`
-spread stays. Still open: `run.steps` (a `Ref`), C6, A8, the model switch
-as a queued row (`SessionRequests.ts` still calls `controls.switchModel`),
-the nightly `validate:tui` (CI runs only `--smoke`), the `./host` helpers
+spread stays. Landed on 2026-11-20 (`claude/upkeep-2026-11-20-ruled-run-items`):
+`run.steps` is a `ScopedRef`; a model switch for a run no process holds is
+queued, and the loop applies it or drops one it cannot take, named in the
+run's trace (`RunControls.switchModel` is gone); the full `validate:tui`
+runs nightly (the `tui-validation` job). Still open: C6, A8, the `./host` helpers
 (fourteen files under `packages/texra/src/tools` still import
 `@texra-ai/harness/host`), the `./plugins` split, the image limits, I-C16
 and the R17 case. M4, H9 and the follow-up status word were not re-read.

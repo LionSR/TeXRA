@@ -8,12 +8,10 @@ import { imageSize } from 'image-size';
 
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
-import { Settings, type ConfigProvider } from '@shared/config/settings';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
-import { MAX_IMAGE_DIMENSION_SETTING } from '@shared/state/stateSettings';
 
 const CHANNEL = 'ImgUtils';
 
@@ -130,23 +128,12 @@ const getImageDimensions = (bytes: Uint8Array) =>
       }),
   });
 
-/** Maximum image dimension (pixels) accepted by provider APIs. */
-const API_MAX_IMAGE_DIMENSION = 8000;
-
-/**
- * Bytes of an image, resized when it exceeds the maximum dimensions. The limit
- * comes from the configuration of the workspace the caller is reading for,
- * held as data, not from whichever roots the calling fiber carries.
- */
+/** Bytes of an image, resized when a side is longer than `maxDimension`. */
 const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
   imagePath: string,
-  config: ConfigProvider,
+  maxDimension: number,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const maxDimension = Math.min(
-    Settings.getConfig(config, MAX_IMAGE_DIMENSION_SETTING),
-    API_MAX_IMAGE_DIMENSION,
-  );
   // One read: the bytes that are measured are the bytes returned.
   const bytes = yield* fs.readFile(imagePath);
   const { width, height } = yield* getImageDimensions(bytes);
@@ -200,19 +187,19 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
 });
 
 /**
- * Base64 of a media file at an absolute path, resizing an oversized image
- * first. A missing or empty file fails with {@link MediaConversionFailed}. A
+ * Base64 of a media file at an absolute path, resizing an image with a side
+ * longer than `maxImageDimension` first. A missing or empty file fails with {@link MediaConversionFailed}. A
  * non-image file that exists but cannot be read fails with the filesystem's
  * `PlatformError`; an image whose bytes cannot be measured fails with
  * {@link MediaConversionFailed}.
  */
 export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
-  function* (mediaPath: string, config: ConfigProvider) {
+  function* (mediaPath: string, maxImageDimension: number) {
     const fs = yield* FileSystem.FileSystem;
     // The read answers whether the file exists: no separate probe.
     const mediaBytes = yield* (
       isImageMimeType(getMimeType(mediaPath))
-        ? resizeImageIfNeeded(mediaPath, config)
+        ? resizeImageIfNeeded(mediaPath, maxImageDimension)
         : fs.readFile(mediaPath)
     ).pipe(
       Effect.catchIf(meansAbsent, () =>

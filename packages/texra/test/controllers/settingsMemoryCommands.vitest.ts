@@ -12,8 +12,8 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 
-import { createFakeUIHosts } from '../support/fakeUiPorts';
-import { nodePlatformLayer } from '../support/fsTestUtils';
+import { createFakeUIHosts } from '@test/support/fakeUiPorts';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 /** The Memory page over a capturing view; a reported failure fails the test. */
 function createMemoryPage(options: { confirmResponses: readonly boolean[] }) {

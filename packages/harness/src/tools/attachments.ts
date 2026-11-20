@@ -1,6 +1,7 @@
 // Third-party imports
-import { Effect, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema, ScopedRef } from 'effect';
 import { imageSize } from 'image-size';
+import { IMAGE_LIMITS } from '@texra-ai/llm';
 import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports
@@ -31,29 +32,22 @@ export interface BuildFileAttachmentOptions {
 /** The largest file read as an attachment or parsed as an email: 15 MiB. */
 export const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
 
-/**
- * Max image dimension (px) for many-image API requests.
- * Anthropic returns a non-retryable 400 when any image exceeds this in a
- * multi-image request.
- */
-const MANY_IMAGE_MAX_DIMENSION = 2000;
-
 /** Bytes image-size cannot read: an unrecognized format or truncated data. */
 class UnreadableImage extends Schema.TaggedError<UnreadableImage>()(
   'UnreadableImage',
   {},
 ) {}
 
-/** Returns true if buffer is an image exceeding the many-image dimension limit. */
-function isOversizedImage(buffer: Buffer | Uint8Array): Effect.Effect<boolean> {
+/** Returns true if buffer is an image with a side longer than `limit`. */
+function isOversizedImage(
+  buffer: Buffer | Uint8Array,
+  limit: number,
+): Effect.Effect<boolean> {
   return Effect.try({
     try: () => imageSize(buffer),
     catch: () => new UnreadableImage(),
   }).pipe(
-    Effect.map(
-      ({ width, height }) =>
-        width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION,
-    ),
+    Effect.map(({ width, height }) => width > limit || height > limit),
     // Bytes with no dimensions are not oversized.
     Effect.catchTag('UnreadableImage', () => Effect.succeed(false)),
   );
@@ -84,10 +78,12 @@ interface BuildBytesAttachmentOptions {
 /**
  * Package in-memory bytes as a tool attachment.
  *
- * Oversized images are reduced to metadata: their binary data is dropped to
- * prevent non-retryable API 400 errors, and downstream handlers fall back to a
- * read_file hint. The returned attachment owns a copy of `bytes`, so callers
- * may zero their own buffer afterwards.
+ * An image whose longest side exceeds the many-image limit of the protocol
+ * the call's run is bound to is reduced to metadata: a tool result may be one
+ * of many images in later requests, and an oversized one fails each of them
+ * with a 400 no retry fixes. Downstream handlers fall back to a read_file
+ * hint. The returned attachment owns a copy of `bytes`, so callers may zero
+ * their own buffer afterwards.
  */
 export const buildBytesAttachment = Effect.fn('buildBytesAttachment')(
   function* ({
@@ -95,17 +91,24 @@ export const buildBytesAttachment = Effect.fn('buildBytesAttachment')(
     mimeType,
     bytes,
     description,
-  }: BuildBytesAttachmentOptions): Effect.fn.Return<ToolFileAttachment, never> {
-    const oversized =
-      isImageMimeType(mimeType) && (yield* isOversizedImage(bytes));
-    if (oversized) {
-      return {
-        path,
-        mimeType,
-        description:
-          (description ? `${description}: ` : '') +
-          `Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
-      };
+  }: BuildBytesAttachmentOptions): Effect.fn.Return<
+    ToolFileAttachment,
+    never,
+    ToolContext
+  > {
+    if (isImageMimeType(mimeType)) {
+      const { origin } = yield* ScopedRef.get(
+        (yield* ToolContext).env.run.model,
+      );
+      const limit = IMAGE_LIMITS[origin.protocol].manyImageMaxDimension;
+      if (yield* isOversizedImage(bytes, limit))
+        return {
+          path,
+          mimeType,
+          description:
+            (description ? `${description}: ` : '') +
+            `Image exceeds ${limit}px dimension limit; binary data stripped`,
+        };
     }
 
     return {

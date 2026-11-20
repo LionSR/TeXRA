@@ -248,15 +248,7 @@ function drain(
       ? Effect.fail(new OutputLimitExceeded({ stream: name, limit }))
       : Effect.void;
   };
-  return Effect.suspend(() => {
-    const decoder = new TextDecoder();
-    return source.pipe(
-      Stream.runForEach((bytes) =>
-        emit(decoder.decode(bytes, { stream: true })),
-      ),
-      Effect.andThen(Effect.suspend(() => emit(decoder.decode()))),
-    );
-  });
+  return source.pipe(Stream.decodeText(), Stream.runForEach(emit));
 }
 
 /** The command for a log or a message: argv quoted as this platform's

@@ -16,7 +16,6 @@ export interface RunControls {
   modelSwitchDisabledReason(
     model: string,
   ): Effect.Effect<string | undefined, Error>;
-  switchModel(model: string): Effect.Effect<void, Error>;
 }
 
 /** What this process holds for one run: the fiber that drives it here,
