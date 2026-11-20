@@ -1391,6 +1391,20 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Agents can edit their own context.** A new built-in `context` tool
+  lets an agent read the messages its requests send (each with its index,
+  kind, estimated tokens and a preview, plus the window size and the tokens
+  in use) and replace any range of them with text it writes, for example a
+  long tool output it no longer needs, or everything so far with its own
+  handoff. The replacement takes effect at the agent's next request; the
+  original messages stay in the transcript. The progress view and the CLI
+  show the edit as **Agent edited its context**, with the messages replaced
+  and the tokens freed. In code mode a script calls it as
+  `tools.context(...)` and gets the view as data. Conversations saved by an
+  earlier build show as written by that build and cannot be resumed by this
+  one. SDK: a `context.edit` row's cause may be `edit` (row version 9), and
+  a completed compaction activity may carry how many messages it
+  `replaced` (`log` row version 13).
 - **A goal completes only when a judge confirms it.** A round that says
   the objective is done no longer ends the goal on its own word: the same
   agent runs again with no earlier conversation, as a judge that did not do

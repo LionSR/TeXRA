@@ -121,7 +121,7 @@ policy a new task starts with. In the CLI, `/status` lists the same grants
 
 ### Context utilization
 
-A **Context** gauge next to the token count shows how full the model's context window is, as tokens used, the window size and a percentage. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session.
+A **Context** gauge next to the token count shows how full the model's context window is, as tokens used, the window size and a percentage. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session. An agent can also replace parts of its own context with text it writes (its `context` tool), for example a long tool output it no longer needs; the transcript shows this as **Agent edited its context** with the number of messages replaced and the tokens freed, and still shows the original messages.
 
 ### After a workflow run
 

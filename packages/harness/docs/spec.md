@@ -312,8 +312,15 @@ The private rows themselves are never sent to a renderer
 - `model.message` (folded: yes): One arm per invocation fact: `attempt`,
   `accepted`, `cancelled`, `failed`, `response`, `handed-down`, `append` (`shared/schemas/runHistoryEvent.ts#ModelMessagePayloadSchema`).
 - `context.edit` (folded: yes): Replaces messages `[from, to)` of the model's
-  view; cause `compaction` or `fork`
-  (`shared/schemas/runHistoryEvent.ts#ContextEditPayloadSchema`).
+  view; cause `compaction` (a summary), `edit` or `fork`
+  (`shared/schemas/runHistoryEvent.ts#ContextEditPayloadSchema`). An `edit`
+  is a replacement the agent wrote with its `context` tool, whose executed
+  result records it (`ContextReplaceSchema`), which the run
+  state keeps waiting (`shared/session/runFacts.ts#requestedEdits`) until the
+  loop writes the edit at the next request boundary
+  (`agent/runtime/run/compaction.ts#agentEditsAtBoundary`). Each agent edit
+  takes its request off the state, highest range first, so a resume applies
+  each exactly once.
 - `tool.intent` (folded: yes): The point after which a call's body may have run,
   at an attempt number; it commits just before the body starts, so it does not
   prove the body ran. It names the card the attempt opens: its id, its tool,
@@ -610,7 +617,11 @@ the publisher, and a cell folds them on `refresh`
 
 A batch that carries a `context.edit` with a `response` MUST place the edit
 immediately before the response, and an edit MUST be the first message-bearing
-row of its batch (`agent/runtime/makeRunHistory.ts#contractViolation`).
+row of its batch (`agent/runtime/makeRunHistory.ts#contractViolation`). Every
+edit of an opened run is written on the run's own fiber at a request boundary
+(`agent/runtime/run/compaction.ts`): a tool call cannot write one, so the
+agent's `context` tool records its request in its result and the boundary
+applies it.
 
 ### 5.5 Resume is the same function
 
