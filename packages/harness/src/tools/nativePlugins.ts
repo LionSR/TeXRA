@@ -34,6 +34,7 @@ import { pathToFileURL } from 'node:url';
 // Third-party imports
 import {
   Array as Arr,
+  Cache,
   Cause,
   Clock,
   Config,
@@ -47,6 +48,7 @@ import {
   Exit,
   Fiber,
   Function as Fn,
+  Hash,
   HashMap,
   HashSet,
   Layer,
@@ -408,55 +410,63 @@ const importEntry = (
 export const nativeRevision = (file: string, digest: string): string =>
   sha256Hex(`${file}\0${digest}`);
 
-/** The revision of `source`'s native entry `entry`. */
-const revisionOf = (source: LoadablePlugin, entry: NativeEntry): string =>
-  nativeRevision(entry.file, source.trust.digest);
+/** One revision of an installed plugin's native entry, the loader's key:
+ *  equal to another of the same revision, whichever read found it. */
+class EntryRevision implements Equal.Equal {
+  readonly revision: string;
+  readonly source: LoadablePlugin;
+  readonly entry: NativeEntry;
+
+  constructor(source: LoadablePlugin, entry: NativeEntry) {
+    this.source = source;
+    this.entry = entry;
+    this.revision = nativeRevision(entry.file, source.trust.digest);
+  }
+
+  [Equal.symbol](that: Equal.Equal): boolean {
+    return that instanceof EntryRevision && that.revision === this.revision;
+  }
+
+  [Hash.symbol](): number {
+    return Hash.string(this.revision);
+  }
+}
 
 /**
  * The process's native plugin loader: each installed plugin's entry at
- * each trust digest is imported and checked once (`load`), its plugin (or
- * why it did not load) kept for the life of the process, as the module
- * itself is. `imported` answers the plugin a load already gave, and imports
- * nothing: what a reader that must run no plugin's code reads.
+ * each trust digest is imported and checked once (`load`; concurrent loads
+ * of one revision share the import), its plugin (or why it did not load)
+ * kept for the life of the process, as the module itself is. `imported`
+ * answers the plugin a load already gave, and imports nothing: what a
+ * reader that must run no plugin's code reads.
  */
-export const nativeLoader = (): {
-  readonly load: (
-    source: LoadablePlugin,
-  ) => Effect.Effect<NativePlugin, NativePluginFailed>;
-  readonly imported: (source: LoadablePlugin) => NativePlugin | undefined;
-} => {
-  const loads = new Map<
-    string,
-    Effect.Effect<NativePlugin, NativePluginFailed>
-  >();
-  const loaded = new Map<string, NativePlugin>();
-  return {
-    load: (source) =>
-      Effect.suspend(() => {
-        const entry = source.plugin.native;
-        if (entry === null)
-          return Effect.fail(failure(source, 'it has no native entry'));
-        const revision = revisionOf(source, entry);
-        const known = loads.get(revision);
-        if (known !== undefined) return known;
-        return Effect.flatMap(
-          Effect.cached(
-            importEntry(source, entry, revision).pipe(
-              Effect.tap((native) =>
-                Effect.sync(() => loaded.set(revision, native)),
-              ),
-            ),
-          ),
-          (load) => {
-            const raced = loads.get(revision) ?? load;
-            loads.set(revision, raced);
-            return raced;
-          },
-        );
-      }),
+export const nativeLoader = Effect.map(
+  Cache.make({
+    capacity: Number.POSITIVE_INFINITY,
+    lookup: ({ source, entry, revision }: EntryRevision) =>
+      importEntry(source, entry, revision),
+  }),
+  (
+    cache,
+  ): {
+    readonly load: (
+      source: LoadablePlugin,
+    ) => Effect.Effect<NativePlugin, NativePluginFailed>;
+    readonly imported: (
+      source: LoadablePlugin,
+    ) => Effect.Effect<Option.Option<NativePlugin>>;
+  } => ({
+    load: (source) => {
+      const entry = source.plugin.native;
+      return entry === null
+        ? Effect.fail(failure(source, 'it has no native entry'))
+        : Cache.get(cache, new EntryRevision(source, entry));
+    },
     imported: (source) => {
       const entry = source.plugin.native;
-      return entry === null ? undefined : loaded.get(revisionOf(source, entry));
+      return entry === null
+        ? Effect.succeedNone
+        : Cache.getSuccess(cache, new EntryRevision(source, entry));
     },
-  };
-};
+  }),
+);

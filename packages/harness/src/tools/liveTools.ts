@@ -189,7 +189,7 @@ export const toolCatalogLayer = (
         [...of.entries.keys()]
           .map((id) => layerKey(id, of.revisionOf(id)))
           .join('\0');
-      const loader = nativeLoader();
+      const loader = yield* nativeLoader;
       // Each native plugin's revision in the table and the one it replaced,
       // while its installed plugin stays enabled: what stands in, kept in
       // memory only, for a newer revision that does not load. A disabled or
@@ -255,15 +255,15 @@ export const toolCatalogLayer = (
                 NativePlugin,
                 NativePluginFailed
               > | null;
-            }> => {
-              const imported = loader.imported(source);
-              return load || imported !== undefined
-                ? Effect.map(Effect.result(loader.load(source)), (result) => ({
-                    id,
-                    result,
-                  }))
-                : Effect.succeed({ id, result: null });
-            },
+            }> =>
+              Effect.gen(function* () {
+                if (!load && Option.isNone(yield* loader.imported(source)))
+                  return { id, result: null };
+                return {
+                  id,
+                  result: yield* Effect.result(loader.load(source)),
+                };
+              }),
             { concurrency: 'unbounded' },
           );
           const candidates = attempts.flatMap(({ id, result }) => {
