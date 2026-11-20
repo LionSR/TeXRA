@@ -85,12 +85,14 @@ across a round's diffs. Which layout is right needs a decision first.
 Items 1, 2 and 4 each need a wording decision; nothing in the repo pins
 the CLI words except the TUI titles in `validate-tui.mjs`.
 
-1. **How a run ended.** `CLI_RUN_STATUS` and `runOutcomeToCliRunStatus`
-   (`packages/cli/src/schemas/cliOutput.ts`), `historyStanding`
-   (`packages/cli/src/runtime/history.ts`) and `runStatusLabel`
-   (`packages/texra/src/ui/copy/runStatus.ts`) word one cancelled run as
-   "interrupted", "cancelled" and "Stopped". Proposed owner:
-   `runStatusLabel`.
+1. **How a run ended.** Taken on 2026-11-20: the headless chat result's
+   status line, a failed program's text result and `historyStanding`
+   (`packages/cli/src/runtime/history.ts`, which the `/resume` form reads
+   too) word an outcome through `runStatusLabel`
+   (`packages/texra/src/ui/copy/runStatus.ts`), so a cancelled run reads
+   "Stopped" everywhere a person reads it. `CLI_RUN_STATUS` and
+   `runOutcomeToCliRunStatus` fed only that text line and are gone; the
+   JSON and NDJSON `outcome` values and the exit codes are unchanged.
 2. **A request's heading.** Bash, edit, proposal, retry and plan requests
    are headed separately by the web panels, the TUI modals and the headless
    summaries (`packages/cli/src/runtime/approval/approvalSummaries.ts`); the

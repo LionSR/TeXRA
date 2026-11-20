@@ -339,12 +339,14 @@ function continueNote(outcome: RunOutcome | null): string {
   return outcome === 'completed' ? 'can continue' : 'can resume';
 }
 
-/** How a listed run stands in `texra history`'s text: its outcome, else
- *  none, and whether `texra resume` continues it. */
+/** How a listed run stands in `texra history`'s text and the `/resume`
+ *  form: its outcome in the word every host gives it, else none, and
+ *  whether `texra resume` continues it. */
 export function historyStanding(
   entry: Pick<CliHistoryEntry, 'outcome' | 'continues'>,
 ): string {
-  const outcome = entry.outcome ?? 'no outcome';
+  const outcome =
+    entry.outcome === null ? 'No outcome' : runStatusLabel(entry.outcome);
   return entry.continues
     ? `${outcome} (${continueNote(entry.outcome)})`
     : outcome;
