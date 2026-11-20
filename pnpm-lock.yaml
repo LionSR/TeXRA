@@ -96,9 +96,6 @@ catalogs:
     safe-stable-stringify:
       specifier: ^3.0.1
       version: 3.0.1
-    tar:
-      specifier: ^7.5.23
-      version: 7.5.23
     turndown:
       specifier: ^7.2.5
       version: 7.2.5
@@ -191,9 +188,6 @@ importers:
       oxlint:
         specifier: 1.94.0
         version: 1.94.0
-      tar:
-        specifier: 'catalog:'
-        version: 7.5.23
       typescript:
         specifier: 'catalog:'
         version: '@typescript/typescript6@6.0.2'
@@ -632,9 +626,6 @@ importers:
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7
-      tar:
-        specifier: 'catalog:'
-        version: 7.5.23
       which:
         specifier: 'catalog:'
         version: 7.0.0

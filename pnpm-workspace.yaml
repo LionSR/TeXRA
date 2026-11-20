@@ -37,7 +37,6 @@ catalog:
   pretty-bytes: '7.2.0'
   quickjs-emscripten-core: '0.32.0'
   safe-stable-stringify: '^3.0.1'
-  tar: '^7.5.23'
   turndown: '^7.2.5'
   turndown-plugin-gfm: '^1.0.2'
   typescript: 'npm:@typescript/typescript6@^6.0.2'
