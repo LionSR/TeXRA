@@ -29,6 +29,7 @@ import { openResume } from '@agent/runtime/resumeRun';
 import { RunCall } from '@agent/runtime/RunCall';
 import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runOwnership';
+import { logFailure } from '@logger/effectLog';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   runEndErrorMessage,
@@ -80,6 +81,8 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
  * under its stored configuration, one cycle, on the session's registry.
  * Refused when its rows cannot continue.
  */
+const CHANNEL = 'childLaunch';
+
 const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   runId: RunId,
   parentId: RunId,
@@ -136,10 +139,10 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
       ? Effect.void
       : runs.stop(runId, 'released').pipe(
           Effect.catchCause((cause) =>
-            Effect.logWarning(
+            logFailure(
+              CHANNEL,
               `Subagent ${runId}: its release was not recorded`,
-            ).pipe(
-              Effect.annotateLogs({ data: cause }),
+            )(cause).pipe(
               Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
             ),
           ),

@@ -43,6 +43,7 @@ import {
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
+  logFailure,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 import { activationView, replayTrace } from '@texra-ai/harness/host';
@@ -73,6 +74,8 @@ import {
   type TaskRecordsFailed,
 } from './protocol';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
+
+const CHANNEL = 'serviceSession';
 
 const isRpcClientError = (
   error: unknown,
@@ -125,7 +128,7 @@ export const serviceFileWrite =
         Effect.logWarning(
           `Writing ${path} in this window's process, where an edit of it by a task in the TeXRA service is not seen: ${away.message}`,
         ).pipe(
-          withLogChannel('serviceSession'),
+          withLogChannel(CHANNEL),
           Effect.andThen(writeFileIfUnchanged(path, contents, expected)),
         ),
       ),
@@ -319,9 +322,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         Cause.hasInterruptsOnly(cause)
           ? Stream.empty
           : Stream.fromEffect(
-              Effect.logWarning(
+              logFailure(
+                CHANNEL,
                 `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
-              ).pipe(Effect.annotateLogs({ data: cause })),
+              )(cause),
             ).pipe(Stream.drain),
       ),
     ),
@@ -355,10 +359,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       Effect.catch((error) =>
         Predicate.isTagged(error, 'TaskFailed')
           ? Effect.fail(runFailure(error.message))
-          : Effect.logWarning(
+          : logFailure(
+              CHANNEL,
               `The TeXRA service stopped before task ${runId} ended`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
+            )(error).pipe(
               Effect.andThen(link.state.get),
               // Why the link is away, or offline when it has not heard yet.
               Effect.flatMap((state) =>

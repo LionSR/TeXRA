@@ -16,6 +16,7 @@ import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/definition';
+import { optionalInput } from './core/inputSchema';
 
 const EditInputSchema = Schema.Struct({
   path: Schema.String.annotate({
@@ -27,10 +28,10 @@ const EditInputSchema = Schema.Struct({
   new_str: Schema.String.annotate({
     description: 'Replacement text to write in place of old_str.',
   }),
-  replace_all: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'Replace every occurrence instead of requiring one unique match.',
-  }),
+  replace_all: optionalInput(
+    Schema.Boolean,
+    'Replace every occurrence instead of requiring one unique match.',
+  ),
 });
 
 type EditInput = typeof EditInputSchema.Type;

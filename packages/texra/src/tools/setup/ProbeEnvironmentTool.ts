@@ -23,6 +23,7 @@ import {
   defineTool,
   Secrets,
   withLogChannel,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import { probeLatexTools } from '@latex/latexToolchain';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
@@ -101,10 +102,10 @@ export const getChatGptSubscriptionStatus = Effect.fn(
 
 const CHANNEL = 'Setup Credentials';
 const ProbeEnvironmentInputSchema = Schema.Struct({
-  tool: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'If provided, re-checks just this one tool on PATH (e.g. "pdflatex") and answers in one line. Otherwise returns the full JSON report.',
-  }),
+  tool: optionalInput(
+    Schema.String,
+    'If provided, re-checks just this one tool on PATH (e.g. "pdflatex") and answers in one line. Otherwise returns the full JSON report.',
+  ),
 });
 
 type ProbeInput = typeof ProbeEnvironmentInputSchema.Type;

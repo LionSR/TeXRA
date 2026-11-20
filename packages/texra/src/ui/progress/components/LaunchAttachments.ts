@@ -14,7 +14,10 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { designTokens } from '@ui/styles';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  dropTargetStyles,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -24,16 +27,13 @@ import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 export class LaunchAttachments extends LitElement {
   static override styles = [
     designTokens,
+    dropTargetStyles,
     css`
       :host {
         display: block;
       }
       .drop {
         border-radius: var(--border-radius-large);
-      }
-      .drop.is-drag-active {
-        outline: 2px dashed var(--wa-color-focus);
-        outline-offset: -2px;
       }
       .files {
         display: flex;

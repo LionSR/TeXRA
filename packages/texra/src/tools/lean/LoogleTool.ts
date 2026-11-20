@@ -251,7 +251,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
 
   const totalHits = results.reduce((sum, r) => sum + r.hits.length, 0);
   const allFailed = results.every(({ result }) => result.status === 'error');
-  const counted = formatResultCount(queries.length, 'query', 'queries');
+  const counted = formatResultCount(queries.length, 'query');
   let summary: string;
   if (totalHits > 0) {
     summary = `${formatResultCount(totalHits, 'result')} across ${counted}`;

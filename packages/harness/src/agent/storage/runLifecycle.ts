@@ -8,6 +8,7 @@ import stableStringify from 'safe-stable-stringify';
 import { Inbox } from '@agent/followUp/Inbox';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
+import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
@@ -209,6 +210,8 @@ type EndServices = SessionLog | Inbox | RunHistory;
 
 /** The caller's {@link EndServices}, for the end's transaction job. Picked
  *  when asked: the inbox's module and this one import each other. */
+const CHANNEL = 'agentRunLifecycle';
+
 const endServices = Effect.suspend(() =>
   Effect.map(
     Effect.context<EndServices>(),
@@ -247,9 +250,10 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
   const inbox = yield* Inbox;
   const undelivered = (why: string, error?: Error) =>
     Effect.as(
-      Effect.logWarning(
+      logFailure(
+        CHANNEL,
         `Run ${runId}: its report was not delivered; ${why}. The report stays on the run.`,
-      ).pipe(Effect.annotateLogs({ data: error })),
+      )(error),
       [],
     );
   const input = yield* Effect.result(inbox.read(runId));

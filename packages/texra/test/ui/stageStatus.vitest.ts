@@ -7,7 +7,7 @@ describe('stageStatus', () => {
   // the stage it had open: its header reads as the run reads, not running.
   it('reads an open stage of an interrupted run as interrupted', () => {
     const status = stageStatus(
-      { outcome: null },
+      { end: null },
       { holder: 'none', outcome: null, position: 'running' },
     );
     expect(status.key).toBe('interrupted');

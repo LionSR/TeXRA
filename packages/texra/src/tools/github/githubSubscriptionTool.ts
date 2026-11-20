@@ -30,8 +30,9 @@ import {
   defineTool,
   type ToolResult,
   Secrets,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { formatResultCount, type RunId } from '@texra-ai/harness/schemas';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -125,10 +126,10 @@ const GitHubSubscriptionInputSchema = Schema.Union([
      * Working directory for `find_current` to resolve the current branch's PR.
      * Defaults to the agent's working directory.
      */
-    working_directory: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-      description:
-        "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
-    }),
+    working_directory: optionalInput(
+      Schema.String,
+      "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
+    ),
   }),
 ]);
 
@@ -321,7 +322,7 @@ const execList = Effect.fn('GitHubSubscriptionTool.list')(function* (
   }
   return executed(
     bound.map((path) => `- ${path}`).join('\n'),
-    `${bound.length} active subscription(s).`,
+    `${formatResultCount(bound.length, 'active subscription')}.`,
   );
 });
 

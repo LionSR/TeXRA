@@ -9,7 +9,10 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
+import {
+  buildOpeningSystemPrompt,
+  stepInstructions,
+} from '@agent/prompt/PromptBuilder';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -78,6 +81,13 @@ describe('PromptBuilder', () => {
         expect(system).toContain('<tool_use_instructions>');
         // `Shell:` in `<workspace_info>` names the user's shell, not a tool.
         expect(system).not.toMatch(/bash tool|glob\/grep|read_file/);
+        // Nor what not to write with a file tool it does not have.
+        const { sections } = stepInstructions([], [], {
+          offered: ['executions', 'plan'],
+          isChild: true,
+          config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
+        });
+        expect(sections['tool-call']).not.toMatch(/markdown files/);
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

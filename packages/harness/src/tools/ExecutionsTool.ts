@@ -45,7 +45,7 @@ import { readCompletedRunConversation } from '@agent/storage/completedRunArchive
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { getPathSegments } from '@utils/core/pathCore';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { formatCount, splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -143,7 +143,7 @@ interface SizedEntry {
  */
 function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
   return entries.map(({ isDirectory, size, path }) => {
-    const bytes = `${size.toLocaleString('en-US')} bytes`;
+    const bytes = `${formatCount(size)} bytes`;
     return `${(isDirectory ? '<dir>' : bytes).padStart(8)}  ${path}`;
   });
 }

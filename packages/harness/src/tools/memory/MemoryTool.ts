@@ -35,7 +35,7 @@ import {
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { formatCount, splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/definition';
@@ -74,7 +74,7 @@ function formatListingRow(
 ): string {
   const display = toDisplayPath(storagePath);
   return [
-    `${size.toLocaleString('en-US')} bytes`,
+    `${formatCount(size)} bytes`,
     new Date(mtime).toISOString(),
     meta ? formatAttribution(meta) : '-',
     meta?.pinned ? `${display} [pinned]` : display,

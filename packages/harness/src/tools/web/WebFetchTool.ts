@@ -18,9 +18,11 @@ import {
   toFetchToolError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
+import { formatCount } from '@utils/text/stringUtils';
 import type { LookupFunction } from 'node:net';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
@@ -38,10 +40,10 @@ const WebFetchInputSchema = Schema.Struct({
       { message: 'URL must use HTTP or HTTPS protocol' },
     ),
   ).annotate({ description: 'Public HTTP or HTTPS URL to fetch.' }),
-  prompt: Schema.optional(Schema.NullOr(Schema.NonEmptyString)).annotate({
-    description:
-      'Optional note on what you need from the page, echoed above the fetched text as a reminder; nothing extracts for you.',
-  }),
+  prompt: optionalInput(
+    Schema.NonEmptyString,
+    'Optional note on what you need from the page, echoed above the fetched text as a reminder; nothing extracts for you.',
+  ),
 });
 
 type WebFetchInput = typeof WebFetchInputSchema.Type;
@@ -197,7 +199,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
         // Permanent: not retried.
         return yield* new ToolError(
-          `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes.`,
+          `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${formatCount(MAX_CONTENT_BYTES)} bytes.`,
         );
       }
 
@@ -230,7 +232,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           if (total > MAX_CONTENT_BYTES) {
             return Effect.fail(
               new ToolError(
-                `Failed to fetch ${url}: Response too large (exceeds ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes maximum).`,
+                `Failed to fetch ${url}: Response too large (exceeds ${formatCount(MAX_CONTENT_BYTES)} bytes maximum).`,
               ),
             );
           }

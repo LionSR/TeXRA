@@ -182,14 +182,18 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
   },
 });
 
-const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).\nFor math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
+const FIND_TEX_SOURCES = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).`;
+
+const MATH_IN_REPLIES = `For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
 
 /**
  * Tools that need no setup and that no dashboard card lists: review
  * annotations and the PDF viewer (each offered where the host serves it),
  * and the user-question dialog. Its
- * prompt section, at every step that offers a tool, finds the TeX sources, says how
- * replies write math, and names the configured default bibliography.
+ * prompt section, at every step that offers a tool, says how replies write
+ * math and names the configured default bibliography; how to find the TeX
+ * sources and read the bibliography is said only to a step offered a tool
+ * that does it.
  */
 const core = (
   editors: EditorRegistry,
@@ -198,15 +202,23 @@ const core = (
   ...definePlugin<EditorHost>({
     id: 'core',
     tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
-    // The section finds sources with bash and writes math for a rendered
-    // reply: a run that writes a document, with no tool offered, gets none
-    // of it (`$$\\begin{align}` inside a .tex file does not compile).
+    // The section writes math for a rendered reply: a run that writes a
+    // document, with no tool offered, gets none of it (`$$\\begin{align}`
+    // inside a .tex file does not compile).
     prompt: ({ config, offered }) => {
       if (offered.length === 0) return '';
+      const offers = (...names: string[]) =>
+        names.some((name) => offered.includes(name));
       const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
-      return bibPath
-        ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
-        : TEX_INSTRUCTIONS;
+      return [
+        ...(offers('bash') ? [FIND_TEX_SOURCES] : []),
+        MATH_IN_REPLIES,
+        ...(bibPath
+          ? [
+              `The default bibliography file is ${bibPath}.${offers('grep', 'read_file', 'bash') ? ' You can grep or read this file to search for citations and references.' : ''}`,
+            ]
+          : []),
+      ].join('\n');
     },
     // The editor's PDF viewer, where `open_pdf` is offered while one is
     // attached; the host's Comments UI, for the one host that has one,

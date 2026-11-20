@@ -10,6 +10,7 @@ import {
 import {
   Secrets,
   Settings,
+  logFailure,
   withLogChannel,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
@@ -147,9 +148,10 @@ export class SubscriptionUsageService {
     return Effect.matchCauseEffect(key, {
       onFailure: Effect.fn('onFailure')({ self: this }, function* (cause) {
         const error = Cause.squash(cause);
-        yield* Effect.logWarning(
+        yield* logFailure(
+          CHANNEL,
           `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
-        ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
+        )(error);
         return yield* this.unavailable(provider, 'request_failed');
       }),
       // One lookup per key at a time, served from the cache while it is warm.

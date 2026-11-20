@@ -117,11 +117,9 @@ export {
 // outside its process runtime: before it is built, or after it is gone.
 export { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 // The harness's log output: where its entries go (the console until a sink
-// is set), how an entry reads, and a line written straight to the sink.
+// is set) and a line written straight to the sink; how an entry reads as
+// text is on `./schemas`.
 export {
-  entryChannel,
-  entryMessage,
-  LOG_CHANNEL,
   setLogSink,
   writeLogLine,
   type LogEntry,

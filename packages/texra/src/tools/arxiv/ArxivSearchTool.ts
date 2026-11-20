@@ -25,6 +25,7 @@ import {
   executed,
   ToolError,
   defineTool,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 
@@ -120,12 +121,10 @@ const ArxivSearchInputSchema = Schema.Struct({
     'all',
     'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
   ),
-  categories: Schema.optional(
-    Schema.NullOr(Schema.Array(ArxivCategorySchema)),
-  ).annotate({
-    description:
-      'Optional arXiv category filters, exactly as arXiv spells them, such as "math.NT", "cs.AI" or "quant-ph". A paper matches when it is in all of them.',
-  }),
+  categories: optionalInput(
+    Schema.Array(ArxivCategorySchema),
+    'Optional arXiv category filters, exactly as arXiv spells them, such as "math.NT", "cs.AI" or "quant-ph". A paper matches when it is in all of them.',
+  ),
   maxResults: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThan(0)).check(
       Schema.isLessThanOrEqualTo(MAX_RESULTS),
@@ -138,12 +137,8 @@ const ArxivSearchInputSchema = Schema.Struct({
     0,
     'Zero-based result offset for pagination.',
   ),
-  sortBy: Schema.optional(Schema.NullOr(SortBySchema)).annotate({
-    description: 'arXiv sort field to use.',
-  }),
-  sortOrder: Schema.optional(Schema.NullOr(SortOrderSchema)).annotate({
-    description: 'Sort direction for results.',
-  }),
+  sortBy: optionalInput(SortBySchema, 'arXiv sort field to use.'),
+  sortOrder: optionalInput(SortOrderSchema, 'Sort direction for results.'),
 });
 
 type ArxivSearchInput = typeof ArxivSearchInputSchema.Type;

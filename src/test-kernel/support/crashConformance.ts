@@ -133,7 +133,9 @@ const payload = (row: Row) => decodeFields(json(row).payload);
 const followUpOf = Schema.decodeUnknownSync(
   Schema.Struct({
     followUpId: Schema.String,
-    control: Schema.optional(Schema.Struct({ kind: Schema.String })),
+    content: Schema.Struct({
+      control: Schema.optional(Schema.Struct({ kind: Schema.String })),
+    }),
   }),
 );
 const configOf = Schema.decodeUnknownSync(
@@ -231,7 +233,10 @@ function outcome(rows: readonly Row[], root: string) {
     // Each request the user made, queued once and consumed once; and the
     // model the run ends on.
     requests: of(root, 'followup.queued').flatMap((row) => {
-      const { followUpId, control } = followUpOf(json(row));
+      const {
+        followUpId,
+        content: { control },
+      } = followUpOf(json(row));
       if (control === undefined) return [];
       const consumed = of(root, 'followup.consumed').filter(
         (done) => json(done).followUpId === followUpId,
@@ -439,7 +444,7 @@ const requested = (rows: readonly Row[], root: string, kind: string) =>
     (row) =>
       row.run === root &&
       row.type === 'followup.queued' &&
-      followUpOf(json(row)).control?.kind === kind,
+      followUpOf(json(row)).content.control?.kind === kind,
   );
 
 /**

@@ -51,10 +51,13 @@ two halves:
    `styles/messageHeaderStyles.ts` groups the author and short timestamp,
    with Copy and collapse controls at the trailing edge. User, assistant and
    error messages share this geometry; the full date remains in the time tooltip.
-6. **Editor adapter:** `wa/monacoTheme.ts` maps the host's resolved palette to
-   Monaco. `wa/monacoOptions.ts` and `styles/monacoStyles.ts` supply shared
-   typography, gutter geometry, and widget styling for source and diff surfaces.
-   Do not override Monaco colors with a second CSS palette.
+6. **Canvas widgets:** xterm.js and Monaco draw on a canvas and cannot read a
+   CSS token. `wa/cssTokenColor.ts` is the one reading of a token as the colour
+   the host paints; `wa/xtermTheme.ts` and the desktop's
+   `packages/desktop/src/renderer/monacoTheme.ts` build their themes from it.
+   The desktop's `monacoOptions.ts` and `monacoStyles.ts` beside it supply
+   typography, gutter geometry and widget styling for source and diff
+   surfaces. Do not override Monaco colors with a second CSS palette.
 
 ## The controls
 
@@ -88,6 +91,9 @@ two halves:
   `.input-plain` is the only other skin. It is a search that owns a whole
   band (the command palette), with no box and no halo.
 
+- **Drop targets.** A file drop zone takes `.is-drag-active` from its
+  `FileDropController` and the one skin in `dropTargetStyles`
+  (`styles/commonViewStyles.ts`); it never paints its own drag outline.
 - **Few choices, all visible.** Two to four mutually exclusive options are a
   segmented `wa-radio-group` (`appearance="button"`), with the selected
   option's one-line description under it. A dropdown is for long or dynamic

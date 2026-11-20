@@ -48,6 +48,7 @@ import { writeTextStderr, writeTextStderrAndWait } from '../platform/logSinks';
 import { readCliPluginPins, runOutcomeExitCode } from './terminalStatus';
 import {
   CliUsageError,
+  isQuiet,
   launchApproval,
   launchApprovalNotice,
   projectApprovalPolicy,
@@ -240,7 +241,7 @@ export const executeCliConfig: (
       what: string,
       cause: string,
     ): Effect.Effect<void> =>
-      runContext.quietLogs
+      isQuiet(runContext)
         ? Effect.void
         : writeTextStderrAndWait(`[warn] [cli.shutdown] ${what}: ${cause}`);
     // Whether a shutdown reached this run: its finalization then reads
