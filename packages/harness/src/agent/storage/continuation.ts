@@ -4,6 +4,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { programOf, type ResumeRefusal, type RunId } from '@shared/schemas';
 import { continuesFromRows } from '@shared/session/runActions';
 import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
+import type { RunRows } from '@shared/session/runRowsShape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'Continuation';
@@ -62,7 +63,21 @@ export const deriveContinuation = Effect.fn('deriveContinuation')(function* (
     );
     return decision;
   }
-  const facts = read.success;
+  return continuationOf(read.success);
+});
+
+/**
+ * {@link deriveContinuation} over facts already read: a point its loop
+ * opened, a run that is finished, or one waiting for a plugin. A resume,
+ * which has read the run's facts for its own decision, asks this rather
+ * than reading them again.
+ */
+export function continuationOf(
+  facts: RunRows | null,
+): Extract<
+  ContinuationDecision,
+  { readonly kind: 'checkpoint' | 'finished' | 'pluginUnavailable' }
+> {
   if (
     facts?.start == null ||
     !continuesFromRows({
@@ -77,13 +92,13 @@ export const deriveContinuation = Effect.fn('deriveContinuation')(function* (
     if (unavailable !== undefined)
       return { kind: 'pluginUnavailable', plugin, cause: unavailable };
   return { kind: 'checkpoint' };
-});
+}
 
 /**
  * {@link deriveContinuation} as a refusal, or null when the run may
  * continue; facts that could not be read right now fail. The one decider
- * for a run with no loop here: a resume, a message to a stored run and a
- * recovered child all ask it.
+ * for a run with no loop here: a message to a stored run and a recovered
+ * child ask it, and a resume asks {@link continuationOf} over its own read.
  */
 export const checkpointRefusal = Effect.fn('checkpointRefusal')(function* (
   runId: RunId,

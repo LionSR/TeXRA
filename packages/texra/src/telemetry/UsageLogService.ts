@@ -502,10 +502,7 @@ export const usageLogLayer = (
        *  recorded it (the run's session roots), read for consent now and again
        *  at flush. */
       const log = Effect.fn('UsageLogService.log')(function* (
-        entry: Omit<
-          UsageLogEntry,
-          'timestamp' | 'extensionVersion' | 'editorType'
-        >,
+        entry: Parameters<UsageLog['Service']['log']>[0],
         config: ConfigProvider,
         env?: Readonly<Record<string, string | undefined>>,
       ) {

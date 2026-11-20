@@ -31,7 +31,7 @@ function isCliPipeClosureError(error: unknown): boolean {
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 
-export function installCliPipeErrorHandlers(): void {
+function installCliPipeErrorHandlers(): void {
   for (const key of ['stdout', 'stderr'] as const) {
     process[key].on('error', (error) => {
       if (isCliPipeClosureError(error)) {

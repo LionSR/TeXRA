@@ -20,6 +20,7 @@ import {
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
+import { formatBytes } from '@ui/copy/format';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
 
@@ -336,12 +337,14 @@ function continueNote(outcome: RunOutcome | null): string {
   return outcome === 'completed' ? 'can continue' : 'can resume';
 }
 
-/** How a listed run stands in `texra history`'s text: its outcome, else
- *  none, and whether `texra resume` continues it. */
+/** How a listed run stands in `texra history`'s text and the `/resume`
+ *  form: its outcome in the word every host gives it, else none, and
+ *  whether `texra resume` continues it. */
 export function historyStanding(
   entry: Pick<CliHistoryEntry, 'outcome' | 'continuation'>,
 ): string {
-  const outcome = entry.outcome ?? 'no outcome';
+  const outcome =
+    entry.outcome === null ? 'No outcome' : runStatusLabel(entry.outcome);
   return entry.continuation.kind === 'continues'
     ? `${outcome} (${continueNote(entry.outcome)})`
     : outcome;
@@ -400,7 +403,8 @@ export function formatCliHistoryDetailsText(
       )
     : '{}';
   const files = details.files.map(
-    (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
+    (file) =>
+      `${file.isDirectory ? '<dir>' : formatBytes(file.size)}\t${file.path}`,
   );
   lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
   lines.push(...(files.length ? files : ['(none)']));

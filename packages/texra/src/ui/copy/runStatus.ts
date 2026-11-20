@@ -159,6 +159,10 @@ export function toolRowLook(
   return model.status && TOOL_STATUS[model.status];
 }
 
+/** How an auto-approval grant on a run paints, in every host: a caution
+ *  while it is on, whichever kind of work it approves. */
+export const RUN_GRANT_TONE = 'warning' satisfies RunTone;
+
 /** The tone of a context compaction's activity row; its words are the
  *  row's label (`COMPACTION_ACTIVITY_LABEL`). */
 export const COMPACTION_ACTIVITY_TONE: Readonly<

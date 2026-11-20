@@ -839,7 +839,7 @@ function relink(u: Update, run: RunView, previousParentId: RunId | null): void {
 function applyEvent(
   u: Update,
   event: DisplayRow,
-  read: 'listing' | 'aggregate' | 'all',
+  read: Extract<SessionViewInput, { _tag: 'event' }>['read'],
 ): boolean {
   // Where a lifecycle row leaves its run, which moves its transcript too.
   const standing = standingAfter(event);

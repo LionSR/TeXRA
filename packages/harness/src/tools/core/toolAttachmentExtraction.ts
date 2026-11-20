@@ -9,10 +9,7 @@ import {
   ToolResultSchema,
 } from '@shared/schemas';
 
-/**
- * Result from extracting attachments from a tool result.
- * Simple interface - no runtime validation needed for this structure.
- */
+/** Result from extracting attachments from a tool result. */
 interface ExtractedToolAttachments {
   /** Extracted file attachments with binary data. */
   attachments: readonly ToolFileAttachment[];
@@ -44,8 +41,7 @@ export function extractToolAttachments(
   // missing before it reaches `formatToolResultAsText`.
   const parsed = Schema.decodeUnknownSync(ToolResultSchema)(result);
 
-  // No binary-bearing field exists on the error branch of the schema
-  // (output/edits/files are all `Schema.Undefined` there).
+  // The error branch of the schema declares no binary-bearing field.
   if (parsed.status === 'error')
     return { attachments: [], facts: [], sanitizedResult: parsed };
 

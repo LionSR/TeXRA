@@ -134,9 +134,11 @@ segment should carry the route too is a narrow-terminal layout decision.
 
 ## 12. Two tone drifts between web and terminal (found 2026-11-17)
 
-- A run grant: the terminal paints `superYolo` in its error colour
-  (`statusBarDisplay.ts`), the web's `runGrantChips.ts` every grant as a
-  warning.
+- A run grant: taken on 2026-11-20. `RUN_GRANT_TONE`
+  (`packages/texra/src/ui/copy/runStatus.ts`) is the one tone of a grant
+  that is on, a warning whatever it approves: the web's `runGrantChips.ts`
+  and the terminal's status bar both read it, so the bar no longer paints
+  `superYolo` in its error colour.
 - A user-feedback rejection: taken on 2026-11-19. `toolRowLook`
   (`packages/texra/src/ui/copy/runStatus.ts`) decides how a tool card paints
   its state for both hosts: the user's feedback outranks the call's status,

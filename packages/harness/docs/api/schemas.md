@@ -1047,7 +1047,7 @@ const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; reado
 ## GLM_CODING_PLAN_SETTING
 
 ```ts
-const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; TeXRA shows the plan's quota and reports its limits as plan limits. Ignored while a custom GLM endpoint is set."; }
+const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; the plan's quota is shown and its limits are reported as plan limits. Ignored while a custom GLM endpoint is set."; }
 ```
 
 ## GLM_ENDPOINT_SETTING
@@ -2419,7 +2419,7 @@ interface SettingRow<A = unknown> extends StateKey<A> {
   /** Human-readable description, shared across every host that renders it. */
   readonly description: string;
   /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
-  readonly configTarget?: 'global' | 'workspace' | 'local';
+  readonly configTarget?: ConfigTarget;
   /**
    * A `global` row a project file may still switch off: its project value
    * counts unless it is `true`, so a repository can opt out (telemetry) but

@@ -19,10 +19,7 @@ export function primaryAgentError(err: unknown): unknown {
 
 /** A run's failure as its `run.end` row records it ({@link failureIn}). */
 export function classifyAgentError(err: unknown): NonNullable<RunEnd['error']> {
-  const failure = failureIn(primaryAgentError(err));
-  return failure.kind === 'model'
-    ? { kind: 'model', failure: failure.failure }
-    : failure;
+  return failureIn(primaryAgentError(err));
 }
 
 /** How a host presents an agent error: an instruction, or a plain error. */

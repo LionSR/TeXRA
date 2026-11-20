@@ -23,6 +23,7 @@ import {
   type RunRecord,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
+import type { ModelMessagePayload } from '@shared/session/historyTurns';
 import { controlOf, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { dispatchFactsFor } from '../run/tools';
@@ -75,7 +76,10 @@ export function appendRow(
   options: {
     readonly sourceResponse?: string | null;
     readonly input?: RunInput;
-    readonly reason?: 'blank-continuation' | 'final-tool';
+    readonly reason?: Extract<
+      ModelMessagePayload,
+      { kind: 'append' }
+    >['reason'];
   } = {},
 ): RunHistoryDraft {
   const { sourceResponse = null, input, reason } = options;
