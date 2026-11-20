@@ -120,7 +120,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
-    mode: 'foreground' | 'background',
+    mode: ResolvedTurn['mode'],
   ) {
     const { turn, parameters } = yield* responseParameters(
       config,
