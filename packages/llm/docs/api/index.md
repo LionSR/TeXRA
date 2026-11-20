@@ -1190,8 +1190,7 @@ interface RouteFacts {
   readonly mode?: ReasoningMode;
   /**
    * The plans a request may bill: preferred, signed in or keyed, and not
-   * declined. The GLM Coding Plan is absent when a dashboard GLM endpoint
-   * outranks its path.
+   * declined.
    */
   readonly plans: readonly PlanRoute[];
   /**
@@ -1200,11 +1199,13 @@ interface RouteFacts {
    */
   readonly chatgptContextWindow: number | undefined;
   /**
-   * The host's endpoint per provider id: a dashboard URL, or the default of
-   * the region the provider's toggle picks. A provider absent here takes its
-   * plugin's default.
+   * The endpoint the user set per provider id. A provider absent here takes
+   * its plugin's default.
    */
   readonly endpoints: Readonly<Partial<Record<string, string>>>;
+  /** The regional providers whose China platform the user picked; every
+   *  other regional provider takes its international one. */
+  readonly chinaPlatforms: readonly RegionalProviderId[];
 }
 ```
 
