@@ -21,7 +21,6 @@ import { customElement, property } from 'lit/decorators.js';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
-import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import type {
   PluginRow,
@@ -38,6 +37,7 @@ import {
   pluginRowSwitchable,
   pluginRowTrust,
   pluginRowUsedBy,
+  toolDependencyStatusLabel,
 } from '@ui/copy/plugins';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
