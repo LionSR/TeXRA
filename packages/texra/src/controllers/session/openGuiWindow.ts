@@ -45,7 +45,7 @@ import {
   AppSignals,
   ToolRegistry,
   type StorageFs,
-  type WorkspaceFs,
+  WorkspaceFs,
 } from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
@@ -116,6 +116,7 @@ import {
 import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
+  hostFailure,
   openLink,
   type HostCommandFailure,
 } from '@texra/controllers/session/hostCallFailure';
@@ -180,8 +181,8 @@ type HostVerb<A> = Effect.Effect<
  * -- the order, the guard, the refusal wording -- is in the one body below.
  */
 export interface SharedHostCommandBindings {
-  /** Open a file of this session's workspace, at a line when one is named. */
-  openPath(file: string, line: number | undefined): HostVerb<void>;
+  /** Open a file by its absolute path, at a line when one is named. */
+  openPath(absolutePath: string, line: number | undefined): HostVerb<void>;
   /** The host's native dialog that opens several files, behind the
    *  launcher's file picker. */
   readonly openFiles: OpenFilesDialog;
@@ -520,9 +521,19 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           if (paths === null) return yield* new Cancelled();
           return { kind: 'files', paths } satisfies HostOutcome;
         }
-        case 'openFile':
-          yield* bindings.openPath(request.path, request.line);
+        case 'openFile': {
+          // An absolute path opens as is; a relative one names a file of
+          // this session's workspace.
+          const absolutePath = path.isAbsolute(request.path)
+            ? request.path
+            : yield* (yield* WorkspaceFs)
+                .resolve(request.path)
+                .pipe(
+                  Effect.mapError((cause) => hostFailure('openFile', cause)),
+                );
+          yield* bindings.openPath(absolutePath, request.line);
           return done;
+        }
         case 'workspaceFile':
           return yield* answerWorkspaceFile(request.action, runs.writeFile);
         case 'openLabel': {
