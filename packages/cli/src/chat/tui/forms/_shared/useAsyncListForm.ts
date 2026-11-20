@@ -4,6 +4,7 @@
 // while it has nothing actionable to show.
 
 import type { EventEmitter } from 'node:events';
+import { setImmediate } from 'node:timers';
 import { useInput, useStdin, type Key, type StdinProps } from 'ink';
 import { Cause, Effect, Fiber, FiberHandle } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -93,26 +94,17 @@ function shouldCloseAsyncListFormOnInput(args: {
  * own passive effect on the commit that shows it: React runs a component's
  * passive effects after its children's, so the list has subscribed by then.
  *
+ * Each held key is replayed in a task of its own, queued after the one in
+ * which React's scheduler runs the passive effects of the commit the previous
+ * key caused, so a key acts on what the one before it opened (a `/config`
+ * category, the next form), as it would have, typed after the list showed.
+ *
  * Esc is not held (the form closes on it while nothing listens), nor is a
  * Ctrl chord: the App's handler already acted on it, and a replay would act
  * twice. A replayed key reaches every listener again; with a form open the
  * App's handler takes only Ctrl chords, and this hook's own handler sees the
  * key as typed on the loaded list.
  */
-/**
- * The emitter every `useInput` listener subscribes to. Ink's stdin context
- * carries it at runtime (its own `useInput` reads it there); the public type
- * leaves it out, and Ink offers no other way to hand a key to its listeners.
- */
-function useInkInputEvents(): EventEmitter {
-  const stdin: StdinProps & { readonly internal_eventEmitter?: EventEmitter } =
-    useStdin();
-  if (stdin.internal_eventEmitter === undefined) {
-    throw new Error("Ink's stdin context no longer carries its input events.");
-  }
-  return stdin.internal_eventEmitter;
-}
-
 function useHeldListInput(args: {
   readonly listShown: boolean;
   readonly failed: boolean;
@@ -120,7 +112,16 @@ function useHeldListInput(args: {
   readonly listening: () => boolean;
   readonly hold: (input: string, key: Key) => void;
 } {
-  const inputEvents = useInkInputEvents();
+  // The emitter every `useInput` listener subscribes to. Ink's stdin context
+  // carries it at runtime (its own `useInput` reads it there); the public
+  // type leaves it out, and Ink offers no other way to hand a key to its
+  // listeners.
+  const stdin: StdinProps & { readonly internal_eventEmitter?: EventEmitter } =
+    useStdin();
+  const inputEvents = stdin.internal_eventEmitter;
+  if (inputEvents === undefined) {
+    throw new Error("Ink's stdin context no longer carries its input events.");
+  }
   const listening = useRef(false);
   const held = useRef<string[]>([]);
   // The chunk Ink is dispatching: `useInput` hands its handler the parsed
@@ -144,9 +145,16 @@ function useHeldListInput(args: {
       return;
     }
     listening.current = true;
-    for (const chunk of held.current.splice(0)) {
+    // The rest of the queue outlives this form if a key closes it: the keys
+    // typed after that one belong to whatever it opened.
+    const queue = held.current.splice(0);
+    const replayNext = (): void => {
+      const chunk = queue.shift();
+      if (chunk === undefined) return;
       inputEvents.emit('input', chunk);
-    }
+      setImmediate(replayNext);
+    };
+    replayNext();
   }, [args.listShown, args.failed, inputEvents]);
 
   return {
