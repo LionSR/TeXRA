@@ -263,6 +263,7 @@ export type {
   ToolCardHandle,
 } from '@agent/trace/AgentTrace';
 export type { LogOptions } from '@shared/schemas/logPayload';
+export type { ProcessOutputStream } from '@shared/schemas/traceEvent';
 export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 export type {
   ModelRetryGate,

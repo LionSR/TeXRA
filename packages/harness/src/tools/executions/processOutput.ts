@@ -12,6 +12,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   ToolError,
+  type ProcessOutputStream,
   type RunId,
   type SessionRow,
 } from '@shared/schemas';
@@ -60,7 +61,7 @@ function projectProcessOutput(
   const lines: string[] = [];
   let chars = 0;
   let pendingText = '';
-  let pendingStream: 'stdout' | 'stderr' | undefined;
+  let pendingStream: ProcessOutputStream | undefined;
 
   const emitText = (text: string, stderr: boolean): void => {
     // A trailing break terminates the last line rather than opening an empty

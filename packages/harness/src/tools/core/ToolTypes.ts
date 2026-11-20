@@ -124,7 +124,7 @@ export interface ITool<E = Error, R = never> {
    * re-runs a call only when that saved word and the current one both say
    * `'safe'`.
    */
-  readonly replay?: 'safe' | 'unsafe';
+  readonly replay?: DispatchFacts['replay'];
   /**
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the

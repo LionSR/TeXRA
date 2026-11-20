@@ -88,7 +88,7 @@ interface AgentTrace {
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
   /** A chunk of a process run's output, on its stream (`process.output`). */
-  output(stream: 'stdout' | 'stderr', text: string): void;
+  output(stream: ProcessOutputStream, text: string): void;
 
   // ─── Stages and stream handles ──────────────────────────────────────
   /**
@@ -1170,7 +1170,7 @@ interface ITool<E = Error, R = never> {
    * re-runs a call only when that saved word and the current one both say
    * `'safe'`.
    */
-  readonly replay?: 'safe' | 'unsafe';
+  readonly replay?: DispatchFacts['replay'];
   /**
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
@@ -1736,6 +1736,14 @@ interface ProcessChildLaunch {
 }
 ```
 
+## ProcessOutputStream
+
+The stream a process run's output chunk came from.
+
+```ts
+type ProcessOutputStream = typeof ProcessOutputStreamSchema.Type;
+```
+
 ## ProcessPluginLayer
 
 A plugin's process-lifetime services (its `processLayer`): built
@@ -2060,12 +2068,12 @@ interface RootedFileSystem extends FileSystem.FileSystem {
 ## RoutePolicy
 
 One route a binding's calls go through: its key, and the scope of the
-failures that cool it (llm's `ModelError.scope`).
+failures that cool it.
 
 ```ts
 interface RoutePolicy {
   readonly key: string;
-  readonly scope: 'model' | 'route';
+  readonly scope: NonNullable<ModelError['scope']>;
 }
 ```
 
