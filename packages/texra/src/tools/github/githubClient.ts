@@ -10,7 +10,11 @@
 import { Clock, Duration, Effect, Predicate, Schema } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { scopedClient, Secrets } from '@texra-ai/harness/plugins';
+import {
+  isTransientHttpStatus,
+  scopedClient,
+  Secrets,
+} from '@texra-ai/harness/plugins';
 
 import { getGitHubToken } from './githubAuth';
 import { isAuthFailureStatus, type SecretsFailed } from '@texra-ai/llm';
@@ -46,7 +50,8 @@ export class GitHubRateLimitError extends Schema.TaggedError<GitHubRateLimitErro
   }
 }
 
-/** An HTTP status that won't recover on retry (404, 410, 422). */
+/** An HTTP status that won't recover on retry: a 4xx other than an auth
+ *  failure, 408 or 429 (`isTransientHttpStatus`). */
 export class GitHubPermanentError extends Schema.TaggedError<GitHubPermanentError>()(
   'GitHubPermanentError',
   {
@@ -56,7 +61,7 @@ export class GitHubPermanentError extends Schema.TaggedError<GitHubPermanentErro
 ) {}
 
 /** A failure that may clear on retry: a transport error, a timeout, or a
- *  status no other class claims (5xx, unclassified 4xx). */
+ *  transient status (408, 429 without rate-limit headers, 5xx). */
 class GitHubTransientError extends Schema.TaggedError<GitHubTransientError>()(
   'GitHubTransientError',
   {
@@ -143,13 +148,10 @@ function classifyFailure(
       message: `GitHub returned ${status}: ${message}`,
     });
   }
-  // Permanent HTTP failures — retrying won't help; surface immediately so
-  // callers can halt rather than burning a slot for 24 h.
-  if (
-    status === StatusCodes.NOT_FOUND ||
-    status === StatusCodes.GONE ||
-    status === StatusCodes.UNPROCESSABLE_ENTITY
-  ) {
+  // Permanent HTTP failures (every status the general HTTP rule does not
+  // call transient): retrying won't help; surface immediately so callers can
+  // halt rather than burning a slot for 24 h.
+  if (!isTransientHttpStatus(status)) {
     return new GitHubPermanentError({
       status,
       message: `GitHub returned ${status}: ${message}`,
