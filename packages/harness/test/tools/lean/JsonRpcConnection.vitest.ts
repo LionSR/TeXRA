@@ -31,7 +31,7 @@ const makePair = Effect.gen(function* () {
   const serverOut = new PassThrough(); // what the server writes (i.e. the client reads)
   const clientBytes = yield* Queue.make<Uint8Array>();
   const notifications = yield* Queue.make<readonly [string, unknown]>();
-  const connection = yield* makeJsonRpcConnection({
+  const { connection } = yield* makeJsonRpcConnection({
     input: chunksOf(serverOut),
     output: Sink.forEach((chunk: Uint8Array) =>
       Queue.offer(clientBytes, chunk),

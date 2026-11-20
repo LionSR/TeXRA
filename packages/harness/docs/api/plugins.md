@@ -679,6 +679,18 @@ class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
 )
 ```
 
+## connectJsonRpcProcess
+
+A JSON-RPC connection over a child process's stdio, closed with the
+owner's reason once the process has exited. The exit can precede the end
+of its output, so the close waits for stdout and stderr to be read: a
+reply already written still reaches its request instead of failing as
+disposed. `exited` holds the exit from then on.
+
+```ts
+const connectJsonRpcProcess: (handle: ChildProcessHandle, options: JsonRpcProcessOptions) => Effect<{ connection: JsonRpcConnection; exited: Deferred<Result<ExitCode, PlatformError>, never>; }, never, Scope>
+```
+
 ## countLineChanges
 
 Added/removed line counts applied over hunks a caller already holds.
@@ -1243,8 +1255,6 @@ interface JsonRpcConnection {
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
   readonly close: (reason: string) => Effect.Effect<void>;
-  /** Completes once the reader has dispatched the input's last message. */
-  readonly inputEnded: Effect.Effect<void>;
 }
 ```
 
@@ -1293,6 +1303,34 @@ interface JsonRpcConnectionOptions {
     id: number,
     method: string,
   ): { readonly method: string; readonly params: unknown } | undefined;
+}
+```
+
+## JsonRpcProcessOptions
+
+How a child process's connection is made and what its end says.
+
+```ts
+interface JsonRpcProcessOptions extends Omit<
+  JsonRpcConnectionOptions,
+  'input' | 'output'
+> {
+  /** How much of the end of the process's stderr `end` is given. */
+  readonly stderrTailLimit: number;
+  /** Each piece of stderr as it arrives. */
+  readonly onStderr?: (text: string) => Effect.Effect<void>;
+  /** How long the close waits, after the exit, for the process's output to
+   *  be read: a grandchild may hold the pipes open. */
+  readonly drainTimeout: Duration.Input;
+  /** The reason the connection closes with, from the process's exit (a
+   *  failure when a signal ended it) and the end of its stderr. */
+  readonly end: (
+    exit: Result.Result<
+      ChildProcessSpawner.ExitCode,
+      PlatformError.PlatformError
+    >,
+    stderrTail: string,
+  ) => Effect.Effect<string>;
 }
 ```
 
@@ -1352,7 +1390,7 @@ type LogOptions =
 ## makeJsonRpcConnection
 
 ```ts
-const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<JsonRpcConnection, never, Scope>
+const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<{ connection: JsonRpcConnection; inputEnded: Effect<void, never, never>; }, never, Scope>
 ```
 
 ## MemoryPinResult

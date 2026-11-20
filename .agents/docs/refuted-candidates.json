@@ -344,7 +344,7 @@
     {
       "id": "ARXIV-download-retry-cause-pair",
       "candidate": "the arXiv download's catchCause/failCause wrapper around Effect.retry replaced by a retry on the typed error, and autoIndent folded into a null formatter",
-      "why": "The cause pair is deliberate: retrying on the typed error alone would drop a cleanup defect that rides beside the failure. autoIndent and a null formatter are two facts: a null formatter with indenting asked for tells the user formatting is off. Found as I8 (round 2, I-latex-documents.md); refused in #14786; re-checked by round 3's V (S9). The tar extraction as a stream stays open as unproven and small.",
+      "why": "The cause pair is deliberate: retrying on the typed error alone would drop a cleanup defect that rides beside the failure. autoIndent and a null formatter are two facts: a null formatter with indenting asked for tells the user formatting is off. Found as I8 (round 2, I-latex-documents.md); refused in #14786; re-checked by round 3's V (S9). The tar extraction is a stream since: effect's Tar decoder, with the path checks in extractTarFile.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#f-small-items-this-session",
       "symbols": [
         {

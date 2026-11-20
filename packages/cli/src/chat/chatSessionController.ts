@@ -380,21 +380,17 @@ export function createChatSessionController(
         const launched = session.claimLaunch();
         if (launched === undefined) return Effect.succeed(false);
         const runId = generateRunId();
-        let resolved = false;
         let held = false;
         // A configuration that cannot be prepared has no launch to show its
-        // failure: it shows here, below the instruction it was typed for.
-        const prepared = Effect.gen(function* () {
-          const config = yield* resolveConfig;
-          resolved = true;
-          adoptRunConfig(config);
-          return yield* decodeLaunchConfig(config);
-        }).pipe(
-          Effect.tapError((error) =>
-            Effect.sync(() => {
-              if (!resolved) appendLocalUserTranscript(shownInstruction);
-            }).pipe(Effect.andThen(showFailure(error))),
+        // failure: it shows here, below the instruction it was typed for,
+        // which a configuration that never resolved has not shown yet.
+        const prepared = resolveConfig.pipe(
+          Effect.tapError(() =>
+            Effect.sync(() => appendLocalUserTranscript(shownInstruction)),
           ),
+          Effect.tap((config) => Effect.sync(() => adoptRunConfig(config))),
+          Effect.flatMap(decodeLaunchConfig),
+          Effect.tapError(showFailure),
         );
         const launch = Effect.gen(function* () {
           const config = yield* prepared;

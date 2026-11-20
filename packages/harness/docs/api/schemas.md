@@ -882,9 +882,8 @@ function formatClippedList(
 
 Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
 
-Backed by `pretty-ms` with whole-second flooring,
-but renders zero / negative / sub-second durations as `0s` (used by elapsed
-displays that start from zero, e.g. goal timings and server uptime).
+Floored to whole seconds; zero, negative and sub-second durations read
+`0s` (elapsed displays start from zero: goal timings, server uptime).
 
 ```ts
 function formatCompactDuration(durationMs: number): string
@@ -944,7 +943,7 @@ function formatIssuesForDiagnostics(
 
 A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
 worded: two units at most, whole minutes, and no minutes once it reaches a
-day (`pretty-ms` would back-fill a zero hour with them, `1d 58m`); under a
+day (two units alone would back-fill a zero hour with them, `1d 58m`); under a
 minute is `less than a minute`.
 
 ```ts
