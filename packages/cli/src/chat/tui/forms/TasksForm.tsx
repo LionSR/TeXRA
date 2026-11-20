@@ -16,13 +16,8 @@ import {
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
-import {
-  BORDERED_PANEL_CHROME_COLUMNS,
-  BorderedPanel,
-} from '@cli/tui/ui/BorderedPanel';
-import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
 import {
   approvalDecisionDelivery,
   type SurfaceDecision,
@@ -45,6 +40,7 @@ import {
 import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';
+import { FormFrame, formFrameContentWidth } from './_shared/FormFrame';
 import { AsyncListForm } from './_shared/ListForm';
 import type { TuiRequest } from '../state/approvalQueue';
 
@@ -272,9 +268,11 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     if (!composing && !answering && isEscapeInput(input, key)) props.onClose();
   });
 
-  const width = Math.max(20, (columns ?? 80) - BORDERED_PANEL_CHROME_COLUMNS);
   const lines = level.run
-    ? transcriptToLines(level.run.transcript.rows, width)
+    ? transcriptToLines(
+        level.run.transcript.rows,
+        formFrameContentWidth(columns),
+      )
     : [];
   const budget = Math.max(
     3,
@@ -287,24 +285,17 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   return (
     <Box flexDirection="column">
-      <BorderedPanel
-        color={level.ended ? COLOR_ERROR : COLOR_HINT}
+      <FormFrame
+        color={level.ended ? COLOR_ERROR : undefined}
         title={joinFacts([task.label, status])}
-        footer={
-          <KeyHints
-            // While a request is on screen its card owns Esc (reject or
-            // skip); detaching waits until it is answered.
-            hints={[
-              ...(composing
-                ? [{ key: 'Enter', action: 'send a follow-up' }]
-                : []),
-              ...(answering
-                ? []
-                : [{ key: 'Esc', action: 'detach (the task keeps running)' }]),
-            ]}
-            confirmCancel={false}
-          />
-        }
+        // While a request is on screen its card owns Esc (reject or skip);
+        // detaching waits until it is answered.
+        hints={[
+          ...(composing ? [{ key: 'Enter', action: 'send a follow-up' }] : []),
+          ...(answering
+            ? []
+            : [{ key: 'Esc', action: 'detach (the task keeps running)' }]),
+        ]}
       >
         {lines.slice(-budget).map((line, index) => (
           <Text key={index}>{line}</Text>
@@ -345,7 +336,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           </Box>
         )}
         {notice && <Text color={COLOR_WARNING}>{notice}</Text>}
-      </BorderedPanel>
+      </FormFrame>
       {presentable && pending && (
         <ApprovalModal
           // A fresh modal per request: a question's answers or a card's

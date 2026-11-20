@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
+  CLOSE_HINT,
+  CLOSE_HINTS,
   ENTER_OR_ESC_CLOSE_HINTS,
   KeyHints,
   type KeyHint,
@@ -69,14 +71,14 @@ interface ListFormProps<T> {
   readonly compactDetail?: ReactNode;
   readonly compactVisibleItems?: number;
   readonly emptyMessage?: string;
-  readonly emptyShowCloseHint?: boolean;
   /** The empty picker also closes on Enter; its footer says so. */
   readonly emptyClosesOnEnter?: boolean;
   readonly selectMarginTop?: number;
   readonly action: string;
   /** Form-specific keys shown between the select and `Esc` hints. */
   readonly extraHints?: readonly KeyHint[];
-  readonly escapeAction?: string;
+  /** What Esc does, `Esc close` by default. */
+  readonly escape?: KeyHint;
   readonly onSelect: (value: T) => void;
   readonly onCancel: () => void;
 }
@@ -88,15 +90,12 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
       <FormFrame
         color={COLOR_WARNING}
         title={props.title}
-        showCloseHint={!props.emptyClosesOnEnter && props.emptyShowCloseHint}
+        hints={
+          props.emptyClosesOnEnter ? ENTER_OR_ESC_CLOSE_HINTS : CLOSE_HINTS
+        }
       >
         <Text>{props.emptyMessage}</Text>
         {props.detail}
-        {props.emptyClosesOnEnter ? (
-          <Box marginTop={1}>
-            <KeyHints hints={ENTER_OR_ESC_CLOSE_HINTS} confirmCancel={false} />
-          </Box>
-        ) : null}
       </FormFrame>
     );
   }
@@ -105,14 +104,11 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     key: listFormShortcutLabel(props.items.length),
     action: props.action,
   };
-  const escape = { key: 'Esc', action: props.escapeAction ?? 'close' };
+  const escape = props.escape ?? CLOSE_HINT;
 
   if (isCompactRows(props.availableRows, COMPACT_FORM_MAX_ROWS)) {
     return (
-      <FormFrame
-        title={props.compactTitle ?? props.title}
-        showCloseHint={false}
-      >
+      <FormFrame title={props.compactTitle ?? props.title} hints={[]}>
         {props.compactDetail}
         <Select
           items={props.items}
@@ -141,7 +137,10 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     selectMarginTop: props.selectMarginTop,
   });
   return (
-    <FormFrame title={props.title} showCloseHint={false}>
+    <FormFrame
+      title={props.title}
+      hints={[NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape]}
+    >
       {props.description}
       {props.detail}
       <Box
@@ -155,12 +154,6 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
           showOverflow={selectWindow.showOverflow}
           onSelect={props.onSelect}
           onCancel={props.onCancel}
-        />
-      </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape]}
-          confirmCancel={false}
         />
       </Box>
     </FormFrame>
@@ -191,7 +184,6 @@ interface AsyncListFormProps<TData, TValue> extends Omit<
   readonly isEmpty?: (data: TData) => boolean;
   /** `false` renders a read-only list where selecting closes the form. */
   readonly selectable?: boolean;
-  readonly showTransientCloseHint?: boolean;
   /** The active row's value, one of `items` (Select matches by identity). */
   readonly activeValueFor?: (data: TData) => TValue | undefined;
   readonly detailFor?: (data: TData) => ReactNode;
@@ -218,7 +210,6 @@ export function AsyncListForm<TData, TValue>(
     items: itemsFor,
     isEmpty,
     selectable = true,
-    showTransientCloseHint,
     activeValueFor,
     detailFor,
     detailRowsFor,
@@ -245,7 +236,6 @@ export function AsyncListForm<TData, TValue>(
     error,
     title: listProps.title,
     loadingLabel,
-    showCloseHint: showTransientCloseHint,
   });
   if (transient) return transient;
   if (data === undefined) {

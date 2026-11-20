@@ -1,5 +1,6 @@
 import { Text } from 'ink';
 
+import { CANCEL_HINT } from '@cli/tui/ui/KeyHints';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_COPY } from '@ui/copy/delegationApproval';
@@ -53,7 +54,7 @@ export function ApprovalPolicyForm(
       }
       selectMarginTop={1}
       action="select"
-      escapeAction="cancel"
+      escape={CANCEL_HINT}
       onSelect={props.onSelect}
       onCancel={props.onCancel}
     />

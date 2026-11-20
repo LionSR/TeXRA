@@ -158,7 +158,6 @@ export function PluginsListForm(
         return data.mcpWarnings.length > 0 ? 1 : 0;
       }}
       action={pending ? PLUGINS_TUI.chooseAction : PLUGINS_TUI.switchAction}
-      showTransientCloseHint={false}
       onSelect={(value, { data, update }) => {
         if (pending) {
           pending.answer(value === TRUST);
