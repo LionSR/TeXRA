@@ -22,6 +22,7 @@ import {
   Exit,
   Layer,
   RcMap,
+  Result,
   Scope,
   Stream,
   SubscriptionRef,
@@ -30,6 +31,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { PluginContext } from '@platform/processRuntime';
 import {
   entriesOf,
@@ -236,6 +238,9 @@ export const follow = (
     );
   }).pipe(Effect.forkScoped, Effect.asVoid);
 
+/** A plugin that has no layer of a kind holds none. */
+const NOTHING = Effect.void;
+
 /** Reads no plugins, from configuration or installed. */
 export const NONE = Effect.succeed({ plugins: [], warnings: [] });
 
@@ -266,9 +271,39 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   const builtIn = shared.builtIn.filter(({ plugin }) =>
     switchedOn.has(plugin.id),
   );
-  // The native plugins the read loaded, as the table accepted them.
-  const natives = [...table.entries.values()].filter(
-    ({ id }) => table.revisionOf(id) !== 'builtin',
+  // The native plugins the read loaded, as the table accepted them, each
+  // with its layers up for the step before the step offers anything of it:
+  // one whose layer fails to build, or dies building, is withheld with its
+  // reason, and the step and the other plugins go on.
+  const built = yield* Effect.forEach(
+    [...table.entries.values()].filter(
+      ({ id }) => table.revisionOf(id) !== 'builtin',
+    ),
+    (plugin) => {
+      const key = layerKey(plugin.id, table.revisionOf(plugin.id));
+      return Effect.all(
+        [
+          plugin.processLayer ? RcMap.get(shared.processLayers, key) : NOTHING,
+          plugin.sessionLayer ? RcMap.get(session.layers, key) : NOTHING,
+        ],
+        { concurrency: 'unbounded', discard: true },
+      ).pipe(
+        Effect.catchDefect(Effect.fail),
+        Effect.result,
+        Effect.map((up) => ({ plugin, up })),
+      );
+    },
+    { concurrency: 'unbounded' },
+  );
+  const natives = built.flatMap(({ plugin, up }) =>
+    Result.isSuccess(up) ? [plugin] : [],
+  );
+  const layerFailures = built.flatMap(({ plugin, up }) =>
+    Result.isFailure(up)
+      ? [
+          `The native code of ${plugin.id} is not loaded: its services did not come up: ${ensureError(up.failure).message}`,
+        ]
+      : [],
   );
   const plugins = [...builtIn.map(({ plugin }) => plugin), ...natives];
   // Each installed plugin's servers, started with this project's
@@ -338,7 +373,12 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
     installed: new Map(
       read.installed.plugins.map(({ id, source }) => [id, source]),
     ),
-    warnings: [...read.warnings, ...failures, ...merged.warnings],
+    warnings: [
+      ...read.warnings,
+      ...layerFailures,
+      ...failures,
+      ...merged.warnings,
+    ],
     services: (used) =>
       Effect.reduce(
         plugins.filter(({ id }) => used.has(id)),

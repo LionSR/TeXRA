@@ -33,7 +33,7 @@ import { pathToFileURL } from 'node:url';
 
 // Third-party imports
 import * as effect from 'effect';
-import { Effect, Layer, Predicate, Result, Schema } from 'effect';
+import { Cause, Effect, Layer, Predicate, Result, Schema } from 'effect';
 
 // Local imports
 import type { NativeEntry } from '@common/plugins/nativeEntry';
@@ -41,9 +41,12 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { installedPluginId } from '@common/plugins/pluginTrust';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import type { ToolResult } from '@shared/schemas';
+import { findStorageRefusal } from '@shared/session/runHistory';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { Plugin } from '@tools/plugins';
 import * as plugins from '@tools/pluginSurface';
+import { thirdPartyCommand, withinDeadline } from '@tools/thirdPartyTool';
 import type { NativePlugin } from '@tools/toolTable';
 import { sha256Hex } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -141,31 +144,63 @@ const contributions = (plugin: Plugin): readonly string[] => [
 
 /**
  * The tool `tool` of the native plugin `name` as the host runs it: the
- * same gate an MCP server's tool gets. Each call is a command the loop's
- * one guard puts to the session's approval policy (no standing grant but
- * the delegated-work one answers it, and the prompt names no directory),
- * every call is a barrier, and it is not a script function. Kept from the
- * definition: its contract, whether a repeat is safe, the host capability
- * it needs and the paths it writes, which only narrow what it may do.
+ * gate and deadline an MCP server's tool gets (`@tools/thirdPartyTool`).
+ * Each call is a command the loop's one guard puts to the session's
+ * approval policy, every call is a barrier, and it is not a script
+ * function. Kept from the definition: its contract, whether a repeat is
+ * safe, the host capability it needs and the paths it writes, which only
+ * narrow what it may do. However its call ends but by interruption or a
+ * store refusal (an error result, a failure, a defect, a throw outside any
+ * effect, the deadline), it ends that call alone, with an error that names
+ * the plugin.
  */
 const hostRun = (
   name: string,
   tool: ITool<Error, PluginToolServices>,
 ): ITool<Error, PluginToolServices> => {
   const { definition, replay, hostCapability, guard } = tool;
+  const what = `${definition.name} of plugin ${name}`;
+  const failed = (message: string): ToolResult => ({
+    status: 'error',
+    error: `${what} failed: ${message}`,
+  });
   return {
     definition,
     ...(replay !== undefined && { replay }),
     ...(hostCapability !== undefined && { hostCapability }),
     guard: {
       ...(guard?.writes !== undefined && { writes: guard.writes }),
-      command: {
-        text: (input: unknown) =>
+      command: thirdPartyCommand(
+        (input: unknown) =>
           `plugin ${name} ${definition.name} ${JSON.stringify(input)}`,
-        cwd: 'unknown',
-      },
+      ),
     },
-    call: (input) => tool.call(input),
+    call: (input) =>
+      withinDeadline(
+        Effect.suspend(() => tool.call(input)).pipe(
+          Effect.map((result) =>
+            result.status === 'error'
+              ? { ...result, ...failed(result.error) }
+              : result,
+          ),
+          Effect.catch((error) =>
+            findStorageRefusal(Cause.fail(error)) === undefined
+              ? Effect.succeed(failed(error.message))
+              : Effect.fail(error),
+          ),
+          Effect.catchDefect((defect) =>
+            findStorageRefusal(Cause.die(defect)) === undefined
+              ? Effect.as(
+                  Effect.logWarning(
+                    `${what} crashed: ${ensureError(defect).message}`,
+                  ).pipe(withLogChannel('plugins')),
+                  failed(ensureError(defect).message),
+                )
+              : Effect.die(defect),
+          ),
+        ),
+        what,
+      ),
   };
 };
 

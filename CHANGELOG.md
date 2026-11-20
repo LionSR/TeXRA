@@ -1413,7 +1413,9 @@ All notable changes to this project will be documented in this file.
   them ends. A version that fails to load is left out with its reason, and
   nothing else changes. Each call of a native tool asks under your
   approval policy, as an MCP server's tool does, whatever the module
-  declares. Agents get a `plugin_manager` tool to list, install, enable,
+  declares, and stops after 60 seconds as one does; a call that fails or
+  crashes fails alone, naming the plugin, and a version whose services do
+  not come up is left out with its reason. Agents get a `plugin_manager` tool to list, install, enable,
   disable and remove plugins themselves, each change but a listing or an
   install asked of you first. Trusting a plugin is asked as its own card in
   the progress view and the terminal, naming the plugin, its version, its

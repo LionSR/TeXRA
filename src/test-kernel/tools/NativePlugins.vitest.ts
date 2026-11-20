@@ -22,6 +22,11 @@
  *   person asked, first or again after a person disabled it;
  * - a native tool that declares no approval runs without asking, where an
  *   MCP server's tool would ask;
+ * - a native tool that fails, dies, throws (in its body or outside any
+ *   effect) or never finishes takes the run or the process down, or fails
+ *   with a message that does not name its plugin;
+ * - a revision whose process layer fails to build fails the step, or is
+ *   offered with no reason given;
  * - a native plugin that runs on another native plugin is withheld when its
  *   name sorts before that plugin's.
  */
@@ -55,16 +60,30 @@ import { toolTable, withNatives } from '@tools/toolTable';
 
 import { autoDecideRequests } from '../agent/progressTestUtils';
 
+/** What a revision of the test plugin adds to its echo, or how it fails. */
+interface EntryOptions {
+  /** It throws as the module is imported. */
+  readonly broken?: boolean;
+  /** Its process layer fails to build. */
+  readonly layerFails?: boolean;
+  /** Tools that fail, die, throw and never finish, and a fiber in its
+   *  process layer that dies once the layer is up. */
+  readonly faulty?: boolean;
+}
+
 /** The plugin's `harness.mjs` at `revision`: a tool that answers the
- *  revision its process layer serves, waiting for `../release` when asked.
- *  `broken` throws as the module is imported. */
-const entry = (revision: string, broken = false) => `// A test plugin.
+ *  revision its process layer serves, waiting for `../release` when asked,
+ *  with what `options` add. */
+const entry = (
+  revision: string,
+  options: EntryOptions = {},
+) => `// A test plugin.
 export const description = 'Echoes the revision that serves the call.';
-export const provides = ['tool:native_echo', 'processLayer'];
+export const provides = ['tool:native_echo', ${options.faulty ? `'tool:native_fail', 'tool:native_die', 'tool:native_throw', 'tool:native_raw', 'tool:native_hang', ` : ''}'processLayer'];
 
 import { appendFileSync, existsSync } from 'node:fs';
 
-${broken ? `throw new Error('${revision} is broken');` : ''}
+${options.broken ? `throw new Error('${revision} is broken');` : ''}
 const note = (line) =>
   appendFileSync(new URL('../events.log', import.meta.url), line + '\\n');
 const released = new URL('../release', import.meta.url);
@@ -73,10 +92,18 @@ export default ({ plugins, effect }) => {
   const { Context, Effect, Layer, Schema } = effect;
   class Revision extends Context.Service()('echoes/Revision') {}
   const layer = Layer.effect(Revision)(
-    Effect.acquireRelease(
+    ${
+      options.layerFails
+        ? `Effect.fail(new Error('${revision} cannot reach its service'))`
+        : `Effect.acquireRelease(
       Effect.sync(() => (note('acquire ${revision}'), '${revision}')),
       () => Effect.sync(() => note('release ${revision}')),
-    ),
+    )${
+      options.faulty
+        ? `.pipe(Effect.tap(() => Effect.forkScoped(Effect.die(new Error('the daemon died')))))`
+        : ''
+    }`
+    },
   );
   const native_echo = plugins.defineTool({
     name: 'native_echo',
@@ -100,9 +127,31 @@ export default ({ plugins, effect }) => {
         return 'echo ' + revision;
       }),
   });
+  const faulty = (name, execute) =>
+    plugins.defineTool({ name, description: name, schema: Schema.Struct({}), execute });
   return plugins.definePlugin({
     id: 'echoes',
-    tools: [native_echo],
+    tools: [
+      native_echo,
+      ${
+        options.faulty
+          ? `faulty('native_fail', () => Effect.fail(new Error('a typed failure'))),
+      faulty('native_die', () => Effect.die(new Error('a defect'))),
+      faulty('native_throw', () => {
+        throw new Error('a synchronous throw');
+      }),
+      {
+        definition: { name: 'native_raw', description: 'native_raw', parameters: { type: 'object', properties: {} } },
+        call: () => {
+          throw new Error('a throw outside any effect');
+        },
+      },
+      faulty('native_hang', () =>
+        Effect.sync(() => note('hang')).pipe(Effect.andThen(Effect.never)),
+      ),`
+          : ''
+      }
+    ],
     processLayer: { layer },
   });
 };
@@ -117,13 +166,13 @@ const pluginFiles = Effect.map(FakeHost, (host) => {
     events: path.join(base, 'events.log'),
     release: path.join(base, 'release'),
     /** Write the plugin's manifest and its entry at `revision`. */
-    write: (revision: string, broken = false) => {
+    write: (revision: string, options?: EntryOptions) => {
       mkdirSync(path.join(dir, '.claude-plugin'), { recursive: true });
       writeFileSync(
         path.join(dir, '.claude-plugin', 'plugin.json'),
         JSON.stringify({ name: 'echoes', version: '1.0.0' }),
       );
-      writeFileSync(path.join(dir, 'harness.mjs'), entry(revision, broken));
+      writeFileSync(path.join(dir, 'harness.mjs'), entry(revision, options));
     },
   };
 });
@@ -148,6 +197,22 @@ const toolOutputs = (storage: string, runId: RunId): string[] =>
     if (row.data.includes('Installed echoes')) return ['installed'];
     if (row.data.includes('Enabled echoes')) return ['enabled'];
     return ['other'];
+  });
+
+/** The errors `runId`'s failed tool calls answered, in commit order. */
+const toolErrors = (storage: string, runId: RunId): string[] =>
+  storedRows(storage).flatMap((row) => {
+    if (row.run !== runId || row.type !== 'tool.result') return [];
+    const { error } = Schema.decodeUnknownSync(
+      Schema.fromJsonString(
+        Schema.Struct({
+          payload: Schema.Struct({
+            result: Schema.Struct({ error: Schema.optional(Schema.String) }),
+          }),
+        }),
+      ),
+    )(row.data).payload.result;
+    return error === undefined ? [] : [error];
   });
 
 /** Start the native run on `session` with `task` after the install
@@ -189,14 +254,14 @@ const start = Effect.fn('start')(function* (
  *  it as the CLI's `plugin enable` does, and let the call finish. */
 const replaceDuringCall = Effect.fn('replaceDuringCall')(function* (
   revision: string,
-  broken = false,
+  options?: EntryOptions,
 ) {
   const { roots } = yield* FakeHost;
   const files = yield* pluginFiles;
   yield* until(roots.storage, () =>
     eventsIn(files.events).includes('call rev1'),
   );
-  files.write(revision, broken);
+  files.write(revision, options);
   yield* InstalledPlugins.enable('echoes', roots, () => Effect.succeed(true));
   writeFileSync(files.release, '');
 });
@@ -316,6 +381,68 @@ describe(
           );
 
           it.effect(
+            'fails only the call of a tool that fails, dies, throws or never finishes, naming the plugin',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const files = yield* pluginFiles;
+                files.write('rev1', { faulty: true });
+                yield* setTestApprovalPolicy('yolo');
+                const session = yield* persistentTestSession();
+                const { runId } = yield* start(
+                  session,
+                  'Call native_fail, native_die, native_throw, native_raw, native_hang in turn.',
+                  false,
+                );
+                // The call that never finishes runs into its deadline.
+                yield* until(roots.storage, () =>
+                  eventsIn(files.events).includes('hang'),
+                );
+                yield* TestClock.adjust('61 seconds');
+                yield* until(
+                  roots.storage,
+                  waitingAfter(runId, 1, roots.storage),
+                );
+                expect(toolErrors(roots.storage, runId)).toStrictEqual([
+                  'native_fail of plugin echoes failed: a typed failure',
+                  'native_die of plugin echoes failed: a defect',
+                  'native_throw of plugin echoes failed: a synchronous throw',
+                  'native_raw of plugin echoes failed: a throw outside any effect',
+                  'native_hang of plugin echoes did not finish within 60s.',
+                ]);
+                // The run went on, on the layer whose fiber died.
+                expect(toolOutputs(roots.storage, runId).at(-1)).toBe(
+                  'echo rev1',
+                );
+                expect(answersOf(roots.storage, runId)).toStrictEqual([
+                  'Echoed.',
+                ]);
+              }),
+          );
+
+          it.effect(
+            'withholds a revision whose process layer fails to build, with its reason',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const files = yield* pluginFiles;
+                files.write('rev1', { layerFails: true });
+                const session = yield* persistentTestSession();
+                const { runId } = yield* start(session, 'Echo once.');
+                const [answer] = answersOf(roots.storage, runId);
+                expect(answer).toContain('native_echo is not offered');
+                expect(answer).toContain('plugin_manager');
+                expect(
+                  storedRows(roots.storage).some(
+                    (row) =>
+                      row.run === runId &&
+                      row.data.includes('rev1 cannot reach its service'),
+                  ),
+                ).toBe(true);
+              }),
+          );
+
+          it.effect(
             'finishes a running call on its revision and serves the next step from the new one',
             () =>
               Effect.gen(function* () {
@@ -368,7 +495,7 @@ describe(
                   'Echo twice, the first waiting.',
                   false,
                 );
-                yield* replaceDuringCall('rev3', true);
+                yield* replaceDuringCall('rev3', { broken: true });
                 yield* until(
                   roots.storage,
                   waitingAfter(runId, 1, roots.storage),

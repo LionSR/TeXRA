@@ -426,8 +426,8 @@ function goldenTurn(
     );
   }
   // The native plugin run: it installs and enables the plugin its task
-  // names, then calls its `native_echo` once, or twice with the first
-  // waiting for its release. A step that does not
+  // names, calls the tools its task names in turn, then calls its
+  // `native_echo` once, or twice with the first waiting for its release. A step that does not
   // offer `native_echo` says so, with what it does offer.
   if (system.includes('GOLDEN-NATIVE')) {
     const offered = turn.tools.map(({ name }) => name);
@@ -443,12 +443,19 @@ function goldenTurn(
           ? [call('plugin_manager', { command: 'enable', name: 'echoes' })]
           : text('Enabled again.'),
       );
+    // `Call native_a, native_b in turn.`: each named tool once, offered or
+    // not, then the echo.
+    const named =
+      /Call (native_\w+(?:, native_\w+)*) in turn\./.exec(said)?.[1] ?? null;
     const steps = [
       () =>
         offered.includes('native_echo')
           ? [call('native_echo', {})]
           : [call('plugin_manager', { command: 'install', source })],
       () => [call('plugin_manager', { command: 'enable', name: 'echoes' })],
+      ...(named === null
+        ? []
+        : named.split(', ').map((name) => () => [call(name, {})])),
       ...(said.includes('Echo twice, the first waiting.')
         ? [echo({ wait: true }), echo({})]
         : [echo({})]),

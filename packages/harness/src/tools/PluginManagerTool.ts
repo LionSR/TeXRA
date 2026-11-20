@@ -299,7 +299,7 @@ export const PluginManagerTool = defineTool({
   // Enabling, disabling and removing ask the person in the body, with what
   // the plugin carries; a listing and an install ask nothing.
   requiresApproval: 'inBody',
-  description: `Manage the plugins you load: list them, install one, and enable, disable or remove one. A plugin is a folder that can carry skills, agents, programs, MCP servers, hooks, and a native module: \`${NATIVE_ENTRY_FILE}\` at its root, which runs inside this process and adds tools, services and a section of your instructions. Each call of a native module's tool asks under the approval policy, as an MCP server's tool does, whatever the tool declares.
+  description: `Manage the plugins you load: list them, install one, and enable, disable or remove one. A plugin is a folder that can carry skills, agents, programs, MCP servers, hooks, and a native module: \`${NATIVE_ENTRY_FILE}\` at its root, which runs inside this process and adds tools, services and a section of your instructions. Each call of a native module's tool asks under the approval policy, as an MCP server's tool does, whatever the tool declares, and is stopped after 60 seconds; a call that fails ends alone, its error naming the plugin.
 
 Commands:
 - \`list\` (the default) answers every installed plugin: whether it is enabled, whether it is trusted as it is now, and what it carries.

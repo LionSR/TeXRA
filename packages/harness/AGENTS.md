@@ -91,8 +91,13 @@ only when a step or a launch reads the table; a change to the install record
 only takes out what no longer loads, so listing, installing or reviewing a
 plugin runs none of its code. The host decides how a native tool runs, not
 its definition: the loader (`hostRun`, `tools/nativePlugins.ts`) gives
-each the gate an MCP server's tool has, so every call asks under the
-session's approval policy through the loop's one guard. Trusting a native
+each the gate and deadline an MCP server's tool has
+(`tools/thirdPartyTool.ts`), so every call asks under the session's
+approval policy through the loop's one guard, and however it ends but by
+interruption it ends that call alone, its error naming the plugin. A step
+brings a native plugin's layers up before it offers anything of it
+(`pinStep`, `tools/sessionTools.ts`); one whose layer fails is withheld
+with its reason. Trusting a native
 module is a person's own answer whatever the policy, and so is enabling
 again one a person trusted and then disabled: `plugin_manager` opens that
 request, a `pluginTrust` request (what the plugin is, where, what it
