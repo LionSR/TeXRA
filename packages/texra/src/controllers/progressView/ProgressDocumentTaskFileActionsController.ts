@@ -115,31 +115,12 @@ export class ProgressDocumentTaskFileActionsController {
       });
     }
     switch (action) {
-      case 'compare': {
-        const fs = yield* FileSystem.FileSystem;
-        for (const [label, side] of [
-          ['Base', base],
-          ['Edited', file],
-        ] as const) {
-          const { absolutePath } = pathToLocationIn(this.deps.workspace, side);
-          const exists = yield* fs
-            .exists(absolutePath)
-            .pipe(
-              Effect.mapError(
-                (cause) => new Rejected({ reason: toErrorMessage(cause) }),
-              ),
-            );
-          if (!exists)
-            return yield* new Rejected({
-              reason: `${label} file not found: ${absolutePath}`,
-            });
-        }
+      case 'compare':
         return yield* this.deps.host.openDiff(
           base,
           file,
           `Compare: ${path.basename(file)} ↔ ${path.basename(base)}`,
         );
-      }
       case 'accept':
         return yield* this.acceptFile(
           file,
