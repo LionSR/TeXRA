@@ -37,7 +37,7 @@ Each item below waits on an open PR that holds its files.
    entry is being rewritten by #15120.
 3. **`FollowUps.release` takes a two-word union read as a boolean**, still
    open in the storage-errors note. Its one caller is `finishRun` in
-   `loop/runLoop.ts`, which #15123 and #15124 both edit.
+   `loop/runLoop.ts`, which #15123 edits.
 4. **`owningCall` reads the facts its callers already hold.** `openResume`,
    `joinOpening` and `closeLeftoverRun` each read the run's facts and then
    call `owningCall`, which reads them again for the parent edge. Passing
