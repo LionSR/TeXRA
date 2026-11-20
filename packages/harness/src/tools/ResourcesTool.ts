@@ -8,8 +8,8 @@
  * same answer.
  */
 // Third-party imports
-import { Clock, Effect, Schema, Struct } from 'effect';
-import { PLAN_ROUTES, type ModelConfig } from '@texra-ai/llm';
+import { Clock, Effect, Option, Result, Schema, Struct } from 'effect';
+import { PLAN_ROUTES, requestRates, type ModelConfig } from '@texra-ai/llm';
 import type { PlanUsageWindow } from '@texra-ai/llm/node';
 
 // Local imports
@@ -17,6 +17,7 @@ import {
   PlanQuotas,
   type PlanQuota,
 } from '@agent/runtime/modelAccess/planQuotas';
+import { CHILD_FIELDS } from '@agent/runtime/delegation/inputFields';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
@@ -30,19 +31,28 @@ import type { SessionView } from '@shared/session/sessionView';
 import { defineTool } from '@tools/core/definition';
 import { formatLocalTime } from '@utils/text/stringUtils';
 
-/** A model's listed prices, USD per million tokens. */
+/** One request's rates, USD per million tokens. */
+const pricesOf = ({
+  inputPrice,
+  outputPrice,
+  cacheDiscountFactor,
+}: ReturnType<typeof requestRates>) => ({
+  input: inputPrice,
+  cachedInput: inputPrice * cacheDiscountFactor,
+  output: outputPrice,
+});
+
+/** A model's listed prices on the standard tier, USD per million tokens:
+ *  its flat rates, and those a prompt above its long-context threshold
+ *  bills at, when it has one. */
 const listedPrices = (config: ModelConfig) => {
-  const { longContextPricing: long } = config;
+  const long = config.longContextPricing?.aboveInputTokens;
   return {
-    input: config.inputPrice,
-    cachedInput: config.inputPrice * config.capabilities.cacheDiscountFactor,
-    output: config.outputPrice,
+    ...pricesOf(requestRates(config, 0)),
     ...(long !== undefined && {
       aboveInputTokens: {
-        tokens: long.aboveInputTokens,
-        input: long.inputPrice,
-        cachedInput: long.inputPrice * long.cacheDiscountFactor,
-        output: long.outputPrice,
+        tokens: long,
+        ...pricesOf(requestRates(config, long + 1)),
       },
     }),
   };
@@ -77,41 +87,67 @@ const windowOf = (window: PlanUsageWindow) => ({
   }),
 });
 
-/** A plan's quota as the tool states it. */
-const quotaOf = (quota: PlanQuota) => {
+/** A plan's windows as one line. */
+const windowsText = (windows: readonly ReturnType<typeof windowOf>[]) =>
+  windows
+    .map(
+      (w) =>
+        `${w.name} ${w.remainingPercent}% left${'resetsAt' in w ? `, resets ${w.resetsAt}` : ''}`,
+    )
+    .join('; ');
+
+/** A plan's quota as the tool states it, and as its line says it; `off`: a
+ *  plan whose endpoint is not asked while it is off. */
+const quotaOf = (quota: PlanQuota | { readonly state: 'off' }) => {
   switch (quota.state) {
-    case 'read':
+    case 'read': {
+      const asOf = formatLocalTime(quota.at);
+      const windows = quota.windows.map(windowOf);
       return {
-        source: 'quota endpoint',
-        asOf: formatLocalTime(quota.at),
-        ...(quota.planName !== undefined && { planName: quota.planName }),
-        windows: quota.windows.map(windowOf),
+        quota: {
+          source: 'quota endpoint',
+          asOf,
+          ...(quota.planName !== undefined && { planName: quota.planName }),
+          windows,
+        },
+        text: `${windowsText(windows)}; from its quota endpoint as of ${asOf}`,
       };
-    case 'failed':
+    }
+    case 'failed': {
+      const asOf = formatLocalTime(quota.at);
       return {
-        source: 'quota endpoint',
-        asOf: formatLocalTime(quota.at),
-        failed: quota.reason,
+        quota: { source: 'quota endpoint', asOf, failed: quota.reason },
+        text: `its quota endpoint failed (${quota.reason}) at ${asOf}`,
       };
-    case 'observed':
+    }
+    case 'observed': {
+      const asOf = formatLocalTime(quota.at);
+      const windows = quota.windows.map(windowOf);
       return {
-        source: 'reply headers',
-        asOf: formatLocalTime(quota.at),
-        windows: quota.windows.map(windowOf),
+        quota: { source: 'reply headers', asOf, windows },
+        text: `${windowsText(windows)}; from its reply headers as of ${asOf}`,
       };
+    }
     case 'unobserved':
-      return {
-        source: 'reply headers',
-        unknown:
-          'No reply on this plan has stated its quota since the process started.',
-      };
+      return unknown(
+        'reply headers',
+        'No reply on this plan has stated its quota since the process started.',
+      );
     case 'unread':
-      return {
-        source: 'none',
-        unknown: 'Nothing this process reads states the quota of this plan.',
-      };
+      return unknown(
+        'none',
+        'Nothing this process reads states the quota of this plan.',
+      );
+    case 'off':
+      return unknown('quota endpoint', 'Not asked while the plan is off.');
   }
 };
+
+/** A quota nothing states, and why. */
+const unknown = (source: string, why: string) => ({
+  quota: { source, unknown: why },
+  text: why,
+});
 
 /** Every plan: whether it carries requests now, and what is known of its
  *  quota. A plan's endpoint is asked only while the plan is on. */
@@ -123,21 +159,22 @@ const plansNow = Effect.fn('resources.plans')(function* (call: RunToolCall) {
     Effect.fnUntraced(function* (plan) {
       const on = route.plans.includes(plan);
       const asksEndpoint = PLAN_ROUTES[plan].credential === 'key';
-      return {
-        plan,
-        on,
-        quota:
-          asksEndpoint && !on
-            ? {
-                source: 'quota endpoint',
-                unknown: 'Not asked while the plan is off.',
-              }
-            : quotaOf(yield* quotas.read(plan, call.env.roots)),
-      };
+      const { quota, text } = quotaOf(
+        asksEndpoint && !on
+          ? { state: 'off' }
+          : yield* quotas.read(plan, call.env.roots),
+      );
+      return { plan: { plan, on, quota }, text };
     }),
     { concurrency: 'unbounded' },
   );
 });
+
+/** The spend cap a child launch's input holds its child to, as the launch
+ *  reads it. */
+const decodeCap = Schema.decodeUnknownOption(
+  Schema.Struct(Struct.pick(CHILD_FIELDS, ['maxCostUsd'])),
+);
 
 /**
  * The spend caps `runId` runs under: each run on its way to the root that a
@@ -167,15 +204,11 @@ const capsOver = Effect.fn('resources.caps')(function* (
     const answered = rows.some(
       (row) => row.type === 'tool.result' && row.payload.logId === card,
     );
-    const cap = Schema.decodeUnknownOption(
-      Schema.Struct({ maxCostUsd: Schema.Finite }),
-    )(intent?.type === 'tool.intent' ? intent.payload.input : undefined);
-    if (!answered && cap._tag === 'Some')
-      caps.push({
-        runId: run.id,
-        maxCostUsd: cap.value.maxCostUsd,
-        spentUsd: run.treeUsage.cost,
-      });
+    const maxCostUsd = Option.getOrUndefined(
+      decodeCap(intent?.type === 'tool.intent' ? intent.payload.input : {}),
+    )?.maxCostUsd;
+    if (!answered && maxCostUsd != null)
+      caps.push({ runId: run.id, maxCostUsd, spentUsd: run.treeUsage.cost });
   }
   return caps;
 });
@@ -195,35 +228,24 @@ const spendNow = Effect.fn('resources.spend')(function* (call: RunToolCall) {
 const text = (now: string, parts: Parts): string => {
   const usd = (n: number) => `$${Number(n.toPrecision(4))}`;
   const lines = [`Now: ${now}`];
-  if (parts.models.ok) {
+  if (Result.isSuccess(parts.models))
     lines.push(
       'Models that can run now (billing; listed USD per million tokens input/cached input/output):',
-      ...parts.models.value.map(
+      ...parts.models.success.map(
         ({ id, billing, listedUsdPerMillionTokens: p }) =>
           `- ${id}: ${billing}; ${p.input}/${p.cachedInput}/${p.output}`,
       ),
     );
-  } else lines.push(`Models: not known (${parts.models.error})`);
-  if (parts.plans.ok) {
-    lines.push('Plans:');
-    for (const { plan, on, quota } of parts.plans.value) {
-      const head = `- ${plan} (${on ? 'on' : 'off'}): `;
-      if ('unknown' in quota) lines.push(`${head}${quota.unknown}`);
-      else if ('failed' in quota)
-        lines.push(
-          `${head}its quota endpoint failed (${quota.failed}) at ${quota.asOf}`,
-        );
-      else
-        lines.push(
-          `${head}${quota.windows
-            .map(
-              (w) =>
-                `${w.name} ${w.remainingPercent}% left${'resetsAt' in w ? `, resets ${w.resetsAt}` : ''}`,
-            )
-            .join('; ')}; from its ${quota.source} as of ${quota.asOf}`,
-        );
-    }
-  } else lines.push(`Plans: not known (${parts.plans.error})`);
+  else lines.push(`Models: not known (${parts.models.failure.message})`);
+  if (Result.isSuccess(parts.plans))
+    lines.push(
+      'Plans:',
+      ...parts.plans.success.map(
+        ({ plan: { plan, on }, text }) =>
+          `- ${plan} (${on ? 'on' : 'off'}): ${text}`,
+      ),
+    );
+  else lines.push(`Plans: not known (${parts.plans.failure.message})`);
   const { spend } = parts;
   lines.push(
     `Spent: this run ${usd(spend.runUsd)}; with the runs it started ${usd(spend.treeUsd)}`,
@@ -237,22 +259,16 @@ const text = (now: string, parts: Parts): string => {
   return lines.join('\n');
 };
 
-/** A part that may fail to read: its value, or why it is not known. */
-type Known<A> =
-  | { readonly ok: true; readonly value: A }
-  | { readonly ok: false; readonly error: string };
-
-const known = <A, E extends Error, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.map((value): Known<A> => ({ ok: true, value })),
-    Effect.catch((error) =>
-      Effect.succeed<Known<A>>({ ok: false, error: error.message }),
-    ),
-  );
-
+/** What the call reads: the models and plans each read or why not. */
 interface Parts {
-  readonly models: Known<Effect.Success<ReturnType<typeof modelsNow>>>;
-  readonly plans: Known<Effect.Success<ReturnType<typeof plansNow>>>;
+  readonly models: Result.Result<
+    Effect.Success<ReturnType<typeof modelsNow>>,
+    Effect.Error<ReturnType<typeof modelsNow>>
+  >;
+  readonly plans: Result.Result<
+    Effect.Success<ReturnType<typeof plansNow>>,
+    Effect.Error<ReturnType<typeof plansNow>>
+  >;
   readonly spend: Effect.Success<ReturnType<typeof spendNow>>;
 }
 
@@ -261,20 +277,20 @@ const runResources = Effect.fn('resources.call')(function* (call: RunToolCall) {
   const now = yield* Clock.currentTimeMillis;
   const parts: Parts = yield* Effect.all(
     {
-      models: known(modelsNow(call)),
-      plans: known(plansNow(call)),
+      models: Effect.result(modelsNow(call)),
+      plans: Effect.result(plansNow(call)),
       spend: spendNow(call),
     },
     { concurrency: 'unbounded' },
   );
   const value = {
     now: formatLocalTime(now),
-    ...(parts.models.ok
-      ? { models: parts.models.value }
-      : { modelsUnknown: parts.models.error }),
-    ...(parts.plans.ok
-      ? { plans: parts.plans.value }
-      : { plansUnknown: parts.plans.error }),
+    ...(Result.isSuccess(parts.models)
+      ? { models: parts.models.success }
+      : { modelsUnknown: parts.models.failure.message }),
+    ...(Result.isSuccess(parts.plans)
+      ? { plans: parts.plans.success.map(({ plan }) => plan) }
+      : { plansUnknown: parts.plans.failure.message }),
     spend: parts.spend,
   };
   return {

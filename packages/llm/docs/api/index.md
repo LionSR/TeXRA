@@ -1107,6 +1107,31 @@ Remote work a provider accepted: enough to observe or cancel it later.
 const RemoteOperationSchema: Struct<{ readonly origin: Struct<{ readonly deployment: Struct<{ readonly endpoint: String; readonly credentialScope: NonEmptyString; }>; readonly requestedModel: NonEmptyString; readonly codecVersion: Int; readonly protocol: Literals<readonly ["openai-responses", "google-interactions"]>; }>; readonly providerResponseId: NonEmptyString; }>
 ```
 
+## requestRates
+
+The rates one request bills at, given its prompt size (input tokens, cached
+tokens included). A model with a documented long-context tier switches its
+whole rate tuple above the threshold; every other model bills flat. With
+`tier`, the service tier's rates are used, and that tier's own long-context
+rates above its threshold; a model without that tier is an error.
+
+- `@example` ```typescript
+  requestRates('openai/gpt-6.1-sol', 300_000);
+  // → { inputPrice: 4, outputPrice: 15, cacheDiscountFactor: 0.05 }
+  requestRates('openai/gpt-5.6-sol', 300_000, { tier: 'fast' });
+  // → { inputPrice: 16, outputPrice: 60, cacheDiscountFactor: 0.1 }
+  ```
+
+```ts
+declare function requestRates(model: ModelConfig | string, promptTokens: number, options?: {
+    tier?: 'fast';
+}): {
+    inputPrice: number;
+    outputPrice: number;
+    cacheDiscountFactor: number;
+};
+```
+
 ## resolveCredential
 
 The one credential ladder: the persisted secret under `name`, else the
