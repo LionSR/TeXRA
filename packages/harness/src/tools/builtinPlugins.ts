@@ -1,6 +1,6 @@
 /**
  * The harness's built-in plugins: files and the shell, the web, memory and
- * tasks, goal mode, child agents and code mode. An app lists them beside its
+ * tasks, goal mode, child agents, and code mode with the agent's own context. An app lists them beside its
  * own; `harnessBuiltins` is every one with
  * no app options.
  */
@@ -11,6 +11,7 @@ import { programTool } from '@agent/runtime/delegation/ProgramTool';
 import { GOAL_PLAN_KIND } from '@shared/schemas';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
+import { ContextTool } from '@tools/codemode/ContextTool';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
 import { SelfTool } from '@tools/codemode/SelfTool';
 import { EditFileTool } from '@tools/EditTool';
@@ -106,17 +107,19 @@ export const multiAgent: Plugin = definePlugin({
 
 /**
  * Code mode: the `script` tool, a program that calls the run's other tools,
- * and `self()`, the function a script runs this agent again with. An agent
- * gets them if its configuration names `script`, or as every run that takes
- * injected tools does (not a program's run, a text-only persona, or a plugin
- * agent that names its own tools). A step that offers `script` sends it and
- * the run's own tools alone; its session layer is the code sandbox the
- * scripts run in.
+ * `self()`, the function a script runs this agent again with, and
+ * `context`, which reads and edits the run's own model view. An agent gets
+ * `script` and `context` if its configuration names them, or as every run
+ * that takes injected tools does (not a program's run, a text-only persona,
+ * or a plugin agent that names its own tools). A step that offers `script`
+ * sends it and the run's own tools alone, so `context` is called from a
+ * script there and directly elsewhere; its session layer is the code
+ * sandbox the scripts run in.
  */
 export const codemode = definePlugin({
   id: 'codemode',
-  tools: SCRIPT_TOOLS,
-  injectedWhen: { script: true },
+  tools: [...SCRIPT_TOOLS, ContextTool],
+  injectedWhen: { script: true, context: true },
   sessionLayer: codeSandboxLayer,
 });
 
