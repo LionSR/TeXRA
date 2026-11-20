@@ -27,7 +27,7 @@ import {
   type PlanUsageWindow,
 } from '@texra-ai/llm/node';
 
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import { Secrets } from '@platform/secrets';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import type { PlanQuotaFailure } from '@shared/model/planQuota';
@@ -207,22 +207,19 @@ const failed = (route: PlanRoute, reason: PlanQuotaFailure, error: unknown) =>
     const http = HttpClientError.isHttpClientError(error)
       ? error.reason
       : undefined;
-    yield* Effect.logWarning(
+    yield* logFailure(
+      CHANNEL,
       `The ${route} quota read failed: ${http === undefined ? toErrorMessage(error) : http._tag}`,
-    ).pipe(
-      Effect.annotateLogs({
-        data:
-          http === undefined
-            ? error
-            : {
-                reason: http._tag,
-                status:
-                  http._tag === 'StatusCodeError'
-                    ? http.response.status
-                    : undefined,
-              },
-      }),
-      withLogChannel(CHANNEL),
+    )(
+      http === undefined
+        ? error
+        : {
+            reason: http._tag,
+            status:
+              http._tag === 'StatusCodeError'
+                ? http.response.status
+                : undefined,
+          },
     );
     return {
       state: 'failed',
