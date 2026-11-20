@@ -187,7 +187,7 @@ type StoreMode = 'persistent' | 'existing' | 'ephemeral';
 
 /** Why a project store did not open: another process holds it. */
 export const STORE_HELD_MESSAGE =
-  'Another TeXRA process holds this project; close it there first.';
+  'Another process holds this project; close it there first.';
 
 export const databaseLayer = (
   mode: StoreMode,

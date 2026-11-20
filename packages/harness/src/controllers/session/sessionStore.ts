@@ -118,7 +118,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
             Effect.andThen(
               Deferred.succeed(
                 feedStopped,
-                `TeXRA could not read rows this session wrote (${error.message}), so ${lost} until the project is opened again.`,
+                `Could not read rows this session wrote (${error.message}), so ${lost} until the project is opened again.`,
               ),
             ),
           ),
