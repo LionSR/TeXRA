@@ -1,7 +1,7 @@
 import { Predicate } from 'effect';
 import { useEffect, useState } from 'react';
 
-import { subscribeToPolling } from './usePollingInterval';
+import { subscribeToPolling } from './polling';
 
 export function useLiveNowMs(shouldTick: boolean, resetKey?: unknown): number {
   const [nowMs, setNowMs] = useState(Date.now);
