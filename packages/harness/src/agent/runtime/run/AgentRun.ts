@@ -36,6 +36,7 @@ import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget'
 import type { AppState } from '@platform/interfaces';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
+import type { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import {
   type Persona,
   AGENT_SOURCE,
@@ -203,6 +204,7 @@ export const agentRunLayer = (
   | HttpClient.HttpClient
   | Secrets
   | SubscriptionAccounts
+  | PlanQuotas
   // A program read from a file is read from that file as it is now.
   | AppState
   | FileSystem.FileSystem

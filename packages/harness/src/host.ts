@@ -122,6 +122,12 @@ export {
 } from '@platform/appSignals';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// What the process knows of each subscription plan's quota.
+export {
+  PlanQuotas,
+  type PlanQuota,
+  type PlanQuotasShape,
+} from '@agent/runtime/modelAccess/planQuotas';
 // The canned model a package-validation build provides beneath the process.
 export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
 // The models a host offers: each visible model's option, the enabled list and

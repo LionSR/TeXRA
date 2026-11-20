@@ -39,8 +39,11 @@ either: every model gets the same text, so nothing asks the provider.
 
 Taken on 2026-11-18: `fetchPlanUsage` (`packages/llm/src/providers/planUsage.ts`)
 asks the Kimi Code and GLM quota endpoints, the GLM one on its region's host
-from `GLM_BASE_URLS`; the app keeps the cache and the snapshot
-(`SubscriptionUsageService.ts`).
+from `GLM_BASE_URLS`. Since 2026-11-20 the harness keeps the cache too
+(`PlanQuotas`, `packages/harness/src/agent/runtime/modelAccess/planQuotas.ts`),
+one per process for the hosts' usage meters and a run's `resources` tool;
+the app only names the snapshot
+(`packages/texra/src/controllers/modelAccess/subscriptionUsage/subscriptionUsage.ts`).
 
 ## 4. The merge feature's edited file is a harness launch field
 

@@ -27,19 +27,21 @@ import { ProjectTools } from './loop/step';
 import { SessionRequests, workAutoApproved } from './requests';
 import type { RunCallShape } from './RunCall';
 import type { RouteRetries } from './ModelRetryGate';
+import type { PlanQuotas } from './modelAccess/planQuotas';
 import type { SessionServices } from './rootLaunch';
 
 /**
  * What a run's program requires of the process: the platform services every
  * process serves, the agent catalog, the plugin table its offered tools are
- * rebuilt from, each workspace's last dependency probe and the model routes'
- * retry gate. The composition's tool catalog (`ToolCatalog`) is not among
+ * rebuilt from, each workspace's last dependency probe, the model routes'
+ * retry gate and what is known of each plan's quota. The composition's tool catalog (`ToolCatalog`) is not among
  * them: no run names it.
  */
 export type RunServices =
   | PlatformServices
   | AgentCatalog
   | RouteRetries
+  | PlanQuotas
   | ToolRegistry
   | ToolAvailability;
 

@@ -587,7 +587,7 @@ consent read them, beside the process `Secrets` and its subscription
 accounts.
 
 ```ts
-const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<{ readonly text: string; readonly usage: { readonly provider: string; readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly responseTimeMs: number; readonly cachedInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; } | null; }, Error | CallFailure, HttpClient | Secrets | SubscriptionAccounts | UsageLog | RouteRetries>
+const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<{ readonly text: string; readonly usage: { readonly provider: string; readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly responseTimeMs: number; readonly cachedInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; } | null; }, Error | CallFailure, HttpClient | Secrets | SubscriptionAccounts | UsageLog | RouteRetries | PlanQuotas>
 ```
 
 ## HelperPrompt
@@ -847,6 +847,79 @@ interface PerKeyLanes<Key> {
   get(key: Key): PerKeyLane | undefined;
   set(key: Key, lane: PerKeyLane): unknown;
   delete(key: Key): unknown;
+}
+```
+
+## PlanQuota
+
+What is known of one plan's quota now. `at` is when it was learned, in
+epoch milliseconds: an endpoint's answer when it came, a reply's when it
+arrived, which may be long ago when no request was made since.
+
+```ts
+type PlanQuota =
+  /** The plan's quota endpoint answered. */
+  | {
+      readonly state: 'read';
+      readonly at: number;
+      /** The plan's tier as the provider names it, when it says. */
+      readonly planName?: string;
+      readonly windows: readonly PlanUsageWindow[];
+    }
+  /** The plan's quota endpoint gave no windows. */
+  | {
+      readonly state: 'failed';
+      readonly at: number;
+      readonly reason: PlanQuotaFailure;
+    }
+  /** A reply on the plan stated its windows. */
+  | {
+      readonly state: 'observed';
+      readonly at: number;
+      readonly windows: readonly PlanUsageWindow[];
+    }
+  /** The plan's replies state its quota, and none has in this process. */
+  | { readonly state: 'unobserved' }
+  /** Nothing this process reads states the plan's quota. */
+  | { readonly state: 'unread' };
+```
+
+## PlanQuotas
+
+The process's plan quotas ({@link PlanQuotasShape}).
+
+```ts
+class PlanQuotas extends Context.Service<PlanQuotas, PlanQuotasShape>()(
+  '@texra-ai/harness/PlanQuotas',
+)
+```
+
+## PlanQuotasShape
+
+The process's plan quotas.
+
+```ts
+interface PlanQuotasShape {
+  /** What is known of `route`'s quota now, asked of its endpoint with the
+   *  key and settings `stores` hold when the cached answer has expired. A
+   *  failure is the answer's `failed` state, logged here, never the
+   *  read's. */
+  readonly read: (
+    route: PlanRoute,
+    stores: SettingsStores,
+  ) => Effect.Effect<PlanQuota, never, HttpClient.HttpClient | Secrets>;
+  /** Drop `route`'s cached and in-flight answers (every plan's when
+   *  omitted), so the next read asks: after its key or account changed, or
+   *  a person's refresh. A reader already waiting still gets its answer,
+   *  which is not cached. */
+  readonly invalidate: (route?: PlanRoute) => Effect.Effect<void>;
+  /** `fetch` for requests billed to `plan`: when the plan's replies state
+   *  its quota, each reply's word is recorded as it arrives; otherwise
+   *  `fetch` itself. */
+  readonly observing: (
+    plan: PlanRoute | null,
+    fetch: typeof globalThis.fetch,
+  ) => typeof globalThis.fetch;
 }
 ```
 
@@ -1495,8 +1568,8 @@ type RunModelDecisionReason = keyof typeof RUN_MODEL_REASONS;
 
 What a run's program requires of the process: the platform services every
 process serves, the agent catalog, the plugin table its offered tools are
-rebuilt from, each workspace's last dependency probe and the model routes'
-retry gate. The composition's tool catalog (`ToolCatalog`) is not among
+rebuilt from, each workspace's last dependency probe, the model routes'
+retry gate and what is known of each plan's quota. The composition's tool catalog (`ToolCatalog`) is not among
 them: no run names it.
 
 ```ts
@@ -1504,6 +1577,7 @@ type RunServices =
   | PlatformServices
   | AgentCatalog
   | RouteRetries
+  | PlanQuotas
   | ToolRegistry
   | ToolAvailability;
 ```

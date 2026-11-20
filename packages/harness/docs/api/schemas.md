@@ -1664,6 +1664,18 @@ function planOf(run: {
 }): Plan | null
 ```
 
+## PlanQuotaFailure
+
+```ts
+type PlanQuotaFailure = typeof PlanQuotaFailureSchema.Type;
+```
+
+## PlanQuotaFailureSchema
+
+```ts
+const PlanQuotaFailureSchema: Literals<readonly ["missing_credentials", "invalid_credentials", "request_failed", "malformed_response"]>
+```
+
 ## planSummaryLine
 
 One-line label for a plan document: its first line of prose. A markdown
