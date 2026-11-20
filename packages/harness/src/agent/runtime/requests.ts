@@ -167,7 +167,7 @@ export const operationOf = (
     case 'proposal':
       return 'proposal';
     case 'pluginTrust':
-      return payload.data.native === undefined ? 'call' : 'trust';
+      return payload.data.native ? 'trust' : 'call';
     case 'bash':
     case 'userQuestion':
     case 'retry':

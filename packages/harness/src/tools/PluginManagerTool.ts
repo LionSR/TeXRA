@@ -150,15 +150,7 @@ const trusted = Effect.fn('plugin_manager.trusted')(function* (
       ...(review.version !== null && { version: review.version }),
       digest: review.digest,
       path: review.path,
-      skills: review.skills,
-      programs: review.programs,
-      servers: review.servers,
-      ...(review.native !== null && {
-        native: {
-          description: review.native.description,
-          provides: review.native.provides,
-        },
-      }),
+      native: review.native !== null,
       review: review.lines,
     },
   };

@@ -14,7 +14,11 @@ import {
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { modelFailureText } from '@ui/copy/modelAccess';
-import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
+import {
+  pluginTrustFacts,
+  REQUEST_ASK,
+  WORKING_DIRECTORY_LABEL,
+} from '@ui/copy/requestCards';
 import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import {
   SCRIPT_REQUEST_COPY,
@@ -243,10 +247,11 @@ export function formatBashApprovalSummary(payload: BashRequest): string {
 /** What trusting a plugin asks: its name and version, a warning when it
  *  carries native code, where it is, and the whole review. */
 export function formatPluginTrustSummary(payload: PluginTrustRequest): string {
+  const facts = pluginTrustFacts(payload);
   return [
-    `${REQUEST_ASK.pluginTrust} ${payload.plugin}${payload.version ? ` ${payload.version}` : ''}:`,
+    `${REQUEST_ASK.pluginTrust} ${facts.plugin}:`,
     ...(payload.native ? [REQUEST_ASK.nativeCode] : []),
-    `${payload.path} (digest ${payload.digest.slice(0, 12)})`,
+    facts.location,
     ...payload.review,
   ].join('\n');
 }

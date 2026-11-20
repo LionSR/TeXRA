@@ -9,7 +9,11 @@ import {
   REQUEST_ACTIONS,
   type RequestDecline,
 } from '@texra/shared/session/surfaceDecision';
-import { getModelLabel, type RequestPayload } from '@texra-ai/harness/schemas';
+import {
+  getModelLabel,
+  type PluginTrustRequest,
+  type RequestPayload,
+} from '@texra-ai/harness/schemas';
 
 /** The primary answer's word, by what it sends; a kind answered from a
  *  form (a question) submits it. */
@@ -35,6 +39,18 @@ export function requestPrimaryLabel(kind: RequestPayload['kind']): string {
 export function requestDeclineLabel(kind: RequestPayload['kind']): string {
   return DECLINE_LABEL[REQUEST_ACTIONS[kind].n];
 }
+
+/** What a plugin trust request names, said alike on every surface: the
+ *  plugin (its name and version, after `REQUEST_ASK.pluginTrust`) and where
+ *  it is (its folder and the start of the digest trusting it records). */
+export const pluginTrustFacts = (
+  request: Pick<PluginTrustRequest, 'plugin' | 'version' | 'path' | 'digest'>,
+): { readonly plugin: string; readonly location: string } => ({
+  plugin: request.version
+    ? `${request.plugin} ${request.version}`
+    : request.plugin,
+  location: `${request.path} (digest ${request.digest.slice(0, 12)})`,
+});
 
 /** The noun each request kind goes by where a row names what waits on the
  *  user: the terminal's child list and the script-stage call lines. */
