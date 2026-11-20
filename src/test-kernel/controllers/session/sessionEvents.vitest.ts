@@ -52,12 +52,6 @@ import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { definePlugin } from '@texra-ai/harness/plugins';
 
-vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@effect/sql-sqlite-node/SqliteClient')
-  >()),
-}));
-
 import {
   type RunId,
   RunIdSchema,
