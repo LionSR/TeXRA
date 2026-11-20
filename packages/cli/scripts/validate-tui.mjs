@@ -10,8 +10,9 @@
 //
 // Its scenarios cover the transcript, queued follow-ups, the slash commands
 // and their forms, approval modals, the child list, resizes and the exit
-// paths; PR CI runs the ones tagged `smoke: true` (`--smoke`). It is NOT a
-// general terminal-automation framework.
+// paths; PR CI runs the ones tagged `smoke: true` (`--smoke`), and the
+// nightly CI run all of them. It is NOT a general terminal-automation
+// framework.
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
 //   or: pnpm --filter @texra-ai/cli validate:tui

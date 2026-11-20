@@ -96,7 +96,9 @@ before the fix and passed 20 of 20 after.
 1. **Whether the full `validate:tui` joins CI.** It is the UI's own time now.
    That changes CI cost, so it is the repo owner's call: a nightly `schedule`
    run of `validate:tui` without `--smoke` at least, or every PR. Only then
-   do the `smoke` tag and the split go.
+   do the `smoke` tag and the split go. 2026-11-20: the nightly run landed
+   (the `tui-validation` job of `.github/workflows/ci.yml`); every PR is
+   still open, and with it the `smoke` tag.
 2. **`/login`'s rows while its account state loads.** Its list mounts and
    listens at once, but the subscription rows are disabled until the
    account state loads, so a hotkey typed in that window selects nothing.
