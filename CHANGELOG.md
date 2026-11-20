@@ -1408,6 +1408,23 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A goal completes only when a judge confirms it.** A round that says
+  the objective is done no longer ends the goal on its own word: the same
+  agent runs again with no earlier conversation, as a judge that did not do
+  the work, derives the requirements from the objective and checks each
+  one itself with the tools the conversation's agent has. It answers with
+  one claim per requirement: `verified`, `failed` or `unverified`, the
+  check anyone can run again, and what it showed. The goal completes when
+  no claim failed; otherwise the next round is told what the judge found.
+  The goal's result carries the latest judge's `claims`, so you need read
+  only the unverified and failed ones, and a judge that fails or gives no
+  verdict pauses the goal with `judge_failed`. A goal now costs one more
+  agent run per claim that it is done, counted in its spend and its cap.
+  SDK: `builtIn:goal` exports `judge(objective, { report })` and
+  `claimSchema` beside `goal`, so any script can check work with a judge,
+  or several, its own way; `GoalResultSchema` gains the optional `claims`
+  (the strategy's own shape, which the harness stores and does not read)
+  and the `judge_failed` pause.
 - **A script caps what a child run spends, and `self()` takes a model.**
   Every child a script waits for (`agent()`, `program()`, `self()`) takes
   `maxCostUsd`, a spend cap in USD on the child and every run it starts:

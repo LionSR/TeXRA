@@ -9,7 +9,8 @@
  * the same tools, so nothing is proposed: the user approved the script.
  * It runs on the conversation's model unless the call names one, and its
  * call holds it to the limits every child launch takes (`CHILD_FIELDS`).
- * The default goal strategy is this function in a loop (`builtIn:goal`).
+ * The default goal strategy (`builtIn:goal`) is this function in a loop:
+ * forked rounds, and a fresh one that judges a round's `done`.
  */
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
