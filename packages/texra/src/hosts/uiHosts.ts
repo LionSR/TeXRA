@@ -78,9 +78,10 @@ export interface ExternalOpener {
 
 /**
  * The failure of a browser open, as every host words it: the address by its
- * origin alone, and the host's `reason` with the full URL replaced by that
- * origin. A sign-in link's path or query can carry a code, and this message
- * reaches the log and the notice the caller shows.
+ * origin alone, and the host's `reason` with every word that names the
+ * URL's host replaced by that origin. A sign-in link's path or query can
+ * carry a code, and this message reaches the log and the notice the caller
+ * shows.
  */
 export function externalOpenFailed(
   url: string,
@@ -95,9 +96,18 @@ export function externalOpenFailed(
       : parsed.origin === 'null'
         ? `a ${parsed.protocol} link`
         : parsed.origin;
+  // A host may echo the URL re-serialized (a trailing slash, re-encoded
+  // query, quotes), so every word naming its host goes, not only the exact
+  // string.
+  const host = parsed?.host ?? '';
+  const scrubbed = reason
+    .replaceAll(url, address)
+    .split(/(\s+)/)
+    .map((word) => (host !== '' && word.includes(host) ? address : word))
+    .join('');
   return new HostFailed({
     member,
-    message: `Could not open ${address} in the default browser: ${reason.replaceAll(url, address)}`,
+    message: `Could not open ${address} in the default browser: ${scrubbed}`,
     cause,
   });
 }

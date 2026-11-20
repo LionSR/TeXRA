@@ -61,7 +61,7 @@ export class GitHubPermanentError extends Schema.TaggedError<GitHubPermanentErro
 ) {}
 
 /** A failure that may clear on retry: a transport error, a timeout, or a
- *  transient status (408, 409, 429 without rate-limit headers, 5xx). */
+ *  transient status (408, 409, 429, 5xx). */
 class GitHubTransientError extends Schema.TaggedError<GitHubTransientError>()(
   'GitHubTransientError',
   {
