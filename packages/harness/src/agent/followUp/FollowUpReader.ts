@@ -147,9 +147,11 @@ interface InputReading {
   readonly pending: (at: InputPoint) => boolean;
   /** Where the log stood before the read: a later row is above it. */
   readonly from: CommitOrdinal;
-  /** How long until the run's earliest note not yet due becomes readable,
-   *  in milliseconds; undefined when none waits for its time. */
-  readonly untilDue: number | undefined;
+  /** When the run's earliest note not yet due becomes readable, in epoch
+   *  milliseconds; undefined when none waits for its time. A time, not a
+   *  delay: a wait that starts after the read sleeps until it, never for
+   *  the delay the read saw. */
+  readonly nextDue: number | undefined;
 }
 
 const inputOf = (
@@ -164,16 +166,22 @@ const inputOf = (
   const compacting = rows.some((f) => f.control?.kind === 'compact');
   const later = rows.flatMap((f) => {
     const due = dueOf(f);
-    return due !== undefined && due > now ? [due - now] : [];
+    return due !== undefined && due > now ? [due] : [];
   });
   return {
     controls: rows.filter((f) => f.control !== undefined),
     batch,
     pending: (at) => compacting || batch(at) !== null,
     from,
-    untilDue: later.length > 0 ? Math.min(...later) : undefined,
+    nextDue: later.length > 0 ? Math.min(...later) : undefined,
   };
 };
+
+/** Sleep until the clock reads `due`, in epoch milliseconds. */
+const sleepUntil = (due: number): Effect.Effect<void> =>
+  Effect.flatMap(Clock.currentTimeMillis, (now) =>
+    now >= due ? Effect.void : Effect.sleep(due - now),
+  );
 
 /** What a reader reads of the session's log. */
 type ReaderLog = Pick<SessionLogShape, 'runRows' | 'tail' | 'now'>;
@@ -239,10 +247,12 @@ export class FollowUpReader {
           ),
           Effect.as(this.closed.await, false),
           // A note the run wrote to itself becomes readable with no row
-          // committed: the wait ends when its time comes.
-          ...(input.untilDue === undefined
+          // committed: the wait ends when its time comes, measured from
+          // the clock as the wait starts (the step opened since the read
+          // takes time, and the clock may have moved past the due time).
+          ...(input.nextDue === undefined
             ? []
-            : [Effect.as(Effect.sleep(input.untilDue), true)]),
+            : [Effect.as(sleepUntil(input.nextDue), true)]),
         ]);
         if (!arrived) return null;
       }
