@@ -16,7 +16,7 @@
  */
 import { Effect } from 'effect';
 
-import { getRunRecords } from '@agent/storage/runOwnership';
+import { agentConfigOf } from '@agent/storage/runOwnership';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import type { SessionRoots } from '@platform/rootedFs';
 import {
@@ -82,13 +82,12 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
 ) {
   const log = yield* SessionLog;
   const runHistory = yield* RunHistory;
-  const records = getRunRecords(from);
-  const config = yield* records.readConfig();
+  const facts = yield* log.facts(from);
+  const config = agentConfigOf(facts);
   if (config === null || runsScript(config)) {
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = from;
-  const facts = yield* log.facts(from);
   const start = facts?.start;
   if (start == null) {
     const noun = runNoun((yield* SessionViewAccess).run(from));

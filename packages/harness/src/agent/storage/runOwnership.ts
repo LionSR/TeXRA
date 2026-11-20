@@ -225,6 +225,14 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   } satisfies RunEnd;
 });
 
+/** The agent configuration in a run's facts: its latest `run.config` row
+ *  when that is an agent's, else null. For a caller that already holds
+ *  the facts; `getRunRecords(runId).readConfig()` reads them. */
+export const agentConfigOf = (facts: RunRows | null): AgentConfig | null => {
+  const record = facts?.config ?? null;
+  return record !== null && isAgentRunRecord(record) ? record : null;
+};
+
 /** Reads of a run's named records from the session database. */
 export function getRunRecords(runId: RunId) {
   const facts = SessionLog.use((log) => log.facts(runId));
@@ -258,12 +266,7 @@ export function getRunRecords(runId: RunId) {
      *  closed by its deletion marker, reads false. */
     exists: (): RecordRead<boolean> => read((held) => held !== null),
     readRunRecord: readRecord,
-    readConfig: (): RecordRead<AgentConfig | null> =>
-      readRecord().pipe(
-        Effect.map((record) =>
-          record && isAgentRunRecord(record) ? record : null,
-        ),
-      ),
+    readConfig: (): RecordRead<AgentConfig | null> => read(agentConfigOf),
     readReport: (): RecordRead<string | null> =>
       read((held) => held?.report ?? null),
     /** The workspace files the run edited, loaded from its finished calls

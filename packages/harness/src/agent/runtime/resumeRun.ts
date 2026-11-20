@@ -13,11 +13,14 @@ import { Effect, Result, Schema } from 'effect';
 import { REFUSED } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import { continuationOf } from '@agent/storage/continuation';
-import { getRunRecords, owningCall } from '@agent/storage/runOwnership';
+import {
+  agentConfigOf,
+  getRunRecords,
+  owningCall,
+} from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
 import {
   type CommitOrdinal,
-  isAgentRunRecord,
   type ResumeRefusal,
   ResumeRefusalSchema,
   type RunId,
@@ -196,10 +199,7 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   if (Result.isFailure(read))
     return yield* Effect.flatMap(refusalFor(read.failure, runId), refuse);
   const facts = read.success;
-  const config =
-    facts?.config != null && isAgentRunRecord(facts.config)
-      ? facts.config
-      : null;
+  const config = agentConfigOf(facts);
   if (config === null) {
     // A run whose records are gone: with nothing queued its input ends.
     yield* inbox.closeInput(runId);
