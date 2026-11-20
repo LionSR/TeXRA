@@ -296,6 +296,9 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// How a host that prints log entries as text words one: its line and what
+// it carries beyond it.
+export { entryDetail, entryLine } from '@logger/logSink';
 // A model call's failure as a run records it (its verdict), its plain
 // words and a run end's, and the used-up plan it names, for an app that
 // words it itself.
