@@ -524,9 +524,8 @@ class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
 A plugin tool's one door to the session's runs. It launches an external
 process as a child of its call's run (`launchProcess`: its run id,
 outside the child-run budget); a plugin's tool reaches no other launch.
-And it reaches a run of the session by id: its input, records, whether
-it holds a request, and the plugin's own facts on it, each over the
-call's run.
+And it reaches a run of the session by id: its input, its records and
+the plugin's own facts on it, each over the call's run.
 
 ```ts
 interface ChildRunsShape {
@@ -556,12 +555,6 @@ interface ChildRunsShape {
    *  since a grant may land mid-run: what a child's own sandbox or
    *  permissions follow. */
   readonly autoApproved: Effect.Effect<boolean, Error>;
-  /** Whether the run holds the request `requestId`, open or decided: what
-   *  a tool that posted one reads after a failed post. */
-  readonly requested: (
-    runId: RunId,
-    requestId: string,
-  ) => Effect.Effect<boolean, Error>;
 }
 ```
 

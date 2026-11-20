@@ -392,12 +392,10 @@ beside the stop, where the tool dispatch keeps it as a defect
 run that the person stopped end in an `AgentError` whenever a stream's
 finalizer fails as the stop unwinds it; how often a provider stream's
 close fails on interruption was not measured, so this waits for that
-evidence before every stop can surface an error. `openResume` reads the run's
-facts once where it read them twice (`readConfig` and `exists`); an
-earlier build is still detectable a second time in the same resume, in
-`checkpointRefusal`'s read after the ownership check, which serves four
-other callers and narrows the window a concurrent deletion has, so it
-stays. `FollowUps.release`'s two literals stay until `runLoop.ts`, their
+evidence before every stop can surface an error. `openResume` reads the run's facts once and decides
+from that read: a failed read is `refusalFor`'s, and the continuation is
+`continuationOf` (`packages/harness/src/agent/storage/continuation.ts`) over
+it, so an earlier build is detected once (2026-11-20). `FollowUps.release`'s two literals stay until `runLoop.ts`, their
 one caller, is free to change. The script delivery's `stopped` stays (the
 2026-11-17 triage note)._
 

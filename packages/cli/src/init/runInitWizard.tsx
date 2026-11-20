@@ -216,7 +216,6 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
             { key: 'Enter', action: 'select' },
             CANCEL_HINT,
           ]}
-          confirmCancel={false}
         />
       </Box>
     </Box>

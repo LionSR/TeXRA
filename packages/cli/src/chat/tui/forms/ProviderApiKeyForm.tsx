@@ -113,7 +113,6 @@ export function ProviderApiKeyForm(
           <Text dimColor>Choose the service that issued the key.</Text>
         }
         action="select"
-        escapeAction="close"
         onSelect={(candidate) => {
           setError(undefined);
           setProvider(candidate);
