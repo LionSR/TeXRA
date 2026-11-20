@@ -10,9 +10,11 @@
  * (`agent/followUp/FollowUpReader.ts`).
  */
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import type { Schema } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
 import { type ApprovalGrants } from '@shared/approvalBypassKind';
 import {
+  CONTEXT_TOOL_NAME,
+  ContextReplaceSchema,
   type DispatchFacts,
   type FollowUpContent,
   type FollowUpDisposition,
@@ -31,7 +33,7 @@ import {
 
 import { byId } from './runRows';
 import type { TurnResult } from '@texra-ai/llm';
-import type { RunHistoryDraft, RunInputDraft } from './runState';
+import type { RowRejection, RunHistoryDraft, RunInputDraft } from './runState';
 import type { PendingResponse } from './inFlight';
 
 /** The text a completed model turn or assistant message contains, in order. */
@@ -79,6 +81,11 @@ export type RunFacts = {
   } | null;
   /** The latest response's answer was finalized for display. */
   readonly answerFinalized: boolean;
+  /** The replacements the agent asked for with its `context` tool, each
+   *  waiting for the next request boundary, where its `context.edit`
+   *  (cause `edit`) takes it off: highest range first, so none applied
+   *  shifts the indices of one still waiting. */
+  readonly contextEdits: readonly ContextReplace[];
   /** Each call a response issued, and each call a script of it issued, by
    *  {@link callKey}: its tool and card, and the response that issued it (a
    *  script's call: its script's) with that row's commit and seq. */
@@ -102,6 +109,7 @@ export const NO_FACTS: RunFacts = Object.freeze({
   handedDown: null,
   finalTool: null,
   answerFinalized: false,
+  contextEdits: Object.freeze([]),
   calls: Object.freeze<RunFacts['calls']>(byId([])),
 });
 
@@ -150,6 +158,46 @@ export function resultFacts(
   };
 }
 
+/** A replacement the agent asked for (`ContextReplaceSchema`). */
+export type ContextReplace = typeof ContextReplaceSchema.Type;
+
+/** The tool `callId` of `pending` names: its `script.call`'s for a call a
+ *  script issued, else the response's own call's. */
+const toolOf = (pending: PendingResponse, callId: string): string | undefined =>
+  pending.records[callId]?.script?.toolName ??
+  pending.calls.find((call) => call.callId === callId)?.toolName;
+
+/**
+ * The replacements waiting once `p` finished its call of `pending`: an
+ * executed `replace` of the `context` tool adds its own, in range order,
+ * highest first. A duplicate copies its primary's result, not its request.
+ */
+export function requestedEdits(
+  facts: RunFacts,
+  p: ToolResultPayload,
+  pending: PendingResponse,
+): Result.Result<RunFacts['contextEdits'], RowRejection> {
+  const value = p.result.status === 'executed' ? p.result.value : undefined;
+  if (
+    p.disposition !== 'executed' ||
+    toolOf(pending, p.callId) !== CONTEXT_TOOL_NAME ||
+    !Predicate.isObject(value) ||
+    value.action !== 'replace'
+  )
+    return Result.succeed(facts.contextEdits);
+  return Result.mapBoth(
+    Schema.decodeUnknownResult(ContextReplaceSchema)(value),
+    {
+      onFailure: (issue): RowRejection => ({
+        reason: 'unreadable-turn',
+        detail: `${p.callId} records a context replacement this build cannot read: ${issue.message}`,
+      }),
+      onSuccess: (edit) =>
+        [...facts.contextEdits, edit].toSorted((a, b) => b.from - a.from),
+    },
+  );
+}
+
 /** What `callId` is to the run's output: a script run's handed-down call,
  *  the one call of a response no model produced; a `submit_output` call,
  *  the response's or one of its scripts' (a script's call names its tool on
@@ -158,11 +206,11 @@ function outputOf(
   pending: PendingResponse,
   callId: string,
 ): 'handed-down' | 'submitted' | null {
-  const own = pending.calls.find((call) => call.callId === callId);
-  if (own !== undefined && pending.assistant.origin === null)
-    return 'handed-down';
-  const tool = pending.records[callId]?.script?.toolName ?? own?.toolName;
-  return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
+  const own = pending.calls.some((call) => call.callId === callId);
+  if (own && pending.assistant.origin === null) return 'handed-down';
+  return toolOf(pending, callId) === STRUCTURED_OUTPUT_TOOL_NAME
+    ? 'submitted'
+    : null;
 }
 
 /** Input that asks the run to do something: a message from its user or

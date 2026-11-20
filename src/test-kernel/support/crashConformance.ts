@@ -8,7 +8,9 @@
  * in-process over a persistent store: a response with two calls (a read and
  * a command), an approved edit of the file the read returned, a script whose
  * nested calls run a read, a command and an
- * awaited `agent()` call that owns its child, the echo's answer, then a
+ * awaited `agent()` call that owns its child, a script that replaces the
+ * edit's call and result in the run's view (`context`, applied as a
+ * `context.edit` at the next request), the echo's answer, then a
  * compaction (`context.edit`) and a fork, and the bash
  * bypass turned on and off again. The pass records the commit each write
  * transaction ended at, from the batches the session's publisher reports: a batch
@@ -28,7 +30,9 @@
  *
  * Failure modes, each checked at every point:
  * - invariant I1: the conversation comes to another end than the clean one: the root's
- *   answers, its view edits, what each executed call returned, its owned
+ *   answers, its view edits (an agent's replacement lost or applied twice
+ *   when a crash falls between its request and the boundary that applies
+ *   it), what each executed call returned, its owned
  *   children and their answers, its fork;
  * - invariant I2: a call settled before the crash settles again, or any call twice;
  * - invariant I4: a command runs before its approval, or an unfinished one again
@@ -222,6 +226,11 @@ const answers = (rows: readonly Row[], run: string) =>
 function outcome(rows: readonly Row[], root: string) {
   const of = (run: string, type: string) =>
     rows.filter((row) => row.run === run && row.type === type);
+  const viewCalls = new Set(
+    of(root, 'script.call')
+      .filter((row) => payload(row).toolName === 'context')
+      .map((row) => String(payload(row).callId)),
+  );
   return {
     // The echo names the user messages its view held: the first, and how
     // many follow.
@@ -229,7 +238,7 @@ function outcome(rows: readonly Row[], root: string) {
       const [first, ...rest] = text.split(' | ');
       return `${first} (+${rest.length})`;
     }),
-    edits: of(root, 'context.edit').map((row) => payload(row).cause),
+    edits: editsOf(rows, root),
     // Each request the user made, queued once and consumed once; and the
     // model the run ends on.
     requests: of(root, 'followup.queued').flatMap((row) => {
@@ -247,7 +256,9 @@ function outcome(rows: readonly Row[], root: string) {
       .flatMap((row) => [configOf(json(row)).config.model])
       .at(-1),
     // What each executed call returned, by call: a retried call returns
-    // what its first attempt would have.
+    // what its first attempt would have. A `context` call answers from the
+    // view, which holds what a crash cut off and the model asked again, so
+    // what it applied is compared (`edits`), not what it read.
     settled: [
       ...new Set(
         rows
@@ -255,7 +266,8 @@ function outcome(rows: readonly Row[], root: string) {
             (row) =>
               row.run === root &&
               row.type === 'tool.result' &&
-              payload(row).disposition === 'executed',
+              payload(row).disposition === 'executed' &&
+              !viewCalls.has(String(payload(row).callId)),
           )
           .map(
             (row) =>
@@ -412,11 +424,13 @@ const until = (storage: string, ready: (rows: readonly Row[]) => boolean) =>
     Effect.timeout('30 seconds'),
   );
 
-/** The root's view edits, by cause. */
+/** The root's view edits, by cause and trigger. */
 const editsOf = (rows: readonly Row[], root: string) =>
   rows
     .filter((row) => row.run === root && row.type === 'context.edit')
-    .map((row) => payload(row).cause);
+    .map(
+      (row) => `${String(payload(row).cause)}/${String(payload(row).trigger)}`,
+    );
 
 /** The root waits for input with `count` answers, after its last view edit. */
 const waitingPastLastEdit = (
@@ -479,7 +493,7 @@ const userSteps = (
       yield* until(
         storage,
         (rows) =>
-          editsOf(rows, root).includes('compaction') &&
+          editsOf(rows, root).includes('compaction/user') &&
           waitingPastLastEdit(rows, root, 2),
       );
       yield* Context.get(session, SessionRequests).request({
@@ -528,14 +542,24 @@ function violations(
   );
   const results = final.filter((row) => row.type === 'tool.result');
   const resumed = results.filter((row) => row.commit > n);
+  // A command: a response's `bash` call, or a script's (its `script.call`
+  // names the tool).
+  const scriptCommands = new Set(
+    final
+      .filter(
+        (row) => row.type === 'script.call' && payload(row).toolName === 'bash',
+      )
+      .map((row) => String(payload(row).callId)),
+  );
+  const isCommand = (callId: unknown) =>
+    /validation-bash-\d+$/.test(String(callId)) ||
+    scriptCommands.has(String(callId));
   // The commands the resume executed, by the effect each appends.
   const commands = resumed
     .filter(
       (row) =>
         payload(row).disposition === 'executed' &&
-        /validation-(bash-\d+|script-\d+\/1)$/.test(
-          String(payload(row).callId),
-        ),
+        isCommand(payload(row).callId),
     )
     .map((row) =>
       String(payload(row).callId).includes('script') ? 'script' : 'batch',
@@ -566,8 +590,6 @@ function violations(
       decidedIn(final, requestIdOf(row))?.data.includes('"action":"cancel"') !==
         true,
   );
-  const isCommand = (callId: unknown) =>
-    /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
   // A call whose body changes the world outside the store: a command, or
   // the edit of the notes.
   const isEffectful = (callId: unknown) =>
@@ -593,9 +615,7 @@ function violations(
   const unapproved = resumed.filter(
     (row) =>
       payload(row).disposition === 'executed' &&
-      /validation-(bash-\d+|script-\d+\/1)$/.test(
-        String(payload(row).callId),
-      ) &&
+      isCommand(payload(row).callId) &&
       !approvals.some(
         (approval) =>
           approval.callId === payload(row).callId &&
@@ -906,10 +926,10 @@ export function crashConformanceSuite(
                 // The clean pass crossed every boundary the suite names.
                 expect(expected).toMatchObject({
                   answers: [
-                    'Model saw: Work through the crash task. (+0)',
+                    'Model saw: Work through the crash task. (+1)',
                     'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
                   ],
-                  edits: ['compaction'],
+                  edits: ['edit/null', 'compaction/user'],
                   requests: ['model consumed 1', 'compact consumed 1'],
                   model: SWITCH_TO,
                   children: 1,
@@ -936,9 +956,9 @@ export function crashConformanceSuite(
                     (p) => p >= first('run.position') && p < traced,
                   ),
                 ).toEqual([]);
-                // The two calls, the edit, the script and its three calls, each
-                // settled.
-                expect(expected.settled).toHaveLength(7);
+                // The two calls, the edit, the script and its three calls, and
+                // the trimming script, each settled.
+                expect(expected.settled).toHaveLength(8);
                 expect(
                   [
                     'tool.intent',

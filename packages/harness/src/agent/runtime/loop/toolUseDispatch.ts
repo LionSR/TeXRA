@@ -455,7 +455,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       instruction: dispatch.instruction,
       attempt,
       logId: fact.logId,
-      facts: cell.current,
+      state: cell.current,
       ...place,
     };
     // The chain first, under the step's roots and plugin services: a call

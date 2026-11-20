@@ -86,6 +86,9 @@ interface CompactionActivityBlock {
     CompactionActivityData,
     { state: 'completed' }
   >['freed'];
+  /** How many messages an edit the agent asked for replaced, from its
+   *  `completed` row; absent for a summary. */
+  readonly replaced?: number;
 }
 ```
 

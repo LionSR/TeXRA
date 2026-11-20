@@ -354,6 +354,19 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
         return outOfOrder(
           `an edit of messages [${p.range.from}, ${p.range.to}) over ${state.messages.length}`,
         );
+      // The agent's own edit takes off the replacement it asked for, the
+      // next one waiting: so a resume applies each exactly once.
+      const [asked, ...waiting] = state.contextEdits;
+      const agent = p.cause === 'edit';
+      if (
+        agent &&
+        (asked === undefined ||
+          asked.from !== p.range.from ||
+          asked.to !== p.range.to)
+      )
+        return outOfOrder(
+          `an agent's edit of messages [${p.range.from}, ${p.range.to}) is not the next replacement it asked for`,
+        );
       const messages = [
         ...state.messages.slice(0, p.range.from),
         ...p.messages,
@@ -370,6 +383,7 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
         offeredSystem: null,
         offeredContext: null,
         usage: addUsage(state.usage, p.usage),
+        contextEdits: agent ? waiting : state.contextEdits,
         countStale:
           state.countStale ||
           p.range.from !== p.range.to ||
