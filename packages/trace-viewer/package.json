@@ -15,7 +15,7 @@
     "@typescript/native": "npm:typescript@^7.0.2",
     "katex": "^0.19.1",
     "lit": "^3.3.3",
-    "signal-polyfill": "^0.2.2",
+    "signal-polyfill": "^0.2.3",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.8",
     "vite-plugin-singlefile": "^2.3.4"

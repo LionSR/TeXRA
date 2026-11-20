@@ -358,8 +358,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       signal-polyfill:
-        specifier: ^0.2.2
-        version: 0.2.2
+        specifier: ^0.2.3
+        version: 0.2.3
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -679,8 +679,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       signal-polyfill:
-        specifier: ^0.2.2
-        version: 0.2.2
+        specifier: ^0.2.3
+        version: 0.2.3
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -4285,8 +4285,8 @@ packages:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
 
-  signal-polyfill@0.2.2:
-    resolution: {integrity: sha512-p63Y4Er5/eMQ9RHg0M0Y64NlsQKpiu6MDdhBXpyywRuWiPywhJTpKJ1iB5K2hJEbFZ0BnDS7ZkJ+0AfTuL37Rg==}
+  signal-polyfill@0.2.3:
+    resolution: {integrity: sha512-9lnybFqkhtuH5xJ0IoRMs+k0HhiNEHAqcedRL2gKGI9bLyPWqlhrNSXTi8PRTwx5XiMktQh954gR5q3dBimwXA==}
 
   simple-update-notifier@2.0.0:
     resolution: {integrity: sha512-a2B9Y0KlNXl9u/vsW6sTIu9vGEpfKu2wRV6l1H3XEas/0gUIzGzBoP/IouTcUQbm9JWZLH3COxyn03TYlFax6w==}
@@ -5524,7 +5524,7 @@ snapshots:
   '@lit-labs/signals@0.3.0':
     dependencies:
       lit: 3.3.2
-      signal-polyfill: 0.2.2
+      signal-polyfill: 0.2.3
 
   '@lit-labs/ssr-client@1.1.8':
     dependencies:
@@ -8327,7 +8327,7 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  signal-polyfill@0.2.2: {}
+  signal-polyfill@0.2.3: {}
 
   simple-update-notifier@2.0.0:
     dependencies:
