@@ -289,11 +289,8 @@ export const agentEditsAtBoundary = Effect.fn('compaction.agentEdits')(
     contextWindow: number,
   ) {
     let state = yield* input.cell.current;
-    for (const { from, to, with: text, freed } of state.contextEdits) {
+    for (const { from, to, with: text } of state.contextEdits) {
       const activity = startCompactionActivity(input.logger);
-      // A range inside the view: what it frees is the tool's estimate of
-      // the messages it replaced less its replacement, which the rest of
-      // the count does not change.
       const tokensBefore = contextTokens(state);
       state = yield* input.cell.append([
         {
@@ -308,10 +305,13 @@ export const agentEditsAtBoundary = Effect.fn('compaction.agentEdits')(
           },
         },
       ]);
+      // The count after is the run's own after the edit (an estimate, as an
+      // edit leaves no provider count for the new view), the figure the
+      // context gauge then shows; the tool's `freed` stays the agent's.
       completed(
         activity,
         tokensBefore,
-        tokensBefore - freed,
+        contextTokens(state),
         contextWindow,
         to - from,
       );
