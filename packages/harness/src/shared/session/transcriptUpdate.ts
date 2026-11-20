@@ -64,14 +64,13 @@ function applyStage(
       name: event.label,
       seqNo: (d.ix.appended += 1),
       startTime: d.at,
-      outcome: null,
+      end: null,
     };
   } else {
     if (at === undefined) return;
     stage = {
       ...d.next.stages[at],
-      outcome: event.status,
-      endTime: d.at,
+      end: { outcome: event.status, at: d.at },
     };
   }
   const stages = writableArray(d, d.next, 'stages');
@@ -105,13 +104,12 @@ function openCardStage(d: TranscriptUpdate, card: string): void {
       name,
       seqNo: (d.ix.appended += 1),
       startTime: d.at,
-      outcome: null,
+      end: null,
     };
     d.ix.stageIndex.set(card, stages.push(stage) - 1);
-  } else if (stages[at].outcome !== null) {
+  } else if (stages[at].end !== null) {
     // Its time restarts with the resume, so its duration is time it ran.
-    const { endTime: _end, ...open } = stages[at];
-    stages[at] = { ...open, startTime: d.at, outcome: null };
+    stages[at] = { ...stages[at], startTime: d.at, end: null };
   } else return;
   d.touched = true;
 }
@@ -126,11 +124,13 @@ function closeCardStage(
   const stages = writableArray(d, d.next, 'stages');
   stages[at] = {
     ...stages[at],
-    outcome:
-      status === TOOL_CALL_STATUS.COMPLETED
-        ? RUN_OUTCOME.COMPLETED
-        : RUN_OUTCOME.FAILED,
-    endTime: d.at,
+    end: {
+      outcome:
+        status === TOOL_CALL_STATUS.COMPLETED
+          ? RUN_OUTCOME.COMPLETED
+          : RUN_OUTCOME.FAILED,
+      at: d.at,
+    },
   };
   d.touched = true;
 }
@@ -347,12 +347,12 @@ function applyStandingToTranscript(
   const { outcome } = standing;
   if (outcome === null || !d.next.stages.some(isOpenStage)) return;
   d.next.stages = d.next.stages.map((stage) =>
-    isOpenStage(stage) ? { ...stage, outcome, endTime: d.at } : stage,
+    isOpenStage(stage) ? { ...stage, end: { outcome, at: d.at } } : stage,
   );
   d.touched = true;
 }
 
-const isOpenStage = (stage: Stage): boolean => stage.outcome === null;
+const isOpenStage = (stage: Stage): boolean => stage.end === null;
 
 /**
  * Apply one session event to a run's transcript, advancing the run's working
