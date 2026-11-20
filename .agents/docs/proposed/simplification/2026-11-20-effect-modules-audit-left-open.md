@@ -22,29 +22,17 @@ The areas are already on the Effect modules. These landed with this note:
   `Stream.decodeText`.
 - `FollowUpReader` reads its closed state from its latch
   (`Latch.isOpen`) and keeps no second flag.
+- The service's busy hold in `packages/texra/src/controllers/server/serve.ts`
+  is a scoped `Stream.switchMap` over the session's view: the busy case
+  acquires the count and the project's lease, and the switch closes them
+  before the next state starts. The `let hold` scope and its two-state
+  `follow` are gone.
+- `texra --version` at the root is `texra version`, as `-v` already was, so
+  both print the same and both honor `--output-format`.
 
 ## Open
 
-1. **The service's busy hold as a scoped stream.** `follow` in
-   `packages/texra/src/controllers/server/serve.ts` keeps a
-   `let hold: Scope.Closeable | null` and takes or drops a lease of the
-   project as runs start and stop work. `Stream.switchMap` over the same
-   view, with a scoped `acquireRelease` for the busy case, is the same
-   two states without the variable: the switch closes the previous inner
-   scope before starting the next. It saves about twelve lines. The lease
-   would be taken on a child fiber, not inline, and the count must be
-   registered before the lease so the lease closes first. It decides how
-   long a project stays open, so it wants a run of the service suites that
-   exercise an idle close, and belongs with a larger change to that file.
-
-2. **`texra -v` and `texra --version` print differently.** effect/cli's
-   version flag already carries the `-v` alias, but `expandRootShortcuts` in
-   `packages/cli/src/commands/root.ts` answers `-v` first: the bare version,
-   in the chosen output format. `--version` prints `texra v<version>` through
-   the presenter. Dropping the `-v` branch makes them agree and loses the
-   JSON form. It needs the owner's call.
-
-3. **Lean's stderr tail is cut by hand.**
+1. **Lean's stderr tail is cut by hand.**
    `packages/texra/src/tools/lean/direct/leanServer.ts` writes
    `(tail + chunk).slice(-LIMIT)`; the MCP server uses the harness's
    `appendTail`, which is not on a public entry. An export for one more
