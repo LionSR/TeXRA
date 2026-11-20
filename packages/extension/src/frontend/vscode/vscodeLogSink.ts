@@ -8,37 +8,11 @@
  * the transcript's to render, not a per-run output channel's.
  */
 // Third-party imports
-<<<<<<< HEAD
-import { Predicate, Record } from 'effect';
-import * as vscode from 'vscode';
-
-// Local imports
-import {
-  LOG_CHANNEL,
-  entryChannel,
-  entryMessage,
-  type LogEntry,
-  type LogSink,
-} from '@texra-ai/harness/node';
-
-/** Everything the channel itself does not already render. Every annotation
- * arrives already rendered and bounded by the write path, so this shows them
- * on the entries the user's own channel-level filter let through. */
-function detail(entry: LogEntry): string {
-  const extra = Record.remove(entry.annotations, LOG_CHANNEL);
-  const parts = [
-    entry.cause,
-    Record.isEmptyRecord(extra) ? undefined : JSON.stringify(extra),
-  ].filter(Predicate.isNotUndefined);
-  return parts.length === 0 ? '' : `\n${parts.join('\n')}`;
-}
-=======
 import * as vscode from 'vscode';
 
 // Local imports
 import type { LogSink } from '@texra-ai/harness/node';
 import { entryDetail, entryLine } from '@texra-ai/harness/schemas';
->>>>>>> origin/main
 
 export function createVsCodeLogSink(): LogSink {
   let output: vscode.LogOutputChannel | undefined;

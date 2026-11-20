@@ -30,15 +30,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { attentionOf } from '@shared/session/sessionView';
 import { SessionViewAccess } from '@shared/session/runHistory';
-<<<<<<< HEAD
-import {
-  answerMismatch,
-  blocksCaller,
-  type RequestDecision,
-} from '@shared/schemas';
-=======
 import { answerMismatch, type RequestDecision } from '@shared/schemas';
->>>>>>> origin/main
 import type { PendingRequest, SessionView } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -172,17 +164,10 @@ const answerRequests = (
               Effect.provide(session),
               // The session took no decision: decided meanwhile, a run no
               // fiber here drives, or a write it refused.
-<<<<<<< HEAD
-              Effect.catchTag('Unavailable', (error) =>
-                Effect.logInfo(
-                  `The decision on request ${pending.requestId} was not recorded: ${error.reason}`,
-                ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
-=======
               Effect.tapError((error) =>
                 Effect.logInfo(
                   `The decision on request ${pending.requestId} was not recorded; recording it again: ${toErrorMessage(error)}`,
                 ).pipe(withLogChannel(CHANNEL)),
->>>>>>> origin/main
               ),
               Effect.retry({ schedule: DECIDE_RETRY, times: DECIDE_RETRIES }),
             ),
