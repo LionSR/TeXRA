@@ -69,11 +69,14 @@ export interface NativeEntryModule {
 const HOST: NativePluginHost = Object.freeze({ plugins, effect });
 
 /** A native entry that did not load: the message names the plugin and
- *  why. */
+ *  why (`reason`), and `revision` the revision that did not load, when it
+ *  has one. */
 export class NativePluginFailed extends Schema.TaggedError<NativePluginFailed>()(
   'NativePluginFailed',
   {
     message: Schema.String,
+    reason: Schema.String,
+    revision: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
@@ -265,10 +268,18 @@ const checked = (
   });
 };
 
-/** The plugin `source`'s native entry is not loaded, for `reason`. */
-const failure = (source: LoadablePlugin, reason: string, cause?: unknown) =>
+/** The plugin `source`'s native entry (at `revision`) is not loaded, for
+ *  `reason`. */
+const failure = (
+  source: LoadablePlugin,
+  reason: string,
+  revision?: string,
+  cause?: unknown,
+) =>
   new NativePluginFailed({
     message: `The native code of plugin ${source.record.name} is not loaded: ${reason}`,
+    reason,
+    ...(revision === undefined ? {} : { revision }),
     ...(cause === undefined ? {} : { cause }),
   });
 
@@ -280,7 +291,7 @@ const importEntry = (
   revision: string,
 ): Effect.Effect<NativePlugin, NativePluginFailed> => {
   const failed = (reason: string, cause?: unknown) =>
-    failure(source, reason, cause);
+    failure(source, reason, revision, cause);
   const url = `${pathToFileURL(entry.file).href}?rev=${revision}`;
   return Effect.gen(function* () {
     const module: unknown = yield* Effect.tryPromise({
@@ -314,11 +325,14 @@ const importEntry = (
   );
 };
 
-/** The revision of `source`'s native entry `entry`: a digest of the
- *  entry's path and the trust digest, the module's identity, which its
- *  layers are kept under. */
+/** The revision of the native entry `file` trusted at `digest`: a digest
+ *  of both, the module's identity, which its layers are kept under. */
+export const nativeRevision = (file: string, digest: string): string =>
+  sha256Hex(`${file}\0${digest}`);
+
+/** The revision of `source`'s native entry `entry`. */
 const revisionOf = (source: LoadablePlugin, entry: NativeEntry): string =>
-  sha256Hex(`${entry.file}\0${source.trust.digest}`);
+  nativeRevision(entry.file, source.trust.digest);
 
 /**
  * The process's native plugin loader: each installed plugin's entry at

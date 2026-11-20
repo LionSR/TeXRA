@@ -323,35 +323,35 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
 export const withNatives = (
   listed: ToolTable,
   natives: readonly NativePlugin[],
-): { readonly table: ToolTable; readonly withheld: readonly string[] } => {
+): {
+  readonly table: ToolTable;
+  /** Each native plugin left out, with why. */
+  readonly withheld: readonly {
+    readonly native: NativePlugin;
+    readonly reason: string;
+  }[];
+} => {
   const base = [...listed.entries.values()];
   let table = listed;
   const accepted: NativePlugin[] = [];
-  let waiting = natives.toSorted((a, b) =>
-    a.plugin.id < b.plugin.id ? -1 : 1,
-  );
-  let reasons = new Map<NativePlugin, string>();
-  for (let progress = true; progress && waiting.length > 0;) {
+  let withheld = natives
+    .toSorted((a, b) => (a.plugin.id < b.plugin.id ? -1 : 1))
+    .map((native) => ({ native, reason: 'it was not judged' }));
+  for (let progress = true; progress && withheld.length > 0;) {
     progress = false;
-    reasons = new Map();
-    for (const native of waiting) {
+    const judged: typeof withheld = [];
+    for (const { native } of withheld) {
       const next = tableOf(base, [...accepted, native]);
-      if (Result.isFailure(next)) reasons.set(native, next.failure);
+      if (Result.isFailure(next)) judged.push({ native, reason: next.failure });
       else {
         accepted.push(native);
         table = next.success;
         progress = true;
       }
     }
-    waiting = waiting.filter((native) => reasons.has(native));
+    withheld = judged;
   }
-  return {
-    table,
-    withheld: waiting.map(
-      (native) =>
-        `The native code of ${native.plugin.id} is not loaded: ${reasons.get(native)}`,
-    ),
-  };
+  return { table, withheld };
 };
 
 /** The plugin table: listed plugins alone where nothing is loaded (the

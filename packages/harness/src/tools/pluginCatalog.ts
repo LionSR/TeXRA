@@ -96,6 +96,12 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
               source,
             };
           }),
+          enabled: new Set([
+            ...loadable.map(({ record }) => installedPluginId(record.name)),
+            ...withheld.flatMap(({ plugin }) =>
+              plugin === null ? [] : [installedPluginId(plugin)],
+            ),
+          ]),
           warnings: [
             ...withheld.map(({ reason }) => reason),
             ...loadable.flatMap(({ plugin }) => [

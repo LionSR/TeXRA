@@ -5,7 +5,7 @@
  * `native_echo`, which answers the revision of the process layer it was
  * served by. The module writes what happens to it (its layer's acquire and
  * release, each call) to `events.log` beside the plugin folder, and a call
- * told to wait waits for the file `release` there.
+ * told to wait for `<n>` waits for the file `release-<n>` there.
  *
  * Failure modes:
  * - a plugin enabled mid-run is not offered until the run restarts, or is
@@ -15,7 +15,8 @@
  * - the replaced revision's layer is never released, or the new one is
  *   built more than once;
  * - a revision that fails to import fails the step or the other tools, or
- *   the step falls back to the previous revision;
+ *   drops the revision in use, or is imported again, or the step does not
+ *   say why;
  * - the person is not asked to trust the native code, the question does
  *   not say it runs inside the process, or it is asked as a shell command;
  * - a policy or a grant that approves every call trusts native code with no
@@ -72,7 +73,8 @@ interface EntryOptions {
 }
 
 /** The plugin's `harness.mjs` at `revision`: a tool that answers the
- *  revision its process layer serves, waiting for `../release` when asked,
+ *  revision its process layer serves, waiting for `../release-<n>` when
+ *  told to wait for `<n>`,
  *  with what `options` add. */
 const entry = (
   revision: string,
@@ -86,7 +88,6 @@ import { appendFileSync, existsSync } from 'node:fs';
 ${options.broken ? `throw new Error('${revision} is broken');` : ''}
 const note = (line) =>
   appendFileSync(new URL('../events.log', import.meta.url), line + '\\n');
-const released = new URL('../release', import.meta.url);
 
 export default ({ plugins, effect }) => {
   const { Context, Effect, Layer, Schema } = effect;
@@ -108,12 +109,13 @@ export default ({ plugins, effect }) => {
   const native_echo = plugins.defineTool({
     name: 'native_echo',
     description: 'Answer the revision of the plugin that served this call.',
-    schema: Schema.Struct({ wait: Schema.optional(Schema.NullOr(Schema.Boolean)) }),
+    schema: Schema.Struct({ wait: Schema.optional(Schema.NullOr(Schema.String)) }),
     execute: ({ wait }) =>
       Effect.gen(function* () {
         const revision = yield* Revision;
         note('call ' + revision);
-        if (wait)
+        if (wait) {
+          const released = new URL('../release-' + wait, import.meta.url);
           yield* Effect.callback((resume) => {
             const timer = setInterval(() => {
               if (existsSync(released)) {
@@ -123,6 +125,7 @@ export default ({ plugins, effect }) => {
             }, 20);
             return Effect.sync(() => clearInterval(timer));
           });
+        }
         note('done ' + revision);
         return 'echo ' + revision;
       }),
@@ -164,7 +167,8 @@ const pluginFiles = Effect.map(FakeHost, (host) => {
   return {
     dir,
     events: path.join(base, 'events.log'),
-    release: path.join(base, 'release'),
+    /** Let the `n`th waiting call finish. */
+    release: (n: number) => writeFileSync(path.join(base, `release-${n}`), ''),
     /** Write the plugin's manifest and its entry at `revision`. */
     write: (revision: string, options?: EntryOptions) => {
       mkdirSync(path.join(dir, '.claude-plugin'), { recursive: true });
@@ -250,20 +254,24 @@ const start = Effect.fn('start')(function* (
   return { runId, decided };
 });
 
-/** While revision 1's call waits: write the plugin at `revision`, trust
- *  it as the CLI's `plugin enable` does, and let the call finish. */
+/** While the `n`th call waits: write the plugin at `revision`, trust it as
+ *  the CLI's `plugin enable` does, and let the call finish. */
 const replaceDuringCall = Effect.fn('replaceDuringCall')(function* (
+  n: number,
   revision: string,
   options?: EntryOptions,
 ) {
   const { roots } = yield* FakeHost;
   const files = yield* pluginFiles;
-  yield* until(roots.storage, () =>
-    eventsIn(files.events).includes('call rev1'),
+  yield* until(
+    roots.storage,
+    () =>
+      eventsIn(files.events).filter((line) => line.startsWith('call '))
+        .length >= n,
   );
   files.write(revision, options);
   yield* InstalledPlugins.enable('echoes', roots, () => Effect.succeed(true));
-  writeFileSync(files.release, '');
+  files.release(n);
 });
 
 describe(
@@ -455,7 +463,7 @@ describe(
                   'Echo twice, the first waiting.',
                   false,
                 );
-                yield* replaceDuringCall('rev2');
+                yield* replaceDuringCall(1, 'rev2');
                 yield* until(
                   roots.storage,
                   waitingAfter(runId, 1, roots.storage),
@@ -483,7 +491,7 @@ describe(
           );
 
           it.effect(
-            'withholds a revision that throws at import, and falls back to none',
+            'keeps the revision in use when its replacement throws at import, until a fixed one replaces it',
             () =>
               Effect.gen(function* () {
                 const { roots } = yield* FakeHost;
@@ -492,38 +500,60 @@ describe(
                 const session = yield* persistentTestSession();
                 const { runId } = yield* start(
                   session,
-                  'Echo twice, the first waiting.',
+                  'Echo three times, the first two waiting.',
                   false,
                 );
-                yield* replaceDuringCall('rev3', { broken: true });
+                yield* replaceDuringCall(1, 'rev2', { broken: true });
+                yield* replaceDuringCall(2, 'rev3');
                 yield* until(
                   roots.storage,
                   waitingAfter(runId, 1, roots.storage),
                 );
-                const [answer] = answersOf(roots.storage, runId);
-                // The other tools are offered as before; revision 1 is not.
-                expect(answer).toContain('native_echo is not offered');
-                expect(answer).toContain('plugin_manager');
-                expect(answer).toContain('read_file');
+                // The step after revision 2 failed still ran revision 1;
+                // the one after revision 3 was trusted ran it.
                 expect(toolOutputs(roots.storage, runId)).toStrictEqual([
                   'installed',
                   'enabled',
                   'echo rev1',
+                  'other',
+                  'echo rev1',
+                  'echo rev3',
                 ]);
-                // The step says why, and revision 1's layer is released.
+                // The listing between them named the revision in use and
+                // the one that did not load.
+                const listing = storedRows(roots.storage).find(
+                  (row) =>
+                    row.run === runId &&
+                    row.type === 'tool.result' &&
+                    row.data.includes('Installed plugins:'),
+                );
+                expect(listing?.data).toMatch(
+                  /native module: revision [0-9a-f]{12} in use/,
+                );
+                expect(listing?.data).toContain('trusted now, did not load');
+                // The step said why, once, naming the revision that stays.
+                const warned = storedRows(roots.storage).filter(
+                  (row) =>
+                    row.run === runId &&
+                    row.data.includes('importing it threw: rev2 is broken') &&
+                    row.data.includes(
+                      'stays in use until the plugin is fixed or disabled',
+                    ),
+                );
+                expect(warned).toHaveLength(1);
+                // Revision 2 never came up; revision 1 went down once, after
+                // revision 3 came up and before it served a call.
+                const events = eventsIn(files.events);
                 expect(
-                  storedRows(roots.storage).some(
-                    (row) =>
-                      row.run === runId &&
-                      row.data.includes('importing it threw: rev3 is broken'),
-                  ),
-                ).toBe(true);
-                expect(eventsIn(files.events)).toStrictEqual([
+                  events.filter((line) => /^(acquire|release)/.test(line)),
+                ).toStrictEqual([
                   'acquire rev1',
-                  'call rev1',
-                  'done rev1',
+                  'acquire rev3',
                   'release rev1',
                 ]);
+                expect(events.indexOf('release rev1')).toBeLessThan(
+                  events.indexOf('call rev3'),
+                );
               }),
           );
         },
@@ -545,9 +575,17 @@ describe('native plugins that run on each other', () => {
       native('plugin:c', ['plugin:b']),
     ]);
     expect([...table.entries.keys()]).toStrictEqual(['plugin:z', 'plugin:a']);
-    expect(withheld).toStrictEqual([
-      'The native code of plugin:b is not loaded: plugin plugin:b runs on plugin plugin:c, which is not listed.',
-      'The native code of plugin:c is not loaded: plugin plugin:c runs on plugin plugin:b, which is not listed.',
+    expect(
+      withheld.map(({ native, reason }) => [native.plugin.id, reason]),
+    ).toStrictEqual([
+      [
+        'plugin:b',
+        'plugin plugin:b runs on plugin plugin:c, which is not listed.',
+      ],
+      [
+        'plugin:c',
+        'plugin plugin:c runs on plugin plugin:b, which is not listed.',
+      ],
     ]);
   });
 });

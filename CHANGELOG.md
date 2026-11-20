@@ -1410,12 +1410,14 @@ All notable changes to this project will be documented in this file.
   step, with no restart. An edit replaces it the same way once trusted
   again: a call already running finishes on the version it started with,
   and the old version's services are released when the last step using
-  them ends. A version that fails to load is left out with its reason, and
-  nothing else changes. Each call of a native tool asks under your
+  them ends. A new version that fails to load, or whose services do not
+  come up, is reported with its reason and leaves the version before it in
+  use until the plugin is fixed or disabled (until TeXRA restarts, after
+  which the plugin is left out with that reason); `plugin_manager list`
+  names the version in use. Nothing else changes. Each call of a native tool asks under your
   approval policy, as an MCP server's tool does, whatever the module
   declares, and stops after 60 seconds as one does; a call that fails or
-  crashes fails alone, naming the plugin, and a version whose services do
-  not come up is left out with its reason. Agents get a `plugin_manager` tool to list, install, enable,
+  crashes fails alone, naming the plugin. Agents get a `plugin_manager` tool to list, install, enable,
   disable and remove plugins themselves, each change but a listing or an
   install asked of you first. Trusting a plugin is asked as its own card in
   the progress view and the terminal, naming the plugin, its version, its

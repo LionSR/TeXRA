@@ -23,7 +23,11 @@ import {
   describeProvides,
   NATIVE_ENTRY_FILE,
 } from '@common/plugins/nativeEntry';
-import type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
+import {
+  installedPluginId,
+  type PluginListing,
+  type PluginReview,
+} from '@common/plugins/pluginTrust';
 import {
   inRunSession,
   RunCall,
@@ -34,6 +38,8 @@ import { Approvals } from '@shared/session/runHistory';
 import { ToolError, type RequestPayload, type RunId } from '@shared/schemas';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nativeRevision } from '@tools/nativePlugins';
+import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 
 const NameSchema = Schema.NonEmptyString.annotate({
   description: 'The installed plugin, by the name `list` answers.',
@@ -77,8 +83,31 @@ const PluginManagerInputSchema = Schema.Union([
 ]);
 type PluginManagerInput = typeof PluginManagerInputSchema.Type;
 
-/** One plugin as a listing answers it. */
-const listingLine = (plugin: PluginListing): string => {
+/** Which revision of `plugin`'s native module the step's table (`table`)
+ *  runs, and whether the one trusted now did not load, so the one before
+ *  it stands in. */
+const nativeState = (plugin: PluginListing, table: ToolTable): string[] => {
+  if (plugin.native === null) return [];
+  const inUse = table.revisionOf(installedPluginId(plugin.name));
+  const trustedNow =
+    plugin.enabled && plugin.trusted && plugin.trust !== undefined
+      ? nativeRevision(plugin.native.file, plugin.trust.digest)
+      : null;
+  if (inUse === 'builtin')
+    return trustedNow === null ? [] : ['  native module: not loaded'];
+  return [
+    `  native module: revision ${inUse.slice(0, 12)} in use`,
+    ...(trustedNow === null || trustedNow === inUse
+      ? []
+      : [
+          `  revision ${trustedNow.slice(0, 12)}, trusted now, did not load (your step's warnings say why); the one in use stays until the plugin is fixed or disabled, and only while this process runs`,
+        ]),
+  ];
+};
+
+/** One plugin as a listing answers it, with what the step's table runs of
+ *  its native module. */
+const listingLine = (plugin: PluginListing, table: ToolTable): string => {
   const state = [
     plugin.enabled ? 'enabled' : 'disabled',
     plugin.trusted ? 'trusted as it is' : 'not trusted as it is',
@@ -93,6 +122,7 @@ const listingLine = (plugin: PluginListing): string => {
   ].join('; ');
   return [
     `- ${plugin.name}${plugin.version ? ` ${plugin.version}` : ''} (${state}): ${carries}`,
+    ...nativeState(plugin, table),
     ...(plugin.problem === undefined ? [] : [`  problem: ${plugin.problem}`]),
   ].join('\n');
 };
@@ -186,12 +216,16 @@ const runPluginManager = Effect.fn('plugin_manager.call')(function* (
   switch (input.command) {
     case 'list': {
       const plugins = yield* InstalledPlugins.list(roots);
+      const table = yield* ToolRegistry;
       return {
         status: 'executed' as const,
         output:
           plugins.length === 0
             ? 'No plugin is installed.'
-            : ['Installed plugins:', ...plugins.map(listingLine)].join('\n'),
+            : [
+                'Installed plugins:',
+                ...plugins.map((plugin) => listingLine(plugin, table)),
+              ].join('\n'),
         summary: `Listed ${plugins.length} plugin${plugins.length === 1 ? '' : 's'}`,
       };
     }
@@ -308,7 +342,7 @@ Commands:
 - \`disable\` takes \`name\`: it stays installed and trusted, and loads nothing. The person is asked first.
 - \`remove\` takes \`name\`: it is forgotten with its trust. The person is asked first.
 
-A change reaches you at your next step (your next request to the model): its tools are offered, or withdrawn, then. A call already running keeps the version it started with.
+A change reaches you at your next step (your next request to the model): its tools are offered, or withdrawn, then. A call already running keeps the version it started with. When a newly trusted version of a native module does not load, the version in use before it stays in use until the plugin is fixed or disabled, but only while this process runs: after a restart the plugin is withheld with the new version's reason. \`list\` names the version in use and one that did not load.
 
 A plugin folder has \`.claude-plugin/plugin.json\` (\`{ "name": "<name>" }\`). Its \`${NATIVE_ENTRY_FILE}\` begins with \`export const description = '<one line>';\` and \`export const provides = ['tool:<name>', ...];\` (also \`program:<name>\`, \`module:<name>\`, \`processLayer\`, \`sessionLayer\`, \`prompt\`), and its default export takes \`{ plugins, effect }\` (the plugin authoring surface and the Effect library this process runs) and returns \`plugins.definePlugin({ id: '<name>', tools: [...] })\`, each tool made with \`plugins.defineTool\`.`,
   schema: PluginManagerInputSchema,

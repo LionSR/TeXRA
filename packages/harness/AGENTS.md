@@ -96,8 +96,12 @@ each the gate and deadline an MCP server's tool has
 approval policy through the loop's one guard, and however it ends but by
 interruption it ends that call alone, its error naming the plugin. A step
 brings a native plugin's layers up before it offers anything of it
-(`pinStep`, `tools/sessionTools.ts`); one whose layer fails is withheld
-with its reason. Trusting a native
+(`pinStep`, `tools/sessionTools.ts`). A revision that does not load (its
+import, its value, the table's check or its layers) is not tried again
+until its trust digest changes, and the revision of that plugin the table
+held before it stays in use, in memory only, until the plugin is fixed,
+disabled or removed (`standing`, `toolCatalogLayer`); with none, the
+plugin is withheld. Either way the step says why. Trusting a native
 module is a person's own answer whatever the policy, and so is enabling
 again one a person trusted and then disabled: `plugin_manager` opens that
 request, a `pluginTrust` request (what the plugin is, where, what it

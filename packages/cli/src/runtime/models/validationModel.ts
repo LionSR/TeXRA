@@ -427,7 +427,9 @@ function goldenTurn(
   }
   // The native plugin run: it installs and enables the plugin its task
   // names, calls the tools its task names in turn, then calls its
-  // `native_echo` once, or twice with the first waiting for its release. A step that does not
+  // `native_echo` once, or two or three times with all but the last
+  // waiting for their release (three times with a listing of the plugins
+  // after the first). A step that does not
   // offer `native_echo` says so, with what it does offer.
   if (system.includes('GOLDEN-NATIVE')) {
     const offered = turn.tools.map(({ name }) => name);
@@ -457,8 +459,15 @@ function goldenTurn(
         ? []
         : named.split(', ').map((name) => () => [call(name, {})])),
       ...(said.includes('Echo twice, the first waiting.')
-        ? [echo({ wait: true }), echo({})]
-        : [echo({})]),
+        ? [echo({ wait: '1' }), echo({})]
+        : said.includes('Echo three times, the first two waiting.')
+          ? [
+              echo({ wait: '1' }),
+              () => [call('plugin_manager', { command: 'list' })],
+              echo({ wait: '2' }),
+              echo({}),
+            ]
+          : [echo({})]),
     ];
     const step = steps[results.length];
     return Effect.succeed(step === undefined ? text('Echoed.') : step());
