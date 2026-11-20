@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
 // Local imports
-import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
+import { dispatchCommandFromRegistry } from '@commands/registry';
 
 describe('dispatchCommandFromRegistry', () => {
   // Regression guard for #3782: a handler's program must reach the caller
