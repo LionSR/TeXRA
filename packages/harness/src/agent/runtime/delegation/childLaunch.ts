@@ -45,7 +45,7 @@ import {
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 
 /** What a child's end answers its awaiting call. */
-interface ChildRunEnd {
+export interface ChildRunEnd {
   readonly runId: RunId;
   readonly result: RunEnd;
 }
