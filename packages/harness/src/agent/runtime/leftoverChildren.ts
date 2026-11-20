@@ -9,7 +9,7 @@
  */
 import { Effect } from 'effect';
 
-import { checkpointRefusal } from '@agent/storage/continuation';
+import { continuationOf } from '@agent/storage/continuation';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
@@ -73,8 +73,9 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   if ((yield* owningCall(run.id, facts)) !== null) return;
   const parentId = parent.runId;
   const report = (why: string) => reportInterrupted(run, why);
-  const rejection = yield* checkpointRefusal(run.id);
-  if (rejection !== null) return yield* report(rejection.kind);
+  const continuation = continuationOf(facts);
+  if (continuation.kind !== 'checkpoint')
+    return yield* report(continuation.kind);
   // A resume refused once it decides is reported; one blocked on a missing
   // agent or plugin, or one that failed, is left for the next resume, said
   // once. Forked: the caller goes on while the child's opening commits.
