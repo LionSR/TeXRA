@@ -10,15 +10,13 @@
  */
 import { Effect, type Scope } from 'effect';
 
-import { getHelperModelName } from '@agent/runtime/helperModelName';
+import { servableHelperModel } from '@agent/runtime/helperModelName';
 import type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 import {
   modelAccessLayer,
   ModelAccess,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import { withLogChannel } from '@logger/effectLog';
-import { readModelOptions } from '@model/computeModelOptions';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { SettingsStores } from '@shared/config/settings';
@@ -36,28 +34,6 @@ export interface HelperPrompt {
   readonly userPrompt: string;
   readonly systemPrompt?: string;
 }
-
-/**
- * The model a helper call binds: the helper model while it can serve, else
- * the asking run's own model. A user who can reach only the run's provider
- * still gets helper calls without the setting being rewritten for them; the
- * swap is logged, as `applyHelperModelPreference` logs its own.
- */
-const servableHelper = Effect.fn('servableHelper')(function* (
-  stores: SettingsStores,
-  helperModel: string | undefined,
-  runModel: string | undefined,
-) {
-  if (helperModel === undefined) return runModel;
-  if (runModel === undefined || runModel === helperModel) return helperModel;
-  const [option] = yield* readModelOptions(stores, [helperModel]);
-  const unavailable = option?.unavailableReason;
-  if (!unavailable) return helperModel;
-  yield* Effect.logWarning(
-    `Using ${runModel} for a helper call: helper model ${helperModel} is unavailable. ${unavailable}`,
-  ).pipe(withLogChannel('helperModel'));
-  return runModel;
-});
 
 /**
  * One helper call: bind the configured helper model (else `runModel`) for
@@ -96,12 +72,8 @@ export const helperCall = Effect.fn('helperCall')(
     | SubscriptionAccounts
   > {
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
-    const helperModel = yield* Effect.mapError(
-      getHelperModelName(stores),
-      RouteUnavailable.of,
-    );
     const modelId = yield* Effect.mapError(
-      servableHelper(stores, helperModel, runModel),
+      servableHelperModel(stores, runModel),
       RouteUnavailable.of,
     );
     if (modelId === undefined)

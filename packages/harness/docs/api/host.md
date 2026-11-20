@@ -781,7 +781,7 @@ provider, for a request llm does not model (audio transcription): the
 route `config` takes with every preference off.
 
 ```ts
-const ownKeyCredential: (stores: SettingsStores, config: ModelConfig) => Effect<{ readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } & { readonly route: "api-key"; readonly bearer: string; } & { readonly endpoint: string; }, RouteUnavailable, Secrets>
+const ownKeyCredential: (stores: SettingsStores, config: ModelConfig) => Effect<{ readonly bearer: string; readonly endpoint: string; }, RouteUnavailable, Secrets>
 ```
 
 ## pathToLocationIn

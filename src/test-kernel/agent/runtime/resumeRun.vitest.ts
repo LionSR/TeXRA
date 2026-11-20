@@ -131,8 +131,8 @@ describe(
               const { session, runId, storage } = yield* waitingRunAfterCrash();
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
-              // The resume reads the run's queued input and then its lineage
-              // (`persistedParentId`): that read fails.
+              // The resume reads the run's queued input and then its owning
+              // call (`owningCall`): that read fails.
               const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.flip(resume(runId, { session })),
