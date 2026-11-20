@@ -1074,9 +1074,10 @@ const GOAL_STRATEGY_SETTING: { readonly key: "goal.strategy"; readonly slot: "co
 
 A goal's result: what its strategy, the `goal` export of the script
 module the `goal.strategy` setting names, returns, and so the structured
-output its run ends with. `completed` when a round claimed the objective
-done and a judge found no requirement `failed` (its `unverified` claims
-are for a person to check), `paused` with the reason otherwise. A pause is a result, not a
+output its run ends with. `completed` when the strategy judged the
+objective met (the default strategy: a round claimed it done and a judge
+found no requirement `failed`; its `unverified` claims are for a person
+to check), `paused` with the reason otherwise. A pause is a result, not a
 waiting run: work continues through a new goal or a new turn.
 
 ```ts
