@@ -105,8 +105,9 @@ export const backgroundScriptOf = (
  *  it takes no later message. A plugin wrote the program, not a model, so
  *  the launch that chose it granted it: tools fixed past any switch, its
  *  delegations under the launch's approval, its prompts and files passed
- *  as written, and no skill activated by its instruction. An installed
- *  plugin's program gets less ({@link isInstalledProgram}). */
+ *  as written, and no skill activated by its instruction. A program read
+ *  from a file gets less ({@link isInstalledProgram}), and one an agent
+ *  wrote for itself less again ({@link delegatesApproved}). */
 export const programOf = (
   config: Pick<AgentConfig, 'script'> | typeof RunRecordFieldsSchema.Encoded,
 ): Extract<AgentConfig['script'], { kind: 'program' }> | null =>
@@ -115,15 +116,36 @@ export const programOf = (
     : null;
 
 /**
- * Whether the program `name` is one an installed plugin carries
- * (`<plugin>:<name>`), not one the app's plugin list registers (a bare
- * name). A person reviewed an installed plugin's programs when they enabled
- * it, so a launch and the agents it starts stand approved like a registered
- * program's; but its text is a third party's, so the tools it lists still
- * pass the user's switches, and the files it hands a child are resolved as
- * a model's script's are.
+ * Whether the program `name` is read from a file (`<plugin>:<name>` of an
+ * installed plugin, `own:<name>` of the agent's own), not one the app's
+ * plugin list registers (a bare name). A person reviewed an installed
+ * plugin's programs when they enabled it, so a launch and the agents it
+ * starts stand approved like a registered program's; but the text is not
+ * the app's, so the tools it lists still pass the user's switches, and the
+ * files it hands a child are resolved as a model's script's are.
  */
 export const isInstalledProgram = (name: string): boolean => name.includes(':');
+
+/** What the name of a program an agent wrote for itself begins with,
+ *  before the colon (`own:<name>`, a file in its memory). No installed
+ *  plugin takes it for its name. */
+export const OWN_PROGRAM_PREFIX = 'own';
+
+/**
+ * Whether the run opened on a program whose launch approved the agents and
+ * programs it starts: one a plugin ships, registered or installed, which
+ * the app or a person stands behind. A program an agent wrote for itself
+ * (`own:<name>`) nobody reviewed, so beside what any program read from a
+ * file gets ({@link isInstalledProgram}) it is held to what a model's own
+ * script may do: what it starts is asked about under the approval policy,
+ * and where no prompt can show, the tools that ask are withheld from it.
+ */
+export const delegatesApproved = (
+  config: Pick<AgentConfig, 'script'>,
+): boolean => {
+  const program = programOf(config);
+  return program !== null && !program.name.startsWith(`${OWN_PROGRAM_PREFIX}:`);
+};
 
 /**
  * Why a run stops. `user` is an explicit stop of the work (a stop button,

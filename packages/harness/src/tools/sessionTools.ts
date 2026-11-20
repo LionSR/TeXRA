@@ -52,7 +52,8 @@ export interface ToolStep {
   /** The modules its scripts may import, source by specifier: each of the
    *  on built-in plugins' `scriptModules` as `builtIn:<name>`, and each
    *  program of the installed plugins it loaded as `<plugin>:<name>`. The
-   *  programs its scripts may start are those plugins' `programs`. */
+   *  programs its scripts may start are those plugins' `programs`. The
+   *  step adds the programs its project's agent wrote for itself. */
   readonly modules: { readonly [specifier: string]: string };
   /** The installed plugins the step loaded, by id, as read (those that ship
    *  only skills included): its installed skills' source. */

@@ -360,7 +360,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
     const { content, offered, handed } = yield* Effect.interruptible(
       Effect.gen(function* () {
         // A script's run renders no prompt: what it runs is its call.
-        const script = yield* scriptCallOf(run.config);
+        const script = yield* scriptCallOf(run.config, roots);
         if (script !== null) {
           echo();
           const step = yield* stepFor(run, opening, false);

@@ -46,6 +46,10 @@ import {
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
 
+import {
+  OWN_PROGRAMS_LISTED,
+  readOwnPrograms,
+} from '@agent/memory/ownPrograms';
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { ITool } from '@tools/core/ToolTypes';
@@ -55,6 +59,7 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
+  delegatesApproved,
   isInstalledProgram,
   PROGRAM_TOOL_NAME,
   programOf,
@@ -225,13 +230,10 @@ const openStep = Effect.fn('Step.open')(function* (
   const roots = yield* SessionRoots;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
-    // A registered program's tools are fixed; anyone else's, an installed
-    // plugin's program's among them, follow the switches read live.
+    // A registered program's tools are fixed; anyone else's, those of a
+    // program read from a file among them, follow the switches read live.
     const program = programOf(run.config);
     const trusted = program !== null && !isInstalledProgram(program.name);
-    // Every program is offered the tools that ask for approval, where no
-    // prompt can show too: its delegations stand approved by its launch, and
-    // any other call is still decided by the approval policy when made.
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
@@ -244,8 +246,27 @@ const openStep = Effect.fn('Step.open')(function* (
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
       directToolCalls: keepsDirectToolCalls(yield* ScopedRef.get(run.model)),
-      ...(program !== null && { approvalPromptsUnavailable: false }),
+      // A program a plugin ships is offered the tools that ask for
+      // approval, where no prompt can show too: its delegations stand
+      // approved by its launch, and any other call is still decided by the
+      // approval policy when made. One the agent wrote for itself is
+      // offered what the agent would be.
+      ...(delegatesApproved(run.config) && {
+        approvalPromptsUnavailable: false,
+      }),
     });
+    // The programs the project's agent wrote for itself, as their files
+    // read now: a file written during one step is a program at the next.
+    // All of them load; the description names the first by name. The run
+    // of a program a plugin ships loads none: what it imports would run
+    // under the approval its launch gave it, which the agent's own text
+    // never gets. It can still start one, as a run of its own.
+    const own = delegatesApproved(run.config)
+      ? { loaded: [], refused: [] }
+      : yield* readOwnPrograms(roots.storage);
+    const unlisted = new Set(
+      own.loaded.slice(OWN_PROGRAMS_LISTED).map(({ name }) => name),
+    );
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     // A plugin whose dependency is missing gives the step no program and no
     // prompt section, as it gives it no tool.
@@ -256,7 +277,12 @@ const openStep = Effect.fn('Step.open')(function* (
     // resumed script runs the code it ran with.
     const imported =
       held === null
-        ? pinned.modules
+        ? {
+            ...pinned.modules,
+            ...Object.fromEntries(
+              own.loaded.map(({ name, source }) => [name, source]),
+            ),
+          }
         : Record.map(state.offeredWith.modules, (at) =>
             stored(state, at, Schema.String),
           );
@@ -264,7 +290,7 @@ const openStep = Effect.fn('Step.open')(function* (
       held?.tools ?? resolved,
       state,
       run.toolInputs.tools,
-      Object.keys(imported),
+      Object.keys(imported).filter((specifier) => !unlisted.has(specifier)),
       // Only a run offered `program` can start one.
       resolved.registry.has(PROGRAM_TOOL_NAME)
         ? [
@@ -281,6 +307,9 @@ const openStep = Effect.fn('Step.open')(function* (
                 name,
                 description,
               })),
+            ),
+            ...own.loaded.flatMap(({ name, description }) =>
+              unlisted.has(name) ? [] : [{ name, description }],
             ),
           ]
         : [],
@@ -363,6 +392,7 @@ const openStep = Effect.fn('Step.open')(function* (
       },
       warnings: [
         ...pinned.warnings,
+        ...own.refused,
         ...resolved.warnings,
         ...(held?.notes ?? []),
         ...catalog.issues.map(

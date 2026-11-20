@@ -203,7 +203,7 @@ export const agentRunLayer = (
   | HttpClient.HttpClient
   | Secrets
   | SubscriptionAccounts
-  // An installed plugin's program is read from the plugin as it is now.
+  // A program read from a file is read from that file as it is now.
   | AppState
   | FileSystem.FileSystem
 > =>
@@ -230,7 +230,7 @@ export const agentRunLayer = (
       const finalToolName = terminalTool?.definition.name ?? null;
       // A script's run offers its script and exactly the tools its call
       // names (a background script's parent's, a program's registered ones).
-      const script = yield* scriptCallOf(config);
+      const script = yield* scriptCallOf(config, roots);
       // A plugin agent that names no tools inherits them, as a Claude Code
       // subagent does: the standard file, shell and web tools and the
       // installed plugins' tools, whoever launched it.

@@ -116,6 +116,18 @@ try {
 const named = await self('Answer on the named model.', { label: 'Named', model: 'openai/gpt-6.1-sol', maxCostUsd: 100 })
 return { capped, named: named.response }`;
 
+/** The program the own-program run writes for itself: it asks a child and
+ *  returns what the child said. */
+const GOLDEN_OWN_PROGRAM = `// Asks a child and reports its answer.
+export const description = 'Ask a child and report its answer.';
+export const uses = ['read_file', 'agent'];
+
+export default async () => {
+  const child = await agent('Own child: answer.', { agentName: 'golden_child', label: 'Own child' });
+  return 'own program ran; child said: ' + child.response;
+};
+`;
+
 /** A reply of `value` alone. */
 const text = (value: string): TurnResult['content'] => [
   { kind: 'message', content: [{ kind: 'text', text: value }] },
@@ -368,6 +380,26 @@ function goldenTurn(
     return results.length === 0
       ? Effect.succeed([call('executions', { path: '/executions' })])
       : Effect.never;
+  }
+  // The own-program run: it writes itself a program with the memory tool,
+  // then its next step's script starts that program by name.
+  if (system.includes('GOLDEN-OWN')) {
+    const step = [
+      () =>
+        call('memory', {
+          command: 'create',
+          path: '/memories/programs/greet.js',
+          file_text: GOLDEN_OWN_PROGRAM,
+        }),
+      () =>
+        call('script', {
+          title: 'Start the program',
+          code: "return (await program('own:greet')).response",
+        }),
+    ][results.length];
+    return Effect.succeed(
+      step === undefined ? text('Own program done.') : [step()],
+    );
   }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [

@@ -1171,20 +1171,20 @@ interface ProcessServicesOptions {
 
 ## programLaunch
 
-What launches the program `name` as a run of its own: the run is named
-for the program and has no agent's prompt or tools (its script is all it
-runs), and it writes the program's own outputs unless the launch names
-files other than its inputs.
+What launches the program `name` as a run of its own in the project at
+`roots`: the run is named for the program and has no agent's prompt or
+tools (its script is all it runs), and it writes the program's own
+outputs unless the launch names files other than its inputs.
 
 ```ts
-const programLaunch: (name: string, args: Readonly<Record<string, Json>>, files: Pick<{ readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly script?: { readonly kind: "background"; readonly title: string; readonly tools: readonly string[]; readonly code: string; readonly timeoutMs?: number | undefined; } | { readonly kind: "program"; readonly name: string; readonly args: { readonly [x: string]: Json; }; } | undefined; readonly workingDirectory?: string | undefined; readonly agentSource?: { readonly kind: "custom" | "builtIn" | "plugin"; } | { readonly kind: "inline"; readonly persona: { readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; }; } | undefined; readonly asCaller?: boolean | undefined; readonly rootUserInstruction?: string | undefined; readonly displayInstruction?: string | undefined; readonly skills?: readonly string[] | undefined; readonly launch?: { readonly [x: string]: Json; } | undefined; readonly delegationAgentScope?: readonly string[] | undefined; readonly outputSchema?: { readonly [x: string]: unknown; } | undefined; }, "inputFiles" | "outputFiles">) => Effect<{ agent: string; agentSource: { kind: "inline"; persona: {}; }; outputFiles: string[]; script: { kind: "program"; name: string; args: Readonly<Record<string, Json>>; }; }, ProgramNotRegistered, FileSystem | AppState | ToolRegistry>
+const programLaunch: (name: string, args: Readonly<Record<string, Json>>, files: Pick<{ readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly script?: { readonly kind: "background"; readonly title: string; readonly tools: readonly string[]; readonly code: string; readonly timeoutMs?: number | undefined; } | { readonly kind: "program"; readonly name: string; readonly args: { readonly [x: string]: Json; }; } | undefined; readonly workingDirectory?: string | undefined; readonly agentSource?: { readonly kind: "custom" | "builtIn" | "plugin"; } | { readonly kind: "inline"; readonly persona: { readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; }; } | undefined; readonly asCaller?: boolean | undefined; readonly rootUserInstruction?: string | undefined; readonly displayInstruction?: string | undefined; readonly skills?: readonly string[] | undefined; readonly launch?: { readonly [x: string]: Json; } | undefined; readonly delegationAgentScope?: readonly string[] | undefined; readonly outputSchema?: { readonly [x: string]: unknown; } | undefined; }, "inputFiles" | "outputFiles">, roots: Pick<WorkspaceRoots, "storage">) => Effect<{ agent: string; agentSource: { kind: "inline"; persona: {}; }; outputFiles: string[]; script: { kind: "program"; name: string; args: Readonly<Record<string, Json>>; }; }, ProgramNotRegistered, FileSystem | AppState | ToolRegistry>
 ```
 
 ## ProgramNotRegistered
 
 A run names a program no plugin offers: an earlier build's run, one of
-a plugin this process does not load, or one of an installed plugin that
-is not loaded now (`withheld` says why).
+a plugin this process does not load, or one read from a file that is
+not loaded now (`withheld` says why).
 
 ```ts
 class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistered>()(
@@ -1199,14 +1199,16 @@ class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistered>()(
 
 ## programsNow
 
-Every program a run can open on now, by name: those the plugin list
-registers, and those of the installed plugins that load now (enabled, and
-trusted as they are), each under `<plugin>:<name>` with the description
-and tools read from its file. `withheld` says why an enabled plugin or
-one of its program files is not loaded.
+Every program a run of the project at `roots` can open on now, by name:
+those the plugin list registers, those of the installed plugins that load
+now (enabled, and trusted as they are), each under `<plugin>:<name>`, and
+those the project's agent wrote for itself, each under `own:<name>`; a
+program read from a file has the description and tools its file
+declares. `withheld` says why an enabled plugin or a program file is not
+loaded.
 
 ```ts
-const programsNow: () => Effect<{ programs: Map<string, Program<unknown>>; withheld: string[]; }, never, FileSystem | AppState | ToolRegistry>
+const programsNow: (roots: Pick<WorkspaceRoots, "storage">) => Effect<{ programs: Map<string, Program<unknown>>; withheld: string[]; }, never, FileSystem | AppState | ToolRegistry>
 ```
 
 ## ProviderError

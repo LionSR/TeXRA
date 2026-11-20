@@ -115,7 +115,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   }
 
   const services = yield* cliPlatform;
-  const { programs, withheld } = yield* programsNow();
+  const { programs, withheld } = yield* programsNow(services.roots);
   const program = programs.get(init.agent);
   // An installed plugin names its agents and its programs `<plugin>:<name>`
   // alike: a name that is both is refused rather than one picked unsaid.
@@ -242,7 +242,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       };
       const config: AgentConfigPayload = {
         ...launch,
-        ...(yield* programLaunch(init.agent, {}, launch)),
+        ...(yield* programLaunch(init.agent, {}, launch, services.roots)),
       };
 
       return yield* executeCliRun(config, context, {
