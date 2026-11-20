@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit, Option, References } from 'effect';
+import { Deferred, Effect, Exit, References } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
 import { formatResultCount } from '@texra-ai/harness/schemas';
@@ -13,11 +13,7 @@ import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
 
 import { adoptLoginShellEnvironment } from '@texra/platform/defaults/loginShellEnvironment';
 
-import {
-  CliInvocation,
-  CliUsageError,
-  type CliContext,
-} from '../runtime/platform/cliContext';
+import { CliInvocation, type CliContext } from '../runtime/platform/cliContext';
 import { linkCliService } from '../runtime/platform/cliService';
 import {
   linkedClient,
@@ -33,16 +29,6 @@ import { cliResult, emitCliResult } from './_helpers/output';
 
 /** How long a service with no project open stays up. */
 const DEFAULT_IDLE_SECONDS = 600;
-
-function parseIdleSeconds(value: string | undefined): number {
-  if (value === undefined) return DEFAULT_IDLE_SECONDS;
-  const seconds = Number(value);
-  if (!Number.isInteger(seconds) || seconds < 1)
-    throw new CliUsageError({
-      message: `--idle-timeout expects a whole number of seconds, got ${value}.`,
-    });
-  return seconds;
-}
 
 /** Every service log line is `time LEVEL [channel] message` on stderr, which
  *  a detached service has pointed at `run/serve.log`. */
@@ -123,21 +109,22 @@ export const serveCommand = cliCommand(SERVICE_SUBCOMMAND, {
   description:
     'Run the TeXRA service in the foreground (windows start it on their own)',
   config: {
-    idleTimeout: Flag.String('idle-timeout').pipe(
+    idleTimeout: Flag.Int('idle-timeout').pipe(
+      Flag.filter(
+        (seconds) => seconds >= 1,
+        (seconds) => `Expected at least 1 second, got ${seconds}`,
+      ),
       Flag.withMetavar('seconds'),
       Flag.withDescription(
         `Exit after this long with no project open and no task starting, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
       ),
-      Flag.optional,
+      Flag.withDefault(DEFAULT_IDLE_SECONDS),
     ),
   },
   catchExitCode: CliExitCode.AgentError,
   layer: cliProcessLayer,
   run: (context, input) =>
-    runServe(
-      context,
-      parseIdleSeconds(Option.getOrUndefined(input.idleTimeout)),
-    ).pipe(
+    runServe(context, input.idleTimeout).pipe(
       // The service's log is read after the fact, so by default it keeps the
       // info lines a one-shot command's default level drops.
       Effect.provideService(
