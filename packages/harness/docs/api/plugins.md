@@ -28,8 +28,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`approvedWriteConflict`](#approvedwriteconflict)).
 - **Native plugins**: an installed plugin folder's `harness.mjs` is a
   module whose default export ([`NativeEntryModule`](#nativeentrymodule))
-  the harness calls with this surface and its own `effect`
-  ([`NativePluginHost`](#nativepluginhost)) and which returns a
+  the harness calls with this surface and its own `effect` authoring
+  modules ([`NativePluginHost`](#nativepluginhost)) and which returns a
   [`Plugin`](#plugin); once the person trusts it, it is added, replaced or
   removed while the process runs, each run seeing the change from its next
   step.
@@ -1378,14 +1378,17 @@ interface NativeEntryModule {
 ## NativePluginHost
 
 What a native entry's default export is called with: this process's
-plugin authoring surface and its `effect`.
+plugin authoring surface and the modules of its `effect` a plugin is
+written with.
 
 ```ts
 interface NativePluginHost {
   /** `@texra-ai/harness/plugins`, as this process loaded it. */
   readonly plugins: typeof plugins;
-  /** `effect`, as this process loaded it. */
-  readonly effect: typeof effect;
+  /** `effect`'s authoring modules, as this process loaded them: `Effect`,
+   *  `Context`, `Layer`, `Schema`, `Stream`, `Scope` and the data and
+   *  concurrency modules beside them, by their `effect` names. */
+  readonly effect: typeof EFFECT;
 }
 ```
 

@@ -1403,8 +1403,10 @@ All notable changes to this project will be documented in this file.
   begins with `export const description = '...';` and
   `export const provides = ['tool:<name>', ...];`, and its default export
   takes `{ plugins, effect }` (the `@texra-ai/harness/plugins` surface and
-  the `effect` TeXRA runs on) and returns a plugin with tools, process or
-  session services, a prompt section, script modules and programs. It runs
+  the modules of the `effect` TeXRA runs on that a plugin is written with,
+  `Effect`, `Context`, `Layer`, `Schema`, `Stream` and their kin) and
+  returns a plugin with tools, process or session services, a prompt
+  section, script modules and programs. It runs
   inside the process as you, so `texra plugin enable` says so and lists what
   it provides; once trusted at its digest it loads from every run's next
   step, with no restart. An edit replaces it the same way once trusted

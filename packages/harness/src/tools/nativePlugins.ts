@@ -32,8 +32,41 @@
 import { pathToFileURL } from 'node:url';
 
 // Third-party imports
-import * as effect from 'effect';
-import { Cause, Effect, Layer, Predicate, Result, Schema } from 'effect';
+import {
+  Array as Arr,
+  Cause,
+  Clock,
+  Config,
+  Context,
+  Data,
+  DateTime,
+  Deferred,
+  Duration,
+  Effect,
+  Equal,
+  Exit,
+  Fiber,
+  Function as Fn,
+  HashMap,
+  HashSet,
+  Layer,
+  Option,
+  Order,
+  Predicate,
+  PubSub,
+  Queue,
+  Record,
+  Redacted,
+  Ref,
+  Result,
+  Schedule,
+  Schema,
+  Scope,
+  Stream,
+  String as Str,
+  Struct,
+  SubscriptionRef,
+} from 'effect';
 
 // Local imports
 import type { NativeEntry } from '@common/plugins/nativeEntry';
@@ -51,13 +84,58 @@ import type { NativePlugin } from '@tools/toolTable';
 import { sha256Hex } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
 
+/**
+ * The modules of `effect` a native entry is handed, as this process loaded
+ * them: those a plugin's tools, layers and programs are written with. A
+ * fixed list, not the whole package: handing every module would keep all
+ * of `effect` in every host's bundle, most of it nothing else uses.
+ */
+const EFFECT = Object.freeze({
+  Array: Arr,
+  Cause,
+  Clock,
+  Config,
+  Context,
+  Data,
+  DateTime,
+  Deferred,
+  Duration,
+  Effect,
+  Equal,
+  Exit,
+  Fiber,
+  Function: Fn,
+  HashMap,
+  HashSet,
+  Layer,
+  Option,
+  Order,
+  Predicate,
+  PubSub,
+  Queue,
+  Record,
+  Redacted,
+  Ref,
+  Result,
+  Schedule,
+  Schema,
+  Scope,
+  Stream,
+  String: Str,
+  Struct,
+  SubscriptionRef,
+});
+
 /** What a native entry's default export is called with: this process's
- *  plugin authoring surface and its `effect`. */
+ *  plugin authoring surface and the modules of its `effect` a plugin is
+ *  written with. */
 export interface NativePluginHost {
   /** `@texra-ai/harness/plugins`, as this process loaded it. */
   readonly plugins: typeof plugins;
-  /** `effect`, as this process loaded it. */
-  readonly effect: typeof effect;
+  /** `effect`'s authoring modules, as this process loaded them: `Effect`,
+   *  `Context`, `Layer`, `Schema`, `Stream`, `Scope` and the data and
+   *  concurrency modules beside them, by their `effect` names. */
+  readonly effect: typeof EFFECT;
 }
 
 /** A native entry module (`harness.mjs`): its default export returns the
@@ -66,7 +144,7 @@ export interface NativeEntryModule {
   readonly default: (harness: NativePluginHost) => Plugin;
 }
 
-const HOST: NativePluginHost = Object.freeze({ plugins, effect });
+const HOST: NativePluginHost = Object.freeze({ plugins, effect: EFFECT });
 
 /** A native entry that did not load: the message names the plugin and
  *  why (`reason`), and `revision` the revision that did not load, when it

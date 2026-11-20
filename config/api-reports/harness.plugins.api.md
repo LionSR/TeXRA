@@ -68,7 +68,7 @@ Exports: 146
 - `ModelRetryGate` — `interface ModelRetryGate { readonly withRoutes: (routes: readonly [ RoutePolicy, ...RoutePolicy[] ]) => <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>; }`
 - `multiAgent` — `const multiAgent: Plugin`
 - `NativeEntryModule` — `interface NativeEntryModule { readonly default: (harness: NativePluginHost) => Plugin; }`
-- `NativePluginHost` — `interface NativePluginHost { readonly plugins: typeof plugins; readonly effect: typeof effect; }`
+- `NativePluginHost` — `interface NativePluginHost { readonly plugins: typeof plugins; readonly effect: typeof EFFECT; }`
 - `noLaterTurn` — `const noLaterTurn: (run: Pick<ToolRun, "entry" | "toolPolicy">) => boolean`
 - `nullishWithDefault` — `function nullishWithDefault: <S extends Schema.Top>(schema: S, fallback: S["Type"], description: string) => decodeTo<toType<S>, optional<NullOr<S>>, never, never>`
 - `parseWorkingDirectory` — `function parseWorkingDirectory: (raw: null | string | undefined) => Result<string | undefined, ToolError>`
