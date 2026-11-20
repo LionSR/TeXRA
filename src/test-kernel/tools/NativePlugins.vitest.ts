@@ -21,7 +21,9 @@
  * - a policy or a grant that approves every call trusts native code with no
  *   person asked;
  * - a native tool that declares no approval runs without asking, where an
- *   MCP server's tool would ask.
+ *   MCP server's tool would ask;
+ * - a native plugin that runs on another native plugin is withheld when its
+ *   name sorts before that plugin's.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -29,7 +31,7 @@ import * as path from 'node:path';
 import { layer } from '@effect/vitest';
 import { type Context, Effect, Schema } from 'effect';
 import { TestClock } from 'effect/testing';
-import { assert, describe, expect } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { InstalledPlugins } from '@common/plugins/installedPlugins';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
@@ -49,6 +51,7 @@ import {
 } from '@test/support/storeFaults';
 import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
+import { toolTable, withNatives } from '@tools/toolTable';
 
 import { autoDecideRequests } from '../agent/progressTestUtils';
 
@@ -375,3 +378,23 @@ describe(
     });
   },
 );
+
+describe('native plugins that run on each other', () => {
+  it('load whatever their names, and a cycle is withheld', () => {
+    const native = (id: string, requires: readonly string[]) => ({
+      plugin: { id, requires },
+      revision: `${id}@1`,
+    });
+    const { table, withheld } = withNatives(toolTable([]), [
+      native('plugin:a', ['plugin:z']),
+      native('plugin:z', []),
+      native('plugin:b', ['plugin:c']),
+      native('plugin:c', ['plugin:b']),
+    ]);
+    expect([...table.entries.keys()]).toStrictEqual(['plugin:z', 'plugin:a']);
+    expect(withheld).toStrictEqual([
+      'The native code of plugin:b is not loaded: plugin plugin:b runs on plugin plugin:c, which is not listed.',
+      'The native code of plugin:c is not loaded: plugin plugin:c runs on plugin plugin:b, which is not listed.',
+    ]);
+  });
+});

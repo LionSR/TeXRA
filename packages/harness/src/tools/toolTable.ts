@@ -311,10 +311,14 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
 
 /**
  * `listed` with the native plugins loaded now, each judged whole against
- * the table the ones before it made: one whose tool or module name another
- * plugin holds, or that runs on a plugin the table lacks, is withheld with
- * its reason, and the rest load. In order of their ids, so the same set
- * gives the same table.
+ * the table the ones accepted before it made: one whose tool or module
+ * name another plugin holds, or that runs on a plugin the table lacks, is
+ * withheld with its reason, and the rest load. The plugins are judged in
+ * passes, in order of their ids, until a pass accepts none: one that runs
+ * on a native plugin judged after it loads in the next pass, whatever the
+ * names. What no pass accepts (a collision, a plugin nobody loads, or a
+ * cycle of plugins that run on each other) is withheld with the reason its
+ * last judgement gave. The same set gives the same table.
  */
 export const withNatives = (
   listed: ToolTable,
@@ -323,21 +327,31 @@ export const withNatives = (
   const base = [...listed.entries.values()];
   let table = listed;
   const accepted: NativePlugin[] = [];
-  const withheld: string[] = [];
-  for (const native of natives.toSorted((a, b) =>
+  let waiting = natives.toSorted((a, b) =>
     a.plugin.id < b.plugin.id ? -1 : 1,
-  )) {
-    const next = tableOf(base, [...accepted, native]);
-    if (Result.isFailure(next)) {
-      withheld.push(
-        `The native code of ${native.plugin.id} is not loaded: ${next.failure}`,
-      );
-      continue;
+  );
+  let reasons = new Map<NativePlugin, string>();
+  for (let progress = true; progress && waiting.length > 0;) {
+    progress = false;
+    reasons = new Map();
+    for (const native of waiting) {
+      const next = tableOf(base, [...accepted, native]);
+      if (Result.isFailure(next)) reasons.set(native, next.failure);
+      else {
+        accepted.push(native);
+        table = next.success;
+        progress = true;
+      }
     }
-    accepted.push(native);
-    table = next.success;
+    waiting = waiting.filter((native) => reasons.has(native));
   }
-  return { table, withheld };
+  return {
+    table,
+    withheld: waiting.map(
+      (native) =>
+        `The native code of ${native.plugin.id} is not loaded: ${reasons.get(native)}`,
+    ),
+  };
 };
 
 /** The plugin table: listed plugins alone where nothing is loaded (the
