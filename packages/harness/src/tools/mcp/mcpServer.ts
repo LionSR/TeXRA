@@ -244,25 +244,15 @@ function mcpTool(
   };
 }
 
-/** SIGTERM the process and wait for it, escalating to SIGKILL. */
-const stopProcess = (handle: ChildProcessSpawner.ChildProcessHandle) =>
-  handle.kill({ forceKillAfter: STOP_TIMEOUT }).pipe(
-    Effect.catch((error) =>
-      Effect.logDebug(`kill failed: ${error.message}`).pipe(
-        withLogChannel(CHANNEL),
-      ),
-    ),
-    Effect.andThen(
-      Effect.ignore(handle.exitCode).pipe(Effect.timeoutOption(STOP_TIMEOUT)),
-    ),
-  );
-
 /** Spawn, initialize and list, in the caller's scope. */
 const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
   const handle = yield* ChildProcess.make(config.command, [...config.args], {
     env: yield* serverEnv(config),
     extendEnv: false,
     ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
+    // The spawner's scoped release signals the process, waits this long,
+    // then escalates to SIGKILL: closing the caller's scope stops the server.
+    forceKillAfter: STOP_TIMEOUT,
   }).pipe(
     Effect.mapError(
       (error) =>
@@ -271,7 +261,6 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
         }),
     ),
   );
-  yield* Effect.addFinalizer(() => stopProcess(handle));
 
   let stderrTail = '';
   const stderrDrained = yield* Effect.forkScoped(
