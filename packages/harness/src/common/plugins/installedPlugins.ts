@@ -36,6 +36,7 @@ import {
   describeHook,
   disablePlugin,
   enablePlugin,
+  reviewPlugin,
   listPlugins,
   readInstalledPluginLoad,
   rereadPlugin,
@@ -479,6 +480,9 @@ export const InstalledPlugins = Object.freeze({
   list: listPlugins,
   /** Enable a plugin, asking `confirm` to trust it unless it already is. */
   enable: enablePlugin,
+  /** A plugin's review as it is now, whether it is trusted as it is and
+   *  whether it is enabled. */
+  review: reviewPlugin,
   /** Disable a plugin; it stays installed, pinned and trusted. */
   disable: disablePlugin,
   /** The records of the plugins that load now: enabled, and trusted as

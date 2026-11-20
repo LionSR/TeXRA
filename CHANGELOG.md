@@ -1411,15 +1411,17 @@ All notable changes to this project will be documented in this file.
   again: a call already running finishes on the version it started with,
   and the old version's services are released when the last step using
   them ends. A version that fails to load is left out with its reason, and
-  nothing else changes. Each call of a native tool asks under your approval
-  policy, as an MCP server's tool does, whatever the module declares. Agents get a `plugin_manager` tool to list,
-  install, enable, disable and remove plugins themselves, each change but a
-  listing or an install asked of you first. Trusting a plugin is asked as
-  its own card in the progress view and the terminal, naming the plugin,
-  its version, its folder, what it contributes and whether it carries
-  native code; trusting native code is always your own answer, whatever the approval policy, so a run that cannot ask
-  you leaves it to `texra plugin enable`. Listing, installing or reviewing a
-  plugin runs none of its code.
+  nothing else changes. Each call of a native tool asks under your
+  approval policy, as an MCP server's tool does, whatever the module
+  declares. Agents get a `plugin_manager` tool to list, install, enable,
+  disable and remove plugins themselves, each change but a listing or an
+  install asked of you first. Trusting a plugin is asked as its own card in
+  the progress view and the terminal, naming the plugin, its version, its
+  folder, what it contributes and whether it carries native code. Trusting
+  native code is always your own answer, whatever the approval policy, and
+  so is an agent enabling again native code you trusted and then disabled;
+  a run that cannot ask you leaves it to `texra plugin enable`. Listing,
+  installing or reviewing a plugin runs none of its code.
 - **An agent can write a program for itself.** A file an agent creates with
   the `memory` tool at `/memories/programs/<name>.js` is the program
   `own:<name>` from its next step, with no restart and nothing to install,

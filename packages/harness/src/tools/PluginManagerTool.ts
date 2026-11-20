@@ -223,6 +223,17 @@ const runPluginManager = Effect.fn('plugin_manager.call')(function* (
     }
     case 'enable': {
       const shown: string[] = [];
+      // Native code a person trusted and then disabled is loaded again
+      // only on a person's own answer, as it was first trusted: a run's
+      // policy or grants never turn it back on. `enable` asks below when
+      // the plugin is not trusted as it is.
+      const now = yield* InstalledPlugins.review(input.name, roots).pipe(
+        Effect.catchTags({ PluginError: fail, PluginRequestError: fail }),
+      );
+      if (now.review.native !== null && now.trusted && !now.enabled) {
+        yield* approved(call, asTrust(now.review), input.name);
+        shown.push(...now.review.lines);
+      }
       yield* InstalledPlugins.enable(input.name, roots, (review) => {
         shown.push(...review.lines);
         return approved(
@@ -293,7 +304,7 @@ export const PluginManagerTool = defineTool({
 Commands:
 - \`list\` (the default) answers every installed plugin: whether it is enabled, whether it is trusted as it is now, and what it carries.
 - \`install\` takes \`source\`: a plugin folder, a git URL, or github.com/<owner>/<repo>[@ref]. It records the plugin disabled; nothing in it runs.
-- \`enable\` takes \`name\`. Unless the person already trusts the plugin as it is, they are shown what it carries and asked to trust it; once they do, it loads. Any later edit to it withdraws it until it is enabled and trusted again. Enabling a plugin with a native module always asks the person, whatever the approval policy; where no person can be asked, it fails and a person enables it themselves.
+- \`enable\` takes \`name\`. Unless the person already trusts the plugin as it is, they are shown what it carries and asked to trust it; once they do, it loads. Any later edit to it withdraws it until it is enabled and trusted again. Enabling a plugin with a native module always asks the person, whatever the approval policy, even one they trusted before and disabled; where no person can be asked, it fails and a person enables it themselves.
 - \`disable\` takes \`name\`: it stays installed and trusted, and loads nothing. The person is asked first.
 - \`remove\` takes \`name\`: it is forgotten with its trust. The person is asked first.
 

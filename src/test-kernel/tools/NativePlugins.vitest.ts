@@ -19,7 +19,7 @@
  * - the person is not asked to trust the native code, the question does
  *   not say it runs inside the process, or it is asked as a shell command;
  * - a policy or a grant that approves every call trusts native code with no
- *   person asked;
+ *   person asked, first or again after a person disabled it;
  * - a native tool that declares no approval runs without asking, where an
  *   MCP server's tool would ask;
  * - a native plugin that runs on another native plugin is withheld when its
@@ -285,6 +285,32 @@ describe(
                   'installed',
                   'enabled',
                   'echo rev1',
+                ]);
+              }),
+          );
+
+          it.effect(
+            'asks the person again to load native code they trusted and then disabled',
+            () =>
+              Effect.gen(function* () {
+                const { roots } = yield* FakeHost;
+                const files = yield* pluginFiles;
+                files.write('rev1');
+                yield* setTestApprovalPolicy('yolo');
+                const session = yield* persistentTestSession();
+                yield* start(session, 'Echo once.');
+                yield* InstalledPlugins.disable('echoes', roots);
+                const { runId, decided } = yield* start(
+                  session,
+                  'Enable echoes again.',
+                );
+                // Trusted as it is, and still the person's own answer.
+                const [again, ...more] = decided.opened;
+                expect(more).toStrictEqual([]);
+                expect(again?.answeredBy).toBe('person');
+                expect(again?.payload.kind).toBe('pluginTrust');
+                expect(answersOf(roots.storage, runId)).toStrictEqual([
+                  'Enabled again.',
                 ]);
               }),
           );

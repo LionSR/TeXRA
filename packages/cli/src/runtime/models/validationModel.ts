@@ -436,6 +436,13 @@ function goldenTurn(
       offered.includes('native_echo')
         ? [call('native_echo', input)]
         : text(`native_echo is not offered; offered: ${offered.join(', ')}`);
+    // A plugin a person trusted and then disabled, enabled again.
+    if (said.includes('Enable echoes again.'))
+      return Effect.succeed(
+        results.length === 0
+          ? [call('plugin_manager', { command: 'enable', name: 'echoes' })]
+          : text('Enabled again.'),
+      );
     const steps = [
       () =>
         offered.includes('native_echo')

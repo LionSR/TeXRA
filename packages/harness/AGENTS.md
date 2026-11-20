@@ -92,11 +92,12 @@ only takes out what no longer loads, so listing, installing or reviewing a
 plugin runs none of its code. The host decides how a native tool runs, not
 its definition: the loader (`hostRun`, `tools/nativePlugins.ts`) gives
 each the gate an MCP server's tool has, so every call asks under the
-session's approval policy through the loop's one guard. Trusting a native module is a person's own
-answer whatever the policy: `plugin_manager` opens that request, a
-`pluginTrust` request (what the plugin is, where, what it contributes and
-whether it carries native code), as one a hook asked about (`hook: 'ask'`,
-so `answeredBy: 'person'`).
+session's approval policy through the loop's one guard. Trusting a native
+module is a person's own answer whatever the policy, and so is enabling
+again one a person trusted and then disabled: `plugin_manager` opens that
+request, a `pluginTrust` request (what the plugin is, where, what it
+contributes and whether it carries native code), as one a hook asked about
+(`hook: 'ask'`, so `answeredBy: 'person'`).
 
 ## Event channels and cards
 
