@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { Clock, Effect, Schema } from 'effect';
 
 // Local imports
-import { wakeNotes } from '@agent/followUp/followUpMessages';
+import { iso, wakeNotes } from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/Inbox';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
@@ -82,8 +82,6 @@ const WakeInputSchema = Schema.Union([
   }),
 ]);
 type WakeInput = typeof WakeInputSchema.Type;
-
-const iso = (time: number): string => new Date(time).toISOString();
 
 /** The run a call's wake continues: its conversation, as `self()` reads it
  *  (`conversationOf`). A program's script has none. */

@@ -64,22 +64,23 @@ export interface WakeNote {
   readonly due: number;
 }
 
+/** The wake note `row` is, if it is one: a message the run sent itself
+ *  (`from.kind: 'self'`), the one kind of row that holds a time. */
+export const wakeNoteOf = ({
+  followUpId,
+  at,
+  content,
+}: QueuedFollowUp): WakeNote | undefined =>
+  'text' in content && content.from.kind === 'self'
+    ? { id: followUpId, note: content.text, asked: at, due: content.from.due }
+    : undefined;
+
 /** The wake notes among a run's pending input, in the order it asked. */
 export const wakeNotes = (rows: readonly QueuedFollowUp[]): WakeNote[] =>
-  rows.flatMap(({ followUpId, at, content }) =>
-    !('text' in content) || content.from.kind !== 'self'
-      ? []
-      : [
-          {
-            id: followUpId,
-            note: content.text,
-            asked: at,
-            due: content.from.due,
-          },
-        ],
-  );
+  rows.flatMap((row) => wakeNoteOf(row) ?? []);
 
-const iso = (time: number): string => new Date(time).toISOString();
+/** A time as the model reads it. */
+export const iso = (time: number): string => new Date(time).toISOString();
 
 /**
  * A wake note as its run's model reads it, rendered where the row becomes

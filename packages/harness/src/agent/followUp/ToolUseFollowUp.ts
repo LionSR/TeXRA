@@ -1,4 +1,4 @@
-import { Cause, Clock, Context, Effect, Exit } from 'effect';
+import { Cause, Context, Effect, Exit } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { checkpointRefusal } from '@agent/storage/continuation';
@@ -12,7 +12,8 @@ import {
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { SendVerdict } from './FollowUpReader';
+import { sleepUntil, type SendVerdict } from './FollowUpReader';
+import { wakeNoteOf } from './followUpMessages';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's acceptance and its wake read of the session. */
@@ -166,15 +167,7 @@ const wakeWhenDue = Effect.fn('wakeWhenDue')(function* (
   due: number,
 ): Effect.fn.Return<void, never, RunRegistry> {
   (yield* RunRegistry).background(
-    Effect.gen(function* () {
-      // Read again after each sleep: a clock set back leaves time to wait.
-      for (;;) {
-        const wait = due - (yield* Clock.currentTimeMillis);
-        if (wait <= 0) break;
-        yield* Effect.sleep(wait);
-      }
-      yield* wakeIfOwed(runId);
-    }),
+    Effect.andThen(sleepUntil(due), wakeIfOwed(runId)),
   );
 });
 
@@ -192,8 +185,8 @@ export const wakePendingNotes: Effect.Effect<
   const listed = yield* (yield* SessionLog).listing();
   for (const row of listed) {
     if (row.type !== 'followup.queued') continue;
-    const { from } = row.content;
-    if (from.kind === 'self') yield* wakeWhenDue(row.aggregateId, from.due);
+    const note = wakeNoteOf(row);
+    if (note !== undefined) yield* wakeWhenDue(row.aggregateId, note.due);
   }
 }).pipe(
   Effect.catch(

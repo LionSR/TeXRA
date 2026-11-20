@@ -22,15 +22,15 @@ import {
 } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
+import { wakeNoteOf } from './followUpMessages';
 
 /** Where in its loop a run reads its input: before a model request inside
  *  a turn, at the turn's end, or while it waits for input. */
 type InputPoint = 'request' | 'turn' | 'idle';
 
-/** When a run's own note for a later time (`from.kind: 'self'`) becomes
- *  readable; undefined for every other row, which holds no time. */
-const dueOf = ({ content: { from } }: QueuedFollowUp): number | undefined =>
-  from.kind === 'self' ? from.due : undefined;
+/** When a run's own note for a later time becomes readable; undefined for
+ *  every other row, which holds no time. */
+const dueOf = (row: QueuedFollowUp): number | undefined => wakeNoteOf(row)?.due;
 
 /**
  * The pending messages a run reads at `at` when the clock says `now`, in
@@ -192,11 +192,16 @@ const inputOf = (
   };
 };
 
-/** Sleep until the clock reads `due`, in epoch milliseconds. */
-const sleepUntil = (due: number): Effect.Effect<void> =>
-  Effect.flatMap(Clock.currentTimeMillis, (now) =>
-    now >= due ? Effect.void : Effect.sleep(due - now),
-  );
+/** Sleep until the clock reads `due`, in epoch milliseconds. The clock is
+ *  read again after each sleep: one set back leaves time to wait. */
+export const sleepUntil = (due: number): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    for (;;) {
+      const wait = due - (yield* Clock.currentTimeMillis);
+      if (wait <= 0) return;
+      yield* Effect.sleep(wait);
+    }
+  });
 
 /** What a reader reads of the session's log. */
 type ReaderLog = Pick<SessionLogShape, 'runRows' | 'tail' | 'now'>;
