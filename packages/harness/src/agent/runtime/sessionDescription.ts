@@ -7,7 +7,7 @@
  * can quickly understand each session.
  */
 
-import { Cause, Context, Effect, Exit, Fiber, Option } from 'effect';
+import { Context, Effect, Exit, Fiber, Option } from 'effect';
 
 import { helperCall } from '@agent/runtime/helperModel';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -16,6 +16,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import {
+  outcomeFromCause,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,
@@ -223,11 +224,9 @@ export const withSessionDescription =
       ),
       () => flow,
       (description, exit) =>
-        (
-          Exit.isSuccess(exit)
-            ? exit.value.outcome === RUN_OUTCOME.CANCELLED
-            : Cause.hasInterrupts(exit.cause)
-        )
+        (Exit.isSuccess(exit)
+          ? exit.value.outcome
+          : outcomeFromCause(exit.cause)) === RUN_OUTCOME.CANCELLED
           ? Fiber.interrupt(description)
           : Fiber.join(description),
     );
