@@ -302,7 +302,6 @@ const HARNESS_CLI_CONTEXT: CliContext = {
 // produced is written. Whoever reads a report has everything written before
 // it on screen, and knows how much of its input that screen answers.
 const frameReport = {
-  commit: 0,
   /** Key events Ink has dispatched, and how many of them are rendered. */
   keysDispatched: 0,
   keysRendered: 0,
@@ -347,12 +346,9 @@ function reportAfterRender(): void {
 const writeTerminal = process.stdout.write.bind(process.stdout);
 function writeFrameReport(): void {
   if (frameReport.closed) return;
-  frameReport.commit += 1;
   const fields = {
-    // Reports written so far: a later one means a later frame.
-    commit: frameReport.commit,
     // Input bytes Ink has taken off stdin, and the key events it made of
-    // them whose frame is written.
+    // them whose frame is written: the counter a key's wait passes.
     read: process.stdin.bytesRead - process.stdin.readableLength,
     keys: frameReport.keysRendered,
     cols: process.stdout.columns,
@@ -1703,14 +1699,22 @@ if (SHOW_BASH_APPROVAL) {
   };
 
   if (SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS) {
-    // Asked once, when the selection first leaves the root.
-    const stopWatching = subscribeToSignalChanges([selectedRunId], () => {
+    // Asked once, when the selection is first off the root: now, or on
+    // the change that moves it.
+    const offRoot = (): boolean => {
       const activeRunId = selectedRunId.get();
-      if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) return;
-      stopWatching();
+      return activeRunId !== undefined && activeRunId !== HARNESS_RUN_ID;
+    };
+    if (offRoot()) {
       startApprovals();
-    });
-    HARNESS_DISPOSERS.push(stopWatching);
+    } else {
+      const stopWatching = subscribeToSignalChanges([selectedRunId], () => {
+        if (!offRoot()) return;
+        stopWatching();
+        startApprovals();
+      });
+      HARNESS_DISPOSERS.push(stopWatching);
+    }
   } else {
     startApprovals();
   }
