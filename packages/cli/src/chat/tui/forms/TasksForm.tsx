@@ -54,6 +54,8 @@ interface TasksFormProps {
 /** Rows the attached view spends outside the transcript: the panel's
  *  border and title, the composer, and the key hints. */
 const ATTACHED_CHROME_ROWS = 6;
+/** Rows a pending request's card gets below the transcript. */
+const REQUEST_CARD_ROWS = 10;
 
 export function TasksForm(props: TasksFormProps): React.JSX.Element {
   const [task, setTask] = useState<TaskSummary>();
@@ -277,7 +279,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     : [];
   const budget = Math.max(
     3,
-    (props.availableRows ?? 24) - ATTACHED_CHROME_ROWS - (presentable ? 10 : 0),
+    (props.availableRows ?? 24) -
+      ATTACHED_CHROME_ROWS -
+      (presentable ? REQUEST_CARD_ROWS : 0),
   );
   const runWord = level.run && runStatus(level.run).word;
   const status = level.ended
@@ -345,7 +349,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           key={pending.requestId}
           payload={presentable}
           grant={offeredGrant(pending)}
-          availableRows={10}
+          availableRows={REQUEST_CARD_ROWS}
           onDecide={decide}
         />
       )}
