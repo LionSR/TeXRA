@@ -116,6 +116,12 @@ try {
 const named = await self('Answer on the named model.', { label: 'Named', model: 'openai/gpt-6.1-sol', maxCostUsd: 100 })
 return { capped, named: named.response }`;
 
+/** The resources run's script: what the run's resources are, then what a
+ *  child under a spend cap says of its own. */
+const GOLDEN_RESOURCES_SOURCE = `const own = await tools.resources({})
+const child = await self('Read your resources.', { fork: false, label: 'Capped', maxCostUsd: 100 })
+return { own, child: child.response }`;
+
 /** The program the own-program run writes for itself: it asks a child and
  *  returns what the child said. */
 const GOLDEN_OWN_PROGRAM = `// Asks a child and reports its answer.
@@ -442,6 +448,27 @@ function goldenTurn(
     ];
     const step = steps[results.length];
     return Effect.succeed(step === undefined ? text('Echoed.') : step());
+  }
+  // The resources run: its script reads the run's resources, then those of
+  // a `self()` child held to a spend cap, which reads them directly and
+  // answers with the cap line they named.
+  if (system.includes('GOLDEN-RESOURCES')) {
+    if (said.includes('started this run of you with self()'))
+      return Effect.succeed(
+        results.length === 0
+          ? [call('resources', {})]
+          : text(/Spend cap: [^"\\]+/.exec(said)?.[0] ?? 'No cap named.'),
+      );
+    return Effect.succeed(
+      results.length === 0
+        ? [
+            call('script', {
+              title: 'Resources',
+              code: GOLDEN_RESOURCES_SOURCE,
+            }),
+          ]
+        : text('Resources read.'),
+    );
   }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [

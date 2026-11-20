@@ -24,6 +24,7 @@ import { PlanTool } from '@tools/plan/PlanTool';
 import { PluginManagerTool } from '@tools/PluginManagerTool';
 import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
+import { ResourcesTool } from '@tools/ResourcesTool';
 import { WakeTool } from '@tools/WakeTool';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
@@ -74,17 +75,25 @@ export const web: Plugin = definePlugin({
 
 /** Memory, past runs and later ones, and the run's own equipment: the
  *  `memory` tool, offered while memory is on; `executions`; `wake`, with
- *  which a run arranges to be continued at a later time; and
+ *  which a run arranges to be continued at a later time;
  *  `plugin_manager`, with which it installs and enables the plugins it
- *  loads, each change approved by the person. The last two are offered to
- *  every agent with tools. */
+ *  loads, each change approved by the person; and `resources`, which reads
+ *  the time, the models, the plans' quotas and the run's spend. The last
+ *  three are offered to every agent with tools. */
 export const memoryWorkflow: Plugin = definePlugin({
   id: 'memory-workflow',
-  tools: [MemoryTool, ExecutionsTool, WakeTool, PluginManagerTool],
+  tools: [
+    MemoryTool,
+    ExecutionsTool,
+    WakeTool,
+    PluginManagerTool,
+    ResourcesTool,
+  ],
   injectedWhen: {
     memory: MEMORY_ENABLED_SETTING,
     wake: true,
     plugin_manager: true,
+    resources: true,
   },
   prompt: memoryPromptSection,
 });

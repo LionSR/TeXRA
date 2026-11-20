@@ -1340,10 +1340,11 @@ const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<
 
 Memory, past runs and later ones, and the run's own equipment: the
 `memory` tool, offered while memory is on; `executions`; `wake`, with
-which a run arranges to be continued at a later time; and
+which a run arranges to be continued at a later time;
 `plugin_manager`, with which it installs and enables the plugins it
-loads, each change approved by the person. The last two are offered to
-every agent with tools.
+loads, each change approved by the person; and `resources`, which reads
+the time, the models, the plans' quotas and the run's spend. The last
+three are offered to every agent with tools.
 
 ```ts
 const memoryWorkflow: Plugin
