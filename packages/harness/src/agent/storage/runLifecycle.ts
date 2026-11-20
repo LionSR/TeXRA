@@ -5,7 +5,8 @@
 import { Context, Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
-import { Inbox } from '@agent/followUp/Inbox';
+import { wakeNotes } from '@agent/followUp/followUpMessages';
+import { cancelWakeRows, Inbox } from '@agent/followUp/Inbox';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
 import { SessionRoots } from '@platform/rootedFs';
@@ -395,8 +396,9 @@ export const endRunRows = Effect.fn('endRunRows')(function* (
 
 /**
  * The rows a stop commits for `runId`: its `run.stop` row, and, for a run
- * no fiber here drives (`end`), its CANCELLED end in the same batch. A run
- * whose lifecycle ended gets none: there is nothing to stop. The first stop
+ * no fiber here drives (`end`), its CANCELLED end in the same batch, and
+ * the drop of the wake notes it has pending. A run whose lifecycle ended
+ * gets no stop row: only its pending wake notes are left to stop. The first stop
  * of a lifecycle stands, and a second ask adds no row. Answers whether the run has rows at all:
  * one that has none yet is a launch that has not registered.
  */
@@ -411,7 +413,17 @@ export const stopRun = Effect.fn('stopRun')(function* (
     Effect.gen(function* () {
       const facts = yield* log.facts(runId);
       if (facts === null) return false;
-      if (facts.end !== null) return true;
+      // A stop also ends what the run arranged for itself: the wake notes
+      // it has pending are dropped, so a stopped run does not continue on
+      // its own later. One that had ended already has only those to stop.
+      const wakes = cancelWakeRows(
+        runId,
+        wakeNotes((yield* (yield* Inbox).read(runId)).followUps),
+      );
+      if (facts.end !== null) {
+        if (wakes.length > 0) yield* tx.append(wakes);
+        return true;
+      }
       const stop =
         facts.stop === null
           ? [
@@ -420,8 +432,9 @@ export const stopRun = Effect.fn('stopRun')(function* (
                 aggregateId: runId,
                 reason,
               } as const,
+              ...wakes,
             ]
-          : [];
+          : wakes;
       if (!end) {
         if (stop.length > 0) yield* tx.append(stop);
         return true;

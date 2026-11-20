@@ -22,7 +22,7 @@ import {
 } from 'effect';
 
 import { Inbox, SessionInbox } from '@agent/followUp/Inbox';
-import { wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
+import { wakeIfOwed, wakePendingNotes } from '@agent/followUp/ToolUseFollowUp';
 import { lastReportRecipients } from '@agent/storage/runLifecycle';
 import {
   ChildRunBudget,
@@ -292,7 +292,8 @@ export const sessionOwnersLayer = (
       );
 
       // What reads the session as it runs: the tails' readers (in the
-      // readers' scope), the leftover-run sweep, the deletion pass at open,
+      // readers' scope), the leftover-run sweep, the wait for each wake
+      // note an earlier process left pending, the deletion pass at open,
       // and the dependency probes, held for its life and probed beside the
       // open (the gate withholds nothing until they answer).
       const plugins = yield* ToolRegistry;
@@ -318,6 +319,7 @@ export const sessionOwnersLayer = (
         }),
       ).pipe(Effect.forkIn(consumers));
       yield* sweepLeftoverRuns.pipe(Effect.provide(session), Effect.forkScoped);
+      yield* wakePendingNotes.pipe(Effect.provide(session), Effect.forkScoped);
       yield* Effect.forkScoped(deletions.pending);
       yield* (yield* ToolAvailability).hold(roots);
       return session;

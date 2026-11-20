@@ -337,7 +337,7 @@ const SURFACE = [
     '- `section(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
   '`const { name } = await import(specifier)` loads a module by its specifier (`builtIn:<module>`, listed below when you may import any); a static `import` line does not parse in a function body.',
-  'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',
+  'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again. To continue at a later time, `tools.wake({ afterSeconds, note })` (where `wake` is offered) returns at once and arranges a later turn of the conversation, which starts from the note.',
 ].join('\n\n');
 
 export const ScriptTool = defineTool({

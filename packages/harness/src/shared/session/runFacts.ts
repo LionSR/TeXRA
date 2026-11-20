@@ -166,12 +166,13 @@ function outputOf(
 }
 
 /** Input that asks the run to do something: a message from its user or
- *  from any run. A run's report at its end and a host notice only inform
- *  it. */
+ *  from any run. A run's report at its end, a host notice and a run's own
+ *  note to itself only inform it. */
 export const isInstruction = (
   content: FollowUpContent,
 ): content is FollowUpMessage =>
-  !('delivery' in content) && content.from.kind !== 'notification';
+  !('delivery' in content) &&
+  (content.from.kind === 'user' || content.from.kind === 'run');
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */

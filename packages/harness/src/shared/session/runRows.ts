@@ -45,10 +45,11 @@ export const isSharedRunRow = <E extends Pick<SessionRow, 'type'>>(
 ): row is Extract<E, SharedRunRow> =>
   Object.hasOwn(SHARED_RUN_ROW_TYPES, row.type);
 
-/** A follow-up queued for the run and not yet consumed, as its row holds it. */
+/** A follow-up queued for the run and not yet consumed, as its row holds
+ *  it; `at` is when it was queued, which a run's own note tells its reader. */
 export type QueuedFollowUp = Pick<
   Extract<SessionRow, { type: 'followup.queued' }>,
-  'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit'
+  'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit' | 'at'
 >;
 
 /** A pending follow-up that is a message, not one of the run's own requests
@@ -220,6 +221,7 @@ export function applyRunRow(
       followUps.push({
         followUpId: row.followUpId,
         commit: row.commit,
+        at: row.at,
         content: row.content,
         ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
         ...(row.control ? { control: row.control } : {}),

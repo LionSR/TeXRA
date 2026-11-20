@@ -1,4 +1,4 @@
-import { Cause, Context, Effect, Exit } from 'effect';
+import { Cause, Clock, Context, Effect, Exit } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { checkpointRefusal } from '@agent/storage/continuation';
@@ -155,11 +155,62 @@ export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
 });
 
 /**
+ * {@link wakeIfOwed} once the clock reaches `due`, for a note the run wrote
+ * to itself for that time: the wait is one of the session's own fibers, so
+ * the session's close ends it and its next open starts it again
+ * ({@link wakePendingNotes}), and the note, already queued, is read then,
+ * late and once. A note cancelled or read meanwhile owes nothing.
+ */
+const wakeWhenDue = Effect.fn('wakeWhenDue')(function* (
+  runId: RunId,
+  due: number,
+): Effect.fn.Return<void, never, RunRegistry> {
+  (yield* RunRegistry).background(
+    Effect.gen(function* () {
+      // Read again after each sleep: a clock set back leaves time to wait.
+      for (;;) {
+        const wait = due - (yield* Clock.currentTimeMillis);
+        if (wait <= 0) break;
+        yield* Effect.sleep(wait);
+      }
+      yield* wakeIfOwed(runId);
+    }),
+  );
+});
+
+/**
+ * The notes runs wrote to themselves that an earlier process left pending,
+ * each waited for here ({@link wakeWhenDue}): one already due resumes its
+ * run at once. Run once as a session opens, over the listing, which holds
+ * every queued follow-up no row consumed.
+ */
+export const wakePendingNotes: Effect.Effect<
+  void,
+  never,
+  RunRegistry | SessionLog
+> = Effect.gen(function* () {
+  const listed = yield* (yield* SessionLog).listing();
+  for (const row of listed) {
+    if (row.type !== 'followup.queued') continue;
+    const { from } = row.content;
+    if (from.kind === 'self') yield* wakeWhenDue(row.aggregateId, from.due);
+  }
+}).pipe(
+  Effect.catch(
+    logFailure(
+      CHANNEL,
+      "The pending wake notes could not be read; each is delivered at its run's next resume",
+    ),
+  ),
+);
+
+/**
  * The one acceptance of a message to a run: every host and tool sends
  * through here. The run's input rows decide the send in the job that
  * commits it (`sendVerdict`), so the row is durable before anything is
  * acknowledged or woken; then the run is woken if the row obliges it and
- * no fiber here drives it (`wakeIfOwed`).
+ * no fiber here drives it (`wakeIfOwed`), a run's own note for a later
+ * time when that time comes (`wakeWhenDue`).
  *
  * A run a fiber here drives reads the row itself, at its next request or
  * turn boundary; a child that ends with it queued is resumed for it. With
@@ -232,7 +283,9 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   // After the commit: a run a fiber drove a moment ago may have left
   // meanwhile.
-  if (sent.status !== 'failed') yield* wakeIfOwed(runId, apiKeys);
+  if (sent.status === 'failed') return sent;
+  yield* wakeIfOwed(runId, apiKeys);
+  if (item.from.kind === 'self') yield* wakeWhenDue(runId, item.from.due);
   return sent;
 });
 

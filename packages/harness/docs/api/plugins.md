@@ -1331,8 +1331,9 @@ const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<
 
 ## memoryWorkflow
 
-Memory and past runs: the `memory` tool, offered while memory is on,
-and `executions`.
+Memory, past runs and later ones: the `memory` tool, offered while
+memory is on; `executions`; and `wake`, with which a run arranges to be
+continued at a later time, offered to every agent with tools.
 
 ```ts
 const memoryWorkflow: Plugin
