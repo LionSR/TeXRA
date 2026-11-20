@@ -631,11 +631,10 @@ export const databaseLayer = (
           ),
         appendAll: Effect.fn('Database.appendAll')(function* (input) {
           if (input.length === 0) return [];
-          // Validate and encode before BEGIN IMMEDIATE. The batch shares one clock.
-          const prepared = yield* Effect.try({
-            try: () => input.map(prepareEventDraft),
-            catch: writeFailed,
-          });
+          // Encode before BEGIN IMMEDIATE; the batch shares one clock. Drafts
+          // are typed and plugin facts were checked at their call
+          // (`checkOwnFacts`), so a draft that fails here is a defect.
+          const prepared = input.map(prepareEventDraft);
           const at = yield* Clock.currentTimeMillis;
           return yield* transact(appendRows(prepared, at));
         }),
