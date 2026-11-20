@@ -91,6 +91,9 @@ two halves:
   `.input-plain` is the only other skin. It is a search that owns a whole
   band (the command palette), with no box and no halo.
 
+- **Drop targets.** A file drop zone takes `.is-drag-active` from its
+  `FileDropController` and the one skin in `dropTargetStyles`
+  (`styles/commonViewStyles.ts`); it never paints its own drag outline.
 - **Few choices, all visible.** Two to four mutually exclusive options are a
   segmented `wa-radio-group` (`appearance="button"`), with the selected
   option's one-line description under it. A dropdown is for long or dynamic

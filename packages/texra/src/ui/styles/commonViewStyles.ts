@@ -131,30 +131,40 @@ const busyIconButtonStyles: CSSResult = css`
 `;
 
 /**
- * Shared drag-over drop cue: an absolutely positioned dashed panel that
- * overlays the drop target. Selector-less fragment — each consumer
- * interpolates it into its own trigger rule (an element like `.drop-cue`, or
- * a `::after` carrying its own `content` copy) and keeps its own activation
- * affordance (outline vs border-color) beside it.
+ * The one drag-over skin for a file drop target driven by `FileDropHandler`:
+ * the target takes `.is-drag-active` while files are over it, and may render
+ * a `.drop-cue` naming what the drop does. The target needs
+ * `position: relative` when it renders the cue.
  */
-export const dropCueStyles: CSSResult = css`
-  position: absolute;
-  inset: var(--wa-space-3xs);
-  z-index: var(--layer-pinned);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: var(--border-thin) dashed var(--wa-color-brand-fill-loud);
-  border-radius: var(--border-radius);
-  background: color-mix(
-    in srgb,
-    var(--wa-color-surface-default) 78%,
-    transparent
-  );
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  pointer-events: none;
+export const dropTargetStyles: CSSResult = css`
+  .is-drag-active {
+    outline: var(--border-medium) dashed var(--wa-color-brand-fill-loud);
+    outline-offset: calc(-1 * var(--border-medium));
+    background: color-mix(
+      in srgb,
+      var(--wa-color-brand-fill-quiet) 22%,
+      transparent
+    );
+  }
+
+  .drop-cue {
+    position: absolute;
+    inset: var(--wa-space-3xs);
+    z-index: var(--layer-pinned);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius);
+    background: color-mix(
+      in srgb,
+      var(--wa-color-surface-default) 78%,
+      transparent
+    );
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    pointer-events: none;
+  }
 `;
 
 export const commonViewStyles: CSSResult = css`
