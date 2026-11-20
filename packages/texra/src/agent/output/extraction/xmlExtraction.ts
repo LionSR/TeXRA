@@ -1,13 +1,11 @@
 /**
- * XML content extraction utilities.
- * Functions for extracting content from XML tags and documents.
+ * The output-document tags of a reply: the `<document name="...">` children
+ * of its container, or a bare `\documentclass` block read as one document.
  *
- * The extraction result shape (MultipleExtractionResult) is a plain type: it
+ * The result shape (`NamedDocument`) is a plain type: it
  * describes an internal return value, not a parsed or validated boundary, so
  * no schema backs it.
  */
-
-// Local imports - utils
 
 // Local imports
 import { OUTPUT_DOCUMENT_TAG } from '@texra/shared/plugins/documentOutputs';
@@ -34,23 +32,6 @@ const DOCUMENT_OPEN_TAG_WITH_NAME = `<${OUTPUT_DOCUMENT_TAG}[^>]*name\\s*=\\s*(?
  * Group 1 (double-quoted) or group 2 (single-quoted): name attribute value
  */
 export const DOCUMENT_NAME_REGEX = new RegExp(DOCUMENT_OPEN_TAG_WITH_NAME);
-
-/**
- * Extract text content from within a specific XML tag.
- * Returns the content of the last matching tag found.
- */
-export function extractTextFromTag(
-  inputContent: string,
-  tagName: string,
-): string {
-  // Find all matches and get the last one using matchAll
-  const regex = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 'gs');
-  const matches = [...inputContent.matchAll(regex)];
-  const lastContent = matches.at(-1)?.[1] ?? '';
-
-  // Use centralized CDATA removal
-  return removeCDATA(lastContent);
-}
 
 /**
  * Extract `<document name="...">` children from any content string.

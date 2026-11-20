@@ -1,7 +1,7 @@
 # Run end and request audit: what is left open
 
 Date: 2026-11-15
-Status: proposed
+Status: implemented (both items landed by 2026-11-19)
 
 Origin: a read-only audit of `main` after #14896 and #14899, over the code
 that ends a run, refuses a request and stores a child's delivery. Its defects
@@ -24,7 +24,7 @@ two below need a decision first.
    - Needs: a version bump of `followup.queued` and a regenerated golden
      store. It is cheapest before that row's current version is released,
      and it should be decided together with the delivery union in
-     [tool card result and delivery shapes](./2026-11-14-tool-card-result-and-delivery-shapes.md).
+     [tool card result and delivery shapes](../../proposed/simplification/2026-11-14-tool-card-result-and-delivery-shapes.md).
    - Landed 2026-11-19 (`followup.queued` v11): the delivery stores
      `wallTimeMs`, which `formatWallTime` (`utils/text/stringUtils.ts`)
      words in the envelope, the summary and the agent-CLI run log; the
@@ -47,6 +47,10 @@ two below need a decision first.
      the main process keeps input for a session it has not started yet.
      The first keeps the rule in the one place that knows the terminal has
      no shell yet.
+   - Landed 2026-11-17 (#15026), by the first design: the pane holds what
+     is typed before it asks for a shell (`heldInput` in
+     `packages/desktop/src/renderer/terminalPane.ts`) and sends it once it
+     has.
    - Needs: a run of the desktop e2e suite, which this audit could not run
      (no Electron binary in its environment).
 

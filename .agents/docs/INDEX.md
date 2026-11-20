@@ -25,6 +25,7 @@ ruling and argues against it explicitly.
 | Programs in plugins; the agent catalog, teams and skills they replace   | [programs, not agents](./proposed/architecture/2026-11-06-programs-not-agents.md)                                                    |
 | Code plugins and hooks                                                  | [code plugins and hooks](./implemented/architecture/2026-09-28-code-plugins-hooks-v1.md)                                             |
 | Code as tool (`script`, `agent()`)                                      | [codemode everywhere](./implemented/architecture/2026-10-01-codemode-everywhere.md)                                                  |
+| What a running agent controls about itself, and what stays the kernel's | [the script is how an agent runs itself](./proposed/architecture/2026-11-19-the-script-is-how-an-agent-runs-itself.md)               |
 | The run model: one run, one run history                                 | [one run model](./implemented/architecture/2026-09-10-one-run-model.md)                                                              |
 | Run state the hosts render                                              | [one fold, three renderers](./implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md)                                   |
 | Non-run current-value state                                             | [current-value SQLite rows](./implemented/architecture/2026-09-22-current-value-state-decision.md)                                   |

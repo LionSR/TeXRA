@@ -130,6 +130,10 @@ The harness still carries TeXRA's name and LaTeX in a few places:
 The first two can take the product name from the catalog namespace. The
 examples can be neutral, which changes the tool descriptions a run records.
 
+Landed 2026-11-19 (#15106): the MCP client sends the app's client id as
+`clientInfo.name`, read from `SubscriptionAccounts` (`mcpServer.ts`). The
+other three are open.
+
 ## Checked and left alone
 
 - **The JSON Schema provider rules in `convertToolSchema`**
