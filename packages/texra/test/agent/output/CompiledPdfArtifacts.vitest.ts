@@ -8,7 +8,7 @@ import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { createRunStorageLocation } from '@texra-ai/harness/host';
+import { createRunStorageLocation } from '@texra-ai/harness/plugins';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

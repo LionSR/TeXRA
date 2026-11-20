@@ -278,6 +278,20 @@ it (`credentialChanged`, `Secrets.announcing`), as
 class FileSecrets implements PlatformSecrets
 ```
 
+## getPathSegments
+
+Get path segments as an array.
+Only converts backslashes — does NOT resolve '..' so callers can detect
+traversal attempts (e.g. AcceptRunFilesTool's `includes('..')` guard).
+It also trims its input, so a caller that must keep a leading or trailing
+space in a name (hidden-file and excluded-directory checks, published
+artifact paths) cannot route through it; those call sites split on their
+own, and each handles `..` its own way on purpose.
+
+```ts
+function getPathSegments(input: string): string[]
+```
+
 ## GlobalDatabase
 
 The process's one handle on the global storage root, held for the process
@@ -358,6 +372,24 @@ Check if an error represents "a parent path component is a file, not a directory
 
 ```ts
 function isNotADirectoryError(err: unknown): boolean
+```
+
+## isPathWithin
+
+True if `target` is `base` itself or a descendant of it.
+Computed via path.relative — works for both absolute and relative inputs
+as long as both are resolved the same way by the caller.
+
+```ts
+function isPathWithin(base: string, target: string): boolean
+```
+
+## isStrictlyWithin
+
+True if `target` is a strict descendant of `base` (excludes `target === base`).
+
+```ts
+function isStrictlyWithin(base: string, target: string): boolean
 ```
 
 ## JsonConfigProvider
@@ -767,6 +799,14 @@ function setLogSink(
   next: LogSink | null,
   options: { readonly trusted?: boolean } = {},
 ): void
+```
+
+## toPosixPath
+
+Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`).
+
+```ts
+function toPosixPath(relativePath: string): string
 ```
 
 ## whichOnExtendedPath

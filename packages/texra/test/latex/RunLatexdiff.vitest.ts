@@ -4,7 +4,7 @@ import {
   fileLocationDisplayPath,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
-import { createRunStorageLocation } from '@texra-ai/harness/host';
+import { createRunStorageLocation } from '@texra-ai/harness/plugins';
 import { latexdiffPairs } from '@latex/latexdiff/diffOperations';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 

@@ -139,6 +139,16 @@ All notable changes to this project will be documented in this file.
 - **A script imports modules by their exact specifier.** A relative
   specifier no longer reaches a module. `describeTool(name)` also returns
   the source of a module or program.
+- **SDK: the helpers TeXRA's own plugins use leave `@texra-ai/harness/host`.**
+  `@texra-ai/harness/plugins` now exports the `FileLocation` builders
+  (`createExternalLocation`, `createRunStorageLocation`,
+  `createWorkspaceLocation`, `pathToLocationIn`), the lanes
+  (`withPerKeyLane`, `PerKeyLane`, `PerKeyLanes`, `withFileWriteLane`), the
+  diff engine (`buildDiffHunks`, `countLineChanges`, `reportDiffTimeout`,
+  `unifiedDiffText`, `DiffHunks`, `Hunk`) and `AgentDirectories`;
+  `@texra-ai/harness/node` exports the path helpers (`getPathSegments`,
+  `isPathWithin`, `isStrictlyWithin`, `toPosixPath`). None of them is on
+  `/host` any more, and `isModuleNotFoundError` is removed.
 - **SDK: a program is called with its launch's instruction and files.** A
   program module's default export is `async (args, launch) => result`, the
   second argument `{ instruction, inputFiles, contextFiles, mediaFiles }`;

@@ -1,6 +1,5 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { pathExists } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -12,7 +11,7 @@ import {
   readUncommentedLatex,
 } from './latexParsingUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
 
 const CHINESE_PACKAGES = [
   'xeCJK',

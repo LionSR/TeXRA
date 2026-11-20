@@ -5,7 +5,7 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { createExternalLocation } from '@texra-ai/harness/host';
+import { createExternalLocation } from '@texra-ai/harness/plugins';
 import { latexdiff } from '@latex/latexdiff';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';

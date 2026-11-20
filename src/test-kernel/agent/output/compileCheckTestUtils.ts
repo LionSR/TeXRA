@@ -6,7 +6,7 @@ import { Layer } from 'effect';
 
 // Local imports
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { createRunStorageLocation } from '@texra-ai/harness/host';
+import { createRunStorageLocation } from '@texra-ai/harness/plugins';
 import { FakeHost } from '@test/support/testKernel';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';

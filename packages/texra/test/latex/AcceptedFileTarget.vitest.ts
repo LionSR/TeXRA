@@ -5,8 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect, Option } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { createWorkspaceLocation } from '@texra-ai/harness/host';
-import { AppSignals } from '@texra-ai/harness/plugins';
+import { AppSignals, createWorkspaceLocation } from '@texra-ai/harness/plugins';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
