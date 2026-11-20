@@ -20,7 +20,7 @@ import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { executed } from '@tools/core/result';
 import { toPosixPath } from '@utils/core/pathCore';
-import { meansAbsent } from '@utils/files/fsEntryExists';
+import { listedEntryGone } from '@utils/files/fsEntryExists';
 import { globEscape } from '@utils/files/rootedFileSystem';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
@@ -126,14 +126,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
           onSome: (modified) => modified.getTime(),
         }),
       })),
-      // A match that vanished between the walk and the stat is dropped, and
-      // so, beyond absence, is one whose path stopped naming something a stat
-      // can follow (any `BadResource`: a link that now loops, say); any other
-      // stat failure is real.
-      Effect.catchIf(
-        (error) => meansAbsent(error) || error.reason._tag === 'BadResource',
-        () => Effect.succeed(null),
-      ),
+      Effect.catchIf(listedEntryGone, () => Effect.succeed(null)),
     );
   });
 

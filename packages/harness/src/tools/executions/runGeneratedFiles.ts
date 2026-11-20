@@ -20,7 +20,7 @@ import type { RunId } from '@shared/schemas';
 // swap; safe here since the input is a storage-relative path produced by the
 // walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
-import { meansAbsent } from '@utils/files/fsEntryExists';
+import { listedEntryGone, meansAbsent } from '@utils/files/fsEntryExists';
 
 const CHANNEL = 'runGeneratedFiles';
 
@@ -98,17 +98,9 @@ const walkRunStorage = Effect.fn('walkRunStorage')(function* (
       const rawRelative = relativePath ? path.join(relativePath, name) : name;
       const childPath = path.join(basePath, rawRelative);
 
-      const stat = yield* fs.stat(childPath).pipe(
-        // An entry that vanished between the listing and the stat is a
-        // benign race, and so, beyond absence, is one whose path stopped
-        // naming something a stat can follow (any `BadResource`: a link
-        // that now loops, say); anything else is a real fault and
-        // propagates.
-        Effect.catchIf(
-          (error) => meansAbsent(error) || error.reason._tag === 'BadResource',
-          () => Effect.void,
-        ),
-      );
+      const stat = yield* fs
+        .stat(childPath)
+        .pipe(Effect.catchIf(listedEntryGone, () => Effect.void));
       if (!stat) return [];
 
       // The entry's kind comes from the stat that already ran, which follows

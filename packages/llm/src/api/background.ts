@@ -92,7 +92,7 @@ const confirmCancelled = (
  * remote work, whose receipt may not have been delivered yet.
  */
 export function backgroundLifecycle<
-  P extends 'openai-responses' | 'google-interactions',
+  P extends RemoteOperation['origin']['protocol'],
 >(wire: {
   readonly origin: ModelOrigin & { readonly protocol: P };
   readonly submit: (

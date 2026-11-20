@@ -61,7 +61,8 @@ import { loadConfigAndWarn } from './loadConfigAndWarn';
 // The global flags: every command takes them, before or after its name.
 // ---------------------------------------------------------------------------
 
-const boolFlag = (name: string, description: string) =>
+/** A switch: off unless given, with no `--no-` form. */
+export const boolFlag = (name: string, description: string) =>
   Flag.Boolean(name).pipe(
     Flag.withoutNegation,
     Flag.withDefault(false),

@@ -24,13 +24,17 @@ import {
   type PollEvent,
   type PollResult,
 } from './poller';
-import { GhIssueCommentArraySchema, GhIssueSchema } from './prTypes';
+import {
+  GhIssueCommentArraySchema,
+  GhIssueSchema,
+  type GhIssue,
+} from './prTypes';
 import type { IssueTarget } from './subscriptionTarget';
 
 /** What an issue's next poll starts from. */
 export interface IssueState {
   /** The last state read from a valid issue payload. */
-  readonly state: 'open' | 'closed' | undefined;
+  readonly state: GhIssue['state'] | undefined;
   /** `undefined` until a valid comments list has been read. */
   readonly comments: SeenItems | undefined;
   readonly etags: { readonly issue?: string; readonly comments?: string };
