@@ -26,7 +26,7 @@ import {
   createWorkspaceLocation,
   withSessionFs,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
@@ -168,10 +168,10 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
       TEMP_EXTENSIONS,
     ).pipe(
       Effect.catch((error) =>
-        Effect.logWarning(`Failed to list the build files of ${filePath}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          Effect.as(new Set<string>()),
-        ),
+        logFailure(
+          CHANNEL,
+          `Failed to list the build files of ${filePath}`,
+        )(error).pipe(Effect.as(new Set<string>())),
       ),
       withLogChannel(CHANNEL),
     );

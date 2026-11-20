@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
 import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { runTool } from '@texra/utils/system/toolChecks';
@@ -27,10 +27,10 @@ const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
       Effect.catch((error) =>
         meansAbsent(error)
           ? Effect.succeed<ReadonlyArray<string>>([])
-          : Effect.logWarning(`Failed to list ${dir}`).pipe(
-              Effect.annotateLogs({ data: error }),
-              Effect.as<ReadonlyArray<string>>([]),
-            ),
+          : logFailure(
+              CHANNEL,
+              `Failed to list ${dir}`,
+            )(error).pipe(Effect.as<ReadonlyArray<string>>([])),
       ),
     );
   return yield* Effect.filter(
