@@ -151,8 +151,8 @@ await Effect.runPromise(
       refused._tag !== 'ResumeRefused' ||
       refused.reason.kind !== 'pluginUnavailable' ||
       refused.reason.plugin !== 'acme-notes' ||
-      listed?.continues !== false ||
-      listed.continueBlocked !== note.unavailable
+      listed?.continuation.kind !== 'blocked' ||
+      listed.continuation.cause !== note.unavailable
     )
       throw new Error(
         `resume was not refused: ${JSON.stringify({ refused, listed })}`,

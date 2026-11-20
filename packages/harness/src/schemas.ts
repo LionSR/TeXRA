@@ -74,7 +74,7 @@ export type {
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
 export type { RunStanding } from '@shared/session/runRowReads';
-// A follow-up queued for a run, as its row holds it (`InboxItem.control`).
+// A follow-up queued for a run, as its row holds it (a message, a delivery, or the run's own `control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
@@ -95,6 +95,8 @@ export type {
   FileListEntry,
   FileLocation,
   FinishedToolResult,
+  FollowUpContent,
+  FollowUpControl,
   FollowUpSender,
   HookEvent,
   InlinePersona,

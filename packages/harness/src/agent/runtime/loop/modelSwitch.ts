@@ -7,7 +7,7 @@ import { Effect, ScopedRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
-import type { QueuedFollowUp } from '@shared/session/runRows';
+import { controlOf, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runState';
 
 import type { RunCell } from '@shared/session/runHistory';
@@ -30,9 +30,10 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   ): Effect.fn.Return<RunState, Error, AgentRun | ModelAccess> {
     const run = yield* AgentRun;
     const access = yield* ModelAccess;
-    const switches = controls.flatMap((f) =>
-      f.control?.kind === 'model' ? [{ ...f, model: f.control.model }] : [],
-    );
+    const switches = controls.flatMap((f) => {
+      const control = controlOf(f);
+      return control?.kind === 'model' ? [{ ...f, model: control.model }] : [];
+    });
     const model = switches.at(-1)?.model;
     if (model === undefined) return yield* cell.current;
     const requests = consumedRows(run.runId, 'model');

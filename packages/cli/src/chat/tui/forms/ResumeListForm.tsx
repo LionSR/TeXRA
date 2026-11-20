@@ -44,9 +44,8 @@ function resumeEntryDescription(entry: CliHistoryEntry): string {
     when,
     historyStanding(entry),
     entry.agent,
-    !entry.continues &&
-      entry.continueBlocked !== undefined &&
-      `cannot resume: ${entry.continueBlocked}`,
+    entry.continuation.kind === 'blocked' &&
+      `cannot resume: ${entry.continuation.cause}`,
   ]);
 }
 
@@ -69,7 +68,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
           value: entry.id,
           label: resumeEntryLabel(entry),
           description: resumeEntryDescription(entry),
-          disabled: !entry.continues,
+          disabled: entry.continuation.kind !== 'continues',
         }))
       }
       availableRows={props.availableRows}

@@ -42,7 +42,7 @@ import {
   type StoredInputPart,
 } from '@shared/schemas';
 import { consumedRow, isInstruction } from '@shared/session/runFacts';
-import type { QueuedFollowUp } from '@shared/session/runRows';
+import type { QueuedMessage } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { followUpDisplay } from '@shared/subagentFollowup';
@@ -125,7 +125,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
    *  (`skippedMediaPart`): the model is told, in the row that carries the
    *  message. */
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
-    followUps: readonly QueuedFollowUp[],
+    followUps: readonly QueuedMessage[],
   ) {
     const { capabilities } = (yield* ScopedRef.get(run.model)).config;
     const parts: (InputPart | StoredInputPart)[] = [];
@@ -166,7 +166,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   });
 
   const logFollowUps = (
-    followUps: readonly QueuedFollowUp[],
+    followUps: readonly QueuedMessage[],
     kinds: readonly (readonly MediaAttachmentKind[])[],
   ): void => {
     for (const [i, { content }] of followUps.entries()) {

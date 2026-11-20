@@ -24,7 +24,6 @@ const BASE_CLI_CONTEXT = {
   mode: 'headless',
   outputFormat: 'text',
   approvalPolicy: 'never',
-  quietLogs: false,
   minimumLogLevel: 'Info' as const,
   stdoutIsTty: false,
   termIsDumb: false,

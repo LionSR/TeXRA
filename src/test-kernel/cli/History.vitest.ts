@@ -134,13 +134,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               expect(
                 outcomes.map(([id]) => [
                   byId(id)?.outcome,
-                  byId(id)?.continues,
+                  byId(id)?.continuation.kind,
                 ]),
               ).toEqual([
-                ['cancelled', false],
-                ['failed', false],
-                ['completed', false],
-                [null, true],
+                ['cancelled', 'finished'],
+                ['failed', 'finished'],
+                ['completed', 'finished'],
+                [null, 'continues'],
               ]);
             }),
         );

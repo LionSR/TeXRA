@@ -171,7 +171,7 @@ function outputOf(
 export const isInstruction = (
   content: FollowUpContent,
 ): content is FollowUpMessage =>
-  !('delivery' in content) && content.from.kind !== 'notification';
+  'text' in content && content.from.kind !== 'notification';
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */

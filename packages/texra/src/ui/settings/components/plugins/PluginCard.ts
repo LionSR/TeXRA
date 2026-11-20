@@ -157,10 +157,11 @@ export class PluginCard extends LitElement {
   override willUpdate(changed: PropertyValues<this>): void {
     if (!changed.has('row') || this.row.kind !== 'texra') return;
     const prev = changed.get('row');
-    const was = prev?.kind === 'texra' ? prev.item.status : undefined;
+    const was = prev?.kind === 'texra' ? prev.item.setup?.status : undefined;
+    const missing = this.row.item.setup?.status === 'not-found';
     if (prev?.kind !== 'texra' || prev.item.id !== this.row.item.id) {
-      this.guideDetails.open = this.row.item.status === 'not-found';
-    } else if (was !== 'not-found' && this.row.item.status === 'not-found') {
+      this.guideDetails.open = missing;
+    } else if (was !== 'not-found' && missing) {
       this.guideDetails.open = true;
     }
   }
@@ -237,9 +238,10 @@ export class PluginCard extends LitElement {
   private renderSetup(
     item: ToolDashboardItem,
   ): TemplateResult | typeof nothing {
+    const { setup } = item;
     if (
-      !item.requiresSetup ||
-      item.installActions.every((action) => action.kind === 'extension')
+      setup === null ||
+      setup.installActions.every((action) => action.kind === 'extension')
     ) {
       return nothing;
     }
@@ -247,7 +249,7 @@ export class PluginCard extends LitElement {
     // When a primary install action exists (terminal command or extension
     // marketplace), demote auxiliary buttons (Sign in, Open install page)
     // to secondary styling.
-    const hasPrimaryInstallAction = item.installActions.some(
+    const hasPrimaryInstallAction = setup.installActions.some(
       (action) => action.kind === 'command' || action.kind === 'extension',
     );
     const auxiliaryKind = hasPrimaryInstallAction ? 'secondary' : 'primary';
@@ -260,19 +262,19 @@ export class PluginCard extends LitElement {
         @wa-show=${this.guideDetails.handleShow}
         @wa-hide=${this.guideDetails.handleHide}
       >
-        ${item.installActions.map((action) =>
+        ${setup.installActions.map((action) =>
           action.kind === 'guide'
             ? html`<div class="plugin-guide">${action.text}</div>`
             : nothing,
         )}
         <div class="plugin-actions">
-          ${item.installActions.map((action) =>
+          ${setup.installActions.map((action) =>
             this.renderInstallAction(item, action, auxiliaryKind),
           )}
         </div>
         ${
-          item.configNotes
-            ? html`<div class="plugin-note">${item.configNotes}</div>`
+          setup.configNotes
+            ? html`<div class="plugin-note">${setup.configNotes}</div>`
             : nothing
         }
       </wa-details>
@@ -319,11 +321,9 @@ export class PluginCard extends LitElement {
    *  Re-check is waiting for. */
   private renderReady(): TemplateResult | typeof nothing {
     const { row } = this;
-    if (row.kind !== 'texra' || !row.item.requiresSetup) return nothing;
-    const label = toolDependencyStatusLabel(
-      row.item.status,
-      row.item.statusLabel,
-    );
+    if (row.kind !== 'texra' || row.item.setup === null) return nothing;
+    const { status, statusLabel } = row.item.setup;
+    const label = toolDependencyStatusLabel(status, statusLabel);
     return html`<span class="plugin-ready">${waIcon('check')}${label}</span>`;
   }
 
@@ -388,11 +388,12 @@ export class PluginCard extends LitElement {
 
   private renderTexraBody(row: TexraRow): TemplateResult {
     const { item } = row;
+    const statusDetail = item.setup?.statusDetail;
     return html`
       <p class="catalog-detail-description" dir="auto">${item.description}</p>
       ${
-        item.statusDetail
-          ? html`<div class="plugin-note" dir="auto">${item.statusDetail}</div>`
+        statusDetail
+          ? html`<div class="plugin-note" dir="auto">${statusDetail}</div>`
           : nothing
       }
       ${this.renderTools(item)}
@@ -404,7 +405,8 @@ export class PluginCard extends LitElement {
     const problem = pluginRowProblem(row);
     const trust = pluginRowTrust(row);
     const usedBy = pluginRowUsedBy(row);
-    const authNote = row.kind === 'texra' ? row.item.authNote : undefined;
+    const authNote =
+      row.kind === 'texra' ? row.item.setup?.authNote : undefined;
 
     return html`
       <article class="plugin-card" data-plugin-kind=${row.kind}>

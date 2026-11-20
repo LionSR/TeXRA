@@ -12,6 +12,7 @@ import {
 
 import {
   cliEnvValue,
+  isQuiet,
   readCliAmbientState,
   readCliEntrypointPath,
   type CliContext,
@@ -260,7 +261,7 @@ export function notifyCliUpdate(
   // before it does.
   if (!ambient.stdinIsTty || !ambient.stdoutIsTty || !ambient.stderrIsTty)
     return Effect.undefined;
-  if (context.outputFormat === 'ndjson' || context.quietLogs === true)
+  if (context.outputFormat === 'ndjson' || isQuiet(context))
     return Effect.undefined;
   // A source checkout or `npm link` build runs from `packages/cli/dist`, not a
   // node_modules tree; an `npm install -g` prompt can't update it, so skip.

@@ -1012,13 +1012,13 @@ type InboxItem = (
       readonly blobs?: readonly DraftBlob[];
     }
   | { readonly delivery: ChildRunDelivery }
+  /** A request of the run's own (`/compact`, a model switch), not a message. */
+  | { readonly control: FollowUpControl }
 ) & {
   readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
-  /** A request of the run's own (`/compact`, a model switch), not a message. */
-  readonly control?: QueuedFollowUp['control'];
 };
 ```
 
