@@ -220,7 +220,6 @@ export function ScrollableModalText(
       {footerHints ? (
         <Box marginTop={1}>
           <KeyHints
-            confirmCancel={false}
             hints={[
               ...(scrollable ? scrollKeyHints(scrollHint) : []),
               ...footerHints,
@@ -244,5 +243,5 @@ export function ScrollHints({
 }: {
   readonly action: string;
 }): React.JSX.Element {
-  return <KeyHints confirmCancel={false} hints={scrollKeyHints(action)} />;
+  return <KeyHints hints={scrollKeyHints(action)} />;
 }

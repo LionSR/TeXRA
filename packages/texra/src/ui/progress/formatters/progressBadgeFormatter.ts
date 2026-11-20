@@ -2,20 +2,22 @@ import {
   documentRoundsOf,
   isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
-import { passLabel } from '@ui/copy/taskDiagnostics';
+import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import type { RunView } from '@texra-ai/harness/schemas';
 
 /**
- * The run header's pass chip: "Pass 2 of 3" on a document task, naming the
- * latest pass whose documents it recorded; nothing on any other task, whose
- * conversation already shows its turns and tool calls. The total is the
- * agent's planned pass count, when the catalog knows it.
+ * The run header's revision chip: "Revision 2 of 3" on a document task,
+ * naming the latest revision whose documents it recorded; nothing on any
+ * other task, whose conversation already shows its turns and tool calls.
+ * The total is the agent's planned revision count, when the catalog knows it.
  */
 export function progressBadgeLabel(
   run: Pick<RunView, 'program' | 'facts'>,
-  plannedPasses: number | undefined,
+  plannedRevisions: number | undefined,
 ): string | undefined {
   if (!isDocumentTaskRun(run)) return undefined;
-  const passes = documentRoundsOf(run).length;
-  return passes === 0 ? undefined : passLabel(passes - 1, plannedPasses);
+  const rounds = documentRoundsOf(run).length;
+  return rounds === 0
+    ? undefined
+    : formatRoundLabel(rounds - 1, plannedRevisions);
 }

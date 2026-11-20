@@ -9,7 +9,7 @@ import { Box, Text, useInput } from 'ink';
 
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { CANCEL_HINT, KeyHints } from '@cli/tui/ui/KeyHints';
 import { COLOR_ACCENT } from '@cli/tui/ui/colors';
 import { TextInput } from './TextInput';
 import type { InputHistory } from '../history/inputHistory';
@@ -56,6 +56,8 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
           hints={[
             { key: 'Ctrl-R / ↑', action: 'older match' },
             { key: '↓', action: 'reset' },
+            { key: 'Enter', action: 'confirm' },
+            CANCEL_HINT,
           ]}
         />
       }

@@ -293,7 +293,7 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
       // question names its topic, the run's own question (did an interrupted
       // call run?) says so, and no heading claims the agent asked.
       title={props.question.header ?? 'Question'}
-      footer={<KeyHints hints={props.hints} confirmCancel={false} />}
+      footer={<KeyHints hints={props.hints} />}
       footerMarginTop={compact ? 0 : 1}
     >
       <Box marginTop={compact ? 0 : 1} flexDirection="column">

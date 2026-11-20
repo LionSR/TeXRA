@@ -42,9 +42,8 @@ const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   ndjson: 'newline-delimited JSON stream',
 };
 
-type Step = 'agent' | 'model' | 'output' | 'gitignore';
-
-const STEPS: readonly Step[] = ['agent', 'model', 'output', 'gitignore'];
+const STEPS = Object.freeze(['agent', 'model', 'output', 'gitignore'] as const);
+type Step = (typeof STEPS)[number];
 
 const STEP_TITLES: Record<Step, string> = {
   agent: 'Default agent for texra chat',
@@ -217,7 +216,6 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
             { key: 'Enter', action: 'select' },
             CANCEL_HINT,
           ]}
-          confirmCancel={false}
         />
       </Box>
     </Box>

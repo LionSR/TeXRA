@@ -368,12 +368,36 @@ still detected twice in one resume, both through `runReadRefusal`
 (`resumeRun.ts:88-92`, `resumability.ts:37-41`; `ownedElsewhere` is gone).
 The other deciders and the remaining stopped vocabulary were not re-read._
 
-_Done 2026-11-20: a resume reads its run's facts once (`openResume`,
-`packages/harness/src/agent/runtime/resumeRun.ts`): a failed read is
-`refusalFor`'s, and the continuation is `continuationOf`
-(`packages/harness/src/agent/storage/continuation.ts`) over that read, so an
-earlier build is detected once. `FollowUps.release` and the script summary's
-`stopped` are still open._
+_At 2026-11-20, every production `Cause.hasInterrupts` site was re-read.
+The ones that asked "did the run stop" call the owner: `readCause`
+(`packages/harness/src/shared/session/causeReading.ts`) and the session
+description's finalizer (`sessionDescription.ts`) ask `outcomeFromCause`;
+`endVerdict` (`AgentRunLifecycle.ts`) no longer wraps it in a ternary that
+returned its own answer; and `commitEnd` reads the outcome its caller's
+verdict decided instead of asking the exit again (`Cause.hasInterrupts`:
+38 files to 36). `stopOrFailure` is not built: `endVerdict` is that
+richer answer (the outcome, and the failure that rode a stop), and the
+two run terminals left (`endRun`, `processRun.ts`'s `endProcessChild`) both
+call it. The sites kept ask other questions: whether a catch or a
+finalizer passes an interruption through (`definition.ts`,
+`LatexToolingController.ts`, `LspTools.ts`, `arxivProcessor.ts`), whether
+an interrupted call proves anything about a route (`ModelRetryGate.ts`),
+whether a fiber's exit is interrupts only, so that nothing is logged or
+the process exits 130 (the hosts' report handlers, `executeCli.ts`,
+`cliCommand.ts`, `runRegistry.ts`'s `drained` and `notOpened`, `commitEnd`'s
+re-raise). The three bare `Effect.interrupt` re-raises (two in
+`ModelInvoker.ts`, one in `compaction.ts`) still drop a failure that rode
+beside the stop, where the tool dispatch keeps it as a defect
+(`toolUseDispatch.ts:488-498`). Keeping it there too would make a root
+run that the person stopped end in an `AgentError` whenever a stream's
+finalizer fails as the stop unwinds it; how often a provider stream's
+close fails on interruption was not measured, so this waits for that
+evidence before every stop can surface an error. `openResume` reads the run's facts once and decides
+from that read: a failed read is `refusalFor`'s, and the continuation is
+`continuationOf` (`packages/harness/src/agent/storage/continuation.ts`) over
+it, so an earlier build is detected once (2026-11-20). `FollowUps.release`'s two literals stay until `runLoop.ts`, their
+one caller, is free to change. The script delivery's `stopped` stays (the
+2026-11-17 triage note)._
 
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
@@ -448,6 +472,17 @@ OpenAI's `failed`/`cancelled` are all `provider-rejection`
 `SyntaxError`. One "no completed turn" check was rejected: the three
 guard three boundaries of the `Model` interface
 (`.agents/docs/refuted-candidates.json`)._
+
+_At 2026-11-20: the one skip signal is refused (`RUN-one-skip-signal` in
+`.agents/docs/refuted-candidates.json`: a disposition `skipped` is a call
+whose body never ran, `name: 'Skipped'` a delegation whose body ran and
+whose child was stopped). `terminalStatusFailure` is not built: the kind
+has converged, and what remains differs per provider, OpenAI's failure
+codes deciding whether a repeat can clear it
+(`openaiResponsesCodec.ts`'s `terminalParts`) and Google's two sites
+(`googleInteractions.ts`, live and background) naming the turn in their
+own words; one helper over two sites of one provider is not worth its
+name._
 
 **Give up.** A silent success on truncation, which is the defect.
 

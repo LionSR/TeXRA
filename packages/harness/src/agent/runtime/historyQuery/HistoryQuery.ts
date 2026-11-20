@@ -87,7 +87,7 @@ const modelEnd = (
   runId: RunId,
   at: string,
   { invocationId, attempt }: InvocationRef,
-  status: 'completed' | 'failed' | 'cancelled',
+  status: Extract<HistoryWrite, { statement: 'modelEnd' }>['params']['status'],
   end: { output?: string; error?: string; usage?: NormalizedUsage | null },
 ): HistoryWrite => ({
   statement: 'modelEnd',

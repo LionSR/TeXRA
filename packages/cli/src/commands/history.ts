@@ -26,7 +26,7 @@ import {
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
@@ -223,13 +223,6 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
     ? CliExitCode.Usage
     : CliExitCode.Success;
 });
-
-const boolFlag = (name: string, description: string) =>
-  Flag.Boolean(name).pipe(
-    Flag.withoutNegation,
-    Flag.withDefault(false),
-    Flag.withDescription(description),
-  );
 
 const TASK_ID_DESCRIPTION = 'Task id from `texra history list`';
 
