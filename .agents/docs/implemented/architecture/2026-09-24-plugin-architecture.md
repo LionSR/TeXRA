@@ -160,9 +160,10 @@ validate is skipped and the resolving run's transcript says why.
   (`projectServers`), shared by that project's runs, kept 30 minutes past its
   last holder and stopped with the session; no server is shared across
   projects.
-- The client is the harness's Effect JSON-RPC connection
-  (`packages/harness/src/tools/jsonRpc.ts`, newline framing), spawned through
-  `effect/process` (`packages/harness/src/tools/mcp/mcpServer.ts`).
+- The client is effect/ai's `McpClient` over its stdio transport, speaking
+  MCP 2025-11-25 only (since 2026-11-22; a server answering an older
+  revision fails its start, naming both), spawned through `effect/process`
+  (`packages/harness/src/tools/mcp/mcpServer.ts`).
 - Every MCP call goes through the one approval authority: the loop's guard
   (`guardedToolCall`, `packages/harness/src/agent/runtime/loop/toolGuard.ts`)
   routes it to `askCommandApproval`. MCP tools are never parallel-safe, and

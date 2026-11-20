@@ -130,19 +130,24 @@ each server with the agents that use it):
 ```json
 {
   "mcpServers": {
-    "github": {
+    "notion": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..." }
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": { "NOTION_TOKEN": "ntn_..." }
     }
   }
 }
 ```
 
 A server name uses letters, digits, `_` and `-` (at most 32 characters, no
-`__`, and not ending in `_`). Only stdio servers (a `command` TeXRA starts) are supported. An entry
-that does not match this shape is skipped, and a run that asks for MCP tools
-shows why in its transcript.
+`__`, and not ending in `_`). Only stdio servers (a `command` TeXRA starts) are
+supported. An entry that does not match this shape is skipped, and a run that
+asks for MCP tools shows why in its transcript.
+
+TeXRA speaks MCP revision 2025-11-25. A server built on an MCP SDK older than
+that revision (the TypeScript SDK before 1.25, December 2025) does not start:
+the run's transcript names the server, the revision it answered and the one
+required, and says to update it. The rest of the run goes on without its tools.
 
 An agent gets a server's tools only when its YAML `tools:` list names them,
 either one by one as `mcp__<server>__<tool>` or all at once as
@@ -151,7 +156,7 @@ either one by one as `mcp__<server>__<tool>` or all at once as
 ```yaml
 tools:
   - read_file
-  - mcp__github__*
+  - mcp__notion__*
 ```
 
 - **Every call goes through shell-command approval.** The prompt shows the
@@ -173,8 +178,9 @@ tools:
 - **Limits.** A call times out after 60 seconds, and output beyond 200,000
   characters keeps its beginning and its end.
 - **A server that fails to start** (a missing command, no answer within 30
-  seconds, a malformed tool list) contributes no tools; the run continues with
-  the rest and its transcript names the server and the reason.
+  seconds, an older MCP revision, a malformed tool list) contributes no tools;
+  the run continues with the rest and its transcript names the server and the
+  reason.
 
 Not yet supported: a project-level `.texra/mcp.json`, HTTP servers, servers
 that change their tool list while running, and MCP resources and prompts.
