@@ -182,9 +182,9 @@ export interface CallRequests {
    *  row. `operation` is what a command (`bash`) asks permission for: the
    *  shell's (`'bash'`, which the run's command grant answers) or another
    *  tool's call (`'call'`, which only the delegated-work grant answers).
-   *  An edit, a plan or a proposal asks about its own kind; with the
-   *  call's hooks, the operation decides who answers the request, and a
-   *  request about none is a person's. */
+   *  An edit, a plan, a proposal or a plugin's trust asks about its own
+   *  kind (`operationOf`); with the call's hooks, the operation decides who
+   *  answers the request, and a request about none is a person's. */
   readonly open: <P extends RequestPayload>(
     payload: P,
     opening?: {

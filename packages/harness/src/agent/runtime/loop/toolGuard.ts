@@ -94,6 +94,28 @@ const askCommandApproval = Effect.fn('askCommandApproval')(function* (
   return decision;
 });
 
+/**
+ * Ask about `ask.command` under the session's policy (`Approvals.permission`)
+ * and, when it presents, the person ({@link askCommandApproval}): the result
+ * that replaces the call when it is refused, `undefined` when it may run.
+ * The guard's question for a guarded call, and a tool's own for a change
+ * it asks about as a command.
+ */
+export const commandApproval = Effect.fn('commandApproval')(function* (
+  runId: RunId,
+  requests: CallRequests,
+  hook: HookAnswer,
+  ask: Parameters<typeof askCommandApproval>[2],
+): Effect.fn.Return<ToolResult | undefined, Error, Approvals> {
+  const answer = (yield* Approvals).permission(runId, ask.operation, hook);
+  if (answer === 'allow') return undefined;
+  const decision =
+    answer === 'ask' ? yield* askCommandApproval(runId, requests, ask) : answer;
+  return decision.action === 'approve'
+    ? undefined
+    : commandRejectedResult(ask.command, decision);
+});
+
 /** What the model is told when the person refuses `command`. */
 function commandRejectedResult(
   command: string,
@@ -243,23 +265,11 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       ? (call.env.workingDirectory ?? call.env.roots.workspace)
       : undefined;
 
-  const operation = guard?.command?.grant ?? 'call';
-  const { run } = call.env;
-  const { requests } = call;
-  const approvals = yield* Approvals;
-  const answer = approvals.permission(run.runId, operation, hook);
-  if (answer === 'allow') return undefined;
-  const decision =
-    answer === 'ask'
-      ? yield* askCommandApproval(run.runId, requests, {
-          command,
-          cwd,
-          operation,
-        })
-      : answer;
-  return decision.action === 'approve'
-    ? undefined
-    : commandRejectedResult(command, decision);
+  return yield* commandApproval(call.env.run.runId, call.requests, hook, {
+    command,
+    cwd,
+    operation: guard?.command?.grant ?? 'call',
+  });
 });
 
 /** One call through the chain, over the `issued` input and its recorded

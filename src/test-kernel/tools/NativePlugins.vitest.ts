@@ -408,10 +408,7 @@ describe(
                 plugin: 'echoes',
                 version: '1.0.0',
                 folder: files.dir,
-                native: {
-                  description: 'Echoes the revision that serves the call.',
-                  provides: ['tool:native_echo', 'processLayer'],
-                },
+                native: true,
               });
               expect(echo?.answeredBy).toBe('superYolo');
               expect(JSON.stringify(echo?.payload)).toContain(

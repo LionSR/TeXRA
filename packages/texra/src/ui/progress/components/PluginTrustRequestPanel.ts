@@ -1,13 +1,12 @@
 /** Plugin trust request card: "Trust and load the plugin echoes 1.0.0",
- *  whether it carries native code, where it is and what it contributes,
- *  then the whole review. */
+ *  whether it carries native code, where it is, then the whole review. */
 
 // Third-party imports
 import { css, html, nothing, type CSSResult, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared utilities
-import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { pluginTrustFacts, REQUEST_ASK } from '@ui/copy/requestCards';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -43,20 +42,12 @@ export class PluginTrustRequestPanel extends BaseRequestPanel<'pluginTrust'> {
   ];
 
   protected override renderAsk(): TemplateResult {
-    const { plugin, version } = this.permission.data;
     return html`${REQUEST_ASK.pluginTrust}
-      <strong>${plugin}</strong>${version ? ` ${version}` : ''}`;
+      <strong>${pluginTrustFacts(this.permission.data).plugin}</strong>`;
   }
 
   override render(): TemplateResult {
-    const { path, digest, native, skills, programs, servers, review } =
-      this.permission.data;
-    const contributes = [
-      native && `native code: ${native.provides.join(', ') || 'nothing'}`,
-      `skills: ${skills}`,
-      `programs: ${programs.join(', ') || 'none'}`,
-      `MCP servers: ${servers.join(', ') || 'none'}`,
-    ].filter(Boolean);
+    const { native, review } = this.permission.data;
     return this.renderCard(html`
       ${
         native
@@ -66,8 +57,7 @@ export class PluginTrustRequestPanel extends BaseRequestPanel<'pluginTrust'> {
           : nothing
       }
       <div class="plugin-trust__facts">
-        <div><bdi dir="ltr">${path}</bdi> (digest ${digest.slice(0, 12)})</div>
-        <div>${contributes.join('; ')}</div>
+        <bdi dir="ltr">${pluginTrustFacts(this.permission.data).location}</bdi>
       </div>
       <div class="plugin-trust__review">${review.join('\n')}</div>
     `);

@@ -67,6 +67,7 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
     runId,
     executeAgent(
       runId,
+      registration.parent?.id ?? null,
       Effect.succeed({ definition, options: { ...options, registration } }),
     ),
   );
@@ -91,6 +92,7 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
     runId,
     executeAgent(
       runId,
+      parentId,
       openResume(runId, options, parentId).pipe(
         Effect.catchTag('ResumeNotOpened', ({ answer }) =>
           Effect.fail(

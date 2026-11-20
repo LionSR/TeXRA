@@ -349,12 +349,16 @@ const onTable =
  * the loop exits reaches exactly once. All of it in the launch's keys.
  * Callers read the outcome and output from its committed end. Root
  * launches use `rootRun`, resumes `resumeRun`, a child's launch
- * `startChildRun`. The run reads the plugin table as its launch read it
+ * `startChildRun`. The run reads the plugin table as its launch found it
  * (`ToolRegistry`: the listed plugins and the native ones loaded then),
- * and each of its steps the table that step read.
+ * and each of its steps the table that step read. A launch `parent`'s call
+ * makes (a child's, or a child's resume by its open call) takes the table
+ * its parent's step read and published; any other reads the installed
+ * plugins, as no step of this run or another read them for it.
  */
 export const executeAgent = <E extends Error>(
   runId: RunId,
+  parent: RunId | null,
   prepare: Effect.Effect<AgentLaunch, E, AgentRunServices>,
 ): Launch<
   OpenedAgent & { readonly table: ToolTable },
@@ -363,7 +367,8 @@ export const executeAgent = <E extends Error>(
   void
 > => ({
   open: Effect.gen(function* () {
-    const table = yield* (yield* ProjectTools).table;
+    const tools = yield* ProjectTools;
+    const table = yield* parent === null ? tools.table : tools.published;
     const opened = yield* Effect.flatMap(prepare, (launch) =>
       withLaunchKeys(openAgent(launch, runId)),
     ).pipe(onTable(table));

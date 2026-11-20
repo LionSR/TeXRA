@@ -27,6 +27,7 @@ export type { WriteFilter } from '@tools/WriteTool';
 export {
   PluginHold,
   ToolRegistry,
+  type NativePlugin,
   type Program,
   type ProgramResult,
   type PluginLayerServices,

@@ -25,13 +25,15 @@ import type {
 } from './database';
 
 /** Each operation a run asks permission for (`OPERATIONS` in
- *  `agent/runtime/requests.ts`, which names the grant that answers it). */
+ *  `agent/runtime/requests.ts`, which names who answers it): `trust` is
+ *  trusting a plugin's native code, which only a person answers. */
 export type ApprovalOperation =
   | 'bash'
   | 'call'
   | 'toolEdit'
   | 'plan'
-  | 'proposal';
+  | 'proposal'
+  | 'trust';
 
 /** What a call's `PreToolUse` hooks answered, if anything: a denial ends
  *  the call before it asks. */

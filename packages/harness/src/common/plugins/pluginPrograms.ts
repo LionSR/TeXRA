@@ -76,6 +76,47 @@ const USES: HeaderList = {
   example: "['read_file', 'agent']",
 };
 
+/**
+ * The regular file `file` of a plugin, read as text and never run, and the
+ * two declarations its header begins with (`list` beside the
+ * `description`), read from `sourceOf` its text: the source, or why not
+ * (an unreadable file, a link, which is not followed, a header that does
+ * not declare them); `null` when nothing is there.
+ */
+export const readDeclaredFile = Effect.fn('readDeclaredFile')(function* (
+  file: string,
+  list: HeaderList = USES,
+  sourceOf: (text: string) => string = (text) => text,
+): Effect.fn.Return<
+  Result.Result<
+    {
+      readonly source: string;
+      readonly description: string;
+      readonly names: readonly string[];
+    },
+    string
+  > | null,
+  never,
+  FileSystem.FileSystem
+> {
+  const fs = yield* FileSystem.FileSystem;
+  const text = yield* Effect.result(
+    Effect.gen(function* () {
+      const info = yield* fs.lstat(file);
+      return info.type === 'File' ? yield* fs.readFileString(file) : null;
+    }),
+  );
+  if (Result.isFailure(text))
+    return meansAbsent(text.failure) ? null : Result.fail(text.failure.message);
+  if (text.success === null)
+    return Result.fail('it is not a regular file (a link is not followed)');
+  const source = sourceOf(text.success);
+  return Result.map(readDeclarations(source, list), (declared) => ({
+    source,
+    ...declared,
+  }));
+});
+
 /** The escapes a quoted literal may hold, by the character after `\`. */
 const ESCAPES: Readonly<Record<string, string>> = {
   '\\': '\\',
@@ -91,7 +132,7 @@ const ESCAPES: Readonly<Record<string, string>> = {
  * `export const` statements and stops there: the rest of the file is never
  * looked at.
  */
-export function readDeclarations(
+function readDeclarations(
   source: string,
   list: HeaderList = USES,
 ): Result.Result<
@@ -269,25 +310,18 @@ export const readPrograms = Effect.fn('readPrograms')(function* ({
           return refused(
             'its name must be lowercase letters, digits and hyphens',
           );
-        const full = path.join(root, entry);
-        const text = yield* Effect.result(
-          Effect.gen(function* () {
-            const info = yield* fs.lstat(full);
-            return info.type === 'File'
-              ? yield* fs.readFileString(full)
-              : undefined;
-          }),
+        const declared = yield* readDeclaredFile(
+          path.join(root, entry),
+          USES,
+          moduleOf,
         );
-        if (Result.isFailure(text)) return refused(text.failure.message);
-        if (text.success === undefined)
-          return refused('it is not a regular file (a link is not followed)');
-        const source = moduleOf?.(text.success) ?? text.success;
-        const declared = readDeclarations(source);
+        if (declared === null) return refused('it is no longer there');
         if (Result.isFailure(declared)) return refused(declared.failure);
+        const { description, names, source } = declared.success;
         return Result.succeed({
           name: `${prefix}:${base}`,
-          description: declared.success.description,
-          tools: declared.success.names,
+          description,
+          tools: names,
           source,
         } satisfies PluginProgram);
       }),

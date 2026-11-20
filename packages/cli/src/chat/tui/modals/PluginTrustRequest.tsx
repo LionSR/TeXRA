@@ -5,7 +5,7 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { truncateToWidth } from '@cli/runtime/terminal/terminalText';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
-import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { pluginTrustFacts, REQUEST_ASK } from '@ui/copy/requestCards';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
@@ -34,10 +34,11 @@ export function PluginTrustRequest(
   const { columns } = useWindowSize();
   const { payload } = props;
   const width = confirmCardContentWidth(columns);
-  const title = `${REQUEST_ASK.pluginTrust} ${payload.plugin}${payload.version ? ` ${payload.version}` : ''}`;
+  const facts = pluginTrustFacts(payload);
+  const title = `${REQUEST_ASK.pluginTrust} ${facts.plugin}`;
   const lines = [
     ...(payload.native ? [REQUEST_ASK.nativeCode] : []),
-    `${payload.path} (digest ${payload.digest.slice(0, 12)})`,
+    facts.location,
   ].map((line) => truncateToWidth(line, width));
   const maxRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
