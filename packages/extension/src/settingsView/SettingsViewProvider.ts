@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Effect, Latch, Predicate, Result, Schema } from 'effect';
+import { Effect, Latch, Predicate } from 'effect';
 
 import { hasExtension } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -10,7 +10,6 @@ import {
   safeExecuteCommand,
 } from '@frontend/system/commandUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
@@ -19,10 +18,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
-import {
-  SettingsViewInboundMessageSchema,
-  type SettingsViewOutboundMessage,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -241,28 +237,15 @@ export class SettingsViewProvider {
       this.fork(
         Effect.gen({ self: this }, function* () {
           if (this.panel?.view !== panel) return;
-          const parsed = Schema.decodeUnknownResult(
-            SettingsViewInboundMessageSchema,
-          )(message);
-          if (Result.isFailure(parsed)) {
-            // Every click must either run its command or explain why it did not.
-            const command =
-              Predicate.hasProperty(message, 'command') &&
-              typeof message.command === 'string'
-                ? message.command
-                : 'unknown';
-            yield* showLoggedErrorMessage(
-              `Settings could not handle the '${command}' request`,
-              parsed.failure.message,
-            );
-            return;
-          }
           // Initial page refreshes must be able to post during ready
           // dispatch; a tab asked for while the panel loaded goes now too.
-          if (parsed.success.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY) {
+          if (
+            Predicate.hasProperty(message, 'command') &&
+            message.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
+          ) {
             yield* ready.open;
           }
-          yield* this.body.handleMessage(parsed.success);
+          yield* this.body.handleMessage(message);
         }).pipe(withLogChannel(CHANNEL)),
       );
     });
