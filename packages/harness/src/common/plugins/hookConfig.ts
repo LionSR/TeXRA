@@ -178,12 +178,10 @@ interface Translation {
 /** Fields renamed, harness name to counterpart name, `path` absolute. */
 const renamed = (fields: Readonly<Record<string, string>>): Translation => ({
   input: (input, abs) =>
-    Object.fromEntries(
-      Object.entries(fields).map(([ours, theirs]) => [
-        theirs,
-        ours === 'path' ? abs(input[ours]) : input[ours],
-      ]),
-    ),
+    EffectRecord.mapEntries(fields, (theirs, ours) => [
+      theirs,
+      ours === 'path' ? abs(input[ours]) : input[ours],
+    ]),
   back: (rewritten, issued) => ({
     ...issued,
     ...EffectRecord.map(fields, (theirs) => rewritten[theirs]),

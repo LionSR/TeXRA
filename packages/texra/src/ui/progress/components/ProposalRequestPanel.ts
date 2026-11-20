@@ -46,7 +46,6 @@ import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { proposalLaunchPatch } from '../proposalEdit';
 import { delegateKeyActivation } from './composedPath';
-import type { RunView } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('proposal-request-panel')
@@ -59,9 +58,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
 
   /** The host's catalogs, the lists the launch form offers. */
   @property({ attribute: false }) host: HostSnapshot | null = null;
-
-  /** The asking run: its `agentScope` bounds the form's agents. */
-  @property({ attribute: false }) run: RunView | null = null;
 
   /** The model the run starts on: the one picked here, else the proposal's. */
   private get model(): string {
@@ -139,7 +135,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /** A script's request approves the script, not one call's agent work,
    *  so only an agent's own proposal opens in the form. */
   private get editable(): boolean {
-    return !this.readOnly && this.host !== null && !this.permission.data.script;
+    return this.host !== null && !this.permission.data.script;
   }
 
   /** Edit: the launch form opens on this proposal, filled with what it

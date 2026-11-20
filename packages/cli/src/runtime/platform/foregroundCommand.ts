@@ -13,7 +13,7 @@ import type { PlatformError } from 'effect/PlatformError';
  * or C's `system()` does, and only records it. When the child ends, the
  * command interrupts its own fiber if the child ended because of that Ctrl-C,
  * so the outcome does not race process exit. Each caller's boundary maps the
- * interruption to exit 130: `defineCliCommand` for the pager,
+ * interruption to exit 130: `cliCommand`'s launch for the pager,
  * `notifyCliUpdate` for the self-update.
  */
 

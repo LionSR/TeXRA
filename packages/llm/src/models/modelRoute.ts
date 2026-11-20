@@ -135,25 +135,18 @@ function codexSubscriptionOf(
 }
 
 /**
- * Whether no route TeXRA reaches serves `config`: llm-zoo retired the model,
- * or only OpenRouter serves it, which TeXRA does not call.
+ * Whether TeXRA serves no run on `config`: llm-zoo retired the model, only
+ * OpenRouter serves it, which TeXRA does not call, or it cannot call
+ * functions, which every run does (its tools, or `script` in code mode).
  */
 export function isUnservedModel(
-  config: Pick<ModelConfig, 'retired' | 'openRouterOnly'>,
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'capabilities'>,
 ): boolean {
-  return config.retired === true || config.openRouterOnly === true;
-}
-
-/**
- * Whether the model issues independent tool calls together in one response
- * and handles their results in any order. The prompt tells such a model it
- * may batch calls; every other model is told to call one tool at a time.
- * Only Anthropic's models are known to; llm-zoo carries no flag for it.
- */
-export function issuesParallelToolCalls(
-  config: Pick<ModelConfig, 'provider'>,
-): boolean {
-  return config.provider === ModelProvider.ANTHROPIC;
+  return (
+    config.retired === true ||
+    config.openRouterOnly === true ||
+    !config.capabilities.supportsFunctionCalling
+  );
 }
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */

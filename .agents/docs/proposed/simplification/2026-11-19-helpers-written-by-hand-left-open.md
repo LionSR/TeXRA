@@ -29,6 +29,13 @@ Landed since:
   words a crash under the entry's label. `texra` also passes the
   crash-report line; `CliEntryCrashed` is file-local.
 
+- **A second pass over every package** replaced the remaining sites with
+  `Record.map` / `filter` / `mapEntries` / `remove`, `Effect.match`,
+  `Effect.orElseSucceed`, `Effect.tapError`, `Effect.sandbox`,
+  `Effect.filter`, `Effect.catchTag`, `Fiber.join`, `Result.all`,
+  `Array.zip` and `Stream.zipWithPrevious`. What it read and left is under
+  "Checked and declined".
+
 ## Open
 
 1. **Warnings with no channel of their own.** Some sites write
@@ -89,3 +96,27 @@ Landed since:
 - **`path.extname(x).toLowerCase()` as `getExtensionLowercase`.** The
   harness helper is not on a public entry. Exporting it to replace a
   one-call native expression is not a gain.
+- **`isFields` in `packages/llm/src/api/failureReply.ts` as
+  `Predicate.isObjectOrArray`.** The runtime check is the same, but the
+  Effect guard narrows to a union with `unknown[]`, which has no named
+  fields to read. The same holds for `Predicate.isObject` over the reused
+  result's `value` in
+  `packages/harness/src/agent/runtime/delegation/agentChild.ts`: the
+  narrowed type cannot be spread.
+- **`Array.partition` for a pair of opposite `filter` calls.** In this Effect
+  version it takes a `Result`-returning filter, not a predicate, so it is
+  not shorter.
+- **`Effect.findFirst` for the first-hit loops** (vendor packages, tool
+  checks, credentials). It returns the element, and each loop wants the
+  value it probed.
+- **A `Schedule` for the model retry and the GitHub poller.** The delay
+  comes from the failure itself (a retry-after, a rate-limit reset), and
+  `times` is applied after `while`, so the last failure would log a retry
+  and sleep before giving up.
+- **`Effect.isSuccess` for the readable-file probe in
+  `packages/cli/src/runtime/doctor.ts`.** The handler's annotated parameter
+  is what makes a second error type fail to compile.
+- **One helper for "copy the sign-in code, warn, say whether it copied"**
+  (`packages/desktop/src/main/desktopSignInPresenters.ts`,
+  `packages/extension/src/frontend/auth/subscriptionSignIn.ts`). Eight
+  lines in two hosts; a new app export would cost about as much.

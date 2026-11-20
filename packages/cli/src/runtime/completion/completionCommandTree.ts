@@ -1,5 +1,8 @@
-// Third-party type imports
-import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
+// Third-party imports
+import { Command, Completions } from 'effect/cli';
+
+// Local imports - CLI
+import { CLI_GLOBAL_FLAG_DESCRIPTORS } from '@cli/commands/_helpers/cliCommand';
 
 export const CLI_COMPLETION_SHELLS = Object.freeze([
   'bash',
@@ -7,12 +10,6 @@ export const CLI_COMPLETION_SHELLS = Object.freeze([
   'fish',
 ] as const);
 export type CliCompletionShell = (typeof CLI_COMPLETION_SHELLS)[number];
-
-/**
- * The part of a citty command the tree walkers read. Every `CommandDef<T>`
- * is one, whatever its args, because these fields are only read.
- */
-export type AnyCommand = Pick<CommandDef, 'meta' | 'args' | 'subCommands'>;
 
 export interface CompletionCommand {
   readonly path: readonly string[];
@@ -29,108 +26,59 @@ export interface CompletionFlag {
   readonly values: readonly string[];
   readonly valueKind?: string;
   readonly negatedName?: string;
-  readonly negatedDescription?: string;
 }
 
-export type CompletionFlagVariant = Omit<
-  CompletionFlag,
-  'negatedName' | 'negatedDescription'
->;
-
-function isCompletionShell(value: string): value is CliCompletionShell {
-  return CLI_COMPLETION_SHELLS.some((shell) => shell === value);
-}
-
-export function parseCompletionShell(value: string): CliCompletionShell {
-  if (isCompletionShell(value)) return value;
-  throw new Error(
-    `Unsupported shell: ${value}. Expected ${CLI_COMPLETION_SHELLS.join(', ')}.`,
-  );
-}
-
-async function resolveValue<T>(
-  value: T | Promise<T> | (() => T | Promise<T>),
-): Promise<T> {
-  return typeof value === 'function'
-    ? // cast: a command's meta, args and children are objects, never functions.
-      (value as () => T | Promise<T>)()
-    : value;
-}
-
-function aliases(arg: ArgDef): string[] {
-  if (!('alias' in arg) || arg.alias == null) return [];
-  return Array.isArray(arg.alias) ? arg.alias : [arg.alias];
-}
-
-function argValues(arg: ArgDef): readonly string[] {
-  return arg.type === 'enum' && Array.isArray(arg.options) ? arg.options : [];
-}
+export type CompletionFlagVariant = Omit<CompletionFlag, 'negatedName'>;
 
 /**
- * Whether a boolean arg documents a negated `--no-<name>` spelling: those
- * defaulting to `true`, which the user necessarily passes via the negative
- * (`--no-color`, `--no-pr`). citty rewrites `--no-<name>` to `<name>: false`;
- * completion, leading-flag reordering and unknown-flag detection all register
- * the spelling from this one predicate.
+ * Flags whose value is a path, keyed by flag name: the shells complete
+ * files or directories for them. effect/cli's path flags resolve against
+ * the process directory and require the path, where TeXRA resolves against
+ * `--cwd` and reads `-` as stdin, so these flags stay strings.
  */
-export function documentsNegatedBooleanForm(def: {
-  readonly type?: string;
-  readonly default?: boolean | number | string;
-}): boolean {
-  return def.type === 'boolean' && def.default === true;
-}
+const PATH_VALUE_FLAGS: Readonly<Record<string, 'file' | 'directory'>> =
+  Object.freeze({
+    cwd: 'directory',
+    source: 'directory',
+    input: 'file',
+    context: 'file',
+    output: 'file',
+    'output-dir': 'directory',
+    'instruction-file': 'file',
+  });
 
-function negativeDescription(arg: ArgDef): string | undefined {
-  if (!('negativeDescription' in arg)) return undefined;
-  return typeof arg.negativeDescription === 'string'
-    ? arg.negativeDescription
-    : undefined;
-}
-
-export function flagFromArg(
-  name: string,
-  arg: ArgDef,
-): CompletionFlag | undefined {
-  if (arg.type === 'positional') return undefined;
+function completionFlag(flag: Completions.FlagDescriptor): CompletionFlag {
+  const takesValue = flag.type._tag !== 'Boolean';
+  const negation =
+    flag.type._tag === 'Boolean' && typeof flag.negation === 'string'
+      ? flag.negation
+      : undefined;
   return {
-    name,
-    aliases: aliases(arg),
-    description: arg.description ?? '',
-    takesValue: arg.type !== 'boolean',
-    values: argValues(arg),
-    valueKind: arg.valueHint,
-    ...(documentsNegatedBooleanForm(arg)
-      ? {
-          negatedName: `no-${name}`,
-          negatedDescription: negativeDescription(arg),
-        }
-      : {}),
+    name: flag.name,
+    aliases: flag.aliases,
+    description: flag.description ?? '',
+    takesValue,
+    values: flag.type._tag === 'Choice' ? flag.type.values : [],
+    valueKind: PATH_VALUE_FLAGS[flag.name],
+    ...(negation === undefined ? {} : { negatedName: negation }),
   };
 }
 
 export function completionFlagVariants(
   flag: CompletionFlag,
 ): CompletionFlagVariant[] {
-  const variants: CompletionFlagVariant[] = [
+  const { negatedName, ...variant } = flag;
+  if (negatedName === undefined) return [variant];
+  return [
+    variant,
     {
-      name: flag.name,
-      aliases: flag.aliases,
-      description: flag.description,
-      takesValue: flag.takesValue,
-      values: flag.values,
-      valueKind: flag.valueKind,
-    },
-  ];
-  if (flag.negatedName) {
-    variants.push({
-      name: flag.negatedName,
+      name: negatedName,
       aliases: [],
-      description: flag.negatedDescription ?? flag.description,
+      description: flag.description,
       takesValue: false,
       values: [],
-    });
-  }
-  return variants;
+    },
+  ];
 }
 
 export function completionFlagTokens(flag: CompletionFlag): string[] {
@@ -140,67 +88,30 @@ export function completionFlagTokens(flag: CompletionFlag): string[] {
   ]);
 }
 
-/**
- * The citty command-tree accessors. `meta`, `args`, and `subCommands` may each
- * be a value, a promise, or a thunk, so every walker of the tree needs these.
- * Shared by the completion generators below and by the dispatch-time `--help`
- * scoping and unknown-command/-flag detection in
- * `@cli/commands/_helpers/dispatch` - one resolution behavior, one place.
- */
-export async function commandMeta(command: AnyCommand): Promise<CommandMeta> {
-  return command.meta ? resolveValue(command.meta) : {};
-}
+const GLOBAL_COMPLETION_FLAGS = CLI_GLOBAL_FLAG_DESCRIPTORS.map(completionFlag);
 
-export async function commandArgs(command: AnyCommand): Promise<ArgsDef> {
-  return command.args ? resolveValue(command.args) : {};
-}
-
-/**
- * Resolves each child as well, so a lazily declared subcommand is a real
- * command definition to every caller. Returns `{}` for a leaf.
- */
-export async function commandSubcommands(
-  command: AnyCommand,
-): Promise<Record<string, AnyCommand>> {
-  const subcommands = command.subCommands
-    ? await resolveValue(command.subCommands)
-    : {};
-  return Object.fromEntries(
-    await Promise.all(
-      Object.entries(subcommands).map(async ([name, subcommand]) => [
-        name,
-        await resolveValue(subcommand),
-      ]),
+/** Every command of the tree, root first, each with the global flags. */
+export function collectCommands(
+  root: Command.Command.Any,
+): CompletionCommand[] {
+  const walk = (
+    descriptor: Completions.CommandDescriptor,
+    path: readonly string[],
+  ): CompletionCommand[] => [
+    {
+      path,
+      description: descriptor.description ?? '',
+      subcommands: descriptor.subcommands.map((child) => child.name),
+      flags: [
+        ...descriptor.flags.map(completionFlag),
+        ...GLOBAL_COMPLETION_FLAGS,
+      ],
+    },
+    ...descriptor.subcommands.flatMap((child) =>
+      walk(child, [...path, child.name]),
     ),
-  );
-}
-
-export async function collectCommands(
-  command: AnyCommand,
-  path: readonly string[] = [],
-): Promise<CompletionCommand[]> {
-  const [meta, args, subcommands] = await Promise.all([
-    commandMeta(command),
-    commandArgs(command),
-    commandSubcommands(command),
-  ]);
-  const flags: CompletionFlag[] = [];
-  for (const [name, arg] of Object.entries(args)) {
-    const flag = flagFromArg(name, arg);
-    if (flag !== undefined) flags.push(flag);
-  }
-  const current: CompletionCommand = {
-    path,
-    description: meta.description ?? '',
-    subcommands: Object.keys(subcommands),
-    flags,
-  };
-  const children = await Promise.all(
-    Object.entries(subcommands).map(([name, child]) =>
-      collectCommands(child, [...path, name]),
-    ),
-  );
-  return [current, ...children.flat()];
+  ];
+  return walk(Completions.fromCommand(root), []);
 }
 
 export function commandKey(path: readonly string[]): string {

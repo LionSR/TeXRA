@@ -14,7 +14,8 @@ status: proposed
 
 正文里的"今天"和各处度量说的是基线 `d173e42`。此后第 1、2、6 期已随
 #14968 落地（2026-11-17 对照 `c78e9f9` 的源码核对过，逐项见"分期"）；第
-3、4、5 期没有动，第 7 期等"负责人问题"2。
+3 期随 #15020 落地，第 4 期已实现（见"分期"第 4 条）；第 5 期没有动，
+第 7 期等"负责人问题"2。
 
 ## 摘要
 
@@ -966,9 +967,11 @@ commands、agents、MCP server 和 hooks，不进脚本的模块表。让它带
   `packages/harness/src/common/plugins/pluginTrust.ts`）。它的程序和模块
   叫 `<插件名>:<名字>`，和它的 skills、agents 今天的叫法一样；插件不能叫
   `builtIn`（今天已经不能叫 agent source 的名字）。
-- **描述和工具从文件里读。** 加载器从文件里的 `export const description`
-  和 `export const tools` 两行静态读出，不求值。这是加载器的约定，内核
-  拿到的仍是值。加载器不跟符号链接（摘要记的是链接文本）。
+- **描述和工具从文件里读。** 加载器从文件开头的 `export const description`
+  和 `export const uses` 两行静态读出，不求值。这是加载器的约定，内核
+  拿到的仍是值。加载器不跟符号链接（摘要记的是链接文本）。第二行不叫
+  `tools`：模块里自己的 `tools` 绑定会盖住沙箱的全局 `tools`，程序里的
+  `tools.read_file(...)` 就调不到工具（实现第 4 期时由端到端验证发现）。
 - **信任用已有的那一套。** 按内容摘要记在用户的全局状态里：启用时列出它
   带的东西让人审阅，改了任何文件摘要就变，整个插件收回，直到重新审阅。
   程序进这份清单，并写明"它启动的子运行不再逐个问你"。不受信的插件什么
@@ -1001,7 +1004,7 @@ custom 扩展 bundled 的方式是启动它，不是覆盖它。只想换一句 
 ```js
 // my-programs/programs/review-and-fix.js
 export const description = 'Annotate, then apply the annotations.';
-export const tools = ['program'];
+export const uses = ['program'];
 export default async (args) => {
   const annotated = await program('annotate', args);
   return program('apply', { ...args, files: annotated.files });
@@ -1209,8 +1212,8 @@ history 的行。
 ## 分期
 
 每一期独立可合，存法只变两次，各自落在需要它的那一期。第 1、2、6 期
-已随 #14968 落地，每一期末尾写了核对到什么、还剩什么；第 3、4、5 期未
-做，第 7 期等"负责人问题"2。
+已随 #14968 落地，每一期末尾写了核对到什么、还剩什么；第 3 期随 #15020
+落地，第 4 期已实现；第 5 期未做，第 7 期等"负责人问题"2。
 
 1. **按名启动和它的存法**（harness 加 documents 的启动路径；用户看不到
    变化）。`Plugin.programs`；`script` 的 `recipe` 成员换成 `program` 成
@@ -1248,8 +1251,21 @@ history 的行。
    有记录；步骤工具对模型写的程序开放，等第 1 期剩下的那一项。
 3. **`lean4` 插件的两个程序**。它的 agent 和 skill 留到第 5 期：team 已
    先删，不再有名单指着它们，留着只因为 agent 目录整体在那一期删。
+   **已落地（#15020；程序列表跟着插件的探测是 #15072）。**
 4. **安装式插件带程序**，即"用户自己的程序"一节。要在第 5 期之前，否
    则删掉 custom agent 时用户自己的东西没处放。
+   **已实现。** `programs/<name>.js` 由
+   `packages/harness/src/common/plugins/pluginPrograms.ts` 只按文本读
+   出（文件开头的 `description` 和 `uses` 两个带引号的字面量，别的形状按
+   文件名拒绝，同一插件的其他程序照常加载），按步进模块表
+   （`packages/harness/src/tools/sessionTools.ts`），名字是
+   `<插件名>:<名字>`；信任审阅列出每个程序和被拒绝的文件
+   （`pluginTrust.ts`）；它列的工具看开关，它交给子运行的文件照
+   模型脚本解析，这两处从名字里有没有冒号推出（`isInstalledProgram`），
+   不另存。`texra run <插件名>:<名字>` 能启动，`texra plugin list` 和设
+   置页的插件行列出程序。还剩：`programs/` 里不带声明的辅助模块不加
+   载；安装式插件没有探测，"跟着探测"在这里就是"插件此刻加载（启用且
+   摘要受信）"；没有无界面的命令能拨工具开关。
 5. **删 agent 文件和补偿层，聊天的存法变更**。`run.chat` 去掉 persona 和
    agent 名（第二次存法变更），`agent()` 和 `StartRequest` 改签名；
    agents 目录（含 lean4 的）、agent 索引和 schema、workspace 选

@@ -79,7 +79,7 @@ const documentTaskRecoveryInputsAreDurable = Effect.fn(
  * session reopens the interactive chat TUI (so a usable terminal is
  * required), whose `/resume` calls it; a document task run resumes headless under
  * its persisted run id, in the same run skeleton as `texra run`. The chat case names the session with its persisted
- * record rather than mounting the TUI itself: `defineCliCommand` mounts it
+ * record rather than mounting the TUI itself: `cliCommand`'s launch mounts it
  * once this program has finished. This entry never suppresses the platform's
  * own signal handlers: the window below (the ownership gate, the resume)
  * still needs a graceful handler, and `runChat` hands ownership over once Ink

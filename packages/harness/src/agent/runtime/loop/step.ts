@@ -44,7 +44,6 @@ import {
   Ref,
 } from 'effect';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { issuesParallelToolCalls } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
@@ -56,6 +55,7 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
+  isInstalledProgram,
   PROGRAM_TOOL_NAME,
   programOf,
   SKILL_CATALOG_MAX_SKILLS,
@@ -225,8 +225,13 @@ const openStep = Effect.fn('Step.open')(function* (
   const roots = yield* SessionRoots;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
-    // A program's tools are fixed; else read the switches live.
-    const trusted = programOf(run.config) !== null;
+    // A registered program's tools are fixed; anyone else's, an installed
+    // plugin's program's among them, follow the switches read live.
+    const program = programOf(run.config);
+    const trusted = program !== null && !isInstalledProgram(program.name);
+    // Every program is offered the tools that ask for approval, where no
+    // prompt can show too: its delegations stand approved by its launch, and
+    // any other call is still decided by the approval policy when made.
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
@@ -239,7 +244,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
       directToolCalls: keepsDirectToolCalls(yield* ScopedRef.get(run.model)),
-      ...(trusted && { approvalPromptsUnavailable: false }),
+      ...(program !== null && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     // A plugin whose dependency is missing gives the step no program and no
@@ -262,12 +267,22 @@ const openStep = Effect.fn('Step.open')(function* (
       Object.keys(imported),
       // Only a run offered `program` can start one.
       resolved.registry.has(PROGRAM_TOOL_NAME)
-        ? available.flatMap(({ programs = {} }) =>
-            Object.entries(programs).map(([name, { description }]) => ({
-              name,
-              description,
-            })),
-          )
+        ? [
+            ...available.flatMap(({ programs = {} }) =>
+              Object.entries(programs).map(([name, { description }]) => ({
+                name,
+                description,
+              })),
+            ),
+            // An installed plugin's, while it loads: enabled, and trusted
+            // as it is now.
+            ...[...pinned.installed.values()].flatMap(({ plugin }) =>
+              plugin.programs.loaded.map(({ name, description }) => ({
+                name,
+                description,
+              })),
+            ),
+          ]
         : [],
     );
     // The plugins whose sections the step's system text renders.
@@ -469,8 +484,6 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const { tools, skills } = step;
   const roots = yield* SessionRoots;
-  // The model-dependent text follows the step's model and settings.
-  const model = yield* ScopedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
     tools,
     roots,
@@ -478,16 +491,11 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const offered = tools.definitions.map(({ name }) => name);
   const context = {
-    ...stepInstructions(
-      step.contributing,
-      step.listed,
-      {
-        offered,
-        isChild: run.entry.parent !== null,
-        config: roots.config,
-      },
-      issuesParallelToolCalls(model.config),
-    ),
+    ...stepInstructions(step.contributing, step.listed, {
+      offered,
+      isChild: run.entry.parent !== null,
+      config: roots.config,
+    }),
     ...(delegation && { delegation }),
   };
   const base =

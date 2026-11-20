@@ -23,8 +23,6 @@ import {
 } from '@shared/schemas';
 import {
   acceptsFollowUp,
-  isInterrupted,
-  requestAnswerability,
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
@@ -154,7 +152,6 @@ function statusOf(
   row: ToolRow,
   agent: boolean,
   child: RunView | undefined,
-  interrupted: boolean,
 ): ScriptCallStatus {
   const { result } = row.log;
   switch (row.model.status) {
@@ -168,10 +165,11 @@ function statusOf(
       if (row.cutByRunEnd === true)
         return agent && child === undefined ? 'not run' : 'cancelled';
       return 'failed';
+    // Nothing works on an open call of a run whose process died: it waits
+    // for Resume, which reissues it.
+    case 'interrupted':
+      return 'interrupted';
     default:
-      // Nothing works on an open call of a run whose process died: it waits
-      // for Resume, which reissues it.
-      if (interrupted) return 'interrupted';
       // An `agent` call waits for its turn under the child-run budget (or
       // for its script's request) until its child starts.
       return agent && child === undefined ? 'queued' : 'running';
@@ -190,7 +188,7 @@ function callView(
   const child = run.childIds
     .map((id) => view.runs.get(id))
     .findLast((candidate) => candidate?.launch?.card === row.id);
-  const status = statusOf(row, agent, child, isInterrupted(run));
+  const status = statusOf(row, agent, child);
   const asking = child === undefined ? undefined : askingRun(view, child);
   const request =
     asking === undefined
@@ -249,12 +247,9 @@ function callView(
     ...(detail !== undefined ? { detail } : {}),
     ...(child !== undefined ? { childRunId: child.id } : {}),
     ...(asking !== undefined ? { askingRunId: asking.id } : {}),
-    // Only a request this window can answer needs the user here: the rule
-    // the request card and the attention badge read.
-    needsYou:
-      request !== undefined &&
-      asking !== undefined &&
-      requestAnswerability(asking) === 'answerable',
+    // A pending request needs the user, as the request card and the
+    // attention badge say.
+    needsYou: request !== undefined && asking !== undefined,
     talkable:
       agent &&
       asking === undefined &&

@@ -139,7 +139,6 @@ export type { SelectedModel } from './models/modelSelection.js';
 export {
   codexBackendModelId,
   decideModelRoute,
-  issuesParallelToolCalls,
   isUnservedModel,
   kimiCodeServing,
   OWN_KEY_ROUTE_FACTS,
