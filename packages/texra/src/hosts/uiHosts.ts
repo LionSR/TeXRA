@@ -76,6 +76,32 @@ export interface ExternalOpener {
   openExternal(url: string): Effect.Effect<void, HostFailed>;
 }
 
+/**
+ * The failure of a browser open, as every host words it: the address by its
+ * origin alone, and the host's `reason` with the full URL replaced by that
+ * origin. A sign-in link's path or query can carry a code, and this message
+ * reaches the log and the notice the caller shows.
+ */
+export function externalOpenFailed(
+  url: string,
+  member: string,
+  reason: string,
+  cause: unknown,
+): HostFailed {
+  const parsed = URL.parse(url);
+  const address =
+    parsed === null
+      ? 'the link'
+      : parsed.origin === 'null'
+        ? `a ${parsed.protocol} link`
+        : parsed.origin;
+  return new HostFailed({
+    member,
+    message: `Could not open ${address} in the default browser: ${reason.replaceAll(url, address)}`,
+    cause,
+  });
+}
+
 /** How much a notice matters to the user. */
 export type NoticeLevel = 'info' | 'warning' | 'error';
 

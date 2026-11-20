@@ -10,7 +10,7 @@ import {
 import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { externalOpenFailed, HostFailed } from '@texra/hosts/uiHosts';
 import type {
   BuildDisplayFn,
   DisplayCompileFailed,
@@ -111,11 +111,7 @@ export function createDesktopPreviewHost(
     Effect.tryPromise({
       try: () => options.shell.openExternal(url),
       catch: (cause) =>
-        new HostFailed({
-          member: 'openExternal',
-          message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
-          cause,
-        }),
+        externalOpenFailed(url, 'openExternal', toErrorMessage(cause), cause),
     });
 
   const buildDisplayProgram = Effect.fn('buildDisplayProgram')(function* (

@@ -3,7 +3,11 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { HostFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
+import {
+  externalOpenFailed,
+  type HostFailed,
+  type ExternalOpener,
+} from '@texra/hosts/uiHosts';
 import { texraGuideUrl } from '@ui/copy/guide';
 
 /**
@@ -17,11 +21,7 @@ export const vscodeOpener: ExternalOpener = Object.freeze({
     return Effect.tryPromise({
       try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
       catch: (cause) =>
-        new HostFailed({
-          member: 'openExternal',
-          message: `VS Code would not open ${url} in the default browser.`,
-          cause,
-        }),
+        externalOpenFailed(url, 'openExternal', 'VS Code rejected it.', cause),
     }).pipe(
       // openExternal resolves `false` — does not throw — when VS Code
       // declines the URI, its documented path for an unhandled scheme. That
@@ -30,12 +30,13 @@ export const vscodeOpener: ExternalOpener = Object.freeze({
       Effect.filterOrFail(
         (opened) => opened,
         () =>
-          new HostFailed({
-            member: 'openExternal',
-            message: `VS Code declined to open ${url}: no handler took it.`,
-            // The refusal is the answer itself; there is no underlying fault.
-            cause: undefined,
-          }),
+          // The refusal is the answer itself; there is no underlying fault.
+          externalOpenFailed(
+            url,
+            'openExternal',
+            'VS Code declined it: no handler took it.',
+            undefined,
+          ),
       ),
       Effect.asVoid,
     );
