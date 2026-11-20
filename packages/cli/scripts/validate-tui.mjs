@@ -858,9 +858,9 @@ const SCENARIOS = [
     },
     keys: [...MODEL_PICKER_KEYS, '\r'],
     frame: 'viewport',
-    // The pick reaches `/model`'s own handler, which answers for the
-    // harness's stored root.
-    expect: ['Resume the task to switch its model.'],
+    // The pick reaches `/model`'s own handler: the harness's stored root,
+    // which no process holds, queues the switch for its next resume.
+    expect: ['Model switched to openai/gpt-5.5-2026-04-23.'],
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
@@ -880,9 +880,9 @@ const SCENARIOS = [
     // Ink's frame throttle, so no loading frame is ever painted to wait on.
     keys: ['/model', { input: '\r', untilRead: true }, '21'],
     frame: 'viewport',
-    // The pick reaches `/model`'s own handler, which answers for the
-    // harness's stored root.
-    expect: ['Resume the task to switch its model.'],
+    // The pick reaches `/model`'s own handler: the harness's stored root,
+    // which no process holds, queues the switch for its next resume.
+    expect: ['Model switched to openai/gpt-5.5-pro-2026-04-23.'],
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
