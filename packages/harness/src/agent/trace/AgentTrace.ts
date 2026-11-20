@@ -12,7 +12,11 @@
  */
 import type { Effect } from 'effect';
 
-import type { MessageType, ToolUseLog } from '@shared/schemas';
+import type {
+  MessageType,
+  ProcessOutputStream,
+  ToolUseLog,
+} from '@shared/schemas';
 import type { LogOptions } from '@shared/schemas/logPayload';
 
 import type { AgentEvent } from '@shared/session/agentEvent';
@@ -68,7 +72,7 @@ export interface AgentTrace {
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
   /** A chunk of a process run's output, on its stream (`process.output`). */
-  output(stream: 'stdout' | 'stderr', text: string): void;
+  output(stream: ProcessOutputStream, text: string): void;
 
   // ─── Stages and stream handles ──────────────────────────────────────
   /**

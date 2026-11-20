@@ -88,7 +88,7 @@ interface AgentTrace {
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
   /** A chunk of a process run's output, on its stream (`process.output`). */
-  output(stream: 'stdout' | 'stderr', text: string): void;
+  output(stream: ProcessOutputStream, text: string): void;
 
   // ─── Stages and stream handles ──────────────────────────────────────
   /**
@@ -1734,6 +1734,14 @@ interface ProcessChildLaunch {
     readonly runId: RunId;
   }) => ProcessTurn;
 }
+```
+
+## ProcessOutputStream
+
+The stream a process run's output chunk came from.
+
+```ts
+type ProcessOutputStream = typeof ProcessOutputStreamSchema.Type;
 ```
 
 ## ProcessPluginLayer
