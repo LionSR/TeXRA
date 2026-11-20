@@ -115,16 +115,33 @@ Landed since, checked against the tree on 2026-11-20: `RunCell.commit`,
 the key-pages link and `wallTimeMs` (#15103); `SessionKey` reading only
 `storage` (#15099); the MCP client name, now the app's client id from
 `SubscriptionAccounts` (#15106); the request noun table, `REQUEST_NOUN` in
-`packages/texra/src/ui/copy/requestCards.ts` (#15106). Half of store debts
-C7: the `leanServerPool` module mock went in #15096, the `SqliteClient`
-spread stays. Landed on 2026-11-20 (`claude/upkeep-2026-11-20-ruled-run-items`):
+`packages/texra/src/ui/copy/requestCards.ts` (#15106). Store debts C7:
+the `leanServerPool` module mock went in #15096, the `SqliteClient` spread
+in #15122. Landed on 2026-11-20 (`claude/upkeep-2026-11-20-ruled-run-items`):
 `run.steps` is a `ScopedRef`; a model switch for a run no process holds is
 queued, and the loop applies it or drops one it cannot take, named in the
 run's trace (`RunControls.switchModel` is gone); the full `validate:tui`
-runs nightly (the `tui-validation` job). Still open: C6, A8, the `./host` helpers
-(fourteen files under `packages/texra/src/tools` still import
-`@texra-ai/harness/host`), the `./plugins` split, the image limits, I-C16
-and the R17 case. M4, H9 and the follow-up status word were not re-read.
+runs nightly (the `tui-validation` job). Landed in #15122: store debts A8
+(`appendAll` no longer reports a malformed draft as `DatabaseWriteFailed`)
+and C6 (no suite asserts a `DatabaseRowCorrupt` or `DatabaseStoreNewer`
+cause shape); `IMAGE_LIMITS` in `packages/llm/src/protocol.ts`, a row per
+protocol read by the tool attachments and the message media (its OpenAI
+Responses and Google Interactions rows repeat the Anthropic numbers until a
+citable source gives theirs, item 2 of
+`simplification/2026-11-19-layer-audit-left-open.md`); the status table's
+word in the run header; and the R17 kernel case,
+`packages/harness/test/effect/sessionPrograms.vitest.ts` "R17: a launch
+interrupted after its run answered, before its caller has the handle,
+leaves the run held, stoppable and released". I-C16: #15106 gave the bash
+and glob/grep sentences and the external directories to the runs offered
+those tools, and on 2026-11-20 the other sentences that name a tool the run
+may lack followed: the markdown-files line of the tool-call section
+(`write_file` or `bash`), the core plugin's `find` for the TeX sources
+(`bash`) and its "grep or read" of the bibliography, and the
+`<workspace_info>` advice before a git command (`bash`). Still open: the
+`./host` helpers (fourteen files under `packages/texra/src/tools` still
+import `@texra-ai/harness/host`, #15120 moves them) and the `./plugins`
+split. M4 and H9 were not re-read.
 
 The earlier version's list of work "safe at any time", read again on
 2026-11-19:
@@ -138,9 +155,9 @@ The earlier version's list of work "safe at any time", read again on
   one symbol table (`MATH_SYMBOL_SPELLINGS`), the `script` tool's
   description (#15024), and the `model.useGoogleBackgroundResponses`
   deletion (#15081).
-- Waiting for open pull requests on their files: store debts A6 and A8
-  (`controllers/session/`) and deriving `referencedAggregates`
-  (`shared/schemas/sessionEvent.ts`).
+- Waiting for open pull requests on their files: deriving
+  `referencedAggregates` (`shared/schemas/sessionEvent.ts`). Store debts A6
+  (#15099) and A8 (#15122) have landed.
 - Not to be done: the media classifier (below). Left to whoever owns the
   bundled prompts: I-C4, and I-C16 as ruled above. Left to the UI work:
   tooltip ids carried by the data.

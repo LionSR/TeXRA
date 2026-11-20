@@ -38,12 +38,8 @@ Each item below waits on an open PR that holds its files.
 3. **`FollowUps.release` takes a two-word union read as a boolean**, still
    open in the storage-errors note. Its one caller is `finishRun` in
    `loop/runLoop.ts`, which #15123 edits.
-4. **`owningCall` reads the facts its callers already hold.** `openResume`,
-   `joinOpening` and `closeLeftoverRun` each read the run's facts and then
-   call `owningCall`, which reads them again for the parent edge. Passing
-   the edge removes one read per call. The resume suite's store-fault tests
-   (`src/test-kernel/agent/runtime/resumeRun.vitest.ts`) pick the failing
-   read by its position in this sequence, so they move with it.
+4. Done 2026-11-20: `owningCall` takes the facts its callers read, and a
+   resumed run's opening takes the `run.start` its resume read.
 
 ## Checked and declined
 
