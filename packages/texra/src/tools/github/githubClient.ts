@@ -51,7 +51,7 @@ export class GitHubRateLimitError extends Schema.TaggedError<GitHubRateLimitErro
 }
 
 /** An HTTP status that won't recover on retry: a 4xx other than an auth
- *  failure, 408 or 429 (`isTransientHttpStatus`). */
+ *  failure, 408, 409 or 429 (`isTransientHttpStatus`, and 409). */
 export class GitHubPermanentError extends Schema.TaggedError<GitHubPermanentError>()(
   'GitHubPermanentError',
   {
@@ -61,7 +61,7 @@ export class GitHubPermanentError extends Schema.TaggedError<GitHubPermanentErro
 ) {}
 
 /** A failure that may clear on retry: a transport error, a timeout, or a
- *  transient status (408, 429 without rate-limit headers, 5xx). */
+ *  transient status (408, 409, 429 without rate-limit headers, 5xx). */
 class GitHubTransientError extends Schema.TaggedError<GitHubTransientError>()(
   'GitHubTransientError',
   {
@@ -150,8 +150,10 @@ function classifyFailure(
   }
   // Permanent HTTP failures (every status the general HTTP rule does not
   // call transient): retrying won't help; surface immediately so callers can
-  // halt rather than burning a slot for 24 h.
-  if (!isTransientHttpStatus(status)) {
+  // halt rather than burning a slot for 24 h. A 409 stays transient: GitHub
+  // answers one while a just-created resource is still replicating, and a
+  // permanent failure here ends the subscription.
+  if (status !== StatusCodes.CONFLICT && !isTransientHttpStatus(status)) {
     return new GitHubPermanentError({
       status,
       message: `GitHub returned ${status}: ${message}`,
