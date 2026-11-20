@@ -414,6 +414,15 @@ Combines context window size and pricing info.
 declare function hint(model: ModelConfig | string): string;
 ```
 
+## IMAGE_LIMITS
+
+The image size limits each wire protocol states, by protocol. Every
+protocol has a row, so a new one does not compile without its limits.
+
+```ts
+const IMAGE_LIMITS: Readonly<{ 'anthropic-messages': Readonly<{ maxDimension: 8000; manyImageMaxDimension: 2000; }>; 'openai-responses': Readonly<{ maxDimension: 8000; manyImageMaxDimension: 2000; }>; 'google-interactions': Readonly<{ maxDimension: 8000; manyImageMaxDimension: 2000; }>; }>
+```
+
 ## InputPart
 
 One part of a user turn or a tool result.
