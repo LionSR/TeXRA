@@ -1,7 +1,6 @@
 /**
- * JSON-RPC 2.0 over a byte stream and a byte sink, in one of two framings:
- * LSP's `Content-Length: <n>\r\n\r\n<json>` (a language server) or
- * one message per line (an MCP server's stdio transport).
+ * JSON-RPC 2.0 over a byte stream and a byte sink, in LSP's
+ * `Content-Length: <n>\r\n\r\n<json>` framing (a language server).
  *
  * Inbound bytes run through the frame decoder (`Stream.mapAccumEffect` over a
  * byte buffer) and are routed: responses complete the `Deferred` registered
@@ -80,8 +79,8 @@ export interface JsonRpcConnection {
   readonly inputEnded: Effect.Effect<void>;
 }
 
-/** What {@link makeJsonRpcConnection} connects: the peer's byte streams,
- *  their framing, and the owner's handlers. */
+/** What {@link makeJsonRpcConnection} connects: the peer's byte streams
+ *  and the owner's handlers. */
 export interface JsonRpcConnectionOptions {
   /** The peer's output: bytes we decode. */
   readonly input: Stream.Stream<Uint8Array, Error>;
@@ -91,11 +90,6 @@ export interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<void>;
-  /**
-   * `'content-length'` (the default): LSP frames. `'newline'`: one JSON
-   * message per line, no embedded newlines (MCP stdio).
-   */
-  readonly framing?: 'content-length' | 'newline';
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
    * with `MethodNotFound`.
@@ -140,14 +134,6 @@ type JsonRpcMessage = typeof JsonRpcBodySchema.Type;
 
 const CONTENT_LENGTH = /Content-Length:\s*(\d+)/i;
 const HEADER_END = '\r\n\r\n';
-/** The longest line a newline-framed peer may send before the reader gives up. */
-const MAX_LINE_BYTES = 16 * 1024 * 1024;
-
-/** The unconsumed tail of a buffer and the messages split off its front. */
-type Decoded = Effect.Effect<
-  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
-  JsonRpcFrameError
->;
 
 function encodeFrame(message: object): Uint8Array {
   const body = Buffer.from(JSON.stringify(message), 'utf8');
@@ -158,7 +144,12 @@ function encodeFrame(message: object): Uint8Array {
 }
 
 /** Split complete frames off the front of `buffer`, parsing their bodies. */
-const takeFrames = (buffer: Buffer): Decoded =>
+const takeFrames = (
+  buffer: Buffer,
+): Effect.Effect<
+  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
+  JsonRpcFrameError
+> =>
   Effect.gen(function* () {
     const messages: JsonRpcMessage[] = [];
     let rest = buffer;
@@ -184,10 +175,6 @@ const takeFrames = (buffer: Buffer): Decoded =>
     return [Buffer.from(rest), messages] as const;
   });
 
-function encodeLine(message: object): Uint8Array {
-  return Buffer.from(`${JSON.stringify(message)}\n`, 'utf8');
-}
-
 const parseBody = (
   body: string,
 ): Effect.Effect<JsonRpcMessage, JsonRpcFrameError> =>
@@ -200,26 +187,6 @@ const parseBody = (
     ),
   );
 
-/** Split complete lines off the front of `buffer`, parsing each non-blank one. */
-const takeLines = (buffer: Buffer): Decoded =>
-  Effect.gen(function* () {
-    const messages: JsonRpcMessage[] = [];
-    let rest = buffer;
-    for (;;) {
-      const end = rest.indexOf(0x0a);
-      if (end < 0) break;
-      const line = rest.subarray(0, end).toString('utf8').trim();
-      if (line) messages.push(yield* parseBody(line));
-      rest = rest.subarray(end + 1);
-    }
-    if (rest.length > MAX_LINE_BYTES) {
-      return yield* new JsonRpcFrameError({
-        message: `Message exceeds ${MAX_LINE_BYTES} bytes without a newline`,
-      });
-    }
-    return [Buffer.from(rest), messages] as const;
-  });
-
 export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   options: JsonRpcConnectionOptions,
 ) {
@@ -230,9 +197,6 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   const closedReason = yield* Ref.make<string | undefined>(undefined);
   const outbound = yield* Queue.make<Uint8Array, Cause.Done>();
   const inputDone = yield* Deferred.make<void>();
-  const newline = options.framing === 'newline';
-  const encode = newline ? encodeLine : encodeFrame;
-  const decode = newline ? takeLines : takeFrames;
 
   const close = Effect.fn('JsonRpc.close')(function* (reason: string) {
     const first = yield* Ref.modify(
@@ -252,7 +216,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
 
   /** Queue a frame; a frame offered after the queue ended is dropped. */
   const send = (message: object): Effect.Effect<void> =>
-    Effect.asVoid(Queue.offer(outbound, encode(message)));
+    Effect.asVoid(Queue.offer(outbound, encodeFrame(message)));
 
   const takePending = (id: number) =>
     Ref.modify(pending, (map) => {
@@ -333,7 +297,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     options.input.pipe(
       Stream.mapAccumEffect(
         (): Buffer => Buffer.alloc(0),
-        (buffer, chunk) => decode(Buffer.concat([buffer, chunk])),
+        (buffer, chunk) => takeFrames(Buffer.concat([buffer, chunk])),
       ),
       Stream.runForEach(dispatch),
       Effect.catch(
