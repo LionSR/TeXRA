@@ -57,6 +57,7 @@ import type {
   MissingTool,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import {
@@ -76,7 +77,10 @@ import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 const CHANNEL = 'Host Snapshot';
 
-type DismissibleBanner = 'gettingStarted' | 'dependency';
+type DismissibleBanner = Extract<
+  HostCommand,
+  { kind: 'dismissBanner' }
+>['banner'];
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
