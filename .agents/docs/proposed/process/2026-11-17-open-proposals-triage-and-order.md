@@ -121,9 +121,15 @@ spread stays. Landed on 2026-11-20 (`claude/upkeep-2026-11-20-ruled-run-items`):
 `run.steps` is a `ScopedRef`; a model switch for a run no process holds is
 queued, and the loop applies it or drops one it cannot take, named in the
 run's trace (`RunControls.switchModel` is gone); the full `validate:tui`
-runs nightly (the `tui-validation` job). Still open: C6, A8, the `./host` helpers
-(fourteen files under `packages/texra/src/tools` still import
-`@texra-ai/harness/host`), the `./plugins` split, the image limits, I-C16
+runs nightly (the `tui-validation` job). I-C16: #15106 gave the bash and
+glob/grep sentences and the external directories to the runs offered those
+tools, and on 2026-11-20 (`ruled-prompt-r17`) the other sentences that name
+a tool the run may lack followed: the markdown-files line of the tool-call
+section (`write_file` or `bash`), the core plugin's `find` for the TeX
+sources (`bash`) and its "grep or read" of the bibliography, and the
+`<workspace_info>` advice before a git command (`bash`). Still open: C6, A8,
+the `./host` helpers (fourteen files under `packages/texra/src/tools` still
+import `@texra-ai/harness/host`), the `./plugins` split, the image limits
 and the R17 case. M4, H9 and the follow-up status word were not re-read.
 
 The earlier version's list of work "safe at any time", read again on
