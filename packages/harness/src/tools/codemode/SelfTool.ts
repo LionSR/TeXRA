@@ -170,7 +170,7 @@ const runSelf = Effect.fn('self.call')(function* (
         return yield* executeSubagentInBand({
           runId,
           parentId,
-          configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
             ...record,
             // A fork on a named model keeps its seed's binding, as a model
             // switch keeps the conversation's: the child's bind rejects a

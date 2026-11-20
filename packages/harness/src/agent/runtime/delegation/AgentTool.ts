@@ -24,6 +24,7 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   runEndErrorMessage,
   AGENT_SOURCE,
+  AgentConfigSchema,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
@@ -505,15 +506,15 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(relaunched.failure.message);
   const programConfig = relaunched?.success ?? null;
   const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
-  const configPayload = {
+  const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
     ...programConfig,
-  };
+  });
   const runId = agentChildRunId(call);
   if (!awaited) {
-    const receipt = yield* launchDetachedSubagent(call, configPayload, {
+    const receipt = yield* launchDetachedSubagent(call, config, {
       runId,
       grants,
       approvalMeta: decided.approvalMeta,
@@ -528,7 +529,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       executeSubagentInBand({
         runId,
         parentId,
-        configPayload,
+        config,
         parentCall: { callId: call.callId, card: call.logId },
         grants,
         notify,
