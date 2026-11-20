@@ -53,13 +53,10 @@ export interface CliHistoryEntry {
   /** The run's durable outcome (its `run.end`); null while none has
    *  landed, as for a run its process left interrupted. */
   readonly outcome: RunOutcome | null;
-  /** `records(id).readContinues()`'s answer, the one `texra resume` acts on.
-   *  Ownership and loadability are decided when the run is opened.
-   *  Independent of `outcome`: a failed run can continue. */
-  readonly continues: boolean;
-  /** The listing's cause when the run cannot resume in this build (its rows
-   *  are unreadable, or an earlier build's); resume surfaces show it. */
-  readonly continueBlocked?: string;
+  /** Whether `texra resume` continues the run, as the listing derives it;
+   *  independent of `outcome`: a failed run can continue. Resume surfaces
+   *  show a blocked run's cause. */
+  readonly continuation: AgentRunListingEntry['continuation'];
   readonly inputBasename: string;
   /** A document task's run, or a chat. */
   readonly kind?: 'task' | 'chat';
@@ -111,18 +108,18 @@ const RESUME_LIST_LIMIT = 50;
 const BLOCKED_LIST_LIMIT = 10;
 
 export function listResumableCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'continues' | 'continueBlocked'>,
+  T extends Pick<CliHistoryEntry, 'continuation'>,
 >(entries: readonly T[]): T[] {
   const listed: T[] = [];
   let continuable = 0;
   let blocked = 0;
   for (const entry of entries) {
     if (continuable === RESUME_LIST_LIMIT) break;
-    if (entry.continues) {
+    if (entry.continuation.kind === 'continues') {
       listed.push(entry);
       continuable += 1;
     } else if (
-      entry.continueBlocked !== undefined &&
+      entry.continuation.kind === 'blocked' &&
       blocked < BLOCKED_LIST_LIMIT
     ) {
       listed.push(entry);
@@ -342,10 +339,10 @@ function continueNote(outcome: RunOutcome | null): string {
 /** How a listed run stands in `texra history`'s text: its outcome, else
  *  none, and whether `texra resume` continues it. */
 export function historyStanding(
-  entry: Pick<CliHistoryEntry, 'outcome' | 'continues'>,
+  entry: Pick<CliHistoryEntry, 'outcome' | 'continuation'>,
 ): string {
   const outcome = entry.outcome ?? 'no outcome';
-  return entry.continues
+  return entry.continuation.kind === 'continues'
     ? `${outcome} (${continueNote(entry.outcome)})`
     : outcome;
 }
@@ -422,10 +419,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,
     outcome: entry.outcome,
-    continues: entry.continues,
-    ...(entry.continueBlocked !== undefined && {
-      continueBlocked: entry.continueBlocked,
-    }),
+    continuation: entry.continuation,
     inputBasename,
     kind: runKindOf(config),
     description: entry.description,
