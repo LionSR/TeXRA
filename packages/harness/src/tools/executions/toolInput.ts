@@ -66,34 +66,27 @@ const WaitActionSchema = Schema.Struct({
   }),
 
   /** Run IDs to wait on (with /executions only; ignored on /executions/{id}). */
-  ids: Schema.optional(
-    Schema.NullOr(
-      Schema.Array(RunIdSchema)
-        .check(Schema.isMinLength(1))
-        .check(Schema.isMaxLength(50)),
-    ),
-  ).annotate({
-    description:
-      'List of run IDs to wait on (with /executions only). ' +
+  ids: optionalInput(
+    Schema.Array(RunIdSchema)
+      .check(Schema.isMinLength(1))
+      .check(Schema.isMaxLength(50)),
+    'List of run IDs to wait on (with /executions only). ' +
       'Waits for any of the listed executions to change status. ' +
       'If omitted, waits for any active run.',
-  }),
+  ),
 
   /** Max seconds to wait. Default: 300. */
-  timeout: Schema.optional(Schema.NullOr(Schema.Finite))
-    .annotate({
-      description: `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
-    })
-    .pipe(
-      Schema.decodeTo(Schema.Finite, {
-        decode: SchemaGetter.transformOptional((value) =>
-          Option.some(
-            executionsWaitTimeoutSeconds(Option.getOrUndefined(value)),
-          ),
-        ),
-        encode: SchemaGetter.passthrough(),
-      }),
-    ),
+  timeout: optionalInput(
+    Schema.Finite,
+    `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
+  ).pipe(
+    Schema.decodeTo(Schema.Finite, {
+      decode: SchemaGetter.transformOptional((value) =>
+        Option.some(executionsWaitTimeoutSeconds(Option.getOrUndefined(value))),
+      ),
+      encode: SchemaGetter.passthrough(),
+    }),
+  ),
 
   /** Zero-based offset for the /executions listing returned once the wait resolves. */
   offset: nullishWithDefault(

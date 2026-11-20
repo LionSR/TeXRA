@@ -11,6 +11,7 @@ import {
   defineTool,
   type ToolResult,
   withLogChannel,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 
 // Local file imports
@@ -106,11 +107,10 @@ const InlineCommentInputSchema = Schema.Union([
     line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
       description: '1-based start line the comment anchors to.',
     }),
-    endLine: Schema.optional(
-      Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
-    ).annotate({
-      description: '1-based end line of the range; defaults to the start line.',
-    }),
+    endLine: optionalInput(
+      Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+      '1-based end line of the range; defaults to the start line.',
+    ),
     body: Schema.NonEmptyString.annotate({
       description: COMMENT_BODY_DESCRIPTION,
     }),
@@ -156,12 +156,10 @@ const InlineCommentInputSchema = Schema.Union([
       description:
         "Read open threads and their comments, including the user's replies.",
     }),
-    path: Schema.optional(
-      Schema.NullOr(Schema.Trim.check(Schema.isMinLength(1))),
-    ).annotate({
-      description:
-        'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
-    }),
+    path: optionalInput(
+      Schema.Trim.check(Schema.isMinLength(1)),
+      'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
+    ),
   }),
 ]);
 

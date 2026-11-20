@@ -35,17 +35,26 @@ behaviour-preserving and need no decision:
   the nullable-optional shape the root AGENTS.md "Tool input schemas" rule
   requires. It replaces the private `optionalFlag` in `documentTools.ts` and the
   hand-rolled copies in every built-in tool that carries a described optional
-  field — harness (`EditTool`, `ReadTool`, `bash`, `grep`, `glob`,
-  `ScriptTool`, `executions/toolInput`, `formatting`, `memory`, `WebFetchTool`)
-  and plugins (`AcceptRunFilesTool`, `claudeAgent`, `codex`, `ArxivSearchTool`,
-  `githubSubscriptionTool`, `ProbeEnvironmentTool`, `UserQuestionTool`). The
-  compiled JSON Schema is byte-identical, so no recorded tool definition
-  changes. A field with **no** description (`view_range`, `memory`'s `new_str`)
-  stays the raw `Schema.optional(Schema.NullOr(...))`: `optionalInput` is for the
-  described case, and inventing a description for it would be worse. Wire and
-  response schemas (`bbtClient`, `prTypes`, the Zotero and GitHub response
-  structs, `LoogleTool`) keep the raw form: they decode external JSON and the
-  nullable-optional rule, which is about what a model sends, does not apply.
+  field where the description sits on the **outer** `Schema.optional(...)` —
+  the shape `optionalInput` reproduces. That is the built-in tools — harness
+  (`EditTool`, `ReadTool`, `bash`, `grep`, `glob`, `ScriptTool`,
+  `executions/toolInput`, `formatting`, `memory`, `WebFetchTool`) and the
+  delegation tools (`AgentTool`, `ProgramTool`, `codemode/SelfTool`, and the
+  shared `CHILD_FIELDS` / `CALL_FIELDS` / `personaField` / `workingDirectoryField`
+  in `agent/runtime/delegation/inputFields.ts`) — and the plugins
+  (`AcceptRunFilesTool`, `claudeAgent`, `codex`, `ArxivSearchTool`,
+  `githubSubscriptionTool`, `ProbeEnvironmentTool`, `UserQuestionTool`,
+  `comment/InlineCommentTool`). The compiled JSON Schema is byte-identical, so
+  no recorded tool definition changes. Three shapes keep the raw form: a field
+  with **no** description (`view_range`, `memory`'s `new_str`), since
+  `optionalInput` is for the described case; a field that annotates the **inner**
+  schema inside `NullOr` rather than the outer optional (the whole Zotero tool
+  family — see Open 5 — where moving the description outward is not a guaranteed
+  byte-identical schema change); and the wire and response schemas (`bbtClient`,
+  `prTypes`, the GitHub and Zotero response structs, `LoogleTool`'s hit and
+  error structs, `codexConfig`'s bundled-model parse), which decode external
+  JSON, where the nullable-optional rule — about what a model sends — does not
+  apply.
 
 ## Open
 
@@ -106,6 +115,20 @@ Each needs a decision or a check this unattended run could not make.
    fourth integration from inventing a fourth convention; the per-tool guidance
    text stays per-caller. Needs a decision on the one convention (the
    user-facing error strings would shift slightly).
+
+5. **The Zotero tools annotate the inner schema, not the outer.** Every input
+   field in `ZoteroSearchTool`, `ZoteroAddTool`, `ZoteroCollectionsTool` and
+   `ZoteroExportTool` is written `Schema.optional(Schema.NullOr(S.annotate({
+   description })))` — the description on the inner `S`, inside `NullOr` — where
+   the rest of the tree, and `optionalInput`, put it on the outer
+   `Schema.optional(...)`. The two produce the same decoded and encoded types,
+   but whether `convertToolSchema` renders byte-identical model JSON for the
+   inner- and outer-annotated forms was not verified this run, so these were not
+   converted (a changed tool definition is a format change). Confirm the
+   generated schema is identical for both placements; if it is, convert the
+   Zotero family to `optionalInput` too, and if it is not, the inner form is the
+   one to keep and `optionalInput` is for the outer case only. Their item and
+   response structs (and `bbtClient`) stay raw regardless.
 
 ## Checked and found clean (so a later run need not re-dig)
 

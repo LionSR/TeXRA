@@ -38,6 +38,7 @@ import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -84,12 +85,10 @@ const LAUNCH_FIELDS = {
     description: 'The agent to run. It works with its own tools.',
   }),
   persona: personaField,
-  schema: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-  ).annotate({
-    description:
-      'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
-  }),
+  schema: optionalInput(
+    Schema.Record(Schema.String, Schema.Unknown),
+    'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
+  ),
   mediaFiles: fileList(
     'Images, figures, PDFs or audio attached to the prompt.',
   ),
