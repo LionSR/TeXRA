@@ -121,10 +121,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
           onSelect={props.onSelect}
           onCancel={props.onCancel}
         />
-        <KeyHints
-          hints={[NAVIGATE_HINT, primary, escape]}
-          confirmCancel={false}
-        />
+        <KeyHints hints={[NAVIGATE_HINT, primary, escape]} />
       </FormFrame>
     );
   }

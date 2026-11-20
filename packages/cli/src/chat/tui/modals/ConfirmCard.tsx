@@ -134,7 +134,7 @@ export function ConfirmCard({
               <Text bold color={color} wrap="truncate-end">
                 {pulsedTitle}
               </Text>
-              <KeyHints hints={stackedCompactHints} confirmCancel={false} />
+              <KeyHints hints={stackedCompactHints} />
             </>
           ) : (
             <Text bold color={color} wrap="truncate-end">
@@ -150,7 +150,7 @@ export function ConfirmCard({
           borderStyle="double"
           color={color}
           title={pulsedTitle}
-          footer={<KeyHints hints={hints} confirmCancel={false} />}
+          footer={<KeyHints hints={hints} />}
         >
           {children}
           {feedbackMode ? feedbackInput(1) : null}

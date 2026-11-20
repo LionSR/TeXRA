@@ -48,11 +48,7 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
       color={props.color ?? COLOR_HINT}
       title={props.title}
       width={formFrameWidth(columns)}
-      footer={
-        hints.length === 0 ? undefined : (
-          <KeyHints hints={hints} confirmCancel={false} />
-        )
-      }
+      footer={hints.length === 0 ? undefined : <KeyHints hints={hints} />}
     >
       {props.children}
     </BorderedPanel>
