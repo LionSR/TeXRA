@@ -10,7 +10,7 @@
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type {
   ChildRunDelivery,
-  FollowUpContent,
+  FollowUpMessageContent,
   ScriptDeliverySummary,
 } from '@shared/schemas';
 import { formatScriptTally, tallyTotal } from '@shared/transcript/scriptCall';
@@ -147,7 +147,9 @@ interface FollowUpDisplay {
  *  of its facts, a script's with its summary typed beside it, so no
  *  renderer reads it from text; a message as its `displayText`, else its
  *  text. */
-export function followUpDisplay(content: FollowUpContent): FollowUpDisplay {
+export function followUpDisplay(
+  content: FollowUpMessageContent,
+): FollowUpDisplay {
   if (!('delivery' in content))
     return { text: content.displayText ?? content.text };
   const { delivery } = content;
