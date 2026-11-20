@@ -82,7 +82,7 @@ across a round's diffs. Which layout is right needs a decision first.
 
 ## Open: copy the terminal restates
 
-Items 1, 2 and 4 each need a wording decision; nothing in the repo pins
+Items 1, 2 and 4 each needed a wording decision; nothing in the repo pins
 the CLI words except the TUI titles in `validate-tui.mjs`.
 
 1. **How a run ended.** Taken on 2026-11-20: the headless chat result's
@@ -106,9 +106,11 @@ the CLI words except the TUI titles in `validate-tui.mjs`.
    `USER_QUESTION_SKIPPED_FEEDBACK` note is gone, and the terminal declines
    through the web's `declineDecision`
    (`packages/texra/src/shared/session/surfaceDecision.ts`).
-4. **"Pass N" and "Revision N".** `passLabel`
-   (`packages/texra/src/ui/copy/taskDiagnostics.ts`) and `formatRoundLabel`
-   name one round with two nouns in the same view.
+4. **"Pass N" and "Revision N".** Taken on 2026-11-20: the guide and
+   every other surface say "Revision", so `formatRoundLabel`
+   (`packages/texra/src/shared/plugins/documentOutputs.ts`) takes the
+   planned total too and words the run header's chip ("Revision 2 of 3")
+   and the copied diagnostics. `passLabel` is gone.
 5. **Section painting.** Taken on 2026-11-19: `formatLineRange`
    (`packages/texra/src/ui/copy/format.ts`) writes a file's range for both
    hosts, so a one-line range reads `:5` in the terminal as on the web. The
