@@ -26,7 +26,7 @@ export { processLayer } from './effect/processLayer.js';
 export { replayTrace } from '@controllers/session/runTrace';
 // What launches a program as a run of its own: the config a host or an
 // app's command starts it with, and the programs there are to start now
-// (the plugin list's and the installed plugins').
+// (the plugin list's, the installed plugins' and the project's agent's own).
 export {
   programLaunch,
   ProgramNotRegistered,

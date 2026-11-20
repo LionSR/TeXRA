@@ -300,7 +300,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // A name no plugin registers fails before anyone is asked to approve it.
   if (program !== null) {
     const known = yield* Effect.result(
-      programLaunch(program.name, program.args, launch.files),
+      programLaunch(program.name, program.args, launch.files, call.env.roots),
     );
     if (Result.isFailure(known)) return errorResult(known.failure.message);
   }
@@ -345,8 +345,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   // The call's files, the program's file arguments among them: a
   // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a registered program's files pass as named, an
-  // installed plugin's program's are resolved like a model's.
+  // completed child of it; a registered program's files pass as named,
+  // those of a program read from a file are resolved like a model's.
   const caller = programOf(run.config);
   const trusted = caller !== null && !isInstalledProgram(caller.name);
   const fileArgs =
@@ -494,13 +494,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // below; the options are the program's arguments, shown for approval.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
   // A program's run is the program's own, whatever agent an approval named.
-  // An installed plugin's program can be gone since the check above (its
-  // plugin disabled or changed while the approval waited).
+  // A program read from a file can be gone since the check above (its
+  // plugin disabled or its file changed while the approval waited).
   const relaunched =
     program === null
       ? null
       : yield* Effect.result(
-          programLaunch(program.name, program.args, approved),
+          programLaunch(program.name, program.args, approved, call.env.roots),
         );
   if (relaunched !== null && Result.isFailure(relaunched))
     return errorResult(relaunched.failure.message);

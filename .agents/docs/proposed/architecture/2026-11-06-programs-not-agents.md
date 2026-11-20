@@ -1266,6 +1266,18 @@ history 的行。
    置页的插件行列出程序。还剩：`programs/` 里不带声明的辅助模块不加
    载；安装式插件没有探测，"跟着探测"在这里就是"插件此刻加载（启用且
    摘要受信）"；没有无界面的命令能拨工具开关。
+   **此后加了 agent 自己写的程序。** agent 用 `memory` 工具写到
+   `/memories/programs/<name>.js` 的文件，下一步起就是程序
+   `own:<name>`，由同一个读取器按步读出
+   （`packages/harness/src/agent/memory/ownPrograms.ts`），不审阅也不记
+   摘要：它只在脚本沙箱里求值，只拿到 `uses` 列的工具，工具看开关和审批
+   策略，它启动的 agent 和程序像模型脚本启动的一样要问
+   （`delegatesApproved`，
+   `packages/harness/src/shared/schemas/runRecords.ts`），所以它做不到
+   agent 自己逐个调用做不到的事。放在 memory 树而不是
+   `.texra/programs/`：memory 树不在仓库里，克隆下来的项目带不进文
+   件，"用户自己的程序"一节说的按文件信任就不需要；项目里共享的程序仍
+   走安装式插件。
 5. **删 agent 文件和补偿层，聊天的存法变更**。`run.chat` 去掉 persona 和
    agent 名（第二次存法变更），`agent()` 和 `StartRequest` 改签名；
    agents 目录（含 lean4 的）、agent 索引和 schema、workspace 选

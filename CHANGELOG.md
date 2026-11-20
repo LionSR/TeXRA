@@ -1406,7 +1406,23 @@ All notable changes to this project will be documented in this file.
   them ends. A version that fails to load is left out with its reason, and
   nothing else changes. Agents get a `plugin_manager` tool to list,
   install, enable, disable and remove plugins themselves, each change but a
-  listing or an install asked of you first.
+  listing or an install asked of you first; trusting native code is always
+  your own answer, whatever the approval policy, so a run that cannot ask
+  you leaves it to `texra plugin enable`. Listing, installing or reviewing a
+  plugin runs none of its code.
+- **An agent can write a program for itself.** A file an agent creates with
+  the `memory` tool at `/memories/programs/<name>.js` is the program
+  `own:<name>` from its next step, with no restart and nothing to install,
+  and it stays for later conversations in the same project;
+  `texra run own:<name> --input paper.tex` starts it too. The file has the
+  form of a plugin's program (`export const description = '...';`,
+  `export const uses = ['...'];`, then the default export). Nobody reviews
+  it, because it can do nothing the agent could not: it runs in the script
+  sandbox on the tools it lists, which follow your plugin switches and
+  approval policy, and each agent or program it starts is asked about as one
+  a model's script starts is. A plugin can no longer be named `own`. See
+  "Programs an agent writes for itself" in the CLI guide. SDK: `programsNow`
+  and `programLaunch` on `@texra-ai/harness/host` take the project's roots.
 - **A script caps what a child run spends, and `self()` takes a model.**
   Every child a script waits for (`agent()`, `program()`, `self()`) takes
   `maxCostUsd`, a spend cap in USD on the child and every run it starts:

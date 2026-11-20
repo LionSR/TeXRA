@@ -16,7 +16,7 @@ import {
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { recordedDecision } from '@agent/runtime/requests';
-import { programOf, ToolError } from '@shared/schemas';
+import { delegatesApproved, ToolError } from '@shared/schemas';
 import type {
   AgentProposal,
   DecisionOf,
@@ -159,8 +159,9 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const { runId, config } = parent.run;
     const approvals = yield* Approvals;
     const { hook } = parent;
-    // A program's delegation is approved unless a hook asked for it.
-    if (programOf(config) !== null && hook !== 'ask')
+    // The delegation of a program a plugin ships is approved unless a hook
+    // asked for it; one the agent wrote for itself asks as its script would.
+    if (delegatesApproved(config) && hook !== 'ask')
       return { result: { action: 'approve' }, childApproval: 'inherit' };
     const answer = approvals.permission(runId, 'proposal', hook);
     if (answer !== 'allow' && answer !== 'ask')

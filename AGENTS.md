@@ -238,7 +238,11 @@ opened on `script.kind: 'program'`. The `theory` plugin's programs are in
 programs as `programs/<name>.js`, started as `<plugin>:<name>`; the file is
 third-party code, so its description and tools are read from its text
 (`packages/harness/src/common/plugins/pluginPrograms.ts`) and it is evaluated
-only in the script sandbox. An installed plugin may also carry native code,
+only in the script sandbox. An agent writes its own with the memory tool as
+`/memories/programs/<name>.js`, started as `own:<name>` from its next step
+(`packages/harness/src/agent/memory/ownPrograms.ts`); nobody reviews one, so
+what it starts is asked about as a model's script's is (`delegatesApproved`).
+An installed plugin may also carry native code,
 `harness.mjs` (`packages/harness/src/common/plugins/nativeEntry.ts`): once
 trusted at its digest it runs in the process and returns a `Plugin`, which
 joins the plugin table from the next step of every run
