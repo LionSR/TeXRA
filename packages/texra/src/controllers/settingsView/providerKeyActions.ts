@@ -15,6 +15,7 @@ import {
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
+import { PROVIDER_KEY_COPY } from '@ui/copy/credentials';
 
 /**
  * A key write or removal that failed. A committed change repaints nothing
@@ -48,7 +49,9 @@ export const setProviderKey = (
     'set',
     Effect.gen(function* () {
       const apiKey = yield* dialogs.input({
-        prompt: `Enter ${yield* getProviderDisplayName(stores, provider)} API key`,
+        prompt: PROVIDER_KEY_COPY.enter(
+          yield* getProviderDisplayName(stores, provider),
+        ),
         secret: true,
         placeholder: '************************************',
       });
