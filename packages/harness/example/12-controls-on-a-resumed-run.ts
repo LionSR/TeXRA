@@ -3,12 +3,13 @@
  *
  * A model switch (`run.model`) and a compaction (`run.compact`) are queued
  * on the run's input and answered as soon as the input holds them, not when
- * the run ends. A run nobody runs here takes neither, and says why.
+ * the run ends. A switch for a run nobody runs here is queued for its next
+ * resume; a compaction needs the run held.
  *
  * 1. Starts an interactive run in a persistent session, lets it wait for
  *    input, and closes the session.
- * 2. Reopens the store. Before the resume, `run.model` is refused as
- *    `Unavailable`, with the reason.
+ * 2. Reopens the store. Before the resume, `run.model` answers `done`: the
+ *    switch waits on the run's input until the resume applies it.
  * 3. Resumes the run and, as soon as the handle is back, switches its model
  *    and asks for a compaction. Both are answered while the run is still
  *    live with no end.
@@ -92,13 +93,11 @@ const runId = await inSession((session) =>
 await inSession((session) =>
   Effect.gen(function* () {
     const model = { kind: 'run.model', runId, model: SWITCHED } as const;
-    // 2. Nobody runs it here yet: the switch is refused, with the reason.
-    const refused = yield* Effect.flip(session.request(model));
-    if (refused._tag !== 'Unavailable')
-      throw new Error(
-        `run.model before the resume: ${JSON.stringify(refused)}`,
-      );
-    console.log(`[12] before the resume: ${refused._tag} (${refused.reason})`);
+    // 2. Nobody runs it here yet: the switch is queued for the resume.
+    const queued = yield* session.request(model);
+    if (queued.kind !== 'done')
+      throw new Error(`run.model before the resume: ${JSON.stringify(queued)}`);
+    console.log(`[12] before the resume: run.model answered ${queued.kind}`);
 
     // 3. Asked the moment the resume hands the run back.
     const resumed = yield* session.resume(runId, { interactive: true });
