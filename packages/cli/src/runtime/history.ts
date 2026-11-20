@@ -333,15 +333,6 @@ export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
   ].join('\n');
 }
 
-/**
- * `--export ''` (or any non-`html`/`md` value) reports this. `JSON.stringify`
- * keeps the reported value unambiguous — an empty string reads as `""`
- * instead of collapsing into a confusing double space after the colon.
- */
-export function formatInvalidExportFormatText(raw: string): string {
-  return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
-}
-
 /** What a run that continues can take: a finished conversation another
  *  message, anything else (interrupted, failed, cancelled) a resume. */
 function continueNote(outcome: RunOutcome | null): string {
