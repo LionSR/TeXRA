@@ -476,6 +476,9 @@ Open, for the owner:
   (`tools/mcp/mcpServer.ts`, `clientInfo`). The app's `ClientIdentity`
   reaches only the model providers; sending it here adds
   `SubscriptionAccounts` to what the tool catalog's layer requires.
+  Landed 2026-11-19 (#15106): `clientInfo.name` is
+  `(yield* SubscriptionAccounts).client.id`, the app's identity passed as
+  data.
 - Names an embedder's users see that carry the app's word: the store file
   `texra.db`, the `TEXRA_APPROVAL_POLICY` and `TEXRA_SKILL_DIR` variables,
   and "Another TeXRA process holds this project".

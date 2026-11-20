@@ -1,6 +1,6 @@
 ---
 created: 2026-11-16
-status: proposed
+status: implemented (its one open finding was ruled not to be done on 2026-11-19)
 ---
 
 # Agent SDK readiness: agent core, model handler, logger and surface are already well-aligned
@@ -102,6 +102,9 @@ surface, so it nets ~0 elements. It is worth doing as a one-owner clarity fix,
 but it changes a hot read path over ~157 models and should ride a decision
 about whether the shared classifier earns its export — an owner's call, not a
 scheduled-run landing.
+
+Ruled 2026-11-19: not to be done
+(`MEDIA-one-capability-classifier` in `.agents/docs/refuted-candidates.json`).
 
 ## Confirmed clean (what was checked and left alone)
 

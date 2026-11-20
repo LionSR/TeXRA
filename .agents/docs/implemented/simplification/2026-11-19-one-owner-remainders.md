@@ -1,7 +1,8 @@
 # One-owner remainders the 2026-11-19 structural audit verified and deferred
 
 Date: 2026-11-19
-Status: proposed
+Status: implemented (sections 1 and 2 landed on 2026-11-19; section 3 was
+ruled not to be done)
 Origin: a scheduled whole-codebase structural-debt audit (12 seam maps, 4
 ideation passes, 7 adversarial verifications) on `main` at `ceebb96`. Most
 seams mapped HEALTHY: the run loop, the session-view reducer, the llm
@@ -92,3 +93,6 @@ delta: the two functions legitimately return different payloads, so only the
 predicate is shared) and the caller contract would change, so it is recorded,
 not proposed, pending an owner's call on whether the shared predicate earns
 its export.
+
+Ruled 2026-11-19: not to be done
+(`MEDIA-one-capability-classifier` in `.agents/docs/refuted-candidates.json`).
