@@ -19,8 +19,9 @@ boot and before the final frame are gone.
 - The harness (`packages/cli/scripts/tui-harness.tsx`) reports its state in a
   private OSC sequence written in order with the frame bytes, after each
   burst of output, after a resize, and after each dispatched key once its
-  frame is written. A report carries a commit counter, the input bytes Ink
-  has read, the key events whose frame is written, the terminal size the
+  frame is written. A report carries the input bytes Ink has read, the
+  count of key events whose frame is written (the counter a key's wait
+  passes, which the commit counter proposed here became), the terminal size the
   frame was drawn for, whether stdin is raw, and whether the TUI has caught
   up with the session (the session has drained its writes, the bound view
   signal holds the session's current view, and every run in it has its
@@ -38,7 +39,8 @@ boot and before the final frame are gone.
   hand their work to a fiber or a signal a turn later. Work that waits on
   I/O or a timer of its own is outside that: such a key names the text it
   waits `until` (an async `/` list's loaded rows: `PLUGINS_FORM_KEYS`,
-  `CONFIG_FORM_KEYS`, `SKILLS_FORM_KEYS`, `MODEL_PICKER_KEYS`) or
+  `CONFIG_FORM_KEYS`, `SKILLS_FORM_KEYS`, `MODEL_PICKER_KEYS`,
+  `LOGIN_FORM_KEYS`) or
   `untilGone` (the two scenarios that return from a focused child with Esc,
   which macOS defers by its chord window).
 - What stays on the clock, and why:
@@ -98,6 +100,11 @@ waits below, lost `model-form-buffered-hotkey` in 2 of 7 runs.
    that subscribes `Select`'s `useInput`, a key reaches neither the form's
    buffer (no longer loading) nor the list. The scenarios now wait for the
    loaded rows, which is what the delay covered.
+   - Two more, `api-form-chatgpt-hotkey` and `api-form-kimi-hotkey`, press
+     a `/login` row's hotkey right after opening it. That list mounts at
+     once, but its rows read "Loading current preference" until the account
+     state loads, and the loaded rows are not the same set; they now wait
+     for a loaded row too. They did not fail in the measured runs.
    - Proposed: the form holds every key that arrives before its list is
      listening (Enter and arrows included) and replays it once `Select`
      subscribes, owned in `useAsyncListForm`

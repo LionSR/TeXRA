@@ -106,6 +106,13 @@ const CONFIG_FORM_KEYS = [
   '/config',
   { input: '\r', until: 'Agents — workspace agents' },
 ];
+// `/login`: its rows show at once, saying "Loading current preference"
+// until the account state loads; a loaded row says the state. The harness
+// starts with every subscription off.
+const LOGIN_FORM_KEYS = [
+  '/login',
+  { input: '\r', until: '1. ChatGPT subscription — Off' },
+];
 const SKILLS_FORM_KEYS = ['/skills', { input: '\r', until: 'Enter activate' }];
 // The `/model` picker over TWO_OPENAI_MODELS, with switching allowed.
 const MODEL_PICKER_KEYS = [
@@ -1175,7 +1182,7 @@ const SCENARIOS = [
     rows: 12,
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
-    keys: ['/login', '\r', '1'],
+    keys: [...LOGIN_FORM_KEYS, '1'],
     frame: 'viewport',
     // The pick reaches the real account action: turning the subscription
     // on starts its sign-in.
@@ -1189,7 +1196,7 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '4',
       KIMI_CODE_API_KEY: 'harness-kimi-code-key',
     },
-    keys: ['/login', '\r', '3'],
+    keys: [...LOGIN_FORM_KEYS, '3'],
     frame: 'viewport',
     expect: ['Kimi Code subscription enabled'],
     expectCollapsed: ['other models still use your own API keys'],
@@ -3563,6 +3570,16 @@ async function runScenario(scenario, index) {
   let rawOutput = '';
   // Called on the next output chunk or on exit.
   let onActivity = () => {};
+  // Resolves on the next output chunk or the exit, or after `ms`.
+  const nextActivity = (ms) =>
+    new Promise((resolve) => {
+      const timer = setTimeout(resolve, ms);
+      onActivity = () => {
+        clearTimeout(timer);
+        onActivity = () => {};
+        resolve();
+      };
+    });
   const childEnv = scenarioChildEnv(scenario, cols, rows);
   const workspaceDir = snapshotWorkspaceDir(index, scenario.name);
   if (workspaceDir && childEnv.HARNESS_CWD == null) {
@@ -3642,14 +3659,7 @@ async function runScenario(scenario, index) {
       if (exited) return false;
       const remaining = deadline - Date.now();
       if (remaining <= 0) return false;
-      await new Promise((resolve) => {
-        const timer = setTimeout(resolve, remaining);
-        onActivity = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-      });
-      onActivity = () => {};
+      await nextActivity(remaining);
     }
   };
 
@@ -3757,16 +3767,10 @@ async function runScenario(scenario, index) {
     if (exited) break;
     await send(exitKey);
   }
-  if (!exited) {
-    // The last exit key was answered; the harness is closing its runtime.
-    await new Promise((resolve) => {
-      const timer = setTimeout(resolve, STATE_TIMEOUT_MS);
-      onActivity = () => {
-        if (!exited) return;
-        clearTimeout(timer);
-        resolve();
-      };
-    });
+  // The last exit key was answered; the harness is closing its runtime.
+  const exitDeadline = Date.now() + STATE_TIMEOUT_MS;
+  while (!exited && Date.now() < exitDeadline) {
+    await nextActivity(exitDeadline - Date.now());
   }
   const exitedCleanly = exited?.exitCode === 0 && !exited.signal;
   if (!exited) {
