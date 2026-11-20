@@ -125,6 +125,15 @@ describe('session view update', () => {
       finished: 1,
       kinds: { agent: 1, process: 0, script: 0 },
     });
+    // Held here and idle, it is not running in the session's count either:
+    // the rail and the task pill read the same count as a parent's rollup.
+    const held = viewOf([...log.events.map(tail), alive]);
+    expect(runView(held, ROOT).holder).toBe('here');
+    expect(held.rollup).toStrictEqual({
+      running: 0,
+      waiting: 0,
+      interrupted: 0,
+    });
   });
 
   it('ends the turn of a run whose owner died mid-compaction', () => {

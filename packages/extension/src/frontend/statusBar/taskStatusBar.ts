@@ -9,7 +9,6 @@ import {
   DETAIL_SEPARATOR,
   APPROVAL_POLICY_SETTING,
   descendantRuns,
-  isWorking,
   sessionActivity,
   sumUsageStats,
   type SessionTitleState,
@@ -31,7 +30,8 @@ interface TaskStatus {
   /** The session's activity (`sessionActivity`, the reading every host's
    *  title shares), so a request waiting on the user keeps the pill shown. */
   readonly activity: SessionTitleState;
-  /** The live runs working right now: the spinner's count. */
+  /** The session's running count (`rollup.running`): the count the
+   *  desktop rail shows. A run idle between turns is not running. */
   readonly working: number;
   /** The spend of every run tree still in flight: a root counts, with all
    *  its runs, finished children included, while any run in its tree is
@@ -51,7 +51,7 @@ function taskStatus(view: SessionView): TaskStatus {
   );
   return {
     activity: sessionActivity(view),
-    working: runs.filter(isWorking).length,
+    working: view.rollup.running,
     usage: sumUsageStats(liveTreeRoots.map((root) => root.treeUsage)),
   };
 }

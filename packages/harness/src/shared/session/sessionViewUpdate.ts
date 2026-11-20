@@ -73,6 +73,7 @@ import { runActions } from './runActions';
 import {
   emptySessionView,
   isInterrupted,
+  isLive,
   requireRun,
   emptyRollup,
   rollupOf,
@@ -193,13 +194,14 @@ function reconcileExistence(
 }
 
 /** The session's run counts, kept as they were when unchanged: those
- *  interrupted, those waiting on the user here, and the others held here. */
+ *  interrupted, those waiting on the user here, and the others live here
+ *  (`isLive`, the reading a run's own `rollup` counts by). */
 function countGroups(view: ViewDraft): void {
   const rollup = { running: 0, waiting: 0, interrupted: 0 };
   for (const run of view.runs.values()) {
     if (isInterrupted(run)) rollup.interrupted += 1;
     else if (run.approval === 'own') rollup.waiting += 1;
-    else if (run.holder === 'here') rollup.running += 1;
+    else if (isLive(run)) rollup.running += 1;
   }
   if (!Equal.equals(rollup, view.rollup)) view.rollup = rollup;
 }
