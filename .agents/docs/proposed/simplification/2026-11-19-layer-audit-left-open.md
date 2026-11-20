@@ -73,6 +73,11 @@ base URL. Today `RouteFacts.endpoints` mixes dashboard URLs with region
 defaults, so llm cannot tell a dashboard URL from a default. The fix is a
 `RouteFacts` field for the user-set endpoints, after which llm owns the rule.
 
+Landed 2026-11-20: `RouteFacts.endpoints` holds only the endpoints the user
+set, and `chinaPlatforms` names the regional providers switched to China.
+`decideModelRoute` picks each provider's URL and drops the plan for a
+per-model or user endpoint; the harness's GLM-specific read is gone.
+
 ## 4. A user row does not say who sent it
 
 `logFollowUps` (`packages/harness/src/agent/runtime/FollowUps.ts`) has the
@@ -142,8 +147,10 @@ The first two can take the product name from the catalog namespace. The
 examples can be neutral, which changes the tool descriptions a run records.
 
 Landed 2026-11-19 (#15106): the MCP client sends the app's client id as
-`clientInfo.name`, read from `SubscriptionAccounts` (`mcpServer.ts`). The
-other three are open.
+`clientInfo.name`, read from `SubscriptionAccounts` (`mcpServer.ts`).
+Landed 2026-11-20: the store messages and the session-label prompt name no
+product. The tool-description examples are item 5 of
+`2026-11-20-layer-audit-left-open.md`.
 
 ## Checked and left alone
 
