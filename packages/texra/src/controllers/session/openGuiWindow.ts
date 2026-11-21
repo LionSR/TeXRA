@@ -211,11 +211,10 @@ export interface SharedHostCommandBindings {
     readonly openGettingStarted: HostVerb<void>;
   };
   /** The host's code editor, where it has one. Its files are
-   *  project-relative; which of them a launcher field takes is decided in
-   *  the body below. */
+   *  project-relative paths, or absolute for a file outside the project;
+   *  which of them a launcher field takes is decided in the body below. */
   readonly editor?: {
-    /** The file the editor shows; null when none is open or it is outside
-     *  the project. */
+    /** The file the editor shows; null when none is open. */
     readonly currentFile: HostVerb<string | null>;
     /** Every file the editor has open. */
     readonly openedFiles: HostVerb<readonly string[]>;
