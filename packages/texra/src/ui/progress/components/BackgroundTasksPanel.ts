@@ -15,7 +15,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
@@ -38,7 +38,7 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -51,10 +51,9 @@ import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 const DISPATCH_GROUP_KEY = 'dispatch';
 
 @customElement('background-tasks-panel')
-export class BackgroundTasksPanel extends LitElement {
+export class BackgroundTasksPanel extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     toneStyles,
     css`
       :host {

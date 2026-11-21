@@ -2,8 +2,7 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { Schema } from 'effect';
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -23,14 +22,12 @@ import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import { TexraSignalElement } from '@ui/litBase';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
-// Local imports - shared constants
-import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - catalog-driven settings rows
 import {
@@ -54,10 +51,9 @@ const DEFAULT_GIT_AUTHOR_NAME = defaultIdentity(GIT_AUTHOR_NAME_SETTING);
 const DEFAULT_GIT_AUTHOR_EMAIL = defaultIdentity(GIT_AUTHOR_EMAIL_SETTING);
 
 @customElement('git-tab')
-export class GitTab extends SignalWatcher(LitElement) {
+export class GitTab extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     statusCheckIconStyles,
     css`
       :host {

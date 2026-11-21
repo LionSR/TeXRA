@@ -1,12 +1,6 @@
 /** Provider API key statuses with set/remove/get-URL actions and per-provider settings. */
 
-import {
-  LitElement,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { providerEndpointSetting } from '@texra-ai/harness/schemas';
@@ -23,7 +17,7 @@ import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { PROVIDER_KEY_COPY } from '@ui/copy/credentials';
 import { planCreditsHint, type PlanCredits } from '@ui/copy/modelAccess';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -46,10 +40,9 @@ import { providerKeyListStyles } from './ProviderKeyList.styles';
 import './SubscriptionUsageRow';
 
 @customElement('provider-key-list')
-export class ProviderKeyList extends LitElement {
+export class ProviderKeyList extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     statusCheckIconStyles,
     providerKeyListStyles,
   ];

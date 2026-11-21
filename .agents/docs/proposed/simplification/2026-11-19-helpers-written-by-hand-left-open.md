@@ -64,15 +64,21 @@ Landed since:
    is a `repoState` row. A slot-agnostic `rowDefault(row)` would serve all
    three. It is a new SDK export, so it needs the owner's call.
 
-3. **`:host { display: block; }` in 28 Lit components.** The block is
-   repeated across `packages/texra/src/ui/progress/components/` and
-   `packages/texra/src/ui/settings/`. Twenty settings components also open
-   their styles with the same `designTokens, commonViewStyles` pair.
+3. Partly landed 2026-11-21: the `designTokens, commonViewStyles` pair now has
+   one owner — `TexraElement` / `TexraSignalElement` in
+   `packages/texra/src/ui/litBase.ts`, `static styles = [designTokens,
+   commonViewStyles]`, which the 37 components opening with that exact pair now
+   extend (byte-identical CSS). The remaining open parts, and the fuller
+   accounting, are in item 2 of
+   `2026-11-20-declarations-without-an-owner-left-open.md`. Still open here:
+   **`:host { display: block; }` in 33 Lit components.** The block is repeated
+   across `packages/texra/src/ui/progress/components/` and
+   `packages/texra/src/ui/settings/`.
    - Do not put `display: block` into `designTokens`: inline and flex hosts
      would change.
-   - A shared `hostBlock` (or a settings-tab styles array) in
-     `packages/texra/src/ui/styles/litStyles.ts` would hold it once.
-   - It needs a visual check of both webviews, which this run could not do.
+   - A shared `hostBlock` sheet (not the base, which many non-block hosts
+     extend) would hold it once.
+   - It needs a visual check of both webviews, which an unattended run cannot do.
 
 ## Checked and declined
 

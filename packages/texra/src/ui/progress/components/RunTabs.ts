@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
@@ -13,8 +13,8 @@ import {
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { runListSections, runStatus } from '@ui/copy/runStatus';
-import { designTokens, commonViewStyles } from '@ui/styles';
 import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+import { TexraElement } from '@ui/litBase';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -40,10 +40,9 @@ import {
 // =============================================================================
 
 @customElement('run-tabs')
-export class RunTabs extends LitElement {
+export class RunTabs extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     layoutStyles,
     runTabsContainerStyles,
     css`

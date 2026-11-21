@@ -6,8 +6,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
@@ -34,11 +33,8 @@ import {
 } from '@texra/shared/constants/latexToolchain';
 
 // Local imports - shared webview toolkit
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@ui/styles';
+import { settingsBannerStyles } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
@@ -130,10 +126,9 @@ const DEPENDENCIES: DependencyInfo[] = [
 ];
 
 @customElement('latex-tab')
-export class LaTeXTab extends SignalWatcher(LitElement) {
+export class LaTeXTab extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     settingsBannerStyles,
     statusCheckIconStyles,
     latexTabStyles,

@@ -4,7 +4,7 @@
  * is the `subscriptions` slot the settings app composes in.
  */
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -12,17 +12,16 @@ import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptio
 import type { ModelSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 
 @customElement('models-tab')
-export class ModelsTab extends LitElement {
+export class ModelsTab extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

@@ -1,6 +1,6 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { SessionUiEvents } from '@ui/progress/uiEvents';
@@ -14,7 +14,7 @@ import {
   ONBOARDING_OPEN_WALKTHROUGH,
   TEXRA_TAGLINE,
 } from '@ui/copy/onboarding';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -28,10 +28,9 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
  * getting-started navigation); the host owns the funnel state.
  */
 @customElement('onboarding-welcome-card')
-export class OnboardingWelcomeCard extends LitElement {
+export class OnboardingWelcomeCard extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

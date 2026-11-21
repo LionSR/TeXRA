@@ -1,9 +1,9 @@
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { LitElement, css, html, type TemplateResult } from 'lit';
+import { css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { COMPACTION_ACTIVITY_TONE, statusGlyph } from '@ui/copy/runStatus';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { waSpinner } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -11,10 +11,9 @@ import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
 
 /** Non-collapsible transcript activity row for one context compaction. */
 @customElement('compaction-activity')
-export class CompactionActivity extends LitElement {
+export class CompactionActivity extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     toneStyles,
     css`
       :host {

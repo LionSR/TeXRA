@@ -10,7 +10,7 @@
  * warning dispatches its own `host.request` command. The onboarding and
  * "no LaTeX files yet" cards are not warnings: they take the hero's place.
  */
-import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -20,16 +20,16 @@ import {
   ONBOARDING_CHOICE_CHATGPT,
 } from '@ui/copy/onboarding';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { bannerStyles, commonViewStyles, designTokens } from '@ui/styles';
+import { bannerStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
 import './DependencyBanner';
 
 @customElement('session-banners')
-export class SessionBanners extends LitElement {
+export class SessionBanners extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     bannerStyles,
     css`
       :host {

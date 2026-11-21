@@ -9,7 +9,7 @@
  * the root as `surface-action` events. The docked list of the wide editor
  * tab is the same body inside `<progress-app>`, never this element.
  */
-import { LitElement, css, html, type TemplateResult } from 'lit';
+import { css, html, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
@@ -20,7 +20,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
@@ -31,10 +31,9 @@ import './RunTabs';
 import { renderTaskFilter, taskFilterStyles } from './taskFilter';
 
 @customElement('session-drawer')
-export class SessionDrawer extends LitElement {
+export class SessionDrawer extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     overlaySurfaceStyles,
     taskFilterStyles,
     css`

@@ -1,10 +1,11 @@
-import { html, css, LitElement, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
+import { bannerStyles } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
+import { TexraElement } from '@ui/litBase';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -20,10 +21,9 @@ const EITHER_OF = new Intl.ListFormat('en-GB', { type: 'disjunction' });
  * Interchangeable tools (GraphicsMagick, ImageMagick) read as one "or".
  */
 @customElement('dependency-banner')
-export class DependencyBanner extends LitElement {
+export class DependencyBanner extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     bannerStyles,
     focusRingStyles,
     css`

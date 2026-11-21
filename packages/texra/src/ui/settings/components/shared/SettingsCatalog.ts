@@ -3,10 +3,10 @@
  * navigation have one implementation. */
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { renderFilterField } from '@ui/wa/filterField';
 import {
@@ -28,12 +28,8 @@ export interface SettingsCatalogItem {
 }
 
 @customElement('settings-catalog')
-export class SettingsCatalog extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    settingsCatalogStyles,
-  ];
+export class SettingsCatalog extends TexraElement {
+  static override styles = [TexraElement.styles, settingsCatalogStyles];
   @property({ attribute: false }) items: readonly SettingsCatalogItem[] = [];
   @property() label = 'Items';
   @property() actionLabel = '';

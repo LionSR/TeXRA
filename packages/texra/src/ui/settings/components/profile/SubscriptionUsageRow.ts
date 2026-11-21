@@ -1,4 +1,4 @@
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -11,7 +11,7 @@ import {
   formatSubscriptionUsageUpdated,
   subscriptionUsageWindowLabel,
 } from '@ui/copy/subscriptionUsage';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 
 type UnavailableReason = Extract<
   SubscriptionUsageSnapshot,
@@ -31,10 +31,9 @@ function unavailableDetail(reason: UnavailableReason): string {
 }
 
 @customElement('subscription-usage-row')
-export class SubscriptionUsageRow extends LitElement {
+export class SubscriptionUsageRow extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: contents;

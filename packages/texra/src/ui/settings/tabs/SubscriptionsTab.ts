@@ -4,7 +4,7 @@
  * with their usage meters.
  */
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
@@ -12,7 +12,7 @@ import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
@@ -24,10 +24,9 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { SUBSCRIPTION_SECTIONS } from '../components/profile/SubscriptionSection';
 
 @customElement('subscriptions-tab')
-export class SubscriptionsTab extends LitElement {
+export class SubscriptionsTab extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

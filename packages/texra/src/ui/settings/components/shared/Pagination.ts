@@ -4,12 +4,12 @@
  */
 
 import { Number as Num } from 'effect';
-import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
+import { html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
 import type { IconName } from '@ui/wa/iconNames';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 
 /** Detail payload for the `page-change` custom event. */
@@ -34,10 +34,9 @@ export function paginate<T>(items: readonly T[], page: number): T[] {
 }
 
 @customElement('list-pagination')
-export class Pagination extends LitElement {
+export class Pagination extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

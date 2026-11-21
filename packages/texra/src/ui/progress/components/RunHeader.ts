@@ -1,6 +1,5 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import {
-  LitElement,
   html,
   css,
   nothing,
@@ -16,7 +15,7 @@ import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import {
@@ -58,10 +57,9 @@ import type {
  * run's actions, the shell's window items, and last, Delete task.
  */
 @customElement('run-header')
-export class RunHeader extends LitElement {
+export class RunHeader extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     statusIndicatorStyles,
     css`
       :host {
