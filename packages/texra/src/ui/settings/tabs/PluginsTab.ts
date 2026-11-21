@@ -6,8 +6,7 @@
  * are listed read-only, edited in the file "Open mcp.json" opens.
  */
 
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/option/option.js';
@@ -25,7 +24,7 @@ import {
   pluginRowState,
   pluginRowProblem,
 } from '@ui/copy/plugins';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { readSelectValue } from '@ui/wa/selectTemplates';
@@ -42,10 +41,9 @@ import '../components/shared/SettingsCatalog';
 import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 
 @customElement('plugins-tab')
-export class PluginsTab extends SignalWatcher(LitElement) {
+export class PluginsTab extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     catalogDetailStyles,
     css`
       :host {

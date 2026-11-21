@@ -5,7 +5,7 @@ import {
   fileLocationDisplayPath,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -30,7 +30,7 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { GENERATED_FILES_LABEL, ROUND_ALERT } from '@ui/copy/documentOutputs';
 import { statusGlyph, type StatusLook } from '@ui/copy/runStatus';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 import {
@@ -91,10 +91,9 @@ function parsePath(path: string): { dir: string; basename: string } {
 }
 
 @customElement('file-list')
-export class FileList extends LitElement {
+export class FileList extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     lineChangeStatsStyles,
     toneStyles,
     fileListStyles,

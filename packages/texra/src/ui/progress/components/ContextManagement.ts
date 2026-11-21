@@ -1,13 +1,7 @@
 /** Displays compaction / clearing / max_tokens reduction events as collapsible details. */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -18,7 +12,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import type { IconName } from '@ui/wa/iconNames';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
@@ -44,10 +38,9 @@ export interface ActionConfig {
 }
 
 @customElement('context-management')
-export class ContextManagement extends LitElement {
+export class ContextManagement extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     bannerDetailsWaDetailsStyles,
     contextManagementStyles,
   ];

@@ -4,12 +4,12 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import type { Surface } from '@texra/shared/session/surface';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { dispatchDisclosureToggle } from './disclosureToggle';
 import type { RunId, Plan } from '@texra-ai/harness/schemas';
 
@@ -25,10 +25,9 @@ const GROUP_KEY = 'plan';
  * reload, and a toggle is dispatched, never kept here.
  */
 @customElement('plan-view')
-export class PlanView extends LitElement {
+export class PlanView extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

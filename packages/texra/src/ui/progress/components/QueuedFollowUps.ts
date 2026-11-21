@@ -1,7 +1,7 @@
 // Third-party imports
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { queuedMessagesTitle } from '@ui/copy/queuedMessages';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Web Awesome native components
@@ -19,10 +19,9 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 const MAX_MESSAGE_LENGTH = 200;
 
 @customElement('queued-follow-ups')
-export class QueuedFollowUps extends LitElement {
+export class QueuedFollowUps extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

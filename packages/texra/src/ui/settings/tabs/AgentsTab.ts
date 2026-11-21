@@ -6,8 +6,7 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -26,11 +25,8 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@ui/styles';
+import { settingsBannerStyles } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
@@ -48,10 +44,9 @@ import '../components/profile/AgentSelectionPanel';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('agents-tab')
-export class AgentsTab extends SignalWatcher(LitElement) {
+export class AgentsTab extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     settingsBannerStyles,
     css`
       :host {

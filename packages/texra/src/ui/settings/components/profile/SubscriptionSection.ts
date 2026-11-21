@@ -7,8 +7,7 @@
  * ({@link SubscriptionSectionProvider}) and the markup is written once.
  */
 
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared auth
@@ -33,7 +32,7 @@ import {
   GROK_AUTH,
   SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   renderSettingsSectionHeading,
@@ -78,10 +77,9 @@ interface SubscriptionSectionProvider {
 }
 
 @customElement('subscription-section')
-export class SubscriptionSection extends SignalWatcher(LitElement) {
+export class SubscriptionSection extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     css`
       :host {
         display: block;

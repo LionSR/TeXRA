@@ -1,12 +1,11 @@
 /** Memory management content for the settings view. */
 
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
@@ -17,10 +16,9 @@ import { MEMORY_ENABLED_SETTING } from '@texra-ai/harness/schemas';
 import '../components/memory/MemoryList';
 
 @customElement('memory-tab')
-export class MemoryTab extends SignalWatcher(LitElement) {
+export class MemoryTab extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     css`
       :host {
         display: block;

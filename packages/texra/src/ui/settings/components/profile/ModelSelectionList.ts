@@ -1,7 +1,6 @@
 /** Checkbox list of models grouped by provider, with deprecated toggles and helper-model picker. */
 
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -43,7 +42,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - profile view styles and events
 import { readSelectValue } from '@ui/wa/selectTemplates';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 
@@ -73,10 +72,9 @@ function availabilityOf({ availability, usageRoute }: ModelSelectionItem) {
 }
 
 @customElement('model-selection-list')
-export class ModelSelectionList extends SignalWatcher(LitElement) {
+export class ModelSelectionList extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     statusCheckIconStyles,
     modelSelectionListStyles,
   ];

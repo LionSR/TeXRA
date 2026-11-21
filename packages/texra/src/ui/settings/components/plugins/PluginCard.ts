@@ -9,7 +9,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import {
-  LitElement,
   html,
   css,
   nothing,
@@ -43,16 +42,15 @@ import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { catalogDetailStyles } from '../shared/catalogDetailStyles';
 
 type TexraRow = Extract<PluginRow, { kind: 'texra' }>;
 
 @customElement('plugin-card')
-export class PluginCard extends LitElement {
+export class PluginCard extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     catalogDetailStyles,
     css`
       :host {

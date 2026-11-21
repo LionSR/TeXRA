@@ -7,8 +7,7 @@
 
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import {
@@ -18,8 +17,8 @@ import {
   TOOL_PATH_PROTECTION_SETTING,
 } from '@texra-ai/harness/schemas';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
-import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import { TexraSignalElement } from '@ui/litBase';
 
 import {
   postStateSetting,
@@ -29,10 +28,9 @@ import {
 import { settingSignal } from '../settingsState';
 
 @customElement('approval-tab')
-export class ApprovalTab extends SignalWatcher(LitElement) {
+export class ApprovalTab extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     css`
       :host {
         display: block;

@@ -1,7 +1,6 @@
 /** Single memory entry with metadata and collapsible markdown preview. */
 
 import {
-  LitElement,
   html,
   nothing,
   css,
@@ -26,7 +25,7 @@ import {
   type MarkdownItInstance,
 } from '@ui/markdown/createMarkdownRenderer';
 import { markdownStyles } from '@ui/styles/markdownStyles';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import {
   renderIconActionButtonParts,
   type IconActionButtonOptions,
@@ -41,10 +40,9 @@ import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 let previewMd: MarkdownItInstance | null = null;
 
 @customElement('memory-item')
-export class MemoryItem extends LitElement {
+export class MemoryItem extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     markdownStyles,
     metaStripStyles,
     css`

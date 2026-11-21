@@ -13,7 +13,7 @@
  * polish, dictation, pickers, and pasted images, a `RuntimeCommand` for a
  * follow-up. It holds no draft of its own.
  */
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -40,7 +40,7 @@ import {
   type ExtractedClipboardImage,
 } from '@ui/progress/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
@@ -60,10 +60,9 @@ import {
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('session-composer')
-export class SessionComposer extends LitElement {
+export class SessionComposer extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

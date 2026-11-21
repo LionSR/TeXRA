@@ -1,9 +1,9 @@
 import { getBasename, type WorktreeInfo } from '@texra-ai/harness/schemas';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles } from '@ui/styles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import { TexraElement } from '@ui/litBase';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -11,10 +11,9 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 /** Compact chip naming the worktree folder an agent runs in. */
 @customElement('worktree-chip')
-export class WorktreeChip extends LitElement {
+export class WorktreeChip extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: inline-flex;

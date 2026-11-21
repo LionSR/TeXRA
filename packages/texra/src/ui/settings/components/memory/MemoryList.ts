@@ -1,17 +1,11 @@
 /** Renders list of saved memory items with pagination. */
 
-import {
-  LitElement,
-  html,
-  css,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { html, css, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { renderEmptyState } from '@ui/wa/emptyState';
 
 // Local imports - memory view components (side-effect: register)
@@ -32,10 +26,9 @@ function hasSameMemoryOrder(
 }
 
 @customElement('memory-list')
-export class MemoryList extends LitElement {
+export class MemoryList extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     css`
       :host {
         display: block;

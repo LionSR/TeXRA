@@ -1,10 +1,11 @@
-import { html, css, LitElement, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@ui/copy/onboarding';
-import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
+import { bannerStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 
 import {
   renderIconActionButton,
@@ -16,10 +17,9 @@ import { renderBannerFrame } from '@ui/wa/bannerFrame';
  *  Setup and the walkthrough have their own homes (the setup hero, the
  *  command palette), so this card offers only the ways to get a paper in. */
 @customElement('getting-started-banner')
-export class GettingStartedBanner extends LitElement {
+export class GettingStartedBanner extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     bannerStyles,
     css`
       .getting-started-row {

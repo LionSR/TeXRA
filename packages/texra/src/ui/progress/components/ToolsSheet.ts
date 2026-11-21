@@ -7,7 +7,7 @@
  * dispatches each verb as a `host-request` and each selection as a
  * `surface-action`.
  */
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
@@ -18,15 +18,14 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { matchesEditedFile } from '@ui/progress/editedFileMatch';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import './LatexDiffsSection';
 
 @customElement('tools-sheet')
-export class ToolsSheet extends LitElement {
+export class ToolsSheet extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     overlaySurfaceStyles,
     css`
       /* As tall as the section, up to most of the view. */

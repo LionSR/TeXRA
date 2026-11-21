@@ -78,23 +78,30 @@ Each needs a decision or a check this unattended run could not make.
    mechanism (route to `CliUsageError`, or a `refuseUsage(msg): number`
    extraction) and convert only the sites that qualify.
 
-2. **No shared Lit base class.** Across `packages/texra/src/ui/progress/components/`
-   and `packages/texra/src/ui/settings/`, 50 components open `static styles`
-   with `designTokens`, 53 import `commonViewStyles`, 33 repeat
-   `:host { display: block; }`, and 63 `@customElement` classes extend
-   `LitElement` or `SignalWatcher(LitElement)` directly — there is no
-   `TexraElement` / `TexraSignalElement` base. A base whose
-   `static styles = [designTokens, hostBlock]`, with subclasses doing
-   `static styles = [...TexraElement.styles, ...own]`, removes ~130–180 lines
-   and is the one home for future shared behaviour. This supersedes the
-   narrower `:host{display:block}` (28) and `designTokens, commonViewStyles`
-   (20) items in `2026-11-19-helpers-written-by-hand-left-open.md`, whose scope
-   was understated. A follow-on: `truncateDeclarations` / `overlineDeclarations`
-   / `panelFrameStyles` are `${...}`-interpolated into per-component selectors
-   (~37 sites, 24 files) instead of exposed as `.truncate` / `.overline`
-   utility classes in `commonViewStyles`. Both need a visual check of both
-   webviews (host-block and token ordering can shift layout) and a decision on
-   whether `commonViewStyles` belongs in the base.
+2. Landed 2026-11-21: the base pair now exists in
+   `packages/texra/src/ui/litBase.ts` — `TexraElement extends LitElement` and
+   `TexraSignalElement extends SignalWatcher(TexraElement)`, both with
+   `static styles = [designTokens, commonViewStyles]`. The 38 components whose
+   styles array opened with that exact pair as its first two elements now
+   `extends` the base and read `[TexraElement.styles, …own]` (or
+   `TexraSignalElement.styles`). Lit flattens the nested group in order, so the
+   adopted stylesheets are unchanged, the compiled CSS is byte-identical, and no
+   visual check was needed. Still open, each needing the visual check the
+   unattended run could not do: **(a)** the ~13 components (`LogList`,
+   `UserMessage`, `FileSelectGroup`, `LatexDiffsSection`, `RunTab`, `StageList`,
+   `ScriptStage`, `LaunchAttachments`, `UsagePanel`, `NewTaskHero`, …) that open
+   with `designTokens` but **no** `commonViewStyles` — they cannot adopt the
+   two-sheet base without gaining `commonViewStyles`, so they want a
+   `designTokens`-only base or a confirmed-safe addition; **(b)** the 33 repeats
+   of `:host { display: block; }` (do not fold into `designTokens`: inline and
+   flex hosts would change); and **(c)** `truncateDeclarations` /
+   `overlineDeclarations` / `panelFrameStyles`, `${...}`-interpolated into
+   per-component selectors (~37 sites, 24 files) instead of exposed as
+   `.truncate` / `.overline` utility classes in `commonViewStyles`. The landed
+   base supersedes the narrower `:host{display:block}` (28) and
+   `designTokens, commonViewStyles` (20) items in
+   `2026-11-19-helpers-written-by-hand-left-open.md`, whose scope was
+   understated.
 
 3. Declined 2026-11-20: the two loops share only `zipWithPrevious` over
    `attentionOf`; the desktop follows many projects, dismisses per project,

@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -18,11 +18,8 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { IconName } from '@ui/wa/iconNames';
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@ui/styles';
+import { settingsBannerStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -60,10 +57,9 @@ function sourceMeta(source: AgentSource): {
 }
 
 @customElement('agent-selection-panel')
-export class AgentSelectionPanel extends LitElement {
+export class AgentSelectionPanel extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     settingsBannerStyles,
     catalogDetailStyles,
   ];

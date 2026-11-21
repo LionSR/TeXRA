@@ -1,7 +1,7 @@
 /** Collapsible latexdiff comparison results panel. */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -20,7 +20,7 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { LATEXDIFF_STATUS } from '@ui/copy/documentOutputs';
 import { statusGlyph } from '@ui/copy/runStatus';
-import { designTokens, commonViewStyles } from '@ui/styles';
+import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -31,10 +31,9 @@ import { buildDetailsCard } from '../formatters/htmlBuilders';
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
 
 @customElement('latexdiff-results')
-export class LatexdiffResults extends LitElement {
+export class LatexdiffResults extends TexraElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraElement.styles,
     toneStyles,
     bannerDetailsWaDetailsStyles,
     css`

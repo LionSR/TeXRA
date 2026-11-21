@@ -1,7 +1,6 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 import {
@@ -17,7 +16,7 @@ import {
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
@@ -35,10 +34,9 @@ const SOURCE_LABELS: Record<ActiveSkillSourceScope, string> = {
 };
 
 @customElement('skills-tab')
-export class SkillsTab extends SignalWatcher(LitElement) {
+export class SkillsTab extends TexraSignalElement {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    TexraSignalElement.styles,
     catalogDetailStyles,
     css`
       :host {
