@@ -53,7 +53,10 @@ Landed since:
    inherited channel. Decide whether each file names its own channel. If it
    does, these become `logFailure` calls.
 
-2. **A setting's default read by decoding `undefined`.** Three app sites
+2. Landed 2026-11-21: the catalog's `defaultOf(key)` answers for every row
+   it holds (memoized, cloned); the JSON config provider keeps its
+   config-slot rule, and the three sites call it. Was: **A setting's default
+   read by decoding `undefined`.** Three app sites
    write `Schema.decodeUnknownSync(row.schema)(undefined)`:
    - `packages/texra/src/ui/settings/tabs/GitTab.ts`
    - `packages/texra/src/ui/settings/settingsState.ts`

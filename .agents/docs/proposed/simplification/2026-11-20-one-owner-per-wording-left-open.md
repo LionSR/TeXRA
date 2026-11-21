@@ -29,7 +29,10 @@ Each needs a decision or changes behavior beyond a consolidation.
    first; `packages/harness/src/agent/prompt/workspaceInfo.ts` reads `ComSpec`
    on Windows. With Git Bash's `SHELL` set, the terminal says bash while the
    system prompt says cmd. Decide the precedence, then one harness reader.
-2. **A file path to a language id, twice.**
+2. Landed 2026-11-21: `languageForPath` in
+   `packages/texra/src/ui/highlighting/fileLanguage.ts` holds the union, in
+   Monaco's ids, which highlight.js registers too. Was: **A file path to a
+   language id, twice.**
    `packages/desktop/src/shared/monacoLanguage.ts` (Monaco) and
    `getLanguageFromPath` in
    `packages/texra/src/ui/progress/formatters/logFormatters/toolFormatters/toolSections.ts`
@@ -46,7 +49,9 @@ Each needs a decision or changes behavior beyond a consolidation.
    `packages/texra/src/tools/documents/documentResult.ts` replaces only the
    separators (`a/b.tex` and `a_b.tex` collide); `packages/texra/src/agent/output/compileCheck.ts`
    sanitizes and adds a hash. One slot-name rule beside `revisionLayout`.
-5. **Lone-CR normalization, seven copies** across the CLI, the desktop
+5. Landed 2026-11-21: `normalizeLineEndings` in `./schemas`; the seven
+   sites and the CLI info pane call it. Was: **Lone-CR normalization, seven
+   copies** across the CLI, the desktop
    renderer and the app's markdown (`.replaceAll('\r\n', '\n').replaceAll('\r', '\n')`
    or `/\r\n?/g`). `splitContentLines` handles CRLF only. A
    `normalizeLineEndings` export beside it would be a new `./schemas` name.
