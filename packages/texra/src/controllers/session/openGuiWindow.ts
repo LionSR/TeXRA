@@ -9,9 +9,9 @@
  * and the difference between the hosts is the table.
  *
  * A host answers its own way only the kinds `OWN_REQUEST_LABEL` lists
- * ({@link OwnHostCommand}: its file pickers, its editor's current file, its
- * tab pop-out), so its switch stays exhaustive and the compiler still names
- * a kind it forgot.
+ * ({@link OwnHostCommand}: its tab pop-out, its getting-started commands),
+ * so its switch stays exhaustive and the compiler still names a kind it
+ * forgot.
  */
 import * as path from 'node:path';
 
@@ -40,8 +40,10 @@ import {
   type PresentationEventHandlers,
   type ProcessServices,
 } from '@texra-ai/harness/host';
+import { commitExists } from '@texra-ai/harness/node';
 import {
   AppSignals,
+  pathToLocationIn,
   ToolRegistry,
   type StorageFs,
   WorkspaceFs,
@@ -59,7 +61,10 @@ import {
   ToolEditApprovalController,
   type ToolEditApprovalHost,
 } from '@texra/controllers/approval/ToolEditApprovalController';
-import { attachDroppedFiles } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import {
+  attachDroppedFiles,
+  fieldTakes,
+} from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
   launchApprovalOptions,
   launchFormOf,
@@ -84,6 +89,7 @@ import {
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
+import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { latexdiffVerbs, type LatexdiffHost } from './latexdiffVerbs';
 import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
@@ -91,10 +97,7 @@ import {
   createHostRunActions,
   type HostRunActionPorts,
 } from './hostRunActions';
-import {
-  openHostSnapshotSource,
-  type HostSnapshotSource,
-} from './hostSnapshotSource';
+import { openHostSnapshotSource } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import { answerWorkspaceFile } from './workspaceFileRequest';
@@ -143,10 +146,12 @@ export interface GuiSession {
 const OWN_REQUEST_LABEL = {
   popOut: 'Pop-out to editor',
   popBack: 'Pop-out to editor',
-  useCurrentFile: "The editor's current file",
-  addOpenedFiles: "The editor's open files",
   gettingStarted: 'Starting a project',
 } as const satisfies Partial<Record<HostCommand['kind'], string>>;
+
+/** The refusal of a request this host has no verb for. */
+const notInThisApp = (label: string) =>
+  new Rejected({ reason: `${label} is not available in this app.` });
 
 /** The requests a host answers its own way. */
 type OwnHostCommand = Extract<
@@ -205,16 +210,21 @@ export interface SharedHostCommandBindings {
     readonly signInChatGpt: HostVerb<void>;
     readonly openGettingStarted: HostVerb<void>;
   };
-}
-
-/** The window's parts its host's verbs act on. */
-interface GuiWindowParts {
-  readonly bridge: SessionBridge;
-  readonly snapshot: HostSnapshotSource;
+  /** The host's code editor, where it has one. Its files are
+   *  project-relative; which of them a launcher field takes is decided in
+   *  the body below. */
+  readonly editor?: {
+    /** The file the editor shows; null when none is open or it is outside
+     *  the project. */
+    readonly currentFile: HostVerb<string | null>;
+    /** Every file the editor has open. */
+    readonly openedFiles: HostVerb<readonly string[]>;
+  };
 }
 
 /** What a host does for its window: the shared body's verbs, the requests
- *  it answers its own way, and the host verbs of the window's parts. */
+ *  it answers its own way, and what its editor, run view, file actions and
+ *  transcript export do. */
 export interface GuiWindowHost {
   /** The window's notices. */
   readonly notify: Dialogs['notify'];
@@ -258,10 +268,13 @@ interface GuiWindowPorts {
   readonly focused: Stream.Stream<void>;
   /** The one process recorder. */
   readonly draftRequests: HostDraftRequests;
-  /** The host's half of the window, over its parts. */
-  host(
-    parts: GuiWindowParts,
-  ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
+  /** The host's half of the window, built for the window's scope once the
+   *  bridge and the snapshot are up. */
+  readonly host: Effect.Effect<
+    GuiWindowHost,
+    never,
+    Scope.Scope | ProcessServices
+  >;
 }
 
 /** The settings body's verbs on a window's runs: its own session's, never
@@ -345,7 +358,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       ),
     ),
   );
-  const host = yield* ports.host({ bridge, snapshot });
+  const host = yield* ports.host;
 
   // The window is its project's window wherever its runs run: here,
   // through this process's own windows, or in the service, whose runs ask
@@ -501,6 +514,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       roots,
       session,
     });
+  /** The host's editor, or the refusal naming what it would have answered. */
+  const editor = (label: string) =>
+    bindings.editor === undefined
+      ? Effect.fail(notInThisApp(label))
+      : Effect.succeed(bindings.editor);
   /**
    * One program per shared request, as a host's own handlers are: it runs on the
    * fiber the window's dispatch already owns and finishes nothing, so its
@@ -549,6 +567,60 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             });
           }
           return done;
+        }
+        case 'useCurrentFile': {
+          const current = yield* (yield* editor("The editor's current file"))
+            .currentFile;
+          if (!current)
+            return yield* new Rejected({
+              reason:
+                'No file is currently open or the file is not part of the workspace.',
+            });
+          // A latexdiff artifact (`paper-diff1234abcd.tex`) taken as the base
+          // file selects the file it was derived from instead, when that
+          // file is still on disk, and its commit rides onto the launcher.
+          const parsed =
+            request.fileType === 'base'
+              ? parseVersionControlDiffFilename(current)
+              : null;
+          if (parsed) {
+            const found =
+              roots.workspace !== undefined &&
+              (yield* commitExists(roots.workspace, parsed.commitHash));
+            if (found)
+              bridge.surfaceAction({
+                kind: 'launch',
+                patch: { commit: parsed.commitHash },
+              });
+            else
+              yield* host.notify(
+                'info',
+                `The commit ${parsed.commitHash} referenced by ${path.basename(current)} was not found in the repository history.`,
+              );
+            const source = pathToLocationIn(roots.workspace, parsed.sourcePath);
+            if (
+              source.kind === 'workspace' &&
+              (yield* (yield* WorkspaceFs).exists(source.relativePath))
+            ) {
+              yield* snapshot.refreshFiles;
+              return { kind: 'files', paths: [parsed.sourcePath] };
+            }
+            yield* host.notify(
+              'info',
+              `The base file ${parsed.sourcePath} could not be found. Keeping ${current} selected.`,
+            );
+          }
+          return { kind: 'files', paths: [current] };
+        }
+        case 'addOpenedFiles': {
+          const opened = yield* (yield* editor("The editor's open files"))
+            .openedFiles;
+          return {
+            kind: 'files',
+            paths: opened.filter(
+              fieldTakes(getIncludedExtensions(request.fileType)),
+            ),
+          };
         }
         case 'openRunStorage':
           yield* documentTaskFileActions.openRunStorage(request.runId);
@@ -761,11 +833,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   const own = (request: OwnHostCommand): HostVerb<HostOutcome> => {
     const handler = host.own[request.kind];
     if (handler === undefined)
-      return Effect.fail(
-        new Rejected({
-          reason: `${OWN_REQUEST_LABEL[request.kind]} is not available in this app.`,
-        }),
-      );
+      return Effect.fail(notInThisApp(OWN_REQUEST_LABEL[request.kind]));
     // cast: the handler bound under `request.kind` takes a request of that kind.
     return (handler as (request: OwnHostCommand) => HostVerb<HostOutcome>)(
       request,
