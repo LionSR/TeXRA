@@ -68,7 +68,6 @@ import { mediaInputParts } from '../run/mediaInput';
 import type { InputPart } from '@texra-ai/llm';
 import { claimFollowUps, type FollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
-import { scriptCallOf } from '../programRun';
 import { resumeLeftoverChildren } from '../leftoverChildren';
 import {
   appendRow,
@@ -363,7 +362,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
     const { content, offered, handed } = yield* Effect.interruptible(
       Effect.gen(function* () {
         // A script's run renders no prompt: what it runs is its call.
-        const script = yield* scriptCallOf(run.config);
+        const { script } = run;
         if (script !== null) {
           echo();
           const step = yield* stepFor(run, opening, false);
@@ -529,7 +528,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // A message typed while the turn ran joins the request after the tool
       // results (past a context update), never a user message: read before
       // the step opens, so a skill it activates is the step's, and before
-      // the boundary's compaction, whose summary then covers it.
+      // the boundary's compaction, whose summary then covers it. One sent
+      // after a `/compact` still pending waits for a later request.
       const tail = state.messages.findLast((m) => m.role !== 'system');
       if (state.invocation === null && tail?.role === 'tool') {
         const queued = input.batch('request');

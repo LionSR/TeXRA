@@ -113,26 +113,28 @@ export const resumeRun = (
   options: ResumeRunOptions,
 ): Effect.Effect<ResumeHandOff, Error, RunRegistry> =>
   Effect.flatMap(RunRegistry, (runs) =>
-    runs.start(runId, executeAgent(runId, openResume(runId, options))).pipe(
-      Effect.map(({ opened }): ResumeHandOff => ({
-        activation: opened.activation,
-      })),
-      Effect.catchTag('ResumeNotOpened', (notOpened) =>
-        Effect.succeed<ResumeHandOff>(notOpened.answer),
+    runs
+      .start(runId, executeAgent(runId, null, openResume(runId, options)))
+      .pipe(
+        Effect.map(({ opened }): ResumeHandOff => ({
+          activation: opened.activation,
+        })),
+        Effect.catchTag('ResumeNotOpened', (notOpened) =>
+          Effect.succeed<ResumeHandOff>(notOpened.answer),
+        ),
+        Effect.catchTag('RunStopped', () =>
+          Effect.succeed<ResumeHandOff>(REFUSED),
+        ),
+        Effect.catch((error) =>
+          error instanceof RunLive
+            ? Effect.flatMap(joinOpening(runs, runId), (joined) =>
+                joined === null
+                  ? resumeRun(runId, options)
+                  : Effect.succeed(joined),
+              )
+            : refusalFor(error, runId),
+        ),
       ),
-      Effect.catchTag('RunStopped', () =>
-        Effect.succeed<ResumeHandOff>(REFUSED),
-      ),
-      Effect.catch((error) =>
-        error instanceof RunLive
-          ? Effect.flatMap(joinOpening(runs, runId), (joined) =>
-              joined === null
-                ? resumeRun(runId, options)
-                : Effect.succeed(joined),
-            )
-          : refusalFor(error, runId),
-      ),
-    ),
   );
 
 /**

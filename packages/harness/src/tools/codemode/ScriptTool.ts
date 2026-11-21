@@ -30,6 +30,7 @@ import {
   SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
+import { WAKE_TOOL_NAME } from '@tools/WakeTool';
 
 import { defineTool } from '../core/definition';
 import { optionalInput, timeoutMsField } from '../core/inputSchema';
@@ -347,7 +348,7 @@ export const ScriptTool = defineTool({
   // each finished call is handed back from its row, never run twice.
   replay: 'safe',
   description: SURFACE,
-  describe: (declared, modules, programs) => {
+  describe: (declared, modules, programs, offered) => {
     // The declared tools whose calls run alongside others: the rest wait
     // their turn.
     const together = declared.flatMap(({ definition, lane }) =>
@@ -355,6 +356,12 @@ export const ScriptTool = defineTool({
     );
     return [
       SURFACE,
+      // Named only to a step that offers it.
+      ...(offered.includes(WAKE_TOOL_NAME)
+        ? [
+            'To continue at a later time, `tools.wake({ afterSeconds, note })` returns at once and arranges a later turn of the conversation, which starts from the note.',
+          ]
+        : []),
       // A module no tool's description names is found only here.
       ...(modules.length === 0
         ? []

@@ -3,6 +3,7 @@ import {
   getProposalFileGroups,
   type AgentProposalRequest,
   type BashRequest,
+  type PluginTrustRequest,
   type RetryRequest,
   type ToolEditContent,
   type ToolEditRequest,
@@ -13,7 +14,11 @@ import {
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { modelFailureText } from '@ui/copy/modelAccess';
-import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
+import {
+  pluginTrustFacts,
+  REQUEST_ASK,
+  WORKING_DIRECTORY_LABEL,
+} from '@ui/copy/requestCards';
 import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import {
   SCRIPT_REQUEST_COPY,
@@ -237,6 +242,18 @@ export function formatRetryRequestMessage(payload: RetryRequest): string {
 export function formatBashApprovalSummary(payload: BashRequest): string {
   const cwd = payload.cwd ? `${WORKING_DIRECTORY_LABEL}: ${payload.cwd}\n` : '';
   return `${REQUEST_ASK.command}:\n${cwd}${payload.command}`;
+}
+
+/** What trusting a plugin asks: its name and version, a warning when it
+ *  carries native code, where it is, and the whole review. */
+export function formatPluginTrustSummary(payload: PluginTrustRequest): string {
+  const facts = pluginTrustFacts(payload);
+  return [
+    `${REQUEST_ASK.pluginTrust} ${facts.plugin}:`,
+    ...(payload.native ? [REQUEST_ASK.nativeCode] : []),
+    facts.location,
+    ...payload.review,
+  ].join('\n');
 }
 
 /** What a tool edit's prompt shows: its diff's label (the tool, the file

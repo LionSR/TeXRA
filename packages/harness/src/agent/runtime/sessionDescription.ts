@@ -26,6 +26,7 @@ import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
 import { descriptionRow } from '@shared/session/runFacts';
 import type { RouteRetries } from './ModelRetryGate';
+import type { PlanQuotas } from './modelAccess/planQuotas';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SessionDescription';
@@ -133,6 +134,7 @@ const generateSessionDescription = Effect.fn('generateSessionDescription')(
     | RouteRetries
     | Secrets
     | SubscriptionAccounts
+    | PlanQuotas
     | SessionLog
     | SessionRoots
   > {

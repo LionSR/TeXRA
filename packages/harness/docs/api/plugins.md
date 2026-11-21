@@ -27,6 +27,13 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   ([`requestToolEditApproval`](#requesttooleditapproval),
   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
   [`approvedWriteConflict`](#approvedwriteconflict)).
+- **Native plugins**: an installed plugin folder's `harness.mjs` is a
+  module whose default export ([`NativeEntryModule`](#nativeentrymodule))
+  the harness calls with this surface and its own `effect` authoring
+  modules ([`NativePluginHost`](#nativepluginhost)) and which returns a
+  [`Plugin`](#plugin); once the person trusts it, it is added, replaced or
+  removed while the process runs, each run seeing the change from its next
+  step.
 - **Runtime callbacks inside a tool**: the call's run and requests on
   [`ToolContext`](#toolcontext), [`ChildRuns`](#childruns), and
   [`RunInbox`](#runinbox).
@@ -496,9 +503,9 @@ interface CallRequests {
    *  row. `operation` is what a command (`bash`) asks permission for: the
    *  shell's (`'bash'`, which the run's command grant answers) or another
    *  tool's call (`'call'`, which only the delegated-work grant answers).
-   *  An edit, a plan or a proposal asks about its own kind; with the
-   *  call's hooks, the operation decides who answers the request, and a
-   *  request about none is a person's. */
+   *  An edit, a plan, a proposal or a plugin's trust asks about its own
+   *  kind (`operationOf`); with the call's hooks, the operation decides who
+   *  answers the request, and a request about none is a person's. */
   readonly open: <P extends RequestPayload>(
     payload: P,
     opening?: {
@@ -1218,6 +1225,9 @@ interface ITool<E = Error, R = never> {
       readonly name: string;
       readonly description: string;
     }[],
+    /** The names of every tool the step offers, injected ones included:
+     *  the description names a tool only when it is among them. */
+    offered: readonly string[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
@@ -1429,8 +1439,13 @@ const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<
 
 ## memoryWorkflow
 
-Memory and past runs: the `memory` tool, offered while memory is on,
-and `executions`.
+Memory, past runs and later ones, and the run's own equipment: the
+`memory` tool, offered while memory is on; `executions`; `wake`, with
+which a run arranges to be continued at a later time;
+`plugin_manager`, with which it installs and enables the plugins it
+loads, each change approved by the person; and `resources`, which reads
+the time, the models, the plans' quotas and the run's spend. The last
+three are offered to every agent with tools.
 
 ```ts
 const memoryWorkflow: Plugin
@@ -1455,6 +1470,49 @@ Child runs: the `agent` tool, and `program` for a registered program.
 
 ```ts
 const multiAgent: Plugin
+```
+
+## NativeEntryModule
+
+A native entry module (`harness.mjs`): its default export returns the
+plugin, written with `harness.plugins.definePlugin`.
+
+```ts
+interface NativeEntryModule {
+  readonly default: (harness: NativePluginHost) => Plugin;
+}
+```
+
+## NativePlugin
+
+A plugin an installed plugin's native entry returned, under that
+installed plugin's id (`plugin:<name>`), and its revision: a digest of
+the entry's path and the trust digest it was loaded at. A new revision
+stands beside the old one, whose layers stay up while a step that pinned
+them holds them.
+
+```ts
+interface NativePlugin {
+  readonly plugin: Plugin;
+  readonly revision: string;
+}
+```
+
+## NativePluginHost
+
+What a native entry's default export is called with: this process's
+plugin authoring surface and the modules of its `effect` a plugin is
+written with.
+
+```ts
+interface NativePluginHost {
+  /** `@texra-ai/harness/plugins`, as this process loaded it. */
+  readonly plugins: typeof plugins;
+  /** `effect`'s authoring modules, as this process loaded them: `Effect`,
+   *  `Context`, `Layer`, `Schema`, `Stream`, `Scope` and the data and
+   *  concurrency modules beside them, by their `effect` names. */
+  readonly effect: typeof EFFECT;
+}
 ```
 
 ## noLaterTurn
@@ -2557,8 +2615,9 @@ reads it.
 
 ```ts
 interface ToolCatalogShape {
-  /** Borrow a plugin's process services for the caller's scope without
-   *  starting them; none while its layer is down. */
+  /** Borrow a plugin's process services (a native plugin's at the revision
+   *  loaded now) for the caller's scope without starting them; none while
+   *  its layer is down. */
   readonly processServices: (
     plugin: string,
   ) => Effect.Effect<Option.Option<PluginContext>, never, Scope.Scope>;
@@ -2831,7 +2890,9 @@ type ToolProbeServices =
 
 ## ToolRegistry
 
-The process's plugin table, which every run's offered tools come from.
+The plugin table: listed plugins alone where nothing is loaded (the
+process's, read outside any run), and inside a run the table its launch
+or its step read, which holds the native plugins loaded then.
 
 ```ts
 class ToolRegistry extends Context.Service<ToolRegistry, ToolTable>()(
@@ -2876,12 +2937,14 @@ interface ToolRun {
 
 ## ToolTable
 
-The process's plugins by plugin id: what each contributes (its tools,
-prompt section and layers) is read off its value.
+The plugin table a run step reads: the app's listed plugins and the
+native plugins loaded at that read, by plugin id; what each contributes
+(its tools, prompt section and layers) is read off its value.
 
 ```ts
 interface ToolTable {
-  /** Every plugin, in the order the app listed them. */
+  /** Every plugin, the listed ones in the order the app listed them, then
+   *  the native ones. */
   readonly entries: ReadonlyMap<string, Plugin>;
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
@@ -2889,8 +2952,16 @@ interface ToolTable {
   /** The programs the plugins register, by name (`Plugin.programs`). */
   readonly programs: ReadonlyMap<string, Program>;
   /** The row kinds the plugins own, by `plugin/kind` (`Plugin.factKinds`):
-   *  what a store opened in this process reads. */
+   *  what a store opened in this process reads. A native plugin owns none. */
   readonly factKinds: FactKinds;
+  /** The revision of the plugin `id`, which its layers are kept under and
+   *  its tools' rows record: `builtin` for a listed plugin, and for a
+   *  native one the revision it was loaded at (`NativePlugin`). */
+  readonly revisionOf: (id: string) => string;
+  /** The native plugins among `entries`, each with its revision, in the
+   *  order they were accepted: what tells a native plugin from a listed
+   *  one. */
+  readonly natives: readonly NativePlugin[];
 }
 ```
 

@@ -1,8 +1,19 @@
-import { Duration } from 'effect';
+import { DateTime, Duration } from 'effect';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
 });
+
+/**
+ * A time, in epoch milliseconds, as a model reads it: the process's local
+ * wall time with its UTC offset and its zone named
+ * (`2030-01-31T09:00:00.000+01:00[Europe/Berlin]`), so a model asked to act
+ * "at 9am" knows whose 9am.
+ */
+export const formatLocalTime = (millis: number): string =>
+  DateTime.formatIsoZoned(
+    DateTime.makeZonedUnsafe(millis, { timeZone: DateTime.zoneMakeLocal() }),
+  );
 
 /**
  * Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).

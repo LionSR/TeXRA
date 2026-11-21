@@ -35,6 +35,7 @@ import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget'
 import type { AppState } from '@platform/interfaces';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
+import type { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import {
   type Persona,
   AGENT_SOURCE,
@@ -51,7 +52,7 @@ import type { Alongside } from '@shared/session/sessionEvents';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import type { ToolRegistry } from '@tools/toolTable';
 import { ProjectTools, type OpenStep } from '../loop/step';
-import { scriptCallOf } from '../programRun';
+import { scriptCallOf, type ScriptCall } from '../programRun';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
@@ -141,6 +142,12 @@ export interface AgentRunShape extends RunLaunch {
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
   /**
+   * The call a script's run makes, read once as the run is built, so the
+   * tools the run offers and the code its opening runs come from one read
+   * of a program's file; null for a run that asks its model.
+   */
+  readonly script: ScriptCall | null;
+  /**
    * The binding in force, this activation's resource (its route, socket,
    * ping fiber and uploads), in a scope of its own under the run's. A
    * `ScopedRef.set` binds the next one into a fresh scope and closes the
@@ -203,7 +210,8 @@ export const agentRunLayer = (
   | HttpClient.HttpClient
   | Secrets
   | SubscriptionAccounts
-  // An installed plugin's program is read from the plugin as it is now.
+  | PlanQuotas
+  // A program read from a file is read from that file as it is now.
   | AppState
   | FileSystem.FileSystem
 > =>
@@ -230,7 +238,7 @@ export const agentRunLayer = (
       const finalToolName = terminalTool?.definition.name ?? null;
       // A script's run offers its script and exactly the tools its call
       // names (a background script's parent's, a program's registered ones).
-      const script = yield* scriptCallOf(config);
+      const script = yield* scriptCallOf(config, roots);
       // A plugin agent that names no tools inherits them, as a Claude Code
       // subagent does: the standard file, shell and web tools and the
       // installed plugins' tools, whoever launched it.
@@ -320,6 +328,7 @@ export const agentRunLayer = (
           Scope.provide(scope),
         ),
         finalToolName,
+        script,
         model,
         scope,
         callbacks: input.callbacks,

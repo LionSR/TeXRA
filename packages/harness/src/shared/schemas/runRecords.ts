@@ -102,11 +102,9 @@ export const backgroundScriptOf = (
 /** The registered program the run opened on (its `name` and `args`), or
  *  null for any other run. A program's run is a script that ends: its
  *  value and its children's spend are its output, its end its record, and
- *  it takes no later message. A plugin wrote the program, not a model, so
- *  the launch that chose it granted it: tools fixed past any switch, its
- *  delegations under the launch's approval, its prompts and files passed
- *  as written, and no skill activated by its instruction. An installed
- *  plugin's program gets less ({@link isInstalledProgram}). */
+ *  it takes no later message. What its launch grants it (its tools, the
+ *  runs it starts, the files it hands them) follows from where the program
+ *  comes from ({@link programOrigin}). */
 export const programOf = (
   config: Pick<AgentConfig, 'script'> | typeof RunRecordFieldsSchema.Encoded,
 ): Extract<AgentConfig['script'], { kind: 'program' }> | null =>
@@ -114,16 +112,39 @@ export const programOf = (
     ? config.script
     : null;
 
+/** What the name of a program an agent wrote for itself begins with,
+ *  before the colon (`own:<name>`, a file in its memory). No installed
+ *  plugin takes it for its name. */
+export const OWN_PROGRAM_PREFIX = 'own';
+
+/** Where a program comes from ({@link programOrigin}). */
+export type ProgramOrigin = 'listed' | 'installed' | 'own';
+
 /**
- * Whether the program `name` is one an installed plugin carries
- * (`<plugin>:<name>`), not one the app's plugin list registers (a bare
- * name). A person reviewed an installed plugin's programs when they enabled
- * it, so a launch and the agents it starts stand approved like a registered
- * program's; but its text is a third party's, so the tools it lists still
- * pass the user's switches, and the files it hands a child are resolved as
- * a model's script's are.
+ * Where the program `name` comes from, which decides what its launch
+ * grants its run:
+ *
+ * | origin      | name              | its tools            | what it starts         | a child's prompt, files |
+ * | ----------- | ----------------- | -------------------- | ---------------------- | ----------------------- |
+ * | `listed`    | `<name>`          | fixed past switches  | approved by its launch | passed as written       |
+ * | `installed` | `<plugin>:<name>` | through the switches | approved by the review | handed off, resolved    |
+ * | `own`       | `own:<name>`      | through the switches | asked about            | handed off, resolved    |
+ *
+ * A `listed` program is one the app's plugin list registers: the app wrote
+ * it. An `installed` one is read from an installed plugin's file, whose
+ * programs a person reviewed when they enabled it, but whose text is not
+ * the app's: its tools pass the user's switches, the prompt a child gets
+ * is handed off with the caller's instruction, and the files it hands that
+ * child are resolved as a model's script's are. An `own` one is a file the
+ * agent wrote into its memory, which nobody reviewed: beside that, what it
+ * starts is asked about under the approval policy as a model's own
+ * script's is, and where no prompt can show, the tools that ask are
+ * withheld from it.
  */
-export const isInstalledProgram = (name: string): boolean => name.includes(':');
+export const programOrigin = (name: string): ProgramOrigin => {
+  if (name.startsWith(`${OWN_PROGRAM_PREFIX}:`)) return 'own';
+  return name.includes(':') ? 'installed' : 'listed';
+};
 
 /**
  * Why a run stops. `user` is an explicit stop of the work (a stop button,

@@ -26,7 +26,7 @@ export { processLayer } from './effect/processLayer.js';
 export { replayTrace } from '@controllers/session/runTrace';
 // What launches a program as a run of its own: the config a host or an
 // app's command starts it with, and the programs there are to start now
-// (the plugin list's and the installed plugins').
+// (the plugin list's, the installed plugins' and the project's agent's own).
 export {
   programLaunch,
   ProgramNotRegistered,
@@ -112,6 +112,12 @@ export {
 } from '@platform/appSignals';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// What the process knows of each subscription plan's quota.
+export {
+  PlanQuotas,
+  type PlanQuota,
+  type PlanQuotasShape,
+} from '@agent/runtime/modelAccess/planQuotas';
 // The canned model a package-validation build provides beneath the process.
 export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
 // The models a host offers: each visible model's option, the enabled list and
@@ -176,6 +182,7 @@ export {
   PluginRequestError,
 } from '@common/plugins/pluginManifest';
 export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
+export type { NativeEntry } from '@common/plugins/nativeEntry';
 export type { ConfiguredHook } from '@common/plugins/hookConfig';
 export type { InstalledPlugin } from '@shared/schemas';
 // The files a run left in its storage directory, under a session's storage

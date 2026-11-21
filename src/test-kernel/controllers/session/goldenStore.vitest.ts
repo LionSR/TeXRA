@@ -338,7 +338,8 @@ describe('the golden 1.0 store', () => {
           [SERVICE_TASK, 'validation-bash-1'],
         ]);
         // It asked for `executions`, and a child is offered what it declares,
-        // whatever its parent was offered.
+        // whatever its parent was offered, with the tools every agent with
+        // tools is given.
         const defined = Schema.decodeUnknownSync(RunIdSchema)(DEFINED);
         expect(
           events.flatMap((event) =>
@@ -346,7 +347,18 @@ describe('the golden 1.0 store', () => {
               ? [event.payload.tools.map(({ name }) => name)]
               : [],
           ),
-        ).toEqual([['read_file', 'executions', 'memory', 'plan', 'context']]);
+        ).toEqual([
+          [
+            'read_file',
+            'executions',
+            'memory',
+            'wake',
+            'plugin_manager',
+            'resources',
+            'plan',
+            'context',
+          ],
+        ]);
         // The plan the chat ran as a goal: a run on the default strategy, its
         // agent the chat's, that ends with the goal's result: what its one
         // round reported, the judge's claims on it, and what the round and

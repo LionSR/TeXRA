@@ -47,7 +47,6 @@ import {
   resolveBypass,
   runPolicy,
   withUnborn,
-  type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import {
   decideApproval,
@@ -140,27 +139,45 @@ export const workAutoApproved = (
     (owners) => decideExecutable(owners, runId) === 'allow',
   );
 
-/** Each operation a run asks permission for: the grant that answers it. A
- *  call of a tool that declares no `command.grant` takes the run's
- *  delegated-work grant, so a command grant never approves it. */
+/** Each operation a run asks permission for: the grant that answers it, or
+ *  a person. A call of a tool that declares no `command.grant` takes the
+ *  run's delegated-work grant, so a command grant never approves it.
+ *  Trusting a plugin's native code is a person's own answer, whatever the
+ *  policy, a grant or a hook says. */
 const OPERATIONS = {
   bash: 'bash',
   call: 'superYolo',
   toolEdit: 'toolEdit',
   plan: 'superYolo',
   proposal: 'superYolo',
-} as const satisfies Record<ApprovalOperation, ApprovalBypassKind>;
+  trust: 'person',
+} as const satisfies Record<ApprovalOperation, AnsweredBy>;
 
-/** The operation a request of each kind asks permission for, where its
- *  kind says which; a command names its own as it opens (the guard's
- *  `askCommandApproval`). */
-const KIND_OPERATIONS: Partial<
-  Record<RequestPayload['kind'], ApprovalOperation>
-> = { toolEdit: 'toolEdit', planApproval: 'plan', proposal: 'proposal' };
+/** The operation `payload` asks permission for, where its kind says which;
+ *  a command names its own as it opens (the guard's `askCommandApproval`).
+ *  Trusting a plugin is a call's, unless the plugin carries native code. */
+export const operationOf = (
+  payload: RequestPayload,
+): ApprovalOperation | undefined => {
+  switch (payload.kind) {
+    case 'toolEdit':
+      return 'toolEdit';
+    case 'planApproval':
+      return 'plan';
+    case 'proposal':
+      return 'proposal';
+    case 'pluginTrust':
+      return payload.data.native ? 'trust' : 'call';
+    case 'bash':
+    case 'userQuestion':
+    case 'retry':
+      return undefined;
+  }
+};
 
 /** Who answers a request about `operation`, given what the call's hooks
  *  said: a person when a hook asked or there is no operation (a question or
- *  a retry), else the operation's grant. */
+ *  a retry), else the operation's grant or a person. */
 const answererOf = (
   operation: ApprovalOperation | undefined,
   hook: HookAnswer,
@@ -169,7 +186,9 @@ const answererOf = (
 
 /** What a request about an operation asks the policy: whether a grant
  *  answers the request `answeredBy` names, and what the call's
- *  `PreToolUse` hooks said. */
+ *  `PreToolUse` hooks said. A request a person answers asks as one a hook
+ *  asked about: no policy, grant or hook's `allow` answers it, and where no
+ *  person can be asked it is denied. */
 const operationAsk = (
   approvals: Pick<SessionApprovals, 'bypass'>,
   runId: RunId,
@@ -181,7 +200,7 @@ const operationAsk = (
     (kind) => approvals.bypass(runId, kind) !== null,
     answeredBy,
   ),
-  hook,
+  hook: answeredBy === 'person' ? 'ask' : hook,
 });
 
 /** The session's one reading of the policy for an operation of a run
@@ -218,6 +237,7 @@ function answerFor(
       case 'proposal':
       case 'toolEdit':
       case 'bash':
+      case 'pluginTrust':
         return operationAsk(owners.approvals, runId, answeredBy, hook);
       case 'userQuestion':
         return { kind: 'question' };
@@ -427,7 +447,7 @@ export const openRequest = <P extends RequestPayload, E>(
     const aggregateId = runId;
     const { hook } = opening;
     const answeredBy = answererOf(
-      opening.operation ?? KIND_OPERATIONS[payload.kind],
+      opening.operation ?? operationOf(payload),
       hook,
     );
     const decision = answerFor(

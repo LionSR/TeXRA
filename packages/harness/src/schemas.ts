@@ -39,6 +39,11 @@ export {
   isSubscriptionAuthProvider,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
+// Why a plan's quota endpoint answered no usage windows.
+export {
+  PlanQuotaFailureSchema,
+  type PlanQuotaFailure,
+} from '@shared/model/planQuota';
 // Reads of a `SessionView` for a renderer: what needs a person, how busy
 // the session is, where each run stands, what `acceptsFollowUp` reads.
 export {
@@ -361,6 +366,8 @@ export {
   isRunId,
   isPlainAgentIdentity,
   programOf,
+  programOrigin,
+  type ProgramOrigin,
   LaunchNoticeSchema,
   NonNegativeIntSchema,
   listingTypeOf,
@@ -373,6 +380,7 @@ export {
   FileFieldsSchema,
   type Plan,
   type PlanApprovalRequest,
+  type PluginTrustRequest,
   planOf,
   planSummaryLine,
   type RequestKind,
