@@ -20,18 +20,22 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
+  formatError,
   type SettingRow,
 } from '@texra-ai/harness/schemas';
 import { Effect, Result, Schema } from 'effect';
 
+import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 
 /** A row the write path accepts: any catalog row, with TeXRA's write
  *  effects when it has them. */
-type WritableRow = SettingRow & Pick<TexraSettingRow, 'onWrite'>;
+export type WritableRow = SettingRow & Pick<TexraSettingRow, 'onWrite'>;
 
 /** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
-type StateSettingUpdateResult<E extends WritableRow> =
+export type StateSettingUpdateResult<E extends WritableRow> =
   | { readonly kind: 'ignored' }
   | { readonly kind: 'rejected'; readonly entry: E; readonly error: Error }
   | { readonly kind: 'workspace-required'; readonly entry: E }
@@ -83,5 +87,74 @@ export function applyStateSettingUpdate<E extends WritableRow>(
       onSuccess: () => ({ kind: 'applied', entry }) as const,
       onFailure: (error) => ({ kind: 'failed', entry, error }) as const,
     }),
+  );
+}
+
+/**
+ * Why a write did not land, worded for the person who made it; `undefined`
+ * when it landed or asked for nothing. Every surface that writes a setting
+ * shows this one sentence.
+ */
+export function settingWriteFailure(
+  result: StateSettingUpdateResult<WritableRow>,
+): SettingsRequestFailed | undefined {
+  switch (result.kind) {
+    case 'applied':
+    case 'ignored':
+      return undefined;
+    case 'workspace-required':
+      return new SettingsRequestFailed({
+        message: `Open a workspace folder before changing the “${result.entry.title}” setting.`,
+      });
+    case 'rejected':
+      return new SettingsRequestFailed({
+        message: formatError(
+          `Invalid value for “${result.entry.title}”`,
+          result.error,
+        ),
+        cause: result.error,
+      });
+    case 'failed':
+      return new SettingsRequestFailed({
+        message: formatError(
+          `Failed to update “${result.entry.title}”`,
+          result.error,
+        ),
+        cause: result.error,
+      });
+  }
+}
+
+/** A disabled-skills list: of skill names, or of skill source scopes. */
+type SkillListRow =
+  | typeof DISABLED_SKILLS_SETTING
+  | typeof DISABLED_SKILL_SOURCES_SETTING;
+
+/**
+ * Switch `item` on or off in a disabled-skills list, over the list as stored
+ * now rather than as a surface last read it. Two writes to one list that
+ * overlap still each read without the other's item, so a surface that can
+ * issue them at once serializes them per list.
+ */
+export function setSkillEnabled(
+  row: SkillListRow,
+  item: string,
+  enabled: boolean,
+  roots: SettingsStores & { readonly workspace: string | undefined },
+): Effect.Effect<StateSettingUpdateResult<SkillListRow>, never, AppSignals> {
+  return Settings.get(roots, row).pipe(
+    Effect.flatMap((disabled: readonly string[]) =>
+      applyStateSettingUpdate(
+        row,
+        enabled
+          ? disabled.filter((candidate) => candidate !== item)
+          : [...new Set([...disabled, item])],
+        roots,
+      ),
+    ),
+    // A list that cannot be read is a failed write: nothing was changed.
+    Effect.catch((error) =>
+      Effect.succeed({ kind: 'failed', entry: row, error } as const),
+    ),
   );
 }
