@@ -132,8 +132,9 @@ const TaskSummarySchema = Schema.Struct({
   /** The project folder the task works in: what the other procedures take. */
   workspace: Schema.String,
   runId: RunIdSchema,
+  /** What every surface names the task by (`RunView.title`): its
+   *  description, else its agent's label. */
   label: Schema.String,
-  description: Schema.NullOr(Schema.String),
   statusKey: RunStatusKeySchema,
   /** Launch time, ms since the epoch: the list's order. */
   launchedAt: Schema.Int.check(Schema.isGreaterThan(0)),
