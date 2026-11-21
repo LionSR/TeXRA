@@ -36,7 +36,10 @@ import {
 } from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
-import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
+import {
+  formatSubscriptionUsagePercent,
+  subscriptionQuotaTone,
+} from '@ui/copy/subscriptionUsage';
 import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import {
@@ -245,11 +248,8 @@ function subscriptionQuotaSegment(
     (left, right) => right.percentUsed - left.percentUsed,
   )[0];
   if (!limiting) return undefined;
-  const remaining = limiting.percentRemaining;
-  const left = formatSubscriptionUsagePercent(remaining);
-  let tone: RunTone | undefined;
-  if (remaining <= 0) tone = 'danger';
-  else if (remaining <= 20) tone = 'warning';
+  const left = formatSubscriptionUsagePercent(limiting.percentRemaining);
+  const tone = subscriptionQuotaTone(limiting);
   return {
     text: `${snapshot.planName} ${left} left`,
     compactText: `${left} left`,
