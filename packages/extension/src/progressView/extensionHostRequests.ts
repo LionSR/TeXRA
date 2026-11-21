@@ -34,7 +34,6 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -370,7 +369,6 @@ export const createExtensionHostRequests = Effect.fn(
     // The host's members read `this`, so they cross the boundary bound.
     notify: (level: NoticeLevel, message: string) =>
       vscodeUi.notify(level, message),
-    openFinalOutput: previewFinalOutput,
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {
       openDiff: (base: string, edited: string, title: string) =>
