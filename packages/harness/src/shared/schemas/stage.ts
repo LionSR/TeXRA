@@ -4,6 +4,7 @@ import { RunOutcomeSchema } from './run';
 
 export const StageSchema = Schema.Struct({
   id: Schema.NonEmptyString,
+  /** Its label, or its id when the start gave none. */
   name: Schema.String,
   /** Its first-appearance position among its run's transcript rows
    *  (`TranscriptRowBase.seqNo`), which orders it among them. */

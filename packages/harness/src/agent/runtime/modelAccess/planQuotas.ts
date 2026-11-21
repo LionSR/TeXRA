@@ -1,14 +1,13 @@
 /**
  * What the process knows of each subscription plan's quota: the one owner
  * of every read of it, for the runs (the `resources` tool) and the hosts'
- * usage meters alike. A coding plan (Kimi Code, the GLM Coding Plan) is
- * asked at its quota endpoint with its key, the answer kept 30 seconds and
- * one request shared by the readers that ask meanwhile. The ChatGPT plan
- * has no endpoint TeXRA asks: its replies state their quota windows in
- * their headers, which the model transport hands here as each reply
- * arrives ({@link PlanQuotasShape.observing}), so what is known is the last
- * reply's word and when it came. Grok's plan states nothing anywhere this
- * process reads.
+ * usage meters alike. Where a plan states its quota is llm's fact
+ * (`PLAN_QUOTA_SOURCES`). A plan with a quota endpoint is asked there with
+ * its key, on its region's platform, the answer kept 30 seconds and one
+ * request shared by the readers that ask meanwhile. A plan whose replies
+ * state their quota windows in their headers has them handed here as each
+ * reply arrives ({@link PlanQuotasShape.observing}), so what is known is
+ * the last reply's word and when it came.
  */
 import { Cache, Cause, Clock, Context, Duration, Effect, Layer } from 'effect';
 import { HttpClientError } from 'effect/http';
@@ -20,18 +19,20 @@ import {
   type PlanRoute,
 } from '@texra-ai/llm';
 import {
-  chatgptReplyUsage,
+  type EndpointPlanRoute,
   fetchPlanUsage,
-  type PlanUsage,
-  type PlanUsageRequest,
+  PLAN_QUOTA_SOURCES,
   type PlanUsageWindow,
+  type ProviderRegion,
+  replyPlanUsage,
+  type ReplyPlanRoute,
 } from '@texra-ai/llm/node';
 
 import { logFailure } from '@logger/effectLog';
 import { Secrets } from '@platform/secrets';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import type { PlanQuotaFailure } from '@shared/model/planQuota';
-import { GLM_REGION_SETTING } from '@shared/state/providerSettings';
+import { providerRegionSetting } from '@shared/state/providerSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'PlanQuotas';
@@ -70,45 +71,25 @@ export type PlanQuota =
   /** Nothing this process reads states the plan's quota. */
   | { readonly state: 'unread' };
 
-/** How a plan's quota is learned: asked at its endpoint, read off its
- *  replies, or not at all. */
-type QuotaSource =
-  | {
-      readonly endpoint: (
-        stores: SettingsStores,
-      ) => Effect.Effect<PlanUsageRequest, Error>;
-    }
-  | {
-      readonly reply: (
-        headers: Headers,
-        receivedAt: number,
-      ) => PlanUsage | null;
-    }
-  | null;
-
-/** Each plan's source, so a plan added to llm does not compile until it
- *  says how its quota is learned. */
-const QUOTA_SOURCES = {
-  'chatgpt-subscription': { reply: chatgptReplyUsage },
-  'xai-subscription': null,
-  'kimi-code-subscription': {
-    endpoint: () => Effect.succeed({ plan: 'kimiCode' }),
-  },
-  // The region decides which platform's endpoint is asked.
-  'glm-coding-plan-subscription': {
-    endpoint: (stores) =>
-      Effect.map(Settings.get(stores, GLM_REGION_SETTING), (china) => ({
-        plan: 'glm',
-        region: china ? 'china' : 'international',
-      })),
-  },
-} as const satisfies Record<PlanRoute, QuotaSource>;
-
-/** One cached endpoint answer: the plan and the request that asks it. */
+/** One cached endpoint answer: the plan and the platform its key is for. */
 interface EndpointKey {
-  readonly route: PlanRoute;
-  readonly request: PlanUsageRequest;
+  readonly route: EndpointPlanRoute;
+  readonly region: ProviderRegion;
 }
+
+/** The platform `route`'s key belongs to: its provider's region toggle, or
+ *  `international` for a provider with one platform. */
+const planRegion = (
+  route: EndpointPlanRoute,
+  stores: SettingsStores,
+): Effect.Effect<ProviderRegion, Error> => {
+  const row = providerRegionSetting(PLAN_ROUTES[route].provider);
+  return row === undefined
+    ? Effect.succeed('international')
+    : Effect.map(Settings.get(stores, row), (china) =>
+        china ? 'china' : 'international',
+      );
+};
 
 /** The process's plan quotas. */
 export interface PlanQuotasShape {
@@ -155,22 +136,21 @@ export class PlanQuotas extends Context.Service<PlanQuotas, PlanQuotasShape>()(
         },
       );
       const read: PlanQuotasShape['read'] = (route, stores) => {
-        const source: QuotaSource = QUOTA_SOURCES[route];
-        if (source === null) return Effect.succeed({ state: 'unread' });
-        if ('reply' in source) {
-          const seen = observed.get(route);
-          return Effect.succeed(
-            seen === undefined
-              ? { state: 'unobserved' }
-              : { state: 'observed', ...seen },
+        if (isEndpointPlan(route))
+          return planRegion(route, stores).pipe(
+            Effect.matchCauseEffect({
+              onFailure: (cause) =>
+                failed(route, 'request_failed', Cause.squash(cause)),
+              onSuccess: (region) => Cache.get(cache, { route, region }),
+            }),
           );
-        }
-        return source.endpoint(stores).pipe(
-          Effect.matchCauseEffect({
-            onFailure: (cause) =>
-              failed(route, 'request_failed', Cause.squash(cause)),
-            onSuccess: (request) => Cache.get(cache, { route, request }),
-          }),
+        if (PLAN_QUOTA_SOURCES[route] === null)
+          return Effect.succeed({ state: 'unread' });
+        const seen = observed.get(route);
+        return Effect.succeed(
+          seen === undefined
+            ? { state: 'unobserved' }
+            : { state: 'observed', ...seen },
         );
       };
       return PlanQuotas.of({
@@ -181,14 +161,11 @@ export class PlanQuotas extends Context.Service<PlanQuotas, PlanQuotasShape>()(
               yield* Cache.invalidate(cache, key);
         }),
         observing: (plan, fetch) => {
-          const source: QuotaSource =
-            plan === null ? null : QUOTA_SOURCES[plan];
-          if (plan === null || source === null || !('reply' in source))
-            return fetch;
+          if (plan === null || !isReplyPlan(plan)) return fetch;
           return async (input, init) => {
             const response = await fetch(input, init);
             const at = clock.currentTimeMillisUnsafe();
-            const usage = source.reply(response.headers, at);
+            const usage = replyPlanUsage(plan, response.headers, at);
             if (usage !== null)
               observed.set(plan, { at, windows: usage.windows });
             return response;
@@ -198,6 +175,12 @@ export class PlanQuotas extends Context.Service<PlanQuotas, PlanQuotasShape>()(
     }),
   );
 }
+
+const isEndpointPlan = (route: PlanRoute): route is EndpointPlanRoute =>
+  PLAN_QUOTA_SOURCES[route] === 'endpoint';
+
+const isReplyPlan = (route: PlanRoute): route is ReplyPlanRoute =>
+  PLAN_QUOTA_SOURCES[route] === 'reply';
 
 /** A failed endpoint read's answer, its cause logged once here. An
  *  `HttpClientError` carries its request, the plan's key in its headers, so
@@ -231,7 +214,7 @@ const failed = (route: PlanRoute, reason: PlanQuotaFailure, error: unknown) =>
 /** Ask a coding plan's endpoint with the key `Secrets` holds. */
 const askEndpoint = ({
   route,
-  request,
+  region,
 }: EndpointKey): Effect.Effect<
   PlanQuota,
   never,
@@ -243,7 +226,7 @@ const askEndpoint = ({
     Effect.flatMap(({ value }) =>
       value === undefined
         ? Effect.succeed(null)
-        : fetchPlanUsage(request, value),
+        : fetchPlanUsage(route, region, value),
     ),
     Effect.flatMap(
       Effect.fnUntraced(function* (usage) {

@@ -1176,7 +1176,7 @@ the run's own model. An app names its own (`settingsCatalog`'s
 `defaults`).
 
 ```ts
-const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model."; }
+const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model used for a run's auxiliary calls, such as session descriptions and the helper calls of an app's features. When unset, a run's helper calls use the run's own model."; }
 ```
 
 ## HookEvent

@@ -17,7 +17,7 @@ Your memory persists across conversations. When memory is in play, record durabl
 
 /** Memory instructions for orchestrators that launch subagents. */
 const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
-The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations. Do not use it as a substitute for subagent result delivery because subagents report back automatically via follow-up messages. Good uses include project conventions, user preferences, and research bibliographies that build up over time.
+The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations. Do not use it as a substitute for subagent result delivery because subagents report back automatically via follow-up messages. Good uses include project conventions, user preferences, and reference material that builds up over time.
 
 For continuation or delegation-heavy work, consult relevant memories instead of rediscovering context. Record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies.
 </orchestrator_memory_protocol>`;

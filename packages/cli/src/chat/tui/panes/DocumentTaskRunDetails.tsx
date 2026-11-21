@@ -68,7 +68,7 @@ function stageLine(
     // Worded as the progress view's stage header words it, never with the
     // call-status vocabulary that happens to share key names.
     text: joinFacts([
-      `${TONE_PAINT[status.tone].marker} ${safeTerminalText(stage.name || stage.id)} ${status.word}`,
+      `${TONE_PAINT[status.tone].marker} ${safeTerminalText(stage.name)} ${status.word}`,
       duration,
     ]),
     tone: status.tone,

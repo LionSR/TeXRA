@@ -10,11 +10,7 @@ import {
   type CliConfigFormProps,
 } from '../chat/tui/forms/CliConfigForm';
 
-/** `texra config edit` holds no session, so it takes no approval hook. */
-type ConfigAppProps = Omit<
-  CliConfigFormProps,
-  'availableRows' | 'onClose' | 'onApprovalPolicyChanged'
->;
+type ConfigAppProps = Omit<CliConfigFormProps, 'availableRows' | 'onClose'>;
 
 function ConfigApp(props: ConfigAppProps) {
   const { exit } = useApp();
