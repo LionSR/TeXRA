@@ -188,8 +188,11 @@ const PATH_HASH_LENGTH = 8;
 const MAX_SANITIZED_STEM_LENGTH = 200;
 
 /**
- * The one-component file name of an output's derived file in run storage
- * (its compile log and build folder, its diff), from the output's path.
+ * The rule that names an output's derived files in run storage (its compile
+ * log and build folder, its diff) as one path component. Each caller passes
+ * the path its directory needs to keep apart: the compile log and build
+ * folder sit in a per-round directory and take the path without its round,
+ * while every round's diff shares one `diffs/` folder and keeps the round.
  * The full path keeps two outputs sharing a basename distinct (ch1/main.tex
  * vs ch2/main.tex). Sanitizing to a filesystem-safe name is lossy: two
  * paths that differ only in characters outside [a-zA-Z0-9._-] ("a:b.tex"

@@ -143,7 +143,7 @@ export const EMPTY_DRAFT: FollowUpDraft = Object.freeze({
 });
 
 /** What this surface keeps for one run. */
-interface RunSurface {
+export interface RunSurface {
   readonly draft: FollowUpDraft;
   /** The user's expansion choice in the tree, absent until they make one;
    *  a run that needs the user (`needsUser`) outranks it. */

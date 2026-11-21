@@ -41,10 +41,8 @@ Each item below waits on an open PR that holds its files.
    They can test the result itself, and the export leaves `./host`. That
    entry is being rewritten by #15120.
 3. Done 2026-11-21: `release(terminal: boolean)` takes the boolean
-   `finishRun` decides.
-   **`FollowUps.release` takes a two-word union read as a boolean**, still
-   open in the storage-errors note. Its one caller is `finishRun` in
-   `loop/runLoop.ts`, which #15123 edits.
+   `finishRun` decides. Was: `FollowUps.release` took a two-word union its
+   one caller read as a boolean.
 4. Done 2026-11-20: `owningCall` takes the facts its callers read, and a
    resumed run's opening takes the `run.start` its resume read.
 
