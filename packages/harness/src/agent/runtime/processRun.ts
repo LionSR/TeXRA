@@ -9,7 +9,7 @@
  * exit other than 0, or the failure a provider's SDK reported with no exit
  * of its own. The process's output goes to the run's trace as it
  * arrives (`AgentTrace.output`); a row of it the store refused fails the
- * run, as it fails any run (`commitEnd`). A stop interrupts the turn, and
+ * run, as it fails any run (`endVerdict`). A stop interrupts the turn, and
  * a stopped process run delivers nothing: its interruption is the fact. A
  * process run is never resumed: a later turn of the same thread is a new
  * run, and a message to one is refused (`takesFollowUps: false`).
