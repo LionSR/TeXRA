@@ -90,10 +90,11 @@ export class JsonConfigProvider implements ConfigProvider {
       ...(projectValueIgnored(row, projectValue) ? [] : [projectValue]),
       ...layers.map((store) => store.get(storedKey)),
     ].find(Predicate.isNotUndefined);
+    // An absent key reads as its default only when a config file owns it.
+    const absent =
+      row?.slot === 'config' ? this.catalog.defaultOf(key) : undefined;
     // cast: the caller names the value type of the key it reads.
-    return (
-      stored === undefined ? this.catalog.configDefault(key) : stored
-    ) as T;
+    return (stored === undefined ? absent : stored) as T;
   }
 
   update<T>(

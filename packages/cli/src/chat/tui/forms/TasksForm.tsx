@@ -7,7 +7,6 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { Effect } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
-import { presentFollowUpResult } from '@texra-ai/harness/host';
 import {
   acceptsFollowUp,
   offeredGrant,
@@ -318,22 +317,16 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                 if (!message) return;
                 setDraft('');
                 act(
-                  (ready, say) =>
+                  (ready) =>
                     ready
                       .request({
                         kind: 'followUp.send',
                         runId: task.runId,
                         text: message,
                       })
-                      .pipe(
-                        Effect.map((outcome) => {
-                          // Queued but not taken: the run did not wake, and
-                          // waits for a resume before it reads the message.
-                          const shown = presentFollowUpResult(outcome);
-                          if (shown.severity !== 'none') say(shown.message);
-                        }),
-                      ),
-                  // Not sent: the draft comes back to send again.
+                      .pipe(Effect.asVoid),
+                  // Not sent: the draft comes back to send again, and `act`
+                  // shows the refusal.
                   () => setDraft((held) => held || message),
                 );
               }}

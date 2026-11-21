@@ -62,7 +62,9 @@ type WritableTargetPreparation =
   | { target: WritableFileTarget };
 
 interface ResolveWritableTargetOptions {
-  missing?: 'allow' | 'require';
+  /** Load a missing file as empty content instead of reading (and failing) on
+   *  it; defaults to false, so a missing file is an error. */
+  allowMissing?: boolean;
 }
 
 /**
@@ -101,7 +103,7 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     }
 
     const originalContent =
-      exists || (options.missing ?? 'require') === 'require'
+      exists || !(options.allowMissing ?? false)
         ? yield* readNormalizedFile(fs, absolutePath)
         : '';
 
@@ -125,7 +127,9 @@ interface LiteralReplacementRequest {
   content: string;
   search: string;
   replacement: string;
-  mode: 'unique' | 'all';
+  /** Replace every occurrence; otherwise the single match, failing when it is
+   *  not unique. */
+  replaceAll: boolean;
   notFoundError: () => string;
   multipleMatchesError?: (context: LiteralMatchContext) => string;
 }
@@ -140,7 +144,7 @@ export function replaceLiteralMatches({
   content,
   search,
   replacement,
-  mode,
+  replaceAll,
   notFoundError,
   multipleMatchesError,
 }: LiteralReplacementRequest): Result.Result<LiteralReplacement, ToolError> {
@@ -149,7 +153,7 @@ export function replaceLiteralMatches({
     return Result.fail(new ToolError(notFoundError()));
   }
 
-  if (mode === 'unique' && count > 1) {
+  if (!replaceAll && count > 1) {
     // Only ambiguous matches need the per-line guidance, so the scan over the
     // whole file stays out of the common single-match path.
     const lineNumbers = findOccurrenceLineNumbers(content, search);
@@ -165,11 +169,10 @@ export function replaceLiteralMatches({
   // or code are never interpreted.
   const verbatim = (): string => replacement;
   return Result.succeed({
-    content:
-      mode === 'all'
-        ? content.replaceAll(search, verbatim)
-        : content.replace(search, verbatim),
-    count: mode === 'all' ? count : 1,
+    content: replaceAll
+      ? content.replaceAll(search, verbatim)
+      : content.replace(search, verbatim),
+    count: replaceAll ? count : 1,
   });
 }
 

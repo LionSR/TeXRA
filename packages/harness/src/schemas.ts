@@ -287,6 +287,7 @@ export {
   collapseWhitespace,
   countLines,
   DETAIL_SEPARATOR,
+  formatCount,
   FACT_SEPARATOR,
   formatClippedList,
   formatCompactDuration,

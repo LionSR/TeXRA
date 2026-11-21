@@ -136,7 +136,7 @@ export function formatClippedList(
 }
 
 /**
- * Normalize line endings and split into content lines.
+ * Normalize CRLF line endings and split into content lines.
  * A trailing newline does not produce a phantom empty element.
  *
  * @example
