@@ -22,12 +22,12 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  * depends on the model or the settings is rendered by each step
  * (`stepInstructions`).
  */
-const toolUseInstructions = (offered: readonly string[]) => {
+const toolUseInstructions = (offered: readonly string[], cwd: string) => {
   const offers = (...names: string[]) =>
     names.some((name) => offered.includes(name));
   const workingDirectory = [
     offers('bash') &&
-      'Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., `ls src/`, `cat README.md`).',
+      `Working directory: the bash tool already executes every command from ${cwd}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`cat README.md\`).`,
     offers('bash', 'glob', 'grep') &&
       'Scope file searches to `.` or a subdirectory, or use the glob/grep tools.',
   ].filter(Boolean);
@@ -119,10 +119,12 @@ export function contextUpdate(
 }
 
 /**
- * The system text a conversation opens with: its persona's prompt rendered,
- * then the project's `AGENTS.md` and the attached memories, and the suffix of
- * tool-use instructions and workspace facts, which a text-only persona (one
- * a program defines with no tools) goes without. What each step's plugins add is
+ * The system text a conversation opens with: its persona's prompt with its
+ * variables filled, then the project's `AGENTS.md` and the attached memories,
+ * and the suffix of tool-use instructions and workspace facts, which a
+ * text-only persona (one a program defines with no tools) goes without. Only
+ * the persona's prompt is read for variables: the suffix is text this module
+ * builds, and the workspace facts in it (a path, a branch name) are data. What each step's plugins add is
  * appended per request (`stepInstructions`).
  */
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
@@ -146,7 +148,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const rendered = yield* renderPrompt(personaPrompt, inputs);
+    const rendered = renderPrompt(personaPrompt, { ...inputs });
     const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(
@@ -163,10 +165,12 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
       ...[agentsMd, attachedMemories].filter(Boolean),
     ].join('\n');
     if (options.textOnly) return systemPrompt;
-    const suffix = yield* renderPrompt(
-      [toolUseInstructions(options.offered), workspaceInfo].join('\n'),
-      inputs,
-    );
-    return [systemPrompt, suffix].filter(Boolean).join('\n');
+    return [
+      systemPrompt,
+      toolUseInstructions(options.offered, inputs.CWD),
+      workspaceInfo,
+    ]
+      .filter(Boolean)
+      .join('\n');
   },
 );

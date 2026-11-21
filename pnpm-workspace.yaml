@@ -30,7 +30,6 @@ catalog:
   is-wsl: '^3.1.1'
   lru-cache: '^11.5.3'
   mime-types: '^3.0.1'
-  nunjucks: '^3.2.4'
   openai: '^7.60.0'
   pathe: '^2.0.3'
   postal-mime: '^4.2.1'

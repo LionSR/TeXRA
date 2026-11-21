@@ -90,4 +90,38 @@ describe('PromptBuilder', () => {
         expect(sections['tool-call']).not.toMatch(/markdown files/);
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
+
+  it.effect(
+    'fills a prompt variable by name and evaluates nothing else in a prompt',
+    () =>
+      Effect.gen(function* () {
+        const storageRoot = mkdtempSync(join(os.tmpdir(), 'texra-prompt-'));
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => rmSync(storageRoot, { recursive: true })),
+        );
+        // cast: the opening reads only the workspace and the storage root.
+        const roots = { workspace: undefined, storageRoot } as WorkspaceRoots;
+        // A prompt is text an embedder may take from anyone: an expression
+        // in it must reach the model as written, never run in this process.
+        const expression =
+          '{{ 7 * 6 }} {{ range.constructor("return process.pid")() }} {% if CWD %}yes{% endif %}';
+        const system = yield* buildOpeningSystemPrompt(
+          `Work in {{ CWD }}. ${expression}`,
+          {
+            inputs: {
+              CWD: '/work',
+              BUILTIN_AGENTS_DIR: '',
+              CUSTOM_AGENTS_DIR: '',
+              AGENT_DOCS_DIR: '',
+            },
+            activated: [],
+            attachedMemories: null,
+            attachedMemoryMisses: [],
+          },
+          { roots, textOnly: false, offered: ['bash'] },
+        );
+        expect(system).toContain(`Work in /work. ${expression}`);
+        expect(system).toContain('executes every command from /work.');
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 });

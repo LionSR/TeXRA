@@ -38,7 +38,7 @@ const createStandalone = Effect.fn('tikzPictures.createStandalone')(function* (
   suffix?: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const standaloneContent = yield* renderPrompt(template, {
+  const standaloneContent = renderPrompt(template, {
     tikzpicture: tikzpictures,
   });
 
