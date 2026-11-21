@@ -63,7 +63,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
       content: originalContent,
       search: old_str,
       replacement: new_str,
-      mode: replace_all ? 'all' : 'unique',
+      replaceAll: replace_all ?? false,
       notFoundError: () =>
         `old_str not found in ${displayPath}.\n` +
         `To fix:\n` +

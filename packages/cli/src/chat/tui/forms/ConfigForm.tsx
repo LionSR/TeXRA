@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { BACK_HINT } from '@cli/tui/ui/KeyHints';
 import type { SelectItem } from '@cli/tui/ui/Select';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   settingEnumChoices,
   settingEnumOptions,
@@ -231,7 +232,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
   // uses the default, leaving the panel and the effect out of sync.
   const resetEntry = (entry: TexraSettingRow): void => {
-    runWrite(entry, Schema.decodeUnknownSync(entry.schema)(undefined), () =>
+    runWrite(entry, TEXRA_SETTINGS.catalog.defaultOf(entry.key), () =>
       props.resetValue(entry),
     );
   };

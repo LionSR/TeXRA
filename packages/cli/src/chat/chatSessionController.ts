@@ -19,7 +19,6 @@ import {
 
 import type { Run, Session, Notices } from '@texra-ai/harness';
 import {
-  presentFollowUpResult,
   presentRunFailure,
   type ProcessRuntime,
   type ProcessServices,
@@ -760,10 +759,6 @@ export function createChatSessionController(
           (!wasHeld || outcome.value.status === 'queued')
         )
           adoptRoot(target);
-        const presentation = presentFollowUpResult(outcome.value);
-        if (presentation.severity !== 'none') {
-          appendLocalNotice(presentation.message, target);
-        }
         return SENT;
       }),
     );

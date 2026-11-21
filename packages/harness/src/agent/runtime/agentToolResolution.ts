@@ -161,19 +161,12 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const withheldForApproval: string[] = [];
   // A declared tool a gate withholds says so; an injected one goes quietly,
   // as the run never asked for it by name.
-  const withheld = (
-    name: string,
-    source: 'declared' | 'injected',
-    reason: string,
-  ): false => {
-    if (source === 'declared')
+  const withheld = (name: string, declared: boolean, reason: string): false => {
+    if (declared)
       warnings.push(`Declared tool "${name}" is not offered: ${reason}`);
     return false;
   };
-  const passesRuntimeGates = (
-    name: string,
-    source: 'declared' | 'injected',
-  ): boolean => {
+  const passesRuntimeGates = (name: string, declared: boolean): boolean => {
     const tool = enabled.get(name)?.tool ?? table.get(name);
     if (
       tool?.hostCapability !== undefined &&
@@ -181,14 +174,13 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     )
       return withheld(
         name,
-        source,
+        declared,
         `this host does not serve "${tool.hostCapability}".`,
       );
     if (tool && asksApproval(tool) && input.approvalPromptsUnavailable) {
       // Only a declared one is reported; an injected one, or one whose
       // plugin is off, is withheld silently.
-      if (source === 'declared' && enabled.has(name))
-        withheldForApproval.push(name);
+      if (declared && enabled.has(name)) withheldForApproval.push(name);
       return false;
     }
     return true;
@@ -238,7 +230,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
 
   const definitions: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
-  const offer = (name: string, source: 'declared' | 'injected'): void => {
+  const offer = (name: string, declared: boolean): void => {
     if (resolvedNames.has(name)) return;
     // A missing dependency says so where the run declared the tool, before
     // any other gate, so an approval-gated tool's reason is not lost to the
@@ -247,13 +239,13 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     const plugin = catalog.get(name)?.plugin;
     const missing = plugin === undefined ? undefined : probedOff.get(plugin);
     if (missing !== undefined) {
-      if (source === 'declared')
+      if (declared)
         warnings.push(
           `Tool "${name}" is not offered: its plugin ${missing.id} is not available in this workspace${missing.statusDetail ? ` (${missing.statusDetail})` : ''}.`,
         );
       return;
     }
-    if (!passesRuntimeGates(name, source)) return;
+    if (!passesRuntimeGates(name, declared)) return;
     const entry = enabled.get(name);
     if (!entry) {
       // A name with no registration is a configuration error (typo, or a
@@ -262,7 +254,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
       // is withheld quietly; an MCP name was reported above.
       if (!table.get(name) && mcpServerOfToolName(name) === undefined)
         warnings.push(
-          `${source === 'declared' ? 'Declared' : 'Injected'} tool not found in registry: ${name}`,
+          `${declared ? 'Declared' : 'Injected'} tool not found in registry: ${name}`,
         );
       return;
     }
@@ -274,13 +266,12 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   for (const name of [...new Set(declaredToolNames(input.tools))].flatMap(
     expandDeclared,
   ))
-    offer(name, 'declared');
+    offer(name, true);
   for (const name of injected)
-    if (!(input.directToolCalls && isScript(name))) offer(name, 'injected');
+    if (!(input.directToolCalls && isScript(name))) offer(name, false);
   // A script's functions come with the script tool.
   if ([...resolvedNames].some(isScript))
-    for (const name of enabled.keys())
-      if (scriptOnly(name)) offer(name, 'injected');
+    for (const name of enabled.keys()) if (scriptOnly(name)) offer(name, false);
 
   const overlay = new Map<string, ITool<Error, PluginToolServices>>();
   for (const tool of input.runTools) {

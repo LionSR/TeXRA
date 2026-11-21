@@ -49,7 +49,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 > {
   const call = yield* ToolContext;
   const prepared = yield* resolveWritableTarget(input.path, {
-    missing: 'allow',
+    allowMissing: true,
   });
   if ('blocked' in prepared) {
     return prepared.blocked;
