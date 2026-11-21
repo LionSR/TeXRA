@@ -1080,15 +1080,6 @@ const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; reado
 const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; the plan's quota is shown and its limits are reported as plan limits. Ignored while a custom GLM endpoint is set."; }
 ```
 
-## GLM_ENDPOINT_SETTING
-
-GLM's custom-endpoint row, which also decides whether the Coding Plan
-route applies (`readModelSettings`).
-
-```ts
-const GLM_ENDPOINT_SETTING: { readonly id: "glm"; readonly key: "endpoint.glm"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }
-```
-
 ## GLM_REGION_SETTING
 
 ```ts

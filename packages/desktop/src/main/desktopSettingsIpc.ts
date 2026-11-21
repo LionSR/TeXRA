@@ -12,7 +12,7 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
-import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
+import type { DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopSpawn } from './desktopWindows.js';
@@ -146,9 +146,7 @@ export function createDesktopSettingsIpc(
 
     const settingsIpc: DesktopSettingsIpc = {
       signInSubscription: body.signInSubscription,
-      route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
-        body.handleMessage(message),
-      ),
+      route: body.handleMessage,
     };
     yield* Effect.forkScoped(body.follow, { startImmediately: true });
     return settingsIpc;

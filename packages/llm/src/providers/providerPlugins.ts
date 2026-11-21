@@ -12,7 +12,7 @@
  * sees about a provider beyond its name: key pages, picker grouping and the
  * setup assistant's probe models, as well as the settings over this list —
  * the custom-endpoint and region toggles, their keys and their control copy,
- * which it resolves into `RouteFacts.endpoints`.
+ * which it reads into `RouteFacts` (`endpoints`, `chinaPlatforms`).
  *
  * Rules: an id is persisted (the `apiKey.<id>` secret, model configs,
  * settings, a run's backend), so it never changes and is never reused.

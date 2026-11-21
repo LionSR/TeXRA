@@ -7,12 +7,20 @@
  * and how it opens a file or picks a folder. The launchers follow the app
  * signals its writes announce.
  *
- * The body answers every command; a host runs each message it has parsed at
- * its own edge through the body's `handleMessage`, and what only some hosts
+ * The body answers every command; a host hands each message its view sent,
+ * unparsed, to the body's `handleMessage`, and what only some hosts
  * can do (an editor's extensions and settings) is a binding the host fills
  * or leaves out. The binding table is `settingsHostBindings.ts`.
  */
-import { Cause, Effect, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Effect,
+  Predicate,
+  Result,
+  Schema,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
 
 import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
@@ -76,6 +84,7 @@ import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
   type SettingsViewInboundMessage,
+  SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
@@ -397,10 +406,25 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       );
 
     return {
-      /** Finish the program one message the host already parsed selects. */
-      handleMessage(
-        message: SettingsViewInboundMessage,
-      ): Effect.Effect<void, never, ProcessServices> {
+      /** Finish the program one message from the view selects. One that
+       *  does not parse is drift between the view and this body; every click
+       *  either runs its command or says why it did not. */
+      handleMessage(raw: unknown): Effect.Effect<void, never, ProcessServices> {
+        const parsed = Schema.decodeUnknownResult(
+          SettingsViewInboundMessageSchema,
+        )(raw);
+        if (Result.isFailure(parsed)) {
+          const command =
+            Predicate.hasProperty(raw, 'command') &&
+            typeof raw.command === 'string'
+              ? raw.command
+              : 'unknown';
+          return report(
+            `Settings could not handle the '${command}' request`,
+            parsed.failure,
+          );
+        }
+        const message = parsed.success;
         return finish(
           Effect.suspend(() => {
             // cast: the discriminant selects exactly this handler's member of

@@ -16,10 +16,11 @@
  * plan goes to the public Responses API its token is issued for and the Grok
  * plan to xAI's API, never to a per-model or dashboard endpoint. A key route
  * takes the per-model base URL, then (Kimi Code) the coding endpoint, then
- * the host's endpoint for the provider, then the provider plugin's default
- * (`../providers/providerPlugins.ts`), a regional one's international
- * platform as the region setting defaults. A GLM Coding Plan key takes its
- * region's Responses endpoint, the same one an API key does.
+ * the user's endpoint for the provider, then the provider plugin's default
+ * (`../providers/providerPlugins.ts`): for a regional one, the platform the
+ * facts pick, else its international one. A GLM Coding Plan key takes its
+ * region's Responses endpoint, the same one an API key does, and gives way
+ * to a per-model or user endpoint, which the plan's key is not issued for.
  *
  * Kimi Code has two eligibility shapes ({@link kimiCodeServing}):
  *  - **exclusive** models (`kimi-for-coding`, `kimi-for-coding-highspeed`)
@@ -40,6 +41,7 @@ import {
   type ApiKeyProviderId,
   findModelProviderPlugin,
   OPENAI_DEFAULT_ENDPOINT,
+  type RegionalProviderId,
   XAI_DEFAULT_ENDPOINT,
 } from '../providers/providerPlugins.js';
 
@@ -56,8 +58,7 @@ export interface RouteFacts {
   readonly mode?: ReasoningMode;
   /**
    * The plans a request may bill: preferred, signed in or keyed, and not
-   * declined. The GLM Coding Plan is absent when a dashboard GLM endpoint
-   * outranks its path.
+   * declined.
    */
   readonly plans: readonly PlanRoute[];
   /**
@@ -66,11 +67,13 @@ export interface RouteFacts {
    */
   readonly chatgptContextWindow: number | undefined;
   /**
-   * The host's endpoint per provider id: a dashboard URL, or the default of
-   * the region the provider's toggle picks. A provider absent here takes its
-   * plugin's default.
+   * The endpoint the user set per provider id. A provider absent here takes
+   * its plugin's default.
    */
   readonly endpoints: Readonly<Partial<Record<string, string>>>;
+  /** The regional providers whose China platform the user picked; every
+   *  other regional provider takes its international one. */
+  readonly chinaPlatforms: readonly RegionalProviderId[];
 }
 
 /**
@@ -81,6 +84,7 @@ export const OWN_KEY_ROUTE_FACTS: RouteFacts = Object.freeze({
   plans: Object.freeze([]),
   chatgptContextWindow: undefined,
   endpoints: Object.freeze({}),
+  chinaPlatforms: Object.freeze([]),
 });
 
 /**
@@ -214,23 +218,29 @@ function zeroCostAccessOverrides(contextWindow: number): {
 }
 
 /**
- * A provider plugin's default endpoint: its one URL, or its international
- * platform's; `undefined` for a provider with no HTTP route.
+ * A provider plugin's default endpoint: its one URL, or the platform
+ * `facts` pick for a regional one; `undefined` for a provider with no HTTP
+ * route.
  */
-function pluginEndpoint(provider: string): string | undefined {
+function pluginEndpoint(
+  provider: string,
+  facts: RouteFacts,
+): string | undefined {
   const plugin = findModelProviderPlugin(provider);
   if (plugin?.kind !== 'backend') return undefined;
-  return typeof plugin.baseUrl === 'string'
-    ? plugin.baseUrl
-    : plugin.baseUrl.international;
+  const { baseUrl } = plugin;
+  if (typeof baseUrl === 'string') return baseUrl;
+  return facts.chinaPlatforms.some((id) => id === provider)
+    ? baseUrl.china
+    : baseUrl.international;
 }
 
 /** The endpoint a provider key takes for `config`: the per-model base URL,
- *  the host's endpoint for its provider, else the plugin's default. */
+ *  the user's endpoint for its provider, else the plugin's default. */
 const keyEndpoint = (config: ModelConfig, facts: RouteFacts) =>
   config.baseUrl ??
   facts.endpoints[config.provider] ??
-  pluginEndpoint(config.provider);
+  pluginEndpoint(config.provider, facts);
 
 /**
  * The route each plan gives `config` under `facts`, or `undefined` when the
@@ -277,16 +287,17 @@ const PLAN_DECISIONS = Object.freeze({
         }
       : undefined;
   },
-  // A per-model base URL outranks the plan's path; the plan's key takes the
-  // endpoint an API key does.
+  // A per-model or user endpoint outranks the plan's path; the plan's key
+  // takes the endpoint an API key does.
   'glm-coding-plan-subscription': (config, facts) => {
     if (
       config.provider !== ModelProvider.GLM ||
       !facts.plans.includes('glm-coding-plan-subscription') ||
-      config.baseUrl
+      config.baseUrl ||
+      facts.endpoints[ModelProvider.GLM]
     )
       return undefined;
-    const endpoint = keyEndpoint(config, facts);
+    const endpoint = pluginEndpoint(config.provider, facts);
     return endpoint === undefined
       ? undefined
       : {

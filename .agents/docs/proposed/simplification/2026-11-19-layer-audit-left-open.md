@@ -73,6 +73,11 @@ base URL. Today `RouteFacts.endpoints` mixes dashboard URLs with region
 defaults, so llm cannot tell a dashboard URL from a default. The fix is a
 `RouteFacts` field for the user-set endpoints, after which llm owns the rule.
 
+Landed 2026-11-20: `RouteFacts.endpoints` holds only the endpoints the user
+set, and `chinaPlatforms` names the regional providers switched to China.
+`decideModelRoute` picks each provider's URL and drops the plan for a
+per-model or user endpoint; the harness's GLM-specific read is gone.
+
 ## 4. A user row does not say who sent it
 
 `logFollowUps` (`packages/harness/src/agent/runtime/FollowUps.ts`) has the

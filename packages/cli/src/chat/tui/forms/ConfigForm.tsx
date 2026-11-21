@@ -16,7 +16,10 @@ import { isCtrlInput } from '@cli/tui/inputKeys';
 import { BACK_HINT } from '@cli/tui/ui/KeyHints';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { settingEnumOptions } from '@texra/shared/settingsView/settingRows';
+import {
+  settingEnumChoices,
+  settingEnumOptions,
+} from '@texra/shared/settingsView/settingRows';
 import type {
   SettingCategory,
   TexraSettingRow,
@@ -113,10 +116,13 @@ function validateSettingInput(
   return { ok: false, message: parsed.failure.message };
 }
 
-function formatSettingValue(value: unknown): string {
+/** A setting's current value as the list shows it: an enum value by its
+ *  choice label, the label every settings UI shows. */
+function formatSettingValue(entry: TexraSettingRow, value: unknown): string {
   if (typeof value === 'boolean') return value ? 'on' : 'off';
   if (value === '' || value == null) return '(empty)';
-  return String(value);
+  const choice = settingEnumChoices(entry)?.find((c) => c.value === value);
+  return choice?.label ?? String(value);
 }
 
 function buildConfigListItems(
@@ -126,7 +132,7 @@ function buildConfigListItems(
   return entries.map((entry) => {
     const kind = settingEditKind(entry);
     const valueText =
-      kind === 'form' ? 'open' : formatSettingValue(readValue(entry));
+      kind === 'form' ? 'open' : formatSettingValue(entry, readValue(entry));
     return {
       value: entry.key,
       label: entry.title,
@@ -141,11 +147,7 @@ function buildConfigListItems(
 }
 
 function buildEnumItems(entry: TexraSettingRow): Array<SelectItem<string>> {
-  return (settingEnumOptions(entry) ?? []).map((value) => ({
-    value,
-    label: value,
-    description: entry.choices?.[value]?.description,
-  }));
+  return [...(settingEnumChoices(entry) ?? [])];
 }
 
 interface ConfigFormProps {
