@@ -25,6 +25,7 @@ import {
   runNoticeText,
   runStatus,
   runStatusLabel,
+  runStatusLook,
   statusGlyph,
   type RunTone,
 } from '@ui/copy/runStatus';
@@ -78,7 +79,7 @@ function rowStatus(run: RunView): {
     // The row keeps its run's own tone; only its word and glyph say a
     // request waits under it.
     tone: status.tone,
-    glyph: statusGlyph({ tone: 'warning' }),
+    glyph: statusGlyph(runStatusLook('waitingOnUser')),
     waiting: true,
     shown: true,
   };

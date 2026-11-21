@@ -28,6 +28,7 @@ import {
   NESTED_NOUNS,
   runNoun,
 } from '@texra-ai/harness/schemas';
+import { sectionCountLabel } from '@ui/copy/runStatus';
 
 /** The agents a task started. */
 export const NESTED_AGENT = Object.freeze({
@@ -68,7 +69,7 @@ export const nestedCountsCompact = (kinds: NestedKinds): string =>
 export function nestedRollupLabel(rollup: RunView['rollup']): string {
   return joinFacts([
     nestedCountsLabel(rollup.kinds),
-    rollup.running > 0 && `${rollup.running} running`,
+    rollup.running > 0 && sectionCountLabel('running', String(rollup.running)),
   ]);
 }
 
