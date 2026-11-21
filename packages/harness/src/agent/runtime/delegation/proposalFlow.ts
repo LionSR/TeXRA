@@ -25,6 +25,7 @@ import {
 import type {
   AgentProposal,
   DecisionOf,
+  ProposalEdit,
   RefusalDecision,
   RequestDecision,
   ToolResult,
@@ -207,7 +208,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
  *  and model: the instruction and the file lists. */
 function formEdits(
   proposal: AgentProposal,
-  approval: Extract<DecisionOf<'proposal'>, { action: 'approve' }>,
+  edit: ProposalEdit,
 ): Partial<AgentProposal> {
   const changed = (
     edited: readonly string[] | null | undefined,
@@ -216,7 +217,7 @@ function formEdits(
     edited != null &&
     (edited.length !== proposed.length ||
       edited.some((file, index) => file !== proposed[index]));
-  const { instruction, inputFiles, contextFiles, mediaFiles } = approval;
+  const { instruction, inputFiles, contextFiles, mediaFiles } = edit;
   return {
     ...(instruction != null &&
       instruction !== proposal.instruction && { instruction }),
@@ -271,21 +272,21 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
   // model fails synchronously here instead of launching and then failing
   // asynchronously. Re-selecting the proposed model needs no re-check — it was
   // already resolved when the proposal was built.
-  const changes = ask === undefined;
+  const edit = ask === undefined ? result.edit : undefined;
   let modelOverride: string | undefined;
-  if (changes && result.model && result.model !== proposal.model) {
+  if (edit?.model && edit.model !== proposal.model) {
     const modelExit = yield* Effect.exit(
       selectAvailableDelegationModel({
-        requestedModel: result.model,
+        requestedModel: edit.model,
         parentModel: proposal.model,
         settings: parent.env.roots,
       }),
     );
     if (Exit.isFailure(modelExit)) {
       return errorResult(
-        `Cannot launch with model '${result.model}': ${toErrorMessage(modelExit.cause)} Re-propose the delegation.`,
+        `Cannot launch with model '${edit.model}': ${toErrorMessage(modelExit.cause)} Re-propose the delegation.`,
         {
-          summary: `Approved model override '${result.model}' is not available`,
+          summary: `Approved model override '${edit.model}' is not available`,
         },
       );
     }
@@ -293,9 +294,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
   }
 
   const agentOverride =
-    changes && result.agent && result.agent !== proposal.agent
-      ? result.agent
-      : undefined;
+    edit?.agent && edit.agent !== proposal.agent ? edit.agent : undefined;
   const resolvedAgentOverride = agentOverride
     ? findAgentByIdentifier(
         yield* delegationAgents(
@@ -322,7 +321,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
   // What the person changed in the launch form besides the agent and model.
   // A changed input list drops the proposal's outputs: they were named for
   // its inputs, and a program names its own for the new ones.
-  const edited = changes ? formEdits(proposal, result) : {};
+  const edited = edit ? formEdits(proposal, edit) : {};
   return {
     proposal: {
       ...proposal,

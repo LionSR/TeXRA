@@ -399,6 +399,9 @@ it, so an earlier build is detected once (2026-11-20). `FollowUps.release`'s two
 one caller, is free to change. The script delivery's `stopped` stays (the
 2026-11-17 triage note)._
 
+_2026-11-21: `FollowUps.release` takes the boolean `finishRun` decides
+(`release(terminal: boolean)`); its two literals are gone._
+
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
 

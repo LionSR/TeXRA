@@ -63,10 +63,6 @@ export interface SlashCommandContext {
   ) => Effect.Effect<void, RequestRefusal, ProcessServices>;
   /** Activate a skill, by name, for the next message (`/skills`). */
   readonly activateSkill: (name: string) => void;
-  /** The project's policy `/config` wrote: the status bar follows it, and
-   *  the chat's own `/approval` choice stays as it was. A plain callback:
-   *  the shared write path takes it as a void-returning port. */
-  readonly onProjectApprovalPolicyChanged: (policy: ApprovalPolicy) => void;
   /** Why `/model` cannot switch the running root to a model, if it cannot. */
   readonly getModelSwitchDisabledReason: GetModelSwitchDisabledReason;
   /** After a sign-in, sign-out, preference, or key save finishes: the chat

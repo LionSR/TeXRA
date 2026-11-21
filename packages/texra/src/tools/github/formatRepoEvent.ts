@@ -24,8 +24,8 @@
 import {
   authorOf,
   formatPreviousStateHint,
-  makeTruncator,
   sections,
+  truncate,
   wrapWebhookEvent as wrap,
   type WebhookEvent,
 } from './formatUtils';
@@ -36,9 +36,8 @@ import type {
   GhReviewComment,
 } from './prTypes';
 
-const MAX_BODY = 200;
-
-const truncate = makeTruncator(MAX_BODY);
+/** The cap on a title or comment quoted on a repository event's one line. */
+const MAX_QUOTE = 200;
 
 /** The path of pull request `number` in `repo`. */
 function pullPath(repo: RepoTarget, number: number): string {
@@ -50,7 +49,7 @@ export function formatRepoPROpened(
   pr: GhPullsListEntry,
 ): WebhookEvent {
   return wrap(
-    `New pull request ${pullPath(repo, pr.number)} opened by ${authorOf(pr.user)}: "${truncate(pr.title)}"\n${pr.html_url}`,
+    `New pull request ${pullPath(repo, pr.number)} opened by ${authorOf(pr.user)}: "${truncate(pr.title, MAX_QUOTE)}"\n${pr.html_url}`,
   );
 }
 
@@ -70,7 +69,7 @@ export function formatRepoIssueComment(
   c: GhIssueComment,
 ): WebhookEvent {
   return wrap(
-    `New comment on ${targetPath({ ...repo, _tag: 'issue', number })} by ${authorOf(c.user)}: "${truncate(c.body)}"\n${c.html_url}`,
+    `New comment on ${targetPath({ ...repo, _tag: 'issue', number })} by ${authorOf(c.user)}: "${truncate(c.body, MAX_QUOTE)}"\n${c.html_url}`,
   );
 }
 
@@ -80,7 +79,7 @@ export function formatRepoReviewComment(
   c: GhReviewComment,
 ): WebhookEvent {
   return wrap(
-    `New ${c.in_reply_to_id != null ? 'review reply' : 'inline review comment'} on ${pullPath(repo, prNumber)} by ${authorOf(c.user)} (${c.path}): "${truncate(c.body)}"\n${c.html_url}`,
+    `New ${c.in_reply_to_id != null ? 'review reply' : 'inline review comment'} on ${pullPath(repo, prNumber)} by ${authorOf(c.user)} (${c.path}): "${truncate(c.body, MAX_QUOTE)}"\n${c.html_url}`,
   );
 }
 

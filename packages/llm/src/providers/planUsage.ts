@@ -7,7 +7,6 @@
  * `SyntaxError` a malformed body).
  */
 import {
-  absurd,
   Duration,
   Effect,
   Number as Num,
@@ -22,7 +21,8 @@ import { HttpClient, HttpClientResponse } from 'effect/http';
 import type { Cause, SchemaAST } from 'effect';
 import type { HttpClientError } from 'effect/http';
 
-import { GLM_BASE_URLS } from './providerPlugins.js';
+import type { PlanRoute } from '../errors.js';
+import { GLM_BASE_URLS, type RegionalBaseUrl } from './providerPlugins.js';
 import { KIMI_CODE_BASE_URL } from './providers.js';
 
 /** One quota window of a plan, as a share of its limit. */
@@ -44,58 +44,106 @@ export interface PlanUsage {
   readonly windows: readonly PlanUsageWindow[];
 }
 
-/** Which plan to ask, and for GLM which platform its key belongs to. */
-export type PlanUsageRequest =
-  | { readonly plan: 'kimiCode' }
-  | { readonly plan: 'glm'; readonly region: 'china' | 'international' };
+/**
+ * How each plan states its quota: asked at its endpoint with its key, read
+ * off its replies' headers, or nowhere this package reads. A plan added to
+ * `PLAN_ROUTES` does not compile until it says which.
+ */
+export const PLAN_QUOTA_SOURCES = Object.freeze({
+  'chatgpt-subscription': 'reply',
+  'xai-subscription': null,
+  'kimi-code-subscription': 'endpoint',
+  'glm-coding-plan-subscription': 'endpoint',
+} as const satisfies Record<PlanRoute, 'endpoint' | 'reply' | null>);
+
+/** A plan with a quota endpoint. */
+export type EndpointPlanRoute = {
+  [K in PlanRoute]: (typeof PLAN_QUOTA_SOURCES)[K] extends 'endpoint'
+    ? K
+    : never;
+}[PlanRoute];
+
+/** A plan whose replies state its quota. */
+export type ReplyPlanRoute = {
+  [K in PlanRoute]: (typeof PLAN_QUOTA_SOURCES)[K] extends 'reply' ? K : never;
+}[PlanRoute];
+
+/** The platform a two-platform provider's key belongs to. */
+export type ProviderRegion = keyof RegionalBaseUrl;
+
+/** Each endpoint plan's request: where, with which headers, read how. A
+ *  plan whose provider has one platform ignores the region. */
+const QUOTA_ENDPOINTS: Record<
+  EndpointPlanRoute,
+  (
+    region: ProviderRegion,
+    key: string,
+  ) => {
+    readonly url: string;
+    readonly headers: Record<string, string>;
+    readonly parse: (json: unknown) => PlanUsage;
+  }
+> = {
+  'kimi-code-subscription': (_region, key) => ({
+    url: `${KIMI_CODE_BASE_URL}/usages`,
+    headers: { Accept: 'application/json', Authorization: `Bearer ${key}` },
+    parse: parseKimiCodeUsage,
+  }),
+  // On the same host as the region's Responses endpoint.
+  'glm-coding-plan-subscription': (region, key) => ({
+    url: new URL('/api/monitor/usage/quota/limit', GLM_BASE_URLS[region]).href,
+    headers: {
+      Accept: 'application/json',
+      'Accept-Language': 'en-US,en',
+      Authorization: key,
+      'Content-Type': 'application/json',
+    },
+    parse: parseGlmCodingPlanUsage,
+  }),
+};
 
 /** The one deadline over a usage request and its body read. */
 const REQUEST_TIMEOUT = Duration.seconds(15);
 
 /**
- * Fetch and read a plan's usage with its API key. The GLM quota endpoint is
- * on the same host as the region's Responses endpoint.
+ * Fetch and read a plan's usage at its quota endpoint with its API key, on
+ * the platform `region` names.
  */
 export function fetchPlanUsage(
-  request: PlanUsageRequest,
+  route: EndpointPlanRoute,
+  region: ProviderRegion,
   apiKey: Redacted.Redacted<string>,
 ): Effect.Effect<
   PlanUsage,
   HttpClientError.HttpClientError | Cause.TimeoutError,
   HttpClient.HttpClient
 > {
-  const key = Redacted.value(apiKey);
-  const { url, headers, parse } =
-    request.plan === 'kimiCode'
-      ? {
-          url: `${KIMI_CODE_BASE_URL}/usages`,
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${key}`,
-          },
-          parse: parseKimiCodeUsage,
-        }
-      : request.plan === 'glm'
-        ? {
-            url: new URL(
-              '/api/monitor/usage/quota/limit',
-              GLM_BASE_URLS[request.region],
-            ).href,
-            headers: {
-              Accept: 'application/json',
-              'Accept-Language': 'en-US,en',
-              Authorization: key,
-              'Content-Type': 'application/json',
-            },
-            parse: parseGlmCodingPlanUsage,
-          }
-        : absurd<never>(request);
+  const { url, headers, parse } = QUOTA_ENDPOINTS[route](
+    region,
+    Redacted.value(apiKey),
+  );
   return HttpClient.get(url, { headers }).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap((response) => response.json),
     Effect.timeout(REQUEST_TIMEOUT),
     Effect.map(parse),
   );
+}
+
+/**
+ * The quota windows a reply on `route` states in its headers; `receivedAt`
+ * (epoch milliseconds) dates a reset given as seconds from the reply. Null
+ * when the headers state no window.
+ */
+export function replyPlanUsage(
+  route: ReplyPlanRoute,
+  headers: Headers,
+  receivedAt: number,
+): PlanUsage | null {
+  switch (route) {
+    case 'chatgpt-subscription':
+      return chatgptReplyUsage(headers, receivedAt);
+  }
 }
 
 // ============================================================================
@@ -240,7 +288,7 @@ const CHATGPT_WINDOWS = ['primary', 'secondary'] as const;
  * `receivedAt` (epoch milliseconds) dates a reset given only as seconds
  * from the reply. Null when the headers state no window.
  */
-export function chatgptReplyUsage(
+function chatgptReplyUsage(
   headers: Headers,
   receivedAt: number,
 ): PlanUsage | null {

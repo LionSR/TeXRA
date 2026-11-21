@@ -27,10 +27,10 @@ import {
   type ConfirmCardKeyRow,
 } from './ConfirmCardState';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
+import { REJECTION_NOTE_PROMPT } from '@ui/copy/requestCards';
 import { TextInput } from '../input/TextInput';
 
 /** Rejection-note prompt for every ConfirmCard-based approval modal. */
-const CONFIRM_CARD_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
 
 /** The enclosing card's rejection note: `mode` is true while its input owns
  *  the keyboard (a scrollable body releases ↑/↓), and `rows` is what it takes
@@ -70,7 +70,7 @@ export function ConfirmCard({
         <Text>{`${POINTER} `}</Text>
         <TextInput
           value={feedback}
-          placeholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
+          placeholder={REJECTION_NOTE_PROMPT}
           onChange={setFeedback}
           onEscape={() => {
             setFeedbackMode(false);
@@ -121,7 +121,7 @@ export function ConfirmCard({
     rows: feedbackMode
       ? confirmCardFeedbackRows({
           columns,
-          placeholder: CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
+          placeholder: REJECTION_NOTE_PROMPT,
           value: feedback,
         })
       : 0,

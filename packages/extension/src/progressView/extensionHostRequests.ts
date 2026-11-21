@@ -34,7 +34,6 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -50,7 +49,7 @@ import type {
   NoticeLevel,
 } from '@texra/hosts/uiHosts';
 
-import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import { fieldTakes } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   TRANSCRIPT_EXPORT_PICK,
@@ -341,22 +340,12 @@ export const createExtensionHostRequests = Effect.fn(
     popBack: () => Effect.as(options.showInSidebar(), done),
     useCurrentFile: (request) => useCurrentFile(request),
     addOpenedFiles: (request) =>
-      Effect.map(getOpenedFiles(), (opened): HostOutcome => {
-        const allowed = new Set(
-          getIncludedExtensions(request.fileType).map(
-            normalizeMainViewFileExtension,
-          ),
-        );
-        return {
-          kind: 'files',
-          paths:
-            allowed.size > 0
-              ? opened.filter((file) =>
-                  allowed.has(normalizeMainViewFileExtension(file)),
-                )
-              : opened,
-        };
-      }),
+      Effect.map(getOpenedFiles(), (opened): HostOutcome => ({
+        kind: 'files',
+        paths: opened.filter(
+          fieldTakes(getIncludedExtensions(request.fileType)),
+        ),
+      })),
     gettingStarted: (request) =>
       Effect.as(
         runHandler(request.action, gettingStarted(request.action)),
@@ -370,7 +359,6 @@ export const createExtensionHostRequests = Effect.fn(
     // The host's members read `this`, so they cross the boundary bound.
     notify: (level: NoticeLevel, message: string) =>
       vscodeUi.notify(level, message),
-    openFinalOutput: previewFinalOutput,
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {
       openDiff: (base: string, edited: string, title: string) =>

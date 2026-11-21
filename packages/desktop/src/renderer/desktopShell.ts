@@ -12,11 +12,19 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import { getBasename, type SessionView } from '@texra-ai/harness/schemas';
-import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
+import type { SessionView } from '@texra-ai/harness/schemas';
+import {
+  projectName,
+  type ProjectDisplay,
+} from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
-import { sectionCountLabel, type RunTone } from '@ui/copy/runStatus';
+import {
+  runSectionTone,
+  sectionCountLabel,
+  type RunTone,
+} from '@ui/copy/runStatus';
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
@@ -84,6 +92,9 @@ function sidebarAction(options: {
   });
 }
 
+/** The run sections a project's status names, in the order it names them. */
+const RAIL_SECTIONS = ['waiting', 'interrupted', 'running'] as const;
+
 /**
  * A project's one status, read from its view's rollup and its surface: what
  * needs the user first (waiting, then interrupted), then work in progress,
@@ -94,21 +105,12 @@ function sidebarAction(options: {
 function projectStatus(
   project: RailProject,
 ): { readonly tone: RunTone | 'unseen'; readonly label: string } | undefined {
-  const { waiting, interrupted, running } = project.view.rollup;
-  if (waiting > 0)
+  const { rollup } = project.view;
+  const section = RAIL_SECTIONS.find((key) => rollup[key] > 0);
+  if (section !== undefined)
     return {
-      tone: 'warning',
-      label: sectionCountLabel('waiting', String(waiting)),
-    };
-  if (interrupted > 0)
-    return {
-      tone: 'warning',
-      label: sectionCountLabel('interrupted', String(interrupted)),
-    };
-  if (running > 0)
-    return {
-      tone: 'running',
-      label: sectionCountLabel('running', String(running)),
+      tone: runSectionTone(section),
+      label: sectionCountLabel(section, String(rollup[section])),
     };
   const unseen = unseenRuns(project.surface, project.view).size;
   if (unseen > 0) return { tone: 'unseen', label: `${unseen} finished` };
@@ -250,7 +252,7 @@ export function shellSidebarTemplate(
                 ${model.recent.slice(0, RECENT_PROJECTS_SHOWN).map((root) =>
                   sidebarAction({
                     icon: 'clock-rotate-left',
-                    label: getBasename(root) || root,
+                    label: projectName(root),
                     title: `Reopen ${root}`,
                     onClick: () => callbacks.onOpenRecent(root),
                   }),
@@ -288,7 +290,7 @@ export function shellSidebarTemplate(
                     removable
                   ></run-tabs>
                 </div>`
-              : renderEmptyMessage('Your tasks will appear here.')
+              : renderEmptyMessage(EMPTY_TASK_LIST.body)
           }
         </section>
       </div>

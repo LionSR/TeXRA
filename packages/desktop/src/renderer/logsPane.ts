@@ -15,6 +15,7 @@ import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
 import {
   DESKTOP_LOG_COMMANDS,
@@ -120,9 +121,7 @@ const decodeDesktopLogLine = Schema.decodeUnknownResult(
  * their expanded state across automatic refreshes.
  */
 function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
-  const lines = text
-    .replaceAll('\r\n', '\n')
-    .replaceAll('\r', '\n')
+  const lines = normalizeLineEndings(text)
     .split('\n')
     .filter((line) => line.trim().length > 0);
 

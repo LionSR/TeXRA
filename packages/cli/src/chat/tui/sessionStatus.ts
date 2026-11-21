@@ -9,6 +9,7 @@ import { OWN_API_KEYS, usageRouteBadge } from '@ui/copy/modelAccess';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
+import { OWN_USAGE_LABEL } from '@ui/copy/tokenUsage';
 
 import { formatResumeCommand } from './state/resumeHint';
 import type {
@@ -82,7 +83,7 @@ function costStatusLines(cost: CliSessionCostStatus | undefined): string[] {
   if (cost.agents.length === 0) return [`cost: ${usageCostLabel(cost.total)}`];
   return [
     `cost: ${usageCostLabel(cost.total)}, agents included`,
-    `  own model calls: ${usageCostLabel(cost.own)}`,
+    `  ${OWN_USAGE_LABEL.toLowerCase()}: ${usageCostLabel(cost.own)}`,
     ...cost.agents.map(
       (agent) => `  ${agent.label}: ${usageCostLabel(agent.usage)}`,
     ),

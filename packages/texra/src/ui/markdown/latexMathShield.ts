@@ -16,6 +16,7 @@ import {
   placeholderRestorer,
   selectPlaceholderTag,
 } from './latexPlaceholders';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 
 type InlineDollarProtector = (
   content: string,
@@ -174,7 +175,7 @@ export function protectLatexMathSpansForNormalize(content: string): {
   content: string;
   restore: (value: string) => string;
 } {
-  const source = content.replaceAll(/\r\n?/g, '\n');
+  const source = normalizeLineEndings(content);
   normalizeEnvironmentProbe ??= createBegEndEnvironmentProbe(
     createProbeMarkdownIt(),
   );

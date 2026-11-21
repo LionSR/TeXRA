@@ -90,8 +90,8 @@ interface ConsumeOptions {
 export interface FollowUps {
   /** The run's reader: what is pending, read from its rows. */
   readonly reader: Pick<FollowUpReader, 'read' | 'next'>;
-  /** The run's loop ended. `terminal` is true when it takes no more input
-   *  (which the inbox's observers hear); false leaves it recoverable. */
+  /** The run's loop ended. A `terminal` run takes no more input (which the
+   *  inbox's observers hear); otherwise it stays recoverable. */
   readonly release: (terminal: boolean) => void;
   /**
    * Commit a batch through the run's cell: its `followup.consumed` rows, its

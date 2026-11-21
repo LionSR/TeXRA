@@ -17,7 +17,6 @@ import { apiKeyEntry } from '@texra-ai/llm';
 
 import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
 import {
-  Settings,
   type StorageFs,
   emitAppSignal,
   type AppSignal,
@@ -66,7 +65,13 @@ import {
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
-import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import {
+  applyStateSettingUpdate,
+  setSkillEnabled,
+  settingWriteFailure,
+  type StateSettingUpdateResult,
+  type WritableRow,
+} from '@texra/controllers/settingsView/stateSettingWrite';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
@@ -221,41 +226,42 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
 
     // ── Catalog-backed settings rows ──
 
-    const updateStateSetting = Effect.fn('updateStateSetting')(function* (
-      key: string,
-      value: unknown,
+    // Every outcome is sent back, so a rejected edit shows the stored value.
+    const settingWritten = Effect.fn('settingWritten')(function* (
+      result: StateSettingUpdateResult<WritableRow>,
     ) {
-      // The webview names the key: only a row this view renders is written.
-      const entry = TEXRA_SETTINGS.settingsViewByKey(key);
-      if (!entry) return;
-      const result = yield* applyStateSettingUpdate(entry, value, roots);
       if (result.kind === 'ignored') return;
-      const label = result.entry.title;
-      if (result.kind === 'rejected') {
-        yield* report(`Invalid value for “${label}”`, result.error);
-      } else if (result.kind === 'failed') {
-        yield* report(`Failed to update “${label}”`, result.error);
-      } else if (result.kind === 'workspace-required') {
-        yield* notice(
-          `Open a workspace folder before changing the “${label}” setting.`,
-        );
-      }
-      // Every outcome is sent back, so a rejected edit shows the stored value.
+      const failure = settingWriteFailure(result);
+      if (failure !== undefined)
+        yield* result.kind === 'workspace-required'
+          ? notice(failure.message)
+          : alert(failure.message);
       yield* changed('settings');
       if (result.kind !== 'applied') return;
       // A row that re-routes models changes what the credentials page says.
       if (result.entry.onWrite?.invalidatesModelOptions) {
         yield* credentialsChanged();
       }
-      if (codingPlanForUsageSetting(key) !== undefined) {
+      if (codingPlanForUsageSetting(result.entry.key) !== undefined) {
         yield* changed('usage');
       }
     });
 
+    const updateStateSetting = (key: string, value: unknown) => {
+      // The webview names the key: only a row this view renders is written.
+      const entry = TEXRA_SETTINGS.settingsViewByKey(key);
+      return entry === undefined
+        ? Effect.void
+        : Effect.flatMap(
+            applyStateSettingUpdate(entry, value, roots),
+            settingWritten,
+          );
+    };
+
     // One read-modify-write at a time per list: two switches handled at once
     // would each read the list without the other's item.
     const skillListLanes = new Map<string, PerKeyLane>();
-    const setSkillEnabled = (
+    const toggleSkill = (
       key: (
         | typeof DISABLED_SKILLS_SETTING
         | typeof DISABLED_SKILL_SOURCES_SETTING
@@ -263,21 +269,17 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       item: string,
       enabled: boolean,
     ) =>
-      Effect.flatMap(
-        Settings.get(
-          roots,
-          key === DISABLED_SKILLS_SETTING.key
-            ? DISABLED_SKILLS_SETTING
-            : DISABLED_SKILL_SOURCES_SETTING,
-        ),
-        (disabled: readonly string[]) =>
-          updateStateSetting(
-            key,
-            enabled
-              ? disabled.filter((candidate) => candidate !== item)
-              : [...new Set([...disabled, item])],
-          ),
-      ).pipe(withPerKeyLane(skillListLanes, key));
+      setSkillEnabled(
+        key === DISABLED_SKILLS_SETTING.key
+          ? DISABLED_SKILLS_SETTING
+          : DISABLED_SKILL_SOURCES_SETTING,
+        item,
+        enabled,
+        roots,
+      ).pipe(
+        Effect.flatMap(settingWritten),
+        withPerKeyLane(skillListLanes, key),
+      );
 
     // A failed key write is reported, and the profile and the Models page
     // show the key as it is.
@@ -327,7 +329,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       updateStateSetting: (message) =>
         updateStateSetting(message.key, message.value),
       setSkillEnabled: (message) =>
-        setSkillEnabled(message.key, message.item, message.enabled),
+        toggleSkill(message.key, message.item, message.enabled),
 
       // ── Subscriptions ──
       signInSubscription: (message) => signInSubscription(message.provider),

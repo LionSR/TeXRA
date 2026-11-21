@@ -260,7 +260,7 @@ export const liveToolGates = Effect.fn('liveToolGates')(function* ({
   runId,
   entry,
 }: Pick<AgentRunShape, 'runId'> & {
-  readonly entry: Pick<AgentRunShape['entry'], 'registration'>;
+  readonly entry: Pick<AgentRunShape['entry'], 'fresh'>;
 }): Effect.fn.Return<
   Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
     readonly policy: ApprovalPolicy;
@@ -270,7 +270,7 @@ export const liveToolGates = Effect.fn('liveToolGates')(function* ({
 > {
   const owners = yield* policyOwners;
   const view = yield* SubscriptionRef.get((yield* SessionViewAccess).ref);
-  const start = entry.registration?.start ?? null;
+  const start = entry.fresh?.registration.start ?? null;
   const parent = start?.parent?.id ?? null;
   const source =
     start === null ? view : withUnborn(view, runId, parent, start.grants);

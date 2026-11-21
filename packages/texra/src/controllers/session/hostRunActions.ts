@@ -12,7 +12,6 @@ import type {
   Notices,
 } from '@texra-ai/harness';
 import {
-  getHelperModelName,
   type ProcessServices,
   type readModelOptions,
   presentRunFailure,
@@ -269,23 +268,6 @@ export const createHostRunActions = Effect.fn(
         ),
       ),
     );
-  /** Start a configuration an action built and wait for its run to end. */
-  const runAgentRequest = (
-    config: AgentConfigInput,
-    options?: RunValidatedOptions,
-  ): Effect.Effect<void, Rejected | Cancelled | RunFailure, ProcessServices> =>
-    startAgentRequest(config, options).pipe(
-      Effect.flatMap((run) => Effect.asVoid(run.result)),
-    );
-
-  /** A document task's rounds; undefined for a run that is none. */
-  const roundsOfRun = (runId: RunId) => {
-    const run = runView(runId);
-    return run !== undefined && isDocumentTaskRun(run)
-      ? documentRoundsOf(run)
-      : undefined;
-  };
-
   /** The saved config of a document task's run. `files` holds on every
    *  finished run, so a request on a run that saved no config, or that is
    *  not a document task's, is refused here, which the surface presents. */
@@ -398,12 +380,13 @@ export const createHostRunActions = Effect.fn(
           ),
         ),
       );
+      // The helper model while it can serve, as every helper launch decides
+      // (`helperModel`), else the default agent model.
       if (launch !== null)
-        yield* startAgentRequest({
-          ...launch,
-          model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
-          inputFiles,
-        });
+        yield* startAgentRequest(
+          { ...launch, model: DEFAULT_AGENT_MODEL, inputFiles },
+          { helperModel: true },
+        );
     }),
     documentTaskFileOperation: Effect.fn(
       'HostRunActions.documentTaskFileOperation',
@@ -477,14 +460,22 @@ export const createHostRunActions = Effect.fn(
       const modelOptions = yield* loadModelOptions(roots).pipe(
         Effect.provide(workspaceEnvironmentLayer(roots.workspace)),
       );
+      // A document task's rounds, as the view holds them once the reads
+      // above are done.
+      const run = runView(runId);
       const fixer = yield* planCompileFixer({
         runId,
         runConfig: config,
-        rounds: roundsOfRun(runId),
+        rounds:
+          run !== undefined && isDocumentTaskRun(run)
+            ? documentRoundsOf(run)
+            : undefined,
         modelOptions,
         workspaceRoot: roots.workspace,
       });
-      yield* runAgentRequest(fixer, { helperModel: true });
+      // The fixer's run is waited for to its end.
+      const fixing = yield* startAgentRequest(fixer, { helperModel: true });
+      yield* fixing.result;
     }),
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
       const forked = yield* forkRun(session, runId, at);

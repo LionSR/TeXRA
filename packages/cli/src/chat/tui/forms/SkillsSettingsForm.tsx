@@ -11,9 +11,11 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Skills } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
-import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import {
+  setSkillEnabled,
+  settingWriteFailure,
+} from '@texra/controllers/settingsView/stateSettingWrite';
 import { enabledLabel } from '@ui/copy/format';
-import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -32,16 +34,6 @@ interface SkillsSettingsData {
 interface SkillsSettingsFormProps {
   readonly availableRows?: number;
   readonly onClose: () => void;
-}
-
-function toggleDisabled<T>(
-  values: readonly T[],
-  value: T,
-  currentlyDisabled: boolean,
-): T[] {
-  return currentlyDisabled
-    ? values.filter((candidate) => candidate !== value)
-    : [...new Set([...values, value])];
 }
 
 export function SkillsSettingsForm(
@@ -99,16 +91,13 @@ export function SkillsSettingsForm(
         const current =
           toggle.kind === 'source' ? data.disabledScopes : data.disabledNames;
         const value = toggle.kind === 'source' ? toggle.scope : toggle.name;
-        const next = toggleDisabled(current, value, current.includes(value));
         update(
-          Effect.flatMap(applyStateSettingUpdate(row, next, roots), (result) =>
-            result.kind === 'applied'
-              ? Effect.void
-              : Effect.fail(
-                  new SettingsRequestFailed({
-                    message: `Could not update skills (${result.kind}).`,
-                  }),
-                ),
+          Effect.flatMap(
+            setSkillEnabled(row, value, current.includes(value), roots),
+            (result) => {
+              const failure = settingWriteFailure(result);
+              return failure === undefined ? Effect.void : Effect.fail(failure);
+            },
           ),
         );
       }}

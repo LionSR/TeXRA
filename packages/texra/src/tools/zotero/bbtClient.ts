@@ -45,6 +45,12 @@ export function zoteroUrl(port: number, pathname: string): string {
   return `http://127.0.0.1:${port}${pathname}`;
 }
 
+/** Better BibTeX's JSON-RPC endpoint, there while that plugin is installed. */
+export const BETTER_BIBTEX_PATH = '/better-bibtex/json-rpc';
+
+/** The Connector API's ping, answered while Zotero runs. */
+export const CONNECTOR_PING_PATH = '/connector/ping';
+
 function zoteroUnreachableError(port: number): ToolError {
   return new ToolError(
     `Zotero is not reachable on port ${port}. ` +
@@ -257,7 +263,7 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
     timeout: number = ZOTERO_BBT_TIMEOUT_MS,
   ) {
     const port = yield* zoteroPort;
-    const url = zoteroUrl(port, '/better-bibtex/json-rpc');
+    const url = zoteroUrl(port, BETTER_BIBTEX_PATH);
 
     const raw = yield* withRequestTimeout(
       timeout,
@@ -321,7 +327,7 @@ export const checkZoteroRunning = Effect.fn('bbtClient.checkZoteroRunning')(
     yield* withRequestTimeout(
       ZOTERO_PING_TIMEOUT_MS,
       Effect.flatMap(scopedOkClient, (client) =>
-        client.get(zoteroUrl(port, '/connector/ping')),
+        client.get(zoteroUrl(port, CONNECTOR_PING_PATH)),
       ),
     ).pipe(Effect.mapError(() => zoteroUnreachableError(port)));
   },

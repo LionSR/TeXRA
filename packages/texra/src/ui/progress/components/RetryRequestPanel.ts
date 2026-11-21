@@ -12,7 +12,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import type { RetryRequest } from '@texra-ai/harness/schemas';
 import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
-import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { REQUEST_ASK, RETRY_OWN_KEY_LABEL } from '@ui/copy/requestCards';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
@@ -43,7 +43,6 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   override render(): TemplateResult {
     const data = this.permission.data;
     const detailsText = this.formatRetryDetails(data.failure);
-    const ownKeyLabel = 'Retry with your own API key';
 
     return this.renderCard(
       html`
@@ -68,8 +67,8 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
       this.canUseOwnApiKey()
         ? renderLabeledActionButton({
             icon: 'key',
-            text: ownKeyLabel,
-            title: `${ownKeyLabel} (k)`,
+            text: RETRY_OWN_KEY_LABEL,
+            title: `${RETRY_OWN_KEY_LABEL} (k)`,
             action: 'useOwnApiKey',
             onClick: () => this.emitAction(REQUEST_ACTIONS.retry.k),
           })

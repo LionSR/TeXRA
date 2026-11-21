@@ -71,6 +71,13 @@ the override had painted a failed run a neutral "Ready"), and the composer
 below the log is what says it takes a message. The table's `ready` entry
 stays the word for a run no activation has started yet.
 
+Checked again on 2026-11-21 and kept: no new key. "Ready" would name the
+same fact the composer already shows (the run takes a follow-up), and a key
+for it would split one outcome into two words, so a failed run that takes a
+message would need its own reading too. Every surface reads the outcome's
+word; the table's sections now carry their tone as well (`runSectionTone`),
+so the desktop rail no longer picks a tone per section itself.
+
 Taken on 2026-11-18 for the tab: a request under the run reads in the status
 table's word for that state, "Waiting on you", not a second "Needs approval".
 

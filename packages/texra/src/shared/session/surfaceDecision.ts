@@ -12,6 +12,7 @@
 import {
   offeredGrant,
   type ApprovalBypassKind,
+  type ProposalEdit,
   type RequestPayload,
   type RequestDecision,
   type PendingRequest,
@@ -40,9 +41,9 @@ export type SurfaceDecision =
   | RequestDecision
   | {
       readonly action: typeof APPROVE_SESSION_ACTION;
-      /** The model an agent-proposal card picked, when it is not the
-       *  proposal's. */
-      readonly model?: string;
+      /** What an agent-proposal card changed (the model it picked), when
+       *  it changed anything. */
+      readonly edit?: ProposalEdit;
     }
   | { readonly action: ToolEditPreviewAction };
 
@@ -146,9 +147,7 @@ export function approvalDecisionDelivery(
       return decide(
         {
           action: 'approve',
-          ...('model' in decision && decision.model !== undefined
-            ? { model: decision.model }
-            : {}),
+          ...(decision.edit !== undefined && { edit: decision.edit }),
         },
         bypass,
       );

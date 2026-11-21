@@ -46,3 +46,7 @@ export function visibleTokenStats(usage: TokenUsageStats): TokenUsageStat[] {
     return 'always' in stat || value > 0 ? [{ ...stat, value }] : [];
   });
 }
+
+/** The label of a task's own share of its spend, where its agents spent
+ *  too: the progress view's usage strip and the terminal's `/status`. */
+export const OWN_USAGE_LABEL = 'Own model calls';
