@@ -21,6 +21,7 @@ import {
   ScopedRef,
   Context,
   Schema,
+  Stream,
 } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
@@ -117,6 +118,15 @@ const mcpToolTableLayer = (dir: string) =>
           path.join(dir, 'mcp.json'),
           TEST_REVISION_KEY,
         ),
+        // No plugin is installed and none is switched.
+        installed: Effect.succeed({
+          plugins: [],
+          warnings: [],
+          enabled: new Set<string>(),
+        }),
+        installedChanges: Stream.empty,
+        nativeCopies: path.join(dir, 'native'),
+        switches: Stream.succeed(new Set<string>()),
       }),
     ),
   ).pipe(Layer.provide(nodePlatformLayer));
