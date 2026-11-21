@@ -338,7 +338,7 @@ const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
       content,
       search: oldStr,
       replacement: newStr,
-      mode: 'unique',
+      replaceAll: false,
       notFoundError: () =>
         `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
       multipleMatchesError: ({ lineNumbers }) =>

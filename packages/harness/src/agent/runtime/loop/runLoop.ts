@@ -257,11 +257,7 @@ const finishRun =
     });
     return Effect.flatMap(RunRegistry, (runs) =>
       Effect.map(runs.hasLiveDescendants(cell.runId), (descendants) =>
-        lease.release(
-          outcome === RUN_OUTCOME.COMPLETED && !descendants
-            ? 'terminal'
-            : 'recoverable',
-        ),
+        lease.release(outcome === RUN_OUTCOME.COMPLETED && !descendants),
       ),
     );
   };
