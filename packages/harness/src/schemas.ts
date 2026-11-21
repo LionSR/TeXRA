@@ -165,6 +165,7 @@ export {
   launchPolicy,
   resolveBypass,
   runBypasses,
+  type ApprovalBypasser,
   type ApprovalBypassKind,
   type LaunchApproval,
   type ApprovalGrants,
