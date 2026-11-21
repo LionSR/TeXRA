@@ -910,6 +910,15 @@ e.g. `0.012` → `'$0.012'`
 function formatCostUsd(cost: number): string
 ```
 
+## formatCount
+
+A count with English thousands separators (`200,000`). Model-facing text
+reads the same on every host, whatever its locale.
+
+```ts
+function formatCount(count: number): string
+```
+
 ## formatError
 
 Format an error with a prefix for logging or user messages.
@@ -1620,6 +1629,16 @@ Normalize a file path to forward slashes for consistent comparisons.
 
 ```ts
 function normalizeFilePath(filePath: string): string
+```
+
+## normalizeLineEndings
+
+`text` with every line ending as `\n`: a CRLF pair and a lone CR alike,
+as markdown-it and a terminal read them. File content keeps a lone CR
+(see {@link splitContentLines}); this is for text a person reads.
+
+```ts
+function normalizeLineEndings(text: string): string
 ```
 
 ## offeredGrant
@@ -2544,13 +2563,13 @@ interface SettingsCatalog {
   /** Look up a row by its stored key, as a store lists it. */
   readonly byStoredKey: (storedKey: string) => SettingRow | undefined;
   /**
-   * A fresh copy of a config-file-backed row's default, or `undefined` for a
-   * key no such row owns: what every `ConfigProvider` answers for an absent
-   * key. Parsed defaults are memoized
-   * because this is on the read path of every absent setting; object values
-   * are cloned so a caller cannot mutate the catalog's own default.
+   * A fresh copy of what the row under `key` reads as while it is absent (its
+   * schema's default, or the app's), or `undefined` for a key no row owns.
+   * Parsed defaults are memoized because this is on the read path of every
+   * absent setting; object values are cloned so a caller cannot mutate the
+   * catalog's own default.
    */
-  readonly configDefault: (key: string) => unknown;
+  readonly defaultOf: (key: string) => unknown;
   /** The models every user starts with enabled, in picker order; a person's
    *  selection is stored as a change over this list. The app's choice over
    *  the llm catalog: the harness curates none. */
@@ -2611,7 +2630,7 @@ const SkillNameSchema: decodeTo<String, String, never, never>
 
 ## splitContentLines
 
-Normalize line endings and split into content lines.
+Normalize CRLF line endings and split into content lines.
 A trailing newline does not produce a phantom empty element.
 
 - `@example` splitContentLines('a\nb\nc')   // ['a', 'b', 'c']

@@ -621,8 +621,8 @@ interface ConfigProvider {
   /**
    * Resolution order an implementation must honor: stored workspace value,
    * stored global value, then the setting catalog's own default
-   * (`catalog.configDefault`); a key no row owns reads as `undefined` when
-   * absent.
+   * (`catalog.defaultOf`) for a config-file row; any other key reads as
+   * `undefined` when absent.
    *
    * It is synchronous because some readers cannot wait for an Effect: the
    * replacement engine's rule sets, a tool's `prompt` callback, the
