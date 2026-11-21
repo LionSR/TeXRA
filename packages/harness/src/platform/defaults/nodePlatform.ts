@@ -1,4 +1,5 @@
 /** The default Node platform of an SDK embedder: process-local, no secrets. */
+import * as path from 'node:path';
 import process from 'node:process';
 
 import { Effect } from 'effect';
@@ -72,18 +73,22 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceRoot = canonicalizeWorkspaceRoot(
     options.workspaceDir ?? process.cwd(),
   );
+  // Absolute once, here: a relative directory read again after the process
+  // changes its working directory would name a second store.
+  const agentsDir = path.resolve(options.agentsDir);
+  const storageDir = path.resolve(options.storageDir);
   return {
     secrets: unpersistedSecrets,
     agentDirectories: {
-      custom: () => Effect.succeed(options.agentsDir),
+      custom: () => Effect.succeed(agentsDir),
       customConfigured: () => Effect.succeed(true),
       builtIn: () => Effect.succeed(''),
     },
     roots: {
       workspace: workspaceRoot,
-      storageRoot: options.storageDir,
-      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceRoot),
-      globalStorage: resolveGlobalStoragePath(options.storageDir),
+      storageRoot: storageDir,
+      storage: resolveWorkspaceStoragePath(storageDir, workspaceRoot),
+      globalStorage: resolveGlobalStoragePath(storageDir),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(
