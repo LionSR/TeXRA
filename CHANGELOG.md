@@ -276,6 +276,13 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   messages after the first request, which shortens the wait for the first
   token. Where you add a key, TeXRA points out the API credits Claude and
   ChatGPT plans include.
+- **One model list everywhere.** The launcher, the terminal's `/model` and
+  an agent's delegation list the same models: signed in to ChatGPT, every
+  model the subscription serves appears without being enabled one by one,
+  and a default model switched off in Settings › Models stays hidden.
+  Turning on a subscription while signed out starts the sign-in, and a
+  coding plan (Kimi Code, GLM Coding Plan) turns on only once its API key is
+  set; TeXRA says which key to add.
 - **Lead and Lean agents are built in.** `orchestrator`, `search`,
   `simplifier`, `presenter` and `progressCheck` ship with every install, and
   the Lean agents and skills come with the Lean plugin.
@@ -295,8 +302,10 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   sessions with persistent history, resume, fork and approvals, agents
   written inline or as files, tools and plugins of your own. Its authoring
   surface is `@texra-ai/harness/plugins` and the built-in plugins are
-  `@texra-ai/harness/builtins`. `@texra-ai/llm` is its model access. Both
-  need Node.js 22.22.2 or 24.15 and Effect 4.1.
+  `@texra-ai/harness/builtins`. The store file and the environment
+  variables it reads are named after the embedding app's settings namespace
+  (`<namespace>.db`, `<NAMESPACE>_APPROVAL_POLICY`). `@texra-ai/llm` is its
+  model access. Both need Node.js 22.22.2 or 24.15 and Effect 4.1.
 - **Smaller additions.** Filters match every word in any order. More Unicode
   math converts to LaTeX, in `gather`, `multline`, `alignat`, `flalign` and
   `eqnarray` too. The VS Code LaTeX commands accept `.ltx` and `.latex`
