@@ -209,10 +209,11 @@ interface EndedRun {
 /** What a run's end reads of its session. */
 type EndServices = SessionLog | Inbox | RunHistory;
 
+/** The log channel of a run's end: its verdict, its report and its rows. */
+export const RUN_LIFECYCLE_CHANNEL = 'agentRunLifecycle';
+
 /** The caller's {@link EndServices}, for the end's transaction job. Picked
  *  when asked: the inbox's module and this one import each other. */
-const CHANNEL = 'agentRunLifecycle';
-
 const endServices = Effect.suspend(() =>
   Effect.map(
     Effect.context<EndServices>(),
@@ -252,7 +253,7 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
   const undelivered = (why: string, error?: Error) =>
     Effect.as(
       logFailure(
-        CHANNEL,
+        RUN_LIFECYCLE_CHANNEL,
         `Run ${runId}: its report was not delivered; ${why}. The report stays on the run.`,
       )(error),
       [],

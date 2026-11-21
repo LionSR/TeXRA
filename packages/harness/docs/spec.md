@@ -529,7 +529,7 @@ exits stops nothing: a session's close interrupts its runs' fibers and MUST
 NOT write a stop or an end for a run nobody stopped, so the run is left as
 its rows stand and reads as interrupted, resumable, at the next open, as
 after a crash (`agent/runtime/runRegistry.ts#interruptAll`,
-`agent/runtime/AgentRunLifecycle.ts#commitEnd`). A run whose
+`agent/runtime/AgentRunLifecycle.ts#endVerdict`). A run whose
 history does not load ends with its `run.end` and its requests uncancelled,
 with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
 run that ends: a native child runs one cycle and ends with its report; a

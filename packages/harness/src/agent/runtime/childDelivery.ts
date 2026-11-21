@@ -10,6 +10,7 @@
  */
 import { Effect } from 'effect';
 
+import { RUN_LIFECYCLE_CHANNEL } from '@agent/storage/runLifecycle';
 import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
@@ -28,11 +29,7 @@ import type { RunRows } from '@shared/session/runRowsShape';
 import { readProgramResult } from './programRun';
 import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
-import { scriptEndDelivery, scriptStopNotice } from './scriptRun';
-
-/** The run lifecycle's log channel (`AgentRunLifecycle.ts`, which imports
- *  this module, names the same). */
-const CHANNEL = 'agentRunLifecycle';
+import { scriptEndDelivery } from './scriptRun';
 
 /** A subagent's context lines, after its wall time: its working directory,
  *  then the memories its launch named and could not attach. */
@@ -62,7 +59,7 @@ function contextLines(
 /**
  * The delivery a run's end makes, or null when it delivers nothing
  * (a stopped agent run, a script its awaiting call released).
- * `report` is the run's own, its outcome resolved by its end; `record` is
+ * `report` is the run's own, with the outcome its end commits; `record` is
  * what its rows say before the end (its stop, an earlier report). A
  * report that cannot be built is delivered as that failure, in the run's
  * family, rather than lost.
@@ -80,11 +77,7 @@ export const childEndReport = Effect.fn('childEndReport')(
   > {
     const { runId, config } = ctx;
     const script = backgroundScriptOf(config);
-    if (script !== null) {
-      if (report.outcome === RUN_OUTCOME.CANCELLED)
-        return record?.stop?.reason === 'user'
-          ? yield* scriptStopNotice(runId, script.title, ctx.startedAt)
-          : null;
+    if (script !== null)
       return yield* scriptEndDelivery(
         runId,
         script.title,
@@ -92,9 +85,9 @@ export const childEndReport = Effect.fn('childEndReport')(
         report.failure === undefined
           ? null
           : runEndErrorMessage(report.failure),
+        record?.stop?.reason,
         ctx.startedAt,
       );
-    }
     const delivery = {
       family: DELIVERY_FAMILY.subagent,
       runId,
@@ -150,7 +143,7 @@ export const childEndReport = Effect.fn('childEndReport')(
     Effect.catch(built, (unbuilt) =>
       Effect.as(
         logFailure(
-          CHANNEL,
+          RUN_LIFECYCLE_CHANNEL,
           `Run ${runId}: its report could not be built`,
         )({
           runId,
