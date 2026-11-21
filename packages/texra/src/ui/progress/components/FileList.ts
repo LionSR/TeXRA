@@ -28,7 +28,10 @@ import {
 import type { FileActionSchema } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
+import { GENERATED_FILES_LABEL, ROUND_ALERT } from '@ui/copy/documentOutputs';
+import { statusGlyph, type StatusLook } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
+import { toneStyles } from '@ui/styles/toneStyles';
 import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 import {
   renderIconActionButton,
@@ -58,6 +61,17 @@ function fileActionButton(
   return renderIconActionButton({ ...options, id });
 }
 
+/** A round alert's glyph, in its tone. */
+function alertIcon(
+  alert: StatusLook,
+  options: { readonly id?: string; readonly label?: string } = {},
+): TemplateResult {
+  return waIcon(statusGlyph(alert), {
+    ...options,
+    className: `round-alert tone-${alert.tone}`,
+  });
+}
+
 /** A file name that opens the file it names. */
 const OPEN_FILE_TARGET = '.file-path[data-file]';
 
@@ -81,6 +95,7 @@ export class FileList extends TexraElement {
   static override styles = [
     TexraElement.styles,
     lineChangeStatsStyles,
+    toneStyles,
     fileListStyles,
   ];
 
@@ -99,7 +114,11 @@ export class FileList extends TexraElement {
     }
 
     return html`
-      <wa-details class="panel-collapsible" summary="Generated files" open>
+      <wa-details
+        class="panel-collapsible"
+        summary=${GENERATED_FILES_LABEL}
+        open
+      >
         ${this.renderStorageHint()}
         <div
           class="files-container"
@@ -181,8 +200,8 @@ export class FileList extends TexraElement {
               ),
             ),
         )}
-        ${noDocuments ? html`<li class="file-item">${waIcon('triangle-exclamation')} Wrote no documents</li>` : nothing}
-        ${missing.map((name) => html`<li class="file-item">${waIcon('triangle-exclamation')} Missing: <bdi dir="auto">${name}</bdi></li>`)}
+        ${noDocuments ? html`<li class="file-item">${alertIcon(ROUND_ALERT.noDocuments)} ${ROUND_ALERT.noDocuments.text}</li>` : nothing}
+        ${missing.map((name) => html`<li class="file-item">${alertIcon(ROUND_ALERT.missingOutput)} ${ROUND_ALERT.missingOutput.text}: <bdi dir="auto">${name}</bdi></li>`)}
         ${
           replyToCheck
             ? html`<li class="file-item">
@@ -245,9 +264,9 @@ export class FileList extends TexraElement {
       <li class="file-item">
         ${
           failure
-            ? html`${waIcon('triangle-exclamation', { id: `${idPrefix}-compile-warning`, className: 'compile-warning', label: 'Compile check failed' })}
-                <wa-tooltip for="${idPrefix}-compile-warning"
-                  >Compile check failed</wa-tooltip
+            ? html`${alertIcon(ROUND_ALERT.compileFailed, { id: `${idPrefix}-compile-alert`, label: ROUND_ALERT.compileFailed.text })}
+                <wa-tooltip for="${idPrefix}-compile-alert"
+                  >${ROUND_ALERT.compileFailed.text}</wa-tooltip
                 >`
             : nothing
         }

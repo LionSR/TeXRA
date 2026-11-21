@@ -35,20 +35,35 @@ import {
   UserQuestionRequestSchema,
 } from './requestPayloads';
 
+/** What a person changed in a proposal's launch form before approving it:
+ *  its agent and model when they are not the proposal's, its instruction
+ *  and file lists as the form holds them. */
+const ProposalEditSchema = Schema.Struct({
+  kind: Schema.Literal('proposal'),
+  model: Schema.optional(Schema.String),
+  agent: Schema.optional(Schema.String),
+  instruction: Schema.optional(Schema.String),
+  inputFiles: Schema.optional(Schema.Array(Schema.String)),
+  contextFiles: Schema.optional(Schema.Array(Schema.String)),
+  mediaFiles: Schema.optional(Schema.Array(Schema.String)),
+});
+/** A proposal approval's changes ({@link ProposalEditSchema}). */
+export type ProposalEdit = typeof ProposalEditSchema.Type;
+
+/** What an approval changed in what it approves, named by the request kind
+ *  it belongs to: a proposal's launch form, or a tool edit's proposed file
+ *  as the user left it in the host's diff view. */
+const ApprovalEditSchema = Schema.Union([
+  ProposalEditSchema,
+  Schema.Struct({ kind: Schema.Literal('toolEdit'), content: Schema.String }),
+]);
+
 export const RequestDecisionSchema = Schema.Union([
-  /** A plain approval. A proposal's approve may carry what the person
-   *  changed in the launch form (its agent, model, instruction and files);
-   *  a tool edit's approve carries the proposed file as the
-   *  user left it in the host's diff view. */
+  /** An approval, with what the person changed when its kind takes an
+   *  edit ({@link ApprovalEditSchema}). */
   Schema.Struct({
     action: Schema.Literal('approve'),
-    model: Schema.optional(Schema.String),
-    agent: Schema.optional(Schema.String),
-    instruction: Schema.optional(Schema.String),
-    inputFiles: Schema.optional(Schema.Array(Schema.String)),
-    contextFiles: Schema.optional(Schema.Array(Schema.String)),
-    mediaFiles: Schema.optional(Schema.Array(Schema.String)),
-    content: Schema.optional(Schema.String),
+    edit: Schema.optional(ApprovalEditSchema),
   }),
   Schema.Struct({
     action: Schema.Literal('approve_and_goal'),
@@ -141,9 +156,23 @@ const REQUEST_ANSWERS = {
 } as const satisfies Record<RequestKind, readonly AnswerAction[]>;
 
 /** The decisions a request of kind `K` takes: its own actions and the three
- *  refusals. */
+ *  refusals, an approval carrying only its own kind's edit. */
 export type DecisionOf<K extends RequestKind> =
-  | Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>
+  | Exclude<
+      Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>,
+      { action: 'approve' }
+    >
+  | ('approve' extends (typeof REQUEST_ANSWERS)[K][number]
+      ? {
+          readonly action: 'approve';
+          readonly edit?: Extract<
+            NonNullable<
+              Extract<RequestDecision, { action: 'approve' }>['edit']
+            >,
+            { kind: K }
+          >;
+        }
+      : never)
   | RefusalDecision;
 
 /**
@@ -186,13 +215,16 @@ export const offeredGrant = (request: {
 }): ApprovalBypassKind | null =>
   request.answeredBy === 'person' ? null : request.answeredBy;
 
-/** Whether `decision` is one `request` takes ({@link DecisionOf}). */
+/** Whether `decision` is one `request` takes ({@link DecisionOf}): one of
+ *  its actions, an approval's edit being its own kind's. */
 export function decisionFits<P extends { readonly kind: RequestKind }>(
   request: P,
   decision: RequestDecision,
 ): decision is DecisionOf<P['kind']> {
   const answers: readonly RequestDecision['action'][] =
     REQUEST_ANSWERS[request.kind];
+  if (decision.action === 'approve' && decision.edit !== undefined)
+    return decision.edit.kind === request.kind;
   return (
     decision.action === 'reject' ||
     decision.action === 'deny' ||
@@ -217,8 +249,11 @@ export function answerMismatch(
   const { action } = decision;
   const { payload, answeredBy } = request;
   const { kind } = payload;
+  const edit = decision.action === 'approve' ? decision.edit : undefined;
   if (!decisionFits(payload, decision))
-    return `A ${kind} request is not answered with "${action}".`;
+    return edit !== undefined
+      ? `A ${kind} request's approval cannot carry a ${edit.kind} edit.`
+      : `A ${kind} request is not answered with "${action}".`;
   if (
     grant != null &&
     (action !== 'approve' ||

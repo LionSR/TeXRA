@@ -56,6 +56,12 @@ const ProjectDisplaySchema = Schema.Struct({
 });
 export type ProjectDisplay = typeof ProjectDisplaySchema.Type;
 
+/** A project's name in every host: its folder's name, or the whole path for
+ *  a root that has none (`/`). */
+export function projectName(root: string): string {
+  return getBasename(root) || root;
+}
+
 /** The display record of one open folder, produced by the host once so no
  *  renderer derives a name from a path; the no-folder session reads as the
  *  prompt to open one. */
@@ -64,7 +70,7 @@ export function projectDisplayOf(
   root: string | undefined,
 ): ProjectDisplay {
   if (root === undefined) return { key, name: 'No project open' };
-  return { key, name: getBasename(root) || root };
+  return { key, name: projectName(root) };
 }
 
 /**

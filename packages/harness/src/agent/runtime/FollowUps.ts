@@ -90,9 +90,9 @@ interface ConsumeOptions {
 export interface FollowUps {
   /** The run's reader: what is pending, read from its rows. */
   readonly reader: Pick<FollowUpReader, 'read' | 'next'>;
-  /** The run's loop ended: it stays recoverable, or takes no more input
-   *  (which the inbox's observers hear). */
-  readonly release: (next: 'recoverable' | 'terminal') => void;
+  /** The run's loop ended. A `terminal` run takes no more input (which the
+   *  inbox's observers hear); otherwise it stays recoverable. */
+  readonly release: (terminal: boolean) => void;
   /**
    * Commit a batch through the run's cell: its `followup.consumed` rows, its
    * user message, and the position it opens, in one batch, answering the
@@ -304,8 +304,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   return {
     reader,
     // A child takes no more input once its loop ends: its parent resumes it.
-    release: (next) => {
-      if (next === 'terminal' || run.entry.parent !== null) inbox.ended(runId);
+    release: (terminal) => {
+      if (terminal || run.entry.parent !== null) inbox.ended(runId);
     },
     consume,
   };

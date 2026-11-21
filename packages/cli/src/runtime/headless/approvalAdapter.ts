@@ -47,7 +47,10 @@ import {
 } from '@texra/shared/session/surfaceDecision';
 import { CliInvocation } from '../platform/cliContext';
 import { REQUEST_ASK } from '@ui/copy/requestCards';
-import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
+import {
+  previewUnavailable,
+  toolEditDiffLabel,
+} from '@ui/copy/toolEditPreview';
 import { CliPromptFailed, writeTextStderr } from '../platform/logSinks';
 import type { Session, SessionHost, HostInteractions } from '@texra-ai/harness';
 
@@ -133,7 +136,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       if (read.kind === 'preview')
         return buildToolEditApprovalContent({ ...data, ...read.content });
       return {
-        summary: `${toolEditDiffLabel(data).title}\nPreview unavailable: ${read.reason}`,
+        summary: `${toolEditDiffLabel(data).title}\n${previewUnavailable(read.reason)}`,
       } satisfies CliApprovalContent;
     },
   );

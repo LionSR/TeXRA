@@ -22,8 +22,10 @@ import {
   type RunId,
   escapeAttr,
   formatHunkLines,
+  normalizeFilePath,
 } from '@texra-ai/harness/schemas';
 import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
+import { outputSlotName } from '@texra/agent/output/compileCheck';
 import {
   type DocumentDiffs,
   type DocumentsResult,
@@ -260,12 +262,9 @@ const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
           const diff = yield* unifiedDiffOf(original, modified);
           if (!diff) return { kind: 'none' } as const;
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
-          // Use full relativePath (with separators replaced) to avoid collisions
-          // when multiple files share the same basename in different directories.
-          const safeName = o.relativePath.replaceAll(/[\\/]/g, '_');
           const summary: ResultDiffSummary = {
             path: o.absolutePath,
-            diffRelPath: `diffs/${safeName}.diff`,
+            diffRelPath: `diffs/${outputSlotName(normalizeFilePath(o.relativePath))}.diff`,
             largeChange,
           };
           return {

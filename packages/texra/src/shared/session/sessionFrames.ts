@@ -20,7 +20,7 @@
  * - `session.request` and `host.request`: one runtime or host command,
  *   answered with its outcome or the error it failed with, as the class.
  *
- * Every message on the channel is a {@link SessionEnvelope}: the session it
+ * Every message on the channel is a {@link SessionEnvelopeSchema}: the session it
  * belongs to, the frontend instance that sent or is answered, and one of
  * `rpc`'s own messages.
  */
@@ -163,7 +163,6 @@ export const SessionEnvelopeSchema = Schema.Struct({
   client: Schema.NonEmptyString,
   message: Schema.Record(Schema.String, Schema.Unknown),
 });
-export type SessionEnvelope = typeof SessionEnvelopeSchema.Type;
 
 /** A message as one end posts it: up, a client's; down, a server's. */
 export interface SessionWire {

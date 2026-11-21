@@ -37,7 +37,7 @@ import { dispatchedChildren } from '@texra-ai/harness/transcript';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
-import { runStatus } from '@ui/copy/runStatus';
+import { runStatus, sectionCountLabel } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
@@ -223,7 +223,7 @@ export class BackgroundTasksPanel extends TexraElement {
     ${dispatchSummary(counts)}${
       rollup.running > 0
         ? html`<wa-badge variant="success" pill
-            >${rollup.running} running</wa-badge
+            >${sectionCountLabel('running', String(rollup.running))}</wa-badge
           >`
         : nothing
     }${

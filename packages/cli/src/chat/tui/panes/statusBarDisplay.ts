@@ -36,9 +36,15 @@ import {
 } from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
-import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
+import {
+  formatSubscriptionUsagePercent,
+  subscriptionQuotaTone,
+} from '@ui/copy/subscriptionUsage';
 import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
-import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
+import {
+  approvalPolicyLabel,
+  approvalPolicyTone,
+} from '@ui/copy/approvalPolicy';
 import {
   AGENT_LIST,
   NESTED_AGENT,
@@ -245,11 +251,8 @@ function subscriptionQuotaSegment(
     (left, right) => right.percentUsed - left.percentUsed,
   )[0];
   if (!limiting) return undefined;
-  const remaining = limiting.percentRemaining;
-  const left = formatSubscriptionUsagePercent(remaining);
-  let tone: RunTone | undefined;
-  if (remaining <= 0) tone = 'danger';
-  else if (remaining <= 20) tone = 'warning';
+  const left = formatSubscriptionUsagePercent(limiting.percentRemaining);
+  const tone = subscriptionQuotaTone(limiting);
   return {
     text: `${snapshot.planName} ${left} left`,
     compactText: `${left} left`,
@@ -521,17 +524,12 @@ function childListBindingsText(
   });
 }
 
-// A policy that stops asking earns a segment: blocking is a caution,
-// approving everything a danger. `ask`, the default, shows nothing.
-const APPROVAL_POLICY_TONE: Readonly<
-  Record<ApprovalPolicy, 'warning' | 'danger' | undefined>
-> = { ask: undefined, never: 'warning', yolo: 'danger' };
-
 function approvalPolicySegment(
   policy: ApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
   if (policy === undefined) return undefined;
-  const tone = APPROVAL_POLICY_TONE[policy];
+  // A policy that stops asking earns a segment, in its tone.
+  const tone = approvalPolicyTone(policy);
   if (tone === undefined) return undefined;
   // The label the /approval picker and every other surface uses for this
   // policy — the bar is how users confirm their selection took effect.

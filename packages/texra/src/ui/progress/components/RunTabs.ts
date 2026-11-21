@@ -12,6 +12,7 @@ import {
 } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { runListSections, runStatus } from '@ui/copy/runStatus';
 import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 import { TexraElement } from '@ui/litBase';
@@ -224,8 +225,8 @@ export class RunTabs extends TexraElement {
           ${when((view?.order.length ?? 0) === 0, () =>
             renderEmptyState({
               icon: 'list-ul',
-              title: 'No tasks yet',
-              body: 'Tasks you start appear here.',
+              title: EMPTY_TASK_LIST.title,
+              body: EMPTY_TASK_LIST.body,
               headingTag: 'h3',
             }),
           )}

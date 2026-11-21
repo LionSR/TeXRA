@@ -57,7 +57,7 @@ const GrepInputSchema = Schema.Struct({
   '-i': optionalInput(Schema.Boolean, 'Case-insensitive search.'),
   type: optionalInput(
     Schema.String,
-    'Ripgrep file type filter (e.g. "tex", "py").',
+    'Ripgrep file type filter (e.g. "md", "py").',
   ),
   offset: nullishWithDefault(NonNegativeIntSchema, 0, 'Skip first N results.'),
   head_limit: optionalInput(
