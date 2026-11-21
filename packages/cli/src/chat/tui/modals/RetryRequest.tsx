@@ -8,7 +8,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
-import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { REQUEST_ASK, RETRY_OWN_KEY_LABEL } from '@ui/copy/requestCards';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
@@ -63,7 +63,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
           ? [
               {
                 key: 'k',
-                action: 'retry with your own API key',
+                action: RETRY_OWN_KEY_LABEL.toLowerCase(),
                 decision: REQUEST_ACTIONS.retry.k,
               },
             ]

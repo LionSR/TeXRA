@@ -65,6 +65,7 @@ import {
   runGrantLabel,
 } from '@ui/copy/delegationApproval';
 import {
+  REJECTION_NOTE_PROMPT,
   requestDeclineLabel,
   requestPrimaryLabel,
 } from '@ui/copy/requestCards';
@@ -163,7 +164,7 @@ export abstract class BaseRequestPanel<
 
   /** The note box's label: what the agent should hear. */
   protected get notePrompt(): string {
-    return 'What should the agent change?';
+    return REJECTION_NOTE_PROMPT;
   }
 
   /** The run-scoped grant on the primary's ▾ menu: the one that answers the
