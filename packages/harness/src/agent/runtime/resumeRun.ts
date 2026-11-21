@@ -238,7 +238,7 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
       stopAfterCycle: options.stopAfterCycle,
       tools: options.tools,
       onProgress: options.onProgress,
-      resumed: { parentId, start: facts?.start ?? null },
+      entry: { kind: 'resume', parentId, start: facts?.start ?? null },
     },
   };
 });

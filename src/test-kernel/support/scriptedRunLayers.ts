@@ -35,6 +35,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { AgentConfigSchema, PersonaSchema, type RunId } from '@shared/schemas';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { generateRunId } from '@shared/schemas';
@@ -261,9 +262,9 @@ const testConfig = () =>
     instruction: TEST_INSTRUCTION,
   });
 
-/** A launch's entry with no parent or opening trace. A fresh one registers
- *  nothing more, since a fixture publishes its run's start itself; a
- *  `resume` has no registration, which is how the loop knows it is one. */
+/** A launch's entry with no parent or opening trace. A fresh one commits
+ *  no rows, since a fixture publishes its run's start itself; a `resume`
+ *  is not fresh, which is how the loop knows it is one. */
 const testEntry = (
   runId: RunId,
   config: RunLaunch['config'],
@@ -271,12 +272,23 @@ const testEntry = (
 ): RunLaunch['entry'] => ({
   parent: null,
   awaited: false,
-  registration: resume
+  fresh: resume
     ? null
     : {
-        rows: [],
-        start: null,
-        config: { type: 'run.config', aggregateId: runId, config },
+        registration: {
+          rows: [],
+          start: {
+            type: 'run.start',
+            aggregateId: runId,
+            identity: { kind: 'agent', agent: config.agent },
+            takesFollowUps: false,
+            worktree: null,
+            parent: null,
+            provenance: null,
+            grants: NO_APPROVAL_GRANTS,
+          },
+          config: { type: 'run.config', aggregateId: runId, config },
+        },
       },
   enter: (commit) => Effect.uninterruptible(commit(Effect.succeed([]))),
 });

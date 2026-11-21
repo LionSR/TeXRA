@@ -165,9 +165,8 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
 > {
   const runHistory = yield* RunHistory;
   const run = yield* AgentRun;
-  // A launch with no registration is a resume.
-  const { registration } = run.entry;
-  const resume = registration === null;
+  const { fresh } = run.entry;
+  const resume = fresh === null;
   // The activation's rows are read in its publisher job, outside this fiber.
   const owners = Context.pick(
     SessionLog,
@@ -213,7 +212,7 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
           }),
         }
       : {
-          registration: Effect.succeed(registration.rows),
+          registration: Effect.succeed(fresh.registration.rows),
         },
   );
   // A resume enters with its activation, with no alongside: its held
@@ -344,8 +343,8 @@ export const openToolUse = Effect.fn('toolUse.open')(
       ...{ modelId: bound.modelId, ...binding },
     };
     // A fork is born on the history it was cut from, its turn ready.
-    const { seed } = run.entry;
-    if (seed != null) {
+    const seed = run.entry.fresh?.seed;
+    if (seed !== undefined) {
       echo();
       const born = [
         ...seed.rows,
@@ -593,7 +592,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ------------------------------------------------------------- the loop
   const loopBody = Effect.fn('loopBody')(function* (cell: RunCell) {
     // A resumed run first finishes what its children were left as.
-    if (run.entry.registration === null) yield* resumeLeftoverChildren();
+    if (run.entry.fresh === null) yield* resumeLeftoverChildren();
     for (;;) {
       let state = yield* cell.current;
       const waiting = state.at === 'waiting' || state.at === 'turn.end';
