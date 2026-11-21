@@ -306,14 +306,6 @@ const APPROVAL_POLICY_SETTING: { readonly key: "approvalPolicy"; readonly slot: 
 type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 ```
 
-## ApprovalEdit
-
-An approval's changes ({@link ApprovalEditSchema}).
-
-```ts
-type ApprovalEdit = typeof ApprovalEditSchema.Type;
-```
-
 ## ApprovalGrants
 
 ```ts

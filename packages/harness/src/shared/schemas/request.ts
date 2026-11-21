@@ -57,8 +57,6 @@ const ApprovalEditSchema = Schema.Union([
   ProposalEditSchema,
   Schema.Struct({ kind: Schema.Literal('toolEdit'), content: Schema.String }),
 ]);
-/** An approval's changes ({@link ApprovalEditSchema}). */
-export type ApprovalEdit = typeof ApprovalEditSchema.Type;
 
 export const RequestDecisionSchema = Schema.Union([
   /** An approval, with what the person changed when its kind takes an
@@ -167,7 +165,12 @@ export type DecisionOf<K extends RequestKind> =
   | ('approve' extends (typeof REQUEST_ANSWERS)[K][number]
       ? {
           readonly action: 'approve';
-          readonly edit?: Extract<ApprovalEdit, { kind: K }>;
+          readonly edit?: Extract<
+            NonNullable<
+              Extract<RequestDecision, { action: 'approve' }>['edit']
+            >,
+            { kind: K }
+          >;
         }
       : never)
   | RefusalDecision;

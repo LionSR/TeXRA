@@ -774,7 +774,12 @@ type DecisionOf<K extends RequestKind> =
   | ('approve' extends (typeof REQUEST_ANSWERS)[K][number]
       ? {
           readonly action: 'approve';
-          readonly edit?: Extract<ApprovalEdit, { kind: K }>;
+          readonly edit?: Extract<
+            NonNullable<
+              Extract<RequestDecision, { action: 'approve' }>['edit']
+            >,
+            { kind: K }
+          >;
         }
       : never)
   | RefusalDecision;
