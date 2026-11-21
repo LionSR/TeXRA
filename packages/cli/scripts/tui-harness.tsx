@@ -1985,10 +1985,6 @@ const harnessSlashContext: SlashCommandContext = {
   resumeTask: () => Effect.void,
   activateSkill: (name) =>
     appendHarnessAssistantTranscript(`Harness skill selected: ${name}.`),
-  onProjectApprovalPolicyChanged: (policy) =>
-    appendHarnessAssistantTranscript(
-      `Project approval policy: ${formatApprovalPolicy(policy)}`,
-    ),
   getModelSwitchDisabledReason: (model) =>
     Effect.succeed(
       DISABLED_MODEL_SWITCHES.has(model)
