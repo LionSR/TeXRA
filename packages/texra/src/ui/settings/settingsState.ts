@@ -21,8 +21,6 @@
  * replays. A signal declared any other way is silently left out of the reset.
  */
 
-import { Schema } from 'effect';
-
 import type { SettingRow } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
@@ -82,7 +80,7 @@ function signalFor(key: string): Signal.State<unknown> {
       throw new Error(`No settings-view catalog row for setting "${key}"`);
     }
     state = trackedSignal<unknown>(() =>
-      Schema.decodeUnknownSync(entry.schema)(undefined),
+      TEXRA_SETTINGS.catalog.defaultOf(entry.key),
     );
     CATALOG_SIGNALS.set(key, state);
   }
