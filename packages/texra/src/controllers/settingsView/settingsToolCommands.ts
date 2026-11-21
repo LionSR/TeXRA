@@ -17,7 +17,6 @@ import {
   type PluginPageRoots,
 } from '@texra/controllers/settingsView/pluginRows';
 import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 
 import {
   SETTINGS_LOG_CHANNEL,
@@ -25,6 +24,7 @@ import {
   hostStatePage,
   type SettingsHostBindings,
   type SettingsPresentation,
+  type SettingsViewInboundHandlerRegistry,
 } from './settingsHostBindings';
 
 /** The Plugins and LaTeX pages: their handlers, their pages, and the follower

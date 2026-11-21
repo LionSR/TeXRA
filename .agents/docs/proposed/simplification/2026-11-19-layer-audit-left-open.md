@@ -134,6 +134,11 @@ desktop refuses both. They can move into `openGuiWindow` behind two host
 bindings, `currentFile` and `openedFiles`. Decision needed: does the desktop
 offer these buttons?
 
+Landed 2026-11-21: both requests are the shared body's, over an optional
+`editor` binding with those two verbs; the extension binds it, and the
+desktop, which binds none, refuses both as before. Whether the desktop
+offers the buttons is still open.
+
 ## 8. TeXRA's name in the harness
 
 The harness still carries TeXRA's name and LaTeX in a few places:

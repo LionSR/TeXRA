@@ -300,6 +300,14 @@ reaches this row.
 const APPROVAL_POLICY_SETTING: { readonly key: "approvalPolicy"; readonly slot: "config"; readonly schema: withDecodingDefault<Literals<readonly ["never", "ask", "yolo"]>, never>; readonly title: "Approval policy"; readonly description: "Whether agents ask before running shell commands and editing files."; readonly configTarget: "local"; readonly choices: { readonly never: { readonly label: "Block"; }; readonly ask: { readonly label: "Ask"; }; readonly yolo: { readonly label: "Auto-approve"; }; }; }
 ```
 
+## ApprovalBypasser
+
+Who bypasses a kind's prompts: a run's autonomous goal, or a human.
+
+```ts
+type ApprovalBypasser = 'goal' | 'human';
+```
+
 ## ApprovalBypassKind
 
 ```ts
@@ -2050,7 +2058,7 @@ function resolveBypass(
   source: ApprovalGrantSource,
   runId: RunId,
   kind: ApprovalBypassKind,
-): 'goal' | 'human' | null
+): ApprovalBypasser | null
 ```
 
 ## ResponseCut

@@ -259,14 +259,13 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         }),
         focused,
         draftRequests: options.draftRequests,
-        host: () =>
-          createDesktopHostRequests({
-            host: hosts.run,
-            openFiles: host.openFileDialog,
-            postToRenderer: host.post,
-            settings: options.settings,
-            openExternalUrl: host.openExternalUrl,
-          }),
+        host: createDesktopHostRequests({
+          host: hosts.run,
+          openFiles: host.openFileDialog,
+          postToRenderer: host.post,
+          settings: options.settings,
+          openExternalUrl: host.openExternalUrl,
+        }),
       });
       const { bridge, snapshot, settingsRuns } = gui;
       // Registered after the host requests, so a port's release (its map

@@ -16,6 +16,7 @@ import {
 } from '@texra/shared/settings/texraSettings';
 
 import {
+  HostTelemetrySwitch,
   USAGE_LOGGING_ENV_OPT_OUT,
   usageLoggingOptOut,
 } from './UsageLogService';
@@ -31,10 +32,12 @@ const NOTICE_SHOWN_KEY = {
  * The first-run notice, or null. It is due once per machine while telemetry
  * is on: the flag is one global app-state row all three hosts share, marked
  * shown as it is returned so exactly one host prints it.
- * An opted-out user is not told about something that is not sent.
+ * An opted-out user, or one whose host switch is off, is not told about
+ * something that is not sent.
  */
 export const telemetryNoticeIfDue = Effect.fn('telemetryNoticeIfDue')(
   function* (config: ConfigProvider) {
+    if (!(yield* HostTelemetrySwitch)()) return null;
     if ((yield* usageLoggingOptOut(config)) !== null) return null;
     const state = yield* AppState;
     if (yield* Settings.state(state, NOTICE_SHOWN_KEY)) return null;
