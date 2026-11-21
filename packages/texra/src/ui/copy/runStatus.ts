@@ -46,16 +46,16 @@ interface StatusWord {
  * words against the real headless run.
  */
 const RUN_STATUS: Readonly<Record<RunStatusKey, StatusWord>> = Object.freeze({
-  starting: { word: 'Initializing', tone: 'running' },
-  resuming: { word: 'Resuming', tone: 'running' },
-  running: { word: 'Running', tone: 'running' },
-  waiting: { word: 'Idle', tone: 'neutral' },
-  ready: { word: 'Ready', tone: 'neutral' },
-  completed: { word: 'Completed', tone: 'success' },
-  cancelled: { word: 'Stopped', tone: 'neutral' },
-  failed: { word: 'Error', tone: 'danger' },
-  interrupted: { word: 'Interrupted', tone: 'warning' },
-  waitingOnUser: { word: 'Waiting on you', tone: 'warning' },
+  starting: Object.freeze({ word: 'Initializing', tone: 'running' }),
+  resuming: Object.freeze({ word: 'Resuming', tone: 'running' }),
+  running: Object.freeze({ word: 'Running', tone: 'running' }),
+  waiting: Object.freeze({ word: 'Idle', tone: 'neutral' }),
+  ready: Object.freeze({ word: 'Ready', tone: 'neutral' }),
+  completed: Object.freeze({ word: 'Completed', tone: 'success' }),
+  cancelled: Object.freeze({ word: 'Stopped', tone: 'neutral' }),
+  failed: Object.freeze({ word: 'Error', tone: 'danger' }),
+  interrupted: Object.freeze({ word: 'Interrupted', tone: 'warning' }),
+  waitingOnUser: Object.freeze({ word: 'Waiting on you', tone: 'warning' }),
 });
 
 /** How each section reads, in the order the sections are painted: its
@@ -140,7 +140,7 @@ export const TOOL_STATUS: Readonly<Record<ToolRowStatus, StatusWord>> =
     in_progress: Object.freeze({ word: 'Running', tone: 'running' }),
     completed: Object.freeze({ word: 'Completed', tone: 'success' }),
     failed: Object.freeze({ word: 'Failed', tone: 'danger' }),
-    interrupted: Object.freeze(RUN_STATUS.interrupted),
+    interrupted: RUN_STATUS.interrupted,
   });
 
 /** The label of what the user told the model when deciding a tool call. */

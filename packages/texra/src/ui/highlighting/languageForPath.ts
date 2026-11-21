@@ -94,8 +94,8 @@ interface PathLanguage {
 
 function pathLanguage(filePath: string): PathLanguage {
   const name = getBasename(filePath).toLowerCase();
-  const byName = FILE_NAME_LANGUAGE[name];
-  if (byName) return { language: byName, extension: '' };
+  if (Object.hasOwn(FILE_NAME_LANGUAGE, name))
+    return { language: FILE_NAME_LANGUAGE[name], extension: '' };
   const dotIndex = name.lastIndexOf('.');
   const extension = dotIndex === -1 ? '' : name.slice(dotIndex + 1);
   return {
