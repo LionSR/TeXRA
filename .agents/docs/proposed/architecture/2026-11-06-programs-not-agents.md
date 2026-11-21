@@ -1316,7 +1316,7 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
 
 ## 负责人问题
 
-决定页上的十一处都选了。剩下两处：
+决定页上的十一处都选了。剩下两处（第 1 处已于 2026-11-21 定）：
 
 1. **skills 留到哪一步，插件带的 agent 怎么办。** 你选了不删安装式插件的
    skills、commands 和 agents。本文据此保留 skills 子系统，并仍然删掉
@@ -1324,6 +1324,14 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
    skill（`.texra/skills`、`~/.texra/skills`、`.claude/skills` 这一类）
    是否照旧加载；安装式插件带的 agent 不能是入口，它们是留作入口 agent
    可以按名调用的子运行，还是不加载。
+   **已定（2026-11-21，负责人要求把这一问定掉，取与"不删安装式插件的
+   skills、commands 和 agents"一致的一侧）。** 项目和用户目录里的 skill
+   照旧加载：skills 子系统本来就为安装式插件留着，这些目录走的是同一个
+   读取器，不加载它们省不下代码，只拿走用户自己的文件的用处。安装式插
+   件带的 agent 留作入口 agent 可以按名调用的子运行（`agent()` 的名
+   字），不是入口，不进 launch form，也不进任何 picker；不加载就等于删
+   掉，和上面的选择相反。第 5 期据此不再等这一问，它等的两片（skill 目
+   录的加载、插件 agent 的子运行登记）按这里做。
 2. **工具改 CLI**（Unix 一节第 1 条）作为第 7 期？你在这一条上没选，只说
    了 `latex-extract` 可以去掉。推荐：接受，先试 `arxiv`。
 
