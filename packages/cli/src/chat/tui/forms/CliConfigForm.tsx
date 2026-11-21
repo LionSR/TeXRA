@@ -38,11 +38,6 @@ export interface CliConfigFormProps {
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
-  /**
-   * Repaints the live session's approval policy after that row is written
-   * here, the same hook `/approval` drives. Omitted by `texra config edit`,
-   * whose process holds no session.
-   */
 }
 
 /**
