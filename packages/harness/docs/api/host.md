@@ -454,8 +454,10 @@ function formatFatalErrorDetail(error: unknown): string
 
 ## getEnabledModels
 
-The models the pickers show — the single reader of
-{@link MODEL_SELECTION_KEY} for every host.
+The models a person has switched on: the list the Models tab and
+`texra models enabled` edit — the single reader of
+{@link MODEL_SELECTION_KEY} for every host. What a picker lists is
+`readModelOptions`' default list, which adds what a subscription serves.
 
 ```ts
 const getEnabledModels: (stores: Pick<SettingsStores, "config" | "globalState">) => Effect<readonly string[], StateReadFailed, never>

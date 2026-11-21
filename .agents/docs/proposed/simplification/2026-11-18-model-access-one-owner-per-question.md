@@ -28,18 +28,20 @@ the app's controllers; a row marked _landed_ changed with this note.
 Checked against `main` on 2026-11-19: all three still stand as written, and
 each waits on the decision its last sentence names. None can land without it.
 
-1. **Which models the launcher's picker lists.** The progress view's
-   launcher reads the enabled models alone
-   (`packages/texra/src/controllers/session/hostSnapshotSource.ts` passes
-   `getEnabledModels`); the terminal's `/model`, `texra models list` and
-   delegation read the harness's default list, which adds every model the
-   ChatGPT subscription serves once signed in (`visibleModelsForAccess`).
-   Signed in to ChatGPT, the terminal offers models the launcher does not.
-   Either is defensible: the harness's list saves enabling each Codex model,
-   while the launcher's honours a model switched off in the Models tab. It
-   is a product-visible default, so the owner decides; the change is one
-   argument in `hostSnapshotSource.ts`, or the ChatGPT branch of
-   `visibleModelsForAccess`.
+1. **Which models the launcher's picker lists.** Decided and landed
+   2026-11-21: one list for every surface, owned by the harness
+   (`listedModels` in `packages/harness/src/model/computeModelOptions.ts`,
+   the default of `readModelOptions`). The launcher reads it
+   (`loadModelOptions(stores)` in
+   `packages/texra/src/controllers/session/hostSnapshotSource.ts`) as the
+   terminal's `/model`, `texra models list` and delegation do. What changed,
+   and for whom: signed in to ChatGPT, the GUI launcher now also offers the
+   models that subscription serves without each being enabled; and on every
+   surface a default model a person switched off stays off even when the
+   subscription serves it (`disabledDefaults` is the one stored "off"; the
+   terminal used to list such a model again). A model that was never a
+   default and never enabled has no stored "off", so none was invented: it
+   is listed while the subscription serves it.
 2. **A model the picker hides.** `chooseLaunchModel` runs a catalog model a
    launch names even when it is not enabled; delegation refuses it with
    "not currently available for delegation", because it checks a launch
