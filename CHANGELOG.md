@@ -6,16 +6,6 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **An agent's prompt is text, with four variables filled by name.** A
-  prompt in an agent file or an SDK inline persona used to be rendered as a
-  template, so an expression, a filter or a `{% … %}` block in it was
-  evaluated. Now only `{{ CWD }}`, `{{ BUILTIN_AGENTS_DIR }}`,
-  `{{ CUSTOM_AGENTS_DIR }}` and `{{ AGENT_DOCS_DIR }}` are replaced, and
-  everything else reaches the model as written. The TikZ template setting
-  likewise fills only `{{ tikzpicture }}`. A custom agent that used template
-  logic needs that logic written out. SDK: `renderPrompt` on
-  `@texra-ai/harness/plugins` returns the string, not an Effect.
-
 - **Two SDK shapes lose a field nothing read.** `ownKeyCredential` on
   `@texra-ai/harness/host` resolves to `{ bearer, endpoint }`: the credential
   no longer carries its provider or route, since a binding keys its retry

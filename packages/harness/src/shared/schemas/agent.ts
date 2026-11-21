@@ -137,9 +137,11 @@ const TemperatureSchema = Schema.Number.check(
 ).check(Schema.isLessThanOrEqualTo(1));
 
 /**
- * A persona: a model agent, its system prompt (whose `{{ CWD }}` and agent
- * directory variables are filled at launch) with the tools it is offered. A persona that declares no tools works text-only. The user's
- * task is the user message, so a persona has no request template.
+ * A persona: a model agent, its system prompt (a Nunjucks template) with the
+ * tools it is offered. A persona that declares no tools works text-only. The
+ * user's task is the user message, so a persona has no request template.
+ * The prompt's expressions are evaluated in the host process when a run
+ * launches: it is its author's code, not a place for an end user's text.
  */
 export const PersonaSchema = Schema.Struct({
   prompt: decodingDefault(Schema.String, ''),

@@ -1,27 +1,55 @@
-import { Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
-/** An opening prompt that could not be built: an `AGENTS.md` that is there
- *  and could not be read. */
+import { ensureError } from '@utils/errors/errorMessage';
+import type { Environment } from 'nunjucks';
+
+/** A prompt that did not render: the template's own error, `nunjucks`
+ *  failing to load, or an `AGENTS.md` that is there and could not be read. */
 export class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
   'PromptRenderFailed',
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 ) {}
 
-/** `{{ NAME }}`, with any spacing inside the braces. */
-const VARIABLE = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
+const renderFailure = (cause: unknown): PromptRenderFailed =>
+  new PromptRenderFailed({ message: ensureError(cause).message, cause });
 
 /**
- * Fill a prompt's variables: each `{{ NAME }}` whose name is a key of
- * `variables` becomes that value, in one pass, so a value is never read for
- * variables itself. Everything else stays as written, an unknown name and
- * any other brace expression included: a prompt is text an embedder may take
- * from anyone, and nothing in it is evaluated.
+ * The prompt-rendering environment: an empty loader list, since a prompt is
+ * an in-memory string and names no template file (a `null` list would get
+ * nunjucks' default `views/` loader; an empty one makes any `{% include %}`
+ * fail as "template not found"), and autoescape off, since a prompt is raw
+ * text, not HTML. The lazy `nunjucks` import is this module's one foreign
+ * async edge; Node's module cache serves every import after the first, and
+ * a failed import surfaces on each render. A fresh environment per
+ * render costs little: `renderString` compiles the template each call anyway.
  */
-export function renderPrompt(
-  prompt: string,
-  variables: Readonly<Record<string, string>>,
-): string {
-  return prompt.replace(VARIABLE, (written, name: string) =>
-    Object.hasOwn(variables, name) ? (variables[name] ?? written) : written,
+const promptEnvironment: Effect.Effect<Environment, PromptRenderFailed> =
+  Effect.tryPromise({
+    try: () => import('nunjucks'),
+    catch: renderFailure,
+  }).pipe(
+    Effect.map(
+      ({ default: nunjucks }) =>
+        new nunjucks.Environment([], { autoescape: false }),
+    ),
   );
-}
+
+/**
+ * Render a prompt string using nunjucks templating. A template is code: its
+ * expressions run in this process, so render only text the agent's author
+ * wrote, never text taken from a project's files or an end user.
+ *
+ * @param prompt The prompt template string
+ * @param variables Variables to use in template rendering
+ * @returns The rendered prompt; a template error fails with its message
+ */
+export const renderPrompt = Effect.fn('prompt.render')(function* (
+  prompt: string,
+  variables: Record<string, unknown>,
+): Effect.fn.Return<string, PromptRenderFailed> {
+  const environment = yield* promptEnvironment;
+  return yield* Effect.try({
+    try: () => environment.renderString(prompt, variables),
+    catch: renderFailure,
+  });
+});

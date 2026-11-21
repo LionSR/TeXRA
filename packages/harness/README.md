@@ -122,6 +122,14 @@ inline persona has no bundled original, so a `basedOn` is refused with a
 it names that no plugin offers fails the run before any model call, as it
 would in a file.
 
+A `prompt`, in a file or inline, is a [Nunjucks](https://mozilla.github.io/nunjucks/)
+template rendered once when the run launches, with `CWD` (the run's working
+directory) among its variables. Its expressions are evaluated in your
+process, so a prompt is its author's code: pass an end user's text as the
+`instruction`, never as part of a persona's `prompt`. Nothing else the system
+prompt carries (the workspace's path and branch, `AGENTS.md`, attached
+memories) is rendered.
+
 ```ts
 const program = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots);

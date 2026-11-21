@@ -1,5 +1,5 @@
 // Node imports
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import * as os from 'node:os';
 import { join } from 'node:path';
 
@@ -92,21 +92,21 @@ describe('PromptBuilder', () => {
   );
 
   it.effect(
-    'fills a prompt variable by name and evaluates nothing else in a prompt',
+    "renders the persona's prompt and leaves the workspace's own facts as written",
     () =>
       Effect.gen(function* () {
         const storageRoot = mkdtempSync(join(os.tmpdir(), 'texra-prompt-'));
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => rmSync(storageRoot, { recursive: true })),
         );
+        // A folder name is the project's, like a branch name: an expression
+        // in one must reach the model as written, never run in this process.
+        const workspace = join(storageRoot, 'ws {{ 7 * 6 }}');
+        mkdirSync(workspace);
         // cast: the opening reads only the workspace and the storage root.
-        const roots = { workspace: undefined, storageRoot } as WorkspaceRoots;
-        // A prompt is text an embedder may take from anyone: an expression
-        // in it must reach the model as written, never run in this process.
-        const expression =
-          '{{ 7 * 6 }} {{ range.constructor("return process.pid")() }} {% if CWD %}yes{% endif %}';
+        const roots = { workspace, storageRoot } as WorkspaceRoots;
         const system = yield* buildOpeningSystemPrompt(
-          `Work in {{ CWD }}. ${expression}`,
+          'Work in {{ CWD }}.',
           {
             inputs: {
               CWD: '/work',
@@ -120,8 +120,9 @@ describe('PromptBuilder', () => {
           },
           { roots, textOnly: false, offered: ['bash'] },
         );
-        expect(system).toContain(`Work in /work. ${expression}`);
+        expect(system).toContain('Work in /work.');
         expect(system).toContain('executes every command from /work.');
+        expect(system).toContain('ws {{ 7 * 6 }}');
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

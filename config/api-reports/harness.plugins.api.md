@@ -103,7 +103,7 @@ Exports: 163
 - `PromptSection` — `type PromptSection = (ctx: { readonly offered: readonly string[]; readonly isChild: boolean; readonly config: ConfigProvider; }) => string; ≡ PromptSection`
 - `randomizedExponentialBackoff` — `function randomizedExponentialBackoff: (base: Input) => Schedule<Duration, unknown, never, never>`
 - `RefusalDecision` — `type RefusalDecision = Extract<RequestDecision, { action: 'reject' | 'deny' | 'cancel'; }>; ≡ RefusalDecision`
-- `renderPrompt` — `function renderPrompt: (prompt: string, variables: Readonly<Record<string, string>>) => string`
+- `renderPrompt` — `const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>`
 - `reportDiffTimeout` — `function reportDiffTimeout: (timeout: string | undefined) => Effect<void, never, never>`
 - `requestToolEditApproval` — `const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>`
 - `resolveToolPath` — `const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, StateReadFailed | ToolError, never>`

@@ -119,13 +119,14 @@ export function contextUpdate(
 }
 
 /**
- * The system text a conversation opens with: its persona's prompt with its
- * variables filled, then the project's `AGENTS.md` and the attached memories,
- * and the suffix of tool-use instructions and workspace facts, which a
- * text-only persona (one a program defines with no tools) goes without. Only
- * the persona's prompt is read for variables: the suffix is text this module
- * builds, and the workspace facts in it (a path, a branch name) are data. What each step's plugins add is
- * appended per request (`stepInstructions`).
+ * The system text a conversation opens with: its persona's prompt rendered,
+ * then the project's `AGENTS.md` and the attached memories, and the suffix of
+ * tool-use instructions and workspace facts, which a text-only persona (one
+ * a program defines with no tools) goes without. Only the persona's prompt
+ * is a template: the suffix is text this module builds, and the workspace
+ * facts in it (a path, a branch name) come from the project, so they are
+ * data and are never rendered. What each step's plugins add is appended per
+ * request (`stepInstructions`).
  */
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
   function* (
@@ -148,7 +149,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const rendered = renderPrompt(personaPrompt, { ...inputs });
+    const rendered = yield* renderPrompt(personaPrompt, inputs);
     const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(

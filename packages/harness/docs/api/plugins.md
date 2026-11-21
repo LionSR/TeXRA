@@ -1992,8 +1992,8 @@ interface ProgramResult<R = unknown> {
 
 ## PromptRenderFailed
 
-An opening prompt that could not be built: an `AGENTS.md` that is there
-and could not be read.
+A prompt that did not render: the template's own error, `nunjucks`
+failing to load, or an `AGENTS.md` that is there and could not be read.
 
 ```ts
 class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
@@ -2037,17 +2037,16 @@ type RefusalDecision = Extract<
 
 ## renderPrompt
 
-Fill a prompt's variables: each `{{ NAME }}` whose name is a key of
-`variables` becomes that value, in one pass, so a value is never read for
-variables itself. Everything else stays as written, an unknown name and
-any other brace expression included: a prompt is text an embedder may take
-from anyone, and nothing in it is evaluated.
+Render a prompt string using nunjucks templating. A template is code: its
+expressions run in this process, so render only text the agent's author
+wrote, never text taken from a project's files or an end user.
+
+- `@param` prompt The prompt template string
+- `@param` variables Variables to use in template rendering
+- `@returns` The rendered prompt; a template error fails with its message
 
 ```ts
-function renderPrompt(
-  prompt: string,
-  variables: Readonly<Record<string, string>>,
-): string
+const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
 ```
 
 ## reportDiffTimeout
