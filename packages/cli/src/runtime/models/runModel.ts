@@ -7,7 +7,11 @@ import {
   cliCommandDefaults,
   resolveKnownCliModelId,
 } from '../platform/cliConfig';
-import { CliUsageError, type CliContext } from '../platform/cliContext';
+import {
+  CliUsageError,
+  isQuiet,
+  type CliContext,
+} from '../platform/cliContext';
 import { writeTextStderr } from '../platform/logSinks';
 import { selectCliRunnableModel } from './modelAccess';
 import type { RunModelCandidate } from '@texra-ai/harness/host';
@@ -70,7 +74,7 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
       ),
     ),
   );
-  if (resolution.notice && context.quietLogs !== true) {
+  if (resolution.notice && !isQuiet(context)) {
     writeTextStderr(resolution.notice);
   }
   return resolution.model;

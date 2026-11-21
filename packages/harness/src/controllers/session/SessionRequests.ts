@@ -263,15 +263,12 @@ const viaInput = Effect.fn('SessionRequests.viaInput')(function* (
       .pipe(failed);
     if (refused !== undefined) return yield* unavailable(refused);
   }
-  const item =
+  const control =
     req.kind === 'run.compact'
-      ? { text: '/compact', control: { kind: 'compact' } as const }
-      : {
-          text: `/model ${req.model}`,
-          control: { kind: 'model', model: req.model } as const,
-        };
+      ? { kind: 'compact' as const }
+      : { kind: 'model' as const, model: req.model };
   const sent = yield* (yield* Inbox)
-    .send(runId, { ...item, from: { kind: 'user' } })
+    .send(runId, { control, from: { kind: 'user' } })
     .pipe(failed);
   return sent.kind === 'refused'
     ? yield* unavailable('This conversation takes no more input.')

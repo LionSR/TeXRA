@@ -9,6 +9,7 @@ import { Predicate, Record as EffectRecord, Schema } from 'effect';
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
 import { lineRangeOf } from '@shared/toolUse';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 const isSupportedEvent = (event: string): event is HookEvent =>
   SUPPORTED_HOOK_EVENTS.some((supported) => supported === event);
@@ -82,7 +83,7 @@ export function configuredHooks(source: string, config: HooksConfig) {
     if (!isSupportedEvent(event)) {
       const count = groups.reduce((sum, group) => sum + group.hooks.length, 0);
       unsupported.push(
-        `${event}: ${count} hook(s), an event this build does not run`,
+        `${event}: ${formatResultCount(count, 'hook')}, an event this build does not run`,
       );
       continue;
     }

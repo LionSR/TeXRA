@@ -21,7 +21,11 @@
  * The reads of a run's requests and input (`runRowReads.ts`) apply the
  * shared rows they select through here too.
  */
-import type { SessionRow } from '@shared/schemas';
+import type {
+  FollowUpControl,
+  FollowUpMessageContent,
+  SessionRow,
+} from '@shared/schemas';
 import type { RunRowState, RunRowVerdict, SharedRunRows } from './runRowsShape';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
@@ -45,17 +49,27 @@ export const isSharedRunRow = <E extends Pick<SessionRow, 'type'>>(
 ): row is Extract<E, SharedRunRow> =>
   Object.hasOwn(SHARED_RUN_ROW_TYPES, row.type);
 
-/** A follow-up queued for the run and not yet consumed, as its row holds it. */
+/** A follow-up queued for the run and not yet consumed, as its row holds
+ *  it; `at` is when it was queued, which a run's own note tells its reader. */
 export type QueuedFollowUp = Pick<
   Extract<SessionRow, { type: 'followup.queued' }>,
-  'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit'
+  'followUpId' | 'content' | 'holdUntil' | 'commit' | 'at'
 >;
+
+/** A queued follow-up a turn reads: a message or a child's delivery. */
+export type QueuedMessage = QueuedFollowUp & {
+  readonly content: FollowUpMessageContent;
+};
 
 /** A pending follow-up that is a message, not one of the run's own requests
  *  (`control`: a `/compact`, a model switch): what the view lists as queued
  *  and what keeps a run's input open. */
-export const isMessage = (row: QueuedFollowUp): boolean =>
-  row.control === undefined;
+export const isMessage = (row: QueuedFollowUp): row is QueuedMessage =>
+  !('control' in row.content);
+
+/** The run's own request a queued follow-up carries, if it is one. */
+export const controlOf = (row: QueuedFollowUp): FollowUpControl | undefined =>
+  'control' in row.content ? row.content.control : undefined;
 
 /**
  * A record keyed by an id the state carries: call and request ids come from
@@ -220,9 +234,9 @@ export function applyRunRow(
       followUps.push({
         followUpId: row.followUpId,
         commit: row.commit,
+        at: row.at,
         content: row.content,
         ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
-        ...(row.control ? { control: row.control } : {}),
       });
       return applied({ followUps });
     }

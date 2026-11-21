@@ -2,7 +2,12 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { Hash, type LogLevel, Result, Schema } from 'effect';
-import { decodingDefault, truncateSummary } from '@texra-ai/harness/schemas';
+import {
+  decodingDefault,
+  entryDetail,
+  entryLine,
+  truncateSummary,
+} from '@texra-ai/harness/schemas';
 import { postToMain } from './messageRoutes';
 import { LOG_LEVEL_LOOK, type LogLevelLook } from '@ui/copy/logLevels';
 import type { IconName } from '@ui/wa/iconNames';
@@ -42,25 +47,7 @@ type DesktopLogLine = typeof DesktopLogLineSchema.Type;
  * that the row's own level and time fields do not already show.
  */
 function desktopLogLineText(line: DesktopLogLine): string {
-  const parts = Array.isArray(line.message) ? line.message : [line.message];
-  const message = parts
-    .map((part) => (typeof part === 'string' ? part : JSON.stringify(part)))
-    .join(' ');
-  // `channel` is the annotation key the harness's log sink writes. The renderer
-  // cannot import core, so it is named here.
-  const channel = line.annotations['channel'];
-  const detail = Object.entries(line.annotations).filter(
-    ([key]) => key !== 'channel',
-  );
-  return [
-    `${typeof channel === 'string' ? `[${channel}] ` : ''}${message}`,
-    line.cause,
-    detail.length === 0
-      ? undefined
-      : JSON.stringify(Object.fromEntries(detail)),
-  ]
-    .filter((part): part is string => part !== undefined && part !== '')
-    .join('\n');
+  return [entryLine(line), ...entryDetail(line)].join('\n');
 }
 
 /** An ISO timestamp as `YYYY-MM-DD HH:MM:SS` in UTC; an unparsable one as is. */

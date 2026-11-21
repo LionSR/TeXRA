@@ -10,8 +10,7 @@ import {
   pickDefaultToolUseAgent,
 } from '@texra/shared/constants/agents';
 import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
-import { type CliContext } from '../runtime/platform/cliContext';
-import { CliExitCode } from '../runtime/platform/exitCodes';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 import {
   buildInitConfig,
   ensureTexraGitignored,
@@ -27,7 +26,7 @@ import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
 interface InitAgentOption {
@@ -145,10 +144,9 @@ const runInit = Effect.fn('runInit')(function* (
     !opts.force &&
     (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, filePath)))
   ) {
-    writeTextStderr(
+    return yield* failUsage(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );
-    return CliExitCode.Usage;
   }
 
   const agents = implicitDefaultToolUseAgents(
@@ -198,17 +196,10 @@ const runInit = Effect.fn('runInit')(function* (
 export const initCommand = cliCommand('init', {
   description: 'Bootstrap a .texra/config.json with sensible defaults',
   config: {
-    yes: Flag.Boolean('yes').pipe(
+    yes: boolFlag('yes', 'Accept defaults non-interactively').pipe(
       Flag.withAlias('y'),
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription('Accept defaults non-interactively'),
     ),
-    force: Flag.Boolean('force').pipe(
-      Flag.withoutNegation,
-      Flag.withDefault(false),
-      Flag.withDescription('Overwrite an existing config file'),
-    ),
+    force: boolFlag('force', 'Overwrite an existing config file'),
     // Absent leaves the choice to the wizard (or `false` without one);
     // `--no-gitignore` refuses it.
     gitignore: Flag.Boolean('gitignore').pipe(

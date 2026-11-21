@@ -74,6 +74,8 @@ function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
       return `Wants approval for a ${REQUEST_NOUN.planApproval}`;
     case 'userQuestion':
       return `Wants an answer to a ${REQUEST_NOUN.userQuestion}`;
+    case 'pluginTrust':
+      return `Wants you to trust the ${REQUEST_NOUN.pluginTrust} ${payload.data.plugin}`;
     default:
       return payload satisfies never;
   }

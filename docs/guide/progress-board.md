@@ -73,7 +73,7 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running or completed, yellow while waiting on you or interrupted, gray when ready for your next message or stopped, red on error.</p>
 
 - **Token and cost summary**: A footer below the log shows the task's input and output token counts and its estimated cost, including the agents it started.
-- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for a multi-pass program run), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
+- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Revision 2 of 3** for a multi-revision program run), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
 - **Task actions menu (`⋯`)**:
   - **All tasks**:
     - **Rename…**: Change the task title.
@@ -121,7 +121,7 @@ policy a new task starts with. In the CLI, `/status` lists the same grants
 
 ### Context utilization
 
-A **Context** gauge next to the token count shows how full the model's context window is, as tokens used, the window size and a percentage. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session.
+A **Context** gauge next to the token count shows how full the model's context window is, as tokens used, the window size and a percentage. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session. An agent can also replace parts of its own context with text it writes (its `context` tool), for example a long tool output it no longer needs; the transcript shows this as **Agent edited its context** with the number of messages replaced and the tokens freed, and still shows the original messages.
 
 ### After a workflow run
 

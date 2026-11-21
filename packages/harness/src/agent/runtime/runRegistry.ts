@@ -31,6 +31,7 @@ import {
 } from 'effect';
 
 import { stopRun } from '@agent/storage/runLifecycle';
+import { logFailure } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 import type { RequestDecision, RunId, RunStopReason } from '@shared/schemas';
@@ -41,6 +42,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { LiveRun, RunControls, RunsShape } from './runs';
 import type { RunServices } from './ToolServices';
 import type { SessionServices } from './rootLaunch';
+
+const CHANNEL = 'RunRegistry';
 
 /** A launch already has the run here: the one refusal for that fact. Hosts
  *  word it from `message`; a resume reads the tag to report the run
@@ -114,6 +117,14 @@ export interface RunRegistryInit {
   /** No fiber here drives the run any more: wake it, and the parent its
    *  last batch delivered to, for the input each holds (`wakeIfOwed`). */
   readonly wake: (runId: RunId) => void;
+  /** Run `effect` as the run's one wake timer, on the session's own
+   *  fibers, in place of the timer it had: its close interrupts it. */
+  readonly wakeTimer: (
+    runId: RunId,
+    effect: Effect.Effect<void, never, CapturedServices>,
+  ) => void;
+  /** Interrupt the run's wake timer, if it has one. */
+  readonly endWakeTimer: (runId: RunId) => void;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -243,6 +254,16 @@ export class SessionRunRegistry implements RunsShape {
    *  waits for it, and the session's close interrupts it. */
   background(effect: Effect.Effect<void, never, AgentRunServices>): void {
     this.init.background(this.provided(effect));
+  }
+
+  /** Run `effect` as the run's one wake timer, in place of the one it had,
+   *  on the session's own fibers. The run's next start interrupts it: a run
+   *  a fiber here drives waits for its own notes. */
+  wakeTimer(
+    runId: RunId,
+    effect: Effect.Effect<void, never, AgentRunServices>,
+  ): void {
+    this.init.wakeTimer(runId, this.provided(effect));
   }
 
   /** Hold a person's `decision` on request `requestId` of a run no fiber here
@@ -572,6 +593,7 @@ export class SessionRunRegistry implements RunsShape {
     };
     this.entries.set(runId, live);
     this.publishHeld();
+    this.init.endWakeTimer(runId);
     return live;
   }
 
@@ -662,10 +684,11 @@ export class SessionRunRegistry implements RunsShape {
       const stop = entry?.kind === 'live' ? entry.stop : null;
       if (stop === null) return Effect.void;
       return this.inSession(stopRun(runId, stop.reason, true)).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
+        Effect.catchCause(
+          logFailure(
+            CHANNEL,
             `Run ${runId}: the stop that cut its opening was not recorded`,
-          ).pipe(Effect.annotateLogs({ data: cause })),
+          ),
         ),
         Effect.asVoid,
       );

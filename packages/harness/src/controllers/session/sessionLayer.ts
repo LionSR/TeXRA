@@ -23,6 +23,7 @@ import { FetchHttpClient, HttpClient } from 'effect/http';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
+import { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   SESSION_CLOSE_DEADLINE_MS,
@@ -358,6 +359,9 @@ export function ownerProcessLayer(
     catalog,
     // One retry gate per process: a 429 cools a credential for every project.
     Layer.sync(RouteRetries, makeRetryGate),
+    // One record of the plans' quotas per process: a reply on one project's
+    // run tells every project's reader.
+    PlanQuotas.layer,
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
     Layer.provideMerge(AppSignals.layer),

@@ -1,29 +1,40 @@
-import prettyMilliseconds from 'pretty-ms';
+import { DateTime, Duration } from 'effect';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
 });
 
 /**
+ * A time, in epoch milliseconds, as a model reads it: the process's local
+ * wall time with its UTC offset and its zone named
+ * (`2030-01-31T09:00:00.000+01:00[Europe/Berlin]`), so a model asked to act
+ * "at 9am" knows whose 9am.
+ */
+export const formatLocalTime = (millis: number): string =>
+  DateTime.formatIsoZoned(
+    DateTime.makeZonedUnsafe(millis, { timeZone: DateTime.zoneMakeLocal() }),
+  );
+
+/**
  * Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
  *
- * Backed by `pretty-ms` with whole-second flooring,
- * but renders zero / negative / sub-second durations as `0s` (used by elapsed
- * displays that start from zero, e.g. goal timings and server uptime).
+ * Floored to whole seconds; zero, negative and sub-second durations read
+ * `0s` (elapsed displays start from zero: goal timings, server uptime).
  */
 export function formatCompactDuration(durationMs: number): string {
   const wholeSeconds = Math.floor(Math.max(0, durationMs) / 1000) * 1000;
   if (wholeSeconds === 0) return '0s';
-  return prettyMilliseconds(wholeSeconds, {
-    secondsDecimalDigits: 0,
-    unitCount: 2,
-  });
+  return largestTwoUnits(wholeSeconds);
 }
+
+/** `Duration.format` names every non-zero unit, largest first. */
+const largestTwoUnits = (ms: number): string =>
+  Duration.format(Duration.millis(ms)).split(' ').slice(0, 2).join(' ');
 
 /**
  * A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
  * worded: two units at most, whole minutes, and no minutes once it reaches a
- * day (`pretty-ms` would back-fill a zero hour with them, `1d 58m`); under a
+ * day (two units alone would back-fill a zero hour with them, `1d 58m`); under a
  * minute is `less than a minute`.
  */
 export function formatResetDuration(durationMs: number): string {
@@ -31,7 +42,15 @@ export function formatResetDuration(durationMs: number): string {
   if (wholeMinutes === 0) return 'less than a minute';
   const flooredMinutes =
     wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
-  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
+  return largestTwoUnits(flooredMinutes * 60_000);
+}
+
+const countFormat = new Intl.NumberFormat('en-US');
+
+/** A count with English thousands separators (`200,000`). Model-facing text
+ *  reads the same on every host, whatever its locale. */
+export function formatCount(count: number): string {
+  return countFormat.format(count);
 }
 
 /** A wall time in seconds to one decimal (`1.2s`), as a child run's

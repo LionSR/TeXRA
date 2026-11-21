@@ -24,6 +24,10 @@ function trace<T extends string, const F extends Schema.Struct.Fields>(
   });
 }
 
+const ProcessOutputStreamSchema = Schema.Literals(['stdout', 'stderr']);
+/** The stream a process run's output chunk came from. */
+export type ProcessOutputStream = typeof ProcessOutputStreamSchema.Type;
+
 const ResponseCutSchema = Schema.Literals(['length', 'content-filter']);
 /** The limit that ended an answer early: the model's output budget
  *  (`length`), or the provider's content filter. */
@@ -43,7 +47,7 @@ export const TraceRowFieldsSchema = Schema.Union([
    *  the stream were left out before this chunk, whose rows from here on
    *  are the stream's last window. */
   trace('process.output', {
-    stream: Schema.Literals(['stdout', 'stderr']),
+    stream: ProcessOutputStreamSchema,
     text: Schema.String,
     elided: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   }),

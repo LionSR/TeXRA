@@ -23,12 +23,14 @@ export interface CompactionActivityBlock {
   readonly finalThroughSeqNo?: number;
   readonly startPosition: number;
   readonly startedAt: number;
-  readonly finishedAt?: number;
   /** What the compaction freed, from its `completed` row. */
   readonly freed?: Extract<
     CompactionActivityData,
     { state: 'completed' }
   >['freed'];
+  /** How many messages an edit the agent asked for replaced, from its
+   *  `completed` row; absent for a summary. */
+  readonly replaced?: number;
 }
 
 export const COMPACTION_ACTIVITY_LABEL: Record<
@@ -53,18 +55,13 @@ export interface CompactionActivityProjection {
 function interruptRunningBlocks(
   projection: CompactionActivityProjection,
   position: number,
-  at: number,
 ): readonly number[] {
   const changedIndices: number[] = [];
   for (const [index, block] of projection.blocks.entries()) {
     if (block.status !== 'running' || position <= block.startPosition) {
       continue;
     }
-    projection.blocks[index] = {
-      ...block,
-      status: 'interrupted',
-      finishedAt: at,
-    };
+    projection.blocks[index] = { ...block, status: 'interrupted' };
     changedIndices.push(index);
   }
   return changedIndices;
@@ -84,13 +81,13 @@ export function applyCompactionActivityEvent(
 ): readonly number[] {
   projection.maxAppliedSeqNo = Math.max(projection.maxAppliedSeqNo, position);
   if (event.type === 'tool.start' || event.type === 'tool.end') {
-    return interruptRunningBlocks(projection, position, at);
+    return interruptRunningBlocks(projection, position);
   }
   if (event.type !== 'log') return [];
   switch (event.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE:
     case MESSAGE_TYPES.ERROR:
-      return interruptRunningBlocks(projection, position, at);
+      return interruptRunningBlocks(projection, position);
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
       break;
     default:
@@ -134,9 +131,11 @@ export function applyCompactionActivityEvent(
     ...openBlock,
     status: state,
     finalized: true,
-    finishedAt: at,
     ...(activity.success.state === 'completed' && {
       freed: activity.success.freed,
+      ...(activity.success.replaced !== undefined && {
+        replaced: activity.success.replaced,
+      }),
     }),
   };
   return [existingIndex];
@@ -148,7 +147,6 @@ export function applyCompactionActivityEvent(
  */
 export function finalizeCompactionActivities(
   projection: CompactionActivityProjection,
-  finishedAt: number,
 ): readonly number[] {
   const throughSeqNo = projection.maxAppliedSeqNo;
   const changedIndices: number[] = [];
@@ -159,7 +157,6 @@ export function finalizeCompactionActivities(
       status: 'interrupted',
       finalized: true,
       finalThroughSeqNo: throughSeqNo,
-      ...(block.finishedAt === undefined ? { finishedAt } : {}),
     };
     changedIndices.push(index);
   }

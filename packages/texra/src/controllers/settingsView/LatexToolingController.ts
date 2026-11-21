@@ -1,7 +1,7 @@
 import { Cause, Effect, Record } from 'effect';
 
 // Local imports - shared constants
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure } from '@texra-ai/harness/plugins';
 import { CommandDirs } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { probeLatexTools } from '@latex/latexToolchain';
@@ -76,11 +76,10 @@ export function detectLatexSettingsStatus(
     // instead of painting the view with an all-missing status.
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      return Effect.logWarning(
+      return logFailure(
+        CHANNEL,
         `LaTeX tooling detection failed: ${toErrorMessage(cause)}`,
-      ).pipe(
-        Effect.annotateLogs({ data: cause }),
-        withLogChannel(CHANNEL),
+      )(cause).pipe(
         Effect.as({
           ...DEFAULT_LATEX_SETTINGS_STATUS,
           platform,

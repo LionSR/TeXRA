@@ -8,9 +8,15 @@
 import type {
   ApprovalBypassKind,
   ApprovalGrants,
+  resolveBypass,
 } from '@shared/approvalBypassKind';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import type { RequestDecision, RunId, SessionRowDraft } from '@shared/schemas';
+import type {
+  HookOutcomePayload,
+  RequestDecision,
+  RunId,
+  SessionRowDraft,
+} from '@shared/schemas';
 import type { Effect } from 'effect';
 import type {
   DatabaseAggregateClosed,
@@ -19,16 +25,21 @@ import type {
 } from './database';
 
 /** Each operation a run asks permission for (`OPERATIONS` in
- *  `agent/runtime/requests.ts`, which names the grant that answers it). */
+ *  `agent/runtime/requests.ts`, which names who answers it): `trust` is
+ *  trusting a plugin's native code, which only a person answers. */
 export type ApprovalOperation =
   | 'bash'
   | 'call'
   | 'toolEdit'
   | 'plan'
-  | 'proposal';
+  | 'proposal'
+  | 'trust';
 
-/** What a call's `PreToolUse` hooks answered, if anything. */
-export type HookAnswer = 'allow' | 'ask' | undefined;
+/** What a call's `PreToolUse` hooks answered, if anything: a denial ends
+ *  the call before it asks. */
+export type HookAnswer =
+  | Exclude<HookOutcomePayload['decision'], 'deny' | null>
+  | undefined;
 
 /**
  * The session's approvals: the run's grants. Enforcement reads
@@ -36,7 +47,10 @@ export type HookAnswer = 'allow' | 'ask' | undefined;
  */
 export interface SessionApprovals {
   /** Who bypasses one kind's prompts for a run, read from the view. */
-  bypass(runId: RunId, kind: ApprovalBypassKind): 'goal' | 'human' | null;
+  bypass(
+    runId: RunId,
+    kind: ApprovalBypassKind,
+  ): ReturnType<typeof resolveBypass>;
   /** Update grants in one transaction, returning once durable and applied.
    *  An unchanged grant writes nothing. A grant turned on answers every
    *  open request it covers in that transaction, unless the request says

@@ -91,7 +91,6 @@ export function SkillsSettingsForm(
       }
       detailRowsFor={(data) => (data.issueCount > 0 ? 1 : 0)}
       action="toggle"
-      showTransientCloseHint={false}
       onSelect={(toggle, { data, update }) => {
         const row =
           toggle.kind === 'source'

@@ -116,6 +116,36 @@ try {
 const named = await self('Answer on the named model.', { label: 'Named', model: 'openai/gpt-6.1-sol', maxCostUsd: 100 })
 return { capped, named: named.response }`;
 
+/** The resources run's script: what the run's resources are, then what a
+ *  child under a spend cap says of its own. */
+const GOLDEN_RESOURCES_SOURCE = `const own = await tools.resources({})
+const child = await self('Read your resources.', { fork: false, label: 'Capped', maxCostUsd: 100 })
+return { own, child: child.response }`;
+
+/** The program the own-program run writes for itself: it asks a child and
+ *  returns what the child said. */
+const GOLDEN_OWN_PROGRAM = `// Asks a child and reports its answer.
+export const description = 'Ask a child and report its answer.';
+export const uses = ['read_file', 'agent'];
+
+export default async () => {
+  const child = await agent('Own child: answer.', { agentName: 'golden_child', label: 'Own child' });
+  return 'own program ran; child said: ' + child.response;
+};
+`;
+
+/** The crash-point run's last script: it finds the edit's call and result
+ *  in its view and replaces the two with its own note, which the run
+ *  applies at its next request. */
+const GOLDEN_CRASH_TRIM_SOURCE = `section('Trim')
+const view = await tools.context({})
+const at = view.messages.findIndex((message) => message.preview.startsWith('edit_file('))
+await tools.context({ action: 'replace', from: at, to: at + 2, with: 'Edited notes.tex: it now edits this file.' })
+return 'trimmed'`;
+
+/** What an agent's replacement opens with in its view. */
+const REPLACED_MARKER = '[Context you replaced]';
+
 /** A reply of `value` alone. */
 const text = (value: string): TurnResult['content'] => [
   { kind: 'message', content: [{ kind: 'text', text: value }] },
@@ -224,6 +254,20 @@ function goldenTurn(
         : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
+    // The judge of the round's `done` (a fresh `self()`): its claims.
+    if (said.includes('<goal_judge>'))
+      return Effect.succeed([
+        call('submit_output', {
+          claims: [
+            {
+              requirement: 'The golden chat is answered.',
+              status: 'verified',
+              check: 'Read the round report.',
+              observed: ANSWERED,
+            },
+          ],
+        }),
+      ]);
     // The goal's round (`self()`): a command its grant approves, a verdict.
     // Its first call is held, so the chat that started the goal finishes
     // its turn before the round goes on.
@@ -315,9 +359,10 @@ function goldenTurn(
         : text('Noted.'),
     );
   // The crash-point run: two calls, an edit of the file they read, a script,
-  // the echo's text. A step a crash cut off unstarted is asked for again; a
-  // view an edit replaced no longer holds the task, and the echo shows the
-  // view the edit left.
+  // a script that replaces the edit's call and result in its view, the
+  // echo's text. A step a crash cut off unstarted is asked for again; a
+  // view an edit replaced no longer holds the task (or holds the run's own
+  // replacement), and the echo shows the view the edit left.
   if (system.includes('GOLDEN-CRASH')) {
     const done = results.filter(
       (message) =>
@@ -346,9 +391,12 @@ function goldenTurn(
         }),
       ],
       () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],
+      () => [call('script', { title: 'Trim', code: GOLDEN_CRASH_TRIM_SOURCE })],
     ][done];
     return Effect.succeed(
-      step === undefined || !said.includes('Work through the crash task.')
+      step === undefined ||
+        !said.includes('Work through the crash task.') ||
+        said.includes(REPLACED_MARKER)
         ? null
         : step(),
     );
@@ -368,6 +416,124 @@ function goldenTurn(
     return results.length === 0
       ? Effect.succeed([call('executions', { path: '/executions' })])
       : Effect.never;
+  }
+  // The own-program run: it writes itself a program with the memory tool,
+  // then its next step's script starts that program by name.
+  if (system.includes('GOLDEN-OWN')) {
+    const step = [
+      () =>
+        call('memory', {
+          command: 'create',
+          path: '/memories/programs/greet.js',
+          file_text: GOLDEN_OWN_PROGRAM,
+        }),
+      () =>
+        call('script', {
+          title: 'Start the program',
+          code: "return (await program('own:greet')).response",
+        }),
+    ][results.length];
+    return Effect.succeed(
+      step === undefined ? text('Own program done.') : [step()],
+    );
+  }
+  // The wake run: it arranges to be continued in an hour and, when its
+  // task says so, cancels that by the id the call answered. Every reply
+  // counts the notes to itself the conversation holds by then.
+  if (system.includes('GOLDEN-WAKE')) {
+    const id = /Its id is ([0-9a-f-]{36})/.exec(said)?.[1];
+    const steps = [
+      () => call('wake', { afterSeconds: 3600, note: 'Check the build.' }),
+      ...(said.includes('then cancel it') && id !== undefined
+        ? [() => call('wake', { command: 'cancel', id })]
+        : []),
+    ];
+    const step = steps[results.length];
+    return Effect.succeed(
+      step === undefined
+        ? text(`Notes read: ${said.split('<wake-note ').length - 1}`)
+        : [step()],
+    );
+  }
+  // The native plugin run: it installs and enables the plugin its task
+  // names, calls the tools its task names in turn, then calls its
+  // `native_echo` once, or two or three times with all but the last
+  // waiting for their release (three times with a listing of the plugins
+  // after the first). A step that does not
+  // offer `native_echo` says so, with what it does offer.
+  if (system.includes('GOLDEN-NATIVE')) {
+    const offered = turn.tools.map(({ name }) => name);
+    const source = /Install the plugin at (\S+?)\. /.exec(said)?.[1];
+    const echo = (input: object) => () =>
+      offered.includes('native_echo')
+        ? [call('native_echo', input)]
+        : text(`native_echo is not offered; offered: ${offered.join(', ')}`);
+    // A plugin a person trusted and then disabled, enabled again.
+    if (said.includes('Enable echoes again.'))
+      return Effect.succeed(
+        results.length === 0
+          ? [call('plugin_manager', { command: 'enable', name: 'echoes' })]
+          : text('Enabled again.'),
+      );
+    // `Call native_a, native_b in turn.`: each named tool once, offered or
+    // not, then the echo.
+    const named =
+      /Call (native_\w+(?:, native_\w+)*) in turn\./.exec(said)?.[1] ?? null;
+    const steps = [
+      () =>
+        offered.includes('native_echo')
+          ? [call('native_echo', {})]
+          : [call('plugin_manager', { command: 'install', source })],
+      () => [call('plugin_manager', { command: 'enable', name: 'echoes' })],
+      ...(named === null
+        ? []
+        : named.split(', ').map((name) => () => [call(name, {})])),
+      ...(said.includes('Echo, then echo waiting, in one reply.')
+        ? [
+            // Two calls of one tool in one reply, each its own id.
+            () =>
+              [call('native_echo', {}), call('native_echo', { wait: '1' })].map(
+                (each, n) =>
+                  each.kind === 'local-call'
+                    ? { ...each, providerCallId: `${each.providerCallId}-${n}` }
+                    : each,
+              ),
+            echo({}),
+          ]
+        : said.includes('Echo twice, the first waiting.')
+          ? [echo({ wait: '1' }), echo({})]
+          : said.includes('Echo three times, the first two waiting.')
+            ? [
+                echo({ wait: '1' }),
+                () => [call('plugin_manager', { command: 'list' })],
+                echo({ wait: '2' }),
+                echo({}),
+              ]
+            : [echo({})]),
+    ];
+    const step = steps[results.length];
+    return Effect.succeed(step === undefined ? text('Echoed.') : step());
+  }
+  // The resources run: its script reads the run's resources, then those of
+  // a `self()` child held to a spend cap, which reads them directly and
+  // answers with the cap line they named.
+  if (system.includes('GOLDEN-RESOURCES')) {
+    if (said.includes('started this run of you with self()'))
+      return Effect.succeed(
+        results.length === 0
+          ? [call('resources', {})]
+          : text(/Spend cap: [^"\\]+/.exec(said)?.[0] ?? 'No cap named.'),
+      );
+    return Effect.succeed(
+      results.length === 0
+        ? [
+            call('script', {
+              title: 'Resources',
+              code: GOLDEN_RESOURCES_SOURCE,
+            }),
+          ]
+        : text('Resources read.'),
+    );
   }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [

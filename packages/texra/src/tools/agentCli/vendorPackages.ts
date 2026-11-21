@@ -31,13 +31,21 @@ import {
 } from 'effect';
 import which from 'which';
 
-import { isModuleNotFoundError } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure } from '@texra-ai/harness/plugins';
 import { executeCommand, withCommandDirs } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'VendorPackages';
+
+/** Whether `err` is a dynamic import's "module not found" (the CommonJS and
+ *  ESM codes). */
+export function isModuleNotFoundError(err: unknown): boolean {
+  return (
+    Predicate.hasProperty(err, 'code') &&
+    (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND')
+  );
+}
 
 /** A vendor CLI's SDK could not be imported, or its package or binary could
  *  not be looked up. */
@@ -322,11 +330,10 @@ export function resolvePackageDir(
     Effect.catch(({ cause }) =>
       isModuleNotFoundError(cause)
         ? Effect.undefined
-        : Effect.logWarning(`Could not resolve ${pkg} from ${baseDir}`).pipe(
-            Effect.annotateLogs({ data: cause }),
-            withLogChannel(CHANNEL),
-            Effect.as(undefined),
-          ),
+        : logFailure(
+            CHANNEL,
+            `Could not resolve ${pkg} from ${baseDir}`,
+          )(cause).pipe(Effect.as(undefined)),
     ),
   );
 }
@@ -362,11 +369,10 @@ export function binaryIfPresent(
   return Effect.flatMap(FileSystem.FileSystem, (fs) => fs.exists(binary)).pipe(
     Effect.map((present) => (present ? binary : undefined)),
     Effect.catch((error) =>
-      Effect.logWarning(`Could not check for ${binary}`).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-        Effect.as(undefined),
-      ),
+      logFailure(
+        CHANNEL,
+        `Could not check for ${binary}`,
+      )(error).pipe(Effect.as(undefined)),
     ),
   );
 }

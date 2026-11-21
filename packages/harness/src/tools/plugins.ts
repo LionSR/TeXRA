@@ -6,7 +6,11 @@
  * reader takes it from: availability probes, the first-install switch seed,
  * the switches, a run's injected tools, and the bundled skills and agents
  * at `resources/plugins/<id>/`, which a switched-off plugin withholds with
- * its tools. How the app shows a plugin is its own record, keyed by id.
+ * its tools. How the app shows a plugin is its own record, keyed by id. An
+ * installed plugin's native entry (`harness.mjs`) returns one too, loaded
+ * while the process runs (`@tools/nativePlugins`): it joins the table a run
+ * reads from its next step, and has no row kinds, switch, probe or
+ * injected tools.
  *
  * Rules: an id is persisted (the disabled-tools key, and the plugin a run's
  * offered tool records), so it never changes and is never reused; every

@@ -32,9 +32,9 @@ import {
   buildAgentProposalApprovalContent,
   buildToolEditApprovalContent,
   formatBashApprovalSummary,
+  formatPluginTrustSummary,
   formatRetryRequestMessage,
   formatUserQuestionPrompt,
-  toolEditAsk,
 } from '../approval/approvalSummaries';
 import {
   parseUserQuestionAnswer,
@@ -46,8 +46,8 @@ import {
   REQUEST_ACTIONS,
 } from '@texra/shared/session/surfaceDecision';
 import { CliInvocation } from '../platform/cliContext';
-import { formatLineChanges } from '@ui/copy/format';
 import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import { CliPromptFailed, writeTextStderr } from '../platform/logSinks';
 import type { Session, SessionHost, HostInteractions } from '@texra-ai/harness';
 
@@ -122,7 +122,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
 ): Effect.fn.Return<SessionHost, never, CliInvocation> {
   const invocation = yield* CliInvocation;
   /** The prompt content for a tool edit: the session's preview of it, else
-   *  the payload's own summary and why there is no diff. */
+   *  the diff's label and why there is no diff. */
   const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
     function* (
       runId: RunId,
@@ -133,7 +133,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       if (read.kind === 'preview')
         return buildToolEditApprovalContent({ ...data, ...read.content });
       return {
-        summary: `${toolEditAsk({ path: data.relativePath, sourceTool: data.sourceTool })}: ${formatLineChanges(data.addedLines, data.removedLines)}\nPreview unavailable: ${read.reason}`,
+        summary: `${toolEditDiffLabel(data).title}\nPreview unavailable: ${read.reason}`,
       } satisfies CliApprovalContent;
     },
   );
@@ -178,6 +178,8 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       }
       case 'userQuestion':
         return yield* askHeadlessUserQuestion(payload.data, hooks);
+      case 'pluginTrust':
+        return yield* ask({ summary: formatPluginTrustSummary(payload.data) });
     }
   });
 

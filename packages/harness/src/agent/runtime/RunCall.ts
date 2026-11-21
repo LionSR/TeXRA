@@ -6,7 +6,7 @@
  * whose `env.run` is the same run, as a plugin's tool sees it. The public
  * contract every tool reads, the run included, is `ToolContext`; an app's
  * tool reads nothing else. `requireFileReadForEdit` here answers an
- * edit's read prerequisite from the run's facts (`RunCallShape.facts`), so
+ * edit's read prerequisite from the run's state (`RunCallShape.state`), so
  * a resumed run counts the reads its rows record.
  */
 import { Context, type Deferred, Effect, Schema } from 'effect';
@@ -17,7 +17,7 @@ import {
   type ToolDefinition,
   type ToolResultPayload,
 } from '@shared/schemas';
-import type { RunFacts } from '@shared/session/runFacts';
+import type { RunState } from '@shared/session/runState';
 import {
   ToolContext,
   type ToolContextShape,
@@ -143,10 +143,11 @@ export interface RunCallShape {
   /** The card this call's rows open under: what a run the call launches
    *  names as its `parent.call.card`. */
   readonly logId: string;
-  /** The run's facts as its rows stand when read (`RunFacts`): what it has
-   *  read and edited so far, a sibling call's finished result included,
-   *  from the loop's cell, so a resumed run answers as the live one did. */
-  readonly facts: Effect.Effect<RunFacts>;
+  /** The run's state as its rows stand when read, from the loop's cell:
+   *  what it has read and edited so far, a sibling call's finished result
+   *  included, and the view its response was sent with, so a resumed run
+   *  answers as the live one did. */
+  readonly state: Effect.Effect<RunState>;
   /** The script that issued this call; null for a call a response issued. */
   readonly script: ScriptScope | null;
   /** For a `script` call, the door its guest calls the run's tools through,
@@ -210,7 +211,7 @@ export type RunToolCall = ToolContextShape & RunCallShape;
 /** The refusal an edit of an existing file gets when the run never read it,
  *  or null. `path` is the file as the results spell it (`reads`,
  *  `edits[].path`): the run has read it once a finished call's result names
- *  it, in this process or in the one that ran the read (`RunCallShape.facts`). */
+ *  it, in this process or in the one that ran the read (`RunCallShape.state`). */
 export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
   function* (
     path: string,
@@ -218,8 +219,8 @@ export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
     errorMessage?: string,
   ): Effect.fn.Return<ToolResult | null, never, ToolContext> {
     if (!exists) return null;
-    const facts = yield* inRunSession((call) => call.facts);
-    if (facts.read.includes(path)) return null;
+    const state = yield* inRunSession((call) => call.state);
+    if (state.read.includes(path)) return null;
     return errorResult(
       errorMessage ??
         'Edits to existing files require a prior read in this session. Please call read_file first.',

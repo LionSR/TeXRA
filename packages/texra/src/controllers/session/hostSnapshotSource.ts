@@ -31,7 +31,6 @@ import {
   SubscriptionRef,
 } from 'effect';
 import {
-  AgentDirectories,
   getEnabledModels,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
@@ -39,11 +38,11 @@ import {
 import {
   Settings,
   logFailure,
-  withLogChannel,
   type AppSignals,
   type Secrets,
   type SettingsStores,
   AppState,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,
@@ -58,6 +57,7 @@ import type {
   MissingTool,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import {
@@ -77,7 +77,10 @@ import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 const CHANNEL = 'Host Snapshot';
 
-type DismissibleBanner = 'gettingStarted' | 'dependency';
+type DismissibleBanner = Extract<
+  HostCommand,
+  { kind: 'dismissBanner' }
+>['banner'];
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
@@ -490,13 +493,10 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           dirs.customConfigured(),
         ).pipe(
           Effect.catch((cause) =>
-            Effect.logWarning(
+            logFailure(
+              CHANNEL,
               'Whether a custom agent directory is set could not be read',
-            ).pipe(
-              Effect.annotateLogs({ data: cause }),
-              withLogChannel(CHANNEL),
-              Effect.as(false),
-            ),
+            )(cause).pipe(Effect.as(false)),
           ),
         );
         yield* write({ agentConfig: { agentName, customDirSet } });

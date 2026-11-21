@@ -404,6 +404,14 @@ texra run my-programs:todo-list --input paper.tex
 - **Trust**: `texra plugin enable` lists each program with its description and tools, and each file it refused. A program acts only through the tools it lists. Unlike a built-in program's, those tools are withheld while their plugin is switched off. A call that needs approval (a shell command, an edit) is decided by the approval policy as for an agent; the agents and programs it starts are not asked about one by one. `texra run` refuses a name that is both a program and an agent of the plugin. Editing any file in the plugin, a program included, withdraws every program of the plugin until you enable it again.
 - **Where it shows**: `texra plugin list` and **Settings → Plugins** name a plugin's programs, `texra run <plugin>:<name>` starts one, and an agent that can start programs is told of it with the built-in ones.
 
+#### Programs an agent writes for itself
+
+An agent can also write a program for itself. A file it creates with the `memory` tool at `/memories/programs/<name>.js` is the program `own:<name>` from its next step, with no restart and nothing to install, and it stays for later conversations in the same project. The file has the form of a plugin's program: the two declarations, then the default export. `texra run own:<name> --input paper.tex` starts it too.
+
+- **Where it lives**: in the project's [memory](./memory.md), beside the notes agents save, not in the repository, so a cloned project brings none. `texra memory list` and the Memory tab show the files; delete one to remove its program. Programs load whether or not memory is enabled for chat agents: that setting decides only whether a chat is handed the `memory` tool.
+- **Trust**: nobody reviews such a program, because it can do nothing the agent could not do itself. It runs in the script sandbox, is offered only the tools it lists, and those tools follow your plugin switches and approval policy. Unlike a plugin's program, each agent or program it starts is asked about, as one a model's script starts is; where no approval prompt can show (`--approval-policy never`), the tools that ask are withheld from it. No plugin can be named `own`.
+- **Listing**: an agent that can start programs is told of the first 20 of them by name; the others still start by name. A file that does not begin with the two declarations is refused by name, and the others load.
+
 ## Shell completion
 
 TeXRA can print completion scripts for Bash, Zsh, and Fish:
@@ -446,9 +454,10 @@ Each line has kind `history-entry` and contains the same run entry object used
 by JSON output, with the terminal `outcome` spelled as `completed`,
 `cancelled`, or `failed` (`null` when none was recorded) and `continues`
 saying whether `texra resume` continues it. The text form's status column
-reads the same outcome, or `no outcome`, followed by `(can continue)` for a
-finished conversation that takes another message, or `(can resume)` for an
-interrupted, failed or cancelled run.
+words the same outcome as the progress view does (`Completed`, `Stopped`,
+`Error`), or `No outcome`, followed by `(can continue)` for a finished
+conversation that takes another message, or `(can resume)` for an
+interrupted, failed or stopped run.
 
 Inspect or delete one run:
 

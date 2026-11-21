@@ -8,7 +8,6 @@ import { Config, Effect, Option, Predicate, Schema } from 'effect';
 // Local imports
 import { API_KEY_PROVIDER_IDS, apiKeyEntry, apiKey } from '@texra-ai/llm';
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
-import { readModelOptions } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
 import { ToolContext } from '@texra-ai/harness/plugins';
@@ -23,10 +22,14 @@ import {
   defineTool,
   Secrets,
   withLogChannel,
+  optionalInput,
 } from '@texra-ai/harness/plugins';
 import { probeLatexTools } from '@latex/latexToolchain';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import {
+  hasUsableSetupCredential,
+  loadModelOptions,
+} from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
@@ -84,7 +87,7 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   );
   // Routing is consulted only for a signed-in account.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const [option] = yield* readModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
+  const [option] = yield* loadModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
@@ -101,10 +104,10 @@ export const getChatGptSubscriptionStatus = Effect.fn(
 
 const CHANNEL = 'Setup Credentials';
 const ProbeEnvironmentInputSchema = Schema.Struct({
-  tool: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'If provided, re-checks just this one tool on PATH (e.g. "pdflatex") and answers in one line. Otherwise returns the full JSON report.',
-  }),
+  tool: optionalInput(
+    Schema.String,
+    'If provided, re-checks just this one tool on PATH (e.g. "pdflatex") and answers in one line. Otherwise returns the full JSON report.',
+  ),
 });
 
 type ProbeInput = typeof ProbeEnvironmentInputSchema.Type;

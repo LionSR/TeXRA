@@ -86,6 +86,7 @@ export {
   MODELS,
   ModelProvider,
   ReasoningEffort,
+  requestRates,
 } from 'llm-zoo';
 export type { ModelConfig, ModelRef, ReasoningMode } from 'llm-zoo';
 export { ReasoningEffortSchema } from 'llm-zoo/schemas';

@@ -1,13 +1,17 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import { pathToLocationIn } from '@texra-ai/harness/host';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { pathExists } from '@texra-ai/harness/node';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+import {
+  documentClass,
+  loadedPackages,
+  readUncommentedLatex,
+} from './latexParsingUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
 
 const CHINESE_PACKAGES = [
   'xeCJK',
@@ -24,14 +28,10 @@ const COUNT_CONCURRENCY = 4;
 const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   absolutePath: string,
 ) {
-  const fs = yield* FileSystem.FileSystem;
-  return yield* readNormalizedFile(fs, absolutePath).pipe(
-    Effect.mapError(ensureError),
+  return yield* readUncommentedLatex(absolutePath).pipe(
     Effect.map((content) =>
-      CHINESE_PACKAGES.some(
-        (pkg) =>
-          content.includes(`\\usepackage{${pkg}}`) ||
-          content.includes(`\\documentclass{${pkg}}`),
+      [...loadedPackages(content), documentClass(content)].some(
+        (name) => name !== undefined && CHINESE_PACKAGES.includes(name),
       ),
     ),
     Effect.catch((err) =>
@@ -58,9 +58,7 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const exists = yield* pathExists(fs, filePath).pipe(
-    Effect.mapError(ensureError),
-  );
+  const exists = yield* pathExists(fs, filePath);
   if (!exists) {
     const reason = `File ${filePath} does not exist.`;
     yield* Effect.logWarning(reason);

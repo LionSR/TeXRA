@@ -37,7 +37,7 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
-import { runStatus, type RunTone } from '@ui/copy/runStatus';
+import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import {
   AGENT_LIST,
@@ -53,7 +53,6 @@ import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runViewOf } from '../state/sessionView';
 import type {
-  ApprovalBypassKind,
   ApprovalPolicy,
   RequestKind,
   RunView,
@@ -77,6 +76,7 @@ function statusKindForApproval(
     case 'planApproval':
     case 'proposal':
     case 'retry':
+    case 'pluginTrust':
       return 'approval';
     default:
       return absurd(kind);
@@ -574,11 +574,6 @@ export function statusBarRunTarget({
   };
 }
 
-// A grant's badge tone: agent work approves everything below it.
-const BYPASS_BADGE_TONE: Readonly<
-  Record<ApprovalBypassKind, 'warning' | 'danger'>
-> = { toolEdit: 'warning', bash: 'warning', superYolo: 'danger' };
-
 // Which text occupies the bindings row is a priority order, not a single
 // condition: a resumable exit confirmation always wins, then an actual
 // foreground surface, then the child list, and only then normal chat shortcuts.
@@ -789,7 +784,7 @@ export function buildStatusBarDisplay(
     if (bypasses?.[kind] === true) {
       left.push({
         text: RUN_GRANT_COPY.label(kind),
-        badgeColor: TONE_PAINT[BYPASS_BADGE_TONE[kind]].color,
+        badgeColor: TONE_PAINT[RUN_GRANT_TONE].color,
         priority: STATUS_BAR_PRIORITY.bypassBadge,
         policy: 'keep',
       });

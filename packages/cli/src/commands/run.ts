@@ -3,6 +3,7 @@ import { Effect, FileSystem, Option, Result } from 'effect';
 import { Argument, Flag } from 'effect/cli';
 
 import {
+  programOrigin,
   toErrorMessage,
   RUN_OUTCOME,
   type RunId,
@@ -32,7 +33,11 @@ import {
   type CliPlatformServices,
 } from '../runtime/platform/initPlatform';
 
-import { cliCommand, SKILL_SOURCES_CONFIG } from './_helpers/cliCommand';
+import {
+  cliCommand,
+  modelFlag,
+  SKILL_SOURCES_CONFIG,
+} from './_helpers/cliCommand';
 import { emitCliResult } from './_helpers/output';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
@@ -115,11 +120,11 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   }
 
   const services = yield* cliPlatform;
-  const { programs, withheld } = yield* programsNow();
+  const { programs, withheld } = yield* programsNow(services.roots);
   const program = programs.get(init.agent);
   // An installed plugin names its agents and its programs `<plugin>:<name>`
   // alike: a name that is both is refused rather than one picked unsaid.
-  if (program !== undefined && init.agent.includes(':')) {
+  if (program !== undefined && programOrigin(init.agent) === 'installed') {
     const agent = yield* Effect.result(
       resolveCliRunAgent(services, init.agent),
     );
@@ -134,10 +139,10 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     const { source } = yield* resolveCliRunAgent(
       services,
       init.agent,
-      // `<plugin>:<name>` may be a program its plugin does not load now.
+      // A program read from a file may be one that does not load now.
       [
         missingRunTargetMessage(init.agent, [...programs.keys()]),
-        ...(init.agent.includes(':') ? withheld : []),
+        ...(programOrigin(init.agent) === 'listed' ? [] : withheld),
       ].join(' '),
     );
     return yield* runToolUseAgent(
@@ -242,7 +247,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       };
       const config: AgentConfigPayload = {
         ...launch,
-        ...(yield* programLaunch(init.agent, {}, launch)),
+        ...(yield* programLaunch(init.agent, {}, launch, services.roots)),
       };
 
       return yield* executeCliRun(config, context, {
@@ -472,11 +477,7 @@ export const headlessRunCommand = cliCommand('run', {
       ),
       Flag.optional,
     ),
-    model: Flag.String('model').pipe(
-      Flag.withAlias('m'),
-      Flag.withDescription('Model for the agent'),
-      Flag.optional,
-    ),
+    model: modelFlag('Model for the agent'),
     instruction: Flag.String('instruction').pipe(
       Flag.withDescription(
         'Instruction passed to the agent or program (an agent needs this or --instruction-file)',

@@ -26,6 +26,7 @@ import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { bindRoute } from './binding';
 import { acceptSwitch } from './routeDecision';
+import { PlanQuotas } from './planQuotas';
 import type { Binding } from '@texra-ai/llm/node';
 import type { CallFailure } from './failureInfo';
 
@@ -113,14 +114,15 @@ const settingsOf = (stores: SettingsStores) =>
 /**
  * Model access over `stores` (a session's setting slots), the process
  * {@link Secrets} and its subscription accounts, for the project whose environment is in force where the
- * layer is built.
+ * layer is built. Its requests' replies tell the process's
+ * {@link PlanQuotas} what they say of a plan's quota.
  */
 export const modelAccessLayer = (
   stores: SettingsStores,
 ): Layer.Layer<
   ModelAccess,
   never,
-  HttpClient.HttpClient | Secrets | SubscriptionAccounts
+  HttpClient.HttpClient | Secrets | SubscriptionAccounts | PlanQuotas
 > =>
   Layer.effect(
     ModelAccess,
@@ -130,6 +132,7 @@ export const modelAccessLayer = (
       const project = yield* ProjectEnvironment;
       const secrets = yield* Secrets;
       const accounts = yield* SubscriptionAccounts;
+      const quotas = yield* PlanQuotas;
       const inProject = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         effect.pipe(
           Effect.provideService(HttpClient.HttpClient, http),
@@ -137,6 +140,7 @@ export const modelAccessLayer = (
           Effect.provideService(ProjectEnvironment, project),
           Effect.provideService(Secrets, secrets),
           Effect.provideService(SubscriptionAccounts, accounts),
+          Effect.provideService(PlanQuotas, quotas),
         );
       return {
         bind: (request) => inProject(bindRoute(request, settingsOf(stores))),

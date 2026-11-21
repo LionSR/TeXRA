@@ -26,14 +26,17 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
+import type { RunRows } from '@shared/session/runRowsShape';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { endRun } from './AgentRunLifecycle';
 import { ChildRunBudget } from './childRunBudget';
 import { openToolUse, runToolUse } from './loop/runLoop';
+import { ProjectTools } from './loop/step';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import { LabelsRootRuns, withSessionDescription } from './sessionDescription';
@@ -48,9 +51,13 @@ export interface ExecuteAgentOptions {
   /** A fresh run's registration, which its opening batch commits: the run
    *  is born with its opening or not at all. Absent, the run is resumed. */
   readonly registration?: RegisterRunOptions;
-  /** A resumed run's parent, as its rows hold it, read once by the resume;
-   *  a fresh run's is its registration's. */
-  readonly parentId?: RunId;
+  /** A resumed run's entry, from the facts its resume read: its parent as
+   *  its rows hold it (less one the store no longer lists) and its
+   *  `run.start`. A fresh run's registration says both. */
+  readonly resumed?: {
+    readonly parentId: RunId | undefined;
+    readonly start: RunRows['start'];
+  };
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
@@ -75,17 +82,17 @@ const enterRun = Effect.fn('enterRun')(function* (
 ) {
   const log = yield* SessionLog;
   const { config } = definition;
-  const parent = options.registration?.parent?.id ?? options.parentId ?? null;
-  // A resumed run's facts, read once: whether its parent's call awaits it,
-  // and whether its launch let it take input.
-  const facts =
-    options.registration === undefined ? yield* log.facts(runId) : null;
+  const parent =
+    options.registration?.parent?.id ?? options.resumed?.parentId ?? null;
+  // A resumed run's `run.start`: whether its parent's call awaits it, and
+  // whether its launch let it take input.
+  const start = options.resumed?.start ?? null;
   // Whether the parent's call awaits the child: a fresh run's
   // registration says; a resumed run's rows do.
   const awaited =
     options.registration !== undefined
       ? options.registration.parent?.call?.awaited === true
-      : (facts?.start?.parent?.call?.awaited ?? false);
+      : (start?.parent?.call?.awaited ?? false);
   // Whether the run ends after one cycle, decided once: every child does
   // (a message to it is a resume), a script's run (its call is its only
   // turn), a root its caller asks to, and a root launched to run once,
@@ -94,7 +101,7 @@ const enterRun = Effect.fn('enterRun')(function* (
     parent !== null ||
     runsScript(config) ||
     options.stopAfterCycle === true ||
-    facts?.start?.takesFollowUps === false;
+    start?.takesFollowUps === false;
   const registered =
     options.registration === undefined
       ? null
@@ -328,6 +335,12 @@ const runAgent = Effect.fn('executeAgent.run')(function* ({
     : budgeted;
 });
 
+/** `effect` with `table` as its `ToolRegistry`. */
+const onTable =
+  (table: ToolTable) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.provideService(effect, ToolRegistry, table);
+
 /**
  * The agent run program, fresh or resumed, as the registry runs it on the
  * run's own fiber (`RunRegistry.start`): `prepare` (the launch's own
@@ -336,15 +349,32 @@ const runAgent = Effect.fn('executeAgent.run')(function* ({
  * the loop exits reaches exactly once. All of it in the launch's keys.
  * Callers read the outcome and output from its committed end. Root
  * launches use `rootRun`, resumes `resumeRun`, a child's launch
- * `startChildRun`.
+ * `startChildRun`. The run reads the plugin table as its launch found it
+ * (`ToolRegistry`: the listed plugins and the native ones loaded then),
+ * and each of its steps the table that step read. A launch `parent`'s call
+ * makes (a child's, or a child's resume by its open call) takes the table
+ * its parent's step read and published; any other reads the installed
+ * plugins, as no step of this run or another read them for it.
  */
 export const executeAgent = <E extends Error>(
   runId: RunId,
+  parent: RunId | null,
   prepare: Effect.Effect<AgentLaunch, E, AgentRunServices>,
-): Launch<OpenedAgent, E | Error, RunReport, void> => ({
-  open: Effect.flatMap(prepare, (launch) =>
-    withLaunchKeys(openAgent(launch, runId)),
-  ),
-  run: (opened) => withLaunchKeys(runAgent(opened)),
-  end: (opened, exit) => withLaunchKeys(endRun(opened.launch, exit)),
+): Launch<
+  OpenedAgent & { readonly table: ToolTable },
+  E | Error,
+  RunReport,
+  void
+> => ({
+  open: Effect.gen(function* () {
+    const tools = yield* ProjectTools;
+    const table = yield* parent === null ? tools.table : tools.published;
+    const opened = yield* Effect.flatMap(prepare, (launch) =>
+      withLaunchKeys(openAgent(launch, runId)),
+    ).pipe(onTable(table));
+    return { ...opened, table };
+  }),
+  run: (opened) => withLaunchKeys(runAgent(opened)).pipe(onTable(opened.table)),
+  end: (opened, exit) =>
+    withLaunchKeys(endRun(opened.launch, exit)).pipe(onTable(opened.table)),
 });

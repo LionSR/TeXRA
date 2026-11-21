@@ -1,7 +1,10 @@
 import { Predicate } from 'effect';
 import { fileLocationAddressPath } from '@texra-ai/harness/schemas';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
-import { compileFailuresOf } from '@texra/shared/plugins/documentOutputs';
+import {
+  compileFailuresOf,
+  formatRoundLabel,
+} from '@texra/shared/plugins/documentOutputs';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import type { RunView } from '@texra-ai/harness/schemas';
 
@@ -10,7 +13,7 @@ import type { RunView } from '@texra-ai/harness/schemas';
  * menu's "Copy diagnostics". It is the one surface that prints the raw ids
  * (the task's and its parent's), which the rest of the copy leaves out, and
  * it states what the task was and where its files landed without asking
- * anything of whoever reads it. A pass with no rows is dropped rather than
+ * anything of whoever reads it. A revision with no rows is dropped rather than
  * printed empty.
  */
 export function formatTaskDiagnostics(run: RunView): string {
@@ -36,7 +39,7 @@ export function formatTaskDiagnostics(run: RunView): string {
       for (const file of files) {
         const source = file.source ? ` (source: ${file.source})` : '';
         lines.push(
-          `- ${passLabel(round)}: ${fileLocationAddressPath(file.location)}${source}`,
+          `- ${formatRoundLabel(round)}: ${fileLocationAddressPath(file.location)}${source}`,
         );
       }
     }
@@ -48,20 +51,11 @@ export function formatTaskDiagnostics(run: RunView): string {
       const { round } = record;
       for (const failure of compileFailuresOf(record)) {
         lines.push(
-          `- ${passLabel(round)} ${failure.displayName}: log ${fileLocationAddressPath(failure.log)}`,
+          `- ${formatRoundLabel(round)} ${failure.displayName}: log ${fileLocationAddressPath(failure.log)}`,
         );
       }
     }
   }
 
   return lines.filter(Predicate.isNotNullish).join('\n');
-}
-
-/** A document task's pass, one-based from a zero-based round: "Pass 2", or
- *  "Pass 2 of 3" against a planned total. The header chip and the
- *  diagnostics count passes the same way. */
-export function passLabel(round: number, total?: number): string {
-  return total === undefined
-    ? `Pass ${round + 1}`
-    : `Pass ${round + 1} of ${total}`;
 }

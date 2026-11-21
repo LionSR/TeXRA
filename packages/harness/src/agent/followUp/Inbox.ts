@@ -6,11 +6,12 @@
  * from those rows (`FollowUpReader`). The inbox keeps no record of who
  * reads: the run its session's registry holds reads its own rows.
  */
-import { Context, Effect, Result, type Scope } from 'effect';
+import { Clock, Context, Effect, Result, type Scope } from 'effect';
 
 import { logFailure } from '@logger/effectLog';
 import {
   type ChildRunDelivery,
+  type FollowUpControl,
   type FollowUpSender,
   type RunId,
   type StoredMedia,
@@ -34,7 +35,7 @@ import {
   sendVerdict,
   type SendVerdict,
 } from './FollowUpReader';
-import { queuedRow } from './followUpMessages';
+import { queuedRow, wakeNotes, type WakeNote } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
@@ -61,13 +62,13 @@ export type InboxItem = (
       readonly blobs?: readonly DraftBlob[];
     }
   | { readonly delivery: ChildRunDelivery }
+  /** A request of the run's own (`/compact`, a model switch), not a message. */
+  | { readonly control: FollowUpControl }
 ) & {
   readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
-  /** A request of the run's own (`/compact`, a model switch), not a message. */
-  readonly control?: QueuedFollowUp['control'];
 };
 
 /** What a send asks of the row and of the run. */
@@ -158,7 +159,7 @@ export class SessionInbox {
   owesResume(runId: RunId): Effect.Effect<boolean | undefined> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.drained;
-      return needsWake(yield* this.read(runId));
+      return needsWake(yield* this.read(runId), yield* Clock.currentTimeMillis);
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
@@ -202,6 +203,25 @@ export class SessionInbox {
           logFailure(CHANNEL, `Run ${runId}: closing its input failed`),
         ),
       );
+  }
+
+  /** Drop the run's pending wake note `id`, unread, in one job
+   *  ({@link cancelWakeRows}). Answers the note, or null when the run has
+   *  none pending under that id. */
+  cancelWake(
+    runId: RunId,
+    id: string,
+  ): Effect.Effect<WakeNote | null, LogWriteError | DatabaseReadFailed> {
+    return this.port.log.transact((tx) =>
+      Effect.gen({ self: this }, function* () {
+        const note = wakeNotes((yield* this.read(runId)).followUps).find(
+          (pending) => pending.id === id,
+        );
+        if (note === undefined) return null;
+        yield* tx.append(cancelWakeRows(runId, [note]));
+        return note;
+      }),
+    );
   }
 
   /** A run that takes no more input (deleted: its `run.removed` row closes
@@ -258,6 +278,14 @@ export class SessionInbox {
     }
   }
 }
+
+/** The rows that drop `notes` from `runId`'s queue unread, as `cancelled`:
+ *  what the run's own cancel commits, and a stop of the run for every note
+ *  it has pending. */
+export const cancelWakeRows = (runId: RunId, notes: readonly WakeNote[]) =>
+  notes.map(({ id }) =>
+    consumedRow(runId, id, { kind: 'dropped', reason: 'cancelled' }),
+  );
 
 /** Whether the run has a pending message, not just one of its own requests. */
 const queued = (input: RunRowsRead<'input'>): boolean =>

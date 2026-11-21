@@ -1,8 +1,9 @@
-import { Config, Effect, Option } from 'effect';
+import { Effect } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
+import { runsInWsl } from '@texra-ai/harness/node';
 import { externalOpenFailed, type HostFailed } from '@texra/hosts/uiHosts';
 
 /**
@@ -75,14 +76,7 @@ function resolveBrowserLaunch(url: string, wsl: boolean): BrowserLaunchCommand {
 export const launchBrowser = Effect.fn('launchBrowser')(function* (
   url: string,
 ): Effect.fn.Return<void, HostFailed, ChildProcessSpawner> {
-  const wsl =
-    Option.isSome(
-      yield* Config.String('WSL_DISTRO_NAME').pipe(Config.option, Effect.orDie),
-    ) ||
-    Option.isSome(
-      yield* Config.String('WSL_INTEROP').pipe(Config.option, Effect.orDie),
-    );
-  const launch = resolveBrowserLaunch(url, wsl);
+  const launch = resolveBrowserLaunch(url, runsInWsl());
   const spawner = yield* ChildProcessSpawner;
   // Never the `PlatformError` itself: its message embeds the argv, and the
   // argv is the URL.

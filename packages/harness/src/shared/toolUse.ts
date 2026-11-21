@@ -14,6 +14,7 @@ import type {
   ToolCallLog,
 } from '@shared/schemas';
 import { stringifyPayload } from '@shared/transcript/transcriptText';
+import { formatCount } from '@utils/text/stringUtils';
 
 function trimmed(value: string | undefined): string {
   return value?.trim() ?? '';
@@ -128,7 +129,7 @@ export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
  *  tool result, of a command's `stream`, or where a capped process log left
  *  part of a stream out. */
 export const elidedNote = (elided: number, stream?: string): string =>
-  `[... ${elided.toLocaleString()} characters elided${stream === undefined ? '' : ` from ${stream}`} ...]`;
+  `[... ${formatCount(elided)} characters elided${stream === undefined ? '' : ` from ${stream}`} ...]`;
 
 /**
  * The lines a stored file-viewing call asked for (`read_file`'s `range`, the

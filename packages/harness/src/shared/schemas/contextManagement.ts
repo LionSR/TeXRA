@@ -31,7 +31,8 @@ const CompactionActivityFields = {
  * Lifecycle event for one context-compaction operation, so hosts project one
  * stable activity row from its start through its end. A completed compaction
  * carries what it freed: the estimated tokens and the window share before
- * and after.
+ * and after; an edit the agent asked for, with a replacement it wrote, also
+ * how many messages it `replaced`.
  */
 export const CompactionActivityDataSchema = Schema.Union([
   Schema.Struct({
@@ -46,6 +47,7 @@ export const CompactionActivityDataSchema = Schema.Union([
       utilizationBefore: UtilizationSchema,
       utilizationAfter: UtilizationSchema,
     }),
+    replaced: Schema.optional(NonNegativeIntSchema),
   }),
 ]);
 

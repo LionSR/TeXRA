@@ -3,10 +3,17 @@
  * plugins' layers serve, and the MCP server processes it runs, each held
  * for exactly as long as something uses it.
  *
- * - **Built-in plugins** (the `ToolRegistry`'s) are on while their switch is
- *   (one with no switch always is); the switches reach the catalog as a
- *   stream. A plugin's `processLayer` is up, once per process, while it is
- *   on or a step uses it.
+ * - **Built-in plugins** (the listed `ToolTable`'s) are on while their
+ *   switch is (one with no switch always is); the switches reach the
+ *   catalog as a stream. A plugin's `processLayer` is up, once per process,
+ *   while it is on or a step uses it.
+ * - **Native plugins** (an installed plugin's `harness.mjs`) are on while
+ *   the installed plugin loads; each read of the installed plugins (every
+ *   step's, and every run's launch) publishes the table they make with the
+ *   listed ones (`live`), the one owner of which plugins there are now. A
+ *   native plugin's layers are kept per revision: a replaced one's new
+ *   layer comes up beside the old, which goes down when the last step that
+ *   pinned it ends.
  * - **A session's catalog** (`session`, built by `sessionTools`: one per
  *   project, in that session's scope) owns the project's plugin layers and
  *   MCP servers, and pins each step's tools, the only place a run's tools
@@ -22,6 +29,7 @@ import {
   Option,
   Path,
   RcMap,
+  Result,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -38,17 +46,25 @@ import type {
   StateWriteFailed,
 } from '@shared/config/settings';
 import { entriesOf } from '@tools/catalogEntries';
-import type { Plugin } from '@tools/plugins';
 import {
   buildPluginLayer,
   follow,
+  heldKeys,
+  LayerKey,
   NONE,
   sessionTools,
   type SessionTools,
   type ProcessCatalog,
 } from '@tools/sessionTools';
 import {
+  nativeLoader,
+  notLoaded,
+  type NativePluginFailed,
+} from '@tools/nativePlugins';
+import {
   ToolRegistry,
+  withNatives,
+  type NativePlugin,
   type PluginLayerServices,
   type ToolTable,
 } from '@tools/toolTable';
@@ -64,8 +80,9 @@ export interface ToolCatalog {
 /** The process's tool catalog as a host, or a plugin's process layer,
  *  reads it. */
 export interface ToolCatalogShape {
-  /** Borrow a plugin's process services for the caller's scope without
-   *  starting them; none while its layer is down. */
+  /** Borrow a plugin's process services (a native plugin's at the revision
+   *  loaded now) for the caller's scope without starting them; none while
+   *  its layer is down. */
   readonly processServices: (
     plugin: string,
   ) => Effect.Effect<Option.Option<PluginContext>, never, Scope.Scope>;
@@ -97,8 +114,9 @@ export interface ToolCatalogOwner {
 export const ToolCatalogOwner = Context.Service<
   ToolCatalogOwner,
   ToolCatalogShape & {
-    /** The shutdown protocol's plugin step: every up process layer's
-     *  `drain`, while its services are still up. */
+    /** The shutdown protocol's plugin step: the `drain` of every process
+     *  layer up, each revision of a native plugin's among them, while its
+     *  services are still up. */
     readonly drain: Effect.Effect<void>;
     /** A session's catalog, in the caller's scope (the session's). */
     readonly session: Effect.Effect<
@@ -110,17 +128,22 @@ export const ToolCatalogOwner = Context.Service<
 >('@texra-ai/harness/tools/ToolCatalogOwner');
 
 /**
- * The catalog over `table`, served with it as the `ToolRegistry`: the
- * configured MCP servers `loader` reads for a run's declared tools, the
- * installed plugins `installed` reads at each step (none when omitted), and
- * the `switches` as they stand and on each change (the ids held off; before
- * the first, every switched plugin is off; omitted, none ever is).
+ * The catalog over `table`, the listed plugins', served with it as the
+ * `ToolRegistry` a reader outside any run reads: the configured MCP servers
+ * `loader` reads for a run's declared tools, the installed plugins and
+ * their native plugins `installed` reads at each step (none when omitted),
+ * read again at each of `installedChanges` (the install record changed, so
+ * a native plugin disabled or replaced anywhere goes down then; one enabled
+ * is imported when a step or a launch next reads, never by this read),
+ * and the `switches` as they stand and on each change (the ids held off;
+ * before the first, every switched plugin is off; omitted, none ever is).
  */
 export const toolCatalogLayer = (
   table: ToolTable,
   options: {
     readonly loader?: PluginLoader;
     readonly installed?: InstalledToolReader;
+    readonly installedChanges?: Stream.Stream<unknown>;
     readonly switches?: Stream.Stream<ReadonlySet<string>>;
   } = {},
 ): Layer.Layer<
@@ -129,15 +152,7 @@ export const toolCatalogLayer = (
   Exclude<PluginLayerServices, ToolCatalog>
 > => {
   const plugins = [...table.entries.values()];
-  const layersOf = <L>(pick: (plugin: Plugin) => L | undefined) =>
-    new Map(
-      plugins.flatMap((plugin) => {
-        const layer = pick(plugin);
-        return layer === undefined ? [] : [[plugin.id, layer] as const];
-      }),
-    );
-  const processLayerOf = layersOf((plugin) => plugin.processLayer?.layer);
-  const drains = layersOf((plugin) => plugin.processLayer?.drain);
+  const installed = options.installed ?? NONE;
   // Only a plugin with a switch (`toggle`, the one the dashboard and the
   // CLI show) is switched: a stored id of any other switches nothing.
   const onOf = (off: ReadonlySet<string>): ReadonlySet<string> =>
@@ -164,35 +179,155 @@ export const toolCatalogLayer = (
         options.switches ?? Stream.succeed(new Set<string>()),
         (off) => SubscriptionRef.set(on, onOf(off)),
       ).pipe(Effect.forkScoped);
+      const live = yield* SubscriptionRef.make(table);
+      // The native revisions a table holds, one key each: a read that
+      // loads what the last one did publishes nothing.
+      const revisions = (of: ToolTable) =>
+        of.natives
+          .map(({ plugin, revision }) => new LayerKey(plugin, revision).name)
+          .join('\0');
+      const loader = yield* nativeLoader;
+      // Each native plugin's revision the table held before the one it
+      // holds now, while its installed plugin stays enabled: kept in memory
+      // only, for when the one in use stops loading. A disabled or removed
+      // plugin forgets it.
+      const previous = new Map<string, NativePlugin>();
+      // The installed plugins as read now and the table they make, with
+      // each native entry imported now (`load`), or only those a step or a
+      // launch already imported: a change to the install record takes a
+      // disabled or replaced plugin out at once, and runs no plugin's code;
+      // a plugin trusted at a revision not imported yet keeps the one in use
+      // until a step tries the new one.
+      const readWith = (load: boolean) =>
+        Effect.gen(function* () {
+          const found = yield* installed;
+          for (const id of previous.keys())
+            if (!found.enabled.has(id)) previous.delete(id);
+          const inUse = new Map(
+            (yield* SubscriptionRef.get(live)).natives.map((native) => [
+              native.plugin.id,
+              native,
+            ]),
+          );
+          // A revision of `id` that does not load (its import, its value,
+          // its layers or the table refused it) keeps the revision in use,
+          // else the one before it, unless that is the revision refused or
+          // its layers did not come up either; with none, the plugin is
+          // withheld. The step says which.
+          const standInFor = (id: string, revision?: string) =>
+            [inUse.get(id), previous.get(id)].find(
+              (native): native is NativePlugin =>
+                native !== undefined &&
+                native.revision !== revision &&
+                !loader.rejected(native),
+            );
+          const notes: string[] = [];
+          const say = (failed: NativePluginFailed, stand?: NativePlugin) =>
+            notes.push(
+              stand === undefined
+                ? failed.message
+                : `${failed.message}; revision ${stand.revision.slice(0, 12)} stays in use until the plugin is fixed or disabled.`,
+            );
+          const fresh = new Set<NativePlugin>();
+          const candidates = (yield* Effect.forEach(
+            found.plugins,
+            ({ id, source }) =>
+              Effect.gen(function* () {
+                if (source.plugin.native === null) return undefined;
+                if (!load && Option.isNone(yield* loader.imported(source)))
+                  return inUse.get(id);
+                const result = yield* Effect.result(loader.load(source));
+                if (Result.isSuccess(result)) {
+                  fresh.add(result.success);
+                  return result.success;
+                }
+                const stand = standInFor(id);
+                say(result.failure, stand);
+                return stand;
+              }),
+            { concurrency: 'unbounded' },
+          )).filter((native) => native !== undefined);
+          // A new revision the table refuses leaves the one before it in
+          // use, judged again with the rest.
+          const first = withNatives(table, candidates);
+          const replaced = new Map(
+            first.withheld.flatMap(({ native, reason }) => {
+              const { plugin, revision } = native;
+              const stand = fresh.has(native)
+                ? standInFor(plugin.id, revision)
+                : undefined;
+              if (stand === undefined) return [];
+              say(notLoaded(plugin.id, revision, reason), stand);
+              return [[native, stand]];
+            }),
+          );
+          const composed =
+            replaced.size === 0
+              ? first
+              : withNatives(
+                  table,
+                  candidates.map((native) => replaced.get(native) ?? native),
+                );
+          for (const { native, reason } of composed.withheld)
+            say(notLoaded(native.plugin.id, native.revision, reason));
+          for (const native of composed.table.natives) {
+            const held = inUse.get(native.plugin.id);
+            if (held !== undefined && held.revision !== native.revision)
+              previous.set(native.plugin.id, held);
+          }
+          if (
+            revisions(composed.table) !==
+            revisions(yield* SubscriptionRef.get(live))
+          )
+            yield* SubscriptionRef.set(live, composed.table);
+          return {
+            installed: found,
+            table: composed.table,
+            warnings: [...found.warnings, ...notes],
+          };
+        });
+      const read = readWith(true);
+      yield* Stream.runForEach(options.installedChanges ?? Stream.empty, () =>
+        readWith(false),
+      ).pipe(Effect.forkScoped);
       // A process layer may read this catalog.
-      const processLayers: RcMap.RcMap<string, PluginContext> =
+      const processLayers: RcMap.RcMap<LayerKey, PluginContext> =
         yield* RcMap.make({
-          lookup: (id: string) =>
-            buildPluginLayer(id, processLayerOf).pipe(
+          lookup: (key: LayerKey) =>
+            buildPluginLayer(key, key.plugin.processLayer?.layer).pipe(
               Effect.provideContext(served),
               Effect.provide(process),
             ),
         });
-      yield* follow(
-        SubscriptionRef.changes(on),
-        [...processLayerOf.keys()],
-        (id) => RcMap.get(processLayers, id),
-      );
       const shared: ProcessCatalog = {
+        listed: table,
         builtIn: plugins.map((plugin) => ({
           plugin,
           entries: entriesOf(plugin.id, plugin.tools ?? []),
         })),
         onOf,
         on,
+        live,
+        read,
+        layerFailed: loader.reject,
         processLayers,
-        sessionLayerOf: layersOf((plugin) => plugin.sessionLayer),
         spawner: Context.get(process, ChildProcessSpawner),
         loader: options.loader ?? (() => NONE),
-        installed: options.installed ?? NONE,
       };
+      yield* follow(
+        heldKeys(shared, ({ processLayer }) => processLayer),
+        (key) => RcMap.get(processLayers, key),
+      );
       const processServices = (id: string) =>
-        RcMap.getOption(processLayers, id);
+        Effect.flatMap(SubscriptionRef.get(live), (now) => {
+          const plugin = now.entries.get(id);
+          return plugin === undefined
+            ? Effect.succeedNone
+            : RcMap.getOption(
+                processLayers,
+                new LayerKey(plugin, now.revisionOf(id)),
+              );
+        });
       const state = Context.get(process, AppState);
       const service: typeof ToolCatalogOwner.Service = {
         processServices,
@@ -202,17 +337,25 @@ export const toolCatalogLayer = (
             ? Effect.logWarning(`Plugin ${id} has no switch; nothing written.`)
             : setToolEnabled(state, id, enabled)
           ).pipe(withLogChannel('toolAvailability')),
-        drain: Effect.forEach(
-          drains,
-          ([id, drain]) =>
-            Effect.scoped(
-              Effect.flatMap(processServices(id), (services) =>
-                Option.isSome(services)
-                  ? Effect.provide(drain, services.value)
-                  : Effect.void,
-              ),
-            ),
-          { concurrency: 'unbounded', discard: true },
+        drain: Effect.flatMap(RcMap.keys(processLayers), (keys) =>
+          Effect.forEach(
+            keys,
+            (key) => {
+              const drain = key.plugin.processLayer?.drain;
+              return drain === undefined
+                ? Effect.void
+                : Effect.scoped(
+                    Effect.flatMap(
+                      RcMap.getOption(processLayers, key),
+                      (services) =>
+                        Option.isSome(services)
+                          ? Effect.provide(drain, services.value)
+                          : Effect.void,
+                    ),
+                  );
+            },
+            { concurrency: 'unbounded', discard: true },
+          ),
         ),
         session: sessionTools(shared),
       };

@@ -231,7 +231,7 @@ and `ApiKeyPromptFailed`, raised from the CLI chat's forms and
 
 | Question                 | Deciders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts:319`, `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`)                                                                                                                                                                                                                                                                                                                                                               |
+| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/harness/src/agent/runtime/modelAccess/planQuotas.ts` (`askEndpoint`), `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`)                                                                                                                                                                                                                                                                                                                                                                               |
 | Is this retryable        | `ModelError.retryable`, `notRetryable` (`verdict.ts:269`), `offersRetry` (`packages/harness/src/common/errors/sdkError/providerErrorFormat.ts:150`), `userRetryable`; `unsent` forces "no offer" twice (`failureInfo.ts:37`, `invocation.ts:288`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Transient HTTP status    | `isRetryableStatus` (`packages/llm/src/errors.ts:142`), `isTransientHttpStatus` (`packages/harness/src/utils/core/httpStatus.ts:14`, the 409 split documented), an inline `status >= 500` (`packages/llm/src/oauth/chatgpt/chatgptProvider.ts:287`), a hand-rolled loop with its own error pair (`packages/texra/src/latex/arxivProcessor.ts:206-245`) beside `retryTransientFetch` (`packages/harness/src/tools/timeouts.ts:53`)                                                                                                                                                                                                                                                                                                                  |
 | Is this an abort         | none in the harness since #14641 deleted `isUserAbort` (a stop is fiber interruption); the boundary signatures, inline `name === 'AbortError'` at `packages/llm/src/api/googleInteractions.ts:232` and `arxivProcessor.ts:419`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -271,7 +271,7 @@ The plan wording's names moved: the harness words a failure with
 the app with `modelFailureText` (`packages/texra/src/ui/copy/modelAccess.ts:108`).
 Still open: the 401/403 question has five deciders (`packages/llm/src/errors.ts:229`,
 `packages/llm/src/oauth/oauthRequest.ts:58`, `githubClient.ts:113`,
-`SubscriptionUsageService.ts:316`, `overleafClone.ts:212`)._
+`planQuotas.ts` (`askEndpoint`), `overleafClone.ts:212`)._
 
 _Done 2026-11-19: `isAuthFailureStatus` (`packages/llm/src/errors.ts`,
 public in `@texra-ai/llm`) owns the 401/403 fact; `authOrRejectionKind`,
@@ -368,6 +368,37 @@ still detected twice in one resume, both through `runReadRefusal`
 (`resumeRun.ts:88-92`, `resumability.ts:37-41`; `ownedElsewhere` is gone).
 The other deciders and the remaining stopped vocabulary were not re-read._
 
+_At 2026-11-20, every production `Cause.hasInterrupts` site was re-read.
+The ones that asked "did the run stop" call the owner: `readCause`
+(`packages/harness/src/shared/session/causeReading.ts`) and the session
+description's finalizer (`sessionDescription.ts`) ask `outcomeFromCause`;
+`endVerdict` (`AgentRunLifecycle.ts`) no longer wraps it in a ternary that
+returned its own answer; and `commitEnd` reads the outcome its caller's
+verdict decided instead of asking the exit again (`Cause.hasInterrupts`:
+38 files to 36). `stopOrFailure` is not built: `endVerdict` is that
+richer answer (the outcome, and the failure that rode a stop), and the
+two run terminals left (`endRun`, `processRun.ts`'s `endProcessChild`) both
+call it. The sites kept ask other questions: whether a catch or a
+finalizer passes an interruption through (`definition.ts`,
+`LatexToolingController.ts`, `LspTools.ts`, `arxivProcessor.ts`), whether
+an interrupted call proves anything about a route (`ModelRetryGate.ts`),
+whether a fiber's exit is interrupts only, so that nothing is logged or
+the process exits 130 (the hosts' report handlers, `executeCli.ts`,
+`cliCommand.ts`, `runRegistry.ts`'s `drained` and `notOpened`, `commitEnd`'s
+re-raise). The three bare `Effect.interrupt` re-raises (two in
+`ModelInvoker.ts`, one in `compaction.ts`) still drop a failure that rode
+beside the stop, where the tool dispatch keeps it as a defect
+(`toolUseDispatch.ts:488-498`). Keeping it there too would make a root
+run that the person stopped end in an `AgentError` whenever a stream's
+finalizer fails as the stop unwinds it; how often a provider stream's
+close fails on interruption was not measured, so this waits for that
+evidence before every stop can surface an error. `openResume` reads the run's facts once and decides
+from that read: a failed read is `refusalFor`'s, and the continuation is
+`continuationOf` (`packages/harness/src/agent/storage/continuation.ts`) over
+it, so an earlier build is detected once (2026-11-20). `FollowUps.release`'s two literals stay until `runLoop.ts`, their
+one caller, is free to change. The script delivery's `stopped` stays (the
+2026-11-17 triage note)._
+
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
 
@@ -441,6 +472,17 @@ OpenAI's `failed`/`cancelled` are all `provider-rejection`
 `SyntaxError`. One "no completed turn" check was rejected: the three
 guard three boundaries of the `Model` interface
 (`.agents/docs/refuted-candidates.json`)._
+
+_At 2026-11-20: the one skip signal is refused (`RUN-one-skip-signal` in
+`.agents/docs/refuted-candidates.json`: a disposition `skipped` is a call
+whose body never ran, `name: 'Skipped'` a delegation whose body ran and
+whose child was stopped). `terminalStatusFailure` is not built: the kind
+has converged, and what remains differs per provider, OpenAI's failure
+codes deciding whether a repeat can clear it
+(`openaiResponsesCodec.ts`'s `terminalParts`) and Google's two sites
+(`googleInteractions.ts`, live and background) naming the turn in their
+own words; one helper over two sites of one provider is not worth its
+name._
 
 **Give up.** A silent success on truncation, which is the defect.
 

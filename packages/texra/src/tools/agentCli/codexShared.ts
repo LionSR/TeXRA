@@ -1,8 +1,9 @@
-import prettyMilliseconds from 'pretty-ms';
+import { Duration } from 'effect';
 import { buildMcpToolName } from '@texra-ai/harness/transcript';
 import {
+  collapseWhitespace,
   getBasename,
-  truncateSummary,
+  previewLabel,
   type McpToolOutput,
   type ToolCallStatus,
   type ToolCard,
@@ -21,7 +22,6 @@ export const CODEX_AGENT_NAME = 'codex';
 const CODEX_FILE_CHANGE_TOOL = 'codex_patch';
 const CODEX_THREAD_TOOL = 'codex_thread';
 const CODEX_TURN_TOOL = 'codex_turn';
-const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
 
 /**
  * The card of a `codex` call: its prompt, and a badge when it continues an
@@ -75,10 +75,7 @@ export function buildCodexCommandToolLog(
 
   return {
     toolName: 'bash',
-    summary: truncateSummary(
-      command || 'command',
-      CODEX_COMMAND_SUMMARY_MAX_LENGTH,
-    ),
+    summary: previewLabel(collapseWhitespace(command || 'command')),
     input: { command: options.command },
     ...(output && { output }),
     ...(options.exit_code != null && { exitCode: options.exit_code }),
@@ -210,9 +207,10 @@ export function buildCodexTurnToolLog({
                 kind: 'text' as const,
                 label: 'Duration:',
                 // Whole seconds, at least 1s: the card's wall-time reading.
-                text: prettyMilliseconds(
-                  Math.max(1000, Math.floor(roundedMs / 1000) * 1000),
-                  { secondsDecimalDigits: 0 },
+                text: Duration.format(
+                  Duration.millis(
+                    Math.max(1000, Math.floor(roundedMs / 1000) * 1000),
+                  ),
                 ),
               },
             ]

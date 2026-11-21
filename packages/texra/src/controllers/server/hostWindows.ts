@@ -17,10 +17,8 @@
  * run's history only through the tool result that used it.
  */
 import { randomUUID } from 'node:crypto';
-import {
-  isPathWithin,
-  type PresentationEventHandlers,
-} from '@texra-ai/harness/host';
+import { type PresentationEventHandlers } from '@texra-ai/harness/host';
+import { isPathWithin } from '@texra-ai/harness/node';
 
 import {
   Cause,
@@ -53,6 +51,7 @@ import {
   type HostAttachFrame,
   type Notice,
 } from './hostCalls';
+import { logFailure } from '@texra-ai/harness/plugins';
 import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import { linkOver, type Linked, type ServiceLink } from './client';
 import type { WindowClient } from './windowHost';
@@ -63,6 +62,8 @@ import type {
 } from '@texra-ai/harness';
 
 /** Each runtime notice as the window call that carries it. */
+const CHANNEL = 'service';
+
 const NOTICE_OF: PresentationEventHandlers<
   RuntimePresentationEventPayloads,
   Notice
@@ -148,10 +149,8 @@ export const makeWindowTable = () => {
     told: Effect.Effect<void, RpcClientError.RpcClientError>,
   ): Effect.Effect<void> =>
     told.pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning('A TeXRA window did not take a host call').pipe(
-          Effect.annotateLogs({ data: cause }),
-        ),
+      Effect.catchCause(
+        logFailure(CHANNEL, 'A TeXRA window did not take a host call'),
       ),
     );
 
@@ -227,9 +226,7 @@ export const makeWindowTable = () => {
         const window = target(key, 'notices');
         const notice = NOTICE_OF[event](payload);
         return window === undefined
-          ? Effect.logWarning(`Host notice ${event}`).pipe(
-              Effect.annotateLogs({ data: payload }),
-            )
+          ? logFailure(CHANNEL, `Host notice ${event}`)(payload)
           : tell(window.calls.notices({ notice }, { discard: true }));
       },
     };

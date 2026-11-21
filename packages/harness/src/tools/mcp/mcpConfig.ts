@@ -137,6 +137,10 @@ interface InstalledToolPlugin {
 export type InstalledToolReader = Effect.Effect<{
   readonly plugins: readonly InstalledToolPlugin[];
   readonly warnings: readonly string[];
+  /** The ids of the installed plugins enabled now, those held back among
+   *  them: a native plugin's revision in use stands while its plugin is
+   *  enabled (`toolCatalogLayer`). */
+  readonly enabled: ReadonlySet<string>;
 }>;
 
 /**

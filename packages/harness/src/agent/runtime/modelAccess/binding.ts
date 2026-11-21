@@ -27,6 +27,7 @@ import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
 
 import { routeCredential } from './credentials';
+import { PlanQuotas } from './planQuotas';
 import { routePolicies, type CallFailure } from './failureInfo';
 import {
   decideRoute,
@@ -95,7 +96,11 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
+  | Scope.Scope
+  | HttpClient.HttpClient
+  | Secrets
+  | SubscriptionAccounts
+  | PlanQuotas
 > {
   const selected = selectModel(request.modelId);
   const requested = request.config ?? selected?.config;
@@ -161,6 +166,9 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     });
   }
   const credential = yield* routeCredential(route);
+  // What the credential is: a provider key (a key plan's included), or the
+  // session plan it signs in to.
+  const credentialKind = route.kind === 'session' ? route.plan : route.kind;
   const reasoning = yield* reasoningOf(plan, requested);
   const bound = yield* bindWireModel({
     model: requested,
@@ -183,27 +191,26 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
       // sends every turn of such a route as background work
       // (`backgroundCapable`), a tool-use turn included.
       background: request.textOnly,
-      fetch: yield* runModelFetch,
+      // A plan whose replies state its quota has each one recorded.
+      fetch: (yield* PlanQuotas).observing(route.plan, yield* runModelFetch),
     },
   });
   return {
     ...commonOf(plan),
     ...bound,
     route,
-    ...('plan' in credential && credential.plan
-      ? { plan: credential.plan }
-      : {}),
+    ...(credential.plan ? { plan: credential.plan } : {}),
     routes: routePolicies(
       [
         bound.config.provider,
-        credential.route,
+        credentialKind,
         route.endpoint,
         // A key cools its own route; a session is one per signed-in
         // account, whose token rotates under it.
         typeof credential.bearer === 'string'
           ? hash(
               'sha256',
-              `${credential.route}\0${credential.bearer}`,
+              `${credentialKind}\0${credential.bearer}`,
               'base64url',
             )
           : 'session',

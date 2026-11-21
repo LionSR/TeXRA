@@ -39,8 +39,11 @@ either: every model gets the same text, so nothing asks the provider.
 
 Taken on 2026-11-18: `fetchPlanUsage` (`packages/llm/src/providers/planUsage.ts`)
 asks the Kimi Code and GLM quota endpoints, the GLM one on its region's host
-from `GLM_BASE_URLS`; the app keeps the cache and the snapshot
-(`SubscriptionUsageService.ts`).
+from `GLM_BASE_URLS`. Since 2026-11-20 the harness keeps the cache too
+(`PlanQuotas`, `packages/harness/src/agent/runtime/modelAccess/planQuotas.ts`),
+one per process for the hosts' usage meters and a run's `resources` tool;
+the app only names the snapshot
+(`packages/texra/src/controllers/modelAccess/subscriptionUsage/subscriptionUsage.ts`).
 
 ## 4. The merge feature's edited file is a harness launch field
 
@@ -134,9 +137,11 @@ segment should carry the route too is a narrow-terminal layout decision.
 
 ## 12. Two tone drifts between web and terminal (found 2026-11-17)
 
-- A run grant: the terminal paints `superYolo` in its error colour
-  (`statusBarDisplay.ts`), the web's `runGrantChips.ts` every grant as a
-  warning.
+- A run grant: taken on 2026-11-20. `RUN_GRANT_TONE`
+  (`packages/texra/src/ui/copy/runStatus.ts`) is the one tone of a grant
+  that is on, a warning whatever it approves: the web's `runGrantChips.ts`
+  and the terminal's status bar both read it, so the bar no longer paints
+  `superYolo` in its error colour.
 - A user-feedback rejection: taken on 2026-11-19. `toolRowLook`
   (`packages/texra/src/ui/copy/runStatus.ts`) decides how a tool card paints
   its state for both hosts: the user's feedback outranks the call's status,

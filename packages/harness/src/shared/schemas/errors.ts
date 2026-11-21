@@ -12,7 +12,7 @@ import { formatResetDuration } from '@utils/text/stringUtils';
 import { type DeclinableUsageRoute, DeclinableUsageRouteSchema } from './usage';
 
 /** A route that bills a signed-in subscription session (ChatGPT, Grok). */
-export const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick(
+const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick(
   Object.values(SUBSCRIPTION_ROUTES),
 );
 

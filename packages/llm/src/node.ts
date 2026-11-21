@@ -18,7 +18,8 @@
  *   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
  *   browser and (Grok's) device-code sign-in.
  * - **Provider endpoints outside a turn**: [`fetchPlanUsage`](#fetchplanusage)
- *   reads a coding plan's quota windows, and
+ *   reads a coding plan's quota windows ([`chatgptReplyUsage`](#chatgptreplyusage)
+ *   the ChatGPT plan's, from a reply's headers), and
  *   [`transcribeAudio`](#transcribeaudio) a recording's text.
  */
 import { Effect, type Scope } from 'effect';
@@ -211,7 +212,7 @@ export type { XaiSession } from './oauth/xai/xaiProvider.js';
 export { SubscriptionAccounts } from './oauth/subscriptionAccounts.js';
 
 // Provider endpoints outside the turn contract.
-export { fetchPlanUsage } from './providers/planUsage.js';
+export { chatgptReplyUsage, fetchPlanUsage } from './providers/planUsage.js';
 
 /**
  * The text of an audio file, from OpenAI's transcription model with an

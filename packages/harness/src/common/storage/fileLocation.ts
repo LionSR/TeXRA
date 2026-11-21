@@ -1,44 +1,5 @@
-import {
-  type RunId,
-  type ExternalFileLocation,
-  type FileLocation,
-  type RunStorageFileLocation,
-  type WorkspaceFileLocation,
-} from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-
-export function createWorkspaceLocation(
-  absolutePath: string,
-  relativePath: string,
-): WorkspaceFileLocation {
-  return {
-    kind: 'workspace',
-    absolutePath,
-    relativePath,
-  };
-}
-
-export function createRunStorageLocation(
-  absolutePath: string,
-  relativePath: string,
-  runId: RunId,
-): RunStorageFileLocation {
-  return {
-    kind: 'runStorage',
-    absolutePath,
-    relativePath,
-    runId,
-  };
-}
-
-export function createExternalLocation(
-  absolutePath: string,
-): ExternalFileLocation {
-  return {
-    kind: 'external',
-    absolutePath,
-  };
-}
 
 /**
  * Convert a string path to a FileLocation against the workspace root its
@@ -66,8 +27,12 @@ export function pathToLocationIn(
     if (!target) {
       throw new Error('Cannot resolve empty path without workspace');
     }
-    return createExternalLocation(resolved.absolutePath);
+    return { kind: 'external', absolutePath: resolved.absolutePath };
   }
 
-  return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
+  return {
+    kind: 'workspace',
+    absolutePath: resolved.absolutePath,
+    relativePath: resolved.relativePath,
+  };
 }

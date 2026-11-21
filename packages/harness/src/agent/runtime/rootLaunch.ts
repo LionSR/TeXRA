@@ -30,7 +30,7 @@ import {
 import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
-import { applyHelperModelPreference } from './helperModelName';
+import { servableHelperModel } from './helperModelName';
 import { RunRegistry } from './runRegistry';
 import type { SessionHandleInit } from './SessionHandle';
 import type { Interactions } from './HostInteractions';
@@ -139,12 +139,17 @@ export const rootRun = Effect.fn('rootRun')(function* (
     runId,
     executeAgent(
       runId,
+      null,
       Effect.gen(function* () {
         const config = launch.helperModel
-          ? yield* applyHelperModelPreference(
-              launch.config,
-              yield* SessionRoots,
-            )
+          ? {
+              ...launch.config,
+              model:
+                (yield* servableHelperModel(
+                  yield* SessionRoots,
+                  launch.config.model,
+                )) ?? launch.config.model,
+            }
           : launch.config;
         const definition = yield* prepareAgentDefinition({ config });
         return {

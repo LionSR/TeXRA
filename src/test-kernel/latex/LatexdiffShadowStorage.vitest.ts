@@ -5,7 +5,6 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { createExternalLocation } from '@texra-ai/harness/host';
 import { latexdiff } from '@latex/latexdiff';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
@@ -61,8 +60,11 @@ describe('latexdiff shadow output', () => {
 
       const error = yield* Effect.flip(
         latexdiff(
-          createExternalLocation(path.join(sourceDir, 'base.tex')),
-          createExternalLocation(path.join(sourceDir, 'revised.tex')),
+          { kind: 'external', absolutePath: path.join(sourceDir, 'base.tex') },
+          {
+            kind: 'external',
+            absolutePath: path.join(sourceDir, 'revised.tex'),
+          },
           {
             roots,
             cwd: roots.workspace,

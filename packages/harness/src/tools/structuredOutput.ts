@@ -165,8 +165,8 @@ export function buildTerminalTool(
     // Whether the run has submitted is its rows' answer, so a resumed run
     // refuses a second submission as the live one does.
     execute: Effect.fn('structuredOutput.execute')(function* (input) {
-      const facts = yield* inRunSession((call) => call.facts);
-      if (facts.structured != null) {
+      const state = yield* inRunSession((call) => call.state);
+      if (state.structured != null) {
         return yield* new ToolError(
           'submit_output can only be accepted once per run.',
         );
