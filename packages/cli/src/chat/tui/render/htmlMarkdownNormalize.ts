@@ -4,6 +4,7 @@ import {
   protectByPatterns,
 } from '@ui/markdown/latexPlaceholders';
 import { protectLatexMathSpansForNormalize } from '@ui/markdown/latexMathShield';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 
 // Only exact supported tag names enter the presented markup. Suffixes such
 // as `<strong-x>` remain literal transcript text.
@@ -417,7 +418,7 @@ function protectLiteralMathSyntax(content: string): {
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   // Normalize once so the container-aware math shield and the later renderer
   // both slice the same LF string markdown-it will parse.
-  const lfContent = content.replaceAll(/\r\n?/g, '\n');
+  const lfContent = normalizeLineEndings(content);
   if (!KNOWN_HTML_TAG_RE.test(lfContent)) return lfContent;
 
   const literalDollarProtection = protectLiteralMathSyntax(lfContent);
