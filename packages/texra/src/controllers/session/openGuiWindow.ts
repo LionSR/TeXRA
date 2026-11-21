@@ -801,7 +801,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   return {
     bridge,
     snapshot,
-    present,
     runValidated: runActions.runValidated,
     runSetup,
     settingsRuns,
