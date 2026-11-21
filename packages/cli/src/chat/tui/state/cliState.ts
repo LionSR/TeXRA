@@ -12,9 +12,9 @@ import {
   type RunId,
   descendantRuns,
   FACT_SEPARATOR,
-  normalizeLineEndings,
 } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import {
   applySurfaceAction,
   emptySurface,

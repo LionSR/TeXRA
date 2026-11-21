@@ -554,7 +554,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/resume', '\r'],
     frame: 'viewport',
-    expect: ['/resume', 'Nothing to resume yet.', 'Esc close'],
+    expect: ['/resume', 'No tasks yet.', 'Esc close'],
     unexpect: ['/resume is registered but has no harness action.'],
   },
   {
@@ -2045,7 +2045,7 @@ const SCENARIOS = [
       '1 approval',
     ],
     unexpect: [
-      'Feedback to send with rejection',
+      'What should the agent change?',
       'send note',
       'use your own API key',
     ],
@@ -2069,7 +2069,7 @@ const SCENARIOS = [
       'use your own API key',
       '1 approval',
     ],
-    unexpect: ['Feedback to send with rejection', 'send note', '/model models'],
+    unexpect: ['What should the agent change?', 'send note', '/model models'],
   },
   {
     name: 'retry-approval-reject',
@@ -2081,7 +2081,7 @@ const SCENARIOS = [
     expect: ['RETRY-REJECTED', '/ commands'],
     unexpect: [
       'The request to harness-model failed',
-      'Feedback to send with rejection',
+      'What should the agent change?',
       'send note',
       '1 approval',
     ],

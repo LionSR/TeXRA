@@ -6,7 +6,6 @@ import {
   decodingDefault,
   entryDetail,
   entryLine,
-  normalizeLineEndings,
   truncateSummary,
 } from '@texra-ai/harness/schemas';
 import { postToMain } from './messageRoutes';
@@ -16,6 +15,7 @@ import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
 import {
   DESKTOP_LOG_COMMANDS,

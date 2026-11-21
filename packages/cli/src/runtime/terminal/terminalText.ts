@@ -2,9 +2,9 @@ import { stripVTControlCharacters } from 'node:util';
 
 import {
   collapseWhitespace,
-  normalizeLineEndings,
   stripControlCharacters,
 } from '@texra-ai/harness/schemas';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import cliTruncate from 'cli-truncate';
 import sliceAnsi from 'slice-ansi';
 import stringWidth from 'string-width';

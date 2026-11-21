@@ -10,9 +10,9 @@
 import { diff_match_patch } from 'diff-match-patch';
 
 // Local imports
-import { normalizeLineEndings } from '@texra-ai/harness/schemas';
 import type { NamedDocument } from '@texra/agent/output/extraction/xmlExtraction';
 import { SCRATCHPAD_TAG } from '@texra/shared/plugins/documentOutputs';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 
 // ---------------------------------------------------------------------------
 // responseText

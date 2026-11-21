@@ -4,9 +4,13 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { AppSignals } from '@texra-ai/harness/plugins';
+import { AppSignals, Settings } from '@texra-ai/harness/plugins';
+import { DISABLED_SKILLS_SETTING } from '@texra-ai/harness/schemas';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import {
+  applyStateSettingUpdate,
+  setSkillEnabled,
+} from '@texra/controllers/settingsView/stateSettingWrite';
 import { LATEX_FORMATTER_SETTING } from '@texra/shared/settings/texraSettings';
 
 describe('applyStateSettingUpdate', () => {
@@ -40,6 +44,25 @@ describe('applyStateSettingUpdate', () => {
           roots,
         ),
       ).toEqual({ kind: 'ignored' });
+    }).pipe(Effect.provide(AppSignals.layer)),
+  );
+
+  it.effect('toggles a skill over the stored list, not a stale copy', () =>
+    Effect.gen(function* () {
+      const fake = makeFakeSettingsStores();
+      const roots = { ...fake.stores, workspace: '/workspace' };
+      // Written after a surface last read the list: a toggle keeps it.
+      yield* Settings.set(roots, DISABLED_SKILLS_SETTING, ['first']);
+
+      yield* setSkillEnabled(DISABLED_SKILLS_SETTING, 'second', false, roots);
+      expect(yield* Settings.get(roots, DISABLED_SKILLS_SETTING)).toEqual([
+        'first',
+        'second',
+      ]);
+      yield* setSkillEnabled(DISABLED_SKILLS_SETTING, 'first', true, roots);
+      expect(yield* Settings.get(roots, DISABLED_SKILLS_SETTING)).toEqual([
+        'second',
+      ]);
     }).pipe(Effect.provide(AppSignals.layer)),
   );
 });

@@ -4,7 +4,8 @@
  * The extension/desktop welcome card and the walkthrough import these strings
  * instead of paraphrasing each other, so the choice order can never drift
  * between surfaces; the CLI's "Connect a model" panel shares the title and
- * the ChatGPT choice, and names the key choice as its own `/key` row does.
+ * the ChatGPT choice and the key choice's description, and labels the key
+ * choice as its own `/key` row does.
  * Surface-specific hints (e.g. "run `texra auth chatgpt login`" vs. a settings link) stay
  * in the surface that owns them.
  *
@@ -36,12 +37,13 @@ export const ONBOARDING_CHOICE_CHATGPT = {
 
 /**
  * State 0 choice 2. Same name as the model-access setting's option, so the
- * welcome card and the settings radio group cannot drift apart; the
- * description stays short here because the card shows one line per choice.
+ * welcome card and the settings radio group cannot drift apart. The
+ * description is also the terminal's key row; it stays short because the card
+ * shows one line per choice.
  */
 export const ONBOARDING_CHOICE_API_KEY = {
   label: OWN_API_KEYS.option.label,
-  description: 'Anthropic, OpenAI, Google, and more',
+  description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
 } as const;
 
 /** The card's lede: what connecting a model leads to. */

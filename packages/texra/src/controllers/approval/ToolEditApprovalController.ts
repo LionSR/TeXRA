@@ -7,7 +7,7 @@
  * The content is the request's (`request.preview`), so every window of the
  * project shows the same proposal, and no window changes it; what the user
  * types into the proposed side is this window's until its Approve sends it
- * as the decision's content (`request.decide`), which the tool applies. The
+ * as the approval's tool edit (`request.decide`), which the tool applies. The
  * session records one decision per request: an Approve sent after another
  * window answered is refused, never applied over that answer. Everything a
  * host owns (staging the files, its diff view, reading back what the user
@@ -442,7 +442,7 @@ export class ToolEditApprovalController {
         requestId,
         decision: {
           action: 'approve',
-          ...(content !== undefined && { content }),
+          ...(content !== undefined && { edit: { kind: 'toolEdit', content } }),
         },
         grant,
       })

@@ -266,20 +266,16 @@ export function builtinSlashCommands(options: {
     appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
   });
 
-  const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
-    const context = useSlashContext();
-    return (
-      <CliConfigForm
-        availableRows={props.availableRows}
-        onApprovalPolicyChanged={context.onProjectApprovalPolicyChanged}
-        onClose={() => props.onDone(undefined)}
-        onError={(error) => {
-          props.onPersist?.();
-          reportFormError(error);
-        }}
-      />
-    );
-  };
+  const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => (
+    <CliConfigForm
+      availableRows={props.availableRows}
+      onClose={() => props.onDone(undefined)}
+      onError={(error) => {
+        props.onPersist?.();
+        reportFormError(error);
+      }}
+    />
+  );
 
   const agent: SlashCommand = {
     name: 'agent',

@@ -7,11 +7,8 @@
 
 import { LRUCache } from 'lru-cache';
 
-import {
-  escapeAttr,
-  escapeText,
-  normalizeLineEndings,
-} from '@texra-ai/harness/schemas';
+import { escapeAttr, escapeText } from '@texra-ai/harness/schemas';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 
 import {
   createBegEndEnvironmentProbe,

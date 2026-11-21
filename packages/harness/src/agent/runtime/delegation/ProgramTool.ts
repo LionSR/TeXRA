@@ -28,7 +28,7 @@ const ProgramInputSchema = Schema.Struct({
   ),
   inputFiles: fileList('The files it works on.'),
   contextFiles: fileList(
-    'Read-only context (guidance, .bib, .sty). Say in the prompt what each is for.',
+    'Read-only context (guidance, references, style files). Say in the prompt what each is for.',
   ),
   mediaFiles: fileList('Images, figures, PDFs or audio.'),
   outputFiles: fileList(

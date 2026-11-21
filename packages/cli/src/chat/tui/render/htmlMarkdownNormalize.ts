@@ -1,10 +1,10 @@
-import { normalizeLineEndings } from '@texra-ai/harness/schemas';
 import { Number as Num } from 'effect';
 import {
   MATH_SPAN_PATTERNS,
   protectByPatterns,
 } from '@ui/markdown/latexPlaceholders';
 import { protectLatexMathSpansForNormalize } from '@ui/markdown/latexMathShield';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 
 // Only exact supported tag names enter the presented markup. Suffixes such
 // as `<strong-x>` remain literal transcript text.

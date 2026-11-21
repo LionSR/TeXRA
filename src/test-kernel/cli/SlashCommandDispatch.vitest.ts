@@ -56,7 +56,6 @@ function createContext(
     resumeRun: (_id: RunId) => Effect.void,
     resumeTask: (_id: RunId) => Effect.void,
     activateSkill: vi.fn(),
-    onProjectApprovalPolicyChanged: vi.fn(),
     getModelSwitchDisabledReason: () => Effect.undefined,
     onAccountChanged: () => Effect.void,
   };

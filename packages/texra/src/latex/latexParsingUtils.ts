@@ -163,32 +163,21 @@ export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
 );
 
 /**
- * Match `pattern` against `content` and split each match's first capture
- * group on commas, trimming and de-duplicating the resulting tokens (empty
- * entries are skipped). `transform` maps each trimmed token before adding it
- * to the result set, so callers can resolve tokens to paths or leave them as
- * plain keys.
+ * Match `pattern` (global, with one capture group: both callers pass a
+ * module constant) against `content` and split each match's group on
+ * commas, trimming and de-duplicating the resulting tokens (empty entries
+ * are skipped). `transform` maps each trimmed token before adding it to the
+ * result set, so callers can resolve tokens to paths or leave them as plain
+ * keys.
  */
 function collectCommaSeparatedMatches(
   content: string,
   pattern: RegExp,
   transform: (token: string) => string = (token) => token,
 ): string[] {
-  if (!pattern.global) {
-    throw new Error(
-      'collectCommaSeparatedMatches requires a global RegExp pattern; add the g flag.',
-    );
-  }
-
   const tokens = new Set<string>();
   for (const match of content.matchAll(pattern)) {
-    const rawGroup = match[1];
-    if (rawGroup == null) {
-      throw new Error(
-        'collectCommaSeparatedMatches requires the pattern to provide a first capture group.',
-      );
-    }
-    for (const raw of rawGroup.split(',')) {
+    for (const raw of match[1].split(',')) {
       const trimmed = raw.trim();
       if (!trimmed) continue;
       tokens.add(transform(trimmed));

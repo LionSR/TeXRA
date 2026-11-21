@@ -15,7 +15,10 @@ import type {
   DocumentMeta,
   ExportConfig,
 } from '@texra/agent/export/schemas';
-import type { ExportNode } from '@texra-ai/harness/schemas';
+import type {
+  ExportNode,
+  MediaAttachmentKind,
+} from '@texra-ai/harness/schemas';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {
@@ -27,6 +30,15 @@ export interface FormatSpec {
   footer: string;
   nodes: NodeRenderers;
 }
+
+/** The heading every export opens with. */
+export const EXPORT_TITLE = 'TeXRA Chat Export';
+
+/** What stands in for a media attachment of a user message. */
+export const ATTACHMENT_LABELS = Object.freeze({
+  image: 'Image attachment',
+  document: 'Document attachment',
+} as const satisfies Record<MediaAttachmentKind, string>);
 
 /** Metadata fields rendered in the document header. */
 export const HEADER_FIELDS = Object.freeze([

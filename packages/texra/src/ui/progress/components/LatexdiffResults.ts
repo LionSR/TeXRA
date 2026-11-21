@@ -18,7 +18,8 @@ import {
   latexdiffDisplayName,
   type LatexdiffEntry,
 } from '@texra/shared/plugins/documentOutputs';
-import { statusGlyph, type StatusLook } from '@ui/copy/runStatus';
+import { LATEXDIFF_STATUS } from '@ui/copy/documentOutputs';
+import { statusGlyph } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -28,16 +29,6 @@ import { buildDetailsCard } from '../formatters/htmlBuilders';
 
 // Local imports - styles
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
-
-/** How an entry's status is painted, and its screen-reader label: the
- *  status is otherwise icon-only. */
-const LATEXDIFF_STATUS: Record<
-  LatexdiffEntry['status'],
-  StatusLook & { readonly label: string }
-> = {
-  ok: { tone: 'success', label: 'Comparison succeeded' },
-  failed: { tone: 'danger', label: 'Comparison failed' },
-};
 
 @customElement('latexdiff-results')
 export class LatexdiffResults extends LitElement {

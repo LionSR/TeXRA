@@ -297,7 +297,6 @@ export {
   formatResultCount,
   formatWallTime,
   joinFacts,
-  normalizeLineEndings,
   pluralize,
   previewLabel,
   splitContentLines,
@@ -388,6 +387,7 @@ export {
   type RequestKind,
   // Who answers a request: a person, or the run grant that answers it.
   type AnsweredBy,
+  type ProposalEdit,
   type ProposalFileFields,
   factName,
   type FactName,

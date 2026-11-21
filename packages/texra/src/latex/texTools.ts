@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // External imports
-import { Config, Effect, FileSystem, Option, Schema } from 'effect';
+import { Config, Effect, FileSystem, Option } from 'effect';
 
 // Local imports
 import {
@@ -12,7 +12,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import { meansAbsent } from '@texra-ai/harness/node';
 import {
-  toErrorMessage,
   splitContentLines,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
@@ -67,14 +66,6 @@ const readCompileLogTail = Effect.fn('texTools.readCompileLogTail')(function* (
     ),
   );
 });
-
-/** The compiler could not be run at all, as opposed to running and failing. */
-class LatexCompilerNotRun extends Schema.TaggedError<LatexCompilerNotRun>()(
-  'LatexCompilerNotRun',
-  {
-    cause: Schema.Defect(),
-  },
-) {}
 
 // `path.delimiter` throughout, so the joined value is ':'-separated on POSIX
 // and ';'-separated on Windows, which is what kpathsea parses on each.
@@ -225,6 +216,15 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     path.basename(latexFile, path.extname(latexFile)),
   );
 
+  const failed = Effect.fnUntraced(function* (message: string) {
+    yield* Effect.logError(`Error compiling LaTeX: ${message}`);
+    const tail = yield* readCompileLogTail(`${outputStem}.log`);
+    return {
+      ok: false,
+      logTail: `Error compiling LaTeX: ${message}\n\n${tail}`,
+    } as const;
+  });
+
   const compile = Effect.gen(function* () {
     yield* fs.makeDirectory(outDir, { recursive: true });
 
@@ -262,9 +262,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // The compiler's cwd is the workspace root: a session with no folder open
     // has nowhere to run it.
     if (workspaceRoot === undefined) {
-      return yield* new LatexCompilerNotRun({
-        cause: new Error('No workspace path found'),
-      });
+      return yield* failed('No workspace path found');
     }
 
     const pdflatexArgs = [
@@ -328,20 +326,10 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     } as const;
   });
 
-  const failed = Effect.fnUntraced(function* (message: string) {
-    yield* Effect.logError(`Error compiling LaTeX: ${message}`);
-    const tail = yield* readCompileLogTail(`${outputStem}.log`);
-    return {
-      ok: false,
-      logTail: `Error compiling LaTeX: ${message}\n\n${tail}`,
-    } as const;
-  });
-
   return yield* compile.pipe(
     Effect.catchTags({
       PlatformError: (error) => failed(error.message),
       StateReadFailed: (error) => failed(error.message),
-      LatexCompilerNotRun: (error) => failed(toErrorMessage(error.cause)),
     }),
   );
 });

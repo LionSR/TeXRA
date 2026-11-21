@@ -296,14 +296,14 @@ interface AppSignalPayloads {
   workspaceAgentsChanged: undefined;
 
   /**
-   * The approval policy was written from a settings view (the shared
-   * settings commands' `updateStateSetting`).
+   * The approval policy was written from a settings view or the terminal's
+   * `/config` (the shared write path, `applyStateSettingUpdate`).
    *
    * Consumed by: the extension's status-bar tooltip and the launchers'
    * approval snapshot, painted outside the
    * settings webview's round-trip. The settings views repaint their own
-   * approval snapshot inline, and the CLI repaints its session line from the
-   * `/config` form and `/approval` directly. Enforcement reads the config
+   * approval snapshot inline. The terminal chat follows it to repaint its
+   * session line; its own `/approval` choice repaints directly. Enforcement reads the config
    * live, so this signal only repaints.
    */
   approvalPolicyChanged: undefined;
@@ -763,11 +763,25 @@ interface CurrentValues {
 ## DecisionOf
 
 The decisions a request of kind `K` takes: its own actions and the three
-refusals.
+refusals, an approval carrying only its own kind's edit.
 
 ```ts
 type DecisionOf<K extends RequestKind> =
-  | Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>
+  | Exclude<
+      Extract<RequestDecision, { action: (typeof REQUEST_ANSWERS)[K][number] }>,
+      { action: 'approve' }
+    >
+  | ('approve' extends (typeof REQUEST_ANSWERS)[K][number]
+      ? {
+          readonly action: 'approve';
+          readonly edit?: Extract<
+            NonNullable<
+              Extract<RequestDecision, { action: 'approve' }>['edit']
+            >,
+            { kind: K }
+          >;
+        }
+      : never)
   | RefusalDecision;
 ```
 
@@ -2052,7 +2066,7 @@ their diff) by its address in the session's blob store, stored with the
 row, so every process the request reaches shows the same diff
 (`request.preview`); answered by a surface's `request.decide`, or by the
 edit grant turned on meanwhile. An approve applies the file as the
-person left it: the decision's content, else the proposal.
+person left it: the approval's tool edit, else the proposal.
 
 ```ts
 const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>

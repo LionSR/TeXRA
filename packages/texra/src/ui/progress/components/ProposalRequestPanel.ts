@@ -5,6 +5,7 @@ import {
   getBasename,
   getProposalFileGroups,
   type AgentProposalRequest,
+  type ProposalEdit,
   getModelLabel,
 } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
@@ -64,11 +65,12 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     return this.draft.model ?? this.permission.data.model;
   }
 
-  /** An approval's `model`: stated only when it is not the proposal's. */
-  private get modelChange(): { readonly model?: string } {
+  /** An approval's edit: the model, stated only when it is not the
+   *  proposal's. */
+  private get modelChange(): { readonly edit?: ProposalEdit } {
     return this.model === this.permission.data.model
       ? {}
-      : { model: this.model };
+      : { edit: { kind: 'proposal', model: this.model } };
   }
 
   protected override submitPrimary(): void {

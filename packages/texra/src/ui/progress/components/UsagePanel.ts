@@ -21,7 +21,11 @@ import { contextGaugeTone, contextUsageText } from '@ui/copy/contextGauge';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';
 import { usageCost, usageCostLabel } from '@ui/copy/modelAccess';
-import { visibleTokenStats, type TokenUsageStat } from '@ui/copy/tokenUsage';
+import {
+  OWN_USAGE_LABEL,
+  visibleTokenStats,
+  type TokenUsageStat,
+} from '@ui/copy/tokenUsage';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 
@@ -235,7 +239,7 @@ export class UsagePanel extends LitElement {
         own.outputTokens === total.outputTokens)
     )
       return undefined;
-    return `Own model calls: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${usageCostLabel(own)}. The total includes its agents.`;
+    return `${OWN_USAGE_LABEL}: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${usageCostLabel(own)}. The total includes its agents.`;
   }
 
   /**

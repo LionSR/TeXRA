@@ -136,15 +136,6 @@ export function formatClippedList(
 }
 
 /**
- * `text` with every line ending as `\n`: a CRLF pair and a lone CR alike,
- * as markdown-it and a terminal read them. File content keeps a lone CR
- * (see {@link splitContentLines}); this is for text a person reads.
- */
-export function normalizeLineEndings(text: string): string {
-  return text.replaceAll(/\r\n?/g, '\n');
-}
-
-/**
  * Normalize CRLF line endings and split into content lines.
  * A trailing newline does not produce a phantom empty element.
  *

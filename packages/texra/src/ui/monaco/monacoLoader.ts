@@ -8,11 +8,9 @@
 // assignment, shared promise cache.
 //
 // Everything in here reaches `monaco-editor`. The path -> language-id table
-// lives in `@ui/highlighting/fileLanguage` so callers that only need a
-// language id do not import this module: Vite emits a worker bundle for every
-// `import('...?worker')` it sees in the module graph before tree-shaking, so
-// one import from here once wrote all five Monaco language workers (~12MB)
-// into the extension build.
+// lives in `@ui/highlighting/languageForPath` precisely so callers that only
+// need a language id do not import this module — see the comment there for
+// what that costs.
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 

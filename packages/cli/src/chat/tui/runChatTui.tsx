@@ -17,8 +17,9 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { AgentCatalog } from '@texra-ai/harness/host';
+import { AgentCatalog, appSignalStream } from '@texra-ai/harness/host';
 import {
+  APPROVAL_POLICY_SETTING,
   type RuntimeCommand,
   type RunId,
   type AgentConfig,
@@ -26,7 +27,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
-import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness/plugins';
+import { SESSION_CLOSE_DEADLINE_MS, Settings } from '@texra-ai/harness/plugins';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -36,7 +37,7 @@ import {
 } from '@cli/runtime/platform/cliContext';
 import { linkedClient } from '@texra/controllers/server/client';
 
-import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
+import { resolveChatDefaults } from '@cli/runtime/models/launchDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';
@@ -362,6 +363,27 @@ export async function runChat(
         ),
       ),
     );
+  // A write to the project's approval policy in this process (`/config`, a
+  // settings view) repaints the policy line, as it does every window's.
+  chat.fork(
+    Stream.runForEach(appSignalStream('approvalPolicyChanged'), () =>
+      Settings.get(services.roots, APPROVAL_POLICY_SETTING).pipe(
+        Effect.map((policy) => {
+          patchSessionMeta({
+            approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
+          });
+          appendLocalNotice(
+            `Project approval policy: ${formatApprovalPolicy(policy)}`,
+          );
+        }),
+        // The value is written: a failed repaint leaves the line as it was.
+        Effect.ignore({
+          log: 'Warn',
+          message: 'Approval policy written; session repaint failed',
+        }),
+      ),
+    ),
+  );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
   // The terminal outlives session subscriptions: only the exit controller
@@ -495,14 +517,6 @@ export async function runChat(
     resumeRun: chatController.resume,
     resumeTask: chatController.resumeTask,
     activateSkill: chatController.activateSkill,
-    onProjectApprovalPolicyChanged: (policy) => {
-      patchSessionMeta({
-        approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
-      });
-      appendLocalNotice(
-        `Project approval policy: ${formatApprovalPolicy(policy)}`,
-      );
-    },
     getModelSwitchDisabledReason,
     onAccountChanged: () =>
       connectChatModel(slashContext, defaults.modelSource, modelConnection),

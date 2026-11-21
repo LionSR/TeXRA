@@ -25,7 +25,7 @@ import {
   buildLineChangeStats,
 } from '@ui/progress/formatters/htmlBuilders';
 import { formatLineRange } from '@ui/copy/format';
-import { languageForPath } from '@ui/highlighting/fileLanguage';
+import { highlightLanguageForPath } from '@ui/highlighting/languageForPath';
 import { statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -83,7 +83,7 @@ const TEXT_SECTION_SCROLL_LINES = 20;
  * the second a shell command, highlighted as bash.
  */
 function codeLanguage(language: string, filePath: string): string {
-  if (language === 'file') return languageForPath(filePath);
+  if (language === 'file') return highlightLanguageForPath(filePath);
   if (language === 'shell') return 'bash';
   return language;
 }

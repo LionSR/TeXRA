@@ -65,7 +65,7 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
                           requestId: event.requestId,
                           decision: {
                             action: 'approve',
-                            content: appliedContent,
+                            edit: { kind: 'toolEdit', content: appliedContent },
                           },
                         },
                       ]);

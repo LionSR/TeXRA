@@ -29,6 +29,7 @@ import {
 import type { ToolEditTuiRequest } from '../state/approvalQueue';
 import { formatLineChanges } from '@ui/copy/format';
 import { REQUEST_ASK } from '@ui/copy/requestCards';
+import { previewUnavailable } from '@ui/copy/toolEditPreview';
 
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
@@ -102,7 +103,7 @@ export function ToolEditRequest(
           </Text>
           <ToneLine
             tone="warning"
-            text={`Preview unavailable: ${props.payload.tui.reason}`}
+            text={previewUnavailable(props.payload.tui.reason)}
           />
         </>
       )}

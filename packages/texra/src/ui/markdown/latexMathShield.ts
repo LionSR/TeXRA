@@ -2,7 +2,6 @@
 // environment + span shield, and the exported shield the HTML normalizer runs
 // between its structural passes.
 
-import { normalizeLineEndings } from '@texra-ai/harness/schemas';
 import {
   applyEnvironmentShields,
   createBegEndEnvironmentProbe,
@@ -17,6 +16,7 @@ import {
   placeholderRestorer,
   selectPlaceholderTag,
 } from './latexPlaceholders';
+import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 
 type InlineDollarProtector = (
   content: string,
