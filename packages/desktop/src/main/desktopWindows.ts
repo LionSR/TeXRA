@@ -74,7 +74,7 @@ interface CurrentWindow extends OpenedDesktopWindow {
  * all wait for that release, so two windows' resources never overlap and the
  * shutdown never drains services under a window still tearing down.
  */
-export interface DesktopWindows {
+interface DesktopWindows {
   /** The open window, if any. */
   window(): BrowserWindow | null;
   /** Show the window, or reopen it once the closed one has released. */

@@ -108,7 +108,7 @@ interface ProposalRef {
  * on an agent's proposal (a proposal card's Edit), whose Send approves that
  * request with the form's changes.
  */
-export type Shown =
+type Shown =
   | { readonly _tag: 'New' }
   | { readonly _tag: 'Run'; readonly runId: RunId }
   | ({ readonly _tag: 'Proposal' } & ProposalRef);
@@ -143,7 +143,7 @@ export const EMPTY_DRAFT: FollowUpDraft = Object.freeze({
 });
 
 /** What this surface keeps for one run. */
-export interface RunSurface {
+interface RunSurface {
   readonly draft: FollowUpDraft;
   /** The user's expansion choice in the tree, absent until they make one;
    *  a run that needs the user (`needsUser`) outranks it. */
