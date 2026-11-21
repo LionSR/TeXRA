@@ -1,0 +1,1 @@
+var e=`/images/tikz-figure-example.png`,t=`/images/overleaf-git.png`;export{e as n,t};

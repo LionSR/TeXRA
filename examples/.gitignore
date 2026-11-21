@@ -1,0 +1,3 @@
+# The global *gemini*.* ignore rule (~/.gitignore_global) would otherwise
+# exclude these committed latexdiff example PDFs, breaking the docs site.
+!*_diff*.pdf
