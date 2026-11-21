@@ -41,7 +41,10 @@ import {
   subscriptionQuotaTone,
 } from '@ui/copy/subscriptionUsage';
 import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
-import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
+import {
+  approvalPolicyLabel,
+  approvalPolicyTone,
+} from '@ui/copy/approvalPolicy';
 import {
   AGENT_LIST,
   NESTED_AGENT,
@@ -521,17 +524,12 @@ function childListBindingsText(
   });
 }
 
-// A policy that stops asking earns a segment: blocking is a caution,
-// approving everything a danger. `ask`, the default, shows nothing.
-const APPROVAL_POLICY_TONE: Readonly<
-  Record<ApprovalPolicy, 'warning' | 'danger' | undefined>
-> = { ask: undefined, never: 'warning', yolo: 'danger' };
-
 function approvalPolicySegment(
   policy: ApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
   if (policy === undefined) return undefined;
-  const tone = APPROVAL_POLICY_TONE[policy];
+  // A policy that stops asking earns a segment, in its tone.
+  const tone = approvalPolicyTone(policy);
   if (tone === undefined) return undefined;
   // The label the /approval picker and every other surface uses for this
   // policy — the bar is how users confirm their selection took effect.
