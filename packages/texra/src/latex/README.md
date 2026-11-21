@@ -38,8 +38,8 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `latexParsingUtils.ts` (comment stripping and bibliography-directive
   matching shared by the extractors; put new shared parsing here);
   `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (the
-  `\criticize` annotations and their positions, for the editor's inline
-  decorations).
+  `\criticize` annotations: their positions, for the editor's inline
+  decorations, and their removal before a file is accepted).
 - **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff` and
   `latexdiffAgainstCommit`: one run of the tool, its `--flatten` fallback and
   the clean-up of its output, which restores bibliography directives and
