@@ -12,7 +12,6 @@ import type {
   Notices,
 } from '@texra-ai/harness';
 import {
-  getHelperModelName,
   type ProcessServices,
   type readModelOptions,
   presentFollowUpResult,
@@ -403,12 +402,13 @@ export const createHostRunActions = Effect.fn(
           ),
         ),
       );
+      // The helper model while it can serve, as every helper launch decides
+      // (`helperModel`), else the default agent model.
       if (launch !== null)
-        yield* startAgentRequest({
-          ...launch,
-          model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
-          inputFiles,
-        });
+        yield* startAgentRequest(
+          { ...launch, model: DEFAULT_AGENT_MODEL, inputFiles },
+          { helperModel: true },
+        );
     }),
     documentTaskFileOperation: Effect.fn(
       'HostRunActions.documentTaskFileOperation',
