@@ -12,8 +12,11 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import { getBasename, type SessionView } from '@texra-ai/harness/schemas';
-import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
+import type { SessionView } from '@texra-ai/harness/schemas';
+import {
+  projectName,
+  type ProjectDisplay,
+} from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { sectionCountLabel, type RunTone } from '@ui/copy/runStatus';
@@ -250,7 +253,7 @@ export function shellSidebarTemplate(
                 ${model.recent.slice(0, RECENT_PROJECTS_SHOWN).map((root) =>
                   sidebarAction({
                     icon: 'clock-rotate-left',
-                    label: getBasename(root) || root,
+                    label: projectName(root),
                     title: `Reopen ${root}`,
                     onClick: () => callbacks.onOpenRecent(root),
                   }),
