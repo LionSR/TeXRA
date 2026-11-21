@@ -15,7 +15,6 @@ import {
   getHelperModelName,
   type ProcessServices,
   type readModelOptions,
-  presentFollowUpResult,
   presentRunFailure,
   workspaceEnvironmentLayer,
   programLaunch,
@@ -337,12 +336,8 @@ export const createHostRunActions = Effect.fn(
       const deliver = session
         .request({ kind: 'followUp.send', runId: launcher, text })
         .pipe(
-          Effect.flatMap((outcome) => {
-            const shown = presentFollowUpResult(outcome);
-            return shown.severity === 'none'
-              ? Effect.void
-              : present(shown.message);
-          }),
+          // A refused send is an `Unavailable` error, presented below; the
+          // success value (queued or sent) says nothing to the launcher.
           Effect.catchCause((cause) => {
             const message = toErrorMessage(cause);
             return Effect.logWarning(

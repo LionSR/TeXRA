@@ -11,10 +11,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import {
-  presentFollowUpResult,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RunsShape } from '@agent/runtime/runs';
 import { SessionViewAccess } from '@shared/session/runHistory';
@@ -85,10 +82,9 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
     {},
   );
   const name = `'${recipient.label}' (${target})`;
-  const shown = presentFollowUpResult(result);
-  if (shown.severity === 'warning') {
+  if (result.status === 'failed') {
     return yield* new ToolError(
-      `${name} did not accept the message: ${shown.message}`,
+      `${name} did not accept the message: ${result.message}`,
     );
   }
   const verb = result.status === 'sent' ? 'Sent' : 'Queued';
