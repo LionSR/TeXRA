@@ -1,16 +1,11 @@
 // Third-party imports
-import { Cause, Predicate } from 'effect';
+import { Predicate } from 'effect';
 
+import { raisedBy } from '@logger/formatLogData';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
-/**
- * What a failed Effect raised: a `Cause` read as the one error
- * `Cause.squash` picks (a typed failure before a defect before an
- * interruption), anything else as itself. Every reader of an `unknown`
- * failure below starts here, so a caller holding a `Cause` passes it as is.
- */
-const raisedBy = (err: unknown): unknown =>
-  Cause.isCause(err) ? Cause.squash(err) : err;
+// Every reader of an `unknown` failure below starts from `raisedBy`, so a
+// caller holding a `Cause` passes it as is.
 
 /** `err` followed by its `cause` chain, outermost first; a `Cause` reads as
  *  the error it raised; an

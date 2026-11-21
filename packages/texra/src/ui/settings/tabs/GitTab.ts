@@ -1,7 +1,6 @@
 /** Git commit author + GitHub token + PR subscription settings. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import { Schema } from 'effect';
 import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -42,11 +41,7 @@ import { settingSignal } from '../settingsState';
 /** The identity agent commits use while a field is blank: the default
  *  TeXRA's catalog gives the row (the harness names none). */
 function defaultIdentity(row: SettingRow<string | undefined>): string {
-  const entry = TEXRA_SETTINGS.catalog.byKey(row.key);
-  const value: unknown =
-    entry === undefined
-      ? undefined
-      : Schema.decodeUnknownSync(entry.schema)(undefined);
+  const value = TEXRA_SETTINGS.catalog.defaultOf(row.key);
   return typeof value === 'string' ? value : '';
 }
 
