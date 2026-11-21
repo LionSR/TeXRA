@@ -49,7 +49,7 @@ import type {
   NoticeLevel,
 } from '@texra/hosts/uiHosts';
 
-import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import { fieldTakes } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   TRANSCRIPT_EXPORT_PICK,
@@ -340,22 +340,12 @@ export const createExtensionHostRequests = Effect.fn(
     popBack: () => Effect.as(options.showInSidebar(), done),
     useCurrentFile: (request) => useCurrentFile(request),
     addOpenedFiles: (request) =>
-      Effect.map(getOpenedFiles(), (opened): HostOutcome => {
-        const allowed = new Set(
-          getIncludedExtensions(request.fileType).map(
-            normalizeMainViewFileExtension,
-          ),
-        );
-        return {
-          kind: 'files',
-          paths:
-            allowed.size > 0
-              ? opened.filter((file) =>
-                  allowed.has(normalizeMainViewFileExtension(file)),
-                )
-              : opened,
-        };
-      }),
+      Effect.map(getOpenedFiles(), (opened): HostOutcome => ({
+        kind: 'files',
+        paths: opened.filter(
+          fieldTakes(getIncludedExtensions(request.fileType)),
+        ),
+      })),
     gettingStarted: (request) =>
       Effect.as(
         runHandler(request.action, gettingStarted(request.action)),
