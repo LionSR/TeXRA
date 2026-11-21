@@ -82,10 +82,10 @@ INSERT INTO event VALUES(17,1,17,'run.config',12,1767225617000,'{"config":{"inpu
 INSERT INTO event VALUES(18,1,18,'run.position',7,1767225618000,'{"payload":{"at":"turn.ready","turn":0}}');
 INSERT INTO event VALUES(19,1,19,'log',13,1767225619000,'{"level":"info","message":"Work through the golden parent task.","messageType":"userMessage"}');
 INSERT INTO event VALUES(20,1,20,'run.position',7,1767225620000,'{"payload":{"at":"turn.begin","turn":1}}');
-INSERT INTO event VALUES(21,1,21,'context.blob',1,1767225621000,'{"payload":{"digest":"8d217dd4efc048540158d1e50532774c57d65444a8b33256b0ca6c7bfb5be388","value":"{\"agent\":\"golden_parent\",\"persona\":{\"prompt\":\"GOLDEN-PARENT: read the notes, plan, delegate.\",\"temperature\":1,\"tools\":[{\"name\":\"read_file\"},{\"name\":\"plan\"},{\"name\":\"agent\"},{\"name\":\"executions\"}]}}"}}');
-INSERT INTO event VALUES(22,1,22,'context.blob',1,1767225622000,'{"payload":{"digest":"05a929047df2e898c5bf33b0e2c374c61c833398b76f6bc8a7a7452ea03e7255","value":"{\"agent\":\"8d217dd4efc048540158d1e50532774c57d65444a8b33256b0ca6c7bfb5be388\",\"controls\":{\"maxOutputTokens\":128000,\"promptCacheKey\":\"a00000000001\",\"reasoning\":null,\"serviceTier\":null,\"store\":false,\"temperature\":0,\"toolChoice\":\"auto\"},\"mode\":\"foreground\",\"system\":\"35a1d8959ea2075c42509e5500f7dd20ed82b1a3b1d5c679e1ec94f74233c0bc\",\"tools\":[\"6e418fb15040d4b29421ec9a2946acb53ce350ccb8c8fb463b9303d660482e99\",\"b3b2a3d44f4a95de0455196ad7ead418771471fafd4c8ed975d4774b7c4fe2a1\",\"b0808977df7428767492df51d58799f9ad0051ff6cf53703f1f4b3e2e5fb3fda\",\"e94f704f9adc8b84b91c44ee77b284cac51ec7ca28813cc2dd49bf83bf704a9a\",\"2cf24576e72aa687df224a7a5037639917077bc04a67b4fef3ba72649d863a14\",\"c7cb7ca529600dfe0965e682c6109f84d037ccd0a2f90fa1d5610c48d136b838\",\"19a4fef898e6ee399ce340beba50f9257556f40384aa4183058ebd0adef43f7c\",\"c607cf9bd7fe97fea9e23a46d7b3d3bee54964795a6fa329db90b93962916aa5\",\"8a2319aaf4d5a9441e58b42c2cd4eb259778d07d1187cc2cd49bf8e068886675\"]}"}}');
-INSERT INTO event VALUES(23,1,23,'model.message',22,1767225623000,'{"payload":{"kind":"attempt","invocation":{"invocationId":"00000000-0000-4000-8000-000000000015","attempt":1},"request":"05a929047df2e898c5bf33b0e2c374c61c833398b76f6bc8a7a7452ea03e7255","origin":{"protocol":"openai-responses","requestedModel":"gpt-5.6-sol","deployment":{"endpoint":"https://validation.invalid/v1","credentialScope":"validation"},"codecVersion":1}}}');
-INSERT INTO event VALUES(24,1,24,'run.description',2,1767225624000,'{"description":"Working through the golden parent task","by":"model","usage":{"inputTokens":1,"outputTokens":1,"cost":7.5e-7,"usageRoute":"api-key","responseTimeMs":0,"provider":"openai-responses"}}');
+INSERT INTO event VALUES(21,1,21,'run.description',2,1767225621000,'{"description":"Working through the golden parent task","by":"model","usage":{"inputTokens":1,"outputTokens":1,"cost":7.5e-7,"usageRoute":"api-key","responseTimeMs":0,"provider":"openai-responses"}}');
+INSERT INTO event VALUES(22,1,22,'context.blob',1,1767225622000,'{"payload":{"digest":"8d217dd4efc048540158d1e50532774c57d65444a8b33256b0ca6c7bfb5be388","value":"{\"agent\":\"golden_parent\",\"persona\":{\"prompt\":\"GOLDEN-PARENT: read the notes, plan, delegate.\",\"temperature\":1,\"tools\":[{\"name\":\"read_file\"},{\"name\":\"plan\"},{\"name\":\"agent\"},{\"name\":\"executions\"}]}}"}}');
+INSERT INTO event VALUES(23,1,23,'context.blob',1,1767225623000,'{"payload":{"digest":"05a929047df2e898c5bf33b0e2c374c61c833398b76f6bc8a7a7452ea03e7255","value":"{\"agent\":\"8d217dd4efc048540158d1e50532774c57d65444a8b33256b0ca6c7bfb5be388\",\"controls\":{\"maxOutputTokens\":128000,\"promptCacheKey\":\"a00000000001\",\"reasoning\":null,\"serviceTier\":null,\"store\":false,\"temperature\":0,\"toolChoice\":\"auto\"},\"mode\":\"foreground\",\"system\":\"35a1d8959ea2075c42509e5500f7dd20ed82b1a3b1d5c679e1ec94f74233c0bc\",\"tools\":[\"6e418fb15040d4b29421ec9a2946acb53ce350ccb8c8fb463b9303d660482e99\",\"b3b2a3d44f4a95de0455196ad7ead418771471fafd4c8ed975d4774b7c4fe2a1\",\"b0808977df7428767492df51d58799f9ad0051ff6cf53703f1f4b3e2e5fb3fda\",\"e94f704f9adc8b84b91c44ee77b284cac51ec7ca28813cc2dd49bf83bf704a9a\",\"2cf24576e72aa687df224a7a5037639917077bc04a67b4fef3ba72649d863a14\",\"c7cb7ca529600dfe0965e682c6109f84d037ccd0a2f90fa1d5610c48d136b838\",\"19a4fef898e6ee399ce340beba50f9257556f40384aa4183058ebd0adef43f7c\",\"c607cf9bd7fe97fea9e23a46d7b3d3bee54964795a6fa329db90b93962916aa5\",\"8a2319aaf4d5a9441e58b42c2cd4eb259778d07d1187cc2cd49bf8e068886675\"]}"}}');
+INSERT INTO event VALUES(24,1,24,'model.message',22,1767225624000,'{"payload":{"kind":"attempt","invocation":{"invocationId":"00000000-0000-4000-8000-000000000015","attempt":1},"request":"05a929047df2e898c5bf33b0e2c374c61c833398b76f6bc8a7a7452ea03e7255","origin":{"protocol":"openai-responses","requestedModel":"gpt-5.6-sol","deployment":{"endpoint":"https://validation.invalid/v1","credentialScope":"validation"},"codecVersion":1}}}');
 INSERT INTO event VALUES(25,1,25,'model.message',22,1767225625000,'{"payload":{"kind":"response","responseId":"00000000-0000-4000-8000-000000000016","invocation":{"invocationId":"00000000-0000-4000-8000-000000000015","attempt":1},"turn":{"providerResponseId":"validation-response-1","requestedOrigin":{"protocol":"openai-responses","requestedModel":"gpt-5.6-sol","deployment":{"endpoint":"https://validation.invalid/v1","credentialScope":"validation"},"codecVersion":1},"returnedModel":"gpt-5.6-sol","content":[{"kind":"local-call","providerCallId":"validation-read_file-1","name":"read_file","argumentsText":"{\"path\":\"notes.tex\"}"}],"finishReason":"tool-calls","usage":{"inputTokens":1,"outputTokens":1,"totalTokens":2,"cachedInputTokens":null,"cacheWriteTokens":null,"reasoningTokens":null,"toolUsePromptTokens":null}},"calls":[{"callId":"validation-read_file-1","toolName":"read_file","lane":"parallel","replay":"safe","duplicateOf":null,"logId":"00000000-0000-4000-8000-000000000017"}],"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"usageRoute":"api-key","responseTimeMs":0,"provider":"openai-responses"}}}');
 INSERT INTO event VALUES(26,1,26,'context.state',1,1767225626000,'{"inputTokens":2,"contextWindow":1050000}');
 INSERT INTO event VALUES(27,1,27,'tool.intent',2,1767225627000,'{"payload":{"origin":{"kind":"response","responseId":"00000000-0000-4000-8000-000000000016"},"callId":"validation-read_file-1","attempt":1,"logId":"00000000-0000-4000-8000-000000000017","toolName":"read_file","input":{"path":"notes.tex"}}}');
@@ -981,11 +981,6 @@ CREATE TABLE current_value (
     at      INTEGER NOT NULL,
     PRIMARY KEY (family, key)
   ) STRICT, WITHOUT ROWID;
-CREATE TABLE input_history (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    at    INTEGER NOT NULL,
-    value TEXT NOT NULL
-  ) STRICT;
 CREATE TABLE projection_state (
     name           TEXT PRIMARY KEY,
     version        INTEGER NOT NULL,
@@ -1004,7 +999,7 @@ INSERT INTO listing_entry VALUES(1,'lifecycle',1);
 INSERT INTO listing_entry VALUES(1,'plugin.fact/goal/plan',37);
 INSERT INTO listing_entry VALUES(1,'run.activate',2);
 INSERT INTO listing_entry VALUES(1,'run.config',17);
-INSERT INTO listing_entry VALUES(1,'run.description/model',24);
+INSERT INTO listing_entry VALUES(1,'run.description/model',21);
 INSERT INTO listing_entry VALUES(1,'run.end',95);
 INSERT INTO listing_entry VALUES(1,'run.position/turn.begin',20);
 INSERT INTO listing_entry VALUES(1,'run.position/turn.end',93);
@@ -1226,6 +1221,6 @@ CREATE INDEX current_value_at ON current_value(family, at);
 CREATE TRIGGER event_blob_collect AFTER DELETE ON event_blob
     WHEN NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = OLD.digest)
     BEGIN DELETE FROM blob WHERE digest = OLD.digest; END;
-PRAGMA user_version=105;
+PRAGMA user_version=106;
 PRAGMA application_id=0;
 COMMIT;

@@ -13,7 +13,7 @@ export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
  * The tolerant input form of {@link ApprovalPolicySchema}: the one place
  * a hand-written spelling (` Yolo `) is trimmed and lowercased before the
  * enum. Reached only through {@link parseApprovalPolicy}, which every
- * reader of typed-in text — `TEXRA_APPROVAL_POLICY`, `--approval-policy`,
+ * reader of typed-in text — the app's `<NAMESPACE>_APPROVAL_POLICY`, `--approval-policy`,
  * `/approval`, the settings dropdown — calls. Persisted config values keep the
  * strict enum: the `approvalPolicy` catalog row validates the stored
  * value for all three hosts and warns when it no longer parses, and the

@@ -21,6 +21,7 @@ import type { SettingsStores } from '@shared/config/settings';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { appEnvName } from '@utils/system/appNamespace';
 import { homeDirectory } from '@utils/system/platformPaths';
 
 import { issue } from './skillLoader';
@@ -325,11 +326,17 @@ const catalogEntry = (
 
 /**
  * The block a message carries to activate one skill: the instruction to
- * use it, and its body with `${TEXRA_SKILL_DIR}` resolved.
+ * use it, and its body with the app's `${<NAMESPACE>_SKILL_DIR}` resolved.
  */
-function formatRuntimeSkillActivation({ skill, source }: SourcedSkill): string {
+function formatRuntimeSkillActivation(
+  { skill, source }: SourcedSkill,
+  namespace: string,
+): string {
   const body = escapeText(
-    skill.body.replaceAll('${TEXRA_SKILL_DIR}', skill.baseDir),
+    skill.body.replaceAll(
+      `\${${appEnvName(namespace, 'SKILL_DIR')}}`,
+      skill.baseDir,
+    ),
   );
   return [
     '<skill_activation>',
@@ -367,6 +374,7 @@ export const skillActivationText = Effect.fn('skills.activationText')(
       yield* readInstalledPluginLoad(roots),
       yield* readDisabledSkills(roots),
     );
+    const { namespace } = roots.config.catalog;
     const blocks: string[] = [];
     for (const name of new Set(wanted)) {
       const entry = skills.find(({ skill }) => skill.name === name);
@@ -374,7 +382,7 @@ export const skillActivationText = Effect.fn('skills.activationText')(
         return yield* new Rejected({
           reason: `The skill ${name} is not enabled.`,
         });
-      blocks.push(formatRuntimeSkillActivation(entry));
+      blocks.push(formatRuntimeSkillActivation(entry, namespace));
     }
     return [
       blocks.join('\n\n'),

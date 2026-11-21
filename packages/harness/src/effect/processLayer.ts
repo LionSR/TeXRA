@@ -48,6 +48,7 @@ import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { ToolRegistry, toolTable, type ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { AppNamespace } from '@utils/system/appNamespace';
 
 import { PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -262,6 +263,7 @@ function sessionsLayer(
           ChildProcessSpawner,
           ProjectDatabases,
           ToolRegistry,
+          AppNamespace,
         )(yield* Effect.context<ProcessServices | ProjectDatabases>());
         return yield* makeSessions(
           yield* SessionOwner,

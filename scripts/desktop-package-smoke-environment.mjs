@@ -111,6 +111,7 @@ export async function rememberOpenProject(dataRoot, workspaceRoot) {
       Effect.provide(
         fixture.globalDatabaseLayer(fixture.resolveGlobalStoragePath(dataRoot)),
       ),
+      Effect.provide(fixture.appNamespaceLayer),
       Effect.provide(fixture.nodePlatformServices),
     ),
   );

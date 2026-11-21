@@ -71,6 +71,11 @@ so this theme is not re-mined.
    product name in user-facing text, threaded as data, that needs a
    product-display-name fact on a port (distinct from the catalog namespace
    key, which is `texra`, not `TeXRA`) — a new SDK surface, so the owner's call.
+   Landed 2026-11-21: the three names derive from the settings catalog's
+   namespace (`AppNamespace`,
+   `packages/harness/src/utils/system/appNamespace.ts`): `<namespace>.db`,
+   `<NAMESPACE>_APPROVAL_POLICY`, `<NAMESPACE>_SKILL_DIR`. TeXRA's names are
+   unchanged; no display-name port was added.
 2. Decided and landed 2026-11-21
    ([the model-access note](../../implemented/simplification/2026-11-18-model-access-one-owner-per-question.md)):
    every surface lists the harness's default list; a delegation names only a

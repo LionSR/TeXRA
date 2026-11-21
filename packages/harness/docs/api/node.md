@@ -28,13 +28,24 @@ Node.js platform implementation and host building blocks for
   name where the log entries go, and
   [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
 
-## APPROVAL_POLICY_ENV
+## AppNamespace
 
-The variable a person's own invocation requests an approval policy
-with; never a project's `.env`, and never a nested process's.
+The settings catalog's namespace, as the process serves it.
 
 ```ts
-const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"
+class AppNamespace extends Context.Service<AppNamespace, string>()(
+  '@texra-ai/harness/AppNamespace',
+)
+```
+
+## approvalPolicyEnv
+
+The variable a person's own invocation requests an approval policy
+with (`<NAMESPACE>_APPROVAL_POLICY`); never a project's `.env`, and never
+a nested process's.
+
+```ts
+const approvalPolicyEnv: (namespace: string) => string
 ```
 
 ## canonicalizeWorkspaceRoot
@@ -339,7 +350,7 @@ The environment a child process the harness spawns starts from: this
 process's with its project's `.env` variables over it (`environment`),
 minus every provider API-key variable the harness reads as its own credential
 ({@link API_KEY_ENV_NAMES}) and the requested approval policy
-({@link APPROVAL_POLICY_ENV}). What a child prints lands in tool results and
+({@link approvalPolicyEnv}). What a child prints lands in tool results and
 the transcript, so the key is never there to print. `keep` names the one
 provider whose key a child agent CLI authenticates with itself. Windows
 matches variable names case-insensitively, as its environment does.

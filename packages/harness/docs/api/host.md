@@ -397,7 +397,7 @@ kept, and a failed deletion is reported while the rest still go. Each
 item's outcome, in listing order.
 
 ```ts
-const deleteStorageInventory: (storageRoot: string, inventory: Pick<StorageInventory, "orphans" | "asides">) => Effect<({ path: string; outcome: "failed"; message: string; } | { path: string; outcome: "kept"; message?: undefined; } | { path: string; outcome: "deleted"; message?: undefined; } | { path: string; outcome: "failed"; message: string; })[], DatabaseReadFailed | PlatformError, FileSystem | GlobalValues>
+const deleteStorageInventory: (storageRoot: string, inventory: Pick<StorageInventory, "orphans" | "asides">) => Effect<({ path: string; outcome: "failed"; message: string; } | { path: string; outcome: "kept"; message?: undefined; } | { path: string; outcome: "deleted"; message?: undefined; } | { path: string; outcome: "failed"; message: string; })[], DatabaseReadFailed | PlatformError, FileSystem | GlobalValues | AppNamespace>
 ```
 
 ## ExternalToolCheckResult
@@ -454,8 +454,10 @@ function formatFatalErrorDetail(error: unknown): string
 
 ## getEnabledModels
 
-The models the pickers show — the single reader of
-{@link MODEL_SELECTION_KEY} for every host.
+The models a person has switched on: the list the Models tab and
+`texra models enabled` edit — the single reader of
+{@link MODEL_SELECTION_KEY} for every host. What a picker lists is
+`readModelOptions`' default list, which adds what a subscription serves.
 
 ```ts
 const getEnabledModels: (stores: Pick<SettingsStores, "config" | "globalState">) => Effect<readonly string[], StateReadFailed, never>
@@ -773,7 +775,8 @@ type PlatformServices =
   | GlobalValues
   | StateStores
   | UsageLog
-  | AppSignals;
+  | AppSignals
+  | AppNamespace;
 ```
 
 ## PluginEnv
@@ -1177,7 +1180,7 @@ const readModelOptions: (stores: SettingsStores, models?: readonly string[] | un
 The orphaned stores and aside copies under `storageRoot`.
 
 ```ts
-const readStorageInventory: (storageRoot: string) => Effect<{ orphans: { readonly directory: string; readonly bytes: number; readonly why: string; }[]; asides: { readonly path: string; readonly bytes: number; }[]; skipped: { readonly path: string; readonly message: string; }[]; }, DatabaseReadFailed | PlatformError, FileSystem | GlobalValues>
+const readStorageInventory: (storageRoot: string) => Effect<{ orphans: { readonly directory: string; readonly bytes: number; readonly why: string; }[]; asides: { readonly path: string; readonly bytes: number; }[]; skipped: { readonly path: string; readonly message: string; }[]; }, DatabaseReadFailed | PlatformError, FileSystem | GlobalValues | AppNamespace>
 ```
 
 ## REASONING_LEVELS_KEY

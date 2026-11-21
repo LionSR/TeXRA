@@ -7,8 +7,7 @@ import { FetchHttpClient, type HttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
 import { GlobalValues } from '@texra-ai/harness/plugins';
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
-import { globalValuesOver } from '@test/support/fsTestUtils';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { globalValuesOver, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { checkForDesktopUpdate } from '@desktop/main/desktopUpdateChecker';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
@@ -51,7 +50,7 @@ describe('checkForDesktopUpdate', () => {
               releases,
               globalValuesOver(
                 globalDatabaseLayer(storage).pipe(
-                  Layer.provide(nodeSpawnerLayer),
+                  Layer.provide(nodePlatformLayer),
                   Layer.orDie,
                 ),
               ),

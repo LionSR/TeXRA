@@ -160,7 +160,9 @@ embedder's domain or name in any string it sends a model or shows a user
 app). The remaining `texra` strings an embedder's
 users still see (the store file `texra.db`, `TEXRA_APPROVAL_POLICY`,
 `TEXRA_SKILL_DIR`) are persisted names and env keys, a format change
-deferred to the release (design doc, "Re-check (2026-11-19)").
+deferred to the release (design doc, "Re-check (2026-11-19)"). Landed
+2026-11-21: they derive from the settings catalog's namespace
+(`AppNamespace`), so an embedder's carry its own word.
 
 ## Checked and left alone
 
