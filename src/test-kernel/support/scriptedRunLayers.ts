@@ -263,8 +263,9 @@ const testConfig = () =>
   });
 
 /** A launch's entry with no parent or opening trace. A fresh one commits
- *  no rows, since a fixture publishes its run's start itself; a `resume`
- *  is not fresh, which is how the loop knows it is one. */
+ *  no rows, since a fixture publishes its run's start itself: its
+ *  `run.start` is the one that fixture publishes, not among `rows`. A
+ *  `resume` is not fresh, which is how the loop knows it is one. */
 const testEntry = (
   runId: RunId,
   config: RunLaunch['config'],
