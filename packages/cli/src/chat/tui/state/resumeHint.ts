@@ -2,12 +2,12 @@ import { Result } from 'effect';
 import * as CommandLine from 'effect/process/CommandLine';
 
 import {
+  formatCount,
   isEmptyUsage,
   type RunId,
   type TokenUsageStats,
 } from '@texra-ai/harness/schemas';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
-import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { visibleTokenStats } from '@ui/copy/tokenUsage';
@@ -89,9 +89,7 @@ function formatResumeUsage(
   if (!usage || isEmptyUsage(usage)) return undefined;
   // The counters the progress view's usage strip shows, exact.
   const tokens = visibleTokenStats(usage)
-    .map(
-      ({ label, value }) => `${formatTokenCount(value)} ${label.toLowerCase()}`,
-    )
+    .map(({ label, value }) => `${formatCount(value)} ${label.toLowerCase()}`)
     .join(', ');
   // A task that never reached a model has no cost to state.
   const costLine =

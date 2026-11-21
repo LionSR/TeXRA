@@ -9,12 +9,6 @@ export function formatBytes(bytes: number): string {
   return prettyBytes(bytes, { binary: true });
 }
 
-/** An exact token count with thousands separators (`12,345`), for a tooltip
- *  or a total where the compact form would round. */
-export function formatTokenCount(tokens: number): string {
-  return tokens.toLocaleString('en-US');
-}
-
 /** A file that reached the model as media, by its kind and size
  *  (`[image, 1.2 MiB]`). */
 export function formatMediaLabel(media: {

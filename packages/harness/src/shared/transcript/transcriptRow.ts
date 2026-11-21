@@ -28,7 +28,11 @@ import {
   type CompactionActivityBlock,
 } from '@shared/runs/compactionActivityProjection';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-import { formatCompactTokenCount, joinFacts } from '@utils/text/stringUtils';
+import {
+  formatCompactTokenCount,
+  formatResultCount,
+  joinFacts,
+} from '@utils/text/stringUtils';
 
 import type { ToolRowModel } from './toolRowModel';
 import type { TranscriptText } from './transcriptText';
@@ -353,7 +357,7 @@ export function compactionActivityRow(
         ? COMPACTION_ACTIVITY_LABEL[block.status]
         : 'Agent edited its context',
       block.replaced !== undefined &&
-        `replaced ${block.replaced} message${block.replaced === 1 ? '' : 's'}`,
+        `replaced ${formatResultCount(block.replaced, 'message')}`,
       block.freed &&
         block.freed.tokens > 0 &&
         `freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`,

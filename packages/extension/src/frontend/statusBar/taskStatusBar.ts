@@ -9,6 +9,7 @@ import {
   DETAIL_SEPARATOR,
   APPROVAL_POLICY_SETTING,
   descendantRuns,
+  formatCount,
   isWorking,
   sessionActivity,
   sumUsageStats,
@@ -20,7 +21,6 @@ import {
   approvalPolicyLabel,
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
-import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { visibleTokenStats } from '@ui/copy/tokenUsage';
 import { runStatusLabel, sectionCountLabel } from '@ui/copy/runStatus';
@@ -89,7 +89,7 @@ function paint(
         '| --- | ---: |',
         `| Cost | ${usageCostLabel(usage)} |`,
         ...visibleTokenStats(usage).map(
-          ({ label, value }) => `| ${label} | ${formatTokenCount(value)} |`,
+          ({ label, value }) => `| ${label} | ${formatCount(value)} |`,
         ),
         '',
         '*Click to show TeXRA sessions*',
