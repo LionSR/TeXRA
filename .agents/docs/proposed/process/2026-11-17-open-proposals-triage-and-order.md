@@ -230,7 +230,9 @@ What is left for the owner falls into five kinds. Nothing below was touched.
   fail their open with the "move it away" message (1.0 is unshipped and
   `release/0.40` writes no such file).
 - A bounded `quick_check` at open that moves a failing file aside (store
-  review F12). A file moved aside stays aside.
+  review F12). A file moved aside stays aside. Closed 2026-11-21, not done:
+  the driver cannot bound it (`.agents/docs/refuted-candidates.json`,
+  `STORE-quick-check-and-minimum-sqlite-at-open`).
 - Renaming `texra.db` and the `TEXRA_*` variables to app-supplied names.
   Landed 2026-11-21: they derive from the settings catalog's namespace
   (`AppNamespace`), so TeXRA's own names do not change and nothing an
