@@ -159,6 +159,32 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
         }),
     );
 
+    it.effect(
+      'answers a /compact queued before a message first, the message the turn after',
+      () =>
+        Effect.gen(function* () {
+          const session = yield* isolatedTestSession();
+          const inbox = Context.get(session, Inbox);
+          const id = yield* startedRun(session);
+          // Both are queued before the run looks: the order they were
+          // committed in decides, not how soon the run looks again.
+          yield* inbox.send(id, {
+            control: { kind: 'compact' },
+            from: { kind: 'user' },
+          });
+          yield* inbox.send(id, user('after the compaction'));
+          yield* inbox.owesResume(id);
+
+          const input = yield* inbox.reader(id);
+          const seen = yield* input.read;
+          expect(yield* input.next('idle', seen)).toMatchObject({
+            kind: 'synthetic',
+          });
+          expect(seen.batch('turn')).toBeNull();
+          expect(seen.batch('request')).toBeNull();
+        }),
+    );
+
     it.effect('a closed run refuses senders from its rows', () =>
       Effect.gen(function* () {
         // The close is the run's `followup.closed` row, not an in-memory

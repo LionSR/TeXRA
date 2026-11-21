@@ -15,9 +15,10 @@
  * later notifications, and refuses later requests. The scope's finalizer
  * closes with a generic reason; the owner with the peer's end when it knows
  * it; a writer failure (stdin gone) with the failure. Ending of the input
- * stream alone does not close; it completes `inputEnded`, so the owner, on
- * the process exit (which can precede the end of its output), and a writer
- * failure (waiting 2s at most) close once every answer written was read.
+ * stream alone does not close: a child process's exit can precede the end of
+ * its output, so {@link connectJsonRpcProcess} closes on the exit once every
+ * answer written was read, and a writer failure waits for the same (2s at
+ * most).
  */
 
 import { Buffer } from 'node:buffer';
@@ -25,17 +26,23 @@ import { Buffer } from 'node:buffer';
 import {
   type Cause,
   Deferred,
+  type Duration,
   Effect,
   Exit,
+  Fiber,
+  type PlatformError,
   Queue,
   Ref,
+  type Result,
   Schema,
   type Sink,
   Stream,
 } from 'effect';
+import type { ChildProcessSpawner } from 'effect/process';
 
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { appendTail } from '@utils/text/appendTail';
 
 const CHANNEL = 'JsonRpcConnection';
 
@@ -76,8 +83,6 @@ export interface JsonRpcConnection {
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
   readonly close: (reason: string) => Effect.Effect<void>;
-  /** Completes once the reader has dispatched the input's last message. */
-  readonly inputEnded: Effect.Effect<void>;
 }
 
 /** What {@link makeJsonRpcConnection} connects: the peer's byte streams,
@@ -113,6 +118,22 @@ export interface JsonRpcConnectionOptions {
 }
 
 type PendingError = JsonRpcRequestError | JsonRpcConnectionDisposed;
+
+/** The reason the connection closed with, and the requests awaiting an
+ *  answer by id. */
+interface ConnectionState {
+  readonly closed: string | undefined;
+  readonly lastId: number;
+  readonly pending: ReadonlyMap<number, PendingRequest>;
+}
+
+/** A request's place in the table, or the reason the connection closed with. */
+type Registered =
+  | {
+      readonly id: number;
+      readonly deferred: Deferred.Deferred<unknown, PendingError>;
+    }
+  | { readonly closed: string };
 
 interface PendingRequest {
   readonly method: string;
@@ -223,11 +244,14 @@ const takeLines = (buffer: Buffer): Decoded =>
 export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   options: JsonRpcConnectionOptions,
 ) {
-  const pending = yield* Ref.make<ReadonlyMap<number, PendingRequest>>(
-    new Map(),
-  );
-  const ids = yield* Ref.make(0);
-  const closedReason = yield* Ref.make<string | undefined>(undefined);
+  // One state, so a request registers and a close drains in one step each:
+  // no request can be inserted behind a close that already drained.
+  const state = yield* Ref.make<ConnectionState>({
+    closed: undefined,
+    lastId: 0,
+    pending: new Map(),
+  });
+  const closedReason = Effect.map(Ref.get(state), ({ closed }) => closed);
   const outbound = yield* Queue.make<Uint8Array, Cause.Done>();
   const inputDone = yield* Deferred.make<void>();
   const newline = options.framing === 'newline';
@@ -235,13 +259,13 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   const decode = newline ? takeLines : takeFrames;
 
   const close = Effect.fn('JsonRpc.close')(function* (reason: string) {
-    const first = yield* Ref.modify(
-      closedReason,
-      (current) => [current === undefined, current ?? reason] as const,
+    const waiting = yield* Ref.modify(state, (current) =>
+      current.closed === undefined
+        ? [current.pending, { ...current, closed: reason, pending: new Map() }]
+        : [undefined, current],
     );
-    if (!first) return;
+    if (waiting === undefined) return;
     yield* Queue.end(outbound);
-    const waiting = yield* Ref.getAndSet(pending, new Map());
     for (const { deferred } of waiting.values()) {
       yield* Deferred.fail(
         deferred,
@@ -255,12 +279,12 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     Effect.asVoid(Queue.offer(outbound, encode(message)));
 
   const takePending = (id: number) =>
-    Ref.modify(pending, (map) => {
-      const entry = map.get(id);
-      if (!entry) return [undefined, map] as const;
-      const next = new Map(map);
-      next.delete(id);
-      return [entry, next] as const;
+    Ref.modify(state, (current) => {
+      const entry = current.pending.get(id);
+      if (!entry) return [undefined, current];
+      const pending = new Map(current.pending);
+      pending.delete(id);
+      return [entry, { ...current, pending }];
     });
 
   const dispatch = Effect.fn('JsonRpc.dispatch')(function* (
@@ -318,7 +342,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       Stream.run(options.output),
       Effect.catch(
         Effect.fnUntraced(function* (error) {
-          if ((yield* Ref.get(closedReason)) === undefined) {
+          if ((yield* closedReason) === undefined) {
             yield* Effect.logDebug(
               `stdin write failed: ${toErrorMessage(error)}`,
             ).pipe(withLogChannel(CHANNEL));
@@ -338,7 +362,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       Stream.runForEach(dispatch),
       Effect.catch(
         Effect.fnUntraced(function* (error) {
-          if ((yield* Ref.get(closedReason)) === undefined) {
+          if ((yield* closedReason) === undefined) {
             yield* Effect.logDebug(
               `connection error: ${toErrorMessage(error)}`,
             ).pipe(withLogChannel(CHANNEL));
@@ -358,7 +382,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     method: string,
     params?: unknown,
   ) {
-    if ((yield* Ref.get(closedReason)) !== undefined) return;
+    if ((yield* closedReason) !== undefined) return;
     yield* send({
       jsonrpc: '2.0',
       method,
@@ -374,44 +398,121 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     // it ends: an answer or `close` takes it, and any other exit takes it
     // here, telling the peer a call it interrupted is no longer wanted.
     return yield* Effect.acquireUseRelease(
-      Effect.gen(function* () {
-        const id = yield* Ref.updateAndGet(ids, (n) => n + 1);
-        const deferred = yield* Deferred.make<unknown, PendingError>();
-        yield* Ref.update(pending, (map) =>
-          new Map(map).set(id, { method, deferred }),
-        );
-        return { id, deferred };
-      }),
-      ({ id, deferred }) =>
-        Effect.gen(function* () {
-          // `close` fails only the table it drained, so an entry inserted
-          // after it would wait forever: read the state after the insert
-          // and fail it here.
-          const closedSince = yield* Ref.get(closedReason);
-          if (closedSince !== undefined)
-            return yield* new JsonRpcConnectionDisposed({
-              message: closedSince,
-            });
-          yield* send({
-            jsonrpc: '2.0',
-            id,
+      Effect.flatMap(Deferred.make<unknown, PendingError>(), (deferred) =>
+        Ref.modify(state, (current): readonly [Registered, ConnectionState] => {
+          if (current.closed !== undefined)
+            return [{ closed: current.closed }, current];
+          const id = current.lastId + 1;
+          const pending = new Map(current.pending).set(id, {
             method,
-            ...(params !== undefined && { params }),
+            deferred,
           });
-          return yield* Deferred.await(deferred);
+          return [
+            { id, deferred },
+            { ...current, lastId: id, pending },
+          ];
         }),
-      ({ id }, exit) =>
-        Effect.flatMap(takePending(id), (entry) => {
-          const notice =
-            entry && Exit.hasInterrupts(exit)
-              ? options.cancel?.(id, method)
-              : undefined;
-          return notice ? notify(notice.method, notice.params) : Effect.void;
-        }),
+      ),
+      (entry) =>
+        'closed' in entry
+          ? Effect.fail(
+              new JsonRpcConnectionDisposed({ message: entry.closed }),
+            )
+          : Effect.andThen(
+              send({
+                jsonrpc: '2.0',
+                id: entry.id,
+                method,
+                ...(params !== undefined && { params }),
+              }),
+              Deferred.await(entry.deferred),
+            ),
+      (entry, exit) =>
+        'closed' in entry
+          ? Effect.void
+          : Effect.flatMap(takePending(entry.id), (waiting) => {
+              const notice =
+                waiting && Exit.hasInterrupts(exit)
+                  ? options.cancel?.(entry.id, method)
+                  : undefined;
+              return notice
+                ? notify(notice.method, notice.params)
+                : Effect.void;
+            }),
     );
   });
 
-  const inputEnded = Deferred.await(inputDone);
-  const connection: JsonRpcConnection = { request, notify, close, inputEnded };
-  return connection;
+  const connection: JsonRpcConnection = { request, notify, close };
+  return { connection, inputEnded: Deferred.await(inputDone) };
+});
+
+/** How a child process's connection is made and what its end says. */
+export interface JsonRpcProcessOptions extends Omit<
+  JsonRpcConnectionOptions,
+  'input' | 'output'
+> {
+  /** How much of the end of the process's stderr `end` is given. */
+  readonly stderrTailLimit: number;
+  /** Each piece of stderr as it arrives. */
+  readonly onStderr?: (text: string) => Effect.Effect<void>;
+  /** How long the close waits, after the exit, for the process's output to
+   *  be read: a grandchild may hold the pipes open. */
+  readonly drainTimeout: Duration.Input;
+  /** The reason the connection closes with, from the process's exit (a
+   *  failure when a signal ended it) and the end of its stderr. */
+  readonly end: (
+    exit: Result.Result<
+      ChildProcessSpawner.ExitCode,
+      PlatformError.PlatformError
+    >,
+    stderrTail: string,
+  ) => Effect.Effect<string>;
+}
+
+/**
+ * A JSON-RPC connection over a child process's stdio, closed with the
+ * owner's reason once the process has exited. The exit can precede the end
+ * of its output, so the close waits for stdout and stderr to be read: a
+ * reply already written still reaches its request instead of failing as
+ * disposed. `exited` holds the exit from then on.
+ */
+export const connectJsonRpcProcess = Effect.fn('JsonRpc.process')(function* (
+  handle: ChildProcessSpawner.ChildProcessHandle,
+  options: JsonRpcProcessOptions,
+) {
+  const tail = yield* Ref.make('');
+  const stderrRead = yield* Effect.forkScoped(
+    handle.stderr.pipe(
+      Stream.decodeText(),
+      Stream.runForEach((text) =>
+        Effect.andThen(
+          options.onStderr?.(text) ?? Effect.void,
+          Ref.update(tail, (current) =>
+            appendTail(current, text, options.stderrTailLimit),
+          ),
+        ),
+      ),
+      Effect.ignore,
+    ),
+  );
+  const { connection, inputEnded } = yield* makeJsonRpcConnection({
+    ...options,
+    input: handle.stdout,
+    output: handle.stdin,
+  });
+  const exited =
+    yield* Deferred.make<
+      Result.Result<ChildProcessSpawner.ExitCode, PlatformError.PlatformError>
+    >();
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      const exit = yield* Effect.result(handle.exitCode);
+      yield* Effect.all([inputEnded, Fiber.await(stderrRead)], {
+        concurrency: 'unbounded',
+      }).pipe(Effect.timeoutOption(options.drainTimeout));
+      yield* connection.close(yield* options.end(exit, yield* Ref.get(tail)));
+      yield* Deferred.succeed(exited, exit);
+    }),
+  );
+  return { connection, exited };
 });

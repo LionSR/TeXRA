@@ -169,7 +169,7 @@ export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
  * to the result set, so callers can resolve tokens to paths or leave them as
  * plain keys.
  */
-export function collectCommaSeparatedMatches(
+function collectCommaSeparatedMatches(
   content: string,
   pattern: RegExp,
   transform: (token: string) => string = (token) => token,
@@ -195,6 +195,23 @@ export function collectCommaSeparatedMatches(
     }
   }
   return [...tokens];
+}
+
+const USEPACKAGE_PATTERN =
+  /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+
+/** The packages `\usepackage` and `\RequirePackage` load in `content`,
+ *  whatever options they take. */
+export function loadedPackages(content: string): string[] {
+  return collectCommaSeparatedMatches(content, USEPACKAGE_PATTERN);
+}
+
+const DOCUMENTCLASS_PATTERN = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/;
+
+/** The class `\documentclass` names in `content`, whatever options it
+ *  takes; `undefined` when there is none. */
+export function documentClass(content: string): string | undefined {
+  return DOCUMENTCLASS_PATTERN.exec(content)?.[1]?.trim();
 }
 
 /**

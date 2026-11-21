@@ -24,20 +24,23 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   runEndErrorMessage,
   AGENT_SOURCE,
+  AgentConfigSchema,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
   type RunEnd,
   type RunId,
   type ToolResult,
-  isInstalledProgram,
   programOf,
+  programOrigin,
+  type ProgramOrigin,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
+import { optionalInput } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -84,12 +87,10 @@ const LAUNCH_FIELDS = {
     description: 'The agent to run. It works with its own tools.',
   }),
   persona: personaField,
-  schema: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
-  ).annotate({
-    description:
-      'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
-  }),
+  schema: optionalInput(
+    Schema.Record(Schema.String, Schema.Unknown),
+    'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
+  ),
   mediaFiles: fileList(
     'Images, figures, PDFs or audio attached to the prompt.',
   ),
@@ -300,7 +301,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // A name no plugin registers fails before anyone is asked to approve it.
   if (program !== null) {
     const known = yield* Effect.result(
-      programLaunch(program.name, program.args, launch.files),
+      programLaunch(program.name, program.args, launch.files, call.env.roots),
     );
     if (Result.isFailure(known)) return errorResult(known.failure.message);
   }
@@ -345,10 +346,17 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   // The call's files, the program's file arguments among them: a
   // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a registered program's files pass as named, an
-  // installed plugin's program's are resolved like a model's.
+  // completed child of it; a listed program's files pass as named, those
+  // of a program read from a file are resolved like a model's.
   const caller = programOf(run.config);
-  const trusted = caller !== null && !isInstalledProgram(caller.name);
+  const verbatim =
+    caller !== null &&
+    (
+      { listed: true, installed: false, own: false } satisfies Record<
+        ProgramOrigin,
+        boolean
+      >
+    )[programOrigin(caller.name)];
   const fileArgs =
     program === null
       ? []
@@ -366,7 +374,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
             : [];
         }),
       ].map(([label, list]) =>
-        trusted
+        verbatim
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
           : resolveInvocationFileList(parentId, label, list),
       ),
@@ -390,10 +398,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(
       '`timeoutMs` and `maxCostUsd` limit a child its call waits for, and this call runs in the background. Call it from a script without `background: true`, or drop the limit.',
     );
-  // A program's launch, a structured call and a call from a program reach
-  // the child verbatim; any other is handed off with the parent's
+  // A program's launch, a structured call and a call from a listed program
+  // reach the child verbatim; any other is handed off with the parent's
   // instruction.
-  const handsOff = program === null && outputSchema === undefined && !trusted;
+  const handsOff = program === null && outputSchema === undefined && !verbatim;
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
   // does not depend on which credentials are configured now. The call's
@@ -494,27 +502,27 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // below; the options are the program's arguments, shown for approval.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
   // A program's run is the program's own, whatever agent an approval named.
-  // An installed plugin's program can be gone since the check above (its
-  // plugin disabled or changed while the approval waited).
+  // A program read from a file can be gone since the check above (its
+  // plugin disabled or its file changed while the approval waited).
   const relaunched =
     program === null
       ? null
       : yield* Effect.result(
-          programLaunch(program.name, program.args, approved),
+          programLaunch(program.name, program.args, approved, call.env.roots),
         );
   if (relaunched !== null && Result.isFailure(relaunched))
     return errorResult(relaunched.failure.message);
   const programConfig = relaunched?.success ?? null;
   const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
-  const configPayload = {
+  const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
     ...programConfig,
-  };
+  });
   const runId = agentChildRunId(call);
   if (!awaited) {
-    const receipt = yield* launchDetachedSubagent(call, configPayload, {
+    const receipt = yield* launchDetachedSubagent(call, config, {
       runId,
       grants,
       approvalMeta: decided.approvalMeta,
@@ -529,7 +537,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       executeSubagentInBand({
         runId,
         parentId,
-        configPayload,
+        config,
         parentCall: { callId: call.callId, card: call.logId },
         grants,
         notify,

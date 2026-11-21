@@ -1,9 +1,11 @@
 /**
- * The process's plugin table: the plugin list an entry passes to
- * `processLayer`, by plugin id, and each tool by name. What a plugin
- * contributes to the tool catalog is read off its value. The `ToolRegistry` service holds it, beside
- * the catalog built over it. This module imports no tool or plugin layer, so
- * a reader of the tag loads none of them.
+ * The plugin table: the plugin list an entry passes to `processLayer`, with
+ * the native plugins loaded now (`withNatives`), by plugin id, and each
+ * tool by name. What a plugin contributes to the tool catalog is read off
+ * its value. The `ToolRegistry` service holds one table: the listed
+ * plugins' outside a run, and inside one the table its launch or its step
+ * read (`@tools/liveTools` owns the current one). This module imports no
+ * tool or plugin layer, so a reader of the tag loads none of them.
  */
 // Third-party imports
 import {
@@ -12,6 +14,7 @@ import {
   type FileSystem,
   type Layer,
   type Path,
+  Result,
   type Schema,
 } from 'effect';
 
@@ -24,7 +27,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
   factName,
-  isInstalledProgram,
+  programOrigin,
   type FactName,
   type RunId,
 } from '@shared/schemas';
@@ -165,10 +168,12 @@ export interface ProgramChange {
   readonly removed: number | null;
 }
 
-/** The process's plugins by plugin id: what each contributes (its tools,
- *  prompt section and layers) is read off its value. */
+/** The plugin table a run step reads: the app's listed plugins and the
+ *  native plugins loaded at that read, by plugin id; what each contributes
+ *  (its tools, prompt section and layers) is read off its value. */
 export interface ToolTable {
-  /** Every plugin, in the order the app listed them. */
+  /** Every plugin, the listed ones in the order the app listed them, then
+   *  the native ones. */
   readonly entries: ReadonlyMap<string, Plugin>;
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
@@ -176,8 +181,28 @@ export interface ToolTable {
   /** The programs the plugins register, by name (`Plugin.programs`). */
   readonly programs: ReadonlyMap<string, Program>;
   /** The row kinds the plugins own, by `plugin/kind` (`Plugin.factKinds`):
-   *  what a store opened in this process reads. */
+   *  what a store opened in this process reads. A native plugin owns none. */
   readonly factKinds: FactKinds;
+  /** The revision of the plugin `id`, which its layers are kept under and
+   *  its tools' rows record: `builtin` for a listed plugin, and for a
+   *  native one the revision it was loaded at (`NativePlugin`). */
+  readonly revisionOf: (id: string) => string;
+  /** The native plugins among `entries`, each with its revision, in the
+   *  order they were accepted: what tells a native plugin from a listed
+   *  one. */
+  readonly natives: readonly NativePlugin[];
+}
+
+/**
+ * A plugin an installed plugin's native entry returned, under that
+ * installed plugin's id (`plugin:<name>`), and its revision: a digest of
+ * the entry's path and the trust digest it was loaded at. A new revision
+ * stands beside the old one, whose layers stay up while a step that pinned
+ * them holds them.
+ */
+export interface NativePlugin {
+  readonly plugin: Plugin;
+  readonly revision: string;
 }
 
 /** The probe of a switched plugin that names none: it needs nothing. */
@@ -186,29 +211,30 @@ const NEEDS_NOTHING: NonNullable<Plugin['availability']> = {
 };
 
 /**
- * The table over `plugins`, which the app lists in order. A list that
- * spells an id other than lowercase letters, digits and dashes, repeats a
- * plugin id, a tool name or a script module's name, names a script module
- * with a colon, registers a program
- * that is not one of its own script modules, contributes a row kind of
- * another plugin's id or one already contributed, or lacks a plugin another
- * `requires` is a defect of the list, rejected when it is built. A plugin
- * with a switch and no availability probe is probed as needing nothing.
+ * The table over `listed` and `natives`, or why it is not one. A listed
+ * plugin's id is lowercase letters, digits and dashes; a native one's is
+ * its installed plugin's, checked where it is loaded. Over both: a
+ * repeated plugin id, tool name or script module name, a script module
+ * named with a colon, a program that is not one of its plugin's script
+ * modules, a row kind of another plugin's id or one already contributed,
+ * or a plugin another `requires` that is missing.
  */
-export function toolTable(plugins: readonly Plugin[]): ToolTable {
+const tableOf = (
+  listed: readonly Plugin[],
+  natives: readonly NativePlugin[],
+): Result.Result<ToolTable, string> => {
+  const plugins = [...listed, ...natives.map(({ plugin }) => plugin)];
   const entries = new Map<string, Plugin>();
   const byName = new Map<string, ITool<Error, PluginToolServices>>();
-  const refuse = (reason: string): never => {
-    throw new Error(`The plugin list is not valid: ${reason}`);
-  };
   for (const plugin of plugins) {
-    // The id names its resources directory and its switch: one plain path
-    // segment, so it can neither escape nor alias another plugin's.
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(plugin.id))
-      refuse(
+    // A listed id names its resources directory and its switch: one plain
+    // path segment, so it can neither escape nor alias another plugin's.
+    if (listed.includes(plugin) && !/^[a-z0-9][a-z0-9-]*$/.test(plugin.id))
+      return Result.fail(
         `plugin id ${JSON.stringify(plugin.id)} is not lowercase letters, digits and dashes.`,
       );
-    if (entries.has(plugin.id)) refuse(`plugin ${plugin.id} is listed twice.`);
+    if (entries.has(plugin.id))
+      return Result.fail(`plugin ${plugin.id} is listed twice.`);
     entries.set(
       plugin.id,
       plugin.toggle !== undefined && plugin.availability === undefined
@@ -218,7 +244,9 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     for (const tool of plugin.tools ?? []) {
       const { name } = tool.definition;
       if (byName.has(name))
-        refuse(`tool ${name} of plugin ${plugin.id} is already registered.`);
+        return Result.fail(
+          `tool ${name} of plugin ${plugin.id} is already registered.`,
+        );
       byName.set(name, tool);
     }
   }
@@ -227,24 +255,27 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
       entries.has(needed) ? [] : [`plugin ${id} runs on plugin ${needed}`],
     ),
   );
-  if (missing !== undefined) refuse(`${missing}, which is not listed.`);
+  if (missing !== undefined)
+    return Result.fail(`${missing}, which is not listed.`);
   const modules = plugins.flatMap(({ scriptModules = {} }) =>
     Object.keys(scriptModules),
   );
   if (new Set(modules).size !== modules.length)
-    refuse('two plugins ship a script module of one name.');
-  // `<plugin>:<name>` names an installed plugin's program, so a listed
-  // plugin's module can never be mistaken for one.
-  const qualified = modules.find(isInstalledProgram);
+    return Result.fail('two plugins ship a script module of one name.');
+  // A name with a colon is a program read from a file (`<plugin>:<name>`,
+  // `own:<name>`), so a plugin's module can never be mistaken for one.
+  const qualified = modules.find((name) => programOrigin(name) !== 'listed');
   if (qualified !== undefined)
-    refuse(`script module ${qualified} has a colon in its name.`);
+    return Result.fail(`script module ${qualified} has a colon in its name.`);
   // A program is started by its module's name, which the check above keeps
-  // unique across the list.
+  // unique across the table.
   const programs = new Map<string, Program>();
   for (const { id, programs: own = {}, scriptModules = {} } of plugins)
     for (const [name, program] of Object.entries(own)) {
       if (!Object.hasOwn(scriptModules, name))
-        refuse(`program ${name} of plugin ${id} is not one of its modules.`);
+        return Result.fail(
+          `program ${name} of plugin ${id} is not one of its modules.`,
+        );
       programs.set(name, program);
     }
   const factKinds = new Map<FactName, FactKind>();
@@ -252,20 +283,85 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     for (const factKind of own) {
       const name = factName(factKind);
       if (factKind.plugin !== id || factKinds.has(name))
-        refuse(
+        return Result.fail(
           `plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
         );
       factKinds.set(name, factKind);
     }
-  return {
+  const revisions = new Map(
+    natives.map(({ plugin, revision }) => [plugin.id, revision]),
+  );
+  return Result.succeed({
     entries,
     get: (name) => byName.get(name),
     programs,
     factKinds: Object.fromEntries(factKinds),
-  };
+    revisionOf: (id) => revisions.get(id) ?? 'builtin',
+    natives,
+  });
+};
+
+/**
+ * The table over `plugins`, which the app lists in order. A list the
+ * table refuses (`tableOf`) is a defect of the list, rejected when it is
+ * built. A plugin with a switch and no availability probe is probed as
+ * needing nothing.
+ */
+export function toolTable(plugins: readonly Plugin[]): ToolTable {
+  const table = tableOf(plugins, []);
+  if (Result.isFailure(table))
+    throw new Error(`The plugin list is not valid: ${table.failure}`);
+  return table.success;
 }
 
-/** The process's plugin table, which every run's offered tools come from. */
+/**
+ * `listed` with the native plugins loaded now, each judged whole against
+ * the table the ones accepted before it made: one whose tool or module
+ * name another plugin holds, or that runs on a plugin the table lacks, is
+ * withheld with its reason, and the rest load. The plugins are judged in
+ * passes, in order of their ids, until a pass accepts none: one that runs
+ * on a native plugin judged after it loads in the next pass, whatever the
+ * names. What no pass accepts (a collision, a plugin nobody loads, or a
+ * cycle of plugins that run on each other) is withheld with the reason its
+ * last judgement gave. The same set gives the same table.
+ */
+export const withNatives = (
+  listed: ToolTable,
+  natives: readonly NativePlugin[],
+): {
+  readonly table: ToolTable;
+  /** Each native plugin left out, with why. */
+  readonly withheld: readonly {
+    readonly native: NativePlugin;
+    readonly reason: string;
+  }[];
+} => {
+  const base = [...listed.entries.values()];
+  let table = listed;
+  const accepted: NativePlugin[] = [];
+  let withheld = natives
+    .toSorted((a, b) => (a.plugin.id < b.plugin.id ? -1 : 1))
+    .map((native) => ({ native, reason: 'it was not judged' }));
+  for (let progress = true; progress && withheld.length > 0;) {
+    progress = false;
+    const judged: typeof withheld = [];
+    for (const { native } of withheld) {
+      const next = tableOf(base, [...accepted, native]);
+      if (Result.isFailure(next)) judged.push({ native, reason: next.failure });
+      else {
+        accepted.push(native);
+        table = next.success;
+        progress = true;
+      }
+    }
+    withheld = judged;
+  }
+  return { table, withheld };
+};
+
+/** The plugin table: listed plugins alone where nothing is loaded (the
+ *  process's, read outside any run), and inside a run the table its launch
+ *  or its step read, which holds the native plugins loaded then. */
 export class ToolRegistry extends Context.Service<ToolRegistry, ToolTable>()(
   '@texra-ai/harness/tools/ToolRegistry',
 ) {}

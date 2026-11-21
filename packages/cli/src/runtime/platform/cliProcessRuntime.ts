@@ -46,7 +46,6 @@ type CliRuntimeContext = Pick<
   | 'config'
   | 'cwd'
   | 'minimumLogLevel'
-  | 'quietLogs'
   | 'resourcesPath'
   | 'skillSourceOptions'
   | 'storageRoot'

@@ -8,12 +8,12 @@
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import {
+  withLogChannel,
+  pathToLocationIn,
   buildDiffHunks,
   countLineChanges,
-  pathToLocationIn,
   reportDiffTimeout,
-} from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
 import {
   toErrorMessage,

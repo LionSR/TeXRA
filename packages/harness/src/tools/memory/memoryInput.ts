@@ -10,7 +10,7 @@ import { Schema } from 'effect';
 import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryLayout';
 
 // Local file imports
-import { nullishWithDefault } from '../core/inputSchema';
+import { nullishWithDefault, optionalInput } from '../core/inputSchema';
 import { LineRangeSchema } from '../formatting';
 import { NonNegativeIntSchema } from '@shared/schemas';
 
@@ -32,9 +32,10 @@ const PathFieldSchema = Schema.String.annotate({
 export const MemoryToolInputSchema = Schema.Union([
   Schema.Struct({
     command: Schema.Literal('view'),
-    path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-      description: `${MEMORY_PATH_DESCRIPTION} Defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
-    }),
+    path: optionalInput(
+      Schema.String,
+      `${MEMORY_PATH_DESCRIPTION} Defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
+    ),
     view_range: Schema.optional(Schema.NullOr(LineRangeSchema)),
     /** Zero-based offset for paginating directory listings (path points to a directory). */
     offset: nullishWithDefault(
@@ -67,9 +68,10 @@ export const MemoryToolInputSchema = Schema.Union([
     command: Schema.Literal('insert'),
     path: PathFieldSchema,
     insert_line: NonNegativeIntSchema,
-    insert_text: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-      description: 'Text to insert. Aliased by `new_str` if omitted.',
-    }),
+    insert_text: optionalInput(
+      Schema.String,
+      'Text to insert. Aliased by `new_str` if omitted.',
+    ),
     new_str: Schema.optional(Schema.NullOr(Schema.String)),
   }).check(
     Schema.makeFilter(

@@ -23,19 +23,15 @@ import {
 } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
 
-import {
-  type PerKeyLane,
-  setModelEnabled,
-  Skills,
-  withPerKeyLane,
-  withSessionFs,
-} from '@texra-ai/harness/host';
+import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
 import {
   Settings,
   type StorageFs,
   emitAppSignal,
   type AppSignal,
   type AppSignalPayloads,
+  type PerKeyLane,
+  withPerKeyLane,
 } from '@texra-ai/harness/plugins';
 import {
   DISABLED_SKILLS_SETTING,
@@ -50,7 +46,10 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import {
+  allSubscriptionUsage,
+  invalidateSubscriptionUsage,
+} from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 import { settingsAgentCommands } from '@texra/controllers/settingsView/settingsAgentCommands';
 import { settingsGitCommands } from '@texra/controllers/settingsView/settingsGitCommands';
 import {
@@ -115,7 +114,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
 
     // ── Controllers ──
 
-    const usage = new SubscriptionUsageService({ stores: roots });
     const memoryPage = settingsMemoryCommands({ bindings, present });
     const gitPage = settingsGitCommands({ bindings, present });
     const toolsPage = settingsToolCommands({ roots, bindings, present });
@@ -149,7 +147,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       hostStatePage(
         'subscriptionUsage',
         ['usage'],
-        Effect.map(usage.getAllUsage(), (snapshots) => ({
+        Effect.map(allSubscriptionUsage(roots), (snapshots) => ({
           snapshots,
         })),
       ),
@@ -171,7 +169,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     ) => HostEffect = Effect.fn('credentialsChanged')(function* (
       usageProvider?: SubscriptionUsageProvider,
     ) {
-      if (usageProvider) yield* usage.invalidate(usageProvider);
+      if (usageProvider) yield* invalidateSubscriptionUsage(usageProvider);
       yield* changed('credentials');
       if (usageProvider) yield* changed('usage');
     });
@@ -347,7 +345,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         setPreferSubscription(message.provider, message.enabled),
       getSubscriptionUsage: (message) =>
         Effect.andThen(
-          message.forceRefresh === true ? usage.invalidateAll() : Effect.void,
+          message.forceRefresh === true
+            ? invalidateSubscriptionUsage()
+            : Effect.void,
           changed('usage'),
         ),
 

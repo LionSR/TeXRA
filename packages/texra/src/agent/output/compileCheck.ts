@@ -8,12 +8,8 @@ import {
   toErrorMessage,
   hasExtension,
 } from '@texra-ai/harness/schemas';
-import { runDirUnder } from '@texra-ai/harness/plugins';
+import { runDirUnder, pathToLocationIn } from '@texra-ai/harness/plugins';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import {
-  createRunStorageLocation,
-  pathToLocationIn,
-} from '@texra-ai/harness/host';
 
 import { Effect, FileSystem } from 'effect';
 
@@ -273,11 +269,12 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
           round: currentRound,
           displayName,
           output: outputFile.location,
-          log: createRunStorageLocation(
-            logAbsolutePath,
-            logRelativePath,
+          log: {
+            kind: 'runStorage',
+            absolutePath: logAbsolutePath,
+            relativePath: logRelativePath,
             runId,
-          ),
+          },
           logRelativePath,
         },
         artifact: null,

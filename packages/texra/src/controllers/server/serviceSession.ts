@@ -43,6 +43,7 @@ import {
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
+  logFailure,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 import { activationView, replayTrace } from '@texra-ai/harness/host';
@@ -73,6 +74,8 @@ import {
   type TaskRecordsFailed,
 } from './protocol';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
+
+const CHANNEL = 'serviceSession';
 
 const isRpcClientError = (
   error: unknown,
@@ -125,7 +128,7 @@ export const serviceFileWrite =
         Effect.logWarning(
           `Writing ${path} in this window's process, where an edit of it by a task in the TeXRA service is not seen: ${away.message}`,
         ).pipe(
-          withLogChannel('serviceSession'),
+          withLogChannel(CHANNEL),
           Effect.andThen(writeFileIfUnchanged(path, contents, expected)),
         ),
       ),
@@ -295,6 +298,24 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         : Effect.fail(new ServiceUnavailable({ reason: reached.refused })),
     ),
   );
+  /** One service's part of a watch ends when that service goes: its stream
+   *  fails, or is interrupted when the link closes its connection. Only a
+   *  failure is said, with what it costs the reader. */
+  const untilServiceGone =
+    (cost: string) =>
+    <A, E, R>(frames: Stream.Stream<A, E, R>): Stream.Stream<A, never, R> =>
+      frames.pipe(
+        Stream.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Stream.empty
+            : Stream.fromEffect(
+                logFailure(
+                  CHANNEL,
+                  `The TeXRA service stopped sending ${workspace}; ${cost}`,
+                )(cause),
+              ).pipe(Stream.drain),
+        ),
+      );
   // The window's own view: the listing, plus the transcripts its readers
   // name, each reader's set held for its scope. A change of that set is a
   // new watch, from the cursor and history the view already holds; the
@@ -315,15 +336,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       // A service that went ends this read: the link closing its connection
       // interrupts the call, which must not end the view with it, and the
       // next service the link reaches is asked again (below).
-      Stream.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Stream.empty
-          : Stream.fromEffect(
-              Effect.logWarning(
-                `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
-              ).pipe(Effect.annotateLogs({ data: cause })),
-            ).pipe(Stream.drain),
-      ),
+      untilServiceGone("this window's run state no longer updates"),
     ),
   );
   const { subscribe } = view;
@@ -355,10 +368,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       Effect.catch((error) =>
         Predicate.isTagged(error, 'TaskFailed')
           ? Effect.fail(runFailure(error.message))
-          : Effect.logWarning(
+          : logFailure(
+              CHANNEL,
               `The TeXRA service stopped before task ${runId} ended`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
+            )(error).pipe(
               Effect.andThen(link.state.get),
               // Why the link is away, or offline when it has not heard yet.
               Effect.flatMap((state) =>
@@ -434,18 +447,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   // A lost service's stream fails, or is interrupted
                   // when the link closes its connection: either ends
                   // this service's part, and the next one takes over.
-                  Stream.catchCause((cause) =>
-                    Cause.hasInterruptsOnly(cause)
-                      ? Stream.empty
-                      : Stream.fromEffect(
-                          Effect.logWarning(
-                            `The TeXRA service stopped sending ${workspace}; the watch resumes when the service is back`,
-                          ).pipe(
-                            Effect.annotateLogs({
-                              data: cause,
-                            }),
-                          ),
-                        ).pipe(Stream.drain),
+                  untilServiceGone(
+                    'the watch resumes when the service is back',
                   ),
                 ),
           ),

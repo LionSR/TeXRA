@@ -22,10 +22,18 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
   [`executed`](#executed), [`errorResult`](#errorresult),
   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
+  [`optionalInput`](#optionalinput),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
   ([`requestToolEditApproval`](#requesttooleditapproval),
   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
   [`approvedWriteConflict`](#approvedwriteconflict)).
+- **Native plugins**: an installed plugin folder's `harness.mjs` is a
+  module whose default export ([`NativeEntryModule`](#nativeentrymodule))
+  the harness calls with this surface and its own `effect` authoring
+  modules ([`NativePluginHost`](#nativepluginhost)) and which returns a
+  [`Plugin`](#plugin); once the person trusts it, it is added, replaced or
+  removed while the process runs, each run seeing the change from its next
+  step.
 - **Runtime callbacks inside a tool**: the call's run and requests on
   [`ToolContext`](#toolcontext), [`ChildRuns`](#childruns), and
   [`RunInbox`](#runinbox).
@@ -54,6 +62,22 @@ The tool that runs a named agent as a child of the calling run.
 const AGENT_TOOL_NAME: "agent"
 ```
 
+## AgentDirectories
+
+The process's agent directories as an Effect service, provided once by the
+composition root through `processLayer`. The shape is the port itself: a
+program that resolves one of the three local agent directories yields the
+port's own readers instead of reaching for the process platform's copy.
+A root holds its port before it installs the runtime that serves it, so the
+layer is `Layer.succeed(AgentDirectories)(port)`.
+
+```ts
+class AgentDirectories extends Context.Service<
+  AgentDirectories,
+  AgentDirectoriesPort
+>()('@texra-ai/harness/platform/AgentDirectories')
+```
+
 ## AgentTrace
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
@@ -71,7 +95,7 @@ interface AgentTrace {
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
   /** A chunk of a process run's output, on its stream (`process.output`). */
-  output(stream: 'stdout' | 'stderr', text: string): void;
+  output(stream: ProcessOutputStream, text: string): void;
 
   // ─── Stages and stream handles ──────────────────────────────────────
   /**
@@ -418,6 +442,21 @@ function buildApprovalRejectedResult(
 ): ToolResult
 ```
 
+## buildDiffHunks
+
+Unified-diff hunks between two texts — the one diff engine behind every
+count, every rendered diff body, and every patch note in the product.
+
+On timeout this reports a whole-file replacement rather than an empty diff:
+"everything changed" is a true (if verbose) description of the edit, while
+an empty hunk list would read as "nothing changed". The returned `timeout`
+names the cause, and the caller that owns the edit reports it through
+{@link reportDiffTimeout}, so a degraded diff is never silent.
+
+```ts
+function buildDiffHunks(oldText: string, newText: string): DiffHunks
+```
+
 ## buildFileAttachment
 
 Build a tool attachment by reading a workspace file and packaging metadata.
@@ -464,9 +503,9 @@ interface CallRequests {
    *  row. `operation` is what a command (`bash`) asks permission for: the
    *  shell's (`'bash'`, which the run's command grant answers) or another
    *  tool's call (`'call'`, which only the delegated-work grant answers).
-   *  An edit, a plan or a proposal asks about its own kind; with the
-   *  call's hooks, the operation decides who answers the request, and a
-   *  request about none is a person's. */
+   *  An edit, a plan, a proposal or a plugin's trust asks about its own
+   *  kind (`operationOf`); with the call's hooks, the operation decides who
+   *  answers the request, and a request about none is a person's. */
   readonly open: <P extends RequestPayload>(
     payload: P,
     opening?: {
@@ -560,12 +599,14 @@ interface ChildRunsShape {
 ## codemode
 
 Code mode: the `script` tool, a program that calls the run's other tools,
-and `self()`, the function a script runs this agent again with. An agent
-gets them if its configuration names `script`, or as every run that takes
-injected tools does (not a program's run, a text-only persona, or a plugin
-agent that names its own tools). A step that offers `script` sends it and
-the run's own tools alone; its session layer is the code sandbox the
-scripts run in.
+`self()`, the function a script runs this agent again with, and
+`context`, which reads and edits the run's own model view. An agent gets
+`script` and `context` if its configuration names them, or as every run
+that takes injected tools does (not a program's run, a text-only persona,
+or a plugin agent that names its own tools). A step that offers `script`
+sends it and the run's own tools alone, so `context` is called from a
+script there and directly elsewhere; its session layer is the code
+sandbox the scripts run in.
 
 ```ts
 const codemode: Plugin
@@ -643,6 +684,29 @@ class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
     cause: Schema.Defect(),
   },
 )
+```
+
+## connectJsonRpcProcess
+
+A JSON-RPC connection over a child process's stdio, closed with the
+owner's reason once the process has exited. The exit can precede the end
+of its output, so the close waits for stdout and stderr to be read: a
+reply already written still reaches its request instead of failing as
+disposed. `exited` holds the exit from then on.
+
+```ts
+const connectJsonRpcProcess: (handle: ChildProcessHandle, options: JsonRpcProcessOptions) => Effect<{ connection: JsonRpcConnection; exited: Deferred<Result<ExitCode, PlatformError>, never>; }, never, Scope>
+```
+
+## countLineChanges
+
+Added/removed line counts applied over hunks a caller already holds.
+
+```ts
+function countLineChanges(hunks: readonly Hunk[]): {
+  added: number;
+  removed: number;
+}
 ```
 
 ## CurrentValues
@@ -792,6 +856,18 @@ type DefineToolOptions<T, R = never> = Required<
      *  an `Error` and the model reads its message as the tool's error. */
     execute: (input: T) => Effect.Effect<ToolResult | string, Error, R>;
   };
+```
+
+## DiffHunks
+
+One diff pass: its hunks, and — when the pass hit its bound — the warning
+naming why the hunks are a whole-file replacement.
+
+```ts
+interface DiffHunks {
+  readonly hunks: StructuredPatchHunk[];
+  readonly timeout: string | undefined;
+}
 ```
 
 ## DraftBlob
@@ -995,6 +1071,16 @@ class HostCapabilities extends Context.Service<
 >()('@texra-ai/harness/agent/HostCapabilities')
 ```
 
+## Hunk
+
+A hunk as its readers see it: jsdiff's, or one carried as data.
+
+```ts
+type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
+  readonly lines: readonly string[];
+};
+```
+
 ## InboxItem
 
 One message a producer sends: a text, with what surfaces show instead
@@ -1011,13 +1097,13 @@ type InboxItem = (
       readonly blobs?: readonly DraftBlob[];
     }
   | { readonly delivery: ChildRunDelivery }
+  /** A request of the run's own (`/compact`, a model switch), not a message. */
+  | { readonly control: FollowUpControl }
 ) & {
   readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
-  /** A request of the run's own (`/compact`, a model switch), not a message. */
-  readonly control?: QueuedFollowUp['control'];
 };
 ```
 
@@ -1105,7 +1191,7 @@ interface ITool<E = Error, R = never> {
    * re-runs a call only when that saved word and the current one both say
    * `'safe'`.
    */
-  readonly replay?: 'safe' | 'unsafe';
+  readonly replay?: DispatchFacts['replay'];
   /**
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
@@ -1139,6 +1225,9 @@ interface ITool<E = Error, R = never> {
       readonly name: string;
       readonly description: string;
     }[],
+    /** The names of every tool the step offers, injected ones included:
+     *  the description names a tool only when it is among them. */
+    offered: readonly string[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
@@ -1176,8 +1265,6 @@ interface JsonRpcConnection {
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
   readonly close: (reason: string) => Effect.Effect<void>;
-  /** Completes once the reader has dispatched the input's last message. */
-  readonly inputEnded: Effect.Effect<void>;
 }
 ```
 
@@ -1226,6 +1313,34 @@ interface JsonRpcConnectionOptions {
     id: number,
     method: string,
   ): { readonly method: string; readonly params: unknown } | undefined;
+}
+```
+
+## JsonRpcProcessOptions
+
+How a child process's connection is made and what its end says.
+
+```ts
+interface JsonRpcProcessOptions extends Omit<
+  JsonRpcConnectionOptions,
+  'input' | 'output'
+> {
+  /** How much of the end of the process's stderr `end` is given. */
+  readonly stderrTailLimit: number;
+  /** Each piece of stderr as it arrives. */
+  readonly onStderr?: (text: string) => Effect.Effect<void>;
+  /** How long the close waits, after the exit, for the process's output to
+   *  be read: a grandchild may hold the pipes open. */
+  readonly drainTimeout: Duration.Input;
+  /** The reason the connection closes with, from the process's exit (a
+   *  failure when a signal ended it) and the end of its stderr. */
+  readonly end: (
+    exit: Result.Result<
+      ChildProcessSpawner.ExitCode,
+      PlatformError.PlatformError
+    >,
+    stderrTail: string,
+  ) => Effect.Effect<string>;
 }
 ```
 
@@ -1285,7 +1400,7 @@ type LogOptions =
 ## makeJsonRpcConnection
 
 ```ts
-const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<JsonRpcConnection, never, Scope>
+const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<{ connection: JsonRpcConnection; inputEnded: Effect<void, never, never>; }, never, Scope>
 ```
 
 ## MemoryPinResult
@@ -1324,8 +1439,13 @@ const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<
 
 ## memoryWorkflow
 
-Memory and past runs: the `memory` tool, offered while memory is on,
-and `executions`.
+Memory, past runs and later ones, and the run's own equipment: the
+`memory` tool, offered while memory is on; `executions`; `wake`, with
+which a run arranges to be continued at a later time;
+`plugin_manager`, with which it installs and enables the plugins it
+loads, each change approved by the person; and `resources`, which reads
+the time, the models, the plans' quotas and the run's spend. The last
+three are offered to every agent with tools.
 
 ```ts
 const memoryWorkflow: Plugin
@@ -1350,6 +1470,49 @@ Child runs: the `agent` tool, and `program` for a registered program.
 
 ```ts
 const multiAgent: Plugin
+```
+
+## NativeEntryModule
+
+A native entry module (`harness.mjs`): its default export returns the
+plugin, written with `harness.plugins.definePlugin`.
+
+```ts
+interface NativeEntryModule {
+  readonly default: (harness: NativePluginHost) => Plugin;
+}
+```
+
+## NativePlugin
+
+A plugin an installed plugin's native entry returned, under that
+installed plugin's id (`plugin:<name>`), and its revision: a digest of
+the entry's path and the trust digest it was loaded at. A new revision
+stands beside the old one, whose layers stay up while a step that pinned
+them holds them.
+
+```ts
+interface NativePlugin {
+  readonly plugin: Plugin;
+  readonly revision: string;
+}
+```
+
+## NativePluginHost
+
+What a native entry's default export is called with: this process's
+plugin authoring surface and the modules of its `effect` a plugin is
+written with.
+
+```ts
+interface NativePluginHost {
+  /** `@texra-ai/harness/plugins`, as this process loaded it. */
+  readonly plugins: typeof plugins;
+  /** `effect`'s authoring modules, as this process loaded them: `Effect`,
+   *  `Context`, `Layer`, `Schema`, `Stream`, `Scope` and the data and
+   *  concurrency modules beside them, by their `effect` names. */
+  readonly effect: typeof EFFECT;
+}
 ```
 
 ## noLaterTurn
@@ -1390,6 +1553,31 @@ function nullishWithDefault<S extends Schema.Top>(
 ): Schema.decodeTo<Schema.toType<S>, Schema.optional<Schema.NullOr<S>>>
 ```
 
+## optionalInput
+
+An optional, nullable tool-input field with no default. The decoded value
+stays nullish: it is `undefined` when the field is absent and `null` when the
+model sends an explicit `null`, so `execute` coalesces it with `?? fallback`
+(which covers both) or tests `== null`.
+
+Like {@link nullishWithDefault}, the encoded side is
+`Schema.optional(Schema.NullOr(schema))`, not `Schema.optional(schema)`:
+OpenAI-compatible providers (DeepSeek, Kimi, …) send an omitted optional
+field as an explicit `null` in structured output, so the field must be
+nullable as well as optional, and plain `Schema.optional(schema)` would fail
+to decode that `null`. Unlike `nullishWithDefault`, this applies no decoding
+transformation, so a `null` is kept rather than replaced by a fallback.
+Naming the shape keeps every tool-input field that takes no default on the
+one rule. `description` is written on the encoded side, which is where the
+model's JSON Schema is generated from.
+
+```ts
+function optionalInput<S extends Schema.Top>(
+  schema: S,
+  description: string,
+): Schema.optional<Schema.NullOr<S>>
+```
+
 ## parseWorkingDirectory
 
 Trim and validate a working_directory value. Must be absolute if provided.
@@ -1398,6 +1586,58 @@ Trim and validate a working_directory value. Must be absolute if provided.
 function parseWorkingDirectory(
   raw: string | null | undefined,
 ): Result.Result<string | undefined, ToolError>
+```
+
+## pathToLocationIn
+
+Convert a string path to a FileLocation against the workspace root its
+caller holds as data: `undefined` with no folder open, which resolves every
+path as external.
+
+NOT run-storage aware — it can only create workspace or external locations.
+For run-storage awareness, use `sourceLocationUnder`.
+
+Path normalization is handled internally - you can pass paths with either
+forward slashes or backslashes. It's safe to pass already-normalized paths
+(path.normalize() is idempotent).
+
+- `@param` workspaceRoot - The session's workspace root
+- `@param` target - Absolute or workspace-relative path
+- `@returns` FileLocation (workspace or external, never runStorage)
+
+```ts
+function pathToLocationIn(
+  workspaceRoot: string | undefined,
+  target: string,
+): FileLocation
+```
+
+## PerKeyLane
+
+One in-process exclusive lane per key for Effect programs: the key's
+`Semaphore`, and the number of fibers holding or waiting on it. The count
+is what lets the entry leave its map once the last fiber is done.
+
+```ts
+interface PerKeyLane {
+  readonly lock: Semaphore.Semaphore;
+  fibers: number;
+}
+```
+
+## PerKeyLanes
+
+Where the lanes live. A `Map` is the usual choice; a `WeakMap` keyed by an
+owning object works too and does not need the idle cleanup (its entries'
+lifetime is the key's own), which is why only these three methods are
+required.
+
+```ts
+interface PerKeyLanes<Key> {
+  get(key: Key): PerKeyLane | undefined;
+  set(key: Key, lane: PerKeyLane): unknown;
+  delete(key: Key): unknown;
+}
 ```
 
 ## PlatformSecrets
@@ -1594,6 +1834,14 @@ interface ProcessChildLaunch {
 }
 ```
 
+## ProcessOutputStream
+
+The stream a process run's output chunk came from.
+
+```ts
+type ProcessOutputStream = typeof ProcessOutputStreamSchema.Type;
+```
+
 ## ProcessPluginLayer
 
 A plugin's process-lifetime services (its `processLayer`): built
@@ -1785,6 +2033,16 @@ Render a prompt string using nunjucks templating.
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
 ```
 
+## reportDiffTimeout
+
+Warn that a diff pass fell back to a whole-file replacement, if it did.
+
+```ts
+function reportDiffTimeout(
+  timeout: string | undefined,
+): Effect.Effect<void>
+```
+
 ## requestToolEditApproval
 
 Ask the person for an edit when the session's policy, given what the
@@ -1908,12 +2166,12 @@ interface RootedFileSystem extends FileSystem.FileSystem {
 ## RoutePolicy
 
 One route a binding's calls go through: its key, and the scope of the
-failures that cool it (llm's `ModelError.scope`).
+failures that cool it.
 
 ```ts
 interface RoutePolicy {
   readonly key: string;
-  readonly scope: 'model' | 'route';
+  readonly scope: NonNullable<ModelError['scope']>;
 }
 ```
 
@@ -2357,8 +2615,9 @@ reads it.
 
 ```ts
 interface ToolCatalogShape {
-  /** Borrow a plugin's process services for the caller's scope without
-   *  starting them; none while its layer is down. */
+  /** Borrow a plugin's process services (a native plugin's at the revision
+   *  loaded now) for the caller's scope without starting them; none while
+   *  its layer is down. */
   readonly processServices: (
     plugin: string,
   ) => Effect.Effect<Option.Option<PluginContext>, never, Scope.Scope>;
@@ -2631,7 +2890,9 @@ type ToolProbeServices =
 
 ## ToolRegistry
 
-The process's plugin table, which every run's offered tools come from.
+The plugin table: listed plugins alone where nothing is loaded (the
+process's, read outside any run), and inside a run the table its launch
+or its step read, which holds the native plugins loaded then.
 
 ```ts
 class ToolRegistry extends Context.Service<ToolRegistry, ToolTable>()(
@@ -2676,12 +2937,14 @@ interface ToolRun {
 
 ## ToolTable
 
-The process's plugins by plugin id: what each contributes (its tools,
-prompt section and layers) is read off its value.
+The plugin table a run step reads: the app's listed plugins and the
+native plugins loaded at that read, by plugin id; what each contributes
+(its tools, prompt section and layers) is read off its value.
 
 ```ts
 interface ToolTable {
-  /** Every plugin, in the order the app listed them. */
+  /** Every plugin, the listed ones in the order the app listed them, then
+   *  the native ones. */
   readonly entries: ReadonlyMap<string, Plugin>;
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
@@ -2689,9 +2952,33 @@ interface ToolTable {
   /** The programs the plugins register, by name (`Plugin.programs`). */
   readonly programs: ReadonlyMap<string, Program>;
   /** The row kinds the plugins own, by `plugin/kind` (`Plugin.factKinds`):
-   *  what a store opened in this process reads. */
+   *  what a store opened in this process reads. A native plugin owns none. */
   readonly factKinds: FactKinds;
+  /** The revision of the plugin `id`, which its layers are kept under and
+   *  its tools' rows record: `builtin` for a listed plugin, and for a
+   *  native one the revision it was loaded at (`NativePlugin`). */
+  readonly revisionOf: (id: string) => string;
+  /** The native plugins among `entries`, each with its revision, in the
+   *  order they were accepted: what tells a native plugin from a listed
+   *  one. */
+  readonly natives: readonly NativePlugin[];
 }
+```
+
+## unifiedDiffText
+
+Unified-diff body between two texts (`text` is undefined when they are
+identical), with the pass's {@link DiffHunks.timeout} for the caller to
+report.
+
+Carries no `---`/`+++` file header: every consumer already names the file in
+its own surrounding prose.
+
+```ts
+function unifiedDiffText(
+  oldText: string,
+  newText: string,
+): { readonly text: string | undefined; readonly timeout: string | undefined }
 ```
 
 ## ValueFamily
@@ -2714,6 +3001,15 @@ The web: `web_search` and `web_fetch`.
 const web: Plugin
 ```
 
+## withFileWriteLane
+
+Run `self`, a read, decision and write of `file`, as the file's one
+writer in this process. `file` is absolute.
+
+```ts
+const withFileWriteLane: (file: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, FileSystem | R>
+```
+
 ## withLogChannel
 
 Name the channel every `Effect.log*` inside `self` belongs to. Annotations
@@ -2722,6 +3018,30 @@ for the entries that don't.
 
 ```ts
 const withLogChannel: (channel: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, R>
+```
+
+## withPerKeyLane
+
+Run `self` holding `key`'s one permit. The exclusion, the queue and its
+release under interruption are the `Semaphore`'s: a fiber joins the key's
+queue and enters in the order it joined, and a waiter that is interrupted
+leaves the queue. What this adds is the keyed map: the lane is created on
+first use, counted while a fiber holds or waits on it, and deleted from
+`lanes` when the count returns to zero. The count is taken and given back
+as one acquire and release, so no exit leaves a key counted.
+
+Order is the order fibers join the semaphore's queue, a few steps after
+they call this. Two fibers that call within those steps of each other,
+with the scheduler taking the first one off in between, can enter in the
+other order (measured at 8 of 2101 step offsets at the default budget,
+against 2 for a bare `Semaphore`). A caller that must keep the order of
+its calls puts them through one consumer, not a lane.
+
+```ts
+function withPerKeyLane<Key>(
+  lanes: PerKeyLanes<Key>,
+  key: Key,
+): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
 ```
 
 ## withRequestTimeout

@@ -1,13 +1,15 @@
 /**
- * Conversation compaction for the tool-use loop: a run-scoped step beside
- * the loop that writes a `context.edit` with cause `compaction` (trigger
- * `context-limit` at the threshold share of the bound model's window, `user`
- * for a `/compact`, `overflow` after a request the window could not hold),
- * replacing the history it summarized. Each runs on the loop's fiber, and
- * the request it precedes waits for it. The replacement, a summary the bound
- * model produces through the invoker's priced `call` (no row records its
- * attempts), is one user message. Every skip and failure is logged and shown
- * as a compaction activity.
+ * The edits of the model's view a run writes on its own fiber at a request
+ * boundary, each a `context.edit`: a summary by an extra model call (cause
+ * `compaction`, trigger `context-limit` at the threshold share of the bound
+ * model's window, `user` for a `/compact`, `overflow` after a request the
+ * window could not hold), or a replacement the agent wrote itself with its
+ * `context` tool (cause `edit`), which calls no model. The request each
+ * precedes waits for it. A summary, made through the invoker's priced
+ * `call` (no row records its attempts), is one user message; so is an
+ * agent's replacement. Every edit, skip and failure is logged and shown as
+ * a compaction activity. The fork seed (`forkRun.ts`) is the one other
+ * writer of a `context.edit`, as a run's first row.
  */
 import { Cause, Effect, Exit } from 'effect';
 
@@ -19,6 +21,7 @@ import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { type RunId } from '@shared/schemas';
 import type { RunCell } from '@shared/session/runHistory';
 import { turnText } from '@shared/session/runFacts';
+import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
@@ -28,7 +31,17 @@ import { MODEL_COMPACTION_THRESHOLD_SETTING } from '@shared/state/stateSettings'
 
 /** Prepended to a summary applied back into the conversation as a user
  *  message: the same marker for every provider. */
-const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
+export const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
+
+/** Prepended to the text an agent replaced part of its context with, so a
+ *  later read of the view tells it from what the user wrote. */
+export const AGENT_REPLACEMENT_PREFIX = '[Context you replaced]\n\n';
+
+/** The one message an agent's replacement `text` stands as in the view. */
+export const agentReplacement = (text: string): HistoryMessage => ({
+  role: 'user',
+  content: [{ kind: 'text', text: `${AGENT_REPLACEMENT_PREFIX}${text}` }],
+});
 
 /** The message a `/compact` on an idle run wakes it with (`FollowUpReader.next`);
  *  the compaction at that turn's request boundary consumes the request. */
@@ -228,19 +241,84 @@ const land = Effect.fn('compaction.land')(function* (
       },
     },
   ]);
-  const tokensBefore = contextTokens(state);
-  const tokensAfter = Math.max(1, estimateMessageTokens(compacted.messages));
-  const { contextWindow } = summary;
-  summary.activity.finish({
+  // The summary replaced everything it measured: the estimate of the new
+  // view is what remains.
+  completed(
+    summary.activity,
+    contextTokens(state),
+    estimateMessageTokens(compacted.messages),
+    summary.contextWindow,
+  );
+  return compacted;
+});
+
+/** Finish `activity` with what an edit from `tokensBefore` to `tokens`
+ *  freed of a `contextWindow`, and for an agent's edit how many messages it
+ *  `replaced`. */
+const completed = (
+  activity: ReturnType<typeof startCompactionActivity>,
+  tokensBefore: number,
+  tokens: number,
+  contextWindow: number,
+  replaced?: number,
+) => {
+  const tokensAfter = Math.max(1, tokens);
+  activity.finish({
     state: 'completed',
     freed: {
       tokens: tokensBefore - tokensAfter,
       utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
       utilizationAfter: roundedUtilizationPercent(tokensAfter, contextWindow),
     },
+    ...(replaced !== undefined && { replaced }),
   });
-  return compacted;
-});
+};
+
+/**
+ * Apply the replacements the agent asked for (`RunState.contextEdits`),
+ * no attempt open, each its own `context.edit` in the order the state holds
+ * them, highest range first: each one's indices are those of the view its
+ * response was sent with, which an edit above it leaves as they were. Each
+ * edit takes its request off the state, so a resume applies the rest. The
+ * tool checked each range against that view; the run history checks the
+ * result again as it commits.
+ */
+export const agentEditsAtBoundary = Effect.fn('compaction.agentEdits')(
+  function* (
+    input: Pick<CompactionInput, 'runId' | 'logger' | 'cell'>,
+    contextWindow: number,
+  ) {
+    let state = yield* input.cell.current;
+    for (const { from, to, with: text } of state.contextEdits) {
+      const activity = startCompactionActivity(input.logger);
+      const tokensBefore = contextTokens(state);
+      state = yield* input.cell.append([
+        {
+          type: 'context.edit',
+          aggregateId: input.runId,
+          payload: {
+            cause: 'edit',
+            trigger: null,
+            range: { from, to },
+            messages: [agentReplacement(text)],
+            usage: null,
+          },
+        },
+      ]);
+      // The count after is the run's own after the edit (an estimate, as an
+      // edit leaves no provider count for the new view), the figure the
+      // context gauge then shows; the tool's `freed` stays the agent's.
+      completed(
+        activity,
+        tokensBefore,
+        contextTokens(state),
+        contextWindow,
+        to - from,
+      );
+    }
+    return state;
+  },
+);
 
 /**
  * Summarize the history (`summarize` says how much of it) and land the

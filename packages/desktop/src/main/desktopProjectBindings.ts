@@ -11,7 +11,7 @@ import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
 import type { Notices } from '@texra-ai/harness';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
@@ -111,13 +111,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             catch: (cause) => hostFailed('homedir', cause),
           }).pipe(
             Effect.catch((error) =>
-              Effect.logWarning(
+              logFailure(
+                'desktop',
                 'No home directory could be determined; the terminal opens in the app directory.',
-              ).pipe(
-                Effect.annotateLogs({ data: error.cause }),
-                withLogChannel('desktop'),
-                Effect.as(process.cwd()),
-              ),
+              )(error.cause).pipe(Effect.as(process.cwd())),
             ),
           );
     /** Each document/project owns one auxiliary transport and its resources.

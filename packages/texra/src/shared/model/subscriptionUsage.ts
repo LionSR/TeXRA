@@ -1,5 +1,8 @@
 import { Schema, Struct } from 'effect';
-import { NonNegativeIntSchema } from '@texra-ai/harness/schemas';
+import {
+  NonNegativeIntSchema,
+  PlanQuotaFailureSchema,
+} from '@texra-ai/harness/schemas';
 
 /**
  * The subscriptions whose usage is reported. Storage owns the enum, so a
@@ -51,12 +54,7 @@ const SubscriptionUsageSnapshotSchema = Schema.Union([
     Struct.assign({
       state: Schema.Literal('unavailable'),
       windows: Schema.Tuple([]),
-      reason: Schema.Literals([
-        'missing_credentials',
-        'invalid_credentials',
-        'request_failed',
-        'malformed_response',
-      ]),
+      reason: PlanQuotaFailureSchema,
     }),
   ),
 ]);

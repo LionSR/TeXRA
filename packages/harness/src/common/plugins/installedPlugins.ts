@@ -13,6 +13,7 @@ import { Effect, FileSystem, Result, Schema } from 'effect';
 import {
   AGENT_SOURCE,
   AgentSourceSchema,
+  OWN_PROGRAM_PREFIX,
   SkillNameSchema,
   type InstalledPlugin,
 } from '@shared/schemas';
@@ -29,11 +30,13 @@ import {
   type PluginEnv,
 } from './installRecord';
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
+import { describeProvides } from './nativeEntry';
 import { pluginDataDir } from './pluginHooks';
 import {
   describeHook,
   disablePlugin,
   enablePlugin,
+  reviewPlugin,
   listPlugins,
   readInstalledPluginLoad,
   rereadPlugin,
@@ -145,12 +148,16 @@ const nameTaken = (name: string) =>
   });
 
 function claimName(run: InstallRun, name: string) {
-  // A plugin agent is `<plugin>:<name>`, so a plugin named like an agent
-  // source would read as that source's agent.
-  if (Result.isSuccess(Schema.decodeUnknownResult(AgentSourceSchema)(name)))
+  // A plugin's agent and its program are `<plugin>:<name>`, so a plugin
+  // named like an agent source would read as that source's agent, and one
+  // named like the prefix of an agent's own programs as their writer.
+  if (
+    name === OWN_PROGRAM_PREFIX ||
+    Result.isSuccess(Schema.decodeUnknownResult(AgentSourceSchema)(name))
+  )
     return Effect.fail(
       new PluginRequestError({
-        message: `A plugin cannot be named "${name}": that name is reserved as an agent source (${Object.values(AGENT_SOURCE).join(', ')}).`,
+        message: `A plugin cannot be named "${name}": that name is reserved (${[...Object.values(AGENT_SOURCE), OWN_PROGRAM_PREFIX].join(', ')}).`,
       }),
     );
   if (run.taken.has(name)) return Effect.fail(nameTaken(name));
@@ -473,6 +480,9 @@ export const InstalledPlugins = Object.freeze({
   list: listPlugins,
   /** Enable a plugin, asking `confirm` to trust it unless it already is. */
   enable: enablePlugin,
+  /** A plugin's review as it is now, whether it is trusted as it is and
+   *  whether it is enabled. */
+  review: reviewPlugin,
   /** Disable a plugin; it stays installed, pinned and trusted. */
   disable: disablePlugin,
   /** The records of the plugins that load now: enabled, and trusted as
@@ -483,4 +493,6 @@ export const InstalledPlugins = Object.freeze({
     ),
   /** A hook's event, matcher and command, as the trust review shows it. */
   describeHook,
+  /** What a native entry's `provides` declares, as the trust review says it. */
+  describeNative: describeProvides,
 } as const);

@@ -126,29 +126,6 @@ freeze the setting for a whole session.
 const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>
 ```
 
-## entryChannel
-
-Which channel an entry belongs to, or `undefined` when it names none. An
-`Effect.log*` carries one only through `Effect.annotateLogs`; a tracer span
-opened by `Effect.withSpan` does not supply it, because the entry's `spans`
-field reads `CurrentLogSpans` (`Effect.withLogSpan`), a separate mechanism.
-An unattributed entry lands on the host's shared surface, which is the right
-home for it.
-
-```ts
-function entryChannel(entry: LogEntry): string | undefined
-```
-
-## entryMessage
-
-Render an entry's message for a host that wants one line of text. Effect
-hands `message` through as a single value or an array of them, so both
-shapes fold here rather than at each host.
-
-```ts
-function entryMessage(entry: LogEntry): string
-```
-
 ## entryTypeIn
 
 The entry's own type at `target`, or `undefined` when nothing is there, with
@@ -301,6 +278,20 @@ it (`credentialChanged`, `Secrets.announcing`), as
 class FileSecrets implements PlatformSecrets
 ```
 
+## getPathSegments
+
+Get path segments as an array.
+Only converts backslashes — does NOT resolve '..' so callers can detect
+traversal attempts (e.g. AcceptRunFilesTool's `includes('..')` guard).
+It also trims its input, so a caller that must keep a leading or trailing
+space in a name (hidden-file and excluded-directory checks, published
+artifact paths) cannot route through it; those call sites split on their
+own, and each handles `..` its own way on purpose.
+
+```ts
+function getPathSegments(input: string): string[]
+```
+
 ## GlobalDatabase
 
 The process's one handle on the global storage root, held for the process
@@ -383,6 +374,24 @@ Check if an error represents "a parent path component is a file, not a directory
 function isNotADirectoryError(err: unknown): boolean
 ```
 
+## isPathWithin
+
+True if `target` is `base` itself or a descendant of it.
+Computed via path.relative — works for both absolute and relative inputs
+as long as both are resolved the same way by the caller.
+
+```ts
+function isPathWithin(base: string, target: string): boolean
+```
+
+## isStrictlyWithin
+
+True if `target` is a strict descendant of `base` (excludes `target === base`).
+
+```ts
+function isStrictlyWithin(base: string, target: string): boolean
+```
+
 ## JsonConfigProvider
 
 Store-backed {@link ConfigProvider}. Keys are relative to the catalog's
@@ -452,14 +461,6 @@ function localBranchExists(
   cwd: string,
   branch: string,
 ): Effect.Effect<boolean, never, ChildProcessSpawner>
-```
-
-## LOG_CHANNEL
-
-Annotation naming the logical channel an entry belongs to.
-
-```ts
-const LOG_CHANNEL: "channel"
 ```
 
 ## LogEntry
@@ -798,6 +799,14 @@ function setLogSink(
   next: LogSink | null,
   options: { readonly trusted?: boolean } = {},
 ): void
+```
+
+## toPosixPath
+
+Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`).
+
+```ts
+function toPosixPath(relativePath: string): string
 ```
 
 ## whichOnExtendedPath

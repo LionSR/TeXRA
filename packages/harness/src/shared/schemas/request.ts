@@ -28,6 +28,7 @@ import {
   AgentProposalRequestSchema,
   BashRequestSchema,
   PlanApprovalRequestSchema,
+  PluginTrustRequestSchema,
   RetryRequestSchema,
   ToolEditRequestSchema,
   UserQuestionAnswersSchema,
@@ -95,6 +96,10 @@ export const RequestPayloadSchema = Schema.Union([
     data: ToolEditRequestSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('bash'), data: BashRequestSchema }),
+  Schema.Struct({
+    kind: Schema.Literal('pluginTrust'),
+    data: PluginTrustRequestSchema,
+  }),
   Schema.Struct({ kind: Schema.Literal('retry'), data: RetryRequestSchema }),
   Schema.Struct({
     kind: Schema.Literal('proposal'),
@@ -128,6 +133,7 @@ type AnswerAction = Exclude<
 const REQUEST_ANSWERS = {
   toolEdit: ['approve'],
   bash: ['approve'],
+  pluginTrust: ['approve'],
   proposal: ['approve'],
   planApproval: ['approve', 'approve_and_goal'],
   retry: ['retry'],

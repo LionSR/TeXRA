@@ -32,6 +32,7 @@ import {
   buildAgentProposalApprovalContent,
   buildToolEditApprovalContent,
   formatBashApprovalSummary,
+  formatPluginTrustSummary,
   formatRetryRequestMessage,
   formatUserQuestionPrompt,
 } from '../approval/approvalSummaries';
@@ -177,6 +178,8 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       }
       case 'userQuestion':
         return yield* askHeadlessUserQuestion(payload.data, hooks);
+      case 'pluginTrust':
+        return yield* ask({ summary: formatPluginTrustSummary(payload.data) });
     }
   });
 

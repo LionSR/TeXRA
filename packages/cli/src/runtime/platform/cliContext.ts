@@ -60,7 +60,6 @@ export interface CliContext {
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
    *  config: what a service launch sends to narrow its own task. */
   readonly requestedApprovalPolicy?: ApprovalPolicy;
-  readonly quietLogs: boolean;
   /**
    * The diagnostics emission threshold this process's runtime builds with,
    * decided once from argv — `--quiet` is `None`, `--verbose` is `Debug`,
@@ -93,6 +92,11 @@ export interface CliContext {
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
 }
+
+/** Whether `--quiet` silenced this invocation's notes and warnings: its
+ *  diagnostics threshold is `None`. */
+export const isQuiet = (context: Pick<CliContext, 'minimumLogLevel'>) =>
+  context.minimumLogLevel === 'None';
 
 /**
  * The invocation a command's program runs for: its context, decided once
@@ -475,7 +479,6 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       outputFormat,
       approvalPolicy,
       ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
-      quietLogs: init.globalArgs.quiet === true,
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,
       termIsDumb: ambient.termIsDumb === true,

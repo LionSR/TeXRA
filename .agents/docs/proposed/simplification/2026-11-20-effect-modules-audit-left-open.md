@@ -30,13 +30,57 @@ The areas are already on the Effect modules. These landed with this note:
 - `texra --version` at the root is `texra version`, as `-v` already was, so
   both print the same and both honor `--output-format`.
 
+A second pass over the same areas, on measurements the first did not have,
+landed:
+
+- **A JSON-RPC peer that is a child process has one owner.**
+  `connectJsonRpcProcess` in `packages/harness/src/tools/jsonRpc.ts` reads
+  stderr into a tail, watches the exit, waits (bounded) for the output to be
+  read and closes the connection with the owner's reason. The MCP client and
+  the Lean server each wrote that; `inputEnded` is no longer on the public
+  connection. The connection's three Refs are one state. The MCP server's
+  stop is the spawner's `forceKillAfter`.
+- **`tar` is gone.** The arXiv extraction is a stream through
+  `effect/encoding` `Tar`, gunzipped by content and bounded by its deadline;
+  the variable holding tar's promise and the join after the deadline are
+  gone. `Path.resolveWithin` keeps each entry beneath the directory, and
+  only files and directories are written. What a user could notice is in
+  the commit: links and absolute paths are skipped, modes are not applied.
+- **`pretty-ms` is gone.** The first two units of `Duration.format` are what
+  it printed with `unitCount: 2` on every whole-second duration under a year
+  (29,764 samples; a year reads `365d`).
+- **A call off the rows retries on a `Schedule`**
+  (`packages/harness/src/agent/runtime/run/modelCall.ts`): `Schedule.while`
+  then `Schedule.modifyDelay`, so the check precedes the wait and its log
+  line. The options form of `Effect.retry` runs the schedule's step first.
+- **`executions wait` asks every view whether it is over**, in place of a
+  race between the view stream and a one-time read of the registry that
+  missed a run ending with no outcome row.
+- The chat launch's `resolved` flag and the service session's repeated watch
+  ending.
+
 ## Open
 
-1. **Lean's stderr tail is cut by hand.**
-   `packages/texra/src/tools/lean/direct/leanServer.ts` writes
-   `(tail + chunk).slice(-LIMIT)`; the MCP server uses the harness's
-   `appendTail`, which is not on a public entry. An export for one more
-   caller is not a gain; it becomes one when a third appears.
+1. **The chat's launch and resume claim a root launch the same way.**
+   `launchRootRun` and `resume` in
+   `packages/cli/src/chat/chatSessionController.ts` each write the mask, the
+   claim, the `ensuring(endLaunch)`, the fork on the shutdown scope and the
+   wait. One `rootLaunch(body, codeIfUnended)` would hold it. `held` could
+   then be read off the launch's `Deferred`, except that a launch cut after
+   `runValidated` and before the hand-over would answer `false` and put the
+   activated skills back into the input. Decide whether that edge matters.
+2. **`attachTo` reassigns `receive` from inside its frame loop**
+   (`packages/texra/src/controllers/server/windowHost.ts`). Only the
+   attachment id arrives late; a `Deferred` for the id lets the server be
+   built before the stream opens. A `call` frame before `attached` would
+   then be served and not dropped. Take it when the file is open.
+3. **The frame decoders copy the whole buffer on every chunk**
+   (`takeLines`, `takeFrames` in `packages/harness/src/tools/jsonRpc.ts`). A
+   multi-megabyte single-line MCP result is quadratic in copies. Not
+   measured. The fix is a scan offset and a chunk list, not an Effect module.
+4. **Lean passes no `cancel` hook**, so an interrupted LSP request is never
+   cancelled on the server with `$/cancelRequest`. A behavior gap, not a
+   helper.
 
 ## Checked and declined
 
@@ -79,6 +123,9 @@ The areas are already on the Effect modules. These landed with this note:
 
 ### Retry gate, stores, logging, the usage queue
 
+- **`ModelRetryGate` onto a `TxRef` and `txRetry`.** The wait is a timed
+  backoff, which a transaction retry cannot express, so the probe permit and
+  its release would stay.
 - **`JsonStore` onto `KeyValueStore.layerFileSystem`.** Effect's store is one
   file per key, written without a rename. `JsonStore` is one hand-edited JSON
   object with a synchronous read that follows the file, an atomic write and a
@@ -118,9 +165,6 @@ A dependency goes only when every import site converts. None does.
   document API, and its header lists syntax it does not read.
 - **`glob`**: `effect/Glob` matches a string; every site here walks a
   directory.
-- **`tar`**: `effect/encoding` `Tar` neither touches the file system nor
-  decompresses. The arXiv extraction needs both, with path checks on an
-  untrusted archive.
 - **`lru-cache`**: `Cache` is built and read in Effect, bounded by entry
   count. Six of eight sites are synchronous, one needs a size bound, the
   pollers copy the cache by value, and the two in Effect code are
@@ -143,8 +187,6 @@ A dependency goes only when every import site converts. None does.
   Effect has no `PATH` lookup and no `Content-Disposition` parser.
 - **`safe-stable-stringify`**: `Formatter.formatJson` does not sort keys, and
   `idHash.ts` hashes the output.
-- **`pretty-ms`**: `Duration.format` has no unit count (`1h 1m` against
-  `1h 1m 1s`).
 - **`pretty-bytes`**: `ByteSize.format` converts the one import site, with
   two decimals where there were three significant digits (`953.67 MiB` for
   `954 MiB`), and it throws on a fraction. A changed wording for one

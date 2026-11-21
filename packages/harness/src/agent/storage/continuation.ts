@@ -68,9 +68,9 @@ export const deriveContinuation = Effect.fn('deriveContinuation')(function* (
 
 /**
  * {@link deriveContinuation} over facts already read: a point its loop
- * opened, a run that is finished, or one waiting for a plugin. A resume,
- * which has read the run's facts for its own decision, asks this rather
- * than reading them again.
+ * opened, a run that is finished, or one waiting for a plugin. A resume
+ * and a recovered child, which have read the run's facts for their own
+ * decisions, ask this rather than reading them again.
  */
 export function continuationOf(
   facts: RunRows | null,
@@ -96,9 +96,9 @@ export function continuationOf(
 
 /**
  * {@link deriveContinuation} as a refusal, or null when the run may
- * continue; facts that could not be read right now fail. The one decider
- * for a run with no loop here: a message to a stored run and a recovered
- * child ask it, and a resume asks {@link continuationOf} over its own read.
+ * continue; facts that could not be read right now fail. The decider for
+ * a message to a stored run with no loop here; a resume and a recovered
+ * child ask {@link continuationOf} over their own read.
  */
 export const checkpointRefusal = Effect.fn('checkpointRefusal')(function* (
   runId: RunId,

@@ -43,6 +43,10 @@ import {
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
 
+import {
+  OWN_PROGRAMS_LISTED,
+  readOwnPrograms,
+} from '@agent/memory/ownPrograms';
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { ITool } from '@tools/core/ToolTypes';
@@ -53,9 +57,10 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
-  isInstalledProgram,
   PROGRAM_TOOL_NAME,
   programOf,
+  programOrigin,
+  type ProgramOrigin,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   SCRIPT_TOOL_NAME,
@@ -69,6 +74,7 @@ import {
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { readDisabledTools } from '@shared/state/disabledTools';
 import type { SessionTools } from '@tools/sessionTools';
+import { ToolRegistry } from '@tools/toolTable';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -172,6 +178,7 @@ function describedAtFreeze<T extends ResolvedTools>(
       scriptGlobal: tools.registry.get(definition.name)?.scriptGlobal,
       lane: tools.registry.get(definition.name)?.lane,
     }));
+  const offered = tools.definitions.map(({ name }) => name);
   const recorded = (name: string) => {
     const shown =
       state.offeredContext === null
@@ -189,7 +196,8 @@ function describedAtFreeze<T extends ResolvedTools>(
       : {
           ...definition,
           description:
-            recorded(definition.name) ?? describe(declared, modules, programs),
+            recorded(definition.name) ??
+            describe(declared, modules, programs, offered),
         };
   });
   const shown = new Map(
@@ -234,14 +242,25 @@ const openStep = Effect.fn('Step.open')(function* (
   // in progress (a plugin's start).
   const acquire = Effect.gen(function* () {
     const scope = yield* Effect.scope;
-    // A registered program's tools are fixed; anyone else's, an installed
-    // plugin's program's among them, follow the switches read live.
+    // What a program's origin grants its step: a listed program's tools
+    // are fixed; anyone else's, a program read from a file among them,
+    // follow the switches read live. The runs a program a plugin ships
+    // starts, listed or installed, stand approved by its launch.
     const program = programOf(run.config);
-    const trusted = program !== null && !isInstalledProgram(program.name);
-    // Every program is offered the tools that ask for approval, where no
-    // prompt can show too: its delegations stand approved by its launch, and
-    // any other call is still decided by the approval policy when made.
-    const off = trusted
+    const grants =
+      program === null
+        ? { toolsFixed: false, startsApproved: false }
+        : (
+            {
+              listed: { toolsFixed: true, startsApproved: true },
+              installed: { toolsFixed: false, startsApproved: true },
+              own: { toolsFixed: false, startsApproved: false },
+            } satisfies Record<
+              ProgramOrigin,
+              { toolsFixed: boolean; startsApproved: boolean }
+            >
+          )[programOrigin(program.name)];
+    const off = grants.toolsFixed
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
     const pinned = yield* (yield* ProjectTools).pin(off, {
@@ -249,13 +268,39 @@ const openStep = Effect.fn('Step.open')(function* (
       held: run.toolInputs.held,
     });
     const { policy, ...gates } = yield* liveToolGates(run);
+    // The step resolves against the table it read, as its calls do.
     const resolved = yield* resolveStepTools(pinned.entries, {
       ...run.toolInputs,
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
       directToolCalls: keepsDirectToolCalls(yield* ScopedRef.get(run.model)),
-      ...(program !== null && { approvalPromptsUnavailable: false }),
-    });
+      // A program a plugin ships is offered the tools that ask for
+      // approval, where no prompt can show too: its delegations stand
+      // approved by its launch, and any other call is still decided by the
+      // approval policy when made. One the agent wrote for itself is
+      // offered what the agent would be.
+      ...(grants.startsApproved && {
+        approvalPromptsUnavailable: false,
+      }),
+    }).pipe(Effect.provideService(ToolRegistry, pinned.table));
+    // The programs the project's agent wrote for itself, as their files
+    // read now: a file written during one step is a program at the next.
+    // All of them load; the description names the first by name. The run
+    // of a program a plugin ships loads none: what it imports would run
+    // under the approval its launch gave it, which the agent's own text
+    // never gets. It can still start one, as a run of its own. A step that
+    // offers neither `script` nor `program` can import or start none, so it
+    // reads none and does not wait on the directory listing.
+    const runsPrograms =
+      resolved.registry.has(SCRIPT_TOOL_NAME) ||
+      resolved.registry.has(PROGRAM_TOOL_NAME);
+    const own =
+      grants.startsApproved || !runsPrograms
+        ? { loaded: [], refused: [] }
+        : yield* readOwnPrograms(roots.storage);
+    const unlisted = new Set(
+      own.loaded.slice(OWN_PROGRAMS_LISTED).map(({ name }) => name),
+    );
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     // A plugin whose dependency is missing gives the step no program and no
     // prompt section, as it gives it no tool.
@@ -266,7 +311,12 @@ const openStep = Effect.fn('Step.open')(function* (
     // resumed script runs the code it ran with.
     const imported =
       held === null
-        ? pinned.modules
+        ? {
+            ...pinned.modules,
+            ...Object.fromEntries(
+              own.loaded.map(({ name, source }) => [name, source]),
+            ),
+          }
         : Record.map(state.offeredWith.modules, (at) =>
             stored(state, at, Schema.String),
           );
@@ -274,7 +324,7 @@ const openStep = Effect.fn('Step.open')(function* (
       held?.tools ?? resolved,
       state,
       run.toolInputs.tools,
-      Object.keys(imported),
+      Object.keys(imported).filter((specifier) => !unlisted.has(specifier)),
       // Only a run offered `program` can start one.
       resolved.registry.has(PROGRAM_TOOL_NAME)
         ? [
@@ -291,6 +341,9 @@ const openStep = Effect.fn('Step.open')(function* (
                 name,
                 description,
               })),
+            ),
+            ...own.loaded.flatMap(({ name, description }) =>
+              unlisted.has(name) ? [] : [{ name, description }],
             ),
           ]
         : [],
@@ -373,6 +426,7 @@ const openStep = Effect.fn('Step.open')(function* (
       },
       warnings: [
         ...pinned.warnings,
+        ...own.refused,
         ...resolved.warnings,
         ...(held?.notes ?? []),
         ...catalog.issues.map(
@@ -405,7 +459,15 @@ const openStep = Effect.fn('Step.open')(function* (
   const withheldChanged =
     step.withheld.length > 0 &&
     step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
-  const warnings = toolsChanged || skillsChanged ? [...step.warnings] : [];
+  // Every warning where the offer changed; otherwise only those the last
+  // step did not give (a plugin enabled that does not load changes no
+  // offer, and says why once).
+  const warnings =
+    toolsChanged || skillsChanged
+      ? [...step.warnings]
+      : step.warnings.filter(
+          (warning) => previous?.warnings.includes(warning) !== true,
+        );
   if (withheldChanged) {
     warnings.push(
       `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,

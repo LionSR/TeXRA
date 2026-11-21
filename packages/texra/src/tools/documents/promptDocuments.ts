@@ -7,7 +7,7 @@ import { basename, isAbsolute, join } from 'node:path';
 
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import { pathToLocationIn } from '@texra-ai/harness/host';
+import { pathToLocationIn } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 
 /**

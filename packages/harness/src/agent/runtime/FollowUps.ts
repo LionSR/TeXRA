@@ -22,6 +22,7 @@
  */
 import {
   Array as Arr,
+  Clock,
   Effect,
   type FileSystem,
   Result,
@@ -29,7 +30,11 @@ import {
   ScopedRef,
 } from 'effect';
 
-import { userFollowUpInstruction } from '@agent/followUp/followUpMessages';
+import {
+  userFollowUpInstruction,
+  wakeNoteText,
+  wakeNotes,
+} from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/Inbox';
 import type {
   FollowUpBatch,
@@ -42,7 +47,7 @@ import {
   type StoredInputPart,
 } from '@shared/schemas';
 import { consumedRow, isInstruction } from '@shared/session/runFacts';
-import type { QueuedFollowUp } from '@shared/session/runRows';
+import type { QueuedMessage } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { followUpDisplay } from '@shared/subagentFollowup';
@@ -118,25 +123,33 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   /** The canonical user message of one batch: every item's text as its
    *  own part, media parts after it; `kinds[i]` is item i's badges. A
    *  child's delivery is rendered here, once, as the envelope the model
-   *  reads (`formatDelivery`). The media is the row's by address; a PDF for
+   *  reads (`formatDelivery`), and a note the run wrote to itself as its
+   *  own (`wakeNoteText`). The media is the row's by address; a PDF for
    *  a model that takes images but no PDF is sent as its pages, as an
    *  opening message's is. A medium the model does not take, or one whose
    *  pages cannot be rendered, is a text part saying so
    *  (`skippedMediaPart`): the model is told, in the row that carries the
    *  message. */
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
-    followUps: readonly QueuedFollowUp[],
+    followUps: readonly QueuedMessage[],
   ) {
     const { capabilities } = (yield* ScopedRef.get(run.model)).config;
     const parts: (InputPart | StoredInputPart)[] = [];
     const kinds: (readonly MediaAttachmentKind[])[] = [];
-    for (const { content } of followUps) {
+    const now = yield* Clock.currentTimeMillis;
+    // A note the run wrote to itself is framed here as a delivery is.
+    const notes = new Map(wakeNotes(followUps).map((note) => [note.id, note]));
+    for (const { followUpId, content } of followUps) {
       if ('delivery' in content) {
         parts.push({ kind: 'text', text: formatDelivery(content.delivery) });
         kinds.push([]);
         continue;
       }
-      parts.push({ kind: 'text', text: content.text });
+      const note = notes.get(followUpId);
+      parts.push({
+        kind: 'text',
+        text: note === undefined ? content.text : wakeNoteText(note, now),
+      });
       const badges: MediaAttachmentKind[] = [];
       for (const { name, mimeType, digest } of content.media ?? []) {
         const part = storedMediaPart(mimeType, digest, capabilities);
@@ -166,7 +179,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   });
 
   const logFollowUps = (
-    followUps: readonly QueuedFollowUp[],
+    followUps: readonly QueuedMessage[],
     kinds: readonly (readonly MediaAttachmentKind[])[],
   ): void => {
     for (const [i, { content }] of followUps.entries()) {

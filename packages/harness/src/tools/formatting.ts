@@ -1,6 +1,7 @@
 // Third-party imports
 import { Schema, SchemaGetter } from 'effect';
 import type { ToolFileAttachment } from '@shared/schemas';
+import { optionalInput } from './core/inputSchema';
 
 const LineNumberSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
 
@@ -8,10 +9,10 @@ const LineRangeObjectSchema = Schema.Struct({
   start: LineNumberSchema.annotate({
     description: 'First line, 1-indexed.',
   }),
-  end: Schema.optional(Schema.NullOr(LineNumberSchema)).annotate({
-    description:
-      'Last line, inclusive and 1-indexed; the end of the file when omitted.',
-  }),
+  end: optionalInput(
+    LineNumberSchema,
+    'Last line, inclusive and 1-indexed; the end of the file when omitted.',
+  ),
 }).check(
   Schema.makeFilter(
     (value) =>

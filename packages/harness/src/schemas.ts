@@ -39,6 +39,11 @@ export {
   isSubscriptionAuthProvider,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
+// Why a plan's quota endpoint answered no usage windows.
+export {
+  PlanQuotaFailureSchema,
+  type PlanQuotaFailure,
+} from '@shared/model/planQuota';
 // Reads of a `SessionView` for a renderer: what needs a person, how busy
 // the session is, where each run stands, what `acceptsFollowUp` reads.
 export {
@@ -74,7 +79,7 @@ export type {
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
 export type { RunStanding } from '@shared/session/runRowReads';
-// A follow-up queued for a run, as its row holds it (`InboxItem.control`).
+// A follow-up queued for a run, as its row holds it (a message, a delivery, or the run's own `control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
@@ -95,6 +100,8 @@ export type {
   FileListEntry,
   FileLocation,
   FinishedToolResult,
+  FollowUpContent,
+  FollowUpControl,
   FollowUpSender,
   HookEvent,
   InlinePersona,
@@ -295,6 +302,9 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// How a host that prints log entries as text words one: its line and what
+// it carries beyond it.
+export { entryDetail, entryLine } from '@logger/logSink';
 // A model call's failure as a run records it (its verdict), its plain
 // words and a run end's, and the used-up plan it names, for an app that
 // words it itself.
@@ -355,6 +365,8 @@ export {
   isRunId,
   isPlainAgentIdentity,
   programOf,
+  programOrigin,
+  type ProgramOrigin,
   LaunchNoticeSchema,
   NonNegativeIntSchema,
   listingTypeOf,
@@ -367,6 +379,7 @@ export {
   FileFieldsSchema,
   type Plan,
   type PlanApprovalRequest,
+  type PluginTrustRequest,
   planOf,
   planSummaryLine,
   type RequestKind,
