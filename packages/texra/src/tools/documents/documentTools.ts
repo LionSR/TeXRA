@@ -8,7 +8,7 @@
  * a resumed program replays against the rows.
  */
 // Node imports
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
@@ -104,57 +104,6 @@ const autoOpensPdf = (docs: Documents) =>
 const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
 
 /**
- * Fail a context that attaches an oversized bibliography file, before any
- * model reads it. `workspaceRoot` is the owning session's workspace folder,
- * handed in as data so a relative path resolves against its own session.
- */
-const rejectOversizedBibAttachments = Effect.fn(
-  'rejectOversizedBibAttachments',
-)(function* (
-  workspaceRoot: string | undefined,
-  contextFiles: readonly string[],
-): Effect.fn.Return<
-  void,
-  ToolError | PlatformError.PlatformError,
-  FileSystem.FileSystem
-> {
-  const fs = yield* FileSystem.FileSystem;
-  const bibFiles = contextFiles
-    .filter((file) => file.trim() !== '')
-    .filter((file) => hasExtension(file, '.bib'));
-
-  for (const bibFile of bibFiles) {
-    // A relative path names a workspace file, which needs a folder open.
-    let absolute = bibFile;
-    if (!isAbsolute(bibFile)) {
-      if (!workspaceRoot) {
-        return yield* new ToolError('Workspace path is not available.');
-      }
-      absolute = join(workspaceRoot, bibFile);
-    }
-    // `FileSystem.stat` follows a link; a link whose target does not
-    // resolve is measured as no file, as a path `readLink` cannot name is
-    // no entry at all.
-    const stats = yield* fs.stat(absolute).pipe(
-      Effect.catch((error) =>
-        fs.readLink(absolute).pipe(
-          Effect.as(undefined),
-          Effect.mapError(() => error),
-        ),
-      ),
-    );
-    if (stats === undefined) continue;
-    if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
-
-    const sizeBytes = Number(stats.size);
-    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. If citations are needed, write the entries the document cites to a smaller .bib file (find each key with grep, then copy its whole record, which spans several lines), and start the program again with that file in place of the full one.`;
-    return yield* new ToolError(message, {
-      summary: 'Rejected oversized BibTeX attachment',
-    });
-  }
-});
-
-/**
  * What the first revision checks before the task does any work, whichever
  * launcher or resume reached it: the documents it revises exist, and no
  * context `.bib` is too large to attach whole. It writes the files-loaded
@@ -172,22 +121,33 @@ const openTask = Effect.fn('documents.openTask')(function* (
   // A file is loaded when it reads: a directory or an unreadable path is
   // not, though it exists. Why it did not read is kept for the refusal. The
   // probe checks the type and the permission; the bytes are read later.
+  type Probe = { readonly error: string | null; readonly size: number };
   const located = (files: readonly string[]) =>
     Effect.forEach(
       files.filter(Boolean),
       (file) => {
         const absolutePath = sourceLocationUnder(roots, file).absolutePath;
         return fs.stat(absolutePath).pipe(
-          Effect.flatMap((info) =>
-            info.type === 'File'
-              ? Effect.as(fs.access(absolutePath, { readable: true }), null)
-              : Effect.succeed(`not a file (${info.type})`),
+          Effect.flatMap(
+            (info): Effect.Effect<Probe, PlatformError.PlatformError> =>
+              info.type === 'File'
+                ? Effect.as(fs.access(absolutePath, { readable: true }), {
+                    error: null,
+                    size: Number(info.size),
+                  })
+                : Effect.succeed({
+                    error: `not a file (${info.type})`,
+                    size: 0,
+                  }),
           ),
-          Effect.catch((error) => Effect.succeed(toErrorMessage(error))),
-          Effect.map((error) => ({
+          Effect.catch((error) =>
+            Effect.succeed({ error: toErrorMessage(error), size: 0 }),
+          ),
+          Effect.map(({ error, size }) => ({
             path: file,
             absolutePath,
             error,
+            size,
             ok: error === null,
           })),
         );
@@ -205,12 +165,21 @@ const openTask = Effect.fn('documents.openTask')(function* (
       }`,
     );
   const contexts = yield* located(config.contextFiles);
-  // A missing context file is skipped, as the prompt skips it; only the
-  // files found are measured.
-  yield* rejectOversizedBibAttachments(
-    docs.deps.roots.workspace,
-    contexts.filter((context) => context.ok).map((c) => c.absolutePath),
+  // No context `.bib` too large to attach whole reaches a model. A missing
+  // context file is skipped, as the prompt skips it; only the files found
+  // are measured.
+  const oversizedBib = contexts.find(
+    (context) =>
+      context.ok &&
+      hasExtension(context.absolutePath, '.bib') &&
+      context.size > LARGE_BIB_LIMIT_BYTES,
   );
+  if (oversizedBib) {
+    return yield* new ToolError(
+      `${oversizedBib.absolutePath} is ${oversizedBib.size} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. If citations are needed, write the entries the document cites to a smaller .bib file (find each key with grep, then copy its whole record, which spans several lines), and start the program again with that file in place of the full one.`,
+      { summary: 'Rejected oversized BibTeX attachment' },
+    );
+  }
   // One files-loaded card per category, its label each file's source.
   const logCategory = (category: string, files: typeof inputs) => {
     if (files.length === 0) return;

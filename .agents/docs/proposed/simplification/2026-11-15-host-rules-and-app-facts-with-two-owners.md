@@ -280,3 +280,31 @@ In order of size. Each needs the decision named.
   for each project the desktop has open. Either `Dialogs` gains
   `notify(level, message, action)`, or the follower stays one per process
   and only its wording is shared.
+
+## Landed in the 2026-11-21 sweep
+
+- **The helper model of a merge.** `HostRunActions.merge` read the helper
+  model itself (`getHelperModelName ?? DEFAULT_AGENT_MODEL`), beside the
+  session's `servableHelperModel`; it now launches with `helperModel: true`
+  as the compile fixer and Fix Compilation do, so a helper model that cannot
+  serve falls back to the default agent model with a logged swap.
+- **A failed final-output open.** The extension's `previewFinalOutput`
+  warn-logged its own failure, the rule `hostRunActions`' `whenEnded`
+  already applies for every host; the shared rule logs it once.
+- **Which files a launcher field takes.** The extension's "add opened
+  files" rebuilt the drop's extension test; `fieldTakes`
+  (`packages/texra/src/controllers/mainView/MainViewDroppedFilesController.ts`)
+  is the one test.
+- Write-only fields of a desktop project binding (`snapshot`,
+  `runValidated`, `present`) are gone.
+
+## Still open after the 2026-11-21 sweep
+
+- `openGuiWindow` returns `present`, which no host reads now that the
+  desktop binding dropped it. The file was held by an open PR that day.
+- **Where a tool edit's staged pair lives** is decided per host: the
+  desktop makes a directory per request and removes it whole, the extension
+  writes into its storage directory and unlinks the two files
+  (`packages/texra/src/controllers/approval/tempFileManager.ts` documents
+  both). One staging owner would move the extension's previews out of its
+  storage directory, a visible change that needs a decision.

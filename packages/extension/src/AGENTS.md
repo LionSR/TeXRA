@@ -5,7 +5,7 @@ extension host and its webviews (`progressView`, `settingsView`).
 
 ## Directory organization
 
-- `packages/extension/src/frontend/` - Extension-host adapters behind the shared UI flows: `hosts/` (the app's dialogs and the browser opener over VS Code), `approval/` (tool-edit previews and diff tabs), `editor/` and `vscode/` (editor and event helpers), `latex/` (LaTeX build, inline criticism), `comments/` (inline comment threads), `events/` (the runtime's notices), `auth/`, `statusBar/`, `system/`, `ui/`, and `agents/` (the final-output opener). Use them instead of duplicating logic in commands or webviews.
+- `packages/extension/src/frontend/` - Extension-host adapters behind the shared UI flows: `hosts/` (the app's dialogs and the browser opener over VS Code), `approval/` (tool-edit previews and diff tabs), `editor/` and `vscode/` (editor and event helpers), `latex/` (LaTeX build, inline criticism), `comments/` (inline comment threads), `events/` (the runtime's notices), `auth/`, `statusBar/`, `system/` and `ui/`. Use them instead of duplicating logic in commands or webviews.
 - `packages/extension/src/common/` - Extension-only helpers: the webview content provider (`webview/BundledViewContentProvider.ts`, which also builds the webview HTML) and shared styles.
 
 ## Webviews
@@ -21,4 +21,4 @@ Generate HTML through `BundledViewContentProvider` and include every common modu
 
 - Surface errors with `showLoggedErrorMessage` / `showLoggedMessageWithDocs` (`packages/extension/src/frontend/ui/errorHandlingUtils.ts`) for consistent telemetry and doc links.
 - Run VS Code commands with `safeExecuteCommand` (`packages/extension/src/frontend/system/commandUtils.ts`) and shell commands with `executeCommand` (`packages/harness/src/utils/system/execUtils.ts`).
-- Notices are `vscodeUi` (`packages/extension/src/frontend/hosts/VscodeUiHost.ts`) and the logged helpers above; `packages/extension/src/frontend/ui/dialogs.ts` holds the pickers, and `instruction.ts` the dismissible instruction banners.
+- Notices are `vscodeUi` (`packages/extension/src/frontend/hosts/VscodeUiHost.ts`) and the logged helpers above; `packages/extension/src/frontend/ui/dialogs.ts` holds the pickers.

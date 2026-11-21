@@ -108,7 +108,7 @@ interface ProposalRef {
  * on an agent's proposal (a proposal card's Edit), whose Send approves that
  * request with the form's changes.
  */
-export type Shown =
+type Shown =
   | { readonly _tag: 'New' }
   | { readonly _tag: 'Run'; readonly runId: RunId }
   | ({ readonly _tag: 'Proposal' } & ProposalRef);

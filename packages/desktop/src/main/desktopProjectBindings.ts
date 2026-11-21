@@ -9,13 +9,10 @@ import { homedir } from 'node:os';
 
 import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
-import type { Notices } from '@texra-ai/harness';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
-import { type HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   openGuiWindow,
   type GuiWindowSettingsRuns,
@@ -51,13 +48,8 @@ interface ProjectBinding {
   readonly bridge: SessionBridge;
   /** This window's port on the project's bridge. */
   readonly port: AttachedPort;
-  readonly snapshot: HostSnapshotSource;
-  /** The project's launcher (`HostRunActions.runValidated`). */
-  readonly runValidated: HostRunActions['runValidated'];
   /** The settings view's verbs on the project's runs. */
   readonly settingsRuns: GuiWindowSettingsRuns;
-  /** Where a failure before one of its runs opens is presented. */
-  readonly present: Notices;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
   /** The binding's lifetime; closing it releases everything above. */
@@ -276,7 +268,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             openExternalUrl: host.openExternalUrl,
           }),
       });
-      const { bridge, snapshot, present, runValidated, settingsRuns } = gui;
+      const { bridge, snapshot, settingsRuns } = gui;
       // Registered after the host requests, so a port's release (its map
       // entry, its transcript set, `onPortClosed`) precedes their release, as
       // the extension's `dispose` orders them; awaited, unlike the bridge's.
@@ -293,10 +285,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         project,
         bridge,
         port,
-        snapshot,
-        runValidated,
         settingsRuns,
-        present,
         workspace,
         browserViews,
       };
