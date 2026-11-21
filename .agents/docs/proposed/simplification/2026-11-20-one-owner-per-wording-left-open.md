@@ -29,13 +29,11 @@ Each needs a decision or changes behavior beyond a consolidation.
    first; `packages/harness/src/agent/prompt/workspaceInfo.ts` reads `ComSpec`
    on Windows. With Git Bash's `SHELL` set, the terminal says bash while the
    system prompt says cmd. Decide the precedence, then one harness reader.
-2. **A file path to a language id, twice.**
-   `packages/desktop/src/shared/monacoLanguage.ts` (Monaco) and
-   `getLanguageFromPath` in
-   `packages/texra/src/ui/progress/formatters/logFormatters/toolFormatters/toolSections.ts`
-   (highlight.js) parse the extension the same way and have drifted (`dtx`,
-   `tikz`, `bst` in one, `bbl` in the other). One extension table in
-   `packages/texra/src/ui/` with each renderer's renames beside it.
+2. **A file path to a language id, twice.** Taken on 2026-11-21: one
+   extension table in `packages/texra/src/ui/highlighting/languageForPath.ts`
+   over the union of both, with Monaco's and highlight.js's renames beside it;
+   the desktop's `monacoLanguage.ts` and the progress view's
+   `getLanguageFromPath` are gone.
 3. **Newest-first runs, three orders.** `packages/harness/src/shared/runs/runOrdering.ts`
    orders by `createdAt`, as `SessionView` documents; `executionListing.ts`
    (`packages/harness/src/tools/executions/`) and
