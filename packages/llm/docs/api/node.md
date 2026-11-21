@@ -368,8 +368,8 @@ reports. Providers may add fields via intersection types.
 ```ts
 type SubscriptionSession =
   (typeof SubscriptionSessionBaseSchema)['Type'] & {
-    email?: string;
-    accountId?: string;
+    email?: string | undefined;
+    accountId?: string | undefined;
   };
 ```
 
