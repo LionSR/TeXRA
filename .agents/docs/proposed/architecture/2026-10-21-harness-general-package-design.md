@@ -481,7 +481,11 @@ Open, for the owner:
   data.
 - Names an embedder's users see that carry the app's word: the store file
   `texra.db`, the `TEXRA_APPROVAL_POLICY` and `TEXRA_SKILL_DIR` variables,
-  and "Another TeXRA process holds this project".
+  and "Another TeXRA process holds this project". Landed 2026-11-21: the
+  store file and the two variables derive from the settings catalog's
+  namespace (`AppNamespace`, `utils/system/appNamespace.ts`, served by the
+  process layer and exported from `./node`); the message lost the product
+  name on 2026-11-20.
 
 ### The built-ins leave `./plugins` (2026-11-21)
 

@@ -333,7 +333,7 @@ process.stdin.on('end', function answer() {
     TEXRA_NO_SERVICE: '1',
     [VALIDATION_SWITCH]: '1',
     [VALIDATION_FLAG]: flag,
-    TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
+    HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const argv = (command) => [binaryPath, ...command, '--cwd', project];

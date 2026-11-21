@@ -182,7 +182,7 @@ export default defineConfig({
     // Every run a suite drives checks, before each model request, that its
     // rows rebuild the turn it sends (`checkRecordedRequest`). Processes a
     // suite spawns inherit the switch.
-    env: { TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1' },
+    env: { HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1' },
     // A local run shares the machine with the editor and with a second run
     // (another worktree, a watcher), so it takes half the cores: two runs fill
     // the machine and no more. CI owns its runner and keeps Vitest's default.

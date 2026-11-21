@@ -18,7 +18,7 @@ import { Settings, type ConfigProvider } from '@texra-ai/harness/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
   meansAbsent,
-  APPROVAL_POLICY_ENV,
+  approvalPolicyEnv,
   canonicalizeWorkspaceRoot,
 } from '@texra-ai/harness/node';
 import {
@@ -40,7 +40,10 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 import { loadCliStartupConfig } from './cliConfig';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
-import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settings/texraSettings';
+import {
+  CLI_OUTPUT_FORMAT_SETTING,
+  TEXRA_SETTINGS,
+} from '@texra/shared/settings/texraSettings';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -452,7 +455,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       (noInput
         ? APPROVAL_POLICY_NO_INPUT_DEFAULT
         : yield* pickEnv(
-            APPROVAL_POLICY_ENV,
+            approvalPolicyEnv(TEXRA_SETTINGS.catalog.namespace),
             parseApprovalPolicy,
             configWarnings,
           ));

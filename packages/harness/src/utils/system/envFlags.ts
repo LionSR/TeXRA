@@ -28,6 +28,7 @@ import {
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
 
+import { AppNamespace, appEnvName } from '@utils/system/appNamespace';
 import { environment } from '@utils/system/nodeWorkspace';
 import { envNameKey } from '@utils/system/platformPaths';
 
@@ -66,15 +67,17 @@ export const envFlag = (
     : Effect.succeed(isEnvFlagValueOn(env[name]));
 
 /** The variable a person's own invocation requests an approval policy
- *  with; never a project's `.env`, and never a nested process's. */
-export const APPROVAL_POLICY_ENV = 'TEXRA_APPROVAL_POLICY';
+ *  with (`<NAMESPACE>_APPROVAL_POLICY`); never a project's `.env`, and never
+ *  a nested process's. */
+export const approvalPolicyEnv = (namespace: string): string =>
+  appEnvName(namespace, 'APPROVAL_POLICY');
 
 /**
  * The environment a child process the harness spawns starts from: this
  * process's with its project's `.env` variables over it (`environment`),
  * minus every provider API-key variable the harness reads as its own credential
  * ({@link API_KEY_ENV_NAMES}) and the requested approval policy
- * ({@link APPROVAL_POLICY_ENV}). What a child prints lands in tool results and
+ * ({@link approvalPolicyEnv}). What a child prints lands in tool results and
  * the transcript, so the key is never there to print. `keep` names the one
  * provider whose key a child agent CLI authenticates with itself. Windows
  * matches variable names case-insensitively, as its environment does.
@@ -83,13 +86,17 @@ export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
   keep?: ApiKeyProviderId,
 ): Effect.fn.Return<Record<string, string>> {
   const env = yield* environment;
+  // Read where served, not required: every process runtime serves it (its
+  // stores require it), and a bare program outside one has no app whose
+  // variable a child could inherit.
+  const namespace = yield* Effect.serviceOption(AppNamespace);
   const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
   // A project's `.env` never reaches a nested harness process as a requested
   // approval policy: only the user's own invocation asks for one.
   const withheld = new Set(
     [
       ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
-      APPROVAL_POLICY_ENV,
+      ...Option.toArray(Option.map(namespace, approvalPolicyEnv)),
     ].map(envNameKey),
   );
   return EffectRecord.filter(

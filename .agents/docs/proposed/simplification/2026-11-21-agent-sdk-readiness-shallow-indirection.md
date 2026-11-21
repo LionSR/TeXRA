@@ -98,6 +98,7 @@ is not re-mined.
    (`texra.db`, `TEXRA_APPROVAL_POLICY`, `TEXRA_SKILL_DIR`): a stored-name /
    env-key change deferred to the first release
    ([2026-11-20-agent-sdk-readiness-audit.md](2026-11-20-agent-sdk-readiness-audit.md)).
+   Landed 2026-11-21: the names derive from the settings catalog's namespace.
 2. **Model handler** — the three product-visible defaults in
    [2026-11-18-model-access-one-owner-per-question.md](2026-11-18-model-access-one-owner-per-question.md):
    which models the launcher's picker lists, whether a delegation may name a

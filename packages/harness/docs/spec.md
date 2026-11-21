@@ -87,8 +87,9 @@ its kind is its `type` column.
 
 ### 2.1 One file per storage root
 
-The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/databaseLayer.ts#SESSION_DATABASE_FILE`). An ephemeral
+The store is one SQLite file under the storage root, named for the app's
+settings namespace: `<namespace>.db`, so `texra.db` for TeXRA
+(`utils/system/appNamespace.ts#storeFileName`). An ephemeral
 session runs the same schema in memory
 (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 

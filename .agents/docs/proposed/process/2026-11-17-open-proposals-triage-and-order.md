@@ -229,8 +229,10 @@ What is left for the owner falls into five kinds. Nothing below was touched.
 - A bounded `quick_check` at open that moves a failing file aside (store
   review F12). A file moved aside stays aside.
 - Renaming `texra.db` and the `TEXRA_*` variables to app-supplied names.
-  Whether `release/0.40` writes a `texra.db` was not established; if it
-  does, the rename is of this kind.
+  Landed 2026-11-21: they derive from the settings catalog's namespace
+  (`AppNamespace`), so TeXRA's own names do not change and nothing an
+  install holds moves. `release/0.40` writes no `texra.db` (its tree names
+  the file only in a PRD under `docs/prds/`).
 - Programs phase 5 and its question 1 (are project and user skill
   directories still loaded; are an installed plugin's agents kept as
   sub-runs or not loaded). Phase 5 deletes the agent catalog and changes

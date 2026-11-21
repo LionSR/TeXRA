@@ -380,10 +380,12 @@ the session store's source; in short:
 
 ## Generated files and deletion
 
-Under its storage root a session owns the store (`texra.db`) and one
+Under its storage root a session owns the store (`<namespace>.db`, named
+for the settings catalog's namespace: `harness.db` unless `nodePlatform`
+is given a catalog of the embedder's own) and one
 directory per run, `executions/<runId>/`, holding the files the run
 generated. A deletion removes nothing else: the project's own files are
-never touched, and a store moved aside (`texra.db.corrupt-<ms>`) is never read again
+never touched, and a store moved aside (`<namespace>.db.corrupt-<ms>`) is never read again
 and goes only when a person deletes it (`deleteStorageInventory`, which
 `texra doctor --prune-storage` runs after asking).
 

@@ -7,8 +7,7 @@ import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { globalValuesOver } from '@test/support/fsTestUtils';
+import { globalValuesOver, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { linkService } from '@texra/controllers/server/client';
 import {
   claimServiceRecord,
@@ -124,7 +123,7 @@ describe('linkService', () => {
           Effect.provide(
             globalValuesOver(
               globalDatabaseLayer(storageRoot).pipe(
-                Layer.provide(nodeSpawnerLayer),
+                Layer.provide(nodePlatformLayer),
                 Layer.orDie,
               ),
             ),

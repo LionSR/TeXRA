@@ -82,8 +82,9 @@ export { runsInWsl } from '@utils/system/wslDetect';
 // unset, empty, `0`, `false`, `no` or `off` is on), and the environment a
 // child agent CLI starts from (no provider key but the one it authenticates
 // with).
+export { AppNamespace } from '@utils/system/appNamespace';
 export {
-  APPROVAL_POLICY_ENV,
+  approvalPolicyEnv,
   envFlag,
   envVar,
   inheritedEnv,

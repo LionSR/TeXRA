@@ -60,6 +60,7 @@ import type { ToolTable } from '@tools/toolTable';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { AppNamespace } from '@utils/system/appNamespace';
 import { databaseLayer } from './databaseLayer';
 import { globalDatabaseLayer } from './globalDatabaseLayer';
 import { processStoresLayer } from './appStateStore';
@@ -395,6 +396,8 @@ export function ownerProcessLayer(
           ),
         ),
         workspaceEnvironmentLayer(workspace),
+        // The app's word for the store file and its variables.
+        Layer.succeed(AppNamespace)(settings.namespace),
       ),
     ),
   );

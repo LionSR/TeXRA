@@ -19,12 +19,9 @@ import {
 import { GlobalValues } from '@platform/processRuntime';
 import { Database, ProjectDatabases } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
+import { AppNamespace, storeFileName } from '@utils/system/appNamespace';
 
-import {
-  databaseLayer,
-  SESSION_DATABASE_FILE,
-  storeOpenElsewhere,
-} from './databaseLayer';
+import { databaseLayer, storeOpenElsewhere } from './databaseLayer';
 import { asideCopies } from './storeAside';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 
@@ -85,6 +82,7 @@ export const projectStores = Effect.fn('projectStores')(function* (
 export const readStorageInventory = Effect.fn('readStorageInventory')(
   function* (storageRoot: string) {
     const fs = yield* FileSystem.FileSystem;
+    const storeName = storeFileName(yield* AppNamespace);
     const records = new Map(
       (yield* projectStores(storageRoot)).map(
         ({ workspace, storage }) =>
@@ -110,7 +108,7 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
           directory === global || id === path.basename(none)
             ? undefined
             : records.get(id);
-        const database = path.join(directory, SESSION_DATABASE_FILE);
+        const database = path.join(directory, storeName);
         if (record === undefined || (yield* fs.exists(record.root))) {
           asides.push(...(yield* asideCopies(database)));
           return;
@@ -161,6 +159,7 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
     inventory: Pick<StorageInventory, 'orphans' | 'asides'>,
   ) {
     const fs = yield* FileSystem.FileSystem;
+    const storeName = storeFileName(yield* AppNamespace);
     const fresh = yield* readStorageInventory(storageRoot);
     const listed = new Set([
       ...fresh.orphans.map(({ directory }) => directory),
@@ -174,7 +173,7 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
             outcome: 'failed' as const,
             message: `no longer listed in the inventory of ${storageRoot}; left in place`,
           };
-        const database = path.join(target, SESSION_DATABASE_FILE);
+        const database = path.join(target, storeName);
         if (
           store &&
           (yield* fs.exists(database)) &&
