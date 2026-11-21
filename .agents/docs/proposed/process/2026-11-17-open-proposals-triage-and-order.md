@@ -239,9 +239,11 @@ What is left for the owner falls into five kinds. Nothing below was touched.
 
 **It changes what a person gets by default.**
 
-- Model access: which models the launcher lists; whether a delegation may
-  name a model the list hides; what the GUI does when a plan is turned on
-  while signed out.
+- Model access: decided and landed on 2026-11-21
+  (`.agents/docs/implemented/simplification/2026-11-18-model-access-one-owner-per-question.md`):
+  the launcher lists what the terminal lists, a delegation names only a
+  model it was told, and a plan turned on while signed out is not written
+  until the sign-in the host starts succeeds.
 - Subscriptions: which credential serves a person who holds both a plan and
   a key (it decides who is billed); dropping "Experimental" from the ChatGPT
   plan; the four features of that note (limit reset time, helper model,

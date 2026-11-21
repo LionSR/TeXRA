@@ -1,7 +1,8 @@
 # Model access: one owner per question, and the questions left open
 
 Date: 2026-11-18
-Status: proposed (four questions landed with this note; three are open)
+Status: implemented (the three questions left open were decided and landed
+on 2026-11-21)
 Origin: applying the owner's rule that a host has no service functions or
 error types of its own to the terminal client's model layer
 (`packages/cli/src/runtime/models/`), against how the GUI hosts choose and
@@ -23,46 +24,45 @@ the app's controllers; a row marked _landed_ changed with this note.
 | Each subscription's status                    | _landed_: `subscriptionAuthStatuses` (`packages/texra/src/controllers/modelAccess/subscriptionProviders.ts`)                                                                                                                                                                      | the same                                                                                                                                                                                            |
 | How a sign-in starts                          | `subscriptionProvider(id).signIn` with the host's presenter (`packages/desktop/src/main/desktopSignInPresenters.ts`)                                                                                                                                                              | the same, with the terminal's presenter (`packages/cli/src/runtime/models/subscriptionLogin.ts`); _landed_: its browser launch fails with the app's `HostFailed`                                    |
 
-## Open
+## Decided on 2026-11-21
 
-Checked against `main` on 2026-11-19: all three still stand as written, and
-each waits on the decision its last sentence names. None can land without it.
+The three questions this note left for the owner, each as it was settled.
 
-1. **Which models the launcher's picker lists.** The progress view's
-   launcher reads the enabled models alone
-   (`packages/texra/src/controllers/session/hostSnapshotSource.ts` passes
-   `getEnabledModels`); the terminal's `/model`, `texra models list` and
-   delegation read the harness's default list, which adds every model the
-   ChatGPT subscription serves once signed in (`visibleModelsForAccess`).
-   Signed in to ChatGPT, the terminal offers models the launcher does not.
-   Either is defensible: the harness's list saves enabling each Codex model,
-   while the launcher's honours a model switched off in the Models tab. It
-   is a product-visible default, so the owner decides; the change is one
-   argument in `hostSnapshotSource.ts`, or the ChatGPT branch of
-   `visibleModelsForAccess`.
-2. **A model the picker hides.** `chooseLaunchModel` runs a catalog model a
-   launch names even when it is not enabled; delegation refuses it with
-   "not currently available for delegation", because it checks a launch
-   against the list it told the model. Making delegation call the app's
-   rule is not possible (the harness imports no app); moving
-   `chooseLaunchModel` into the harness beside `decideRunModel` would let
-   delegation use it, at the cost of the delegation prompt listing models a
-   launch accepts beyond them. Decide whether a delegation may name an
-   unlisted model first.
-3. **Turning a model-access preference on or off.** `updateCliModelAccess`
-   (`packages/cli/src/runtime/models/modelAccessSelection.ts`) toggles a
-   subscription (signing in first when the account is signed out) or a
-   coding plan (refusing without its key). The GUI has no such operation:
-   its Models page writes the subscription preference directly and the
-   coding-plan rows through `applyStateSettingUpdate`, which the terminal's
-   own `/config` form also uses, so the terminal writes one coding-plan row
-   two ways. One app operation, `setModelAccessPreference(stores,
-   provider, state)` in `packages/texra/src/controllers/modelAccess/`,
-   returning a typed outcome (`enabled`, `disabled`, `needs-sign-in`,
-   `needs-key`) that each host words, would replace both; it needs the
-   GUI's answer to "turned on while signed out" decided first, since the
-   terminal signs in on the spot. `readCliModelAccessStatus`'s coding-plan half (key set,
-   preference) moves with it.
+1. **Which models the launcher's picker lists.** Decided and landed
+   2026-11-21: one list for every surface, owned by the harness
+   (`listedModels` in `packages/harness/src/model/computeModelOptions.ts`,
+   the default of `readModelOptions`). The launcher reads it
+   (`loadModelOptions(stores)` in
+   `packages/texra/src/controllers/session/hostSnapshotSource.ts`) as the
+   terminal's `/model`, `texra models list` and delegation do. What changed,
+   and for whom: signed in to ChatGPT, the GUI launcher now also offers the
+   models that subscription serves without each being enabled; and on every
+   surface a default model a person switched off stays off even when the
+   subscription serves it (`disabledDefaults` is the one stored "off"; the
+   terminal used to list such a model again). A model that was never a
+   default and never enabled has no stored "off", so none was invented: it
+   is listed while the subscription serves it.
+2. **A model the picker hides.** Decided 2026-11-21: the code's rule
+   stays. A delegation may name only a model of the list its prompt told it
+   (`selectAvailableDelegationModel`); a person's explicit launch may name
+   any catalog model (`chooseLaunchModel`). The two already read the same
+   list (item 1), so this rule is their only difference, and it is one of
+   authority: a model chooses among what it was offered, and a person who
+   types a model's name has decided for themselves. `chooseLaunchModel`
+   stays in the app.
+3. **Turning a model-access preference on or off.** Landed 2026-11-21:
+   `setModelAccessPreference(stores, provider, enabled)` in
+   `packages/texra/src/controllers/modelAccess/modelAccessPreference.ts`
+   answers `enabled`, `disabled`, `needs-sign-in` or `needs-key`, and each
+   host words the outcome. Turned on without its credential, a preference
+   is not written: the terminal signs in on the spot, and the settings view
+   starts the window's sign-in (which turns the preference on when it
+   succeeds). A coding plan's switch reaches the same writer from every
+   settings row (`applyStateSettingUpdate` calls `setCodingPlanPreference`),
+   so the GUI's Models page, the terminal's `/login` and its `/config` write
+   one way, and the GUI no longer turns a plan on with no key set.
+   `readModelAccessStatus` is beside it; `updateCliModelAccess` only words,
+   and `codingPlanSubscriptionRuntimes` is gone.
 
 ## Kept in the terminal, and why
 

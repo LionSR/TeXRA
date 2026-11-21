@@ -347,17 +347,29 @@ function enabledOrDefaults(
   return enabled.length > 0 ? enabled : curated;
 }
 
-/**
- * The models the pickers show — the single reader of
- * {@link MODEL_SELECTION_KEY} for every host.
- */
-export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
-  stores: Pick<SettingsStores, 'config' | 'globalState'>,
+/** The stored selection, with an unreadable one reported and read as none. */
+const readSelection = Effect.fnUntraced(function* (
+  stores: Pick<SettingsStores, 'globalState'>,
 ) {
   const stored = yield* stores.globalState.get(MODEL_SELECTION_KEY.key);
   const { selection, invalid } = selectionOf(stored);
   yield* reportInvalid(invalid);
-  return enabledOrDefaults(stores.config.catalog.curatedModels, selection);
+  return selection;
+});
+
+/**
+ * The models a person has switched on: the list the Models tab and
+ * `texra models enabled` edit — the single reader of
+ * {@link MODEL_SELECTION_KEY} for every host. What a picker lists is
+ * `readModelOptions`' default list, which adds what a subscription serves.
+ */
+export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
+  stores: Pick<SettingsStores, 'config' | 'globalState'>,
+) {
+  return enabledOrDefaults(
+    stores.config.catalog.curatedModels,
+    yield* readSelection(stores),
+  );
 });
 
 /**
@@ -531,8 +543,7 @@ export const readModelOptions = Effect.fn('readModelOptions')(function* (
   models?: readonly string[],
 ) {
   const routeCtx = yield* buildAvailabilityContext(stores);
-  const visible =
-    models ?? visibleModelsForAccess(yield* getEnabledModels(stores), routeCtx);
+  const visible = models ?? (yield* listedModels(stores, routeCtx));
   const decided = yield* decideVerdicts(
     routeModels(visible, routeCtx),
     routeCtx,
@@ -545,18 +556,28 @@ function modelSource(route: ModelRoute, config: ModelConfig): string {
   return route.kind === 'api-key' ? route.provider : resolveModelSource(config);
 }
 
-/** The enabled models, plus every model the ChatGPT subscription serves. */
-function visibleModelsForAccess(
-  configuredModels: readonly string[],
+/**
+ * The models every picker lists, the launcher's, the terminal's and a
+ * delegation's alike: the enabled models, plus every model the ChatGPT
+ * subscription serves once signed in, so each Codex model need not be
+ * enabled by hand. A default a person switched off stays off: that is the
+ * one stored "off" there is, and a model that was never enabled has none.
+ */
+const listedModels = Effect.fnUntraced(function* (
+  stores: SettingsStores,
   { facts }: ModelRouteContext,
-): readonly string[] {
-  const models = new Set(configuredModels);
+) {
+  const selection = yield* readSelection(stores);
+  const models = new Set(
+    enabledOrDefaults(stores.config.catalog.curatedModels, selection),
+  );
   if (!facts.plans.includes('chatgpt-subscription')) return [...models];
+  const off = new Set(selection.disabledDefaults);
   for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
-    if (config.deprecated) continue;
+    if (config.deprecated || off.has(model)) continue;
     const route = decideModelRoute(config, facts);
     if (route.kind === 'session' && route.plan === 'chatgpt-subscription')
       models.add(model);
   }
   return [...models];
-}
+});
