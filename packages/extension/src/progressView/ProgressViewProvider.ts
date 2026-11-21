@@ -97,6 +97,25 @@ const showInSidebar: Effect.Effect<void, HostFailed> = executeVscodeCommand(
   Effect.mapError((cause) => hostFailed('showInSidebar', cause)),
 );
 
+/**
+ * After a run this window started completes, preview its final revised
+ * output (which one is `selectAutoOpenFinalOutput`'s, in the shared run
+ * actions) so the file does not seem to vanish into run storage, with a
+ * status-bar hint that workflow mode is slow by design. A failure reaches
+ * the run actions, which warn-log it.
+ */
+const previewFinalOutput = (absolutePath: string) =>
+  fromHost('showTextDocument', async () => {
+    await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
+      preview: true,
+      preserveFocus: false,
+    });
+    vscode.window.setStatusBarMessage(
+      'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
+      8000,
+    );
+  });
+
 /** One surface: a VS Code webview attached to the bridge as a port. */
 interface Surface<View extends vscode.WebviewView | vscode.WebviewPanel> {
   readonly view: View;
@@ -264,12 +283,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             popOutToEditor: () => onView((view) => view.popOutToEditor()),
             showInSidebar: () => showInSidebar,
           }).pipe(
-            Effect.map(({ openFinalOutput, ...requests }) => ({
+            Effect.map((requests) => ({
               ...requests,
               notices: createAgentPresentationHost(roots, runtime, showBuilt),
               window: editor,
               runs: {
-                openFinalOutput,
+                openFinalOutput: previewFinalOutput,
                 showRunView: () => onView((view) => view.showProgressView()),
                 // Or name the run in a toast when the list cannot be shown.
                 revealProgress: (config: AgentConfig) =>

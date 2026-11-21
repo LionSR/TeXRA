@@ -15,7 +15,7 @@ import {
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import { REQUEST_NOUN } from '@ui/copy/requestCards';
-import type { StatusLook } from '@ui/copy/runStatus';
+import { runStatusLook, type StatusLook } from '@ui/copy/runStatus';
 
 export const SCRIPT_CALL_STATUS_LABEL = Object.freeze({
   queued: 'Queued',
@@ -48,10 +48,9 @@ const SCRIPT_CALL_STATUS_LOOK: Readonly<Record<ScriptCallStatus, StatusLook>> =
  *  waiting on the user reads as a run waiting on the user does. */
 export function scriptCallLook(call: ScriptCallView): StatusLook {
   return call.needsYou
-    ? WAITING_ON_YOU_LOOK
+    ? runStatusLook('waitingOnUser')
     : SCRIPT_CALL_STATUS_LOOK[call.status];
 }
-const WAITING_ON_YOU_LOOK: StatusLook = Object.freeze({ tone: 'warning' });
 
 /** What a row says before its answer, in one line. */
 function detailText(detail: NonNullable<ScriptCallView['detail']>): string {

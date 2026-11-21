@@ -68,7 +68,10 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
     executeAgent(
       runId,
       registration.parent?.id ?? null,
-      Effect.succeed({ definition, options: { ...options, registration } }),
+      Effect.succeed({
+        definition,
+        options: { ...options, entry: { kind: 'fresh', registration } },
+      }),
     ),
   );
   return opened.activation;

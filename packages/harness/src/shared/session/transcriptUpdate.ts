@@ -61,7 +61,8 @@ function applyStage(
   if (event.type === 'stage.start') {
     stage = {
       id: event.id,
-      name: event.label,
+      // A section with no label reads by its id, on every surface.
+      name: event.label || event.id,
       seqNo: (d.ix.appended += 1),
       startTime: d.at,
       end: null,

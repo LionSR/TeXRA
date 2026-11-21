@@ -462,7 +462,7 @@ export const HELPER_MODEL_SETTING = {
   schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
   description:
-    "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model.",
+    "Model used for a run's auxiliary calls, such as session descriptions and the helper calls of an app's features. When unset, a run's helper calls use the run's own model.",
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {

@@ -20,6 +20,10 @@ export function toolEditDiffLabel(request: {
   };
 }
 
+/** Where a tool edit's diff cannot be shown: why, in the host's words. */
+export const previewUnavailable = (reason: string): string =>
+  `Preview unavailable: ${reason}`;
+
 const notApplied = (relativePath: string) =>
   `Your changes to the proposed ${relativePath} were not applied: its request closed without them.`;
 

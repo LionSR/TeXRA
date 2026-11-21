@@ -89,9 +89,9 @@ export const fileListStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  .compile-warning {
+  .round-alert {
     flex-shrink: 0;
-    color: var(--color-warning);
+    color: var(--tone-color);
   }
 
   .compile-actions {

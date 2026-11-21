@@ -2,16 +2,14 @@ import { Secrets, Settings, type AppSignals } from '@texra-ai/harness/plugins';
 import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';
-import {
-  APPROVAL_POLICY_SETTING,
-  ensureError,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import {
+  applyStateSettingUpdate,
+  settingWriteFailure,
+} from '@texra/controllers/settingsView/stateSettingWrite';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 import {
   removeGitHubToken,
@@ -34,19 +32,12 @@ import {
   type ProviderApiKeyStatusView,
 } from './ProviderApiKeyForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import { useChatProcess } from '../chatProcess';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
-  /**
-   * Repaints the live session's approval policy after that row is written
-   * here, the same hook `/approval` drives. Omitted by `texra config edit`,
-   * whose process holds no session.
-   */
-  readonly onApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
 }
 
 /**
@@ -91,55 +82,20 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
 
   // The one CLI write path for a `/config` row: the same
   // `applyStateSettingUpdate` the extension and desktop settings views call.
-  // The write announces what it changed to the process; this form adds its
-  // own repaint: an approval-policy write updates the live session's policy
-  // line (enforcement reads the config itself). `null` is the shared reset
-  // convention (delete the key so the schema default reappears).
+  // The write announces what it changed to the process, which is how the
+  // chat repaints its policy line. `null` is the shared reset convention
+  // (delete the key so the schema default reappears).
   const applyUpdate = Effect.fn('applyUpdate')(function* (
     entry: TexraSettingRow,
     value: unknown,
   ): Effect.fn.Return<void, SettingsRequestFailed, AppSignals> {
     const result = yield* applyStateSettingUpdate(entry, value, roots);
-    const label = entry.title;
-    switch (result.kind) {
-      case 'applied':
-        break;
-      case 'rejected':
-      case 'failed':
-        // ConfigForm rolls its optimistic value back on a failure and
-        // reports it, so a refused write must fail rather than read as
-        // applied.
-        return yield* new SettingsRequestFailed({
-          message: `Failed to update "${label}": ${toErrorMessage(result.error)}`,
-          cause: result.error,
-        });
-      case 'ignored':
-      case 'workspace-required':
-        return yield* new SettingsRequestFailed({
-          message: `Setting "${label}" is not writable from /config (${result.kind}).`,
-        });
-    }
+    // ConfigForm rolls its optimistic value back on a failure and reports
+    // it, so a refused write must fail rather than read as applied.
+    const failure = settingWriteFailure(result);
+    if (failure !== undefined) return yield* failure;
+    if (result.kind === 'ignored') return;
     settings.reload();
-    if (entry.key === APPROVAL_POLICY_SETTING.key) {
-      // The value is written: a failed repaint is reported, never rolled back.
-      yield* Settings.get(roots, APPROVAL_POLICY_SETTING).pipe(
-        Effect.flatMap((policy) =>
-          Effect.try({
-            try: () => props.onApprovalPolicyChanged?.(policy),
-            catch: (cause) =>
-              new SettingsRequestFailed({
-                message: ensureError(cause).message,
-                cause,
-              }),
-          }),
-        ),
-        Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),
-        Effect.ignore({
-          log: 'Warn',
-          message: 'Approval policy written; session repaint failed',
-        }),
-      );
-    }
   });
 
   const transient = renderAsyncListFormTransient({

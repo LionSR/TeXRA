@@ -6,7 +6,10 @@ import {
   type RequestPayload,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { requestPrimaryLabel } from '@ui/copy/requestCards';
+import {
+  REJECTION_NOTE_PROMPT,
+  requestPrimaryLabel,
+} from '@ui/copy/requestCards';
 
 import { CliInvocation } from '../platform/cliContext';
 import {
@@ -157,7 +160,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
           hooks,
           askCliApprovalQuestion({
             summary: '',
-            prompt: 'Rejection feedback (optional, Enter to skip): ',
+            prompt: `${REJECTION_NOTE_PROMPT} (optional, Enter to skip) `,
           }),
         );
         feedback = feedbackAnswer.trim() || undefined;

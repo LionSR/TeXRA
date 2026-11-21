@@ -9,9 +9,11 @@ import {
   formatSubscriptionUsagePercent,
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
+  subscriptionQuotaTone,
   subscriptionUsageWindowLabel,
 } from '@ui/copy/subscriptionUsage';
 import { commonViewStyles, designTokens } from '@ui/styles';
+import { toneStyles } from '@ui/styles/toneStyles';
 
 type UnavailableReason = Extract<
   SubscriptionUsageSnapshot,
@@ -35,6 +37,7 @@ export class SubscriptionUsageRow extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    toneStyles,
     css`
       :host {
         display: contents;
@@ -73,6 +76,10 @@ export class SubscriptionUsageRow extends LitElement {
         --track-height: 0.45rem;
         --indicator-color: var(--wa-color-progress-bg);
         width: 100%;
+      }
+
+      wa-progress-bar:is(.tone-warning, .tone-danger) {
+        --indicator-color: var(--tone-color);
       }
 
       .usage-window,
@@ -160,6 +167,7 @@ export class SubscriptionUsageRow extends LitElement {
                 window.resetAt,
                 this.now,
               );
+              const tone = subscriptionQuotaTone(window);
               return html`
                 <div class="usage-window">
                   <span class="usage-summary"
@@ -167,6 +175,7 @@ export class SubscriptionUsageRow extends LitElement {
                     <bdi dir="auto">${percent}</bdi></span
                   >
                   <wa-progress-bar
+                    class=${tone === undefined ? '' : `tone-${tone}`}
                     value=${window.percentUsed}
                     label="${snapshot.providerName} ${label} usage"
                   ></wa-progress-bar>

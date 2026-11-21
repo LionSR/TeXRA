@@ -157,9 +157,12 @@ export const rootRun = Effect.fn('rootRun')(function* (
           options: {
             stopAfterCycle: launch.interactive !== true,
             tools: launch.tools,
-            registration: {
-              identity: { kind: 'agent', agent: definition.config.agent },
-              grants: limit === undefined ? grants : { ...grants, limit },
+            entry: {
+              kind: 'fresh',
+              registration: {
+                identity: { kind: 'agent', agent: definition.config.agent },
+                grants: limit === undefined ? grants : { ...grants, limit },
+              },
             },
           },
         };

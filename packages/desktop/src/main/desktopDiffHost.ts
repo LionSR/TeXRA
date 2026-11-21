@@ -13,7 +13,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
-import { monacoLanguageForPath } from '../shared/monacoLanguage';
+import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
 
 import { DESKTOP_DIFF_COMMANDS } from '../shared/desktopDiffMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';

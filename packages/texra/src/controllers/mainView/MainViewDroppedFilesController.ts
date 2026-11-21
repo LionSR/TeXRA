@@ -80,19 +80,12 @@ function attachDroppedPaths(
   { paths: string[]; attachedCount: number; rejectedCount: number },
   Rejected
 > {
-  const allowed = new Set(
-    allowedExtensions.map(normalizeMainViewFileExtension),
-  );
+  const takes = fieldTakes(allowedExtensions);
   const attached = new Set<string>();
   let rejectedCount = 0;
 
   for (const filePath of paths) {
-    if (!filePath) {
-      rejectedCount += 1;
-      continue;
-    }
-    const extension = normalizeMainViewFileExtension(filePath);
-    if (!extension || !allowed.has(extension)) {
+    if (!filePath || !takes(filePath)) {
       rejectedCount += 1;
       continue;
     }
@@ -115,8 +108,24 @@ function attachDroppedPaths(
   });
 }
 
-export function normalizeMainViewFileExtension(filePath: string): string {
+/** A file's extension as the launcher compares it: lower case, no dot. */
+function extensionOf(filePath: string): string {
   const trimmed = filePath.trim();
   const extension = path.extname(trimmed) || trimmed;
   return extension.toLowerCase().replace(/^\./, '');
+}
+
+/**
+ * Whether a launcher field whose files have `allowedExtensions` takes a
+ * file, by its extension: the one test a drop and the editor's open files
+ * apply.
+ */
+export function fieldTakes(
+  allowedExtensions: readonly string[],
+): (filePath: string) => boolean {
+  const allowed = new Set(allowedExtensions.map(extensionOf));
+  return (filePath) => {
+    const extension = extensionOf(filePath);
+    return extension !== '' && allowed.has(extension);
+  };
 }
