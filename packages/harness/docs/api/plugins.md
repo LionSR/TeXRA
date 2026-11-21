@@ -296,14 +296,14 @@ interface AppSignalPayloads {
   workspaceAgentsChanged: undefined;
 
   /**
-   * The approval policy was written from a settings view (the shared
-   * settings commands' `updateStateSetting`).
+   * The approval policy was written from a settings view or the terminal's
+   * `/config` (the shared write path, `applyStateSettingUpdate`).
    *
    * Consumed by: the extension's status-bar tooltip and the launchers'
    * approval snapshot, painted outside the
    * settings webview's round-trip. The settings views repaint their own
-   * approval snapshot inline, and the CLI repaints its session line from the
-   * `/config` form and `/approval` directly. Enforcement reads the config
+   * approval snapshot inline. The terminal chat follows it to repaint its
+   * session line; its own `/approval` choice repaints directly. Enforcement reads the config
    * live, so this signal only repaints.
    */
   approvalPolicyChanged: undefined;
