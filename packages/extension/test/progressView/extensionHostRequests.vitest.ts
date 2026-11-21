@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 
 import { createExtensionHostRequests } from '@progressView/extensionHostRequests';
 
-it.effect('fails with the URL when VS Code declines to open a link', () =>
+it.effect('fails naming the origin when VS Code declines to open a link', () =>
   Effect.gen(function* () {
     // VS Code answers `false`, without throwing, for a URL no handler takes.
     yield* Effect.acquireRelease(
@@ -27,6 +27,8 @@ it.effect('fails with the URL when VS Code declines to open a link', () =>
     ) as unknown as Effect.Effect<void, Error>;
     const error = yield* Effect.flip(open);
 
-    expect(error.message).toContain('https://texra.ai/guide/custom-agents');
+    // The origin only: a sign-in link's path or query can carry a code.
+    expect(error.message).toContain('https://texra.ai');
+    expect(error.message).not.toContain('/guide/custom-agents');
   }).pipe(Effect.scoped),
 );

@@ -53,8 +53,8 @@ export function formatCount(count: number): string {
   return countFormat.format(count);
 }
 
-/** A child run's wall time in seconds to one decimal (`1.2s`), as its
- *  delivery and its summary read. */
+/** A wall time in seconds to one decimal (`1.2s`), as a child run's
+ *  delivery and summary and a shell command's result read it. */
 export function formatWallTime(durationMs: number): string {
   return `${(durationMs / 1000).toFixed(1)}s`;
 }

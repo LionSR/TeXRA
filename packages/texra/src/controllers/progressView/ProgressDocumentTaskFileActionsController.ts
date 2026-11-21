@@ -113,12 +113,26 @@ export class ProgressDocumentTaskFileActionsController {
       });
     }
     switch (action) {
-      case 'compare':
+      case 'compare': {
+        // Both sides are checked here, once for every host: a host's diff
+        // view would otherwise fail on a missing side in its own words.
+        const fs = yield* FileSystem.FileSystem;
+        for (const [label, side] of [
+          ['Base', base],
+          ['Edited', file],
+        ] as const) {
+          if (!(yield* fs.exists(side))) {
+            return yield* new Rejected({
+              reason: `${label} file not found: ${side}`,
+            });
+          }
+        }
         return yield* this.deps.host.openDiff(
           base,
           file,
           `Compare: ${path.basename(file)} ↔ ${path.basename(base)}`,
         );
+      }
       case 'accept':
         return yield* this.acceptFile(
           file,

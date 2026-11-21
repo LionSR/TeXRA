@@ -244,8 +244,8 @@ const isIdle = (run: Pick<RunView, 'position' | 'approval'>): boolean =>
 
 /** Whether this process holds the run and it is not idle (`isIdle`):
  *  working a turn, waiting on the user inside one, or held before its first
- *  activation. The one reading of a live child every count of running
- *  children uses. */
+ *  activation. The one reading of a running run every count uses: a
+ *  run's `rollup` and the session's. */
 export const isLive = (
   run: Pick<RunView, 'holder' | 'position' | 'approval'>,
 ): boolean => run.holder === 'here' && !isIdle(run);
@@ -335,7 +335,9 @@ export const SessionViewSchema = Schema.Struct({
    *  when the aggregate enters the subscription set, deleted with its
    *  transcript when it leaves; never a commit ordinal. */
   transcriptSeq: Schema.ReadonlyMap(RunIdSchema, Count),
-  /** Project-level aggregate; a rail badge reads it and derives nothing. */
+  /** Project-level counts: `interrupted` runs, runs `waiting` on the user
+   *  here, and the other `running` ones (`isLive`). Every surface that
+   *  shows how many runs are running reads this and derives nothing. */
   rollup: Schema.Struct({ running: Count, waiting: Count, interrupted: Count }),
   requests: Schema.Array(PendingRequestSchema),
 });

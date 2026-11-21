@@ -80,19 +80,11 @@ export function createDesktopWindowHost(options: {
   /**
    * Open a URL in the browser without keeping the caller waiting; the
    * browser never opening is shown in the window and logged, not swallowed.
-   * The log names the link rather than the address the shell refused.
+   * The failure names the address by its origin (`externalOpenFailed`).
    */
   const openExternalInBackground = (url: string): void => {
     spawn(
       presented(previewHost.openExternal(url)).pipe(
-        Effect.mapError(
-          (cause) =>
-            new HostFailed({
-              member: 'openExternal',
-              message: 'The link could not be opened.',
-              cause,
-            }),
-        ),
         // The handler's parameter is the whole error type this expression can
         // carry, so a second failure added here fails to compile instead of
         // reading as a documentation URL that would not open.

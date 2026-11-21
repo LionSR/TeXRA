@@ -4,7 +4,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
 import { runsInWsl } from '@texra-ai/harness/node';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { externalOpenFailed, type HostFailed } from '@texra/hosts/uiHosts';
 
 /**
  * Why the launcher did not open the URL: it could not start, or it exited
@@ -16,18 +16,19 @@ type LaunchFault = { readonly command: string } & (
   | { readonly exitCode: number }
 );
 
-/** The app's failure for a host capability, worded from the fault alone so
- *  neither the message nor the cause can carry the URL. */
-function launchFailed(fault: LaunchFault): HostFailed {
+/** The app's failure for a browser open, worded from the fault alone so
+ *  the cause cannot carry the URL. */
+function launchFailed(url: string, fault: LaunchFault): HostFailed {
   const what =
     'exitCode' in fault
       ? `exited with code ${fault.exitCode}`
       : `could not start (${fault.start})`;
-  return new HostFailed({
-    member: fault.command,
-    message: `Could not open the browser automatically: ${fault.command} ${what}`,
-    cause: fault,
-  });
+  return externalOpenFailed(
+    url,
+    fault.command,
+    `${fault.command} ${what}`,
+    fault,
+  );
 }
 
 interface BrowserLaunchCommand {
@@ -91,11 +92,17 @@ export const launchBrowser = Effect.fn('launchBrowser')(function* (
     )
     .pipe(
       Effect.mapError((error: PlatformError) =>
-        launchFailed({ command: launch.command, start: error.reason._tag }),
+        launchFailed(url, {
+          command: launch.command,
+          start: error.reason._tag,
+        }),
       ),
     );
   if (code !== 0) {
-    return yield* launchFailed({ command: launch.command, exitCode: code });
+    return yield* launchFailed(url, {
+      command: launch.command,
+      exitCode: code,
+    });
   }
 });
 

@@ -228,26 +228,6 @@ function describeEnd(
   };
 }
 
-/** SIGTERM a live process and wait for its stdio to close, escalating to SIGKILL. */
-const stopProcess = Effect.fn('LeanServer.stopProcess')(function* (
-  handle: ChildProcessSpawner.ChildProcessHandle,
-) {
-  yield* handle
-    .kill({ forceKillAfter: SHUTDOWN_TIMEOUT })
-    .pipe(
-      Effect.catch((error) =>
-        Effect.logDebug(`kill failed: ${error.message}`).pipe(
-          withLogChannel(LOG_CHANNEL),
-        ),
-      ),
-    );
-  // Only the wait matters: a server ended by the signal just sent has no exit
-  // code, which fails the read.
-  yield* Effect.ignore(handle.exitCode).pipe(
-    Effect.timeoutOption(SHUTDOWN_TIMEOUT),
-  );
-});
-
 const make = ({
   workspaceRoot: root,
 }: LeanServerOptions): Effect.Effect<
@@ -263,12 +243,14 @@ const make = ({
       SubscriptionRef.SubscriptionRef<FileState>
     >();
 
-    const handle = yield* ChildProcess.make('lake', [
-      'env',
-      'lean',
-      '--server',
-    ]).pipe(ChildProcess.setCwd(root), Effect.mapError(spawnFailure));
-    yield* Effect.addFinalizer(() => stopProcess(handle));
+    // The spawner's scoped release signals the server, waits
+    // `SHUTDOWN_TIMEOUT`, then escalates to SIGKILL, so closing this scope
+    // stops it.
+    const handle = yield* ChildProcess.make(
+      'lake',
+      ['env', 'lean', '--server'],
+      { cwd: root, forceKillAfter: SHUTDOWN_TIMEOUT },
+    ).pipe(Effect.mapError(spawnFailure));
 
     const handlePublishDiagnostics = Effect.fn('handlePublishDiagnostics')(
       function* (params: LspPublishDiagnosticsParams) {
@@ -419,7 +401,15 @@ const make = ({
           ),
         );
         yield* rpc.notify('exit');
-        yield* stopProcess(handle);
+        yield* handle
+          .kill({ forceKillAfter: SHUTDOWN_TIMEOUT })
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logDebug(`[${root}] kill failed: ${error.message}`).pipe(
+                withLogChannel(LOG_CHANNEL),
+              ),
+            ),
+          );
         // The end watcher closes the connection with the exit as its reason;
         // wait for it so a caller sees the server fully ended, bounded like
         // every other step of the protocol.

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, FiberHandle, FileSystem } from 'effect';
+import { Cause, Effect, FiberHandle } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -7,33 +7,9 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { refreshDiffOnLayoutChange } from '@frontend/ui/diffView';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
 const CHANNEL = 'CompareCommands';
-
-const validateFilesExist = Effect.fnUntraced(function* (
-  baseLocation: FileLocation,
-  editedLocation: FileLocation,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const required: ReadonlyArray<readonly [string, FileLocation]> = [
-    ['Base', baseLocation],
-    ['Edited', editedLocation],
-  ];
-  for (const [label, location] of required) {
-    if (!(yield* fs.exists(location.absolutePath))) {
-      yield* showLoggedMessage(
-        `${label} file not found: ${location.absolutePath}`,
-      );
-      return false;
-    }
-  }
-
-  return true;
-});
 
 export const handleCompare = Effect.fn('compareCommands.handleCompare')(
   function* (
@@ -43,10 +19,6 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
     /** The window's diff refresh, which this comparison takes over. */
     diffRefresh: FiberHandle.FiberHandle,
   ) {
-    if (!(yield* validateFilesExist(baseLocation, editedLocation))) {
-      return;
-    }
-
     const baseUri = vscode.Uri.file(baseLocation.absolutePath);
     const editedUri = vscode.Uri.file(editedLocation.absolutePath);
 
