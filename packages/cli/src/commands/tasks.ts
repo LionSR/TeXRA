@@ -37,7 +37,7 @@ import {
   getStdoutColumns,
   writeTextStderr,
 } from '../runtime/platform/logSinks';
-import { selectCliRunModel } from '../runtime/models/runModel';
+import { selectCliRunModel } from '../runtime/models/launchDefaults';
 import { attachTask } from '../runtime/headless/taskAttach';
 import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 

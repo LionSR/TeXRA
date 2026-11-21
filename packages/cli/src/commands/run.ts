@@ -21,7 +21,7 @@ import {
   writeErrorStderr,
   writeTextStderr,
 } from '../runtime/platform/logSinks';
-import { selectCliRunModel } from '../runtime/models/runModel';
+import { selectCliRunModel } from '../runtime/models/launchDefaults';
 import {
   RUN_TARGET_NAME_DESCRIPTION,
   missingRunTargetMessage,
