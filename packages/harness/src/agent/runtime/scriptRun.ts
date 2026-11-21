@@ -16,6 +16,7 @@ import {
   type ChildRunDelivery,
   type RunId,
   type RunOutcome,
+  type RunStopReason,
   type ToolResultPayload,
   type ScriptDeliverySummary,
 } from '@shared/schemas';
@@ -222,18 +223,13 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
 const resumeHint = (runId: RunId): string =>
   `Nothing continues it on its own. Resuming run ${runId} hands its finished calls back from its rows and runs the rest.`;
 
-/** What every delivery of a script run opens with: its family, its run
- *  and the title its parent's `script` call gave it. */
-const scriptDelivery = (runId: RunId, title: string) => ({
-  family: DELIVERY_FAMILY.script,
-  runId,
-  attributes: [{ name: 'title', value: title }],
-});
-
 /**
  * What a background script's run delivers at its end: its calls' result
- * and summary when the script ran to its result, else its failure (the
- * script call's error, the run's own, or a run that ended with no result).
+ * and summary when the script ran to its result; its failure otherwise
+ * (the script call's error, the run's own, or a run that ended with no
+ * result); and, stopped, the notice a person's stop leaves (what it had
+ * done, and the run to resume), or nothing when the call awaiting it
+ * released it.
  */
 export const scriptEndDelivery = Effect.fn('scriptRun.endDelivery')(function* (
   runId: RunId,
@@ -241,13 +237,39 @@ export const scriptEndDelivery = Effect.fn('scriptRun.endDelivery')(function* (
   outcome: RunOutcome,
   /** The run's own failure, when it ended failed. */
   failure: string | null,
+  /** Why a stopped run stopped. */
+  stopReason: RunStopReason | undefined,
   /** When this launch or resume of the run started. */
   startedAt: number,
-): Effect.fn.Return<ChildRunDelivery, Error, SessionLog | SessionViewAccess> {
+): Effect.fn.Return<
+  ChildRunDelivery | null,
+  Error,
+  SessionLog | SessionViewAccess
+> {
+  const delivery = {
+    family: DELIVERY_FAMILY.script,
+    runId,
+    attributes: [{ name: 'title', value: title }],
+  };
+  if (outcome === RUN_OUTCOME.CANCELLED) {
+    if (stopReason !== 'user') return null;
+    const summary = yield* scriptRunSummary(
+      runId,
+      title,
+      'stopped',
+      null,
+      startedAt,
+    );
+    return {
+      ...delivery,
+      summary,
+      message: `The script '${title}' was stopped after ${summary.tally.ok} of ${tallyTotal(summary.tally)} calls. ${resumeHint(runId)}`,
+    };
+  }
   const { script } = yield* scriptRunCalls(runId);
   if (outcome === RUN_OUTCOME.COMPLETED && script?.result.status === 'executed')
     return {
-      ...scriptDelivery(runId, title),
+      ...delivery,
       response: script.result.output ?? '',
       summary: yield* scriptRunSummary(
         runId,
@@ -262,29 +284,8 @@ export const scriptEndDelivery = Effect.fn('scriptRun.endDelivery')(function* (
       ? script.result.error
       : (failure ?? 'The script ended without a result.');
   return {
-    ...scriptDelivery(runId, title),
+    ...delivery,
     summary: yield* scriptRunSummary(runId, title, 'failed', cause, startedAt),
     message: failure === null ? cause : `${cause}\n${resumeHint(runId)}`,
-  };
-});
-
-/** The notice a background script stopped by a person leaves its parent:
- *  what it had done, and the run to resume. */
-export const scriptStopNotice = Effect.fn('scriptRun.stopNotice')(function* (
-  runId: RunId,
-  title: string,
-  startedAt: number,
-): Effect.fn.Return<ChildRunDelivery, Error, SessionLog | SessionViewAccess> {
-  const summary = yield* scriptRunSummary(
-    runId,
-    title,
-    'stopped',
-    null,
-    startedAt,
-  );
-  return {
-    ...scriptDelivery(runId, title),
-    summary,
-    message: `The script '${title}' was stopped after ${summary.tally.ok} of ${tallyTotal(summary.tally)} calls. ${resumeHint(runId)}`,
   };
 });
