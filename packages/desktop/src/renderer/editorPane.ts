@@ -44,7 +44,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { applyMonacoTheme } from './monacoTheme';
 import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
-import { monacoLanguageForPath } from '../shared/monacoLanguage';
+import { languageForPath } from '@ui/highlighting/fileLanguage';
 
 import { createEditorFileNotice } from './editorFileNotice';
 import {
@@ -521,7 +521,7 @@ export function createEditorPane(
           file.disk = contents;
           const created = loadedMonaco.editor.createModel(
             contents,
-            monacoLanguageForPath(path),
+            languageForPath(path),
           );
           // Track dirty per file. `onDidChangeContent` fires for programmatic
           // edits too, which is correct here: only reads and saves are

@@ -25,6 +25,7 @@ import {
   buildLineChangeStats,
 } from '@ui/progress/formatters/htmlBuilders';
 import { formatLineRange } from '@ui/copy/format';
+import { languageForPath } from '@ui/highlighting/fileLanguage';
 import { statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -73,46 +74,6 @@ export function buildTerminalSection(
   );
 }
 
-/**
- * Map file extensions that don't match highlight.js language names.
- * Focused on LaTeX research context. Unknown extensions try the extension directly.
- */
-const EXTENSION_ALIASES = new Map<string, string>([
-  // LaTeX ecosystem
-  ['tex', 'latex'],
-  ['sty', 'latex'],
-  ['cls', 'latex'],
-  ['dtx', 'latex'],
-  ['tikz', 'latex'],
-  ['bib', 'bibtex'],
-  ['bst', 'latex'],
-  // Scientific computing
-  ['py', 'python'],
-  ['jl', 'julia'],
-  ['wl', 'mathematica'],
-  ['m', 'mathematica'],
-  ['f90', 'fortran'],
-  ['f95', 'fortran'],
-  ['ipynb', 'json'],
-  // Config/docs
-  ['yml', 'yaml'],
-  ['md', 'markdown'],
-  ['sh', 'bash'],
-]);
-
-/** Get highlight.js language from file path based on extension. Uses alias map for non-standard extensions, otherwise tries the extension directly. */
-function getLanguageFromPath(filePath: string): string {
-  if (!filePath) return 'plaintext';
-  const fileName = getBasename(filePath) || filePath;
-  const lowerFileName = fileName.toLowerCase();
-  if (lowerFileName === 'dockerfile') return 'dockerfile';
-  if (lowerFileName === 'makefile') return 'makefile';
-  const lastDot = fileName.lastIndexOf('.');
-  if (lastDot === -1 || lastDot === fileName.length - 1) return 'plaintext';
-  const extension = fileName.slice(lastDot + 1).toLowerCase();
-  return EXTENSION_ALIASES.get(extension) ?? extension;
-}
-
 /** Line count past which a text section becomes a fixed-height scroll box. */
 const TEXT_SECTION_SCROLL_LINES = 20;
 
@@ -122,7 +83,7 @@ const TEXT_SECTION_SCROLL_LINES = 20;
  * the second a shell command, highlighted as bash.
  */
 function codeLanguage(language: string, filePath: string): string {
-  if (language === 'file') return getLanguageFromPath(filePath);
+  if (language === 'file') return languageForPath(filePath);
   if (language === 'shell') return 'bash';
   return language;
 }
