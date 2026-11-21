@@ -81,9 +81,9 @@ Each needs a decision or a check this unattended run could not make.
 2. Landed 2026-11-21: the base pair now exists in
    `packages/texra/src/ui/litBase.ts` — `TexraElement extends LitElement` and
    `TexraSignalElement extends SignalWatcher(TexraElement)`, both with
-   `static styles = [designTokens, commonViewStyles]`. The 37 components whose
-   styles array opened with that exact adjacent pair as its first two elements
-   now `extends` the base and read `[TexraElement.styles, …own]` (or
+   `static styles = [designTokens, commonViewStyles]`. The 38 components whose
+   styles array opened with that exact pair as its first two elements now
+   `extends` the base and read `[TexraElement.styles, …own]` (or
    `TexraSignalElement.styles`). Lit flattens the nested group in order, so the
    adopted stylesheets are unchanged, the compiled CSS is byte-identical, and no
    visual check was needed. Still open, each needing the visual check the
@@ -92,10 +92,9 @@ Each needs a decision or a check this unattended run could not make.
    `ScriptStage`, `LaunchAttachments`, `UsagePanel`, `NewTaskHero`, …) that open
    with `designTokens` but **no** `commonViewStyles` — they cannot adopt the
    two-sheet base without gaining `commonViewStyles`, so they want a
-   `designTokens`-only base or a confirmed-safe addition; **(b)** `SettingsApp`,
-   whose styles open on a different shape; **(c)** the 33 repeats of
-   `:host { display: block; }` (do not fold into `designTokens`: inline and flex
-   hosts would change); and **(d)** `truncateDeclarations` /
+   `designTokens`-only base or a confirmed-safe addition; **(b)** the 33 repeats
+   of `:host { display: block; }` (do not fold into `designTokens`: inline and
+   flex hosts would change); and **(c)** `truncateDeclarations` /
    `overlineDeclarations` / `panelFrameStyles`, `${...}`-interpolated into
    per-component selectors (~37 sites, 24 files) instead of exposed as
    `.truncate` / `.overline` utility classes in `commonViewStyles`. The landed

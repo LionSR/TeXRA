@@ -1,8 +1,7 @@
 /** Main container for the unified settings view. */
 
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { SignalWatcher } from '@lit-labs/signals';
 import { Result } from 'effect';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -19,7 +18,7 @@ import type {
   SettingsSectionName,
   SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import { TexraSignalElement } from '@ui/litBase';
 import { listMoveOfKey, nextListIndex } from '@ui/wa/listInteraction';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -53,8 +52,8 @@ import {
 registerTeXRAWebAwesomeIcons();
 
 @customElement('settings-app')
-export class SettingsApp extends SignalWatcher(LitElement) {
-  static override styles = [designTokens, commonViewStyles, settingsViewStyles];
+export class SettingsApp extends TexraSignalElement {
+  static override styles = [TexraSignalElement.styles, settingsViewStyles];
 
   constructor() {
     super();
