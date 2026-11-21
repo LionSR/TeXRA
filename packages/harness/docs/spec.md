@@ -93,8 +93,10 @@ settings namespace: `<namespace>.db`, so `texra.db` for TeXRA
 session runs the same schema in memory
 (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
-The store MUST carry schema version 105 in SQLite's `user_version`
-(`controllers/session/storeSchema.ts#SCHEMA_VERSION`). A process gives the
+A project store MUST carry schema version 106 in SQLite's `user_version`
+(`controllers/session/storeSchema.ts#PROJECT_SCHEMA`), and the global
+storage root's store, which holds current values and the input history and
+no event table, version 107 (`#GLOBAL_SCHEMA`). A process gives the
 schema to an unstamped file and MUST fail the open of a store stamped with a
 schema other than its own, earlier or newer, writing nothing to it
 (`controllers/session/storeSchema.ts#checkStamps`). A file SQLite reports

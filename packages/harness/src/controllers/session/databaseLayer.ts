@@ -88,7 +88,12 @@ import {
 } from './rowReader';
 import { isBusy, isDamaged, mapDatabaseFailure } from './storeAside';
 import { storeConnection } from './storeConnection';
-import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
+import {
+  IN_MEMORY_STORE,
+  openStore,
+  PROJECT_SCHEMA,
+  reclaimFreePages,
+} from './storeSchema';
 /** The store file `name` under `storage`, by the directory's real path.
  *  SQLite makes only the file, so `create` makes the directory first. */
 export const storeFile = (
@@ -231,6 +236,7 @@ export const databaseLayer = (
         }),
         path,
         filename,
+        PROJECT_SCHEMA,
       ).pipe(
         Effect.catchIf(isBusy, () =>
           Effect.fail(openFailed(new Error(STORE_HELD_MESSAGE))),

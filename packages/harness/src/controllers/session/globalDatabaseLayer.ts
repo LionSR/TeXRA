@@ -30,7 +30,7 @@ import { changeRead, currentValues } from './currentValues';
 import { storeFile } from './databaseLayer';
 import { mapDatabaseFailure } from './storeAside';
 import { storeConnection } from './storeConnection';
-import { openStore } from './storeSchema';
+import { GLOBAL_SCHEMA, openStore } from './storeSchema';
 
 /** Append an entry unless it repeats the latest; a row back when it did. */
 const APPEND_HISTORY = `INSERT INTO input_history (at, value)
@@ -74,6 +74,7 @@ export const globalDatabaseLayer = (
         SqliteClient.make({ filename, busyTimeout: '5 seconds' }),
         path,
         filename,
+        GLOBAL_SCHEMA,
       ).pipe(mapDatabaseFailure(openFailed));
       // The store holds no plugin's rows, so the gate knows no fact kind.
       const store = storeConnection(sql, path, { shared: true, factKinds: {} });

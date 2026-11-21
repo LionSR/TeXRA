@@ -751,7 +751,7 @@ describe('the session event table and its one publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 106;
+    const format = 9999;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(
