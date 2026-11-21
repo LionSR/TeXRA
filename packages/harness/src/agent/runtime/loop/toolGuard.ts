@@ -174,7 +174,7 @@ const answerOf = (outcomes: readonly HookOutcomePayload[]) => {
   return { deny, hook, rewritten };
 };
 
-const hookDenied = (tool: string, why: string): ToolResult => ({
+const hookDenied = (why: string): ToolResult => ({
   status: 'error',
   error: `Blocked by a PreToolUse hook: ${why}`,
 });
@@ -221,7 +221,6 @@ const rejection = Effect.fn('toolUse.guard')(function* (
     // it refuses is the hook's, and denies the call.
     return rewritten
       ? hookDenied(
-          definition.name,
           `it rewrote the call to an input ${definition.name} does not take.\n${parsed.failure.message}`,
         )
       : undefined;
@@ -285,8 +284,7 @@ export const guardedToolCall = (
   ITool<Error, PluginToolServices | SessionServices | RunCall>['call']
 > => {
   const { deny, hook, rewritten } = answerOf(hooks.outcomes);
-  if (deny !== null)
-    return Effect.succeed(hookDenied(tool.definition.name, deny));
+  if (deny !== null) return Effect.succeed(hookDenied(deny));
   const input = rewritten === null ? issued : hooks.fromHook(rewritten);
   // The hooks' answer is the call's: its command's request reads it as it
   // opens, and so does every request its body opens.

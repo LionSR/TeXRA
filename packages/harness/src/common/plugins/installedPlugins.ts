@@ -47,7 +47,6 @@ import {
   PluginError,
   PluginRequestError,
   readPlugin,
-  UNLOADED_COMPONENT_LABELS,
 } from './pluginManifest';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -189,7 +188,7 @@ const installFromRoot = Effect.fn('installFromRoot')(function* (
   nested: boolean,
 ): Effect.fn.Return<
   InstalledPlugin[],
-  PluginError | PluginRequestError | Error,
+  PluginError | PluginRequestError,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
   const fs = yield* FileSystem.FileSystem;
@@ -260,7 +259,7 @@ function installOrigin(
   nested: boolean,
 ): Effect.Effect<
   InstalledPlugin[],
-  PluginError | PluginRequestError | Error,
+  PluginError | PluginRequestError,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
   if (origin.kind === 'local') {
@@ -472,8 +471,6 @@ const updatePlugins = Effect.fn('updatePlugins')(function* (
  * process opened.
  */
 export const InstalledPlugins = Object.freeze({
-  /** The components a plugin can carry that the harness does not load. */
-  unloadedComponents: UNLOADED_COMPONENT_LABELS,
   /** Parse a source as a user types it, refused before anything runs. */
   origin: parsePluginOrigin,
   /** Install what an origin offers, recorded disabled until trusted. */
