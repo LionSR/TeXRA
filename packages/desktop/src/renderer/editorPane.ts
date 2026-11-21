@@ -44,7 +44,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { applyMonacoTheme } from './monacoTheme';
 import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
-import { monacoLanguageForPath } from '../shared/monacoLanguage';
+import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
 
 import { createEditorFileNotice } from './editorFileNotice';
 import {

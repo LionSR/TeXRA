@@ -64,6 +64,13 @@ export const REQUEST_NOUN = Object.freeze({
   pluginTrust: 'plugin',
 } as const satisfies Record<RequestPayload['kind'], string>);
 
+/** What the note sent with a rejection is for: the card's note box, the
+ *  terminal card's note field and the headless prompt. */
+export const REJECTION_NOTE_PROMPT = 'What should the agent change?';
+
+/** A retry's offer to run again on the user's own API key (its `k`). */
+export const RETRY_OWN_KEY_LABEL = 'Retry with your own API key';
+
 /** The label of the directory a command or a proposed agent runs in. */
 export const WORKING_DIRECTORY_LABEL = 'Working directory';
 

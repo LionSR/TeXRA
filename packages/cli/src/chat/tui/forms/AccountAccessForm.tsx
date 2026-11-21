@@ -24,6 +24,7 @@ import {
 } from '@ui/copy/accountAuth';
 import {
   ONBOARDING_CARD_TITLE,
+  ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
 } from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
@@ -157,7 +158,7 @@ const CONNECT_CHOICES = Object.freeze({
 const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
   value: { kind: 'key' },
   label: 'Add a provider API key',
-  description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
+  description: ONBOARDING_CHOICE_API_KEY.description,
 };
 
 /**

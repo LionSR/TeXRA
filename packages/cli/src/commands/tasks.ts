@@ -21,6 +21,7 @@ import {
   requestOnService,
   type ServiceClient,
 } from '@texra/controllers/server/client';
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
@@ -122,7 +123,7 @@ const listCommand = cliCommand('list', {
         tasks,
         tasks.length
           ? tasks.map(taskLine).join('\n')
-          : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
+          : `${EMPTY_TASK_LIST.title}. \`texra tasks start <agent> --instruction …\` starts one.`,
       ),
     );
   }, Effect.scoped),

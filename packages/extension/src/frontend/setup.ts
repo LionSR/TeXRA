@@ -9,7 +9,10 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { askUnlessSilenced } from '@texra/controllers/session/windowNotices';
-import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
+import {
+  LATEX_WORKSHOP_EXT_ID,
+  LATEX_WORKSHOP_FEATURES,
+} from '@texra/shared/constants/latexToolchain';
 
 const CHANNEL = 'extension';
 const INSTALL = 'Install';
@@ -62,7 +65,7 @@ export function initializeLatexSupport(
         askNotice,
         globalState,
         'latex-workshop-install',
-        'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+        `LaTeX Workshop extension is recommended for full TeXRA functionality (${LATEX_WORKSHOP_FEATURES}). Install now?`,
         [INSTALL],
       );
       if (choice !== INSTALL) return;
