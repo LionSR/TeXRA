@@ -173,7 +173,7 @@ The Status column shows `Key set` once the key is stored. To replace a key, set 
 <p class="hero-caption">The Models page's API keys list: each provider shows its key status and Set / Get / Remove actions.</p>
 
 ::: tip Per-provider settings
-Expand a provider's row (select the chevron) to point requests at a custom endpoint, for providers that support it.
+Expand a provider's row (select the chevron) to point requests at a custom endpoint, for providers that support it. The endpoint must serve the same API the provider's own does: the OpenAI Responses API for most providers, the Anthropic Messages API for Anthropic and the Gemini Interactions API for Google.
 :::
 
 You can also place a `.env` file in your workspace with variables such as `OPENAI_API_KEY`. Every task of the project reads it, in the extension, the desktop app and the CLI, so you don't need to enter keys each time.

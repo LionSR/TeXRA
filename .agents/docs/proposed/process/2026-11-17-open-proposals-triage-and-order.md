@@ -249,8 +249,10 @@ What is left for the owner falls into five kinds. Nothing below was touched.
 - Windows: accept that a second window or the CLI is rejected, or build the
   named-pipe service first.
 - What a saved `endpoint.<provider>` means after a backend changes protocol.
-  It is urgent in one respect: `config.json` is additive-only from 1.0, so
-  the choice is cheap only before the release.
+  Decided and landed on 2026-11-21: the stored key names the protocol
+  (`endpoint.<provider>.<protocol>`, read from llm's `BACKEND_PROTOCOLS`),
+  so a provider that changes protocol gets a new, empty key and the URL
+  saved for the old one stays stored and unread.
 - Whether `history delete` waits for its own cleanup; `StartOptions.continues`;
   the meaning of `plan: null` on a rejected plan; the facts-on-the-result
   shape for tools; the `ToolFileAttachment` content union for outside
