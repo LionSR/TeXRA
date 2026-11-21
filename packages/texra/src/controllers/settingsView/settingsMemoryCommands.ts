@@ -6,13 +6,13 @@ import { Effect } from 'effect';
 
 import { MemoryStore, StorageFs } from '@texra-ai/harness/plugins';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
 import {
   hostStatePage,
   type SettingsHostBindings,
   type SettingsPresentation,
+  type SettingsViewInboundHandlerRegistry,
 } from './settingsHostBindings';
 
 /** The Memory page: its handlers and its page. */

@@ -25,6 +25,7 @@ import { apiKeyEntry } from '@texra-ai/llm';
 
 import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
 import {
+  Settings,
   type StorageFs,
   emitAppSignal,
   type AppSignal,
@@ -58,6 +59,7 @@ import {
   type SettingsInput,
   type SettingsInputCounts,
   type SettingsPage,
+  type SettingsViewInboundHandlerRegistry,
 } from '@texra/controllers/settingsView/settingsHostBindings';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
 import {
@@ -65,14 +67,12 @@ import {
   setReasoningLevel,
 } from '@texra/controllers/settingsView/modelSelection';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
-import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage';
 import {
+  buildProfilePage,
   removeProviderKey,
   setProviderKey,
 } from '@texra/controllers/settingsView/providerKeyActions';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
 import {
   applyStateSettingUpdate,
   setSkillEnabled,
@@ -80,6 +80,7 @@ import {
   type StateSettingUpdateResult,
   type WritableRow,
 } from '@texra/controllers/settingsView/stateSettingWrite';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
@@ -128,9 +129,23 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     // ── Pages ──
 
     const pages: ReadonlyArray<SettingsPage<ProcessServices | StorageFs>> = [
+      // A derived snapshot is the catalog rows tagged for it, each read
+      // with its row's default and validation.
       ...DERIVED_SETTINGS_SNAPSHOTS.map((snapshot) => ({
         follows: ['settings'] as const,
-        build: buildSettingsSnapshotMessage(snapshot, roots),
+        build: Effect.map(
+          Effect.forEach(TEXRA_SETTINGS.snapshotEntries(snapshot), (entry) =>
+            Effect.map(
+              Settings.get(roots, entry),
+              (value) => [entry.key, value] as const,
+            ),
+          ),
+          (values) => ({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+            snapshot,
+            values: Object.fromEntries(values),
+          }),
+        ),
       })),
       hostStatePage(
         'profile',

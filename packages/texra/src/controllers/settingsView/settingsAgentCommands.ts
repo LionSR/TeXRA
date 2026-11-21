@@ -32,7 +32,6 @@ import {
   agentFileFromTemplate,
 } from '@texra/agent/templates/agentTemplates';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
 import {
@@ -40,6 +39,7 @@ import {
   SettingsRequestFailed,
   type SettingsHostBindings,
   type SettingsPresentation,
+  type SettingsViewInboundHandlerRegistry,
 } from './settingsHostBindings';
 
 type HostEffect = Effect.Effect<void, Error, ProcessServices>;
