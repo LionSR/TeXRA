@@ -20,11 +20,8 @@ import { join } from 'node:path';
 
 import { Effect, Layer, Schema } from 'effect';
 import { HISTORY_TABLES, Sessions } from '@texra-ai/harness';
-import {
-  definePlugin,
-  harnessBuiltins,
-  defineTool,
-} from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
 
 import {
   EXAMPLE_CLIENT,

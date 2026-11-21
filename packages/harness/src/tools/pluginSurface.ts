@@ -3,19 +3,8 @@
  * (that entry is this module), and what a native plugin's entry is handed
  * at run time as `harness.plugins` (`@tools/nativePlugins`), so a plugin
  * loaded from a folder runs on this process's own harness and `effect`.
+ * The built-in plugins are not part of it: they are `./builtins`.
  */
-export {
-  codemode,
-  fileOps,
-  goal,
-  harnessBuiltins,
-  memoryWorkflow,
-  multiAgent,
-  web,
-} from '@tools/builtinPlugins';
-/** The name of the `multiAgent` plugin's tool, which runs a named agent as
- *  a child of the calling run: an agent whose tools name it orchestrates. */
-export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
   type FactKind,
@@ -23,7 +12,6 @@ export {
   type Plugin,
   type PluginDefinition,
 } from '@tools/plugins';
-export type { WriteFilter } from '@tools/WriteTool';
 export {
   PluginHold,
   ToolRegistry,

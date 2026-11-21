@@ -23,12 +23,8 @@ import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
-import {
-  definePlugin,
-  executed,
-  harnessBuiltins,
-  defineTool,
-} from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { definePlugin, executed, defineTool } from '@texra-ai/harness/plugins';
 import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
 
 import {

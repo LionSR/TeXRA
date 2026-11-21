@@ -33,11 +33,11 @@ import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 import {
   definePlugin,
   errorResult,
   executed,
-  harnessBuiltins,
   type Plugin,
   defineTool,
 } from '@texra-ai/harness/plugins';

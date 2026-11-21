@@ -23,7 +23,7 @@
  */
 import { Effect, Layer, Schema } from 'effect';
 import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
 import { acmeNotes, NoteSchema } from 'acme-notes';
 

@@ -19,7 +19,7 @@
  */
 import { Effect, Layer, Option, Stream } from 'effect';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
