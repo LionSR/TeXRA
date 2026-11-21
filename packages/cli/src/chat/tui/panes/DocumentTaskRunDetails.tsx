@@ -26,6 +26,11 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
+import {
+  GENERATED_FILES_LABEL,
+  LATEXDIFF_STATUS,
+  ROUND_ALERT,
+} from '@ui/copy/documentOutputs';
 import { formatLineChanges } from '@ui/copy/format';
 import { stageStatus, type RunTone } from '@ui/copy/runStatus';
 
@@ -108,7 +113,7 @@ function documentTaskRunDetailGroups(
     if (outputs.length > 0) {
       lines.push({
         key: `outputs:${round}`,
-        text: `  Generated files`,
+        text: `  ${GENERATED_FILES_LABEL}`,
         tone: 'neutral',
         role: 'outputHeading',
       });
@@ -133,7 +138,7 @@ function documentTaskRunDetailGroups(
     }
     const alert = (
       key: string,
-      tone: 'danger' | 'warning',
+      tone: RunTone,
       facts: readonly (string | false | null | undefined)[],
     ): void => {
       const text = joinFacts([formatRoundLabel(round), ...facts]);
@@ -146,34 +151,41 @@ function documentTaskRunDetailGroups(
     };
     const { noDocuments, replyToCheck } = roundAlerts(record);
     if (noDocuments || replyToCheck)
-      alert(`reply:${round}`, 'warning', [
-        noDocuments && 'Wrote no documents',
+      alert(`reply:${round}`, ROUND_ALERT.noDocuments.tone, [
+        noDocuments && ROUND_ALERT.noDocuments.text,
         replyToCheck &&
           `Reply kept at ${safeTerminalText(replyToCheck.absolutePath)}`,
       ]);
     for (const [index, path] of missing.entries()) {
-      alert(`missing:${round}:${path}:${index}`, 'warning', [
-        `Missing output: ${safeTerminalText(path)}`,
-      ]);
+      alert(
+        `missing:${round}:${path}:${index}`,
+        ROUND_ALERT.missingOutput.tone,
+        [`${ROUND_ALERT.missingOutput.text}: ${safeTerminalText(path)}`],
+      );
     }
     for (const [index, failure] of compileFailuresOf(record).entries()) {
-      alert(`compile:${round}:${failure.log.absolutePath}:${index}`, 'danger', [
-        `Compile check failed: ${safeTerminalText(failure.displayName)}`,
-        safeTerminalText(failure.logRelativePath),
-      ]);
+      alert(
+        `compile:${round}:${failure.log.absolutePath}:${index}`,
+        ROUND_ALERT.compileFailed.tone,
+        [
+          `${ROUND_ALERT.compileFailed.text}: ${safeTerminalText(failure.displayName)}`,
+          safeTerminalText(failure.logRelativePath),
+        ],
+      );
     }
     for (const [index, entry] of record.latexdiffs.entries()) {
       const label = `Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`;
       const key = `latexdiff:${round}:${index}`;
+      const { tone } = LATEXDIFF_STATUS[entry.status];
       if (entry.status === 'failed') {
-        alert(key, 'danger', [
+        alert(key, tone, [
           `${label}${DETAIL_SEPARATOR}${safeTerminalText(entry.error)}`,
         ]);
         continue;
       }
       lines.push({
         key,
-        text: `  ${TONE_PAINT.success.marker} ${joinFacts([formatRoundLabel(round), label])}`,
+        text: `  ${TONE_PAINT[tone].marker} ${joinFacts([formatRoundLabel(round), label])}`,
         tone: undefined,
         role: 'output',
       });
