@@ -26,6 +26,7 @@ import {
   LATEX_DEPENDENCIES,
   LATEX_RECOMMENDED_SETTINGS,
   LATEX_WORKSHOP_EXT_ID,
+  LATEX_WORKSHOP_FEATURES,
   type LatexDependency,
   type LatexRecommendedSettingField,
   type ProbedLatexTool,
@@ -89,9 +90,8 @@ const DEPENDENCIES: DependencyInfo[] = [
   },
   {
     key: 'latexWorkshop',
-    installedDesc: 'Provides LaTeX compilation, PDF preview, and IntelliSense.',
-    missingDesc:
-      'Required for LaTeX compilation, PDF preview, and IntelliSense.',
+    installedDesc: `Provides ${LATEX_WORKSHOP_FEATURES}.`,
+    missingDesc: `Required for ${LATEX_WORKSHOP_FEATURES}.`,
   },
   {
     key: 'latexdiff',

@@ -7,7 +7,10 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
-import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
+import {
+  LATEX_WORKSHOP_EXT_ID,
+  LATEX_WORKSHOP_FEATURES,
+} from '@texra/shared/constants/latexToolchain';
 
 const CHANNEL = 'extension';
 
@@ -57,8 +60,7 @@ export function initializeLatexSupport(
       );
       yield* promptExtensionInstall(globalState, {
         suppressKey: 'latex-workshop-install',
-        message:
-          'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+        message: `LaTeX Workshop extension is recommended for full TeXRA functionality (${LATEX_WORKSHOP_FEATURES}). Install now?`,
         extensionId: LATEX_WORKSHOP_EXT_ID,
       });
     }

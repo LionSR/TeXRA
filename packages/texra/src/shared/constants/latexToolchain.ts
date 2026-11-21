@@ -9,6 +9,10 @@ import type { OsPlatform } from '@texra/shared/osPlatform';
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
+/** What LaTeX Workshop adds, where TeXRA recommends it or reports it. */
+export const LATEX_WORKSHOP_FEATURES =
+  'LaTeX compilation, PDF preview, and IntelliSense';
+
 /**
  * A recommended VS Code setting: a scalar written as is, or an object merged
  * key-by-key into whatever the user already has set (rather than overwritten
