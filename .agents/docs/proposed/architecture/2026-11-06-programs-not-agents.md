@@ -295,12 +295,17 @@ const theory: TexraPlugin = {
 - **描述和工具是表里的数据。** 不为发现而求值任何源码，也不从源码里提取。
 - **源码是真实的文件。** 一个程序是插件源码目录里的一个 `.js` 文件（如
   `packages/texra/src/tools/theory/programs/annotate.js`），构建时作为
-  文本打进插件值；沙箱 worker 的源码今天就是这样进包的
-  （`virtual:code-sandbox-worker`）。今天的 `GOAL_MODULE`、
-  `DOCUMENTS_MODULE` 和 `recipeSource()` 是 TS 里的模板字符串，没有 lint、
-  没有高亮，常量靠 `JSON.stringify` 拼进源码。不从 `resources/` 运行时
-  读：`texraPlugins()` 是一张同步的值的表，没打包的 host 也没有那个目
-  录。
+  文本打进插件值（`./programs/annotate.js?raw`：esbuild 的插件在
+  `scripts/code-sandbox-worker.mjs`，Vite 自己认这个后缀）；沙箱 worker
+  的源码也是这样进包的（`virtual:code-sandbox-worker`）。**已落地**：
+  theory 和 lean 的模块、`builtIn:goal`
+  （`packages/harness/src/tools/plan/goal.js`）和 realm 的两段启动脚本
+  （`packages/harness/src/agent/codeSandbox/bridge.js`、`determinism.js`）
+  都是文件，有 lint（`oxlint.config.mts` 的 `REALM`：`no-undef` 只认语言
+  自带的全局和 bridge 定义的那几个）和格式化，常量直接写在模块里。没有
+  类型检查：工具的返回形状今天只是给模型看的字符串（`scriptReturns`）。
+  不从 `resources/` 运行时读：`texraPlugins()` 是一张同步的值的表，没打
+  包的 host 也没有那个目录。
 - `agentBlock` 连同 `AgentBlock`、`boundFiles`、`boundFile`、
   `agentBlockOf`、`ToolTable.blocks` 和 `ITool.launchesTasks` 删。
   `AgentBlock.result`（一个 task 的结果怎么读给启动它的人）先原样挪到程
@@ -1241,8 +1246,8 @@ history 的行。
    一期对比后决定删不删。程序能由 `texra run` 和入口 agent 启动；launch
    form 这一期不动。
    **已落地（#14968，后续 #14998）。** 八个程序在
-   `packages/texra/src/tools/theory/programs.ts`（源码是这个文件里的字符
-   串，不是各自的 `.js` 文件）；task 文件、`task:` 块、选项表和
+   `packages/texra/src/tools/theory/programs.ts`（源码后来搬成了
+   `programs/` 下各自的 `.js` 文件）；task 文件、`task:` 块、选项表和
    `critic.yaml` 已删，`packages/extension/resources/agents` 剩 19 个文
    件，`DOCUMENT_TASK_OPTIONS` 整词搜索 0 处；`describeTool` 对程序名返回
    源码；launch form 的 task 开关和 task agent 也在这一期删了。还剩：结

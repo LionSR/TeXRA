@@ -9,12 +9,39 @@
 // CLI's single ESM file, the desktop's split ESM chunks and the desktop's
 // app.asar all start the same worker without a per-host lookup table.
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { build } from 'esbuild';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 export const CODE_SANDBOX_WORKER_ID = 'virtual:code-sandbox-worker';
+
+/**
+ * Loads `./file.js?raw` as the file's text: the code a script's realm
+ * evaluates (the realm's setup scripts, a plugin's script modules) is
+ * written as files and shipped as strings. Vite reads the same suffix
+ * itself, so the suites need no plugin.
+ *
+ * @type {import('esbuild').Plugin}
+ */
+const rawText = {
+  name: 'raw-text',
+  setup(pluginBuild) {
+    pluginBuild.onResolve({ filter: /\?raw$/ }, ({ path, resolveDir }) => ({
+      path: resolve(resolveDir, path.slice(0, -'?raw'.length)),
+      namespace: 'raw-text',
+    }));
+    pluginBuild.onLoad(
+      { filter: /.*/, namespace: 'raw-text' },
+      async (args) => ({
+        contents: await readFile(args.path, 'utf8'),
+        loader: 'text',
+        watchFiles: [args.path],
+      }),
+    );
+  },
+};
 
 /**
  * Bundles the worker entry. Returns its source text and the files it read,
@@ -44,12 +71,14 @@ export async function bundleCodeSandboxWorker({ minify = false } = {}) {
       js: 'var importMetaUrl = require("node:url").pathToFileURL(__filename).href;',
     },
     define: { 'import.meta.url': 'importMetaUrl' },
+    plugins: [rawText],
     tsconfig: resolve(repoRoot, 'tsconfig.json'),
   });
   return {
     source: result.outputFiles[0].text,
+    // A file loaded as text is listed under its plugin's namespace.
     inputs: Object.keys(result.metafile.inputs).map((input) =>
-      resolve(repoRoot, input),
+      resolve(repoRoot, input.replace(/^raw-text:/, '')),
     ),
   };
 }
@@ -92,18 +121,18 @@ function buildIdentityDefine() {
 
 /**
  * The esbuild options every bundle of the harness's sources starts from;
- * each config spreads them and adds its own. They embed the worker and the
- * QuickJS WASM bytes, stamp the build identity, and keep class names: the
- * model-error verdict (packages/llm/src/api/verdict.ts) tells a network
- * failure by the SDK error classes' names along the prototype chain, and
- * esbuild renames a class when it minifies or when two bundled modules
- * declare the same name.
+ * each config spreads them and adds its own. They embed the worker, the
+ * QuickJS WASM bytes and the script sources, stamp the build identity, and
+ * keep class names: the model-error verdict
+ * (packages/llm/src/api/verdict.ts) tells a network failure by the SDK
+ * error classes' names along the prototype chain, and esbuild renames a
+ * class when it minifies or when two bundled modules declare the same name.
  */
 export function harnessBundleOptions() {
   return {
     bundle: true,
     loader: { '.wasm': 'binary' },
-    plugins: [codeSandboxWorker],
+    plugins: [codeSandboxWorker, rawText],
     define: buildIdentityDefine(),
     keepNames: true,
   };
