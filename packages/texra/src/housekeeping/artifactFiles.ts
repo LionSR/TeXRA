@@ -1,13 +1,13 @@
 /**
  * The files a housekeeping command packs or cleans: the filesystem a path is
  * handled through, the artifacts a pattern names, the timestamp a packed name
- * carries, and the error a failed listing raises.
+ * carries.
  */
 // Standard library imports
 import * as path from 'node:path';
 
 // Third-party imports
-import { Clock, Effect, FileSystem, type PlatformError, Schema } from 'effect';
+import { Clock, Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import {
@@ -22,20 +22,6 @@ import {
 
 import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { CHANNEL } from './constants';
-
-/**
- * A workspace listing that did not complete. The `glob` package rejects, and
- * a housekeeping command reports that as an error result rather than as a
- * defect, so the rejection is typed here instead of caught raw.
- */
-export class GlobFailed extends Schema.TaggedError<GlobFailed>()('GlobFailed', {
-  pattern: Schema.String,
-  cause: Schema.Defect(),
-}) {
-  override get message(): string {
-    return `Failed to list ${this.pattern}: ${String(this.cause)}`;
-  }
-}
 
 /**
  * The filesystem a housekeeping path is handled through, with the path in
