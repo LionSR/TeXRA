@@ -15,7 +15,7 @@ What an embedder needs to know, in order:
    `harnessBuiltins` from `./plugins`, plus any plugin of your own;
    `client` names your app to the model providers (`{ name, id }`).
 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
-3. `session.start({ agent, instruction })` gives a {@link Run}: read
+3. `session.start({ agent, instruction, model })` gives a {@link Run}: read
    `run.events` for its progress (`run.events.pipe(responseText)` for
    just the answer's text) and `run.result` for how it ended.
 4. `session.resume(runId)` continues a run a persistent session stored.
@@ -26,8 +26,9 @@ yourself (a scripted model in a test), merge {@link ModelFetch} beneath
 `Sessions.layer` with `Layer.provideMerge`.
 
 The surface is Effect: nothing here calls `Effect.runPromise`; your
-program runs it at its own entry point. Every failure is a tagged error
-listed below.
+program runs it at its own entry point. A start, a resume and an open
+fail with the tagged errors listed below; a `session.request` is refused
+with the ones on `./schemas` (`RequestError`).
 
 ### Companion subpaths
 
@@ -42,7 +43,7 @@ listed below.
   filesystem, SQLite, and process building blocks.
 - [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's
   editor, desktop and terminal apps) composes beyond this entry:
-  `processLayer`, the agent catalog, and the config and state stores.
+  `processLayer`, the agent catalog, skills and installed plugins.
 
 ## AgentDirectoriesFailed
 
@@ -925,7 +926,7 @@ interface StreamChunkEvent {
 ## ToolsRefused
 
 The tools the caller passed cannot run here: a tool that requires
-approval, on a session opened without an approval handler.
+approval, on a session with no approval handler attached.
 
 ```ts
 class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(

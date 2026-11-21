@@ -12,7 +12,7 @@
  *    `harnessBuiltins` from `./plugins`, plus any plugin of your own;
  *    `client` names your app to the model providers (`{ name, id }`).
  * 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
- * 3. `session.start({ agent, instruction })` gives a {@link Run}: read
+ * 3. `session.start({ agent, instruction, model })` gives a {@link Run}: read
  *    `run.events` for its progress (`run.events.pipe(responseText)` for
  *    just the answer's text) and `run.result` for how it ended.
  * 4. `session.resume(runId)` continues a run a persistent session stored.
@@ -23,8 +23,9 @@
  * `Sessions.layer` with `Layer.provideMerge`.
  *
  * The surface is Effect: nothing here calls `Effect.runPromise`; your
- * program runs it at its own entry point. Every failure is a tagged error
- * listed below.
+ * program runs it at its own entry point. A start, a resume and an open
+ * fail with the tagged errors listed below; a `session.request` is refused
+ * with the ones on `./schemas` (`RequestError`).
  *
  * ### Companion subpaths
  *
@@ -39,7 +40,7 @@
  *   filesystem, SQLite, and process building blocks.
  * - [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's
  *   editor, desktop and terminal apps) composes beyond this entry:
- *   `processLayer`, the agent catalog, and the config and state stores.
+ *   `processLayer`, the agent catalog, skills and installed plugins.
  */
 
 // Building the process and opening sessions.
@@ -74,10 +75,11 @@ export type {
   StartInput,
 } from './effect/sessions.js';
 // What a session's methods take and hand out is on `./schemas`: a run's id
-// (`session.resume`), a commit position and a display event (`view`), a
-// stored conversation's nodes (`records(runId).readConversation`), a
-// request (`session.request`), and the request an `ApprovalHandler` is
-// asked with and the decision it answers.
+// (`session.resume`), a display event (`view`), a stored conversation's
+// nodes (`records(runId).readConversation`), a request (`session.request`)
+// with the errors it is refused with, and the request an `ApprovalHandler`
+// is asked with and the decision it answers. A commit position and what
+// `view.watch` takes and yields are on `./transcript`.
 
 // The presentation surface a `SessionHost` serves and a `LocalSession`'s
 // `emit` shows through: the notices a session's runs ask a host to present,

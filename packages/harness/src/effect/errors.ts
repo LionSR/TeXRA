@@ -36,7 +36,7 @@ export class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
 
 /**
  * The tools the caller passed cannot run here: a tool that requires
- * approval, on a session opened without an approval handler.
+ * approval, on a session with no approval handler attached.
  */
 export class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(
   'ToolsRefused',
