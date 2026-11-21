@@ -2,6 +2,7 @@
 // environment + span shield, and the exported shield the HTML normalizer runs
 // between its structural passes.
 
+import { normalizeLineEndings } from '@texra-ai/harness/schemas';
 import {
   applyEnvironmentShields,
   createBegEndEnvironmentProbe,
@@ -174,7 +175,7 @@ export function protectLatexMathSpansForNormalize(content: string): {
   content: string;
   restore: (value: string) => string;
 } {
-  const source = content.replaceAll(/\r\n?/g, '\n');
+  const source = normalizeLineEndings(content);
   normalizeEnvironmentProbe ??= createBegEndEnvironmentProbe(
     createProbeMarkdownIt(),
   );

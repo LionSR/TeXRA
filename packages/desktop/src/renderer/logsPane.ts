@@ -6,6 +6,7 @@ import {
   decodingDefault,
   entryDetail,
   entryLine,
+  normalizeLineEndings,
   truncateSummary,
 } from '@texra-ai/harness/schemas';
 import { postToMain } from './messageRoutes';
@@ -120,9 +121,7 @@ const decodeDesktopLogLine = Schema.decodeUnknownResult(
  * their expanded state across automatic refreshes.
  */
 function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
-  const lines = text
-    .replaceAll('\r\n', '\n')
-    .replaceAll('\r', '\n')
+  const lines = normalizeLineEndings(text)
     .split('\n')
     .filter((line) => line.trim().length > 0);
 

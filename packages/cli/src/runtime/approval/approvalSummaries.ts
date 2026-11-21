@@ -10,6 +10,7 @@ import {
   type UserQuestionRequest,
   formatClippedList,
   formatHunkLines,
+  normalizeLineEndings,
 } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
@@ -94,10 +95,7 @@ function truncateLineToWidth(line: string, maxChars: number): string {
 }
 
 function agentProposalInstructionLines(instruction: string): readonly string[] {
-  return instruction
-    .replaceAll('\r\n', '\n')
-    .replaceAll('\r', '\n')
-    .split('\n');
+  return normalizeLineEndings(instruction).split('\n');
 }
 
 function boundedAgentProposalInstructionLines(

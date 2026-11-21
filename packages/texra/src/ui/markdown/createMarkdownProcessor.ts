@@ -7,7 +7,11 @@
 
 import { LRUCache } from 'lru-cache';
 
-import { escapeAttr, escapeText } from '@texra-ai/harness/schemas';
+import {
+  escapeAttr,
+  escapeText,
+  normalizeLineEndings,
+} from '@texra-ai/harness/schemas';
 
 import {
   createBegEndEnvironmentProbe,
@@ -115,7 +119,7 @@ export function createMarkdownProcessor(
     // markdown-it core normalizes CRLF / bare CR to LF before block rules run,
     // so normalize once here and let the whole render pipeline operate on LF.
     const source = config.protectLatexMath
-      ? content.replaceAll(/\r\n?/g, '\n')
+      ? normalizeLineEndings(content)
       : content;
 
     // Protect in widening order (refs → math spans → stray macros); restore in

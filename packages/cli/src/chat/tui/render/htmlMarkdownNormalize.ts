@@ -1,3 +1,4 @@
+import { normalizeLineEndings } from '@texra-ai/harness/schemas';
 import { Number as Num } from 'effect';
 import {
   MATH_SPAN_PATTERNS,
@@ -417,7 +418,7 @@ function protectLiteralMathSyntax(content: string): {
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   // Normalize once so the container-aware math shield and the later renderer
   // both slice the same LF string markdown-it will parse.
-  const lfContent = content.replaceAll(/\r\n?/g, '\n');
+  const lfContent = normalizeLineEndings(content);
   if (!KNOWN_HTML_TAG_RE.test(lfContent)) return lfContent;
 
   const literalDollarProtection = protectLiteralMathSyntax(lfContent);

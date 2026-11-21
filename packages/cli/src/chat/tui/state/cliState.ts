@@ -12,6 +12,7 @@ import {
   type RunId,
   descendantRuns,
   FACT_SEPARATOR,
+  normalizeLineEndings,
 } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import {
@@ -373,7 +374,7 @@ export const infoPane: Signal.Computed<InfoPaneContent | undefined> = computed(
 export function openInfoPane(title: string, text: string): void {
   INFO_PANE_QUEUE.set([
     ...INFO_PANE_QUEUE.get(),
-    { title, lines: text.replaceAll('\r\n', '\n').split('\n') },
+    { title, lines: normalizeLineEndings(text).split('\n') },
   ]);
 }
 

@@ -10,6 +10,7 @@
 import { diff_match_patch } from 'diff-match-patch';
 
 // Local imports
+import { normalizeLineEndings } from '@texra-ai/harness/schemas';
 import type { NamedDocument } from '@texra/agent/output/extraction/xmlExtraction';
 import { SCRATCHPAD_TAG } from '@texra/shared/plugins/documentOutputs';
 
@@ -37,10 +38,7 @@ export function stripScratchpad(content: string): string {
 
 /** Strip `<scratchpad>` blocks, normalize CRLF/CR to LF, and split into lines. */
 export function responseLines(content: string): string[] {
-  return stripScratchpad(content)
-    .replaceAll('\r\n', '\n')
-    .replaceAll('\r', '\n')
-    .split('\n');
+  return normalizeLineEndings(stripScratchpad(content)).split('\n');
 }
 
 // ---------------------------------------------------------------------------

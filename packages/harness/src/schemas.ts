@@ -296,6 +296,7 @@ export {
   formatResultCount,
   formatWallTime,
   joinFacts,
+  normalizeLineEndings,
   pluralize,
   previewLabel,
   splitContentLines,
