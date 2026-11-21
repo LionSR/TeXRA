@@ -91,6 +91,7 @@ async function writeCanonicalRunFixtures(
         yield* database.appendAll([
           {
             type: 'run.start',
+            maxCostUsd: null,
             aggregateId: id,
             identity: { kind: 'agent', agent: runFixture.agent },
             takesFollowUps: true,

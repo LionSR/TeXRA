@@ -188,6 +188,8 @@ interface AwaitedChildLaunch {
   readonly parentCall: Omit<NonNullable<RunParent['call']>, 'awaited'>;
   /** The grants a fresh child is registered with. */
   readonly grants?: ApprovalGrants;
+  /** The spend cap a fresh child is registered with. */
+  readonly maxCostUsd?: number | null;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
   readonly seed?: RegisterRunOptions['seed'];
   /** Live progress for the call's card; absent means silent. */
@@ -217,6 +219,7 @@ export const executeSubagentInBand = (
             call: { ...launch.parentCall, awaited: true },
           },
           grants: launch.grants,
+          maxCostUsd: launch.maxCostUsd,
           seed: launch.seed,
         },
         { onProgress: launch.notify },

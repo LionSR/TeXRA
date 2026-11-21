@@ -47,6 +47,7 @@ const publishRun = (
   return publishTestRows(session, [
     {
       type: 'run.start',
+      maxCostUsd: null,
       aggregateId,
       identity: { kind: 'agent', agent },
       takesFollowUps: true,
@@ -201,6 +202,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 yield* publishTestRows(handle, [
                   {
                     type: 'run.start',
+                    maxCostUsd: null,
                     aggregateId: parentId,
                     identity: { kind: 'agent', agent: 'chat' },
                     takesFollowUps: true,
@@ -211,6 +213,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   },
                   {
                     type: 'run.start',
+                    maxCostUsd: null,
                     aggregateId: childRunId,
                     identity: { kind: 'agent', agent: 'review' },
                     takesFollowUps: false,

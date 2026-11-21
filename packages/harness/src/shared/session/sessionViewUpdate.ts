@@ -364,6 +364,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     actions: [],
     usage: emptyUsageStats(),
     treeUsage: emptyUsageStats(),
+    maxCostUsd: event.maxCostUsd,
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,

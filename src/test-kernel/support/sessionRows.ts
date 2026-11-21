@@ -21,6 +21,7 @@ export const runStart = (
   over: Partial<Omit<RunStartDraft, 'type' | 'aggregateId'>> = {},
 ): RunStartDraft => ({
   type: 'run.start',
+  maxCostUsd: null,
   aggregateId: runId,
   identity: { kind: 'agent', agent: 'chat' },
   takesFollowUps: false,

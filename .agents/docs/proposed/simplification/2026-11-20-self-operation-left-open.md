@@ -16,6 +16,32 @@ was found and not done, with the reason.
 
 ## 1. A child's spend cap is a fact of the waiting call, not of the run
 
+**Landed 2026-11-21.** The cap is `run.start.maxCostUsd` (`run.start` v6 to
+v7) and `RunView.maxCostUsd`; one watcher per session
+(`stopRunsAtCap`, `packages/harness/src/agent/runtime/spendCap.ts`) stops a
+run at its cap with the runs under it, under a new stop reason `cap`
+(`run.stop` v2 to v3) that the awaiting call reads as `BudgetExceeded` and a
+background child's report to its parent states. A direct call and a
+`background: true` call take `maxCostUsd`; `resources` walks the view's
+launch edges; the tool-intent walk and `AgentOverBudget` are gone. Decided
+by the owner: a cap survives a resume. It is the run's for its whole life,
+so a capped run resumed at its cap is stopped again, and more spend takes a
+new run. The cap also covers what a finished child left running in the
+background, which the waiting call did not.
+
+`timeoutMs` did not move. It is how long a call waits, measured on the
+waiting call's clock, so it is a fact of the wait: recorded on the run it
+would need a meaning across a resume (time while no process ran it) that
+nobody has asked for. A background call still rejects it. `withinLimits` is
+now `withinTime`, the timeout alone.
+
+Not covered by a test: the background child's report at its cap. The kernel
+suite that covers caps (`src/test-kernel/tools/codemode/SelfTool.vitest.ts`)
+drives `self()`, which has no background form; a case needs a new scripted
+scenario in the validation model.
+
+The text below is the finding as written.
+
 `withinLimits` (`packages/harness/src/agent/runtime/delegation/agentChild.ts`)
 holds `maxCostUsd` in the call that waits for the child. Three consequences
 follow from that one placement:

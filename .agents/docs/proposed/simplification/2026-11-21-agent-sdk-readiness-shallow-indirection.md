@@ -103,7 +103,9 @@ is not re-mined.
    which models the launcher's picker lists, whether a delegation may name a
    model the picker hides, and one `setModelAccessPreference` operation for the
    two write paths.
-3. **A child's spend cap is a fact of the waiting call, not of the run**
+3. Landed 2026-11-21 (`run.start.maxCostUsd`, `spendCap.ts`; a cap
+   survives a resume). Was: **A child's spend cap is a fact of the waiting
+   call, not of the run**
    ([2026-11-20-self-operation-left-open.md](2026-11-20-self-operation-left-open.md)
    §1): recording the cap on the child run's start, so `resources` reads the
    view instead of walking ancestors — a stored-row change for the first
