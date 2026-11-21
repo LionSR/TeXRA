@@ -34,7 +34,8 @@ import {
   RUN_LOG_MAX_LINE_LENGTH,
   RUN_LOG_MAX_LINES,
 } from './limits';
-import { BRIDGE_PRELUDE, DETERMINISM_PRELUDE } from './prelude';
+import BRIDGE from './bridge.js?raw';
+import DETERMINISM from './determinism.js?raw';
 import {
   ResultMessageSchema,
   type StepReportWire,
@@ -228,8 +229,8 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
   const bridge = yield* Effect.acquireRelease(
     Effect.try({
       try: () => {
-        const handle = evaluate(context, BRIDGE_PRELUDE, 'sandbox-bridge.js');
-        evaluate(context, DETERMINISM_PRELUDE, 'sandbox-prelude.js').dispose();
+        const handle = evaluate(context, BRIDGE, 'sandbox-bridge.js');
+        evaluate(context, DETERMINISM, 'sandbox-prelude.js').dispose();
         return handle;
       },
       catch: realmFailure,
