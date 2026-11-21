@@ -12,7 +12,11 @@
 // Third-party imports
 import { Schema } from 'effect';
 import { decodingDefault } from '@shared/schemas';
-import { providerDisplayName } from '@texra-ai/llm';
+import {
+  BACKEND_PROTOCOLS,
+  providerDisplayName,
+  type BackendProviderId,
+} from '@texra-ai/llm';
 
 // Local imports
 import type { SettingRow } from '@shared/state/stateSettings';
@@ -21,14 +25,31 @@ import type { SettingRow } from '@shared/state/stateSettings';
 export const booleanWithDefault = (value: boolean) =>
   decodingDefault(Schema.Boolean, value);
 
-/** A provider's custom-endpoint row, stored as `<namespace>.endpoint.<id>`. */
-const endpointRow = <const Id extends string>(id: Id) =>
+/** Each protocol's API, as its vendor names it. */
+const PROTOCOL_API = {
+  'openai-responses': 'OpenAI Responses API',
+  'anthropic-messages': 'Anthropic Messages API',
+  'google-interactions': 'Gemini Interactions API',
+} as const satisfies Record<
+  (typeof BACKEND_PROTOCOLS)[BackendProviderId],
+  string
+>;
+
+/**
+ * A provider's custom-endpoint row, stored as
+ * `<namespace>.endpoint.<id>.<protocol>`. The value is a base URL for the
+ * protocol the provider's requests use, so the key names that protocol: when
+ * a provider moves to another protocol its row takes a new key, starting
+ * empty, and the URL saved for the old protocol stays stored and unread
+ * instead of receiving requests it does not serve.
+ */
+const endpointRow = <const Id extends BackendProviderId>(id: Id) =>
   ({
     id,
-    key: `endpoint.${id}` as const,
+    key: `endpoint.${id}.${BACKEND_PROTOCOLS[id]}` as const,
     schema: decodingDefault(Schema.String, ''),
     title: `${providerDisplayName(id)} endpoint`,
-    description: `Custom base URL for ${providerDisplayName(id)} API requests. Leave empty to use the default endpoint.`,
+    description: `Custom base URL for ${providerDisplayName(id)} requests, which use the ${PROTOCOL_API[BACKEND_PROTOCOLS[id]]}. Leave empty to use the default endpoint.`,
     slot: 'globalState',
   }) as const satisfies SettingRow<string> & { readonly id: Id };
 
