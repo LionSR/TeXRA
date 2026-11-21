@@ -15,8 +15,12 @@ import { LitElement, type CSSResultGroup } from 'lit';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@ui/styles';
 
-/** The token sheet and common view chrome every component adopts. */
+/** The token sheet and common view chrome every component adopts. Frozen
+ *  because every subclass holds this one array by reference through
+ *  `TexraElement.styles`; Lit only ever reads a styles group, so freezing keeps
+ *  the shared list from being mutable state crossing the module boundary. */
 const baseStyles: CSSResultGroup = [designTokens, commonViewStyles];
+Object.freeze(baseStyles);
 
 /** Base for a webview component: adopts the shared token and view sheets. */
 export class TexraElement extends LitElement {
