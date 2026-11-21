@@ -42,15 +42,14 @@ each waits on the decision its last sentence names. None can land without it.
    terminal used to list such a model again). A model that was never a
    default and never enabled has no stored "off", so none was invented: it
    is listed while the subscription serves it.
-2. **A model the picker hides.** `chooseLaunchModel` runs a catalog model a
-   launch names even when it is not enabled; delegation refuses it with
-   "not currently available for delegation", because it checks a launch
-   against the list it told the model. Making delegation call the app's
-   rule is not possible (the harness imports no app); moving
-   `chooseLaunchModel` into the harness beside `decideRunModel` would let
-   delegation use it, at the cost of the delegation prompt listing models a
-   launch accepts beyond them. Decide whether a delegation may name an
-   unlisted model first.
+2. **A model the picker hides.** Decided 2026-11-21: the code's rule
+   stays. A delegation may name only a model of the list its prompt told it
+   (`selectAvailableDelegationModel`); a person's explicit launch may name
+   any catalog model (`chooseLaunchModel`). The two already read the same
+   list (item 1), so this rule is their only difference, and it is one of
+   authority: a model chooses among what it was offered, and a person who
+   types a model's name has decided for themselves. `chooseLaunchModel`
+   stays in the app.
 3. **Turning a model-access preference on or off.** `updateCliModelAccess`
    (`packages/cli/src/runtime/models/modelAccessSelection.ts`) toggles a
    subscription (signing in first when the account is signed out) or a
