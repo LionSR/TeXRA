@@ -49,6 +49,7 @@ import {
   allSubscriptionUsage,
   invalidateSubscriptionUsage,
 } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
+import { setModelAccessPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
 import { settingsAgentCommands } from '@texra/controllers/settingsView/settingsAgentCommands';
 import { settingsGitCommands } from '@texra/controllers/settingsView/settingsGitCommands';
 import {
@@ -222,16 +223,22 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         ),
       );
     };
-    const setPreferSubscription = (
+    /** A subscription switched on while signed out is not written: the
+     *  window's sign-in follows, which turns it on when it succeeds. */
+    const setSubscriptionPreference = (
       providerId: SubscriptionProviderId,
       enabled: boolean,
-    ) => {
-      const provider = subscriptionProvider(providerId);
-      return subscriptionChange(
-        `Could not update the ${provider.displayName} subscription preference`,
-        provider.setPreferSubscription(roots, enabled),
+    ) =>
+      subscriptionChange(
+        `Could not update the ${subscriptionProvider(providerId).displayName} subscription preference`,
+        Effect.flatMap(
+          setModelAccessPreference(roots, providerId, enabled),
+          (outcome) =>
+            outcome === 'needs-sign-in'
+              ? signInSubscription(providerId)
+              : Effect.void,
+        ),
       );
-    };
 
     // ── Catalog-backed settings rows ──
 
@@ -242,7 +249,8 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       if (result.kind === 'ignored') return;
       const failure = settingWriteFailure(result);
       if (failure !== undefined)
-        yield* result.kind === 'workspace-required'
+        yield* result.kind === 'workspace-required' ||
+        result.kind === 'needs-key'
           ? notice(failure.message)
           : alert(failure.message);
       yield* changed('settings');
@@ -344,7 +352,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       signInSubscription: (message) => signInSubscription(message.provider),
       signOutSubscription: (message) => signOutSubscription(message.provider),
       setSubscriptionPreference: (message) =>
-        setPreferSubscription(message.provider, message.enabled),
+        setSubscriptionPreference(message.provider, message.enabled),
       getSubscriptionUsage: (message) =>
         Effect.andThen(
           message.forceRefresh === true

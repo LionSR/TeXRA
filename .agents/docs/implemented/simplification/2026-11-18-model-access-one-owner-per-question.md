@@ -1,7 +1,8 @@
 # Model access: one owner per question, and the questions left open
 
 Date: 2026-11-18
-Status: proposed (four questions landed with this note; three are open)
+Status: implemented (the three questions left open were decided and landed
+on 2026-11-21)
 Origin: applying the owner's rule that a host has no service functions or
 error types of its own to the terminal client's model layer
 (`packages/cli/src/runtime/models/`), against how the GUI hosts choose and
@@ -23,10 +24,9 @@ the app's controllers; a row marked _landed_ changed with this note.
 | Each subscription's status                    | _landed_: `subscriptionAuthStatuses` (`packages/texra/src/controllers/modelAccess/subscriptionProviders.ts`)                                                                                                                                                                      | the same                                                                                                                                                                                            |
 | How a sign-in starts                          | `subscriptionProvider(id).signIn` with the host's presenter (`packages/desktop/src/main/desktopSignInPresenters.ts`)                                                                                                                                                              | the same, with the terminal's presenter (`packages/cli/src/runtime/models/subscriptionLogin.ts`); _landed_: its browser launch fails with the app's `HostFailed`                                    |
 
-## Open
+## Decided on 2026-11-21
 
-Checked against `main` on 2026-11-19: all three still stand as written, and
-each waits on the decision its last sentence names. None can land without it.
+The three questions this note left for the owner, each as it was settled.
 
 1. **Which models the launcher's picker lists.** Decided and landed
    2026-11-21: one list for every surface, owned by the harness
@@ -50,20 +50,19 @@ each waits on the decision its last sentence names. None can land without it.
    authority: a model chooses among what it was offered, and a person who
    types a model's name has decided for themselves. `chooseLaunchModel`
    stays in the app.
-3. **Turning a model-access preference on or off.** `updateCliModelAccess`
-   (`packages/cli/src/runtime/models/modelAccessSelection.ts`) toggles a
-   subscription (signing in first when the account is signed out) or a
-   coding plan (refusing without its key). The GUI has no such operation:
-   its Models page writes the subscription preference directly and the
-   coding-plan rows through `applyStateSettingUpdate`, which the terminal's
-   own `/config` form also uses, so the terminal writes one coding-plan row
-   two ways. One app operation, `setModelAccessPreference(stores,
-   provider, state)` in `packages/texra/src/controllers/modelAccess/`,
-   returning a typed outcome (`enabled`, `disabled`, `needs-sign-in`,
-   `needs-key`) that each host words, would replace both; it needs the
-   GUI's answer to "turned on while signed out" decided first, since the
-   terminal signs in on the spot. `readCliModelAccessStatus`'s coding-plan half (key set,
-   preference) moves with it.
+3. **Turning a model-access preference on or off.** Landed 2026-11-21:
+   `setModelAccessPreference(stores, provider, enabled)` in
+   `packages/texra/src/controllers/modelAccess/modelAccessPreference.ts`
+   answers `enabled`, `disabled`, `needs-sign-in` or `needs-key`, and each
+   host words the outcome. Turned on without its credential, a preference
+   is not written: the terminal signs in on the spot, and the settings view
+   starts the window's sign-in (which turns the preference on when it
+   succeeds). A coding plan's switch reaches the same writer from every
+   settings row (`applyStateSettingUpdate` calls `setCodingPlanPreference`),
+   so the GUI's Models page, the terminal's `/login` and its `/config` write
+   one way, and the GUI no longer turns a plan on with no key set.
+   `readModelAccessStatus` is beside it; `updateCliModelAccess` only words,
+   and `codingPlanSubscriptionRuntimes` is gone.
 
 ## Kept in the terminal, and why
 

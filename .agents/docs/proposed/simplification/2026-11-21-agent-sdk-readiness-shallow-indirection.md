@@ -98,11 +98,10 @@ is not re-mined.
    (`texra.db`, `TEXRA_APPROVAL_POLICY`, `TEXRA_SKILL_DIR`): a stored-name /
    env-key change deferred to the first release
    ([2026-11-20-agent-sdk-readiness-audit.md](2026-11-20-agent-sdk-readiness-audit.md)).
-2. **Model handler** — the three product-visible defaults in
-   [2026-11-18-model-access-one-owner-per-question.md](2026-11-18-model-access-one-owner-per-question.md):
-   which models the launcher's picker lists, whether a delegation may name a
-   model the picker hides, and one `setModelAccessPreference` operation for the
-   two write paths.
+2. Decided and landed 2026-11-21: the three product-visible defaults of
+   [the model-access note](../../implemented/simplification/2026-11-18-model-access-one-owner-per-question.md)
+   (one list of models for every surface, a delegation names only a model it
+   was told, and `setModelAccessPreference` as the one writer).
 3. **A child's spend cap is a fact of the waiting call, not of the run**
    ([2026-11-20-self-operation-left-open.md](2026-11-20-self-operation-left-open.md)
    §1): recording the cap on the child run's start, so `resources` reads the

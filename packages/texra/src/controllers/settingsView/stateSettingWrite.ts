@@ -7,7 +7,9 @@
 //   - a value-less message is a no-op (the catalog schemas carry a decoding
 //     default, so parsing `undefined` would silently write a default),
 //   - null explicitly resets a setting while an omitted value remains a no-op,
-//   - a workspace-target config write needs an open workspace folder.
+//   - a workspace-target config write needs an open workspace folder,
+//   - a coding plan's switch is a model-access preference, written by its
+//     one operation, which turns it on only when the plan's key is set.
 // Which rows a surface may write is the caller's: a settings view looks the
 // webview's key up among the rows it renders, the CLI writes the rows its
 // `/config` panel lists.
@@ -16,6 +18,7 @@ import {
   emitAppSignal,
   Settings,
   type AppSignals,
+  type Secrets,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
 import {
@@ -25,7 +28,14 @@ import {
   formatError,
   type SettingRow,
 } from '@texra-ai/harness/schemas';
+import { providerDisplayName } from '@texra-ai/llm';
 import { Effect, Result, Schema } from 'effect';
+
+import { setCodingPlanPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  type CodingPlanSubscription,
+} from '@texra/shared/model/codingPlans';
 
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
@@ -39,6 +49,12 @@ export type StateSettingUpdateResult<E extends WritableRow> =
   | { readonly kind: 'ignored' }
   | { readonly kind: 'rejected'; readonly entry: E; readonly error: Error }
   | { readonly kind: 'workspace-required'; readonly entry: E }
+  | {
+      /** A coding plan's switch, not turned on: its provider key is not set. */
+      readonly kind: 'needs-key';
+      readonly entry: E;
+      readonly plan: CodingPlanSubscription;
+    }
   | { readonly kind: 'applied'; readonly entry: E }
   | { readonly kind: 'failed'; readonly entry: E; readonly error: Error };
 
@@ -49,12 +65,14 @@ export type StateSettingUpdateResult<E extends WritableRow> =
  * policy. The extension and desktop `UPDATE_STATE_SETTING` boundaries and the
  * CLI `/config` panel call it, and each caller adds its UI feedback and its
  * snapshot rebroadcast. A failed persist returns as the `failed` result.
+ * A coding plan's switch goes through `setCodingPlanPreference`, the one
+ * writer of that preference.
  */
 export function applyStateSettingUpdate<E extends WritableRow>(
   entry: E,
   value: unknown,
   roots: SettingsStores & { readonly workspace: string | undefined },
-): Effect.Effect<StateSettingUpdateResult<E>, never, AppSignals> {
+): Effect.Effect<StateSettingUpdateResult<E>, never, AppSignals | Secrets> {
   if (value === undefined) return Effect.succeed({ kind: 'ignored' });
   const parsed =
     value === null ? null : Schema.decodeUnknownResult(entry.schema)(value);
@@ -67,6 +85,20 @@ export function applyStateSettingUpdate<E extends WritableRow>(
     roots.workspace === undefined
   ) {
     return Effect.succeed({ kind: 'workspace-required', entry });
+  }
+  const plan = CODING_PLAN_SUBSCRIPTIONS.find(
+    ({ preference }) => preference.key === entry.key,
+  );
+  if (plan !== undefined && typeof parsed?.success === 'boolean') {
+    return setCodingPlanPreference(roots, plan, parsed.success).pipe(
+      Effect.match({
+        onSuccess: (outcome) =>
+          outcome === 'needs-key'
+            ? ({ kind: 'needs-key', entry, plan } as const)
+            : ({ kind: 'applied', entry } as const),
+        onFailure: (error) => ({ kind: 'failed', entry, error }) as const,
+      }),
+    );
   }
   const persist =
     parsed === null
@@ -106,6 +138,10 @@ export function settingWriteFailure(
       return new SettingsRequestFailed({
         message: `Open a workspace folder before changing the “${result.entry.title}” setting.`,
       });
+    case 'needs-key':
+      return new SettingsRequestFailed({
+        message: `Add a ${providerDisplayName(result.plan.apiProvider)} API key before turning on “${result.entry.title}”.`,
+      });
     case 'rejected':
       return new SettingsRequestFailed({
         message: formatError(
@@ -141,7 +177,11 @@ export function setSkillEnabled(
   item: string,
   enabled: boolean,
   roots: SettingsStores & { readonly workspace: string | undefined },
-): Effect.Effect<StateSettingUpdateResult<SkillListRow>, never, AppSignals> {
+): Effect.Effect<
+  StateSettingUpdateResult<SkillListRow>,
+  never,
+  AppSignals | Secrets
+> {
   return Settings.get(roots, row).pipe(
     Effect.flatMap((disabled: readonly string[]) =>
       applyStateSettingUpdate(
