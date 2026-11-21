@@ -6,7 +6,8 @@
  * transaction (`endIn`). A subagent, or a root another run asked, delivers
  * its reply or its failure; a background script its calls' summary, its
  * failure, or, stopped by a person, a notice naming the run to resume; a
- * stopped subagent delivers nothing.
+ * subagent stopped at its own spend cap says so, and one stopped any other
+ * way delivers nothing.
  */
 import { Effect } from 'effect';
 
@@ -22,10 +23,11 @@ import {
 } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import type { ToolRegistry } from '@tools/toolTable';
-import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { SessionViewAccess, type SessionLog } from '@shared/session/runHistory';
 import type { RunRows } from '@shared/session/runRowsShape';
 
 import { readProgramResult } from './programRun';
+import { capReached } from './spendCap';
 import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
 import { scriptEndDelivery, scriptStopNotice } from './scriptRun';
@@ -103,8 +105,22 @@ export const childEndReport = Effect.fn('childEndReport')(
     };
     const agent = { name: 'agent', value: config.agent };
     switch (report.outcome) {
-      case RUN_OUTCOME.CANCELLED:
-        return null;
+      case RUN_OUTCOME.CANCELLED: {
+        // Stopped at its own cap: its parent, which may not be waiting for
+        // it, reads why. Any other stop is its stopper's to report.
+        const capped = capReached(
+          yield* (yield* SessionViewAccess).read([]),
+          runId,
+          record?.stop?.reason,
+        );
+        return capped === null
+          ? null
+          : {
+              ...delivery,
+              attributes: [agent],
+              message: `The agent run ${runId} ${capped}`,
+            };
+      }
       case RUN_OUTCOME.FAILED:
         return {
           ...delivery,

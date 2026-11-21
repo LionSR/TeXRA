@@ -13,9 +13,10 @@
  * A script's awaited call may also be answered by a completed call before
  * it with the same prompt, options and file bytes (`reusable`).
  *
- * The call that waits for a child holds it to the limits the call named
- * (`withinLimits`): a time limit and a spend cap, applied to a launch and
- * to a resume alike, since both are read from the call's own input.
+ * The call that waits for a child holds the wait to the time limit the call
+ * named (`withinTime`), on a launch and a resume alike. A spend cap is not
+ * the call's: it is recorded on the child run at its start and held by the
+ * session (`spendCap.ts`).
  */
 
 // Node imports
@@ -27,12 +28,10 @@ import {
   type Deferred,
   Effect,
   FileSystem,
-  Option,
-  Result,
   Schema,
   Stream,
 } from 'effect';
-import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
 import { getRunRecords, callChildRunId } from '@agent/storage/runOwnership';
@@ -139,88 +138,30 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
   return { kind: 'answered', result: end };
 });
 
-/** The limits the call that waits for a child holds it to, as the call
- *  named them (`CHILD_FIELDS`). */
-export interface ChildLimits {
-  readonly timeoutMs?: number | null | undefined;
-  readonly maxCostUsd?: number | null | undefined;
-}
-
 /** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
 class AgentTimedOut extends Schema.TaggedError<AgentTimedOut>()(
   'AgentTimedOut',
   { timeoutMs: Schema.Number },
 ) {}
 
-/** The child and the runs under it had spent `cost`, the call's
- *  `maxCostUsd` or more, and the child was stopped before it finished. */
-class AgentOverBudget extends Schema.TaggedError<AgentOverBudget>()(
-  'AgentOverBudget',
-  { maxCostUsd: Schema.Number, cost: Schema.Number },
-) {}
-
 /**
- * `work`, the wait for child `runId`, under its call's limits.
- *
- * A time limit interrupts the wait, which stops the child. A spend cap
- * needs no clock: what the child and every run under it have spent is the
- * session view's (`treeUsage`), which moves as each priced row commits, so
- * the wait follows the view, and a resumed call starts from what an earlier
- * process spent. At the cap the child is stopped, with the runs under it,
- * and the call fails; a child that had finished on its own by then answers
- * the call as usual. The cap is read after each priced reply, never before
- * a request: the tree can pass it by the replies in flight when it is
- * reached. It holds while the call waits: what a finished child left
- * running in the background spends unwatched.
+ * `work`, the wait for a child, under its call's time limit: how long the
+ * call waits, so it belongs to the wait and not to the child. Past it the
+ * wait is interrupted, which stops the child.
  */
-export const withinLimits = <R>(
-  runId: RunId,
-  limits: ChildLimits,
+export const withinTime = <R>(
+  timeoutMs: number | null | undefined,
   work: Effect.Effect<ChildRunEnd, Error, R>,
-): Effect.Effect<ChildRunEnd, Error, R | AgentRunServices> => {
-  const { timeoutMs, maxCostUsd } = limits;
-  const timed =
-    timeoutMs == null
-      ? work
-      : Effect.timeoutOrElse(work, {
-          duration: timeoutMs,
-          orElse: () => Effect.fail(new AgentTimedOut({ timeoutMs })),
-        });
-  if (maxCostUsd == null) return timed;
-  return Effect.gen(function* () {
-    const { changes } = yield* SessionViewAccess;
-    const runs = yield* RunRegistry;
-    const atCap = changes.pipe(
-      // A child is not in the view until its launch opens it: nothing spent.
-      Stream.map((view) => view.runs.get(runId)?.treeUsage.cost ?? 0),
-      Stream.filter((cost) => cost >= maxCostUsd),
-      Stream.runHead,
-      // The view's stream ends as its session closes, which ends the wait.
-      Effect.flatMap(
-        Option.match({
-          onNone: () => Effect.never,
-          onSome: (cost) => Effect.succeed(Result.fail(cost)),
-        }),
-      ),
-    );
-    const raced = yield* Effect.raceFirst(
-      Effect.map(timed, Result.succeed),
-      atCap,
-    );
-    if (Result.isSuccess(raced)) return raced.success;
-    // Losing the race interrupted the wait, which stops a child running
-    // here. The stop asked here also ends a child no fiber drives yet (a
-    // resume cut before it opened), and records nothing a second time.
-    yield* runs.stop(runId, 'released');
-    yield* runs.awaitDrained(runId);
-    const result = yield* getRunRecords(runId).readRunEnd();
-    if (result?.outcome === RUN_OUTCOME.COMPLETED) return { runId, result };
-    return yield* new AgentOverBudget({ maxCostUsd, cost: raced.failure });
-  });
-};
+): Effect.Effect<ChildRunEnd, Error, R> =>
+  timeoutMs == null
+    ? work
+    : Effect.timeoutOrElse(work, {
+        duration: timeoutMs,
+        orElse: () => Effect.fail(new AgentTimedOut({ timeoutMs })),
+      });
 
-/** The result of a call whose child passed one of the call's limits
- *  ({@link withinLimits}), under the name a script catches; null for any
+/** The result of a call whose wait passed its time limit
+ *  ({@link withinTime}), under the name a script catches; null for any
  *  other failure. */
 export function limitResult(
   agentName: string,
@@ -230,11 +171,6 @@ export function limitResult(
     return errorResult(
       `'${agentName}' did not finish within ${error.timeoutMs} ms; its run was stopped.`,
       { name: 'TimedOut', summary: `'${agentName}' timed out` },
-    );
-  if (error instanceof AgentOverBudget)
-    return errorResult(
-      `'${agentName}' reached its spend cap of $${error.maxCostUsd} before it finished (spent $${Number(error.cost.toPrecision(4))}, the runs it started included); its run was stopped.`,
-      { name: 'BudgetExceeded', summary: `'${agentName}' reached its cap` },
     );
   return null;
 }
@@ -260,9 +196,9 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
   recovery: {
     /** Progress lines for the parent's trace. */
     readonly notify: (update: SubagentProgressUpdate) => void;
-    /** What a child resumed now is held to; an answered child's read, to
-     *  none. */
-    readonly limits: ChildLimits;
+    /** How long the wait for a child resumed now lasts; an answered
+     *  child's read is not timed. */
+    readonly timeoutMs: number | null | undefined;
   },
 ): Effect.fn.Return<Recovered, Error, AgentRunServices | RunCall> {
   const { runId: parentId } = call.run;
@@ -275,9 +211,8 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     case 'fresh':
       return { kind: 'launch' };
     case 'resume': {
-      const { result } = yield* withinLimits(
-        earlier,
-        recovery.limits,
+      const { result } = yield* withinTime(
+        recovery.timeoutMs,
         resumeSubagentInBand({
           runId: earlier,
           parentId,

@@ -695,6 +695,7 @@ function seedRun(
   };
   publish({
     type: 'run.start',
+    maxCostUsd: null,
     aggregateId: runId,
     identity,
     takesFollowUps: options.takesFollowUps ?? true,
@@ -2064,6 +2065,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   ] as const) {
     log.emit(id, 10_000_000, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent },
       takesFollowUps: true,
       // The creation commit the database stamps, not a guess: `Log.parent`

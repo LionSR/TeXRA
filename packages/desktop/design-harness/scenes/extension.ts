@@ -235,6 +235,7 @@ function interruptedTasksView(): SessionView {
   for (const [id, title, at] of tasks) {
     log.emit(id, at, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: 'assistant' },
       worktree: { workingDirectory: '/paper' },
       parent: null,
@@ -253,6 +254,7 @@ function interruptedTasksView(): SessionView {
   for (const [index, id] of referees.entries()) {
     log.emit(id, T.childProgress, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: `referee-${index + 1}` },
       parent: log.parent(REVIEW_TASK),
       provenance: null,
@@ -292,6 +294,7 @@ function forkView(): SessionView {
   ) => {
     log.emit(id, at, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: 'assistant' },
       worktree: { workingDirectory: '/paper' },
       parent: null,
@@ -602,6 +605,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const log = new Log();
     log.emit(ROOT, T.root, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: 'review' },
       worktree: { workingDirectory: '/paper' },
       parent: null,

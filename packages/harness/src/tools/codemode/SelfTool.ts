@@ -30,7 +30,7 @@ import {
   agentChildRunId,
   countLaunch,
   recoverAgentChild,
-  withinLimits,
+  withinTime,
 } from '@agent/runtime/delegation/agentChild';
 import { executeSubagentInBand } from '@agent/runtime/delegation/childLaunch';
 import { CHILD_FIELDS } from '@agent/runtime/delegation/inputFields';
@@ -147,7 +147,7 @@ const runSelf = Effect.fn('self.call')(function* (
   const notify = printSubagentProgress(name, call.emit);
   // An earlier attempt's child answers the call, or continues under its id.
   const recovered = yield* Effect.result(
-    recoverAgentChild(call, { notify, limits: input }),
+    recoverAgentChild(call, { notify, timeoutMs: input.timeoutMs }),
   );
   if (Result.isFailure(recovered)) return failedResult(name, recovered.failure);
   if (recovered.success.kind === 'ended')
@@ -166,9 +166,8 @@ const runSelf = Effect.fn('self.call')(function* (
   // framed prompt alone. Either way it is launched, never resumed, so it starts
   // with the grants its parent holds now.
   const launched = yield* Effect.result(
-    withinLimits(
-      runId,
-      input,
+    withinTime(
+      input.timeoutMs,
       Effect.gen(function* () {
         const fork = input.fork && source !== null;
         const task = selfTask(input.prompt, fork);
@@ -200,6 +199,7 @@ const runSelf = Effect.fn('self.call')(function* (
           }),
           ...(forked !== null && { seed: forked.seed }),
           parentCall: { callId: call.callId, card: call.logId },
+          maxCostUsd: input.maxCostUsd,
           notify,
         });
       }),

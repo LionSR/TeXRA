@@ -185,6 +185,9 @@ const RunViewSchema = Schema.Struct({
    *  walk to the root. The one task total every host shows (footer, script
    *  card, status line), so no host sums a tree. */
   treeUsage: TokenUsageStatsSchema,
+  /** The spend cap the run was started with (`run.start.maxCostUsd`),
+   *  which `treeUsage.cost` is held to; null for none. */
+  maxCostUsd: Schema.NullOr(Schema.Finite),
   /** The newest thinking row is still streaming. */
   thinkingActive: Schema.Boolean,
   /** A context compaction is in progress. */
