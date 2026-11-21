@@ -37,7 +37,7 @@ import {
 } from '@cli/runtime/platform/cliContext';
 import { linkedClient } from '@texra/controllers/server/client';
 
-import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
+import { resolveChatDefaults } from '@cli/runtime/models/launchDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';

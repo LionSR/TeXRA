@@ -18,6 +18,7 @@ import {
 
 // Local imports - shared
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
+import { isImplicitDefaultEligible } from '@texra/shared/constants/agents';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   CLI_AGENT_SETTING,
@@ -124,10 +125,25 @@ export interface CliStartupConfig {
 }
 
 /**
+ * An agent named by configuration or the environment, trimmed, or undefined
+ * when it may not be started on implicitly: `simplifier` set as the chat
+ * agent is ignored rather than auto-selected. An explicit `--agent` is
+ * honored as given and never passes through here.
+ */
+export function usableDefaultAgent(
+  value: string | undefined,
+): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && isImplicitDefaultEligible(trimmed) ? trimmed : undefined;
+}
+
+/**
  * Agent and model for one command: its own `texra.chat` / `texra.run` section
  * over the top-level `texra.agent` / `texra.model` rows, both resolved through
  * the setting slots the caller holds — the ones `CliPlatform` handed back,
- * so the value read here is the value `texra config` writes.
+ * so the value read here is the value `texra config` writes. The agent is
+ * the one a launch would start on (`usableDefaultAgent`), so what `texra
+ * agents` shows as the default is what the chat starts.
  */
 export function cliCommandDefaults(
   stores: SettingsStores,
@@ -137,8 +153,9 @@ export function cliCommandDefaults(
     COMMAND_SECTIONS[role];
   const section = Settings.getConfig(stores.config, sectionRow) ?? {};
   return {
-    agent:
+    agent: usableDefaultAgent(
       section.agent ?? Settings.getConfig(stores.config, CLI_AGENT_SETTING),
+    ),
     model:
       section.model ?? Settings.getConfig(stores.config, CLI_MODEL_SETTING),
   };
