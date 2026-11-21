@@ -175,17 +175,32 @@ interface PerFileOutcome {
   artifact: RunStorageFileLocation | null;
 }
 
-// Short hex digest length appended to safeName below — enough to make
+// Short hex digest length appended to a slot name — enough to make
 // collisions between distinct paths astronomically unlikely while keeping
-// log filenames legible.
+// file names legible.
 const PATH_HASH_LENGTH = 8;
 
-// Cap on the sanitized stem portion of safeName (before the hash suffix).
+// Cap on the sanitized stem portion of a slot name (before the hash suffix).
 // Most filesystems reject a single path component over ~255 bytes; a deeply
-// nested or very long output path plus the round prefix, hash, and `.log`
-// extension could otherwise exceed that. The hash is derived from the full,
+// nested or very long output path plus a prefix, the hash and an extension
+// could otherwise exceed that. The hash is derived from the full,
 // untruncated path, so truncating the stem never reintroduces collisions.
 const MAX_SANITIZED_STEM_LENGTH = 200;
+
+/**
+ * The one-component file name of an output's derived file in run storage
+ * (its compile log and build folder, its diff), from the output's path.
+ * The full path keeps two outputs sharing a basename distinct (ch1/main.tex
+ * vs ch2/main.tex). Sanitizing to a filesystem-safe name is lossy: two
+ * paths that differ only in characters outside [a-zA-Z0-9._-] ("a:b.tex"
+ * and "a_b.tex", or "a/b.tex" and "a_b.tex") collapse to one string, so a
+ * short hash of the untruncated path gives each output its own slot.
+ */
+export function outputSlotName(outputPath: string): string {
+  const sanitizedName = outputPath.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
+  const pathHash = hash('sha256', outputPath, 'hex').slice(0, PATH_HASH_LENGTH);
+  return `${sanitizedName.slice(0, MAX_SANITIZED_STEM_LENGTH)}_${pathHash}`;
+}
 
 /**
  * Compile one output: a file with no `\documentclass` is skipped without
@@ -200,25 +215,14 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   opts: PerFileOptions,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  // Full relative path keeps two outputs sharing a basename distinct
-  // (ch1/main.tex vs ch2/main.tex). The revision's own folder is left out,
-  // since the log's name already carries the revision.
-  const pathForSafeName = stripRevisionDir(
-    normalizeFilePath(fileLocationDisplayPath(outputFile.location)),
-    currentRound,
+  // The revision's own folder is left out, since the log's name already
+  // carries the revision.
+  const safeName = outputSlotName(
+    stripRevisionDir(
+      normalizeFilePath(fileLocationDisplayPath(outputFile.location)),
+      currentRound,
+    ),
   );
-  // Sanitizing to a filesystem-safe name is lossy: two distinct paths that
-  // differ only in characters outside [a-zA-Z0-9._-] (e.g. "a:b.tex" and
-  // "a_b.tex") both collapse to the same string, so a second file's log
-  // write/delete would clobber the first's. Suffix with a short hash of the
-  // untruncated path so every output gets its own collision-free log slot.
-  const sanitizedName = pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
-  const pathHash = hash('sha256', pathForSafeName, 'hex').slice(
-    0,
-    PATH_HASH_LENGTH,
-  );
-  const sanitizedStem = sanitizedName.slice(0, MAX_SANITIZED_STEM_LENGTH);
-  const safeName = `${sanitizedStem}_${pathHash}`;
   const layout = revisionLayout(currentRound);
   const buildDir = path.join(opts.runDirectory, layout.compileBuild(safeName));
   const logRelativePath = layout.compileLog(safeName);
