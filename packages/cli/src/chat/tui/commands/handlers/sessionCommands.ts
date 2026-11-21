@@ -8,6 +8,7 @@ import {
   type RunView,
 } from '@texra-ai/harness/schemas';
 import { type Session } from '@texra-ai/harness';
+import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import {
@@ -145,7 +146,7 @@ function interruptedTasks(): RunView[] {
         isInterrupted(run) &&
         run.actions.includes('resume'),
     )
-    .toSorted((a, b) => b.createdAt - a.createdAt);
+    .toSorted(compareByNewestCreationTime);
 }
 
 /**
