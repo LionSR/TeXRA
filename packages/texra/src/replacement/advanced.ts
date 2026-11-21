@@ -10,7 +10,6 @@ import {
   withStarredForms,
 } from '@replacement/constants';
 import { createPatterns } from '@replacement/patterns';
-import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
 /**
  * A fact a replacement pass reports rather than logs: the passes are pure, so
@@ -327,61 +326,6 @@ export function fixLatexQuoteIssues(text: string): string {
   text = text.replaceAll(/(`[a-zA-Z\s]{3,16})([.,;:])(')/g, "$1'$2");
 
   return text;
-}
-
-const CRITICIZE_MACRO = '\\criticize';
-
-/**
- * Strip all `\criticize{comment}{severity}{confidence}` LaTeX annotations
- * (inserted by critique-style agents) from LaTeX content. Uses the same
- * brace-balanced macro scanner as `parseCriticismAnnotations`
- * (`latex/criticismParser.ts`) so a message containing nested macros (e.g.
- * `\cref{...}`, `\frac{a}{b}`) is stripped correctly rather than left
- * behind. Unlike `parseCriticismAnnotations`, this applies no
- * severity/confidence validation — malformed annotations still need to be
- * removed from output.
- */
-export function stripCriticizeAnnotations(content: string): {
-  content: string;
-  count: number;
-} {
-  if (!content.includes(CRITICIZE_MACRO)) return { content, count: 0 };
-  const calls = findBraceBalancedMacroCalls(content, CRITICIZE_MACRO, 3);
-  if (calls.length === 0) return { content, count: 0 };
-
-  let out = '';
-  let cursor = 0;
-  // Tracks the start of the line containing the current call, advanced
-  // forward as `calls` (already in ascending `start` order) are walked —
-  // avoids a `lastIndexOf` backward-scan per call, which would be
-  // O(document length) per annotation on a document with no preceding
-  // newline (e.g. one long generated/minified line).
-  let lineStart = 0;
-  for (const call of calls) {
-    let nextNewline = content.indexOf('\n', lineStart);
-    while (nextNewline !== -1 && nextNewline < call.start) {
-      lineStart = nextNewline + 1;
-      nextNewline = content.indexOf('\n', lineStart);
-    }
-    const nlIndex = content.indexOf('\n', call.end);
-    const lineEnd = nlIndex === -1 ? content.length : nlIndex;
-    const beforeOnLine = content.slice(lineStart, call.start);
-    const afterOnLine = content.slice(call.end, lineEnd);
-    // Whole-line form is removed along with its trailing newline so a macro
-    // occupying its own line doesn't leave a blank line behind.
-    const isWholeLine =
-      /^[ \t]*$/.test(beforeOnLine) && /^[ \t]*\r?$/.test(afterOnLine);
-
-    if (isWholeLine) {
-      out += content.slice(cursor, lineStart);
-      cursor = nlIndex === -1 ? content.length : nlIndex + 1;
-    } else {
-      out += content.slice(cursor, call.start);
-      cursor = call.end;
-    }
-  }
-  out += content.slice(cursor);
-  return { content: out, count: calls.length };
 }
 
 /**

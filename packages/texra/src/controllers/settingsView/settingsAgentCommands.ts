@@ -129,9 +129,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               filePath: entry.path || undefined,
               tools: [...agentToolNames(entry)],
               newerBuiltIn: agents.newerBuiltIn(entry)?.source,
-              // A stored list holds resolved `source:name` keys, but older
-              // workspaces persisted bare names, which
-              // `agentMatchesIdentifier` still matches.
+              // A stored list holds `source:name` keys and the bare names
+              // the CLI writes; `agentMatchesIdentifier` matches both.
               enabled: enabledKeys.some((key) =>
                 agentMatchesIdentifier(entry, key),
               ),

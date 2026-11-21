@@ -99,18 +99,9 @@ export function sections(
     .join('\n\n');
 }
 
+/** `s` trimmed and cut to `max` characters; an absent text is empty. */
 export function truncate(s: string | null | undefined, max: number): string {
   return truncateWithEllipsis((s ?? '').trim(), max);
-}
-
-/**
- * Build a single-arg truncator bound to `max`, so each formatter keeps one
- * file-local cap instead of re-declaring the `(s) => truncate(s, MAX)` wrapper.
- */
-export function makeTruncator(
-  max: number,
-): (s: string | null | undefined) => string {
-  return (s) => truncate(s, max);
 }
 
 /**

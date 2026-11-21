@@ -40,10 +40,14 @@ Each needs a decision or changes behavior beyond a consolidation.
    `packages/harness/src/agent/storage/runListing.ts` order by `launchedAt`,
    the latter by parsing back an ISO string it built. Moving them to the owner
    changes the listing order where wall clock and commit order disagree.
-4. **A diff file named after an output path.**
-   `packages/texra/src/tools/documents/documentResult.ts` replaces only the
-   separators (`a/b.tex` and `a_b.tex` collide); `packages/texra/src/agent/output/compileCheck.ts`
-   sanitizes and adds a hash. One slot-name rule beside `revisionLayout`.
+4. **A diff file named after an output path.** Landed 2026-11-21:
+   `outputSlotName` (`packages/texra/src/agent/output/compileCheck.ts`)
+   names an output's compile log, build folder and diff, so `a/b.tex` and
+   `a_b.tex` no longer write one `diffs/a_b.tex.diff`. It sits beside the
+   compile check, not `revisionLayout`: the diff writer already imports
+   `agent/output/`. Was: `packages/texra/src/tools/documents/documentResult.ts`
+   replaced only the separators, while the compile check sanitized and added
+   a hash.
 5. **Lone-CR normalization, seven copies.** Taken on 2026-11-21: the CLI,
    the desktop renderer, the app's markdown and `responseLines` call
    `normalizeLineEndings` (`packages/texra/src/shared/utils/lineEndings.ts`),
@@ -59,6 +63,25 @@ Each needs a decision or changes behavior beyond a consolidation.
    (`packages/texra/src/ui/progress/fileDropHandler.ts`). Sending the raw URI
    would leave `fileURLToPath` the one decoder, but it rejects a UNC host on
    POSIX, which today drops as `//host/path`.
+
+## Left by the 2026-11-21 app sweep
+
+Found while landing item 4 and the sweep's other findings, outside what that
+sweep could edit:
+
+- **`isTexFile`** (`packages/texra/src/shared/latexFileTypes.ts`) only
+  forwards to `hasExtension(path, '.tex')`, and the compile check and the
+  media pass call `hasExtension` directly. Inline it, or route those two
+  through it.
+- **`GlobFailed`** is declared in
+  `packages/texra/src/housekeeping/artifactFiles.ts`, which no longer globs;
+  its one user is `packages/texra/src/controllers/session/taskFiles.ts`. It
+  belongs there.
+- **A revision's inputs are read up to three times.**
+  `processInputFiles` (`packages/texra/src/latex/latexMedia.ts`) has the
+  figure, dependency and TikZ readers each call `readUncommentedLatex` on
+  the same file. One read per file would need the three steps' separate
+  failure recovery kept, so it is a behavior question, not a consolidation.
 
 ## Checked and declined
 

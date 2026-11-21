@@ -6,29 +6,55 @@
  * formatter stays pure.
  */
 
-import type { MediaAttachmentKind } from '@texra-ai/harness/schemas';
-
 import type {
   ChatExportInput,
   DocumentMeta,
 } from '@texra/agent/export/schemas';
 
-import { escapeLatex, latexListing } from './escapeUtils';
 import {
+  ATTACHMENT_LABELS,
+  EXPORT_TITLE,
   HEADER_FIELDS,
   renderDocument,
   type NodeRenderers,
 } from './formatSpec';
 
-function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
-  const esc = escapeLatex;
+/**
+ * A character-level replacement map (pandoc/pylatex pattern) avoids ordering
+ * bugs: every special character is handled exactly once in a single pass.
+ */
+const LATEX_ESCAPE_MAP: Record<string, string> = {
+  '\\': '\\textbackslash{}',
+  '#': '\\#',
+  $: '\\$',
+  '%': '\\%',
+  '&': '\\&',
+  _: '\\_',
+  '{': '\\{',
+  '}': '\\}',
+  '~': '\\textasciitilde{}',
+  '^': '\\textasciicircum{}',
+};
 
+const LATEX_ESCAPE_RE = /[\\#$%&_{}~^]/g;
+
+function escapeLatex(text: string): string {
+  return text.replaceAll(LATEX_ESCAPE_RE, (ch) => LATEX_ESCAPE_MAP[ch]);
+}
+
+/** Wrap text in lstlisting, handling nested end markers. */
+function latexListing(text: string): string {
+  const safeText = text.replaceAll('\\end{lstlisting}', '\\end {lstlisting}');
+  return `\\begin{lstlisting}\n${safeText}\n\\end{lstlisting}`;
+}
+
+function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
   const rows = HEADER_FIELDS.filter((f) => meta[f.key]).map(
-    (f) => `\\textbf{${f.label}:} & ${esc(String(meta[f.key]))} \\\\`,
+    (f) => `\\textbf{${f.label}:} & ${escapeLatex(String(meta[f.key]))} \\\\`,
   );
 
   const instruction = meta.instruction
-    ? `\n\\medskip\\noindent\\textbf{Instruction:} ${esc(meta.instruction)}\n`
+    ? `\n\\medskip\\noindent\\textbf{Instruction:} ${escapeLatex(meta.instruction)}\n`
     : '';
 
   const fileList = meta.files.length
@@ -37,7 +63,7 @@ function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
         '\\begin{itemize}',
         ...meta.files.map(
           ({ label, value }) =>
-            `  \\item ${esc(label)}: \\texttt{${esc(value)}}`,
+            `  \\item ${escapeLatex(label)}: \\texttt{${escapeLatex(value)}}`,
         ),
         '\\end{itemize}',
       ].join('\n')
@@ -48,7 +74,7 @@ function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
     '',
     '\\begin{document}',
     '',
-    '\\section*{TeXRA Chat Export}',
+    `\\section*{${EXPORT_TITLE}}`,
     '',
     '\\begin{tabular}{@{}ll}',
     ...rows,
@@ -61,18 +87,13 @@ function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
   ].join('\n');
 }
 
-const LATEX_ATTACHMENT_LABELS = {
-  image: '\\textit{[Image attachment]}',
-  document: '\\textit{[Document attachment]}',
-} as const satisfies Record<MediaAttachmentKind, string>;
-
 const TEX_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {
     const body = parts
       .map((p) =>
         p.type === 'text'
           ? escapeLatex(p.text)
-          : LATEX_ATTACHMENT_LABELS[p.attachmentType],
+          : `\\textit{[${ATTACHMENT_LABELS[p.attachmentType]}]}`,
       )
       .join('\n\n');
     return `\\begin{usermessage}\n${body}\n\\end{usermessage}\n`;

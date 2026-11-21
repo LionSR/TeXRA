@@ -1,13 +1,13 @@
 /** Markdown format spec for chat export. */
 
-import type { MediaAttachmentKind } from '@texra-ai/harness/schemas';
-
 import type {
   ChatExportInput,
   DocumentMeta,
 } from '@texra/agent/export/schemas';
 
 import {
+  ATTACHMENT_LABELS,
+  EXPORT_TITLE,
   HEADER_FIELDS,
   renderDocument,
   type FormatSpec,
@@ -59,11 +59,6 @@ function markdownHeader(meta: DocumentMeta): string {
   ].join('\n');
 }
 
-const ATTACHMENT_LABELS = {
-  image: 'Image attachment',
-  document: 'Document attachment',
-} as const satisfies Record<MediaAttachmentKind, string>;
-
 const MD_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {
     const body = parts
@@ -89,7 +84,7 @@ const MD_NODES: NodeRenderers = {
 };
 
 const markdownSpec: FormatSpec = {
-  header: (meta) => `# TeXRA Chat Export\n\n${markdownHeader(meta)}`,
+  header: (meta) => `# ${EXPORT_TITLE}\n\n${markdownHeader(meta)}`,
   footer: '',
   nodes: MD_NODES,
 };
