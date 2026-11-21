@@ -90,8 +90,6 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
-// Follow-up delivery helpers hosts share.
-export { presentFollowUpResult } from '@agent/followUp/ToolUseFollowUp';
 // A host's presentation of the notices the root entry types
 // (`HostInteractions`, `Notices`): a window's own presenter, the emit
 // handlers (one per event), and a failed run's presentation, with the notice

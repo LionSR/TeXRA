@@ -12,6 +12,7 @@ import {
   type CliHistoryEntry,
 } from '@cli/runtime/history';
 import { formatCliHistorySubject } from '@cli/runtime/historyLabels';
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
@@ -73,7 +74,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       }
       availableRows={props.availableRows}
       description={<Text dimColor>Choose a task to continue.</Text>}
-      emptyMessage="Nothing to resume yet. Tasks appear here once you start one."
+      emptyMessage={EMPTY_TASK_LIST.line}
       selectMarginTop={1}
       action="resume"
       onSelect={props.onSelect}

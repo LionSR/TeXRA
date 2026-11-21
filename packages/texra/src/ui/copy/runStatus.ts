@@ -31,23 +31,57 @@ export function formatLoopPositionLabel(
   return turn == null ? undefined : `t${turn}`;
 }
 
-/** One label per section, in the order the sections are painted. */
-const RUN_SECTION_LABELS: Readonly<Record<RunSection, string>> = Object.freeze({
-  running: 'Running',
-  waiting: 'Waiting on you',
-  interrupted: 'Interrupted',
-  recent: 'Recent',
+/** A fact-only word every host paints in its own colour vocabulary. */
+export type RunTone = 'running' | 'success' | 'danger' | 'neutral' | 'warning';
+
+/** A status's word and tone. */
+interface StatusWord {
+  readonly word: string;
+  readonly tone: RunTone;
+}
+
+/**
+ * The word and tone of each status key (`runStatusKey`).
+ * `packages/cli/scripts/validate-run.mjs` pins the completed and stopped
+ * words against the real headless run.
+ */
+const RUN_STATUS: Readonly<Record<RunStatusKey, StatusWord>> = Object.freeze({
+  starting: Object.freeze({ word: 'Initializing', tone: 'running' }),
+  resuming: Object.freeze({ word: 'Resuming', tone: 'running' }),
+  running: Object.freeze({ word: 'Running', tone: 'running' }),
+  waiting: Object.freeze({ word: 'Idle', tone: 'neutral' }),
+  ready: Object.freeze({ word: 'Ready', tone: 'neutral' }),
+  completed: Object.freeze({ word: 'Completed', tone: 'success' }),
+  cancelled: Object.freeze({ word: 'Stopped', tone: 'neutral' }),
+  failed: Object.freeze({ word: 'Error', tone: 'danger' }),
+  interrupted: Object.freeze({ word: 'Interrupted', tone: 'warning' }),
+  waitingOnUser: Object.freeze({ word: 'Waiting on you', tone: 'warning' }),
+});
+
+/** How each section reads, in the order the sections are painted: its
+ *  label, and the tone of a count of its runs, the tone of the status that
+ *  puts a run there. */
+const RUN_SECTIONS: Readonly<Record<RunSection, StatusWord>> = Object.freeze({
+  running: RUN_STATUS.running,
+  waiting: RUN_STATUS.waitingOnUser,
+  interrupted: RUN_STATUS.interrupted,
+  recent: Object.freeze({ word: 'Recent', tone: 'neutral' }),
 });
 
 /** A count of runs in one section, as a rollup reads it: `2 waiting on you`. */
 export function sectionCountLabel(section: RunSection, count: string): string {
-  return `${count} ${RUN_SECTION_LABELS[section].toLowerCase()}`;
+  return `${count} ${RUN_SECTIONS[section].word.toLowerCase()}`;
+}
+
+/** The tone a count of a section's runs paints with. */
+export function runSectionTone(section: RunSection): RunTone {
+  return RUN_SECTIONS[section].tone;
 }
 
 /** Section order, in the table's own order. */
 const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
-  Object.keys(RUN_SECTION_LABELS).filter((key): key is RunSection =>
-    Object.hasOwn(RUN_SECTION_LABELS, key),
+  Object.keys(RUN_SECTIONS).filter((key): key is RunSection =>
+    Object.hasOwn(RUN_SECTIONS, key),
   ),
 );
 
@@ -68,36 +102,9 @@ export function runListSections<R extends RunStatusFacts>(
     const members = runs.filter((run) => runSection(run) === section);
     return members.length === 0
       ? []
-      : [{ section, label: RUN_SECTION_LABELS[section], runs: members }];
+      : [{ section, label: RUN_SECTIONS[section].word, runs: members }];
   });
 }
-
-/** A fact-only word every host paints in its own colour vocabulary. */
-export type RunTone = 'running' | 'success' | 'danger' | 'neutral' | 'warning';
-
-/** A status's word and tone. */
-interface StatusWord {
-  readonly word: string;
-  readonly tone: RunTone;
-}
-
-/**
- * The word and tone of each status key (`runStatusKey`).
- * `packages/cli/scripts/validate-run.mjs` pins the completed and stopped
- * words against the real headless run.
- */
-const RUN_STATUS: Readonly<Record<RunStatusKey, StatusWord>> = Object.freeze({
-  starting: { word: 'Initializing', tone: 'running' },
-  resuming: { word: 'Resuming', tone: 'running' },
-  running: { word: 'Running', tone: 'running' },
-  waiting: { word: 'Idle', tone: 'neutral' },
-  ready: { word: 'Ready', tone: 'neutral' },
-  completed: { word: 'Completed', tone: 'success' },
-  cancelled: { word: 'Stopped', tone: 'neutral' },
-  failed: { word: 'Error', tone: 'danger' },
-  interrupted: { word: 'Interrupted', tone: 'warning' },
-  waitingOnUser: { word: 'Waiting on you', tone: 'warning' },
-});
 
 /** Shape cue per tone, the one glyph table every web painter reads. */
 const TONE_GLYPH: Readonly<Record<RunTone, IconName>> = Object.freeze({
@@ -133,7 +140,7 @@ export const TOOL_STATUS: Readonly<Record<ToolRowStatus, StatusWord>> =
     in_progress: Object.freeze({ word: 'Running', tone: 'running' }),
     completed: Object.freeze({ word: 'Completed', tone: 'success' }),
     failed: Object.freeze({ word: 'Failed', tone: 'danger' }),
-    interrupted: Object.freeze(RUN_STATUS.interrupted),
+    interrupted: RUN_STATUS.interrupted,
   });
 
 /** The label of what the user told the model when deciding a tool call. */
@@ -196,6 +203,12 @@ export function runStatus(run: RunStatusFacts): RunStatus {
 /** The word a status key reads as. */
 export function runStatusLabel(key: RunStatusKey): string {
   return RUN_STATUS[key].word;
+}
+
+/** How a status key is painted, for a row that reads as that status
+ *  without being a run in it (a call or a parent a request waits under). */
+export function runStatusLook(key: RunStatusKey): StatusLook {
+  return RUN_STATUS[key];
 }
 
 /** A run's news as a notification says it, in the status's word:

@@ -48,16 +48,17 @@ const CHANNEL = 'executeAgent';
 
 /** Options for {@link executeAgent}. */
 export interface ExecuteAgentOptions {
-  /** A fresh run's registration, which its opening batch commits: the run
-   *  is born with its opening or not at all. Absent, the run is resumed. */
-  readonly registration?: RegisterRunOptions;
-  /** A resumed run's entry, from the facts its resume read: its parent as
-   *  its rows hold it (less one the store no longer lists) and its
-   *  `run.start`. A fresh run's registration says both. */
-  readonly resumed?: {
-    readonly parentId: RunId | undefined;
-    readonly start: RunRows['start'];
-  };
+  /** How the run is entered: fresh, with the registration its opening
+   *  batch commits (the run is born with its opening or not at all), or
+   *  resumed, from the facts its resume read: its parent as its rows hold
+   *  it (less one the store no longer lists) and its `run.start`. */
+  readonly entry:
+    | { readonly kind: 'fresh'; readonly registration: RegisterRunOptions }
+    | {
+        readonly kind: 'resume';
+        readonly parentId: RunId | undefined;
+        readonly start: RunRows['start'];
+      };
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
@@ -82,16 +83,18 @@ const enterRun = Effect.fn('enterRun')(function* (
 ) {
   const log = yield* SessionLog;
   const { config } = definition;
+  const { entry } = options;
+  const asked = entry.kind === 'fresh' ? entry.registration : null;
   const parent =
-    options.registration?.parent?.id ?? options.resumed?.parentId ?? null;
+    (entry.kind === 'fresh' ? asked?.parent?.id : entry.parentId) ?? null;
   // A resumed run's `run.start`: whether its parent's call awaits it, and
   // whether its launch let it take input.
-  const start = options.resumed?.start ?? null;
+  const start = entry.kind === 'resume' ? entry.start : null;
   // Whether the parent's call awaits the child: a fresh run's
   // registration says; a resumed run's rows do.
   const awaited =
-    options.registration !== undefined
-      ? options.registration.parent?.call?.awaited === true
+    asked !== null
+      ? asked.parent?.call?.awaited === true
       : (start?.parent?.call?.awaited ?? false);
   // Whether the run ends after one cycle, decided once: every child does
   // (a message to it is a resume), a script's run (its call is its only
@@ -102,19 +105,18 @@ const enterRun = Effect.fn('enterRun')(function* (
     runsScript(config) ||
     options.stopAfterCycle === true ||
     start?.takesFollowUps === false;
-  const registered =
-    options.registration === undefined
+  const registration =
+    asked === null
       ? null
       : yield* registrationRows(runId, config, {
-          ...options.registration,
+          ...asked,
           // A child takes a message as its resume; a one-shot root none.
           takesFollowUps: !stopAfterCycle || parent !== null,
         });
-  if (registered !== null && registered.start === null)
+  if (registration !== null && registration.start === null)
     return yield* new AgentError({
       message: `Run ${runId} already exists; resume it.`,
     });
-  const registration = registered;
   let held: AgentEvent[] | null = [];
   const logger = new TraceEmitter((event) =>
     held === null ? log.publish(runId, event) : held.push(event),
@@ -141,11 +143,21 @@ const enterRun = Effect.fn('enterRun')(function* (
       Effect.uninterruptible,
     );
   };
-  const seed = options.registration?.seed ?? null;
   return {
     logger,
     stopAfterCycle,
-    entry: { parent, awaited, registration, seed, enter },
+    entry: {
+      parent,
+      awaited,
+      fresh:
+        registration?.start == null
+          ? null
+          : {
+              registration: { ...registration, start: registration.start },
+              seed: asked?.seed,
+            },
+      enter,
+    },
   };
 });
 
@@ -179,7 +191,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
 
   // A resume renders nothing again: the run's rows hold its opening.
   const opening =
-    entry.registration === null
+    entry.fresh === null
       ? null
       : yield* buildTemplateInputs(config, {
           // The session's own roots, handed to prompt assembly as data, so
@@ -243,7 +255,7 @@ export interface AgentLaunch {
  * run's context and its per-run layer (its `AgentRun` and the invoker,
  * over the session's services the fiber carries) into the fiber's scope,
  * and commits the run's entry (a fresh run registers with its opening,
- * `options.registration`; a resume activates the run its rows hold), so a
+ * `options.entry`; a resume activates the run its rows hold), so a
  * launch that fails before the run exists fails here with no run behind
  * it. Interruptible: every acquisition finishes atomically inside its own
  * `acquireRelease`, so an interruption lands between steps and the scope's
@@ -257,7 +269,7 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
   // Said as the launch opens, before the model binds: a host's e2e reads
   // the service's log for it, and a launch refused for want of a key
   // still names the run it was asked for.
-  if (launch.entry.registration !== null)
+  if (launch.entry.fresh !== null)
     yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
       Effect.annotateLogs({
         data: {
@@ -329,7 +341,7 @@ const runAgent = Effect.fn('executeAgent.run')(function* ({
           runId,
           config,
           description,
-          launch.entry.registration === null,
+          launch.entry.fresh === null,
         ),
       )
     : budgeted;

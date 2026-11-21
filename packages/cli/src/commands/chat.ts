@@ -2,7 +2,7 @@ import { Effect, Option } from 'effect';
 import { Flag } from 'effect/cli';
 
 import { CliUsageError } from '../runtime/platform/cliContext';
-import { assertExplicitModelKnown } from '../runtime/models/runModel';
+import { assertExplicitModelKnown } from '../runtime/models/launchDefaults';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,

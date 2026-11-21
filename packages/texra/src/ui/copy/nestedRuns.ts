@@ -28,6 +28,7 @@ import {
   NESTED_NOUNS,
   runNoun,
 } from '@texra-ai/harness/schemas';
+import { sectionCountLabel } from '@ui/copy/runStatus';
 
 /** The agents a task started. */
 export const NESTED_AGENT = Object.freeze({
@@ -68,7 +69,7 @@ export const nestedCountsCompact = (kinds: NestedKinds): string =>
 export function nestedRollupLabel(rollup: RunView['rollup']): string {
   return joinFacts([
     nestedCountsLabel(rollup.kinds),
-    rollup.running > 0 && `${rollup.running} running`,
+    rollup.running > 0 && sectionCountLabel('running', String(rollup.running)),
   ]);
 }
 
@@ -126,6 +127,17 @@ export const TASK_ACTIONS = Object.freeze({
   /** The CLI's exit line before the `texra resume …` command. */
   resumeHint: 'Resume this task with:',
 } as const);
+
+/** A task list with nothing in it, in every host: its heading, and what
+ *  fills it. A host that starts tasks by command adds that command. */
+const EMPTY_TASK_TITLE = 'No tasks yet';
+const EMPTY_TASK_BODY = 'Tasks you start appear here.';
+export const EMPTY_TASK_LIST = Object.freeze({
+  title: EMPTY_TASK_TITLE,
+  body: EMPTY_TASK_BODY,
+  /** Both, as one line where there is no heading. */
+  line: `${EMPTY_TASK_TITLE}. ${EMPTY_TASK_BODY}`,
+});
 
 /** An agent row's one action: open its agent's conversation, the composer
  *  addressed to it, to steer it while it runs or keep talking after. */

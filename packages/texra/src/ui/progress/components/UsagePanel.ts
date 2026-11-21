@@ -11,6 +11,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared schemas, styles, and constants
 import {
+  formatCount,
   isEmptyUsage,
   type ContextStateData,
   type TokenUsageStats,
@@ -19,9 +20,12 @@ import {
 import { contextGaugeTone, contextUsageText } from '@ui/copy/contextGauge';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';
-import { formatTokenCount } from '@ui/copy/format';
 import { usageCost, usageCostLabel } from '@ui/copy/modelAccess';
-import { visibleTokenStats, type TokenUsageStat } from '@ui/copy/tokenUsage';
+import {
+  OWN_USAGE_LABEL,
+  visibleTokenStats,
+  type TokenUsageStat,
+} from '@ui/copy/tokenUsage';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 
@@ -42,7 +46,7 @@ const TOKEN_STAT_ICONS = Object.freeze({
 function renderTokenStat(stat: TokenUsageStat): TemplateResult {
   const { icon, id } = TOKEN_STAT_ICONS[stat.key];
   const name = 'note' in stat ? `${stat.label} (${stat.note})` : stat.label;
-  const tooltip = `${name}: ${formatTokenCount(stat.value)}`;
+  const tooltip = `${name}: ${formatCount(stat.value)}`;
   // prettier-ignore
   return html`<span id=${id} class="token-stat" tabindex="0">${waIcon(icon)}<span class="token-value">${formatCompactTokenCount(stat.value)}</span></span><wa-tooltip for=${id}>${tooltip}</wa-tooltip>`;
 }
@@ -235,7 +239,7 @@ export class UsagePanel extends LitElement {
         own.outputTokens === total.outputTokens)
     )
       return undefined;
-    return `Own model calls: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${usageCostLabel(own)}. The total includes its agents.`;
+    return `${OWN_USAGE_LABEL}: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${usageCostLabel(own)}. The total includes its agents.`;
   }
 
   /**

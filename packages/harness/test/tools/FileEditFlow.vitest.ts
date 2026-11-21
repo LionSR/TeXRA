@@ -25,7 +25,7 @@ describe('replaceLiteralMatches', () => {
           content: 'before OLD after',
           search: 'OLD',
           replacement,
-          mode: 'unique',
+          replaceAll: false,
           notFoundError,
         }),
       ).toEqual(

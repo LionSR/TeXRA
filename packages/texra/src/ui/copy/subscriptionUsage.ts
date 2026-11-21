@@ -12,6 +12,7 @@ import {
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import { formatRelativeTime } from '@ui/copy/format';
+import type { RunTone } from '@ui/copy/runStatus';
 
 const STALE_AFTER_MS = 2 * 60_000;
 
@@ -27,6 +28,17 @@ export function subscriptionUsageWindowLabel(
   if (/seven[_ -]?day|weekly|secondary/.test(name)) return `${prefix}7-day`;
   if (/thirty[_ -]?day|monthly/.test(name)) return `${prefix}30-day`;
   return `${prefix}${name.replaceAll('_', ' ')}`;
+}
+
+/** The tone a usage window paints with, by what it has left: an error once
+ *  it is used up, a caution at a fifth or less, and nothing to say above
+ *  that. The CLI status bar and the settings view's meters read it. */
+export function subscriptionQuotaTone(
+  window: Pick<SubscriptionUsageWindow, 'percentRemaining'>,
+): Extract<RunTone, 'warning' | 'danger'> | undefined {
+  if (window.percentRemaining <= 0) return 'danger';
+  if (window.percentRemaining <= 20) return 'warning';
+  return undefined;
 }
 
 export function formatSubscriptionUsagePercent(percentUsed: number): string {

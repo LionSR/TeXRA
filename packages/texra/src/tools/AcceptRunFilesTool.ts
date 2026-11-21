@@ -47,7 +47,7 @@ import {
   type ToolCard,
 } from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
-import { stripCriticizeAnnotations } from '@replacement/advanced';
+import { stripCriticizeAnnotations } from '@latex/criticismParser';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
 import {
   type PluginToolServices,

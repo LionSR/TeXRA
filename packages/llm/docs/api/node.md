@@ -20,9 +20,10 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   account, keyed by its route
   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
   browser and (Grok's) device-code sign-in.
-- **Provider endpoints outside a turn**: [`fetchPlanUsage`](#fetchplanusage)
-  reads a coding plan's quota windows ([`chatgptReplyUsage`](#chatgptreplyusage)
-  the ChatGPT plan's, from a reply's headers), and
+- **Provider endpoints outside a turn**: how each plan states its quota
+  ([`PLAN_QUOTA_SOURCES`](#plan_quota_sources)), read at its endpoint
+  ([`fetchPlanUsage`](#fetchplanusage)) or off a reply's headers
+  ([`replyPlanUsage`](#replyplanusage)), and
   [`transcribeAudio`](#transcribeaudio) a recording's text.
 
 ## Binding
@@ -101,24 +102,6 @@ interface BindSpec {
 }
 ```
 
-## chatgptReplyUsage
-
-The quota windows a reply on the ChatGPT plan states in its headers
-(`x-codex-<window>-used-percent`, `-window-minutes`, `-reset-at`,
-`-reset-after-seconds`, for the `primary` and `secondary` windows). The
-names are an outside gateway's reading of the Codex backend
-(yetone/magpie, `internal/gateway/codex_limits.go`); no reply recorded in
-this repository carries them, so a reply without them states no window.
-`receivedAt` (epoch milliseconds) dates a reset given only as seconds
-from the reply. Null when the headers state no window.
-
-```ts
-function chatgptReplyUsage(
-  headers: Headers,
-  receivedAt: number,
-): PlanUsage | null
-```
-
 ## ChatgptSession
 
 A stored ChatGPT session.
@@ -144,14 +127,27 @@ interface ClientIdentity {
 }
 ```
 
+## EndpointPlanRoute
+
+A plan with a quota endpoint.
+
+```ts
+type EndpointPlanRoute = {
+  [K in PlanRoute]: (typeof PLAN_QUOTA_SOURCES)[K] extends 'endpoint'
+    ? K
+    : never;
+}[PlanRoute];
+```
+
 ## fetchPlanUsage
 
-Fetch and read a plan's usage with its API key. The GLM quota endpoint is
-on the same host as the region's Responses endpoint.
+Fetch and read a plan's usage at its quota endpoint with its API key, on
+the platform `region` names.
 
 ```ts
 function fetchPlanUsage(
-  request: PlanUsageRequest,
+  route: EndpointPlanRoute,
+  region: ProviderRegion,
   apiKey: Redacted.Redacted<string>,
 ): Effect.Effect<
   PlanUsage,
@@ -174,6 +170,16 @@ class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTrans
 )
 ```
 
+## PLAN_QUOTA_SOURCES
+
+How each plan states its quota: asked at its endpoint with its key, read
+off its replies' headers, or nowhere this package reads. A plan added to
+`PLAN_ROUTES` does not compile until it says which.
+
+```ts
+const PLAN_QUOTA_SOURCES: Readonly<{ readonly 'chatgpt-subscription': "reply"; readonly 'xai-subscription': null; readonly 'kimi-code-subscription': "endpoint"; readonly 'glm-coding-plan-subscription': "endpoint"; }>
+```
+
 ## PlanUsage
 
 A plan's reported usage. No window means the body named none it reads.
@@ -184,16 +190,6 @@ interface PlanUsage {
   readonly planName?: string;
   readonly windows: readonly PlanUsageWindow[];
 }
-```
-
-## PlanUsageRequest
-
-Which plan to ask, and for GLM which platform its key belongs to.
-
-```ts
-type PlanUsageRequest =
-  | { readonly plan: 'kimiCode' }
-  | { readonly plan: 'glm'; readonly region: 'china' | 'international' };
 ```
 
 ## PlanUsageWindow
@@ -211,6 +207,38 @@ interface PlanUsageWindow {
   /** How long the window is, in minutes, when the provider says. */
   readonly windowMinutes?: number;
 }
+```
+
+## ProviderRegion
+
+The platform a two-platform provider's key belongs to.
+
+```ts
+type ProviderRegion = keyof RegionalBaseUrl;
+```
+
+## ReplyPlanRoute
+
+A plan whose replies state its quota.
+
+```ts
+type ReplyPlanRoute = {
+  [K in PlanRoute]: (typeof PLAN_QUOTA_SOURCES)[K] extends 'reply' ? K : never;
+}[PlanRoute];
+```
+
+## replyPlanUsage
+
+The quota windows a reply on `route` states in its headers; `receivedAt`
+(epoch milliseconds) dates a reset given as seconds from the reply. Null
+when the headers state no window.
+
+```ts
+function replyPlanUsage(
+  route: ReplyPlanRoute,
+  headers: Headers,
+  receivedAt: number,
+): PlanUsage | null
 ```
 
 ## SessionToken

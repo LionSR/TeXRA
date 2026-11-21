@@ -462,7 +462,7 @@ export const HELPER_MODEL_SETTING = {
   schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
   description:
-    "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model.",
+    "Model used for a run's auxiliary calls, such as session descriptions and the helper calls of an app's features. When unset, a run's helper calls use the run's own model.",
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {
@@ -550,13 +550,13 @@ export interface SettingsCatalog {
   /** Look up a row by its stored key, as a store lists it. */
   readonly byStoredKey: (storedKey: string) => SettingRow | undefined;
   /**
-   * A fresh copy of a config-file-backed row's default, or `undefined` for a
-   * key no such row owns: what every `ConfigProvider` answers for an absent
-   * key. Parsed defaults are memoized
-   * because this is on the read path of every absent setting; object values
-   * are cloned so a caller cannot mutate the catalog's own default.
+   * A fresh copy of what the row under `key` reads as while it is absent (its
+   * schema's default, or the app's), or `undefined` for a key no row owns.
+   * Parsed defaults are memoized because this is on the read path of every
+   * absent setting; object values are cloned so a caller cannot mutate the
+   * catalog's own default.
    */
-  readonly configDefault: (key: string) => unknown;
+  readonly defaultOf: (key: string) => unknown;
   /** The models every user starts with enabled, in picker order; a person's
    *  selection is stored as a change over this list. The app's choice over
    *  the llm catalog: the harness curates none. */
@@ -616,9 +616,9 @@ export function settingsCatalog(options: {
       storedKey.startsWith(`${options.namespace}.`)
         ? byKey.get(storedKey.slice(options.namespace.length + 1))
         : undefined,
-    configDefault: (key) => {
+    defaultOf: (key) => {
       const entry = byKey.get(key);
-      if (entry?.slot !== 'config') return undefined;
+      if (entry === undefined) return undefined;
       if (!defaults.has(key)) {
         defaults.set(key, Schema.decodeUnknownSync(entry.schema)(undefined));
       }

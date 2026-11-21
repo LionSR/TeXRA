@@ -139,7 +139,7 @@ function verifyNoMonacoWorkers(entries, failures) {
     workers.length === 0,
     `VSIX contains Monaco worker bundles that no shipped code loads: ${workers.join(', ')}. ` +
       'Something in a webview graph now imports @ui/monaco/monacoLoader — ' +
-      'import @ui/monaco/monacoLanguage instead if you only need a language id.',
+      'import @ui/highlighting/languageForPath instead if you only need a language id.',
     failures,
   );
 }

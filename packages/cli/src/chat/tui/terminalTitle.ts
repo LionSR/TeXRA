@@ -1,5 +1,3 @@
-import { basename } from 'node:path';
-
 import { computed } from '@lit-labs/signals';
 
 import { stripControlCharacters } from '@texra-ai/harness/schemas';
@@ -12,6 +10,7 @@ import {
   TERMINAL_TAB_TITLE,
 } from '@texra/shared/sessionTitle';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { projectName } from '@texra/shared/session/hostSnapshot';
 
 import { rootRunIds } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
@@ -37,7 +36,7 @@ function terminalTitleText(
   // still interpret as escape-sequence introducers (the C1 range, e.g. 0x9d
   // as an 8-bit OSC); strip both C0 and C1 controls so a weird folder name
   // can't inject terminal escape sequences into the title.
-  return formatSessionTitle(stripControlCharacters(basename(cwd)), state, {
+  return formatSessionTitle(stripControlCharacters(projectName(cwd)), state, {
     detail: activityDetail,
     style: TERMINAL_TAB_TITLE,
   });

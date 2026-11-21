@@ -287,6 +287,7 @@ export {
   collapseWhitespace,
   countLines,
   DETAIL_SEPARATOR,
+  formatCount,
   FACT_SEPARATOR,
   formatClippedList,
   formatCompactDuration,
@@ -386,6 +387,7 @@ export {
   type RequestKind,
   // Who answers a request: a person, or the run grant that answers it.
   type AnsweredBy,
+  type ProposalEdit,
   type ProposalFileFields,
   factName,
   type FactName,

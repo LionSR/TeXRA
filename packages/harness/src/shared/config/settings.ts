@@ -71,8 +71,8 @@ export interface ConfigProvider {
   /**
    * Resolution order an implementation must honor: stored workspace value,
    * stored global value, then the setting catalog's own default
-   * (`catalog.configDefault`); a key no row owns reads as `undefined` when
-   * absent.
+   * (`catalog.defaultOf`) for a config-file row; any other key reads as
+   * `undefined` when absent.
    *
    * It is synchronous because some readers cannot wait for an Effect: the
    * replacement engine's rule sets, a tool's `prompt` callback, the
@@ -322,7 +322,11 @@ function getConfig<A>(config: ConfigProvider, row: SettingRow<A>): A {
  *  gives it, `undefined` for a row that names none. */
 function defaultOf<A>(catalog: SettingsCatalog, row: SettingRow<A>): A {
   // cast: the catalog's row under this key has `row`'s schema, which produced it.
-  return Schema.decodeUnknownSync(entryOf(catalog, row).schema)(undefined) as A;
+  return (
+    catalog.byKey(row.key) === undefined
+      ? Schema.decodeUnknownSync(row.schema)(undefined)
+      : catalog.defaultOf(row.key)
+  ) as A;
 }
 
 /**

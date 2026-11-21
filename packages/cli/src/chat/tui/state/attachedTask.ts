@@ -10,6 +10,7 @@ import {
   Rejected,
   Unavailable,
   attentionOf,
+  descendantRuns,
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
@@ -37,18 +38,6 @@ export interface AttachedTaskActions {
   readonly request: <R extends RuntimeCommand>(
     request: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, Error>;
-}
-
-/** The run ids of `root` and every run under it. */
-function treeOf(view: SessionView, root: RunView['id']): Set<string> {
-  const ids = new Set<string>();
-  const visit = (id: RunView['id']): void => {
-    if (ids.has(id)) return;
-    ids.add(id);
-    for (const child of view.runs.get(id)?.childIds ?? []) visit(child);
-  };
-  visit(root);
-  return ids;
 }
 
 /** The service's client, through the chat's link. */
@@ -96,7 +85,9 @@ export function followAttachedTask(
             }),
           );
         seen ||= run !== undefined;
-        const tree = treeOf(view, task.runId);
+        const tree = new Set<string>(
+          descendantRuns(view, task.runId, { includeRoot: true }),
+        );
         onLevel({
           run,
           // Only what the service can take an answer for now (the rule

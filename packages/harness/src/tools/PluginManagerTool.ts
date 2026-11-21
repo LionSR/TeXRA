@@ -38,6 +38,7 @@ import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { nativeRevision } from '@tools/nativePlugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 const NameSchema = Schema.NonEmptyString.annotate({
   description: 'The installed plugin, by the name `list` answers.',
@@ -203,7 +204,7 @@ const runPluginManager = Effect.fn('plugin_manager.call')(function* (
                 'Installed plugins:',
                 ...plugins.map((plugin) => listingLine(plugin, table)),
               ].join('\n'),
-        summary: `Listed ${plugins.length} plugin${plugins.length === 1 ? '' : 's'}`,
+        summary: `Listed ${formatResultCount(plugins.length, 'plugin')}`,
       };
     }
     case 'install': {
