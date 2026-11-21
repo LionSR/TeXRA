@@ -20,15 +20,11 @@ modules move into their caller. What follows needs a decision.
 
 ## Open
 
-1. **What the API key choice says it reaches.** The web welcome card
-   (`ONBOARDING_CHOICE_API_KEY` in `packages/texra/src/ui/copy/onboarding.ts`)
-   says "Anthropic, OpenAI, Google, and more"; the terminal's key row
-   (`API_KEY_ITEM` in `packages/cli/src/chat/tui/forms/AccountAccessForm.tsx`)
-   says "Anthropic, OpenAI, Google, DeepSeek, and more". The onboarding
-   module's header says the terminal "names the key choice as its own `/key`
-   row does", so the difference is deliberate in shape but not in content.
-   Decision: one sentence in `onboarding.ts` that both read, and which
-   providers it names.
+1. **What the API key choice says it reaches.** Taken on 2026-11-21: the
+   terminal's key row reads `ONBOARDING_CHOICE_API_KEY.description`, which
+   names the providers the way the terminal did ("Anthropic, OpenAI, Google,
+   DeepSeek, and more"). The extension's walkthrough step and the guide pages
+   are static text and still say "Anthropic, OpenAI, Google, and more".
 2. **A provider's name by region.** `getProviderDisplayName`
    (`packages/texra/src/model/providerPresentation.ts`) names Qwen "Bailian"
    when its region toggle picks the China platform; the settings key list,
