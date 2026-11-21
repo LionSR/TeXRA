@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Cause,
+  Context,
   DateTime,
   Duration,
   Effect,
@@ -304,16 +305,23 @@ const sendBatch = Effect.fn('UsageLogService.sendBatch')(function* (
   return response;
 });
 
-/** What a host stamps on its entries, and its own telemetry switch. */
+/**
+ * The host's own telemetry switch, read live: the extension provides
+ * `vscode.env.isTelemetryEnabled`, which overrides ours. Off, nothing is
+ * sent and the first-run notice is not shown. Absent, on.
+ */
+export const HostTelemetrySwitch = Context.Reference<() => boolean>(
+  '@texra/telemetry/HostTelemetrySwitch',
+  { defaultValue: () => () => true },
+);
+
+/** What a host stamps on its entries. */
 export interface UsageLogOptions {
   /** This host's version, reported with every entry. */
   readonly version: string | undefined;
   /** The editor this process runs in: the CLI, the desktop app, or the
    *  editor's own name on the extension host. */
   readonly editorType: string | undefined;
-  /** The host's own telemetry switch, read live on each queue and send: the
-   *  extension passes `vscode.env.isTelemetryEnabled`. */
-  readonly hostTelemetryEnabled?: () => boolean;
 }
 
 /**
@@ -333,7 +341,7 @@ export const usageLogLayer = (
     UsageLog,
     Effect.gen(function* () {
       const { version, editorType } = options;
-      const hostTelemetryEnabled = options.hostTelemetryEnabled ?? (() => true);
+      const hostTelemetryEnabled = yield* HostTelemetrySwitch;
       /** Entries waiting for the next batch; past capacity the oldest goes.
        *  The close ends it: no entry is accepted after, and those queued
        *  remain for the final drain. */
