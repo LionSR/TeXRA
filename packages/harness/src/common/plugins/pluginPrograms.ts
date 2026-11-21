@@ -1,8 +1,10 @@
-// The programs an installed plugin carries: each `programs/<name>.js` is a
-// script module a person or a model starts by name, as `<plugin>:<name>`.
+// The programs read from files: each `<name>.js` of a directory of programs
+// is a script module a person or a model starts by name. An installed
+// plugin carries its own in `programs/`, started as `<plugin>:<name>`; an
+// agent writes its own into its memory, started as `own:<name>`.
 //
-// An installed plugin's file is third-party code, so nothing here runs it:
-// a program's description and tools are read from the text of the file, and
+// Such a file is not the app's code, so nothing here runs it: a program's
+// description and tools are read from the text of the file, and
 // the source is handed on as text for the script sandbox to load. The file
 // must begin with two declarations, in either order, with only whitespace
 // and comments before and between them:
@@ -18,7 +20,7 @@
 // and no evaluation, and what the reader takes is what the module itself
 // exports. Anything else at the start of the file (a computed value, a
 // template string, code before the declarations) refuses that one file by
-// name; the plugin's other programs load.
+// name; the directory's other programs load.
 
 // Node imports
 import * as path from 'node:path';
@@ -32,7 +34,7 @@ import { meansAbsent } from '@utils/files/fsEntryExists';
 /** The directory of a plugin that holds its programs. */
 const PROGRAMS_DIRECTORY = 'programs';
 
-/** A program's own name, the part after `<plugin>:`: the grammar of a
+/** A program's own name, the part after the colon: the grammar of a
  *  plugin's name and of a skill's. */
 const PROGRAM_NAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
@@ -40,12 +42,10 @@ const PROGRAM_NAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
  *  at every step that may start the program. */
 const DESCRIPTION_MAX_LENGTH = 300;
 
-/** One program an installed plugin carries, as read from its file. */
+/** One program, as read from its file. */
 export interface PluginProgram {
-  /** `<plugin>:<name>`: what it is started by, and its module's specifier. */
+  /** `<prefix>:<name>`: what it is started by, and its module's specifier. */
   readonly name: string;
-  /** Its file, relative to the plugin directory. */
-  readonly file: string;
   readonly description: string;
   /** The tools its run is offered, by name. */
   readonly tools: readonly string[];
@@ -53,15 +53,69 @@ export interface PluginProgram {
   readonly source: string;
 }
 
-/** What a plugin's `programs/` directory holds. */
+/** What a directory of programs holds. */
 export interface PluginPrograms {
   readonly loaded: readonly PluginProgram[];
   /** One line for each program file that is not loaded, naming it. */
   readonly refused: readonly string[];
 }
 
-const HEADER_FORM =
-  "it must begin with `export const description = '...';` and `export const uses = ['...'];` (the tools it is offered), each a quoted literal";
+/** The list a file's header declares beside its `description`: a
+ *  program's `uses` (the tools it is offered), or a native entry's
+ *  `provides` (what its plugin contributes, `./nativeEntry`). */
+export interface HeaderList {
+  readonly name: 'uses' | 'provides';
+  /** What the list holds, and an example, for a refusal. */
+  readonly holds: string;
+  readonly example: string;
+}
+
+const USES: HeaderList = {
+  name: 'uses',
+  holds: 'the tools it is offered',
+  example: "['read_file', 'agent']",
+};
+
+/**
+ * The regular file `file` of a plugin, read as text and never run, and the
+ * two declarations its header begins with (`list` beside the
+ * `description`), read from `sourceOf` its text: the source, or why not
+ * (an unreadable file, a link, which is not followed, a header that does
+ * not declare them); `null` when nothing is there.
+ */
+export const readDeclaredFile = Effect.fn('readDeclaredFile')(function* (
+  file: string,
+  list: HeaderList = USES,
+  sourceOf: (text: string) => string = (text) => text,
+): Effect.fn.Return<
+  Result.Result<
+    {
+      readonly source: string;
+      readonly description: string;
+      readonly names: readonly string[];
+    },
+    string
+  > | null,
+  never,
+  FileSystem.FileSystem
+> {
+  const fs = yield* FileSystem.FileSystem;
+  const text = yield* Effect.result(
+    Effect.gen(function* () {
+      const info = yield* fs.lstat(file);
+      return info.type === 'File' ? yield* fs.readFileString(file) : null;
+    }),
+  );
+  if (Result.isFailure(text))
+    return meansAbsent(text.failure) ? null : Result.fail(text.failure.message);
+  if (text.success === null)
+    return Result.fail('it is not a regular file (a link is not followed)');
+  const source = sourceOf(text.success);
+  return Result.map(readDeclarations(source, list), (declared) => ({
+    source,
+    ...declared,
+  }));
+});
 
 /** The escapes a quoted literal may hold, by the character after `\`. */
 const ESCAPES: Readonly<Record<string, string>> = {
@@ -80,7 +134,12 @@ const ESCAPES: Readonly<Record<string, string>> = {
  */
 function readDeclarations(
   source: string,
-): Result.Result<Pick<PluginProgram, 'description' | 'tools'>, string> {
+  list: HeaderList = USES,
+): Result.Result<
+  { readonly description: string; readonly names: readonly string[] },
+  string
+> {
+  const headerForm = `it must begin with \`export const description = '...';\` and \`export const ${list.name} = ['...'];\` (${list.holds}), each a quoted literal`;
   let at = 0;
   const refuse = (reason: string) => Result.fail(reason);
   /** Advance past `pattern` when the text at the cursor matches it. */
@@ -128,18 +187,20 @@ function readDeclarations(
   const wrong = {
     description:
       '`description` must be one quoted string on one line (\'...\' or "...") followed by `;`, not a template or an expression',
-    uses: "`uses` must be an array of quoted tool names (['read_file', 'agent']) followed by `;`, not an expression",
+    list: `\`${list.name}\` must be an array of quoted names (${list.example}) followed by \`;\`, not an expression`,
   };
   while (description === undefined || tools === undefined) {
     skip();
-    const declared = take(/export\s+const\s+(description|uses)\b\s*=/);
+    const declared = take(
+      new RegExp(`export\\s+const\\s+(description|${list.name})\\b\\s*=`),
+    );
     if (declared === null) {
       const missing = [
         ...(description === undefined ? ['description'] : []),
-        ...(tools === undefined ? ['uses'] : []),
+        ...(tools === undefined ? [list.name] : []),
       ];
       return refuse(
-        `${HEADER_FORM}; ${missing.map((name) => `\`${name}\``).join(' and ')} ${missing.length === 1 ? 'is' : 'are'} not declared there`,
+        `${headerForm}; ${missing.map((name) => `\`${name}\``).join(' and ')} ${missing.length === 1 ? 'is' : 'are'} not declared there`,
       );
     }
     skip();
@@ -159,46 +220,65 @@ function readDeclarations(
           `\`description\` is longer than ${DESCRIPTION_MAX_LENGTH} characters`,
         );
     } else {
-      if (tools !== undefined) return refuse('`uses` is declared twice');
-      if (take(/\[/) === null) return refuse(wrong.uses);
+      if (tools !== undefined)
+        return refuse(`\`${list.name}\` is declared twice`);
+      if (take(/\[/) === null) return refuse(wrong.list);
       const names: string[] = [];
       for (;;) {
         skip();
         if (take(/\]/) !== null) break;
         const name = quoted();
         if (name === undefined || !/^\S+$/.test(name))
-          return refuse(wrong.uses);
+          return refuse(wrong.list);
         names.push(name);
         skip();
         if (take(/,/) !== null) continue;
         if (take(/\]/) !== null) break;
-        return refuse(wrong.uses);
+        return refuse(wrong.list);
       }
       skip();
       // As above: `[...].concat(more)` is an expression.
-      if (take(/;/) === null) return refuse(wrong.uses);
+      if (take(/;/) === null) return refuse(wrong.list);
       tools = names;
     }
   }
-  return Result.succeed({ description, tools });
+  return Result.succeed({ description, names: tools });
+}
+
+/** A directory of program files, and whose they are. */
+interface ProgramFiles {
+  /** The directory, absolute. */
+  readonly root: string;
+  /** What its programs' names begin with: `<name>.js` is `<prefix>:<name>`. */
+  readonly prefix: string;
+  /** How a message names its file `entry`, or the directory itself (`''`). */
+  readonly named: (entry: string) => string;
+  /** The module a file holds, where its writer puts more in the file than
+   *  the module. */
+  readonly moduleOf?: (text: string) => string;
 }
 
 /**
- * The programs in the plugin `plugin` at `dir`: every `programs/<name>.js`,
- * read as text and never run. A file whose name is not lowercase letters,
- * digits and hyphens, that is a link (the loader follows none, so no program
- * comes from outside the plugin directory), that cannot be read or that does
- * not begin with its two declarations is refused by name and the others
- * load; entries that are not `.js` files are not programs. Never fails.
+ * The programs in the directory `root`: every `<name>.js`, read as text and
+ * never run. A file whose name is not lowercase letters, digits and
+ * hyphens, that is a link (the loader follows none, so no program comes
+ * from outside the directory), that cannot be read or that does not begin
+ * with its two declarations is refused by name and the others load; entries
+ * that are not `.js` files are not programs. Never fails.
  */
-export const readPluginPrograms = Effect.fn('readPluginPrograms')(function* (
-  dir: string,
-  plugin: string,
-): Effect.fn.Return<PluginPrograms, never, FileSystem.FileSystem> {
+export const readPrograms = Effect.fn('readPrograms')(function* ({
+  root,
+  prefix,
+  named,
+  moduleOf,
+}: ProgramFiles): Effect.fn.Return<
+  PluginPrograms,
+  never,
+  FileSystem.FileSystem
+> {
   const fs = yield* FileSystem.FileSystem;
-  const root = path.join(dir, PROGRAMS_DIRECTORY);
-  const refusal = (file: string, reason: string) =>
-    `Program ${file} of plugin ${plugin} is not loaded: ${reason}.`;
+  const refusal = (entry: string, reason: string) =>
+    `Program ${named(entry)} is not loaded: ${reason}.`;
   const listed = yield* Effect.result(
     Effect.gen(function* () {
       const info = yield* fs.lstat(root);
@@ -213,50 +293,36 @@ export const readPluginPrograms = Effect.fn('readPluginPrograms')(function* (
       ? { loaded: [], refused: [] }
       : {
           loaded: [],
-          refused: [refusal(PROGRAMS_DIRECTORY, listed.failure.message)],
+          refused: [refusal('', listed.failure.message)],
         };
   if (listed.success === undefined)
     return {
       loaded: [],
-      refused: [
-        refusal(
-          PROGRAMS_DIRECTORY,
-          'it is not a directory inside the plugin (a link is not followed)',
-        ),
-      ],
+      refused: [refusal('', 'it is not a directory (a link is not followed)')],
     };
   const read = yield* Effect.forEach(
     listed.success,
     (entry) =>
       Effect.gen(function* () {
-        const file = path.join(PROGRAMS_DIRECTORY, entry);
-        const refused = (reason: string) => Result.fail(refusal(file, reason));
+        const refused = (reason: string) => Result.fail(refusal(entry, reason));
         const base = entry.slice(0, -'.js'.length);
         if (!PROGRAM_NAME.test(base))
           return refused(
             'its name must be lowercase letters, digits and hyphens',
           );
-        const full = path.join(root, entry);
-        const text = yield* Effect.result(
-          Effect.gen(function* () {
-            const info = yield* fs.lstat(full);
-            return info.type === 'File'
-              ? yield* fs.readFileString(full)
-              : undefined;
-          }),
+        const declared = yield* readDeclaredFile(
+          path.join(root, entry),
+          USES,
+          moduleOf,
         );
-        if (Result.isFailure(text)) return refused(text.failure.message);
-        if (text.success === undefined)
-          return refused(
-            'it is not a regular file inside the plugin (a link is not followed)',
-          );
-        const declared = readDeclarations(text.success);
+        if (declared === null) return refused('it is no longer there');
         if (Result.isFailure(declared)) return refused(declared.failure);
+        const { description, names, source } = declared.success;
         return Result.succeed({
-          name: `${plugin}:${base}`,
-          file,
-          ...declared.success,
-          source: text.success,
+          name: `${prefix}:${base}`,
+          description,
+          tools: names,
+          source,
         } satisfies PluginProgram);
       }),
     { concurrency: 8 },
@@ -268,3 +334,16 @@ export const readPluginPrograms = Effect.fn('readPluginPrograms')(function* (
     ),
   };
 });
+
+/** The programs the plugin `plugin` at `dir` carries: those of its
+ *  `programs/` directory, each started as `<plugin>:<name>`. */
+export const readPluginPrograms = (
+  dir: string,
+  plugin: string,
+): Effect.Effect<PluginPrograms, never, FileSystem.FileSystem> =>
+  readPrograms({
+    root: path.join(dir, PROGRAMS_DIRECTORY),
+    prefix: plugin,
+    named: (entry) =>
+      `${path.join(PROGRAMS_DIRECTORY, entry)} of plugin ${plugin}`,
+  });

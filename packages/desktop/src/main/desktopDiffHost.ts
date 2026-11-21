@@ -3,12 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { Effect, FileSystem } from 'effect';
 
 import {
-  buildDiffHunks,
-  countLineChanges,
   type ProcessRuntime,
-  reportDiffTimeout,
   withProcessServices,
 } from '@texra-ai/harness/host';
+import {
+  buildDiffHunks,
+  countLineChanges,
+  reportDiffTimeout,
+} from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '../shared/monacoLanguage';

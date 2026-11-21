@@ -139,6 +139,21 @@ All notable changes to this project will be documented in this file.
 - **A script imports modules by their exact specifier.** A relative
   specifier no longer reaches a module. `describeTool(name)` also returns
   the source of a module or program.
+- **SDK: the helpers TeXRA's own plugins use leave `@texra-ai/harness/host`.**
+  `@texra-ai/harness/plugins` now exports `pathToLocationIn`, the lanes
+  (`withPerKeyLane`, `PerKeyLane`, `PerKeyLanes`, `withFileWriteLane`), the
+  diff engine (`buildDiffHunks`, `countLineChanges`, `reportDiffTimeout`,
+  `unifiedDiffText`, `DiffHunks`, `Hunk`) and `AgentDirectories`;
+  `@texra-ai/harness/node` exports the path helpers (`getPathSegments`,
+  `isPathWithin`, `isStrictlyWithin`, `toPosixPath`). None of them is on
+  `/host` any more, and `isModuleNotFoundError` is removed.
+- **SDK: a `FileLocation` is written as its object.** `createWorkspaceLocation`,
+  `createRunStorageLocation` and `createExternalLocation` are removed from
+  the SDK (they were on `@texra-ai/harness/host`): write
+  `{ kind: 'workspace', absolutePath, relativePath }`,
+  `{ kind: 'runStorage', absolutePath, relativePath, runId }` or
+  `{ kind: 'external', absolutePath }`. `pathToLocationIn` still resolves a
+  path against a workspace root.
 - **SDK: a program is called with its launch's instruction and files.** A
   program module's default export is `async (args, launch) => result`, the
   second argument `{ instruction, inputFiles, contextFiles, mediaFiles }`;
@@ -1398,6 +1413,80 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Agents can edit their own context.** A new built-in `context` tool
+  lets an agent read the messages its requests send (each with its index,
+  kind, estimated tokens and a preview, plus the window size and the tokens
+  in use) and replace any range of them with text it writes, for example a
+  long tool output it no longer needs, or everything so far with its own
+  handoff. The replacement takes effect at the agent's next request; the
+  original messages stay in the transcript. The progress view and the CLI
+  show the edit as **Agent edited its context**, with the messages replaced
+  and the tokens freed. In code mode a script calls it as
+  `tools.context(...)` and gets the view as data. Conversations saved by an
+  earlier build show as written by that build and cannot be resumed by this
+  one. SDK: a `context.edit` row's cause may be `edit` (row version 9), and
+  a completed compaction activity may carry how many messages it
+  `replaced` (`log` row version 13).
+- **A goal completes only when a judge confirms it.** A round that says
+  the objective is done no longer ends the goal on its own word: the same
+  agent runs again with no earlier conversation, as a judge that did not do
+  the work, derives the requirements from the objective and checks each
+  one itself with the tools the conversation's agent has. It answers with
+  one claim per requirement: `verified`, `failed` or `unverified`, the
+  check anyone can run again, and what it showed. The goal completes when
+  no claim failed; otherwise the next round is told what the judge found.
+  The goal's result carries the latest judge's `claims`, so you need read
+  only the unverified and failed ones, and a judge that fails or gives no
+  verdict pauses the goal with `judge_failed`. A goal now costs one more
+  agent run per claim that it is done, counted in its spend and its cap.
+  SDK: `builtIn:goal` exports `judge(objective, { report })` and
+  `claimSchema` beside `goal`, so any script can check work with a judge,
+  or several, its own way; `GoalResultSchema` gains the optional `claims`
+  (the strategy's own shape, which the harness stores and does not read)
+  and the `judge_failed` pause.
+- **A plugin you install can carry native code, loaded while TeXRA runs.**
+  Put `harness.mjs` at the root of a Claude Code or Codex plugin folder: it
+  begins with `export const description = '...';` and
+  `export const provides = ['tool:<name>', ...];`, and its default export
+  takes `{ plugins, effect }` (the `@texra-ai/harness/plugins` surface and
+  the modules of the `effect` TeXRA runs on that a plugin is written with,
+  `Effect`, `Context`, `Layer`, `Schema`, `Stream` and their kin) and
+  returns a plugin with tools, process or session services, a prompt
+  section, script modules and programs. It runs
+  inside the process as you, so `texra plugin enable` says so and lists what
+  it provides; once trusted at its digest it loads from every run's next
+  step, with no restart. An edit replaces it the same way once trusted
+  again: a call already running finishes on the version it started with,
+  and the old version's services are released when the last step using
+  them ends. A new version that fails to load, or whose services do not
+  come up, is reported with its reason and leaves the version before it in
+  use until the plugin is fixed or disabled (until TeXRA restarts, after
+  which the plugin is left out with that reason); `plugin_manager list`
+  names the version in use. Nothing else changes. Each call of a native tool asks under your
+  approval policy, as an MCP server's tool does, whatever the module
+  declares, and stops after 60 seconds as one does; a call that fails or
+  crashes fails alone, naming the plugin. Agents get a `plugin_manager` tool to list, install, enable,
+  disable and remove plugins themselves, each change but a listing or an
+  install asked of you first. Trusting a plugin is asked as its own card in
+  the progress view and the terminal, naming the plugin, its version, its
+  folder, what it contributes and whether it carries native code. Trusting
+  native code is always your own answer, whatever the approval policy, and
+  so is an agent enabling again native code you trusted and then disabled;
+  a run that cannot ask you leaves it to `texra plugin enable`. Listing,
+  installing or reviewing a plugin runs none of its code.
+- **An agent can write a program for itself.** A file an agent creates with
+  the `memory` tool at `/memories/programs/<name>.js` is the program
+  `own:<name>` from its next step, with no restart and nothing to install,
+  and it stays for later conversations in the same project;
+  `texra run own:<name> --input paper.tex` starts it too. The file has the
+  form of a plugin's program (`export const description = '...';`,
+  `export const uses = ['...'];`, then the default export). Nobody reviews
+  it, because it can do nothing the agent could not: it runs in the script
+  sandbox on the tools it lists, which follow your plugin switches and
+  approval policy, and each agent or program it starts is asked about as one
+  a model's script starts is. A plugin can no longer be named `own`. See
+  "Programs an agent writes for itself" in the CLI guide. SDK: `programsNow`
+  and `programLaunch` on `@texra-ai/harness/host` take the project's roots.
 - **A script caps what a child run spends, and `self()` takes a model.**
   Every child a script waits for (`agent()`, `program()`, `self()`) takes
   `maxCostUsd`, a spend cap in USD on the child and every run it starts:

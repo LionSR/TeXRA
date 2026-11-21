@@ -27,6 +27,7 @@ import {
   type ToolCardEnd,
   type LogLevel,
   type MessageType,
+  type ProcessOutputStream,
   type ToolUseLog,
 } from '@shared/schemas';
 import type { LogOptions } from '@shared/schemas/logPayload';
@@ -93,7 +94,7 @@ export class TraceEmitter implements AgentTrace {
   }
 
   /** A chunk of a process run's output, on its stream. */
-  output(stream: 'stdout' | 'stderr', text: string): void {
+  output(stream: ProcessOutputStream, text: string): void {
     this.emit({ type: 'process.output', stream, text });
   }
 

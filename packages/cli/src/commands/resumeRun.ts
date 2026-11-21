@@ -26,7 +26,11 @@ import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
 } from '../runtime/terminal/terminalRequirements';
-import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
+import {
+  CliUsageError,
+  failUsage,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
@@ -105,34 +109,30 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   }
   const config = configResult.success;
   if (!config) {
-    writeTextStderr(`Run not found: ${id}`);
-    return CliExitCode.Usage;
+    return yield* failUsage(`Run not found: ${id}`);
   }
   const documentTask = programOf(config) !== null;
   if (fork && documentTask) {
-    writeTextStderr(
+    return yield* failUsage(
       `Task ${id} is a program run: only a conversation can be forked.`,
     );
-    return CliExitCode.Usage;
   }
   // A fork reads the source's committed rows, whoever holds it, and the
   // chat continues the new task.
   if (fork) {
     const terminalFailure = interactiveTerminalFailure(context);
     if (terminalFailure) {
-      writeTextStderr(
+      return yield* failUsage(
         formatInteractiveTerminalFailure(terminalFailure, {
           headlessMessage: `Forking continues the new task in an interactive chat: run \`${context.commandName} resume ${id} --fork\` in a terminal.`,
           dumbTerminalCommand: 'resume',
           dumbTerminalOptions: { commandName: context.commandName },
         }),
       );
-      return CliExitCode.Usage;
     }
     const forked = yield* Effect.result(forkRun(runSession, id));
     if (Result.isFailure(forked)) {
-      writeTextStderr(requestErrorText(forked.failure));
-      return CliExitCode.Usage;
+      return yield* failUsage(requestErrorText(forked.failure));
     }
     const forkId = forked.success;
     const forkConfig = yield* runSession.records(forkId).readConfig;
@@ -156,8 +156,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       stored.success.runs.get(id),
     );
     if (oneShot !== undefined) {
-      writeTextStderr(oneShot);
-      return CliExitCode.Usage;
+      return yield* failUsage(oneShot);
     }
   }
   // A resumed task continues under the approval it was launched with: a
@@ -176,7 +175,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     if (terminalFailure) {
       const commandName = context.commandName;
       const runCommand = `${commandName} run`;
-      writeTextStderr(
+      return yield* failUsage(
         formatInteractiveTerminalFailure(terminalFailure, {
           headlessMessage: `Resuming continues an interactive chat session, run \`${formatResumeCommand(
             commandName,
@@ -190,7 +189,6 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
           },
         }),
       );
-      return CliExitCode.Usage;
     }
     return {
       chat: { initialResume: { id, config } },

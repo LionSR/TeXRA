@@ -1,7 +1,8 @@
 /**
  * The process's plugin catalog: the `ToolRegistry` over the `ToolTable`
  * `processLayer` validated at build, the tool catalog over it, the
- * user's MCP servers and the installed plugins, following the switches.
+ * user's MCP servers and the installed plugins with the native plugins they
+ * load, following the switches and the install record.
  */
 
 // Third-party imports
@@ -17,6 +18,7 @@ import {
 } from 'effect';
 
 // Local imports
+import { INSTALLED_PLUGINS_KEY } from '@common/plugins/installRecord';
 import { revisionKey } from '@common/plugins/mcpServers';
 import {
   installedPluginId,
@@ -46,7 +48,9 @@ const SWITCH_READ = Schedule.exponential('200 millis');
  * switches and the plugin install record. A switch flipped or a plugin
  * disabled in any process sharing that state reaches the catalog at once
  * (`AppState.changes`), not only at a run's next step, so what follows the
- * catalog outside a run (a plugin layer's lifetime) follows the switch.
+ * catalog outside a run (a plugin layer's lifetime) follows the switch and
+ * the record. A native plugin enabled meanwhile is imported only when a
+ * step or a launch next reads the table.
  */
 export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
   Layer.unwrap(
@@ -68,7 +72,8 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
       );
       // The installed plugins a step loads: the enabled, trusted ones, and
       // why each other enabled one loads nothing or leaves a program file
-      // out. One that ships only skills or programs loads with no servers.
+      // out. One that ships only skills or programs loads with no servers;
+      // the catalog loads a native entry's plugin (`toolCatalogLayer`).
       const installed = Effect.gen(function* () {
         const {
           loadable,
@@ -91,6 +96,12 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
               source,
             };
           }),
+          enabled: new Set([
+            ...loadable.map(({ record }) => installedPluginId(record.name)),
+            ...withheld.flatMap(({ plugin }) =>
+              plugin === null ? [] : [installedPluginId(plugin)],
+            ),
+          ]),
           warnings: [
             ...withheld.map(({ reason }) => reason),
             ...loadable.flatMap(({ plugin }) => [
@@ -126,6 +137,7 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
       return toolCatalogLayer(table, {
         loader: mcpPluginLoader(fs, mcpConfigPath, envKey),
         installed,
+        installedChanges: appState.changes([INSTALLED_PLUGINS_KEY.key]),
         switches,
       });
     }),

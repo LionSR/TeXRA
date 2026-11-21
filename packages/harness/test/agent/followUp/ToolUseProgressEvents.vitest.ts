@@ -1,7 +1,7 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect, Layer, Context } from 'effect';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
 // Local imports
@@ -10,6 +10,7 @@ import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
+import { ContextTool } from '@tools/codemode/ContextTool';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
@@ -202,6 +203,96 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
           expect(edits).toMatchObject([
             { type: 'context.edit', payload: { trigger: 'overflow' } },
+          ]);
+        }),
+      );
+
+      // Failure modes of an agent's own context edit (`context` replace):
+      // a range reaching into the response that asked for it; a range that
+      // leaves a tool result without its call; two ranges of one response,
+      // which must both apply, highest first, each against the view the
+      // response was sent with; and an overlapping one, refused. A refused
+      // range changes nothing and says why.
+      it.effect('applies the replacements a response asked for', () =>
+        Effect.gen(function* () {
+          const session = yield* quietSession();
+          const runId = yield* startedRun(session);
+          const probe = {
+            definition: { name: 'probe' },
+            call: () =>
+              Effect.succeed({ status: 'executed' as const, output: 'done' }),
+          };
+          const replace = (id: string, from: number, to: number) => ({
+            id,
+            name: 'context',
+            input: { action: 'replace', from, to, with: `note ${id}` },
+          });
+          const { result, state } = yield* runScript({
+            runId,
+            session,
+            tools: { probe, context: ContextTool },
+            script: [
+              toolCallTurn([{ id: 'call-1', name: 'probe' }]),
+              toolCallTurn([{ id: 'call-2', name: 'probe' }]),
+              // The view: [0] the task, [1] call-1, [2] its result, [3]
+              // call-2, [4] its result; this response is message 5.
+              toolCallTurn([
+                replace('a', 3, 5),
+                replace('orphan', 1, 2),
+                replace('into', 1, 6),
+                replace('overlap', 4, 5),
+                replace('b', 1, 3),
+              ]),
+              textTurn('Done.'),
+            ],
+          });
+          expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+          const edits = yield* Context.get(session, SessionLog).history(
+            runId,
+            undefined,
+            ['context.edit'],
+          );
+          expect(edits).toMatchObject([
+            { payload: { cause: 'edit', range: { from: 3, to: 5 } } },
+            { payload: { cause: 'edit', range: { from: 1, to: 3 } } },
+          ]);
+          assert(state !== null);
+          expect(state.contextEdits).toEqual([]);
+          const texts = state.messages.map((message) =>
+            message.role === 'user'
+              ? message.content.flatMap((part) =>
+                  part.kind === 'text' ? [part.text] : [],
+                )
+              : message.role === 'tool'
+                ? message.results.map(
+                    ({ status, content }) =>
+                      `${status}: ${content.flatMap((part) => (part.kind === 'text' ? [part.text] : [])).join('')}`,
+                  )
+                : [message.role],
+          );
+          expect(texts).toEqual([
+            ['Do the thing.'],
+            ['[Context you replaced]\n\nnote b'],
+            ['[Context you replaced]\n\nnote a'],
+            ['assistant'],
+            [
+              expect.stringMatching(
+                /^success: Messages \[3, 5\) will be replaced/,
+              ),
+              expect.stringMatching(
+                /^error: .*separate a tool call from its result/,
+              ),
+              expect.stringMatching(
+                /^error: .*message 5 is the response that made this call/,
+              ),
+              expect.stringMatching(
+                /^error: .*already asked to replace \[3, 5\)/,
+              ),
+              expect.stringMatching(
+                /^success: Messages \[1, 3\) will be replaced/,
+              ),
+            ],
+            ['assistant'],
           ]);
         }),
       );

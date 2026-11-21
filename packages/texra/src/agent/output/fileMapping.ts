@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { getPathSegments, toPosixPath } from '@texra-ai/harness/host';
 
 import { Effect, FileSystem } from 'effect';
 
@@ -9,7 +8,11 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 
-import { readNormalizedFile } from '@texra-ai/harness/node';
+import {
+  readNormalizedFile,
+  getPathSegments,
+  toPosixPath,
+} from '@texra-ai/harness/node';
 import { rewriteTexInputs } from '@latex/latexParsingUtils';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';

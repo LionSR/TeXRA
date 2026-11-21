@@ -7,9 +7,10 @@
  * `followup.consumed` rows its reader commits with the message it became.
  * A reader hands a step of the loop one reading of the input
  * ({@link InputReading}); with nothing to read it waits on the session log for
- * the next message queued for its run, or for the inbox to end it.
+ * the next message queued for its run, for the time a note the run wrote to
+ * itself is due, or for the inbox to end it.
  */
-import { Effect, Latch, Option, Stream } from 'effect';
+import { Clock, Effect, Latch, Option, Stream } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
@@ -21,23 +22,35 @@ import {
 } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
+import { wakeNoteOf } from './followUpMessages';
 
 /** Where in its loop a run reads its input: before a model request inside
  *  a turn, at the turn's end, or while it waits for input. */
 type InputPoint = 'request' | 'turn' | 'idle';
 
+/** When a run's own note for a later time becomes readable; undefined for
+ *  every other row, which holds no time. */
+const dueOf = (row: QueuedFollowUp): number | undefined => wakeNoteOf(row)?.due;
+
 /**
- * The pending messages a run reads at `at`, in commit order. A row held
- * until the turn ends is not read before a request inside the turn.
+ * The pending messages a run reads at `at` when the clock says `now`, in
+ * commit order. A row held until the turn ends is not read before a request
+ * inside the turn, and a run's own note for a later time is not read before
+ * it is due.
  */
 function readableMessages(
   rows: readonly QueuedFollowUp[],
   at: InputPoint,
+  now: number,
 ): QueuedMessage[] {
-  return rows.filter(
-    (f): f is QueuedMessage =>
-      isMessage(f) && (f.holdUntil === undefined || at !== 'request'),
-  );
+  return rows.filter((f): f is QueuedMessage => {
+    const due = dueOf(f);
+    return (
+      isMessage(f) &&
+      (due === undefined || due <= now) &&
+      (f.holdUntil === undefined || at !== 'request')
+    );
+  });
 }
 
 /**
@@ -49,7 +62,8 @@ function readableMessages(
  * then only the user's message committed after that stop wakes it, so no
  * run undoes a person's stop. A resumed run that crashed carries no end, so
  * no earlier Stop of it holds a message back. A host's notification wakes
- * nothing: it is read by a run already running.
+ * nothing: it is read by a run already running. A run's own note wakes it
+ * as a run's message does, once it is readable.
  */
 const wakes = (
   { end, stop }: RunRowsRead<'input'>,
@@ -64,13 +78,13 @@ const wakes = (
 /**
  * Whether a run's pending input obliges a resume of it when no fiber here
  * drives it, from its input rows (`followup.queued`, `followup.consumed`,
- * `run.activate`, `run.end`), over the messages readable at idle
- * ({@link wakes}). A closed input obliges none.
+ * `run.activate`, `run.end`), over the messages readable at idle when the
+ * clock says `now` ({@link wakes}). A closed input obliges none.
  */
-export function needsWake(input: RunRowsRead<'input'>): boolean {
+export function needsWake(input: RunRowsRead<'input'>, now: number): boolean {
   return (
     !input.inputClosed &&
-    readableMessages(input.followUps, 'idle').some(({ commit, content }) =>
+    readableMessages(input.followUps, 'idle', now).some(({ commit, content }) =>
       wakes(input, content.from, commit),
     )
   );
@@ -112,8 +126,9 @@ export function sendVerdict(
 
 /**
  * What a run reads from its input: the messages readable at this point, or
- * a text the loop itself supplies (a `/compact` with nothing else queued, a
- * Stop hook's block), which never shares a batch with messages.
+ * a text the loop itself supplies (a `/compact` committed before any
+ * readable message, a Stop hook's block), which never shares a batch with
+ * messages.
  */
 export type FollowUpBatch =
   | {
@@ -129,7 +144,8 @@ export type FollowUpBatch =
 interface InputReading {
   /** The run's own pending requests (`/compact`, a model switch). */
   readonly controls: readonly QueuedFollowUp[];
-  /** The messages readable at `at`, when there are any; nothing is taken. */
+  /** The messages readable at `at`, when there are any and no `/compact`
+   *  committed before the first of them waits; nothing is taken. */
   readonly batch: (
     at: InputPoint,
   ) => Extract<FollowUpBatch, { kind: 'followUps' }> | null;
@@ -138,24 +154,54 @@ interface InputReading {
   readonly pending: (at: InputPoint) => boolean;
   /** Where the log stood before the read: a later row is above it. */
   readonly from: CommitOrdinal;
+  /** When the run's earliest note not yet due becomes readable, in epoch
+   *  milliseconds; undefined when none waits for its time. A time, not a
+   *  delay: a wait that starts after the read sleeps until it, never for
+   *  the delay the read saw. */
+  readonly nextDue: number | undefined;
 }
 
 const inputOf = (
   rows: readonly QueuedFollowUp[],
   from: CommitOrdinal,
+  now: number,
 ): InputReading => {
+  // The earliest pending `/compact`. One committed before the first
+  // readable message is answered first: no message is read until it is, so
+  // which comes first follows commit order, not when the run looks. One
+  // committed after lands at the request boundary of the message's turn.
+  const compact = rows.find((f) => controlOf(f)?.kind === 'compact')?.commit;
   const batch: InputReading['batch'] = (at) => {
-    const followUps = readableMessages(rows, at);
-    return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
+    const followUps = readableMessages(rows, at, now);
+    const first = followUps[0]?.commit;
+    if (first === undefined || (compact !== undefined && compact < first))
+      return null;
+    return { kind: 'followUps', followUps };
   };
-  const compacting = rows.some((f) => controlOf(f)?.kind === 'compact');
+  const compacting = compact !== undefined;
+  const later = rows.flatMap((f) => {
+    const due = dueOf(f);
+    return due !== undefined && due > now ? [due] : [];
+  });
   return {
     controls: rows.filter((f) => !isMessage(f)),
     batch,
     pending: (at) => compacting || batch(at) !== null,
     from,
+    nextDue: later.length > 0 ? Math.min(...later) : undefined,
   };
 };
+
+/** Sleep until the clock reads `due`, in epoch milliseconds. The clock is
+ *  read again after each sleep: one set back leaves time to wait. */
+export const sleepUntil = (due: number): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    for (;;) {
+      const wait = due - (yield* Clock.currentTimeMillis);
+      if (wait <= 0) return;
+      yield* Effect.sleep(wait);
+    }
+  });
 
 /** What a reader reads of the session's log. */
 type ReaderLog = Pick<SessionLogShape, 'runRows' | 'tail' | 'now'>;
@@ -184,8 +230,11 @@ export class FollowUpReader {
   /** The run's input now, in one read of its committed rows. */
   readonly read: Effect.Effect<InputReading> = Effect.suspend(() => {
     const from = this.log.now();
-    return this.log.runRows(this.runId, 'input').pipe(
-      Effect.map(({ followUps }) => inputOf(followUps, from)),
+    return Effect.all([
+      this.log.runRows(this.runId, 'input'),
+      Clock.currentTimeMillis,
+    ]).pipe(
+      Effect.map(([{ followUps }, now]) => inputOf(followUps, from, now)),
       Effect.orDie,
     );
   });
@@ -203,7 +252,7 @@ export class FollowUpReader {
         if (readable !== null) return readable;
         if (input.pending(at))
           return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
-        const arrived = yield* Effect.raceFirst(
+        const arrived = yield* Effect.raceAllFirst([
           this.log.tail(input.from).pipe(
             Stream.filter(
               (event) =>
@@ -215,7 +264,14 @@ export class FollowUpReader {
             Effect.orDie,
           ),
           Effect.as(this.closed.await, false),
-        );
+          // A note the run wrote to itself becomes readable with no row
+          // committed: the wait ends when its time comes, measured from
+          // the clock as the wait starts (the step opened since the read
+          // takes time, and the clock may have moved past the due time).
+          ...(input.nextDue === undefined
+            ? []
+            : [Effect.as(sleepUntil(input.nextDue), true)]),
+        ]);
         if (!arrived) return null;
       }
     });

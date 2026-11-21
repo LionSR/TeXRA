@@ -25,6 +25,7 @@ import { turnText } from '@shared/session/runFacts';
 import type { UsageLog } from '@shared/usageLog';
 
 import type { RouteRetries } from './ModelRetryGate';
+import type { PlanQuotas } from './modelAccess/planQuotas';
 import { callModel } from './run/modelCall';
 import type { UsageAttribution } from './run/pricing';
 import type { HttpClient } from 'effect/http';
@@ -70,6 +71,7 @@ export const helperCall = Effect.fn('helperCall')(
     | RouteRetries
     | Secrets
     | SubscriptionAccounts
+    | PlanQuotas
   > {
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
     const modelId = yield* Effect.mapError(

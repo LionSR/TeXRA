@@ -41,7 +41,6 @@ import {
 } from '@texra-ai/harness';
 import {
   AgentCatalog,
-  AgentDirectories,
   processLayer,
   ToolAvailability,
   UsageLog,
@@ -59,6 +58,7 @@ import {
   StateStores,
   ToolCatalog,
   type StateStore,
+  AgentDirectories,
 } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
@@ -66,6 +66,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RouteRetries } from '@agent/runtime/ModelRetryGate';
+import { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
@@ -192,7 +193,8 @@ const followedPorts = (current: Ref.Ref<HostRecord>) => {
  * `GlobalDatabase` handle, the `HttpClient`,
  * `Secrets` with its `SubscriptionAccounts`, `AppState`, `AgentDirectories`,
  * `GlobalValues`, `StateStores`, `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`) the
- * `AgentCatalog`, the model routes' `RouteRetries` gate, the `ToolRegistry`
+ * `AgentCatalog`, the model routes' `RouteRetries` gate, the plans'
+ * `PlanQuotas`, the `ToolRegistry`
  * and `ToolAvailability`; the composition adds its `ToolCatalog`; and a
  * composition root opens its sessions through `Sessions`, with the internal
  * `SessionOwner` and the project stores (`ProjectDatabases`) beside it, which
@@ -216,6 +218,7 @@ const PROCESS_SERVICES = [
   AppSignals,
   AgentCatalog,
   RouteRetries,
+  PlanQuotas,
   ToolRegistry,
   ToolAvailability,
   ToolCatalog,

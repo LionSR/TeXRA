@@ -30,7 +30,7 @@ import { gh, ghAvailable, git } from '../runtime/gitOps';
 
 import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { CliContext } from '../runtime/platform/cliContext';
+import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 
 const WORKFLOW_RELATIVE_PATH = '.github/workflows/texra-code-review.yml';
 const DEFAULT_BRANCH_NAME = 'texra/add-code-review';
@@ -183,10 +183,9 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
 
   // The command commits with the user's own git identity.
   if (!(yield* isGitRepository(cwd))) {
-    writeTextStderr(
+    return yield* failUsage(
       'Not inside a git repository. Run this from a cloned GitHub repo.',
     );
-    return CliExitCode.Usage;
   }
 
   const root = (yield* repositoryRoot(cwd)) ?? cwd;
@@ -198,10 +197,9 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     pathExists(fs, workflowAbsPath),
   );
   if (workflowExists && !opts.force) {
-    writeTextStderr(
+    return yield* failUsage(
       `${WORKFLOW_RELATIVE_PATH} already exists. Re-run with --force to overwrite it.`,
     );
-    return CliExitCode.Usage;
   }
 
   const url = yield* originUrl(root);
@@ -212,18 +210,16 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
 
   const branchExists = yield* localBranchExists(root, branch);
   if (branchExists && !opts.force) {
-    writeTextStderr(
+    return yield* failUsage(
       `Branch "${branch}" already exists. Pass --branch <name> or --force.`,
     );
-    return CliExitCode.Usage;
   }
 
   const baseRef = branchExists ? base : yield* resolveBaseRef(root, base);
   if (!baseRef) {
-    writeTextStderr(
+    return yield* failUsage(
       `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
     );
-    return CliExitCode.Usage;
   }
 
   // Only once the command is committed to writing the workflow file: the

@@ -54,7 +54,6 @@ it.layer(nodePlatformLayer)('an installed plugin’s programs', (it) => {
         loaded: [
           {
             name: 'kit:hello',
-            file: path.join('programs', 'hello.js'),
             description: 'Say hello.',
             tools: ['read_file', 'agent'],
             source: GOOD,
@@ -149,7 +148,7 @@ it.layer(nodePlatformLayer)('an installed plugin’s programs', (it) => {
       const read = yield* readPluginPrograms(dir, 'kit');
       expect(read.loaded.map(({ name }) => name)).toEqual(['kit:hello']);
       expect(read.refused).toEqual([
-        `Program ${path.join('programs', 'linked.js')} of plugin kit is not loaded: it is not a regular file inside the plugin (a link is not followed).`,
+        `Program ${path.join('programs', 'linked.js')} of plugin kit is not loaded: it is not a regular file (a link is not followed).`,
       ]);
       // The whole directory linked from elsewhere loads nothing.
       const linked = yield* Effect.promise(() =>
@@ -164,7 +163,7 @@ it.layer(nodePlatformLayer)('an installed plugin’s programs', (it) => {
       expect(yield* readPluginPrograms(linked, 'kit')).toEqual({
         loaded: [],
         refused: [
-          'Program programs of plugin kit is not loaded: it is not a directory inside the plugin (a link is not followed).',
+          'Program programs of plugin kit is not loaded: it is not a directory (a link is not followed).',
         ],
       });
     }),

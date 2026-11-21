@@ -24,7 +24,11 @@ import {
   emitCliResult,
   emitPagedCliResult,
 } from './_helpers/output';
-import { isQuiet, type CliContext } from '../runtime/platform/cliContext';
+import {
+  failUsage,
+  isQuiet,
+  type CliContext,
+} from '../runtime/platform/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
   context: CliContext,
@@ -69,8 +73,7 @@ const showAgent = Effect.fn('showAgent')(function* (
   const catalog = yield* AgentCatalog;
   const entry = catalog.get(name);
   if (!entry) {
-    writeTextStderr(missingAgentMessage(name));
-    return CliExitCode.Usage;
+    return yield* failUsage(missingAgentMessage(name));
   }
   if (!isQuiet(context) && catalog.newerBuiltIn(entry)) {
     writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
@@ -96,16 +99,11 @@ function emitCopyResult(result: {
   return emitCliResult(cliResult('agent-copy', copy, text));
 }
 
-function refuse(message: string) {
-  writeTextStderr(message);
-  return CliExitCode.Usage;
-}
-
 /** Copy a bundled agent into the custom agents directory, stamped `basedOn`. */
 const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
   yield* cliPlatform;
   const builtIn = yield* bundledAgentNamed(name);
-  if (!builtIn) return refuse(`No built-in agent named ${name}.`);
+  if (!builtIn) return yield* failUsage(`No built-in agent named ${name}.`);
   return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
     Effect.flatMap(({ path }) =>
       emitCopyResult({
@@ -116,7 +114,7 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
       }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
-      Effect.succeed(refuse(refused.message)),
+      failUsage(refused.message),
     ),
   );
 });
@@ -127,7 +125,9 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   if (!custom || !(yield* bundledAgentNamed(name))) {
-    return refuse(`${name} is not a custom copy of a built-in agent.`);
+    return yield* failUsage(
+      `${name} is not a custom copy of a built-in agent.`,
+    );
   }
   return yield* catalog
     .workspaceAgents(services)
@@ -142,7 +142,7 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
         }),
       ),
       Effect.catchTag('AgentCustomizeRefused', (refused) =>
-        Effect.succeed(refuse(refused.message)),
+        failUsage(refused.message),
       ),
     );
 });
@@ -160,7 +160,7 @@ const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
       }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
-      Effect.succeed(refuse(refused.message)),
+      failUsage(refused.message),
     ),
   );
 });

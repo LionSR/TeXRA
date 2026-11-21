@@ -17,10 +17,8 @@
  * run's history only through the tool result that used it.
  */
 import { randomUUID } from 'node:crypto';
-import {
-  isPathWithin,
-  type PresentationEventHandlers,
-} from '@texra-ai/harness/host';
+import { type PresentationEventHandlers } from '@texra-ai/harness/host';
+import { isPathWithin } from '@texra-ai/harness/node';
 
 import {
   Cause,

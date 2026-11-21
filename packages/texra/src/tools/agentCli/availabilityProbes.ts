@@ -8,7 +8,6 @@
 import { Effect, type FileSystem } from 'effect';
 
 // Local imports
-import { isModuleNotFoundError } from '@texra-ai/harness/host';
 import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage, causeChain } from '@texra-ai/harness/schemas';
 import { ToolProbeFailed } from '@texra-ai/harness/plugins';
@@ -18,6 +17,7 @@ import {
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
 } from '@texra/shared/constants/latexToolchain';
+import { isModuleNotFoundError } from './vendorPackages';
 
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

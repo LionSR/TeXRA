@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -348,11 +347,12 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
   DiffServices
 > {
   const diffFileName = path.basename(diffPath);
-  const diffLocation = createRunStorageLocation(
-    path.join(diffDirectory.absolutePath, diffFileName),
-    path.join(diffDirectory.relativePath, diffFileName),
-    diffDirectory.runId,
-  );
+  const diffLocation: RunStorageFileLocation = {
+    kind: 'runStorage',
+    absolutePath: path.join(diffDirectory.absolutePath, diffFileName),
+    relativePath: path.join(diffDirectory.relativePath, diffFileName),
+    runId: diffDirectory.runId,
+  };
 
   const buildDir = path.join(
     path.dirname(diffLocation.absolutePath),

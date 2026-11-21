@@ -69,8 +69,8 @@ describe('buildTerminalTool', () => {
         <A, E, R>(call: Effect.Effect<A, E, R>) =>
           call.pipe(
             Effect.provideService(RunCall, {
-              facts: Effect.succeed(facts),
-              // cast: the tool reads only the call's facts, and of them only `structured`.
+              state: Effect.succeed(facts),
+              // cast: the tool reads only the call's state, and of it only `structured`.
             } as unknown as RunCallShape),
             // cast: the tool reads nothing of the call itself.
             Effect.provideService(ToolContext, {} as ToolContextShape),

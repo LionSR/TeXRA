@@ -4,9 +4,9 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Stream } from 'effect';
+import { Tar } from 'effect/encoding';
 import { FetchHttpClient } from 'effect/http';
-import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -41,16 +41,18 @@ describe('arXiv source download filenames', () => {
         const workspaceRoot = yield* Effect.promise(() =>
           makeTempDir('texra-arxiv-root-', tempDirs),
         );
-        const archive = yield* Effect.promise(async () => {
-          const srcDir = await makeTempDir('texra-arxiv-tar-', tempDirs);
-          await fs.mkdir(path.join(srcDir, 'figures'));
-          await fs.writeFile(path.join(srcDir, 'main.tex'), 'arxiv');
-          await fs.writeFile(path.join(srcDir, 'figures/a.txt'), 'fig');
-          const tarPath = path.join(srcDir, 'source.tar');
-          await tar.c({ cwd: srcDir, file: tarPath }, ['main.tex', 'figures']);
-          await fs.writeFile(path.join(workspaceRoot, 'main.tex'), 'mine');
-          return fs.readFile(tarPath);
-        });
+        const archive = yield* Stream.make(
+          Tar.file('main.tex', 'arxiv'),
+          Tar.directory('figures'),
+          Tar.file('figures/a.txt', 'fig'),
+        ).pipe(
+          Stream.pipeThroughChannel(Tar.encode()),
+          Stream.runCollect,
+          Effect.map((chunks) => Buffer.concat(chunks)),
+        );
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(workspaceRoot, 'main.tex'), 'mine'),
+        );
         const download = downloadArxivSource('2404.12175', {
           roots: createFakeWorkspaceRoots({ workspaceRoot }),
           indent: false,

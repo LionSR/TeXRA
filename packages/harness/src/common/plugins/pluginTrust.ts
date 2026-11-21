@@ -30,6 +30,11 @@ import {
   type PluginEnv,
 } from './installRecord';
 import { revisionKey, type McpServerConfig } from './mcpServers';
+import {
+  describeProvides,
+  NATIVE_ENTRY_FILE,
+  type NativeEntry,
+} from './nativeEntry';
 import { externalFiles, pluginDigest } from './pluginDigest';
 import { hookShell, NO_SHELL, pinHook } from './pluginHooks';
 import {
@@ -99,8 +104,15 @@ const describeServer = (server: McpServerConfig) =>
 export interface PluginReview {
   readonly name: string;
   readonly version: string | null;
+  /** The digest trusting it records. */
+  readonly digest: string;
+  /** Its folder. */
+  readonly path: string;
   /** What the plugin declares, one line each, for the prompt. */
   readonly lines: readonly string[];
+  /** Its native entry, which runs inside the process once trusted: only a
+   *  person's own answer trusts it. */
+  readonly native: NativeEntry | null;
 }
 
 /** How many skills the plugin's skill directories hold. */
@@ -146,6 +158,12 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
       );
     for (const line of refused) lines.push(`  ${line}`);
   }
+  if (plugin.native === null) lines.push('Native code: none');
+  else
+    lines.push(
+      `Native code (${NATIVE_ENTRY_FILE}: ${plugin.native.description}): a module that runs inside this process, as you, with everything the process can reach (your files, the network, your credentials and every open session). It is not sandboxed. Each call of its tools asks under your approval policy, as an MCP server’s tool does, whatever the module declares; a call that fails, crashes or runs past its deadline fails alone. What it does outside an Effect cannot be contained: a loop that never yields, \`process.exit\` or a crash in a native addon stops this process.`,
+      `  It contributes ${describeProvides(plugin.native.provides)}; a module that contributes anything else is not loaded.`,
+    );
   const { hooks, unsupported } = plugin.hooks;
   if (hooks.length === 0) lines.push('Hooks: none');
   else {
@@ -191,6 +209,55 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
   return lines;
 });
 
+/** The recorded plugin `name` as it is now, with the trust it needs; a
+ *  code plugin is refused. */
+const readRecorded = Effect.fn('pluginTrust.readRecorded')(function* (
+  name: string,
+  env: PluginEnv,
+) {
+  const record = yield* Effect.fromResult(
+    findInstalled(yield* readInstalled(env), name),
+  );
+  const plugin = yield* rereadPlugin(record);
+  if (plugin.code.length > 0)
+    return yield* new PluginError({ message: codeRefusal(name, plugin) });
+  const key = yield* trustKey(record, plugin, yield* envKeyOf(env));
+  return { record, plugin, key };
+});
+
+/** What trusting `record` as it is now (`key`) asks. */
+const reviewOf = Effect.fn('pluginTrust.reviewOf')(function* (
+  record: InstalledPlugin,
+  plugin: ResolvedPlugin,
+  key: PluginTrust,
+) {
+  return {
+    name: record.name,
+    version: key.version,
+    digest: key.digest,
+    path: record.path,
+    lines: yield* reviewLines(record, plugin),
+    native: plugin.native,
+  } satisfies PluginReview;
+});
+
+/**
+ * The recorded plugin `name`'s review as it is now, whether it is trusted
+ * as it is and whether it is enabled: what a caller that decides to ask
+ * before enabling reads. A code plugin is refused.
+ */
+export const reviewPlugin = Effect.fn('reviewPlugin')(function* (
+  name: string,
+  env: PluginEnv,
+) {
+  const { record, plugin, key } = yield* readRecorded(name, env);
+  return {
+    review: yield* reviewOf(record, plugin, key),
+    trusted: trusts(record, key),
+    enabled: record.enabled,
+  };
+});
+
 /**
  * Enable a recorded plugin. A plugin the user already trusts as it is now
  * is enabled at once; otherwise `confirm` shows what it declares, and only
@@ -202,19 +269,9 @@ export const enablePlugin = Effect.fn('enablePlugin')(function* <E, R>(
   env: PluginEnv,
   confirm: (review: PluginReview) => Effect.Effect<boolean, E, R>,
 ) {
-  const record = yield* Effect.fromResult(
-    findInstalled(yield* readInstalled(env), name),
-  );
-  const plugin = yield* rereadPlugin(record);
-  if (plugin.code.length > 0)
-    return yield* new PluginError({ message: codeRefusal(name, plugin) });
-  const key = yield* trustKey(record, plugin, yield* envKeyOf(env));
+  const { record, plugin, key } = yield* readRecorded(name, env);
   if (!trusts(record, key)) {
-    const accepted = yield* confirm({
-      name,
-      version: key.version,
-      lines: yield* reviewLines(record, plugin),
-    });
+    const accepted = yield* confirm(yield* reviewOf(record, plugin, key));
     if (!accepted) return 'declined' as const;
   }
   // One decision per plugin: trusting it now replaces the last one.
@@ -240,6 +297,8 @@ export interface PluginListing extends InstalledPlugin {
   readonly programs: readonly string[];
   /** Its MCP servers' names, as its tools carry them. */
   readonly mcpServers: readonly string[];
+  /** Its native entry, as its file declares it. */
+  readonly native: NativeEntry | null;
   /** Whether the user trusts it as it is now. */
   readonly trusted: boolean;
   /** Its command hooks, and the configured ones the harness does not run. */
@@ -271,6 +330,7 @@ export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
           agentCount: plugin.agents.length,
           programs: plugin.programs.loaded.map(({ name }) => name),
           mcpServers: plugin.mcpServers.map((server) => server.name),
+          native: plugin.native,
           trusted: trusts(record, key),
           hooks: plugin.hooks.hooks,
           unsupportedHooks: plugin.hooks.unsupported,
@@ -286,6 +346,7 @@ export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
             agentCount: 0,
             programs: [],
             mcpServers: [],
+            native: null,
             trusted: false,
             hooks: [],
             unsupportedHooks: [],

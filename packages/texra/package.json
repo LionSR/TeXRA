@@ -33,9 +33,7 @@
     "markdown-it-texmath": "^1.0.0",
     "monaco-editor": "^0.57.0",
     "pretty-bytes": "catalog:",
-    "pretty-ms": "catalog:",
     "sortablejs": "^1.15.7",
-    "tar": "catalog:",
     "which": "catalog:",
     "yaml": "catalog:"
   },

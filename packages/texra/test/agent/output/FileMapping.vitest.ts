@@ -4,10 +4,7 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import {
-  createExternalLocation as externalLocation,
-  createWorkspaceLocation,
-} from '@texra-ai/harness/host';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 import { replaceInputCommands } from '@texra/agent/output/fileMapping';
 import { noopTrace } from '@test/support/noopTrace';
 
@@ -21,7 +18,11 @@ describe('replaceInputCommands', () => {
           'a/main.tex',
           'b/main.tex',
           'c/intro.tex',
-        ].map((file) => createWorkspaceLocation(`/w/${file}`, file));
+        ].map((file): FileLocation => ({
+          kind: 'workspace',
+          absolutePath: `/w/${file}`,
+          relativePath: file,
+        }));
         // Outputs sit at the model-reported source path under the round dir;
         // the last one was renamed by the model.
         const outputs = [
@@ -31,7 +32,10 @@ describe('replaceInputCommands', () => {
           'c/intro_revised.tex',
         ].map((source) => ({
           source,
-          location: externalLocation(`/r/r1/${source}`),
+          location: {
+            kind: 'external',
+            absolutePath: `/r/r1/${source}`,
+          } satisfies FileLocation,
         }));
         const original = String.raw`\input{a/main} \input{b/main} \input{c/intro}`;
         const files = new Map<string, string>(
@@ -63,12 +67,17 @@ describe('replaceInputCommands', () => {
     'rewrites what LaTeX reads as an input: \\include and a spaced \\input, not a comment',
     () =>
       Effect.gen(function* () {
-        const bases = ['paper.tex', 'intro.tex'].map((file) =>
-          createWorkspaceLocation(`/w/${file}`, file),
-        );
+        const bases = ['paper.tex', 'intro.tex'].map((file): FileLocation => ({
+          kind: 'workspace',
+          absolutePath: `/w/${file}`,
+          relativePath: file,
+        }));
         const outputs = ['paper.tex', 'intro_revised.tex'].map((source) => ({
           source,
-          location: externalLocation(`/r/r1/${source}`),
+          location: {
+            kind: 'external',
+            absolutePath: `/r/r1/${source}`,
+          } satisfies FileLocation,
         }));
         const files = new Map<string, string>([
           [

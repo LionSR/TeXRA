@@ -18,13 +18,14 @@ import {
 } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
-import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import { meansAbsent, canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   withLogChannel,
   AppState,
   StateStores,
+  withPerKeyLane,
+  type PerKeyLane,
 } from '@texra-ai/harness/plugins';
 import {
   projectDisplayOf,

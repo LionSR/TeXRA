@@ -59,7 +59,12 @@ behaviour-preserving and need no decision:
 
 Each needs a decision or a check this unattended run could not make.
 
-1. **The CLI refuses a usage error two ways.** `cliCommand.ts` already catches
+1. Done 2026-11-20: every standalone refusal in agents, history, init,
+   installGithubAction, models and resumeRun fails with `failUsage` (29
+   sites, agents' private `refuse()` gone); the sites the paragraph below
+   excludes keep their own code, as do clone's outcome table and
+   `executeCliConfig`'s structured `{ ok: false }` result.
+   **The CLI refuses a usage error two ways.** `cliCommand.ts` already catches
    `CliUsageError` and writes its message to stderr and returns
    `CliExitCode.Usage` (`report`, and the parse's `catch`); it is the owner of
    "refuse with a usage error". Yet ~15–24 command sites inline
@@ -91,7 +96,13 @@ Each needs a decision or a check this unattended run could not make.
    webviews (host-block and token ordering can shift layout) and a decision on
    whether `commonViewStyles` belongs in the base.
 
-3. **The attention follower is reimplemented per GUI host.** Both hosts hand-roll
+3. Declined 2026-11-20: the two loops share only `zipWithPrevious` over
+   `attentionOf`; the desktop follows many projects, dismisses per project,
+   sums the badge across them and folds arrivals and finishes into one
+   notification, while the extension reveals the first arrival and chimes a
+   completed document task. A shared helper would be a port as wide as the
+   two bodies, and the "which finished run" choice is a product decision.
+   **The attention follower is reimplemented per GUI host.** Both hosts hand-roll
    the same loop — subscribe to the session view, call the shared `attentionOf`,
    diff a cached badge count, dispatch arrived/finished — differing only in the
    host surface: `ProgressViewProvider.followAttention` / `setBadge` (extension)
@@ -115,7 +126,13 @@ Each needs a decision or a check this unattended run could not make.
    text stays per-caller. Needs a decision on the one convention (the
    user-facing error strings would shift slightly).
 
-5. **The Zotero tools annotate the inner schema, not the outer.** Every input
+5. Checked 2026-11-20: the placements render different model JSON. The
+   inner form puts `description` on the value branch inside `anyOf`
+   (`{ anyOf: [{ type: 'string', description }, { type: 'null' }] }`), the
+   outer form on the field beside `anyOf`. Converting the Zotero family would
+   change four tool definitions, so the inner form stays and `optionalInput`
+   is for the outer case only.
+   **The Zotero tools annotate the inner schema, not the outer.** Every input
    field in `ZoteroSearchTool`, `ZoteroAddTool`, `ZoteroCollectionsTool` and
    `ZoteroExportTool` is written `Schema.optional(Schema.NullOr(S.annotate({
    description })))` — the description on the inner `S`, inside `NullOr` — where

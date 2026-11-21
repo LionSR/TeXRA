@@ -12,7 +12,10 @@ import {
 import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@ui/copy/subscriptionUsage';
-import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import {
+  invalidateSubscriptionUsage,
+  subscriptionUsage,
+} from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
 import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
@@ -101,17 +104,16 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     ] as const,
     { concurrency: 'unbounded' },
   );
-  // Detailed `/login status` is user-invoked, so reopening it is the manual refresh
-  // path. Ordinary chat startup and the status bar never call this service. It
-  // is built fresh over the caller's stores for each status, so its cache is
-  // empty and every read below fetches.
-  const usageReader = new SubscriptionUsageService({ stores });
+  // Detailed `/login status` is user-invoked, so reopening it is the manual
+  // refresh path: the cached usage is dropped first, so every read below
+  // asks its plan's endpoint.
+  yield* invalidateSubscriptionUsage();
   const codingPlanUsageEntries = yield* Effect.forEach(
     CODING_PLAN_SUBSCRIPTIONS,
     (plan) => {
       const status = cliCodingPlanStatus(access, plan);
       return Effect.map(
-        status.keySet ? usageReader.getUsage(plan.id) : Effect.undefined,
+        status.keySet ? subscriptionUsage(stores, plan.id) : Effect.undefined,
         (usage) => [plan.id, usage] as const,
       );
     },

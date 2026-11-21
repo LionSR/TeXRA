@@ -35,6 +35,7 @@ import {
   type SessionRow,
   type SessionRowDraft,
   type StoredInputPart,
+  type StoredMessage,
 } from '@shared/schemas';
 import type {
   DraftBlob,
@@ -55,7 +56,6 @@ import type { InputPart } from '@texra-ai/llm';
 
 type AssertNever<T extends never> = T;
 type StoredTurn = typeof StoredTurnSchema.Type;
-type StoredHistoryMessage = typeof StoredMessageSchema.Type;
 type LlmMessage = typeof MessageSchema.Type;
 /*
  * Storage owns its copy of the turn's vocabulary, so a provider change is no
@@ -81,7 +81,7 @@ type _EveryInputPartIsStored = AssertNever<
 type _EveryToolStatusIsStored = AssertNever<
   Exclude<
     Extract<LlmMessage, { role: 'tool' }>['results'][number]['status'],
-    Extract<StoredHistoryMessage, { role: 'tool' }>['results'][number]['status']
+    Extract<StoredMessage, { role: 'tool' }>['results'][number]['status']
   >
 >;
 

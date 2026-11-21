@@ -21,7 +21,8 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
   browser and (Grok's) device-code sign-in.
 - **Provider endpoints outside a turn**: [`fetchPlanUsage`](#fetchplanusage)
-  reads a coding plan's quota windows, and
+  reads a coding plan's quota windows ([`chatgptReplyUsage`](#chatgptreplyusage)
+  the ChatGPT plan's, from a reply's headers), and
   [`transcribeAudio`](#transcribeaudio) a recording's text.
 
 ## Binding
@@ -98,6 +99,24 @@ interface BindSpec {
     readonly fetch?: typeof fetch;
   };
 }
+```
+
+## chatgptReplyUsage
+
+The quota windows a reply on the ChatGPT plan states in its headers
+(`x-codex-<window>-used-percent`, `-window-minutes`, `-reset-at`,
+`-reset-after-seconds`, for the `primary` and `secondary` windows). The
+names are an outside gateway's reading of the Codex backend
+(yetone/magpie, `internal/gateway/codex_limits.go`); no reply recorded in
+this repository carries them, so a reply without them states no window.
+`receivedAt` (epoch milliseconds) dates a reset given only as seconds
+from the reply. Null when the headers state no window.
+
+```ts
+function chatgptReplyUsage(
+  headers: Headers,
+  receivedAt: number,
+): PlanUsage | null
 ```
 
 ## ChatgptSession
@@ -189,6 +208,8 @@ interface PlanUsageWindow {
   readonly percentRemaining: number;
   /** When the window resets, in epoch milliseconds. */
   readonly resetAt?: number;
+  /** How long the window is, in minutes, when the provider says. */
+  readonly windowMinutes?: number;
 }
 ```
 

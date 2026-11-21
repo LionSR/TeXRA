@@ -2,8 +2,8 @@
 // plugin manifest (`.claude-plugin/plugin.json`) and the Codex plugin
 // manifest (`.codex-plugin/plugin.json`), with the conventional component
 // locations beside them (`skills/`, `commands/`, `agents/`, `.mcp.json`),
-// and the programs a plugin carries for TeXRA (`programs/`,
-// `./pluginPrograms`). The harness defines no manifest of its own. Each file is validated with a schema
+// the programs a plugin carries for TeXRA (`programs/`,
+// `./pluginPrograms`) and its native entry (`harness.mjs`, `./nativeEntry`). The harness defines no manifest of its own. Each file is validated with a schema
 // here, at the boundary; fields the harness does not read are stripped. The
 // marketplace files that list plugins are read by `./marketplace`.
 
@@ -32,6 +32,7 @@ import {
   HooksConfigSchema,
   type ConfiguredHook,
 } from './hookConfig';
+import { readNativeEntry, type NativeEntry } from './nativeEntry';
 import { readPluginPrograms, type PluginPrograms } from './pluginPrograms';
 import {
   jsonSyntaxError,
@@ -216,6 +217,11 @@ export interface ResolvedPlugin {
   /** Its programs (`programs/<name>.js`), each read from its text and never
    *  run, and one line for each program file that is not loaded. */
   readonly programs: PluginPrograms;
+  /** Its native entry (`harness.mjs`), read from its text and never run
+   *  here: the code that, once trusted, runs inside the process. A file
+   *  that declares nothing readable is not loaded, and said in
+   *  `warnings`. */
+  readonly native: NativeEntry | null;
   /** Its stdio MCP servers, `${CLAUDE_PLUGIN_ROOT}` expanded, each run in
    *  the plugin directory under the name `plugin_<plugin>_<server>`. */
   readonly mcpServers: readonly McpServerConfig[];
@@ -229,7 +235,8 @@ export interface ResolvedPlugin {
   readonly code: readonly string[];
   /** Labels of the data components the harness does not load. */
   readonly ignored: readonly string[];
-  /** MCP server entries that were skipped, and why. */
+  /** MCP server entries that were skipped, and a native entry that is not
+   *  loaded, and why. */
   readonly warnings: readonly string[];
 }
 
@@ -524,6 +531,7 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
         found.flatMap((manifest) => toList(manifest.agents)),
       ),
       programs: readPluginPrograms(dir, name.success),
+      native: readNativeEntry(dir, name.success),
       code: presentComponents(dir, found, CODE_COMPONENTS),
       ignored: presentComponents(dir, found, IGNORED_COMPONENTS),
     },
@@ -536,6 +544,7 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
   ))
     if (root !== undefined) skills.add(path.relative(dir, root) || '.');
   const mcp = yield* Effect.fromResult(parts.mcp);
+  const native = yield* Effect.fromResult(parts.native);
   return {
     name: name.success,
     version: primary.version,
@@ -544,11 +553,15 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
     commands: yield* Effect.fromResult(parts.commands),
     agents: yield* Effect.fromResult(parts.agents),
     programs: yield* Effect.fromResult(parts.programs),
+    native: native.entry,
     mcpServers: mcp.servers,
     hooks: yield* hooksOf(dir, name.success, found),
     code: yield* Effect.fromResult(parts.code),
     ignored: yield* Effect.fromResult(parts.ignored),
-    warnings: mcp.warnings,
+    warnings: [
+      ...mcp.warnings,
+      ...(native.refused === null ? [] : [native.refused]),
+    ],
   } satisfies ResolvedPlugin;
 });
 

@@ -10,10 +10,10 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { buildDiffHunks, isPathWithin } from '@texra-ai/harness/host';
 import {
   readNormalizedFile,
   workspaceRelativePath,
+  isPathWithin,
 } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -41,6 +41,7 @@ import {
   type ProgramChange,
   withLogChannel,
   runDirUnder,
+  buildDiffHunks,
 } from '@texra-ai/harness/plugins';
 
 /**
