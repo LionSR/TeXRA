@@ -302,10 +302,13 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   // The agent and model are the proposal's, so the decision names neither.
   expect(decided.decision).toStrictEqual({
     action: 'approve',
-    instruction: EDITED,
-    inputFiles: ['draft.tex'],
-    contextFiles: ['macros.tex'],
-    mediaFiles: [],
+    edit: {
+      kind: 'proposal',
+      instruction: EDITED,
+      inputFiles: ['draft.tex'],
+      contextFiles: ['macros.tex'],
+      mediaFiles: [],
+    },
   });
 
   // The child runs with the edits.
