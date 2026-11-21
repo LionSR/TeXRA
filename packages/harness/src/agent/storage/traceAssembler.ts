@@ -24,17 +24,22 @@ import { isRequestDecision } from '@shared/session/runRowReads';
  * A decision's action, without what the user typed or approved. The fold reads
  * a `request.decided` row for its id alone — it closes the pending request and
  * renders nothing from the decision — while the payload can hold a whole
- * edited document (`approve.content`), question answers, or free-text feedback. An exported trace is a file
+ * edited document (a tool edit's `content`), question answers, or free-text feedback. An exported trace is a file
  * people share, so it carries the action and drops the content.
  */
 const decisionAction = (decision: RequestDecision): RequestDecision => {
   switch (decision.action) {
     case 'approve':
-      return {
-        action: 'approve',
-        model: decision.model,
-        agent: decision.agent,
-      };
+      return decision.edit?.kind === 'proposal'
+        ? {
+            action: 'approve',
+            edit: {
+              kind: 'proposal',
+              model: decision.edit.model,
+              agent: decision.edit.agent,
+            },
+          }
+        : { action: 'approve' };
     case 'submit':
       return { action: 'submit', answers: {} };
     case 'skip':

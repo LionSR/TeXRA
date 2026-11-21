@@ -276,7 +276,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // (an earlier build's `null` feedback would fail as damaged).
     // v4: no `answer` arm, which only a plugin's request took (an earlier
     // build's would fail as damaged).
-    'request.decided': Object.freeze({ version: 4, listing: 'request' }),
+    // v5: an approval's changes are one `edit` named by its request kind,
+    // not a proposal's and a tool edit's fields side by side (an earlier
+    // build's edited approval would read as a plain one).
+    'request.decided': Object.freeze({ version: 5, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
     // its check).

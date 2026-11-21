@@ -63,10 +63,9 @@ const sessionModelAccess = Layer.unwrap(
 );
 
 /**
- * How a launch enters its run's cell: a fresh run's `registration` rides
- * its opening batch (null: a resume, whose cell activates the run), on the
- * history a fork is born with when it has a `seed`, and `enter` commits
- * that batch with the trace held until then.
+ * How a launch enters its run's cell: a fresh run's registration rides
+ * its opening batch, on the history a fork is born with when it has a
+ * `seed`, and `enter` commits that batch with the trace held until then.
  */
 interface LaunchEntry {
   /** The parent this activation runs under, read once as it starts (a
@@ -76,8 +75,15 @@ interface LaunchEntry {
    *  end delivers nothing to the parent's input, and the run takes no
    *  permit of the child-run budget (it rides its parent's). */
   readonly awaited: boolean;
-  readonly registration: Registration | null;
-  readonly seed?: RegisterRunOptions['seed'] | null;
+  /** A fresh run's registration, the run it gives birth to, and the
+   *  history a fork is seeded with; null on a resume, whose cell activates
+   *  the run its rows hold. */
+  readonly fresh: {
+    readonly registration: Registration & {
+      readonly start: NonNullable<Registration['start']>;
+    };
+    readonly seed?: RegisterRunOptions['seed'];
+  } | null;
   /** Run `commit`, the batch that enters the run, uninterruptibly: the
    *  trace events held up to the first stream ride it as its alongside
    *  (a resume's activation takes none), and the rest publish once it
@@ -296,7 +302,7 @@ export const agentRunLayer = (
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).
-      const fromSeed = launch.entry.seed?.binding ?? null;
+      const fromSeed = launch.entry.fresh?.seed?.binding ?? null;
       const persisted = loaded?.backend != null ? loaded : fromSeed;
       const backend = persisted?.backend ?? undefined;
       const modelId = config.model;

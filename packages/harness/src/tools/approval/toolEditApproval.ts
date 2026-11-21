@@ -75,7 +75,7 @@ function diffEdit(original: string, proposed: string): DiffHunks {
  * row, so every process the request reaches shows the same diff
  * (`request.preview`); answered by a surface's `request.decide`, or by the
  * edit grant turned on meanwhile. An approve applies the file as the
- * person left it: the decision's content, else the proposal.
+ * person left it: the approval's tool edit, else the proposal.
  */
 export const requestToolEditApproval = (
   request: ToolEditProposal,
@@ -138,7 +138,7 @@ export const requestToolEditApproval = (
                       // are the request's stored ones, including after a resume.
                       finalizeApprovalResult(
                         (
-                          decision.content ?? reviewed.proposedContent
+                          decision.edit?.content ?? reviewed.proposedContent
                         ).replaceAll('\r\n', '\n'),
                         reviewed,
                       ),
