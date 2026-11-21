@@ -13,9 +13,8 @@ import {
   authorOf,
   formatPreviousStateHint,
   MAX_BODY,
-  makeTruncator,
   sections,
-  truncate as truncateBody,
+  truncate,
   wrapWebhookEvent as wrap,
   type WebhookEvent,
 } from './formatUtils';
@@ -37,8 +36,6 @@ import { formatResultCount } from '@texra-ai/harness/schemas';
 const MAX_ANNOTATIONS_PER_RUN = 20;
 const MAX_CI_STARTED_CHECK_NAMES = 20;
 const MAX_ANNOTATION_MESSAGE = 300;
-
-const truncate = makeTruncator(MAX_BODY);
 
 /** Verb fragments per `GhReview.state`. Unknown states fall back to "reviewed". */
 const REVIEW_VERBS: Readonly<Record<string, string>> = {
@@ -83,7 +80,7 @@ const annotationLocation = (a: GhCheckAnnotation): string => {
 const annotationBlock = (a: GhCheckAnnotation): string => {
   const level = normalizeCheckAnnotationLevel(a.annotation_level).toUpperCase();
   const title = a.title ? `${a.title}: ` : '';
-  const message = truncateBody(a.message, MAX_ANNOTATION_MESSAGE);
+  const message = truncate(a.message, MAX_ANNOTATION_MESSAGE);
   return `[${level}] ${annotationLocation(a)}\n${title}${message}`;
 };
 
@@ -94,7 +91,7 @@ export function formatReviewComment(
   return wrap(
     sections(
       `${reviewCommentPrefix(c)} on ${targetPath(pr)} by ${authorOf(c.user)} at ${reviewCommentLocation(c)}:`,
-      truncate(c.body),
+      truncate(c.body, MAX_BODY),
       c.html_url,
     ),
   );
@@ -105,7 +102,7 @@ export function formatReview(pr: PullTarget, r: GhReview): WebhookEvent {
   return wrap(
     sections(
       `${authorOf(r.user)} ${verb} ${targetPath(pr)}.`,
-      r.body && truncate(r.body),
+      r.body && truncate(r.body, MAX_BODY),
       r.html_url,
     ),
   );

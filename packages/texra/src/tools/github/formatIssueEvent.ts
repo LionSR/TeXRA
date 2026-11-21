@@ -8,15 +8,13 @@
 
 import {
   MAX_BODY,
-  makeTruncator,
   sections,
+  truncate,
   wrapWebhookEvent as wrap,
   type WebhookEvent,
 } from './formatUtils';
 import { targetPath, type IssueTarget } from './subscriptionTarget';
 import type { GhIssue } from './prTypes';
-
-const truncate = makeTruncator(MAX_BODY);
 
 export function formatIssueClosed(
   issue: IssueTarget,
@@ -36,7 +34,7 @@ export function formatIssueReopened(
 ): WebhookEvent {
   return wrap(
     sections(
-      `${targetPath(issue)} was reopened: "${truncate(data.title)}"`,
+      `${targetPath(issue)} was reopened: "${truncate(data.title, MAX_BODY)}"`,
       data.html_url,
     ),
   );
