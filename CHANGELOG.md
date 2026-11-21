@@ -1458,7 +1458,11 @@ All notable changes to this project will be documented in this file.
   step, with no restart. An edit replaces it the same way once trusted
   again: a call already running finishes on the version it started with,
   and the old version's services are released when the last step using
-  them ends. A new version that fails to load, or whose services do not
+  them ends. Each version runs from a copy of the plugin as you trusted
+  it, so the new version's entry gets the new version of every module it
+  imports (not the ones the old entry loaded), and a file written to the
+  plugin's folder afterwards runs only once you trust it; the module's
+  `import.meta.url` names that copy. A new version that fails to load, or whose services do not
   come up, is reported with its reason and leaves the version before it in
   use until the plugin is fixed or disabled (until TeXRA restarts, after
   which the plugin is left out with that reason); `plugin_manager list`

@@ -51,18 +51,26 @@ const ContentHashes = Context.Reference(
   },
 );
 
+/** One entry under a plugin's root, as `lstat` reads it. */
+interface PluginEntry {
+  readonly full: string;
+  /** Its path from the plugin's root. */
+  readonly relative: string;
+  readonly info: FileSystem.File.Info;
+}
+
 /**
- * Every file under the plugin root, as sorted `[path, sha256]` pairs; `.git`
- * is skipped, and a symlink digests its target text rather than following
- * it. Any edit inside the plugin, a script a server imports included,
- * changes it.
+ * Visit what a plugin ships: every directory under its root before what the
+ * directory holds, and every file and link, a link as itself and never
+ * followed. A `.git` directory is skipped.
  */
-const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
+const eachEntry = Effect.fnUntraced(function* (
   root: string,
+  visit: (
+    entry: PluginEntry,
+  ) => Effect.Effect<void, PlatformError.PlatformError>,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const hashes = yield* ContentHashes;
-  const files: [string, string][] = [];
   const walk = (
     dir: string,
   ): Effect.Effect<void, PlatformError.PlatformError> =>
@@ -72,23 +80,36 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
         discard: true,
       }),
     );
-  // One directory entry: a link, a subdirectory, or a file. A directory's
-  // entries are read at once; the list is sorted after the walk.
-  const entry = Effect.fn('entry')(function* (
-    dir: string,
-    name: string,
-  ): Effect.fn.Return<void, PlatformError.PlatformError> {
+  // One `lstat` per entry; a directory's entries are read at once.
+  const entry = Effect.fnUntraced(function* (dir: string, name: string) {
     const full = path.join(dir, name);
-    const relative = path.relative(root, full);
-    // One `lstat` per entry: a link is digested as its target text.
     const info = yield* fs.lstat(full);
-    if (info.type === 'SymbolicLink') {
-      files.push([relative, `-> ${yield* fs.readLink(full)}`]);
-      return;
-    }
-    if (info.type === 'Directory') {
-      if (name !== '.git') yield* walk(full);
-    } else if (info.type === 'File') {
+    if (info.type === 'Directory' && name === '.git') return;
+    yield* visit({ full, relative: path.relative(root, full), info });
+    if (info.type === 'Directory') yield* walk(full);
+  });
+  yield* walk(root);
+});
+
+/**
+ * Every file under the plugin root, as sorted `[path, sha256]` pairs; a
+ * symlink digests its target text rather than following it. Any edit inside
+ * the plugin, a script a server imports included, changes it.
+ */
+const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
+  root: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const hashes = yield* ContentHashes;
+  const files: [string, string][] = [];
+  yield* eachEntry(
+    root,
+    Effect.fnUntraced(function* ({ full, relative, info }) {
+      if (info.type === 'SymbolicLink') {
+        files.push([relative, `-> ${yield* fs.readLink(full)}`]);
+        return;
+      }
+      if (info.type !== 'File') return;
       const mtime = Option.getOrUndefined(info.mtime)?.getTime();
       // git's racy rule: a file modified within RACY_MS of now may be
       // written again under the same (rounded) mtime and size, so it is
@@ -105,9 +126,8 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
         if (key !== undefined) hashes.set(key, hash);
       }
       files.push([relative, hash]);
-    }
-  });
-  yield* walk(root).pipe(
+    }),
+  ).pipe(
     Effect.mapError(
       (error) =>
         new PluginError({
@@ -117,6 +137,45 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
   );
   return files.toSorted(([a], [b]) => Order.String(a, b));
 });
+
+/**
+ * Copy what the plugin at `root` ships into the new directory `dest`: the
+ * files the digest reads, so the copy is the plugin as it was trusted
+ * whatever is written to `root` afterwards. A link to something the plugin
+ * ships points at the copy of it, and any other link at what it pointed at.
+ */
+export const copyPlugin = Effect.fn('pluginDigest.copyPlugin')(
+  function* (root: string, dest: string) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(dest);
+    yield* eachEntry(
+      root,
+      Effect.fnUntraced(function* ({ full, relative, info }) {
+        const to = path.join(dest, relative);
+        if (info.type === 'Directory') yield* fs.makeDirectory(to);
+        else if (info.type === 'File') yield* fs.copyFile(full, to);
+        else if (info.type === 'SymbolicLink') {
+          const target = path.resolve(
+            path.dirname(full),
+            yield* fs.readLink(full),
+          );
+          yield* fs.symlink(
+            isPathWithin(root, target)
+              ? path.join(dest, path.relative(root, target))
+              : target,
+            to,
+          );
+        }
+      }),
+    );
+  },
+  Effect.mapError(
+    (error) =>
+      new PluginError({
+        message: `Could not copy the plugin: ${error.message}`,
+      }),
+  ),
+);
 
 /** A file a server names that lies outside the plugin: trusted by its
  *  resolved path, size and modification time, not its content. */

@@ -12,6 +12,8 @@
  *   offered at the step that enabled it;
  * - a replaced plugin interrupts the call its old revision is running, or
  *   runs that call on the new revision;
+ * - a replaced plugin's entry runs a module it imports as the plugin shipped
+ *   it before the replacement;
  * - the replaced revision's layer is never released, or the new one is
  *   built more than once;
  * - a revision that fails to import fails the step or the other tools, or
@@ -93,21 +95,25 @@ const ECHO_PROGRAM = `export default async () => {
 `;
 
 /** The plugin's `harness.mjs` at `revision`: a tool that answers the
- *  revision its process layer serves, waiting for `../release-<n>` when
- *  told to wait for `<n>`,
- *  with what `options` add. */
+ *  revision the module beside it (`shipped.mjs`) names, on the process
+ *  layer of its own, waiting for `release-<n>` in `base` when told to wait
+ *  for `<n>`, with what `options` add. It writes to `base` by its path: the
+ *  entry runs from a copy of the plugin, not from the plugin's folder. */
 const entry = (
   revision: string,
+  base: string,
   options: EntryOptions = {},
 ) => `// A test plugin.
 export const description = 'Echoes the revision that serves the call.';
 export const provides = ['tool:native_echo', ${options.faulty ? `'tool:native_fail', 'tool:native_die', 'tool:native_throw', 'tool:native_raw', 'tool:native_hang', ` : ''}${options.session ? `'tool:native_session', 'sessionLayer', 'module:echo_program', 'program:echo_program', ` : ''}'processLayer'];
 
 import { appendFileSync, existsSync } from 'node:fs';
+import * as path from 'node:path';
+import { shipped } from './shipped.mjs';
 
 ${options.broken ? `throw new Error('${revision} is broken');` : ''}
 const note = (line) =>
-  appendFileSync(new URL('../events.log', import.meta.url), line + '\\n');
+  appendFileSync(path.join(${JSON.stringify(base)}, 'events.log'), line + '\\n');
 
 export default ({ plugins, effect }) => {
   const { Context, Effect, Layer, Schema } = effect;
@@ -143,7 +149,7 @@ export default ({ plugins, effect }) => {
         const revision = yield* Revision;
         note('call ' + revision);
         if (wait) {
-          const released = new URL('../release-' + wait, import.meta.url);
+          const released = path.join(${JSON.stringify(base)}, 'release-' + wait);
           yield* Effect.callback((resume) => {
             const timer = setInterval(() => {
               if (existsSync(released)) {
@@ -155,7 +161,7 @@ export default ({ plugins, effect }) => {
           });
         }
         note('done ' + revision);
-        return 'echo ' + revision;
+        return 'echo ' + shipped;
       }),
   });
   const faulty = (name, execute) =>
@@ -226,7 +232,14 @@ const pluginFiles = Effect.map(FakeHost, (host) => {
         path.join(dir, '.claude-plugin', 'plugin.json'),
         JSON.stringify({ name: 'echoes', version: '1.0.0' }),
       );
-      writeFileSync(path.join(dir, 'harness.mjs'), entry(revision, options));
+      writeFileSync(
+        path.join(dir, 'shipped.mjs'),
+        `export const shipped = '${revision}';\n`,
+      );
+      writeFileSync(
+        path.join(dir, 'harness.mjs'),
+        entry(revision, base, options),
+      );
     },
   };
 });
