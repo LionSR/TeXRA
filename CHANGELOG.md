@@ -2084,6 +2084,14 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A project's files can no longer run code when an agent starts in it.**
+  A branch or folder name written as a template expression was evaluated
+  while the system prompt was built, and the `PATH` or git settings in a
+  project's `.env`, or a file-watcher command in its git configuration,
+  chose a program the start-up `git` reads ran, all before anything was
+  approved. Names are now plain text, and those reads use the machine's own
+  `git` and environment.
+
 - **A child run keeps its parent's model when that model is not an
   enabled one.** A sub-agent or program started from a run on a model the
   person never enabled (an SDK embedder names its run's model) fell back to
