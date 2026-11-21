@@ -4,10 +4,10 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { withLogChannel } from '@texra-ai/harness/plugins';
+import { hasExtension } from '@texra-ai/harness/schemas';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
-import { isTexFile } from '@texra/shared/latexFileTypes';
 import { DiagnosticsReadFailed } from '@texra/tools/editorHost';
 
 const CHANNEL = 'LinterUtils';
@@ -30,7 +30,7 @@ export const getLinterMessages = Effect.fn('linter.getLinterMessages')(
   ): Effect.fn.Return<vscode.Diagnostic[], DiagnosticsReadFailed> {
     const fileUri = vscode.Uri.file(filePath);
 
-    if (isTexFile(filePath)) {
+    if (hasExtension(filePath, '.tex')) {
       yield* triggerLaTeXBuild(filePath, fileUri);
     }
 
