@@ -128,6 +128,17 @@ export const TASK_ACTIONS = Object.freeze({
   resumeHint: 'Resume this task with:',
 } as const);
 
+/** A task list with nothing in it, in every host: its heading, and what
+ *  fills it. A host that starts tasks by command adds that command. */
+const EMPTY_TASK_TITLE = 'No tasks yet';
+const EMPTY_TASK_BODY = 'Tasks you start appear here.';
+export const EMPTY_TASK_LIST = Object.freeze({
+  title: EMPTY_TASK_TITLE,
+  body: EMPTY_TASK_BODY,
+  /** Both, as one line where there is no heading. */
+  line: `${EMPTY_TASK_TITLE}. ${EMPTY_TASK_BODY}`,
+});
+
 /** An agent row's one action: open its agent's conversation, the composer
  *  addressed to it, to steer it while it runs or keep talking after. */
 export const TALK_TO_AGENT = 'Talk to this agent';

@@ -24,6 +24,7 @@ import {
   sectionCountLabel,
   type RunTone,
 } from '@ui/copy/runStatus';
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
@@ -289,7 +290,7 @@ export function shellSidebarTemplate(
                     removable
                   ></run-tabs>
                 </div>`
-              : renderEmptyMessage('Your tasks will appear here.')
+              : renderEmptyMessage(EMPTY_TASK_LIST.body)
           }
         </section>
       </div>

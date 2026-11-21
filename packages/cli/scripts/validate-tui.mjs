@@ -554,7 +554,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/resume', '\r'],
     frame: 'viewport',
-    expect: ['/resume', 'Nothing to resume yet.', 'Esc close'],
+    expect: ['/resume', 'No tasks yet.', 'Esc close'],
     unexpect: ['/resume is registered but has no harness action.'],
   },
   {
