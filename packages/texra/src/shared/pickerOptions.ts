@@ -26,12 +26,14 @@ const PickerOptionBaseSchema = Schema.Struct({
 /**
  * Resolved per-model access. Computed once by `readModelOptions` and
  * shared verbatim across hosts (CLI picker, extension Models tab) so
- * availability and routing are never re-derived at render time: the kind and
- * the subscription that pays are the whole verdict, and
- * `MODEL_AVAILABILITY_STATUS` reads the kind.
+ * availability and routing are never re-derived at render time: the kind,
+ * why it cannot run and the subscription that pays are the whole verdict,
+ * and `MODEL_AVAILABILITY_STATUS` reads the kind.
  */
 export const ModelAvailabilityFieldsSchema = Schema.Struct({
   availability: ModelAvailabilityKindSchema,
+  /** Why it cannot run now, worded as a run would fail; absent when it can. */
+  unavailableReason: Schema.optional(Schema.String),
   /** The subscription paying for the next request; absent means own keys. */
   usageRoute: Schema.optional(DeclinableUsageRouteSchema),
   /** Effective request route for a model that can use multiple backends. */
