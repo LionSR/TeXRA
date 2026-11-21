@@ -8,6 +8,7 @@
     "types": ["node"]
   },
   "include": [
+    "packages/harness/src/builtins.ts",
     "packages/harness/src/index.ts",
     "packages/harness/src/host.ts",
     "packages/harness/src/node.ts",

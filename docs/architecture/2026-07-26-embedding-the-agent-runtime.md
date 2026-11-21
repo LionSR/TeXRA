@@ -180,13 +180,13 @@ loads on its first miss (Prerequisite B). `nodePlatform` reads provider keys
 from the environment (Step 2) and names the agent directory the registry
 scans (Step 3). The example imports only the published entries; every name in
 it is in the package's declarations (`config/api-reports/harness.api.md`,
-`harness.node.api.md`, `harness.plugins.api.md`).
+`harness.node.api.md`, `harness.builtins.api.md`).
 
 ```ts
 import { Effect, Fiber, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 
 // The process services and the workspace roots: the agent directory, the
 // storage directory (required; nothing falls back to a per-user default) and

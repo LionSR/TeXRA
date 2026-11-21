@@ -140,8 +140,11 @@ may lack followed: the markdown-files line of the tool-call section
 (`bash`) and its "grep or read" of the bibliography, and the
 `<workspace_info>` advice before a git command (`bash`). Still open: the
 `./host` helpers (fourteen files under `packages/texra/src/tools` still
-import `@texra-ai/harness/host`, #15120 moves them) and the `./plugins`
-split. M4 and H9 were not re-read.
+import `@texra-ai/harness/host`, #15120 moves them). M4 and H9 were not
+re-read. Landed on 2026-11-21: the `./plugins` split. The built-in plugins
+are `@texra-ai/harness/builtins`, and `./plugins` is the authoring surface
+alone (the comparison is in the general-package note, "The built-ins leave
+`./plugins`").
 
 The earlier version's list of work "safe at any time", read again on
 2026-11-19:

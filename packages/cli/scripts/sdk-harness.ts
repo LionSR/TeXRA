@@ -24,7 +24,8 @@ import { Effect, Layer, Option, Schema, Stream } from 'effect';
 
 import { Sessions, type ApprovalHandler } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins, defineTool } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { defineTool } from '@texra-ai/harness/plugins';
 import type { PendingRequest, RunId } from '@texra-ai/harness/schemas';
 import { validationModelLayer } from '../src/runtime/models/validationModel';
 

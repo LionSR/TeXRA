@@ -16,7 +16,7 @@
  */
 import { Effect, Layer, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 

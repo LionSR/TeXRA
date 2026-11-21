@@ -16,7 +16,7 @@ import { join } from 'node:path';
 
 import { Effect, Layer } from 'effect';
 import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 import {
   acceptsFollowUp,
   attentionOf,

@@ -1,19 +1,19 @@
 # Plugins, Tools & Codemode
 
-File operations, shell execution, web search, memory, goal loops, multi-agent delegation, and QuickJS orchestration are implemented as plugins in [`@texra-ai/harness/plugins`](./harness/plugins).
+File operations, shell execution, web search, memory, goal loops, multi-agent delegation, and QuickJS orchestration are implemented as plugins in [`@texra-ai/harness/builtins`](./harness/builtins); a plugin of your own is written with [`@texra-ai/harness/plugins`](./harness/plugins).
 
 ## Built-in plugins (`harnessBuiltins`)
 
-Pass [`harnessBuiltins`](./harness/plugins#harnessbuiltins) (or a subset) plus your own plugins to `Sessions.layer({ platform, plugins, client })`:
+Pass [`harnessBuiltins`](./harness/builtins#harnessbuiltins) (or a subset) plus your own plugins to `Sessions.layer({ platform, plugins, client })`:
 
-| Export                                               | Plugin ID           | Contributions                                                                                                                           |
-| ---------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [`codemode`](./harness/plugins#codemode)             | `'codemode'`        | `script` (sandboxed QuickJS execution) and `self()` (running the current agent for another round), plus `searchTools` / `describeTool`. |
-| [`fileOps(options?)`](./harness/plugins#fileops)     | `'file-ops'`        | `read_file`, `edit_file`, `write_file` (configurable with `WriteFilter`), `glob`, `grep`, and `bash`.                                   |
-| [`multiAgent`](./harness/plugins#multiagent)         | `'multi-agent'`     | `agent` ([`AGENT_TOOL_NAME`](./harness/plugins#agent_tool_name)) for launching awaited or background specialist child runs.             |
-| [`web`](./harness/plugins#web)                       | `'web'`             | Local `web_search` and `web_fetch` tools.                                                                                               |
-| [`memoryWorkflow`](./harness/plugins#memoryworkflow) | `'memory-workflow'` | Persistent `memory` tool ([`MemoryStore`](./harness/plugins#memorystore)), `executions` history tool, and memory prompt section.        |
-| [`goal`](./harness/plugins#goal)                     | `'goal'`            | `plan` tool and goal execution recipe over `codemode`.                                                                                  |
+| Export                                                | Plugin ID           | Contributions                                                                                                                           |
+| ----------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [`codemode`](./harness/builtins#codemode)             | `'codemode'`        | `script` (sandboxed QuickJS execution) and `self()` (running the current agent for another round), plus `searchTools` / `describeTool`. |
+| [`fileOps(options?)`](./harness/builtins#fileops)     | `'file-ops'`        | `read_file`, `edit_file`, `write_file` (configurable with `WriteFilter`), `glob`, `grep`, and `bash`.                                   |
+| [`multiAgent`](./harness/builtins#multiagent)         | `'multi-agent'`     | `agent` ([`AGENT_TOOL_NAME`](./harness/builtins#agent_tool_name)) for launching awaited or background specialist child runs.            |
+| [`web`](./harness/builtins#web)                       | `'web'`             | Local `web_search` and `web_fetch` tools.                                                                                               |
+| [`memoryWorkflow`](./harness/builtins#memoryworkflow) | `'memory-workflow'` | Persistent `memory` tool ([`MemoryStore`](./harness/plugins#memorystore)), `executions` history tool, and memory prompt section.        |
+| [`goal`](./harness/builtins#goal)                     | `'goal'`            | `plan` tool and goal execution recipe over `codemode`.                                                                                  |
 
 ## Writing custom tools (`defineTool`)
 
@@ -111,7 +111,7 @@ When a step starts, it pins the current [`ToolRegistry`](./harness/plugins#toolr
 
 ## Codemode (`script`) and tool discovery
 
-The [`codemode`](./harness/plugins#codemode) plugin exposes the `script` tool, which executes an `async` JavaScript body inside a QuickJS worker thread:
+The [`codemode`](./harness/builtins#codemode) plugin exposes the `script` tool, which executes an `async` JavaScript body inside a QuickJS worker thread:
 
 ```js
 const matches = await tools.grep({ pattern: 'Theorem 3', path: 'sections/' });

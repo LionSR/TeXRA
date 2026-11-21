@@ -25,7 +25,7 @@ points to a strictly lower layer:
    engine with the built-in tools. They import each other.
 8. `controllers/`: the SQLite session stores and the session composition.
 9. `effect/`: the SDK (`Sessions`, `processLayer`).
-10. The entry files at the root (`index.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
+10. The entry files at the root (`index.ts`, `builtins.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
 
 The known exception: `agent/` and `tools/` form one cycle.
 
