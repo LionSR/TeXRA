@@ -18,10 +18,10 @@ const RETRY_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 
 /** One route a binding's calls go through: its key, and the scope of the
- *  failures that cool it (llm's `ModelError.scope`). */
+ *  failures that cool it. */
 export interface RoutePolicy {
   readonly key: string;
-  readonly scope: 'model' | 'route';
+  readonly scope: NonNullable<ModelError['scope']>;
 }
 
 /** Gate `attempt` on every route in `routes`, narrowest first. The tuple is

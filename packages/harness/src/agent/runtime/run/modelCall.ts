@@ -8,7 +8,7 @@
  * up to the binding's automatic retries. A subscription token the provider
  * rejects is llm's to renew, inside the request.
  */
-import { Duration, Effect } from 'effect';
+import { Duration, Effect, Schedule } from 'effect';
 import {
   completedTurn,
   ModelError,
@@ -62,7 +62,6 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* (
   const usageLog = yield* UsageLog;
   const gate = yield* RouteRetries;
   const retries = call.retries ?? (yield* call.binding).automaticRetries;
-  let resent = 0;
   const attempt = Effect.fn('modelCall.attempt')(function* (bound: BoundModel) {
     const prepared = yield* bound.model.prepareTurn(call.request);
     if (prepared.mode !== 'foreground')
@@ -88,20 +87,27 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* (
   return yield* Effect.flatMap(call.binding, (bound) =>
     gate.withRoutes(bound.routes)(attempt(bound)),
   ).pipe(
-    Effect.retry({
-      while: (error: CallFailure | Error) =>
-        Effect.gen(function* () {
-          if (!(error instanceof ModelError)) return false;
-          if (!error.retryable || resent >= retries) return false;
-          resent += 1;
-          const delayMs = resendDelayMs(error);
-          yield* call.debug(
-            `Model request failed; automatic retry in ${delayMs}ms.`,
+    Effect.retry(
+      Schedule.forever.pipe(
+        Schedule.while(
+          ({ input, attempt }) =>
+            input instanceof ModelError &&
+            input.retryable &&
+            attempt <= retries,
+        ),
+        // Only a failure the check above resends reaches the wait, so the
+        // line is never said for a call that ends.
+        Schedule.modifyDelay(({ input }) => {
+          const delayMs = resendDelayMs(input);
+          return Effect.as(
+            call.debug(
+              `Model request failed; automatic retry in ${delayMs}ms.`,
+            ),
+            Duration.millis(delayMs),
           );
-          if (delayMs > 0) yield* Effect.sleep(delayMs);
-          return true;
         }),
-    }),
+      ),
+    ),
     Effect.mapError((error) =>
       error instanceof ModelError ? routeFailureOf(error) : error,
     ),

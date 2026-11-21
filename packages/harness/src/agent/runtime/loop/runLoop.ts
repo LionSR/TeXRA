@@ -59,12 +59,15 @@ import { sentDefinitions } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 
 import { AgentRun } from '../run/AgentRun';
-import { compactAfterOverflow, compactAtBoundary } from '../run/compaction';
+import {
+  agentEditsAtBoundary,
+  compactAfterOverflow,
+  compactAtBoundary,
+} from '../run/compaction';
 import { mediaInputParts } from '../run/mediaInput';
 import type { InputPart } from '@texra-ai/llm';
 import { claimFollowUps, type FollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
-import { scriptCallOf } from '../programRun';
 import { resumeLeftoverChildren } from '../leftoverChildren';
 import {
   appendRow,
@@ -359,7 +362,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
     const { content, offered, handed } = yield* Effect.interruptible(
       Effect.gen(function* () {
         // A script's run renders no prompt: what it runs is its call.
-        const script = yield* scriptCallOf(run.config);
+        const { script } = run;
         if (script !== null) {
           echo();
           const step = yield* stepFor(run, opening, false);
@@ -525,7 +528,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // A message typed while the turn ran joins the request after the tool
       // results (past a context update), never a user message: read before
       // the step opens, so a skill it activates is the step's, and before
-      // the boundary's compaction, whose summary then covers it.
+      // the boundary's compaction, whose summary then covers it. One sent
+      // after a `/compact` still pending waits for a later request.
       const tail = state.messages.findLast((m) => m.role !== 'system');
       if (state.invocation === null && tail?.role === 'tool') {
         const queued = input.batch('request');
@@ -538,15 +542,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       let step = yield* stepFor(run, state, false);
       if (step.rows.length > 0) state = yield* cell.append(step.rows);
       let tools = sentDefinitions(step.tools);
-      // One round: the compaction the history may need, the `/compact`s
-      // it answers, the invocation. An open attempt's history is fixed.
+      // One round: the replacements the agent asked for, then the
+      // compaction the history may need, the `/compact`s it answers, the
+      // invocation. An open attempt's history is fixed.
       if (state.invocation === null) {
+        state = yield* agentEditsAtBoundary(
+          compaction,
+          bound.config.contextWindow,
+        );
         // A `/compact`: the edit answering it applies it, else it is a no-op.
         const compacts = consumedRows(runId, 'compact');
         const requests = compacts(input.controls, { kind: 'applied' });
         const before = state.commit;
         state = yield* compactAtBoundary({ ...compaction, bound }, requests);
-        // A compaction dropped the context updates: a new step renders them.
+        // An edit dropped the context updates: a new step renders them.
         if (state.offeredContext === null) {
           step = yield* stepFor(run, state, false);
           state = yield* cell.append(step.rows);

@@ -9,7 +9,8 @@
  * the same tools, so nothing is proposed: the user approved the script.
  * It runs on the conversation's model unless the call names one, and its
  * call holds it to the limits every child launch takes (`CHILD_FIELDS`).
- * The default goal strategy is this function in a loop (`builtIn:goal`).
+ * The default goal strategy (`builtIn:goal`) is this function in a loop:
+ * forked rounds, and a fresh one that judges a round's `done`.
  */
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
@@ -65,32 +66,51 @@ const SelfInputSchema = Schema.Struct({
 type SelfInput = typeof SelfInputSchema.Type;
 
 /**
- * The agent `self()` runs again, the conversation its forks copy, and the
- * commit they cut before. In the caller's own script that is the caller,
- * mid-turn. A background script is its conversation's agent: the
- * conversation it launched from (its recorded parent, whether or not it was
- * since detached) as it stood when the script started. A program's script
- * is its own agent, with no conversation to fork.
+ * The conversation a call's run belongs to: the run itself, in its own
+ * turn; for a background script, the conversation it launched from (its
+ * recorded parent, whether or not it was since detached), with the call
+ * that launched it; null for a program's script, which is its own agent and
+ * has none.
+ */
+export const conversationOf = Effect.fn('conversationOf')(function* ({
+  run,
+}: Pick<RunToolCall, 'run'>) {
+  if (!runsScript(run.config)) return { id: run.runId, launchedBy: null };
+  if (backgroundScriptOf(run.config) === null) return null;
+  const edge = (yield* (yield* SessionLog).facts(run.runId))?.start?.parent;
+  if (edge == null)
+    return yield* new ToolError(
+      `The script ${run.runId} has no record of the conversation it launched from.`,
+    );
+  return { id: edge.id, launchedBy: edge.call ?? null };
+});
+
+/**
+ * The agent `self()` runs again, the conversation its forks copy
+ * ({@link conversationOf}), and the commit they cut before. In the caller's
+ * own script that is the caller, mid-turn. A background script is its
+ * conversation's agent, as that conversation stood when the script
+ * started. A program's script is its own agent, with no conversation to
+ * fork.
  */
 const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const { run } = call;
-  if (!runsScript(run.config))
+  const belongsTo = yield* conversationOf(call);
+  if (belongsTo === null)
+    return { config: run.config, source: null, before: 0, boundAt: undefined };
+  const { id: parent, launchedBy } = belongsTo;
+  if (parent === run.runId)
     return {
       config: run.config,
       source: run.runId,
       before: Number.POSITIVE_INFINITY,
       boundAt: undefined,
     };
-  if (backgroundScriptOf(run.config) === null)
-    return { config: run.config, source: null, before: 0, boundAt: undefined };
-  const start = (yield* (yield* SessionLog).facts(run.runId))?.start;
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
-  const edge = start?.parent;
-  if (edge?.call == null) return yield* missing;
-  const { id: parent } = edge;
-  const { card } = edge.call;
+  if (launchedBy === null) return yield* missing;
+  const { card } = launchedBy;
   const config = yield* getRunRecords(parent).readConfig();
   // The cut is the response that issued the script, not the script's own
   // start, which a full child-run budget can delay past later turns: the
@@ -169,7 +189,7 @@ const runSelf = Effect.fn('self.call')(function* (
         return yield* executeSubagentInBand({
           runId,
           parentId,
-          configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
             ...record,
             // A fork on a named model keeps its seed's binding, as a model
             // switch keeps the conversation's: the child's bind rejects a

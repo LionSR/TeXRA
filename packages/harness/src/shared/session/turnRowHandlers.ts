@@ -19,7 +19,13 @@ import { Result } from 'effect';
 import { assistantMessageFromResult } from '@texra-ai/llm';
 import { addUsage, type DispatchFacts } from '@shared/schemas';
 import { byId, copyById, ownCopy, type BatchCopies } from './runRows';
-import { resultFacts, turnText, withInput, callKey } from './runFacts';
+import {
+  callKey,
+  requestedEdits,
+  resultFacts,
+  turnText,
+  withInput,
+} from './runFacts';
 import {
   attemptOf,
   callResultOf,
@@ -365,7 +371,7 @@ export const TURN_ROW_HANDLERS: {
         return call.status.kind === 'finished'
           ? Result.fail({ reason: 'orphan-settlement', detail: rejection })
           : outOfOrder(rejection);
-      return Result.succeed({
+      return Result.map(requestedEdits(state, p, pending), (contextEdits) => ({
         ...withCall(copies, state, pending, p.callId, {
           ...call,
           status: {
@@ -379,7 +385,8 @@ export const TURN_ROW_HANDLERS: {
           },
         }),
         ...resultFacts(state, p, pending),
-      });
+        contextEdits,
+      }));
     },
   },
 };

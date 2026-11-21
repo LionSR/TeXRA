@@ -12,7 +12,8 @@ import {
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { SendVerdict } from './FollowUpReader';
+import { sleepUntil, type SendVerdict } from './FollowUpReader';
+import { wakeNotes } from './followUpMessages';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's acceptance and its wake read of the session. */
@@ -155,11 +156,72 @@ export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
 });
 
 /**
+ * Wait for the notes `runId` wrote to itself, when no fiber here drives it,
+ * and resume it ({@link wakeIfOwed}) as each one's time comes. The wait is
+ * the run's one wake timer on the session's own fibers
+ * (`RunRegistry.wakeTimer`): a later call replaces it, so whoever changes a
+ * run's notes calls this again; the run's start ends it, since a run a
+ * fiber drives waits for its notes in its own reader, and its leaving
+ * calls this again. The session's close ends it too, and its next open
+ * starts it again ({@link wakePendingNotes}), when a note already due is
+ * read late, and once.
+ */
+export const waitForWakeNotes = Effect.fn('waitForWakeNotes')(function* (
+  runId: RunId,
+): Effect.fn.Return<void, never, RunRegistry> {
+  const runs = yield* RunRegistry;
+  if (runs.get(runId) !== undefined) return;
+  runs.wakeTimer(
+    runId,
+    Effect.gen(function* () {
+      const inbox = yield* Inbox;
+      // The due time woken for last: a note due then or before was read by
+      // the resume it started, or waits for the run's next one.
+      let woken = -Infinity;
+      for (;;) {
+        const later = wakeNotes((yield* inbox.read(runId)).followUps)
+          .map(({ due }) => due)
+          .filter((due) => due > woken);
+        if (later.length === 0) return;
+        woken = Math.min(...later);
+        yield* sleepUntil(woken);
+        yield* wakeIfOwed(runId);
+      }
+    }).pipe(
+      Effect.catch(
+        logFailure(
+          CHANNEL,
+          `Run ${runId}: its wake notes could not be read; each is delivered at its next resume`,
+        ),
+      ),
+    ),
+  );
+});
+
+/**
+ * The notes runs wrote to themselves that an earlier process left pending,
+ * waited for here ({@link waitForWakeNotes}): one already due resumes its
+ * run at once. Run once as a session opens, for each run the view lists
+ * with a queued message, a note among them; the timer reads which are
+ * notes from the run's own input rows.
+ */
+export const wakePendingNotes: Effect.Effect<
+  void,
+  never,
+  RunRegistry | SessionViewAccess
+> = Effect.gen(function* () {
+  const { runs } = yield* (yield* SessionViewAccess).read([]);
+  for (const run of runs.values())
+    if (run.queuedFollowUps.length > 0) yield* waitForWakeNotes(run.id);
+});
+
+/**
  * The one acceptance of a message to a run: every host and tool sends
  * through here. The run's input rows decide the send in the job that
  * commits it (`sendVerdict`), so the row is durable before anything is
  * acknowledged or woken; then the run is woken if the row obliges it and
- * no fiber here drives it (`wakeIfOwed`).
+ * no fiber here drives it (`wakeIfOwed`), a run's own note for a later
+ * time when that time comes (`waitForWakeNotes`).
  *
  * A run a fiber here drives reads the row itself, at its next request or
  * turn boundary; a child that ends with it queued is resumed for it. With
@@ -232,7 +294,9 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   // After the commit: a run a fiber drove a moment ago may have left
   // meanwhile.
-  if (sent.status !== 'failed') yield* wakeIfOwed(runId, apiKeys);
+  if (sent.status === 'failed') return sent;
+  yield* wakeIfOwed(runId, apiKeys);
+  if (item.from.kind === 'self') yield* waitForWakeNotes(runId);
   return sent;
 });
 

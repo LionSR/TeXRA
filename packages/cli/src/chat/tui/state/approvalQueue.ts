@@ -172,6 +172,7 @@ function presentedPayload(
     case 'proposal':
     case 'retry':
     case 'userQuestion':
+    case 'pluginTrust':
       return payload;
     case 'toolEdit':
       // Presentable only once the host stages it with its preview.

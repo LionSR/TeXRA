@@ -84,12 +84,11 @@ interface RunToolContext {
  * session's view stream against the view the wait started from: a status as
  * the phases, a follow-up as a `queuedFollowUps` id the caller did not hold.
  * The caller is inside this tool call, so nothing it is sent is taken before
- * the wait sees it, whoever sent it; a change landing before the stream's
- * first emission, or after `initial` (the view `runIds` were chosen on),
- * still wakes it; `finished` is re-checked once the stream is up. The view
- * stream ends with the session, which ends the wait too. The race finishes on
- * the first completion, success or failure, so a dead fold surfaces at once
- * instead of stalling until the deadline.
+ * the wait sees it, whoever sent it; a change landing after `initial` (the
+ * view `runIds` were chosen on) still wakes it, since the stream's first
+ * element is the view as it stands, and `settled` is asked of every view.
+ * The view stream ends with the session, which ends the wait too, and a
+ * failed view update fails the wait at once instead of at the deadline.
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
@@ -112,18 +111,16 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       );
     const started = phases(initial);
     const held = new Set(sent(initial));
-    const { changes, ref } = yield* SessionViewAccess;
-    const change = changes.pipe(
+    // The stream starts with the current view, so a wait that is already
+    // over, or ends with no change of phase, is seen as soon as a view says so.
+    yield* (yield* SessionViewAccess).changes.pipe(
       Stream.filter(
         (view) =>
-          phases(view) !== started || sent(view).some((id) => !held.has(id)),
+          phases(view) !== started ||
+          sent(view).some((id) => !held.has(id)) ||
+          settled(view),
       ),
       Stream.runHead,
-    );
-    const alreadyFinished = Effect.suspend(() =>
-      settled(SubscriptionRef.getUnsafe(ref)) ? Effect.void : Effect.never,
-    );
-    yield* Effect.raceAllFirst([change, alreadyFinished]).pipe(
       Effect.timeoutOption(Duration.seconds(timeoutSeconds)),
     );
   },

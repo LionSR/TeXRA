@@ -1,10 +1,10 @@
 /**
- * What a coding plan's quota endpoint reports: one GET per plan, at the host
- * its routes already use, and the provider's loosely shaped body read into
- * named usage windows. The caller keeps the cache and the presentation, and
- * classifies a failure on the HTTP client's own reason (`StatusCodeError`
- * 401/403 is a refused key, `DecodeError` over a `SyntaxError` a malformed
- * body).
+ * What a plan says of its quota: a coding plan's quota endpoint, one GET per
+ * plan at the host its routes already use, and the ChatGPT plan's reply
+ * headers, each read into named usage windows. The caller keeps the cache
+ * and the presentation, and classifies a failure on the HTTP client's own
+ * reason (`StatusCodeError` 401/403 is a refused key, `DecodeError` over a
+ * `SyntaxError` a malformed body).
  */
 import {
   absurd,
@@ -33,6 +33,8 @@ export interface PlanUsageWindow {
   readonly percentRemaining: number;
   /** When the window resets, in epoch milliseconds. */
   readonly resetAt?: number;
+  /** How long the window is, in minutes, when the provider says. */
+  readonly windowMinutes?: number;
 }
 
 /** A plan's reported usage. No window means the body named none it reads. */
@@ -219,6 +221,51 @@ function usageWindow(
     percentRemaining: 100 - percentUsed,
     ...(resetAt !== undefined ? { resetAt } : {}),
   };
+}
+
+// ============================================================================
+// ChatGPT reply headers
+// ============================================================================
+
+/** The windows a ChatGPT-plan reply names in its headers. */
+const CHATGPT_WINDOWS = ['primary', 'secondary'] as const;
+
+/**
+ * The quota windows a reply on the ChatGPT plan states in its headers
+ * (`x-codex-<window>-used-percent`, `-window-minutes`, `-reset-at`,
+ * `-reset-after-seconds`, for the `primary` and `secondary` windows). The
+ * names are an outside gateway's reading of the Codex backend
+ * (yetone/magpie, `internal/gateway/codex_limits.go`); no reply recorded in
+ * this repository carries them, so a reply without them states no window.
+ * `receivedAt` (epoch milliseconds) dates a reset given only as seconds
+ * from the reply. Null when the headers state no window.
+ */
+export function chatgptReplyUsage(
+  headers: Headers,
+  receivedAt: number,
+): PlanUsage | null {
+  const windows = CHATGPT_WINDOWS.flatMap((name) => {
+    const field = (suffix: string) => headers.get(`x-codex-${name}-${suffix}`);
+    const fields = {
+      used: field('used-percent'),
+      minutes: field('window-minutes'),
+      resetAt: field('reset-at'),
+      resetAfter: field('reset-after-seconds'),
+    };
+    const after = numberField(fields, 'resetAfter');
+    const window = usageWindow(
+      name,
+      { used: numberField(fields, 'used') },
+      timestampField(fields, 'resetAt') ??
+        (after === undefined ? undefined : receivedAt + after * 1000),
+    );
+    const minutes = numberField(fields, 'minutes');
+    if (window === undefined) return [];
+    return [
+      minutes === undefined ? window : { ...window, windowMinutes: minutes },
+    ];
+  });
+  return windows.length === 0 ? null : { windows };
 }
 
 // ============================================================================

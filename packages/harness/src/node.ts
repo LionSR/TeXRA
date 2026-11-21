@@ -48,6 +48,14 @@ export {
   relativeToRoot,
 } from '@utils/system/nodeWorkspace';
 export { workspaceRelativePath } from '@utils/files/workspaceFS';
+// Path containment under this platform's path rules, a path's segments,
+// and its POSIX form.
+export {
+  getPathSegments,
+  isPathWithin,
+  isStrictlyWithin,
+  toPosixPath,
+} from '@utils/core/pathCore';
 export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,

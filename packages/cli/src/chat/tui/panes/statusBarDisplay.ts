@@ -76,6 +76,7 @@ function statusKindForApproval(
     case 'planApproval':
     case 'proposal':
     case 'retry':
+    case 'pluginTrust':
       return 'approval';
     default:
       return absurd(kind);

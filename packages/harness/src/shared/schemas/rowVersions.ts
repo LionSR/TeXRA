@@ -222,11 +222,15 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // branch of `content`, with no placeholder text beside a top-level
     // `control` (a v11 request would read as an ordinary message from its
     // text, its control dropped).
+    // A run's own note for a later time (sender `self`) was added under
+    // v12: every earlier row reads as it did, so it is no version.
     'followup.queued': Object.freeze({ version: 12, listing: 'followup' }),
     // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
     // it and fails to decode.
     // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
     // row dropped for it would fail as damaged).
+    // The `cancelled` reason (a wake note dropped unread) was added under
+    // v3, for the same reason.
     'followup.consumed': Object.freeze({ version: 3, listing: 'followup' }),
     // v2: a task proposal carries its plugin's `options`, not `toolConfig`
     // v3: a retry's credential switch names no OpenRouter key.
@@ -263,7 +267,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v17: no `plugin` kind: every request is one the harness declares,
     // and blocks the call that opened it (an earlier build's plugin request
     // would fail as damaged).
-    'request.opened': Object.freeze({ version: 17, listing: 'request' }),
+    // v18: a `pluginTrust` kind: trusting an installed plugin is asked as
+    // itself, not as a command (an earlier build would read it as damaged).
+    'request.opened': Object.freeze({ version: 18, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
     // v3: a decision's optional fields are absent when unset, never `null`
@@ -317,7 +323,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v12: a file list's entry has no `source`, which nothing read beside the
     // `sourceDisplay` it repeated (an earlier build's would be silently
     // stripped).
-    log: Object.freeze({ version: 12, listing: 'none' }),
+    // v13: a completed compaction's activity says how many messages an
+    // agent's own edit `replaced` (an earlier build would silently strip it
+    // and show the edit as a summary).
+    log: Object.freeze({ version: 13, listing: 'none' }),
     // v2: no `phase` kind and no `index`/`total` (an earlier build's script
     // phase stage would fail its run as damaged rather than read as that
     // build's).
@@ -428,7 +437,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // as damaged).
     // v8: no `base`: an edit is written by the fiber that holds the view it
     // edits (an earlier build's row would have the field silently dropped).
-    'context.edit': Object.freeze({ version: 8, listing: 'none' }),
+    // v9: an edit may have the cause `edit`, a replacement the agent wrote
+    // itself through its `context` tool (an earlier build would refuse the
+    // cause as damaged).
+    'context.edit': Object.freeze({ version: 9, listing: 'none' }),
     // v2: the intent names the card its attempt opens (`logId`, `toolName`,
     // the `input` the body runs on, the tool's `card`, a script's `section`),
     // which a display read shows as the call's `tool.start`; the run loop

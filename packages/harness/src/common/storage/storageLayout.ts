@@ -22,7 +22,7 @@ import { normalizeFilePath } from '@utils/core/pathBasics';
 import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 
-import { createRunStorageLocation, pathToLocationIn } from './fileLocation';
+import { pathToLocationIn } from './fileLocation';
 
 /** Root collection names shared by storage providers and persisted stores. */
 export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
@@ -82,11 +82,12 @@ export function runStorageLocationUnder(
   const runId = Schema.decodeUnknownResult(RunIdSchema)(rawRunId);
   if (Result.isFailure(runId) || entrySegments.length === 0) return undefined;
 
-  return createRunStorageLocation(
-    path.resolve(root, runRelativePath),
-    entrySegments.join('/'),
-    runId.success,
-  );
+  return {
+    kind: 'runStorage',
+    absolutePath: path.resolve(root, runRelativePath),
+    relativePath: entrySegments.join('/'),
+    runId: runId.success,
+  };
 }
 
 /**
@@ -177,11 +178,12 @@ export const runEntryUnder = Effect.fn('runStorage.runEntry')(function* (
         : type === 'File'
           ? {
               kind: 'file',
-              location: createRunStorageLocation(
+              location: {
+                kind: 'runStorage',
                 absolutePath,
-                normalizedPath,
+                relativePath: normalizedPath,
                 runId,
-              ),
+              },
             }
           : type === 'Directory'
             ? { kind: 'directory', absolutePath }

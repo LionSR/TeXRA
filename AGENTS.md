@@ -238,7 +238,20 @@ opened on `script.kind: 'program'`. The `theory` plugin's programs are in
 programs as `programs/<name>.js`, started as `<plugin>:<name>`; the file is
 third-party code, so its description and tools are read from its text
 (`packages/harness/src/common/plugins/pluginPrograms.ts`) and it is evaluated
-only in the script sandbox.
+only in the script sandbox. An agent writes its own with the memory tool as
+`/memories/programs/<name>.js`, started as `own:<name>` from its next step
+(`packages/harness/src/agent/memory/ownPrograms.ts`); nobody reviews one, so
+what it starts is asked about as a model's script's is. Where a program
+comes from (`programOrigin`: listed, installed or own) decides what its
+launch grants it.
+An installed plugin may also carry native code,
+`harness.mjs` (`packages/harness/src/common/plugins/nativeEntry.ts`): once
+trusted at its digest it runs in the process and returns a `Plugin`, which
+joins the plugin table from the next step of every run
+(`packages/harness/src/tools/nativePlugins.ts`), its tools gated by the host
+as an MCP server's are. The plugin table is not
+fixed: the listed plugins are, and each read of the installed plugins adds
+the native ones loaded now; a step pins the table it read.
 
 **Prompts** (bundled agents, plugin agents, templates, skills,
 `.github/prompts/`) use general behavioral rubrics: never an identifiable

@@ -27,6 +27,7 @@ import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
 
 import { routeCredential } from './credentials';
+import { PlanQuotas } from './planQuotas';
 import { routePolicies, type CallFailure } from './failureInfo';
 import {
   decideRoute,
@@ -95,7 +96,11 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
+  | Scope.Scope
+  | HttpClient.HttpClient
+  | Secrets
+  | SubscriptionAccounts
+  | PlanQuotas
 > {
   const selected = selectModel(request.modelId);
   const requested = request.config ?? selected?.config;
@@ -186,7 +191,8 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
       // sends every turn of such a route as background work
       // (`backgroundCapable`), a tool-use turn included.
       background: request.textOnly,
-      fetch: yield* runModelFetch,
+      // A plan whose replies state its quota has each one recorded.
+      fetch: (yield* PlanQuotas).observing(route.plan, yield* runModelFetch),
     },
   });
   return {

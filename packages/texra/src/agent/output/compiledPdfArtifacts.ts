@@ -7,7 +7,6 @@ import {
   type FileLocation,
   hasExtension,
 } from '@texra-ai/harness/schemas';
-import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { meansAbsent } from '@texra-ai/harness/node';
 
 // Third-party imports
@@ -93,9 +92,10 @@ export const publishCompiledPdfArtifact = Effect.fn(
   yield* copyArtifactFile(options.compiledPdfPath, roundAbsolutePath);
   yield* copyArtifactFile(roundAbsolutePath, latestAbsolutePath);
 
-  return createRunStorageLocation(
-    latestAbsolutePath,
-    latestRelativePath,
-    options.runId,
-  );
+  return {
+    kind: 'runStorage',
+    absolutePath: latestAbsolutePath,
+    relativePath: latestRelativePath,
+    runId: options.runId,
+  } satisfies FileLocation;
 });

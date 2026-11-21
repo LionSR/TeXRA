@@ -386,6 +386,7 @@ export const createHostRunActions = Effect.fn(
         'merge',
         { [MERGE_EDITED_FILE]: editedFile },
         { inputFiles, outputFiles: [] },
+        roots,
       ).pipe(
         // No merge program is registered: said beside the merge docs, and
         // logged.

@@ -26,9 +26,9 @@ import {
   Schema,
   Stream,
 } from 'effect';
+import { Tar } from 'effect/encoding';
 import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
-import * as tar from 'tar';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
@@ -320,37 +320,59 @@ function downloadFileOnce(
   );
 }
 
+/** gunzip a byte stream; bytes that are not gzip are a permanent failure. */
+const gunzip = NodeStream.pipeThroughDuplex({
+  evaluate: () => createGunzip(),
+  onError: (cause) =>
+    new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
+});
+
 /**
- * Extract `tarPath` into `destDir`. tar has no abort option, so
- * interruption (the deadline's included) stops accepting entries, and tar's
- * own promise is joined outside the timeout race so a distinct late
- * rejection stays observable. The join is unbounded; a rejection need not
- * mean every write closed.
+ * Extract `tarPath`, gzipped or not, into `destDir`, a directory made for
+ * it. The archive is untrusted: only its files and directories are written,
+ * each beneath `destDir`, and nothing is overwritten. A link, or a path that
+ * leaves the directory, is skipped and named in the log; with no link ever
+ * made, a path inside the directory stays inside it. Interruption (the
+ * deadline's included) stops the writes.
  */
 const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
   tarPath: string,
   destDir: string,
-): Effect.fn.Return<void, ArxivSourcePermanentError> {
+): Effect.fn.Return<
+  void,
+  ArxivSourcePermanentError,
+  FileSystem.FileSystem | Path.Path
+> {
   yield* Effect.logDebug(`Extracting tar file: ${tarPath} to ${destDir}`);
-  let pending: Promise<void> | undefined;
-  // The rejection that already failed this extraction, by identity, so
-  // the late join below does not raise it a second time.
-  let rejected: { error: unknown } | undefined;
-  yield* Effect.tryPromise({
-    try: (requestSignal) => {
-      pending = tar.x({
-        file: tarPath,
-        cwd: destDir,
-        filter: () => !requestSignal.aborted,
-      });
-      return pending;
-    },
-    // A tar failure is not retried; the handler below words it.
-    catch: (error) => {
-      rejected = { error };
-      return new ArxivSourcePermanentError({ message: toErrorMessage(error) });
-    },
-  }).pipe(
+  const fs = yield* FileSystem.FileSystem;
+  const paths = yield* Path.Path;
+  const extract = Effect.gen(function* () {
+    const magic = Buffer.concat(
+      yield* Stream.runCollect(fs.stream(tarPath, { bytesToRead: 2 })),
+    );
+    const archive = fs.stream(tarPath);
+    const gzipped = magic[0] === 0x1f && magic[1] === 0x8b;
+    yield* (gzipped ? archive.pipe(gunzip) : archive).pipe(
+      Stream.pipeThroughChannel(Tar.decode()),
+      Stream.runForEach(({ header, body }) => {
+        const target = paths.resolveWithin(destDir, header.path);
+        if (
+          Option.isNone(target) ||
+          (header.type !== 'File' && header.type !== 'Directory')
+        )
+          return Effect.logWarning(
+            `Skipped archive entry (${header.type}): ${header.path}`,
+          );
+        if (header.type === 'Directory')
+          return fs.makeDirectory(target.value, { recursive: true });
+        return Effect.andThen(
+          fs.makeDirectory(paths.dirname(target.value), { recursive: true }),
+          Stream.run(body, fs.sink(target.value, { flag: 'wx' })),
+        );
+      }),
+    );
+  });
+  yield* extract.pipe(
     Effect.timeout(Duration.millis(EXTRACT_TIMEOUT_MS)),
     Effect.catch((cause) => {
       const error = Cause.isTimeoutError(cause)
@@ -366,19 +388,6 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
         ),
       );
     }),
-    Effect.onExit(() =>
-      Effect.promise(
-        () =>
-          pending?.then(
-            () => {},
-            (error: unknown) => {
-              if (rejected !== undefined && rejected.error === error) return;
-              // A distinct late tar failure must survive interruption.
-              throw error;
-            },
-          ) ?? Promise.resolve(),
-      ),
-    ),
   );
 }, withLogChannel(ARXIV_CHANNEL));
 
@@ -676,13 +685,7 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
       const decompressedPath = downloadedPath.replace(/\.gz$/, '');
       // Chunk by chunk, never whole; interruption closes gunzip and both handles.
       yield* fs.stream(downloadedPath).pipe(
-        NodeStream.pipeThroughDuplex({
-          evaluate: () => createGunzip(),
-          onError: (cause) =>
-            new ArxivSourcePermanentError({
-              message: toErrorMessage(cause),
-            }),
-        }),
+        gunzip,
         Stream.run(fs.sink(decompressedPath)),
         Effect.catchTag('PlatformError', (error) =>
           Effect.fail(permanentFsError(error)),

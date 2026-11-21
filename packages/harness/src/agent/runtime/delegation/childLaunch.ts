@@ -15,7 +15,7 @@
  * detached it (`RunRegistry.stop`), in which case it runs on as a root and
  * only the wait ends.
  */
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 
 import {
   prepareAgentDefinition,
@@ -33,7 +33,6 @@ import { logFailure } from '@logger/effectLog';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   runEndErrorMessage,
-  AgentConfigSchema,
   RUN_OUTCOME,
   ToolError,
   type CommitOrdinal,
@@ -41,7 +40,7 @@ import {
   type RunId,
   type RunParent,
   type SubagentProgressUpdate,
-  type AgentConfigPayload,
+  type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 
@@ -62,12 +61,13 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
   definition: PreparedAgentDefinition,
   registration: RegisterRunOptions,
-  options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
+  options: Pick<ExecuteAgentOptions, 'onProgress'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
   const { opened } = yield* (yield* RunRegistry).start(
     runId,
     executeAgent(
       runId,
+      registration.parent?.id ?? null,
       Effect.succeed({ definition, options: { ...options, registration } }),
     ),
   );
@@ -92,6 +92,7 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
     runId,
     executeAgent(
       runId,
+      parentId,
       openResume(runId, options, parentId).pipe(
         Effect.catchTag('ResumeNotOpened', ({ answer }) =>
           Effect.fail(
@@ -178,7 +179,7 @@ interface AwaitedChildLaunch {
   readonly parentId: RunId;
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
-  readonly configPayload: AgentConfigPayload;
+  readonly config: AgentConfig;
   /** The parent's call that launches the child, which owns it and awaits
    *  its end, and its tool card. */
   readonly parentCall: Omit<NonNullable<RunParent['call']>, 'awaited'>;
@@ -201,9 +202,7 @@ export const executeSubagentInBand = (
     launch.runId,
     Effect.gen(function* () {
       const definition = yield* prepareAgentDefinition({
-        config: Schema.decodeUnknownSync(AgentConfigSchema)(
-          launch.configPayload,
-        ),
+        config: launch.config,
       });
       return yield* startChildRun(
         launch.runId,

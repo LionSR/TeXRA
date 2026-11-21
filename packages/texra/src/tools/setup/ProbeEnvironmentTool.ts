@@ -8,7 +8,6 @@ import { Config, Effect, Option, Predicate, Schema } from 'effect';
 // Local imports
 import { API_KEY_PROVIDER_IDS, apiKeyEntry, apiKey } from '@texra-ai/llm';
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
-import { readModelOptions } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
 import { ToolContext } from '@texra-ai/harness/plugins';
@@ -27,7 +26,10 @@ import {
 } from '@texra-ai/harness/plugins';
 import { probeLatexTools } from '@latex/latexToolchain';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import {
+  hasUsableSetupCredential,
+  loadModelOptions,
+} from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
@@ -85,7 +87,7 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   );
   // Routing is consulted only for a signed-in account.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const [option] = yield* readModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
+  const [option] = yield* loadModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({

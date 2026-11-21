@@ -6,7 +6,6 @@ import {
   EFFORT_SCALE,
   ReasoningEffort,
 } from '@texra-ai/llm';
-import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import { executeCommand } from '@texra-ai/harness/node';
 import {
   isCodexModel,
@@ -24,6 +23,8 @@ import {
   Settings,
   type SettingsStores,
   type StateReadFailed,
+  withPerKeyLane,
+  type PerKeyLane,
 } from '@texra-ai/harness/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

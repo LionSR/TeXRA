@@ -22,6 +22,7 @@ export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
   bash: FORM_FOREGROUND_MAX_ROWS,
   toolEdit: FORM_FOREGROUND_MAX_ROWS,
   proposal: FORM_FOREGROUND_MAX_ROWS,
+  pluginTrust: FORM_FOREGROUND_MAX_ROWS,
   planApproval: undefined,
   retry: undefined,
   userQuestion: undefined,

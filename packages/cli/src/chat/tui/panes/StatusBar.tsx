@@ -1,6 +1,6 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Effect, Exit, Stream, type Duration } from 'effect';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { apiKeyEntry } from '@texra-ai/llm';
 import { appSignalStream, readModelOptions } from '@texra-ai/harness/host';
@@ -9,7 +9,7 @@ import { isWorking } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_BADGE_TEXT } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { subscriptionUsage } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 
 import {
   transientNotice as transientNoticeSignal,
@@ -102,10 +102,6 @@ function useFollowedRead<K extends string, A, E>(
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const { roots } = useChatProcess();
   const mount = useMountScope();
-  const subscriptionUsage = useMemo(
-    () => new SubscriptionUsageService({ stores: roots }),
-    [roots],
-  );
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
@@ -170,7 +166,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     displayUsage?.usageRoute === undefined;
   const modelAccess = displayUsage?.usageRoute ?? prospectiveRoute;
 
-  // `getUsage` always succeeds with a snapshot (see its class doc): an
+  // `subscriptionUsage` always succeeds with a snapshot (see its module): an
   // `unavailable` snapshot is the designed carrier of a transport failure.
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
     usageRoute: displayUsage?.usageRoute,
@@ -178,8 +174,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   });
   const readQuota = useCallback(
     (provider: NonNullable<typeof subscriptionUsageProvider>) =>
-      subscriptionUsage.getUsage(provider),
-    [subscriptionUsage],
+      subscriptionUsage(roots, provider),
+    [roots],
   );
   const quotaRead = useFollowedRead(
     mount,

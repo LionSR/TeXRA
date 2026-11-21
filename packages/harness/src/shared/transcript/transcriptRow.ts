@@ -346,9 +346,14 @@ export function compactionActivityRow(
     timestamp: block.startedAt,
     level: 'info',
     block,
-    // `Context compacted · freed 41k tokens (78% → 22%)`.
+    // `Context compacted · freed 41k tokens (78% → 22%)`; an edit the
+    // agent asked for, `Agent edited its context · replaced 12 messages · …`.
     label: joinFacts([
-      COMPACTION_ACTIVITY_LABEL[block.status],
+      block.replaced === undefined
+        ? COMPACTION_ACTIVITY_LABEL[block.status]
+        : 'Agent edited its context',
+      block.replaced !== undefined &&
+        `replaced ${block.replaced} message${block.replaced === 1 ? '' : 's'}`,
       block.freed &&
         block.freed.tokens > 0 &&
         `freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`,
