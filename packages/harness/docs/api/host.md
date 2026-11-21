@@ -913,14 +913,6 @@ its own failures before a run opens.
 function presenterOn(host: HostInteractions): Notices
 ```
 
-## presentFollowUpResult
-
-```ts
-function presentFollowUpResult(
-  result: SubmitFollowUpResult,
-): { severity: 'none' } | { severity: 'warning'; message: string }
-```
-
 ## presentRunFailure
 
 Present a failed run from its raw error, replayed to a surface that

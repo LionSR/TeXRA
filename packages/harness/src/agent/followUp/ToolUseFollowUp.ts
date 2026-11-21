@@ -55,14 +55,6 @@ interface SubmitFollowUpOptions {
   readonly skills?: readonly string[];
 }
 
-export function presentFollowUpResult(
-  result: SubmitFollowUpResult,
-): { severity: 'none' } | { severity: 'warning'; message: string } {
-  if (result.status === 'failed')
-    return { severity: 'warning', message: result.message };
-  return { severity: 'none' };
-}
-
 const CHANNEL = 'ToolUseFollowUp';
 
 /** A resume's refusal of a run that cannot continue here. */
