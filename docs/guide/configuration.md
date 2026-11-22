@@ -224,6 +224,7 @@ TeXRA's native configuration.
 
 Per-run controls in the task composer affect only the task being launched: the
 agent, the model, the approval policy and attached media.
+Persistent agent visibility belongs in Settings instead.
 
 ## Debugging
 

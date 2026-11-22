@@ -1,6 +1,6 @@
 /**
  * The Agents page of the settings body both GUI hosts answer through: the
- * agent-file actions and the custom agent directory,
+ * agent toggles, the agent-file actions and the custom agent directory,
  * with the refresh every mutation ends in. The host binds only what it
  * shows its own way (a document, a folder picker, the AI creator).
  */
@@ -23,6 +23,8 @@ import {
   AGENT_FILE_EXTENSION,
   AgentNameSchema,
   agentKey,
+  agentKeyOf,
+  agentMatchesIdentifier,
   isPackagedAgentSource,
 } from '@texra-ai/harness/schemas';
 import {
@@ -88,7 +90,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
 );
 
 interface SettingsAgentCommandsPorts {
-  readonly roots: Pick<WorkspaceRoots, 'globalState'>;
+  readonly roots: Pick<WorkspaceRoots, 'repoState' | 'globalState'>;
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
 }
@@ -97,6 +99,11 @@ interface SettingsAgentCommandsPorts {
 export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { bindings, present } = ports;
   const { globalState } = ports.roots;
+  /** The page's views over the process's agent catalog. */
+  const page = Effect.map(AgentCatalog, (agents) => {
+    const workspaceAgents = agents.workspaceAgents(ports.roots);
+    return { agents, workspaceAgents };
+  });
   const customDirectory = AgentDirectories.use((directories) =>
     directories.custom(),
   );
@@ -106,7 +113,12 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       'agents',
       ['agents'],
       Effect.gen(function* () {
-        const agents = yield* AgentCatalog;
+        const { agents, workspaceAgents } = yield* page;
+        // An `all` agent list enables every visible agent, never a custom
+        // agent the user hid.
+        const enabledKeys =
+          (yield* workspaceAgents.getEnabledAgentKeys()) ??
+          (yield* workspaceAgents.visible()).map(agentKeyOf);
         return {
           agents: agents
             .list()
@@ -117,6 +129,11 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               filePath: entry.path || undefined,
               tools: [...agentToolNames(entry)],
               newerBuiltIn: agents.newerBuiltIn(entry)?.source,
+              // A stored list holds `source:name` keys and the bare names
+              // the CLI writes; `agentMatchesIdentifier` matches both.
+              enabled: enabledKeys.some((key) =>
+                agentMatchesIdentifier(entry, key),
+              ),
             }))
             .toSorted((a, b) => a.name.localeCompare(b.name)),
           customAgentIssues: [...agents.scanIssues()],
@@ -162,6 +179,33 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const activeDeletions = new Set<string>();
 
   const handlers = {
+    setAgentEnabled: (message) =>
+      present.reported(
+        'Failed to update agent visibility',
+        Effect.flatMap(page, ({ workspaceAgents }) =>
+          workspaceAgents.setAgentEnabled({
+            source: message.agentSource,
+            name: message.agentName,
+            enabled: message.enabled,
+          }),
+        ).pipe(Effect.andThen(agentsChanged)),
+      ),
+    setAllAgentsEnabled: (message) =>
+      present.reported(
+        'Failed to update agent visibility',
+        // Every agent from one source, as one store step, so a single toggle
+        // landing meanwhile is not lost.
+        Effect.flatMap(page, ({ agents, workspaceAgents }) =>
+          workspaceAgents.setAgentEnabled({
+            source: message.source,
+            name: agents
+              .list()
+              .filter((entry) => entry.source === message.source)
+              .map((entry) => entry.name),
+            enabled: message.enabled,
+          }),
+        ).pipe(Effect.andThen(agentsChanged)),
+      ),
     openAgentYaml: (message) =>
       present.reported(
         'Failed to open agent YAML file',
@@ -256,7 +300,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             });
             if (!confirmed) return;
 
-            const refused = yield* (yield* AgentCatalog)
+            // The removal is real only here: the file goes, and the agent
+            // list forgets its choice.
+            const { workspaceAgents } = yield* page;
+            const refused = yield* workspaceAgents
               .removeCustom(message.agentName)
               .pipe(
                 Effect.as(undefined),

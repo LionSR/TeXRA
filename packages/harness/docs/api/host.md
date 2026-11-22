@@ -124,38 +124,17 @@ interface AgentCatalogShape {
     AgentCatalogLoadError | StateReadFailed
   >;
   /** A source changed and its reload waits out a debounce: the next
-   *  `forLaunch` loads it first, so an agent saved a moment ago launches as
+   *  `WorkspaceAgents.forLaunch` loads it first, so an agent saved a moment ago launches as
    *  saved. */
   readonly invalidate: Effect.Effect<void>;
   /**
    * A delegation scope's pinned agents, deduplicated by key: the list a
    * scoped delegating agent is told and its calls resolve against, in place
-   * of every agent.
+   * of its workspace's visible agents. Reads no store.
    */
   readonly pinned: (scope: AgentDelegationScope) => AgentEntry[];
-  /**
-   * The agent a launch runs, over a finished catalog: the entry an explicit
-   * `source` pins, else the one `get` answers. A miss reloads once, then
-   * fails with {@link AgentNotFound}, saying what the load said.
-   */
-  readonly forLaunch: (
-    identifier: string,
-    source?: AgentSource | null,
-  ) => Effect.Effect<
-    AgentEntry,
-    AgentNotFound | AgentCatalogLoadError | StateReadFailed
-  >;
-  /**
-   * Delete the custom agent `name`'s file. Refused when the catalog holds
-   * no such custom agent (`noFile`) or its file lies outside the custom
-   * directory (`escapes`). The deleted file's path.
-   */
-  readonly removeCustom: (
-    name: string,
-  ) => Effect.Effect<
-    string,
-    AgentCustomizeRefused | AgentDirectoriesFailed | PlatformError.PlatformError
-  >;
+  /** One workspace's agents over this catalog, its stores captured. */
+  readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
   /** Make a custom copy of `entry` (see {@link AgentCustomization}):
    *  the copy's path. */
   readonly customize: (
@@ -1734,6 +1713,90 @@ function withSessionFs<A, E, R>(
   E,
   Exclude<R, WorkspaceFs | StorageFs> | FileSystem.FileSystem | Path.Path
 >
+```
+
+## WorkspaceAgents
+
+One workspace's agents over the catalog: its selection, the agents it
+shows (`visible`), and the agent a launch from it runs.
+
+```ts
+interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
+  /**
+   * The agent a launch runs, over a finished catalog: the entry an explicit
+   * `source` pins, else a visible one, else any. A miss reloads once, then
+   * fails with {@link AgentNotFound}, saying what the load said.
+   */
+  readonly forLaunch: (
+    identifier: string,
+    source?: AgentSource | null,
+  ) => Effect.Effect<
+    AgentEntry,
+    AgentNotFound | AgentCatalogLoadError | StateReadFailed
+  >;
+  /**
+   * Delete the custom agent `name`: its file, and the workspace's hidden
+   * choice for it. Refused when the catalog holds no such custom agent
+   * (`noFile`) or its file lies outside the custom directory (`escapes`).
+   * The deleted file's path.
+   */
+  readonly removeCustom: (
+    name: string,
+  ) => Effect.Effect<
+    string,
+    | AgentCustomizeRefused
+    | AgentDirectoriesFailed
+    | StateWriteFailed
+    | PlatformError.PlatformError
+  >;
+}
+```
+
+## WorkspaceAgentsController
+
+```ts
+class WorkspaceAgentsController<
+  Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
+>
+```
+
+## WorkspaceAgentsControllerDeps
+
+```ts
+interface WorkspaceAgentsControllerDeps<
+  Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
+> {
+  readonly repoState: StateStore;
+  readonly getAgents: () => Entry[];
+  /**
+   * Resolve one stored identifier without collapsing exact source identity.
+   * The controller applies no fallback around this, so an implementation owns
+   * the whole contract: match a bare name against the deduplicated agents,
+   * and a source-qualified key exactly. `AgentCatalog.get` is the production
+   * implementation.
+   */
+  readonly resolveAgent: (identifier: string) => Entry | undefined;
+}
+```
+
+## WorkspaceAgentsEntry
+
+```ts
+interface WorkspaceAgentsEntry {
+  readonly name: string;
+  readonly source: AgentSource;
+}
+```
+
+## WorkspaceAgentsStores
+
+The state slot a workspace's agent list resolves against: the repository's
+selection. Every read is answered for the workspace whose slot the caller
+hands over, so a process holding several sessions never answers one
+project's question with another's agent list.
+
+```ts
+type WorkspaceAgentsStores = Pick<WorkspaceRoots, 'repoState'>;
 ```
 
 ## workspaceEnvironmentLayer

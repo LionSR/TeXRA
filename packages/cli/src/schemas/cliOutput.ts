@@ -85,7 +85,7 @@ interface CliCommandResult {
 export const CLI_RESULT_FIELD = Object.freeze({
   agent: 'agent',
   'agent-copy': 'copy',
-  'default-agent': 'defaultAgent',
+  'workspace-agents': 'agents',
   config: 'config',
   service: 'service',
   task: 'task',

@@ -17,6 +17,8 @@ import {
 } from 'effect';
 
 import { LaunchRefused } from '@common/errors/agentErrors';
+import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
+import { forgetHiddenAgent } from '@agent/workspaceAgents/workspaceAgentsState';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
@@ -24,7 +26,11 @@ import {
   type AgentDirectoriesFailed,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import type { StateReadFailed } from '@shared/config/settings';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type {
+  StateReadFailed,
+  StateWriteFailed,
+} from '@shared/config/settings';
 import type {
   AgentDelegationScope,
   AgentScanIssue,
@@ -58,6 +64,48 @@ export class AgentCatalogLoadError extends Schema.TaggedError<AgentCatalogLoadEr
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 ) {}
 
+/**
+ * The state slot a workspace's agent list resolves against: the repository's
+ * selection. Every read is answered for the workspace whose slot the caller
+ * hands over, so a process holding several sessions never answers one
+ * project's question with another's agent list.
+ */
+export type WorkspaceAgentsStores = Pick<WorkspaceRoots, 'repoState'>;
+
+/**
+ * One workspace's agents over the catalog: its selection, the agents it
+ * shows (`visible`), and the agent a launch from it runs.
+ */
+export interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
+  /**
+   * The agent a launch runs, over a finished catalog: the entry an explicit
+   * `source` pins, else a visible one, else any. A miss reloads once, then
+   * fails with {@link AgentNotFound}, saying what the load said.
+   */
+  readonly forLaunch: (
+    identifier: string,
+    source?: AgentSource | null,
+  ) => Effect.Effect<
+    AgentEntry,
+    AgentNotFound | AgentCatalogLoadError | StateReadFailed
+  >;
+  /**
+   * Delete the custom agent `name`: its file, and the workspace's hidden
+   * choice for it. Refused when the catalog holds no such custom agent
+   * (`noFile`) or its file lies outside the custom directory (`escapes`).
+   * The deleted file's path.
+   */
+  readonly removeCustom: (
+    name: string,
+  ) => Effect.Effect<
+    string,
+    | AgentCustomizeRefused
+    | AgentDirectoriesFailed
+    | StateWriteFailed
+    | PlatformError.PlatformError
+  >;
+}
+
 /** What the process's agent catalog serves (see {@link AgentCatalog}). */
 export interface AgentCatalogShape {
   /** Every agent, one per name: a custom agent over a bundled one over a
@@ -84,38 +132,17 @@ export interface AgentCatalogShape {
     AgentCatalogLoadError | StateReadFailed
   >;
   /** A source changed and its reload waits out a debounce: the next
-   *  `forLaunch` loads it first, so an agent saved a moment ago launches as
+   *  `WorkspaceAgents.forLaunch` loads it first, so an agent saved a moment ago launches as
    *  saved. */
   readonly invalidate: Effect.Effect<void>;
   /**
    * A delegation scope's pinned agents, deduplicated by key: the list a
    * scoped delegating agent is told and its calls resolve against, in place
-   * of every agent.
+   * of its workspace's visible agents. Reads no store.
    */
   readonly pinned: (scope: AgentDelegationScope) => AgentEntry[];
-  /**
-   * The agent a launch runs, over a finished catalog: the entry an explicit
-   * `source` pins, else the one `get` answers. A miss reloads once, then
-   * fails with {@link AgentNotFound}, saying what the load said.
-   */
-  readonly forLaunch: (
-    identifier: string,
-    source?: AgentSource | null,
-  ) => Effect.Effect<
-    AgentEntry,
-    AgentNotFound | AgentCatalogLoadError | StateReadFailed
-  >;
-  /**
-   * Delete the custom agent `name`'s file. Refused when the catalog holds
-   * no such custom agent (`noFile`) or its file lies outside the custom
-   * directory (`escapes`). The deleted file's path.
-   */
-  readonly removeCustom: (
-    name: string,
-  ) => Effect.Effect<
-    string,
-    AgentCustomizeRefused | AgentDirectoriesFailed | PlatformError.PlatformError
-  >;
+  /** One workspace's agents over this catalog, its stores captured. */
+  readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
   /** Make a custom copy of `entry` (see {@link AgentCustomization}):
    *  the copy's path. */
   readonly customize: (
@@ -351,50 +378,77 @@ export class AgentCatalog extends Context.Service<
       const reads = catalogReads(state);
       const { list, get, newerBuiltIn } = reads;
 
-      const resolve = (
-        identifier: string,
-        source: AgentSource | null | undefined,
-      ) =>
-        (source
-          ? state.entries.get(agentKey(source, agentName(identifier)))
-          : undefined) ?? get(identifier);
-      const forLaunch = Effect.fn('forLaunch')(function* (
-        identifier: string,
-        source?: AgentSource | null,
-      ) {
-        const entry =
-          (yield* Effect.map(settled, () => resolve(identifier, source))) ??
-          (yield* Effect.map(refresh, () => resolve(identifier, source)));
-        if (entry) return entry;
-        return yield* new AgentNotFound({
-          agent: identifier,
-          message: missMessage(state, identifier),
+      const workspaceAgents = ({
+        repoState,
+      }: WorkspaceAgentsStores): WorkspaceAgents => {
+        const selection = new WorkspaceAgentsController<AgentEntry>({
+          repoState,
+          getAgents: list,
+          resolveAgent: get,
         });
-      });
-      const removeCustom = (name: string) =>
-        Effect.gen(function* () {
-          const entry = state.entries.get(agentKey('custom', agentName(name)));
-          if (!entry) {
-            return yield* new AgentCustomizeRefused({
-              reason: 'noFile',
-              message: `Custom agent not found: ${name}`,
-            });
-          }
-          const customDir = yield* (yield* AgentDirectories).custom();
-          if (!isStrictlyWithin(customDir, entry.path)) {
-            return yield* new AgentCustomizeRefused({
-              reason: 'escapes',
-              path: entry.path,
-              message:
-                'Refusing to delete: file is not inside the custom agents directory.',
-            });
-          }
-          // A file already gone is the result asked for, not a failure.
-          yield* FileSystem.FileSystem.use((fs) =>
-            fs.remove(entry.path, { force: true }),
+        // Each tier runs only when the one before has no match, so the exact
+        // agent validation chose launches even if visibility changed since.
+        const resolve = (
+          identifier: string,
+          source: AgentSource | null | undefined,
+        ): Effect.Effect<AgentEntry | undefined, StateReadFailed> => {
+          // A pinned source needs no selection read, so a failing store
+          // cannot reject an entry the catalog holds.
+          const pinned = source
+            ? state.entries.get(agentKey(source, agentName(identifier)))
+            : undefined;
+          if (pinned) return Effect.succeed(pinned);
+          return Effect.map(
+            selection.visible(),
+            (visibleAgents) =>
+              findAgentByIdentifier(visibleAgents, identifier) ??
+              get(identifier),
           );
-          return entry.path;
-        }).pipe(Effect.provide(services));
+        };
+        const forLaunch = Effect.fn('forLaunch')(function* (
+          identifier: string,
+          source?: AgentSource | null,
+        ) {
+          const entry =
+            (yield* Effect.andThen(settled, () =>
+              resolve(identifier, source),
+            )) ??
+            (yield* Effect.andThen(refresh, () => resolve(identifier, source)));
+          if (entry) return entry;
+          return yield* new AgentNotFound({
+            agent: identifier,
+            message: missMessage(state, identifier),
+          });
+        });
+        const removeCustom = (name: string) =>
+          Effect.gen(function* () {
+            const entry = state.entries.get(
+              agentKey('custom', agentName(name)),
+            );
+            if (!entry) {
+              return yield* new AgentCustomizeRefused({
+                reason: 'noFile',
+                message: `Custom agent not found: ${name}`,
+              });
+            }
+            const customDir = yield* (yield* AgentDirectories).custom();
+            if (!isStrictlyWithin(customDir, entry.path)) {
+              return yield* new AgentCustomizeRefused({
+                reason: 'escapes',
+                path: entry.path,
+                message:
+                  'Refusing to delete: file is not inside the custom agents directory.',
+              });
+            }
+            // A file already gone is the result asked for, not a failure.
+            yield* FileSystem.FileSystem.use((fs) =>
+              fs.remove(entry.path, { force: true }),
+            );
+            yield* forgetHiddenAgent(repoState, name);
+            return entry.path;
+          }).pipe(Effect.provide(services));
+        return Object.assign(selection, { forLaunch, removeCustom });
+      };
 
       const customize = (entry: AgentEntry, change: AgentCustomization) =>
         customizeCopy(entry, change, newerBuiltIn(entry)).pipe(
@@ -424,8 +478,7 @@ export class AgentCatalog extends Context.Service<
           state.changePending = true;
         }),
         pinned: reads.pinned,
-        forLaunch,
-        removeCustom,
+        workspaceAgents,
         customize,
         keepCustom,
       };

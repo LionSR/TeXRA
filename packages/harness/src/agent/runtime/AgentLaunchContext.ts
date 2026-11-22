@@ -78,6 +78,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
             agentSource,
           }
         : yield* (yield* AgentCatalog)
+            .workspaceAgents(roots)
             .forLaunch(fullConfig.agent, agentSource?.kind)
             .pipe(
               Effect.map((entry) => ({

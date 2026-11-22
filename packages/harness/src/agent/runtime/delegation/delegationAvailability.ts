@@ -18,7 +18,10 @@ import { Array as Arr, Effect } from 'effect';
 
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  AgentCatalog,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentCatalog';
 import { agentToolNames } from '@agent/index/agentEntry';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
@@ -54,18 +57,21 @@ const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
  * ---------------------------------------------------------------------- */
 
 /** The agents a delegation may launch: the run's pinned delegation scope's,
- *  else every agent. */
+ *  else the workspace's visible ones. */
 export const delegationAgents = Effect.fn('delegationAgents')(function* (
+  stores: WorkspaceAgentsStores,
   scope: AgentDelegationScope | null | undefined,
 ) {
   const catalog = yield* AgentCatalog;
-  return scope ? catalog.pinned(scope) : catalog.list();
+  return scope
+    ? catalog.pinned(scope)
+    : yield* catalog.workspaceAgents(stores).visible();
 });
 
 /**
  * The targets the `agent` tool can launch, or `undefined` when the step's
- * tools hold none: the run's pinned delegation scope's agents, or every
- * agent.
+ * tools hold none: the run's pinned delegation scope's agents, or the
+ * workspace's visible ones.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
@@ -74,7 +80,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     scope: AgentDelegationScope | undefined,
   ) {
     if (registry.get(AGENT_TOOL_NAME) === undefined) return undefined;
-    const agents = (yield* delegationAgents(scope)).map((entry) => ({
+    const agents = (yield* delegationAgents(stores, scope)).map((entry) => ({
       name: entry.name,
       // One line per agent: a blank line in a (user-defined) description
       // would otherwise read as the end of the list.

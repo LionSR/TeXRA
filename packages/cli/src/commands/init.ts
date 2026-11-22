@@ -149,7 +149,9 @@ const runInit = Effect.fn('runInit')(function* (
     );
   }
 
-  const agents = implicitDefaultToolUseAgents((yield* AgentCatalog).list());
+  const agents = implicitDefaultToolUseAgents(
+    yield* (yield* AgentCatalog).workspaceAgents(services).visible(),
+  );
   const models = yield* loadModelOptions(services);
 
   const interactive =

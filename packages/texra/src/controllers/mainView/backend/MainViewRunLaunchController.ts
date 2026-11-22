@@ -2,10 +2,14 @@ import { Effect } from 'effect';
 
 import { type StartInput } from '@texra-ai/harness';
 import type { StateReadFailed } from '@texra-ai/harness/plugins';
-import { AgentCatalog } from '@texra-ai/harness/host';
+import {
+  AgentCatalog,
+  type WorkspaceAgentsStores,
+} from '@texra-ai/harness/host';
 import {
   AGENT_SOURCE,
   agentKey,
+  agentKeyOf,
   agentName,
   type AgentConfig,
   Rejected,
@@ -19,11 +23,9 @@ import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostCommand, { kind: 'launch' }>;
 
-/** What a launch reads of its session: the storage root, under which its
- *  pasted images live. */
-interface LaunchRoots {
-  readonly storage: string;
-}
+/** The session's slots a launch reads: its agent selection and storage
+ *  root, under which its pasted images live. */
+type LaunchRoots = WorkspaceAgentsStores & { readonly storage: string };
 
 /**
  * The run option an Auto-approve launch adds: its run starts with every
@@ -41,7 +43,7 @@ export function launchApprovalOptions({
 export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
   function* (
     { launch, instruction }: LaunchRequest,
-    /** The requesting session's storage root, carried as data: the
+    /** The requesting session's slots and storage root, carried as data: the
      *  pasted-image paths it names are joined onto its root rather than
      *  resolved from an ambient read at this depth. */
     roots: LaunchRoots,
@@ -55,17 +57,30 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     // An agent the catalog does not know launches all the same: its own
     // resolution shows the agent-config banner. A failed load refuses the
     // launch.
-    const catalog = yield* AgentCatalog;
+    const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
+    const visible = yield* workspaceAgents.visible();
     // An empty agent is the person choosing none: the default of the agents
     // the form lists, the one its agent chip shows.
-    const agent = launch.agent || pickDefaultToolUseAgent(catalog.list());
-    yield* catalog.forLaunch(agent).pipe(
+    const agent = launch.agent || pickDefaultToolUseAgent(visible);
+    const entry = yield* workspaceAgents.forLaunch(agent).pipe(
       Effect.catchTags({
         AgentNotFound: () => Effect.succeed(null),
         AgentCatalogLoadError: (failed) =>
           Effect.fail(new Rejected({ reason: failed.message })),
       }),
     );
+    // The form lists the workspace's visible agents (`agentOptionsData`) and
+    // reads the mode from the one its selection names, so a launch runs only
+    // one of them. The catalog also finds an agent hidden since it was chosen
+    // (or the hidden agent of a run Run again… opened the form on); the form
+    // shows no agent for it, so its launch is refused.
+    if (
+      entry !== null &&
+      !visible.some((shown) => agentKeyOf(shown) === agentKeyOf(entry))
+    )
+      return yield* new Rejected({
+        reason: `Choose an agent first: ${entry.name} is hidden from the agent selector.`,
+      });
     return yield* decodeLaunchConfig({
       agent,
       model: launch.model,

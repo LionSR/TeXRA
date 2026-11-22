@@ -618,20 +618,26 @@ texra memory show memories/<file>
 ## Workspace defaults
 
 Run `texra config` in a terminal, or `/config` in a chat, to open the same
-configuration view. Its **Agents** section sets the **default chat agent**:
-the root agent selected for new chats in this workspace, stored under
-`texra.chat` in `.texra/config.json`. Every agent is available in every
-folder.
+configuration view. Its **Agents** section has two distinct choices:
+
+- **Workspace agents** controls which agents are available in the current
+  folder: every agent (**All agents**), or an exact **Custom selection**.
+- **Default chat agent** is the root agent selected for new chats in this
+  workspace. It is stored under `texra.chat` in `.texra/config.json` and does
+  not change which agents are visible.
 
 The corresponding non-interactive interface is `texra config agents`:
 
 ```bash
-texra config agents                                     # show the default chat agent
+texra config agents                               # inspect the workspace agents
+texra config agents --agents all                  # make every agent visible in this folder
+texra config agents --agents assistant,research,review
 texra config agents --default-agent builtIn:assistant   # or `none` for the automatic default
 ```
 
-`texra agents list` inspects agents and changes nothing. `texra init` writes
-initial command defaults.
+`texra agents list` keeps a narrower responsibility: it inspects agents, but
+does not alter the workspace agents. `texra init` writes initial command
+defaults and likewise does not change agent visibility.
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
 current workspace. Scaffold one with `texra init` (add `--yes` to accept

@@ -63,8 +63,15 @@ export {
   AgentCatalogLoadError,
   AgentNotFound,
   type AgentCatalogShape,
+  type WorkspaceAgents,
+  type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
+export type {
+  WorkspaceAgentsController,
+  WorkspaceAgentsControllerDeps,
+  WorkspaceAgentsEntry,
+} from '@agent/workspaceAgents/WorkspaceAgentsController';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,

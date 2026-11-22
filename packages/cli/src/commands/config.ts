@@ -14,27 +14,30 @@ import {
 } from '../runtime/platform/cliContext';
 import { missingAgentMessage } from '../runtime/agents';
 import {
+  formatCliWorkspaceAgents,
+  readCliWorkspaceAgents,
+} from '../runtime/workspaceAgents';
+import {
   cliPlatform,
   type CliPlatformServices,
 } from '../runtime/platform/initPlatform';
 import { writeErrorStderr } from '../runtime/platform/logSinks';
 
-import {
-  cliCommandDefaults,
-  setWorkspaceCliChatAgent,
-} from '../runtime/platform/cliConfig';
+import { setWorkspaceCliChatAgent } from '../runtime/platform/cliConfig';
 
 import { cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
-/** The agent new chats in the project start on, as `config` reports it. */
-const defaultChatAgent = (stores: CliPlatformServices['roots']) => {
-  const agent = cliCommandDefaults(stores, 'chat').agent;
-  return {
-    record: { defaultChatAgent: agent },
-    text: `Default chat agent: ${agent ?? '(automatic)'}`,
-  };
-};
+function parseAgentKeys(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
 
 function formatConfigValue(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -45,7 +48,7 @@ const showConfig = Effect.fn('showConfig')(function* (
   services: CliPlatformServices,
 ) {
   const stores = services.roots;
-  const agents = defaultChatAgent(stores);
+  const agents = yield* readCliWorkspaceAgents(stores);
   const { catalog, cliRows } = TEXRA_SETTINGS;
   // Named as `.texra/config.json` spells them.
   const settings = Object.fromEntries(
@@ -56,7 +59,7 @@ const showConfig = Effect.fn('showConfig')(function* (
       ]),
     ),
   );
-  const record = { settings, agents: agents.record };
+  const record = { settings, agents };
   yield* emitCliResult(
     cliResult(
       'config',
@@ -66,39 +69,82 @@ const showConfig = Effect.fn('showConfig')(function* (
           ([key, value]) => `${key}: ${formatConfigValue(value)}`,
         ),
         '',
-        agents.text,
+        formatCliWorkspaceAgents(agents),
       ].join('\n'),
     ),
   );
 });
 
-const configureDefaultAgent = Effect.fn('configureDefaultAgent')(function* (
-  services: CliPlatformServices,
-  input: string | undefined,
-) {
-  const roots = services.roots;
-  const defaultAgent = input?.trim();
-  if (defaultAgent === '')
-    return yield* failUsage('--default-agent needs a value.');
-  // The keyword reads in any case.
-  if (defaultAgent?.toLowerCase() === 'none') {
-    yield* setWorkspaceCliChatAgent(roots, undefined);
-  } else if (defaultAgent !== undefined) {
-    const available = (yield* AgentCatalog).list();
-    const selected = available.find(
-      (agent) =>
-        agent.name === defaultAgent || agentKeyOf(agent) === defaultAgent,
+const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
+  function* (
+    services: CliPlatformServices,
+    input: {
+      readonly agents?: string;
+      readonly defaultAgent?: string;
+    },
+  ) {
+    const roots = services.roots;
+    const catalog = yield* AgentCatalog;
+    const workspaceAgents = catalog.workspaceAgents(roots);
+    // Each value is read once, trimmed; a keyword (`all`, `none`) reads in
+    // any case.
+    const agents = input.agents?.trim();
+    const defaultAgent = input.defaultAgent?.trim();
+    for (const [flag, value] of [
+      ['--agents', agents],
+      ['--default-agent', defaultAgent],
+    ] as const) {
+      if (value === '') return yield* failUsage(`${flag} needs a value.`);
+    }
+    const keyword = (value: string | undefined) => value?.toLowerCase();
+
+    if (keyword(agents) === 'all') {
+      yield* workspaceAgents.select({ kind: 'all' });
+    } else if (agents !== undefined) {
+      const agentKeys = parseAgentKeys(agents);
+      // A list replaces every agent it does not name, so one holding a name
+      // no agent has would only narrow the workspace: nothing is stored.
+      const unknown = agentKeys.filter((key) => catalog.get(key) === undefined);
+      if (unknown.length > 0) {
+        return yield* failUsage(missingAgentMessage(unknown.join(', ')));
+      }
+      yield* workspaceAgents.select({ kind: 'custom', agentKeys });
+    }
+
+    if (keyword(defaultAgent) === 'none') {
+      yield* setWorkspaceCliChatAgent(roots, undefined);
+    } else if (defaultAgent !== undefined) {
+      const available = yield* workspaceAgents.visible();
+      const selected = available.find(
+        (agent) =>
+          agent.name === defaultAgent || agentKeyOf(agent) === defaultAgent,
+      );
+      if (!selected) {
+        const names = available.map((agent) => agent.name).join(', ');
+        return yield* failUsage(
+          `Default chat agent "${defaultAgent}" is not in the workspace agents. Available agents: ${names || '(none)'}.`,
+        );
+      }
+      yield* setWorkspaceCliChatAgent(roots, agentKeyOf(selected));
+    }
+
+    const record = yield* readCliWorkspaceAgents(roots);
+    yield* emitCliResult(
+      cliResult('workspace-agents', record, formatCliWorkspaceAgents(record)),
     );
-    if (!selected) return yield* failUsage(missingAgentMessage(defaultAgent));
-    yield* setWorkspaceCliChatAgent(roots, agentKeyOf(selected));
-  }
-  const { record, text } = defaultChatAgent(roots);
-  yield* emitCliResult(cliResult('default-agent', record, text));
-});
+  },
+);
 
 const configAgentsCommand = cliCommand('agents', {
-  description: 'Show or change the default chat agent',
+  description: 'Show or change the workspace agents',
   config: {
+    agents: Flag.String('agents').pipe(
+      Flag.withMetavar('all|agent,...'),
+      Flag.withDescription(
+        'The workspace agents: every agent (all), or an exact comma-separated agent list',
+      ),
+      Flag.optional,
+    ),
     defaultAgent: Flag.String('default-agent').pipe(
       Flag.withMetavar('agent|none'),
       Flag.withDescription(
@@ -109,10 +155,10 @@ const configAgentsCommand = cliCommand('agents', {
   },
   run: Effect.fn('config.run')(function* (_context, input) {
     const services = yield* cliPlatform;
-    return yield* configureDefaultAgent(
-      services,
-      Option.getOrUndefined(input.defaultAgent),
-    );
+    return yield* configureWorkspaceAgents(services, {
+      agents: Option.getOrUndefined(input.agents),
+      defaultAgent: Option.getOrUndefined(input.defaultAgent),
+    });
   }),
 });
 

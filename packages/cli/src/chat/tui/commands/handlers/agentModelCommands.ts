@@ -15,10 +15,14 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { selectChatModel, type SlashCommandContext } from './slashContext';
+import type { WorkspaceAgentsStores } from '@texra-ai/harness/host';
 
 /** Resolve the chat root agent once: the entry the run pins, or the refusal. */
-export function resolveChatToolUseAgent(agentName: string) {
-  return resolveCliRunAgent(agentName).pipe(
+export function resolveChatToolUseAgent(
+  stores: WorkspaceAgentsStores,
+  agentName: string,
+) {
+  return resolveCliRunAgent(stores, agentName).pipe(
     Effect.catchIf(
       (error): error is CliUsageError => error instanceof CliUsageError,
       (refusal) => Effect.succeed(refusal),
@@ -37,7 +41,7 @@ export const applyInitialCliAgentSelection = Effect.fn(
   }
 
   const nextAgent = agentName.trim();
-  const entry = yield* resolveChatToolUseAgent(nextAgent);
+  const entry = yield* resolveChatToolUseAgent(context.stores, nextAgent);
   if (entry instanceof CliUsageError) {
     setTransientNotice(entry.message);
     return;

@@ -8,14 +8,17 @@ import {
   AGENT_NAME_DESCRIPTION,
   formatCliAgentDetails,
   formatCliAgentList,
+  formatCliHiddenAgentsNotice,
   formatCliNewerBuiltInNotice,
+  loadCliAgentList,
   missingAgentMessage,
+  type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
-import { cliCommand } from './_helpers/cliCommand';
+import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import {
   cliResult,
   emitCliResult,
@@ -27,16 +30,21 @@ import {
   type CliContext,
 } from '../runtime/platform/cliContext';
 
-const listAgents = Effect.fn('listAgents')(function* (context: CliContext) {
-  yield* cliPlatform;
-  const catalog = yield* AgentCatalog;
-  const agents = catalog.list();
+const listAgents = Effect.fn('listAgents')(function* (
+  context: CliContext,
+  options: CliAgentListOptions = {},
+) {
+  const services = yield* cliPlatform;
+  const result = yield* loadCliAgentList(services, options);
 
   if (!isQuiet(context)) {
+    const catalog = yield* AgentCatalog;
+    const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
+    if (hiddenNotice) writeTextStderr(hiddenNotice);
     for (const issue of catalog.scanIssues()) {
       writeTextStderr(`Skipped custom agent ${issue.path}: ${issue.message}`);
     }
-    for (const agent of agents) {
+    for (const agent of result.agents) {
       if (catalog.newerBuiltIn(agent)) {
         writeTextStderr(formatCliNewerBuiltInNotice(agent.name));
       }
@@ -46,9 +54,12 @@ const listAgents = Effect.fn('listAgents')(function* (context: CliContext) {
   yield* emitPagedCliResult(
     cliResult(
       'agent',
-      agents,
-      formatCliAgentList(agents, {
-        showEmptyState: !isQuiet(context) && context.outputFormat === 'text',
+      result.agents,
+      formatCliAgentList(result.agents, {
+        showEmptyState:
+          options.includeHidden !== true &&
+          !isQuiet(context) &&
+          context.outputFormat === 'text',
       }),
     ),
   );
@@ -110,7 +121,7 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
 
 /** Delete the custom copy that overrides a bundled agent. */
 const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
-  yield* cliPlatform;
+  const services = yield* cliPlatform;
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   if (!custom || !(yield* bundledAgentNamed(name))) {
@@ -118,19 +129,22 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
       `${name} is not a custom copy of a built-in agent.`,
     );
   }
-  return yield* catalog.removeCustom(name).pipe(
-    Effect.flatMap((path) =>
-      emitCopyResult({
-        action: 'reset',
-        name,
-        path,
-        text: `Removed ${path}; ${name} uses the built-in version again.`,
-      }),
-    ),
-    Effect.catchTag('AgentCustomizeRefused', (refused) =>
-      failUsage(refused.message),
-    ),
-  );
+  return yield* catalog
+    .workspaceAgents(services)
+    .removeCustom(name)
+    .pipe(
+      Effect.flatMap((path) =>
+        emitCopyResult({
+          action: 'reset',
+          name,
+          path,
+          text: `Removed ${path}; ${name} uses the built-in version again.`,
+        }),
+      ),
+      Effect.catchTag('AgentCustomizeRefused', (refused) =>
+        failUsage(refused.message),
+      ),
+    );
 });
 
 /** Keep the custom copy and dismiss its newer-built-in notice. */
@@ -180,9 +194,14 @@ const agentsKeepCommand = cliCommand('keep', {
 });
 
 const agentsListCommand = cliCommand('list', {
-  description: 'List the agents',
-  config: {},
-  run: (context) => listAgents(context),
+  description: 'List available agents',
+  config: {
+    all: boolFlag(
+      'all',
+      'Show every agent, including agents hidden by workspace visibility settings',
+    ),
+  },
+  run: (context, input) => listAgents(context, { includeHidden: input.all }),
 });
 
 const agentsShowCommand = cliCommand('show', {

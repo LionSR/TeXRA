@@ -342,10 +342,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           source: { kind: AGENT_SOURCE.INLINE, persona: {} },
         }
       : launch.persona == null
-        ? yield* Effect.map(requireAgent(launch.agentName, run), (entry) => ({
-            name: entry.name,
-            source: { kind: entry.source },
-          }))
+        ? yield* Effect.map(
+            requireAgent(call.env.roots, launch.agentName, run),
+            (entry) => ({ name: entry.name, source: { kind: entry.source } }),
+          )
         : {
             name: launch.agentName,
             source: { kind: AGENT_SOURCE.INLINE, persona: launch.persona },

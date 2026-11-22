@@ -95,6 +95,7 @@ import {
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
+import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
@@ -408,6 +409,7 @@ function parseList(value: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
+const HARNESS_VISIBLE_AGENTS = parseList(process.env.HARNESS_VISIBLE_AGENTS);
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
 const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
 
@@ -468,6 +470,14 @@ const harnessRuntimeSession = await harnessRuntime.runPromise(
     }),
   ),
 );
+if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
+  await harnessRuntime.runPromise(
+    harnessRoots.repoState.update(WORKSPACE_AGENTS_KEY.key, {
+      kind: 'custom',
+      agentKeys: HARNESS_VISIBLE_AGENTS,
+    }),
+  );
+}
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.globalState.update(MODEL_SELECTION_KEY.key, {

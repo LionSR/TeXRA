@@ -9,7 +9,10 @@
 import { Context, type Deferred, Effect, Exit } from 'effect';
 
 // Local imports
-import { findAgentByIdentifier } from '@agent/index/agentCatalog';
+import {
+  findAgentByIdentifier,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentCatalog';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { recordedDecision } from '@agent/runtime/requests';
@@ -53,10 +56,14 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
 /** Resolve `name` from the agents `run` may launch, listing them on
  *  failure. */
 export const requireAgent = Effect.fn('requireAgent')(function* (
+  stores: WorkspaceAgentsStores,
   name: string,
   run: Pick<RunToolCall['run'], 'config'>,
 ) {
-  const agents = yield* delegationAgents(run.config.delegationAgentScope);
+  const agents = yield* delegationAgents(
+    stores,
+    run.config.delegationAgentScope,
+  );
   const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
   return yield* new ToolError(
@@ -290,7 +297,10 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     edit?.agent && edit.agent !== proposal.agent ? edit.agent : undefined;
   const resolvedAgentOverride = agentOverride
     ? findAgentByIdentifier(
-        yield* delegationAgents(parent.run.config.delegationAgentScope),
+        yield* delegationAgents(
+          parent.env.roots,
+          parent.run.config.delegationAgentScope,
+        ),
         agentOverride,
       )
     : undefined;
