@@ -57,6 +57,7 @@ import {
   RunChanged,
 } from '@shared/session/database';
 import { ToolRegistry } from '@tools/toolTable';
+import { AppNamespace, storeFileName } from '@utils/system/appNamespace';
 import { currentValues } from './currentValues';
 import {
   LISTED_KINDS,
@@ -87,14 +88,21 @@ import {
 } from './rowReader';
 import { isBusy, isDamaged, mapDatabaseFailure } from './storeAside';
 import { storeConnection } from './storeConnection';
-import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
-/** The database file of a storage root, beside the stores it replaces. */
-export const SESSION_DATABASE_FILE = 'texra.db';
-/** The store file under `storage`, by the directory's real path. SQLite
- *  makes only the file, so `create` makes the directory first. */
-export const storeFile = (storage: string, create: boolean): string => {
+import {
+  IN_MEMORY_STORE,
+  openStore,
+  PROJECT_SCHEMA,
+  reclaimFreePages,
+} from './storeSchema';
+/** The store file `name` under `storage`, by the directory's real path.
+ *  SQLite makes only the file, so `create` makes the directory first. */
+export const storeFile = (
+  storage: string,
+  name: string,
+  create: boolean,
+): string => {
   if (create) mkdirSync(storage, { recursive: true });
-  return join(realpathSync.native(storage), SESSION_DATABASE_FILE);
+  return join(realpathSync.native(storage), name);
 };
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
@@ -194,16 +202,15 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  SessionWorkspace | FileSystem.FileSystem | ToolRegistry
+  SessionWorkspace | FileSystem.FileSystem | ToolRegistry | AppNamespace
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
       const roots = yield* SessionWorkspace;
+      const name = storeFileName(yield* AppNamespace);
       const path =
-        mode === 'ephemeral'
-          ? IN_MEMORY_STORE
-          : join(roots.storage, SESSION_DATABASE_FILE);
+        mode === 'ephemeral' ? IN_MEMORY_STORE : join(roots.storage, name);
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
       const create = mode !== 'existing';
@@ -212,7 +219,7 @@ export const databaseLayer = (
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
           : yield* Effect.try({
-              try: () => storeFile(roots.storage, create),
+              try: () => storeFile(roots.storage, name, create),
               catch: (cause) => openFailed(ensureError(cause)),
             });
       // A project store has one holder, this process, so the driver opens
@@ -229,6 +236,7 @@ export const databaseLayer = (
         }),
         path,
         filename,
+        PROJECT_SCHEMA,
       ).pipe(
         Effect.catchIf(isBusy, () =>
           Effect.fail(openFailed(new Error(STORE_HELD_MESSAGE))),

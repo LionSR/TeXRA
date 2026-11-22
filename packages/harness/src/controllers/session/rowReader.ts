@@ -347,6 +347,7 @@ function bareStart(input: SqlRow): SessionRow | null {
   if (row.type !== 'run.start' || row.kind !== 'run') return null;
   return {
     type: 'run.start',
+    maxCostUsd: null,
     aggregateId: Schema.decodeUnknownSync(RunIdSchema)(row.logicalId),
     seq: row.seq,
     commit: row.commit,

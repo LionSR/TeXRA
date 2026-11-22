@@ -903,7 +903,7 @@
       "id": "LLM-codex-backend-model-id-export",
       "candidate": "withdrawing codexBackendModelId from the public exports of @texra-ai/llm (the app asking llm a higher-level question, or reading a decided route, for the Codex backend's model id)",
       "why": "Its consumer outside llm, the app's Codex launch configuration, starts a Codex binary that signs in by itself: llm decides no route for that launch, so there is no decided route to read. routeConfig's ChatGPT case keeps config.id and only responsesConfiguration strips the date pin, so making routeConfig answer would change every reader of config.id, and the app would have to build a ChatGPT route it never uses. Withdrawing the export would copy the date-pin pattern into the app, a second owner for it.",
-      "ruling": ".agents/docs/proposed/simplification/2026-11-18-model-access-one-owner-per-question.md#kept-as-llm-exports-and-why",
+      "ruling": ".agents/docs/implemented/simplification/2026-11-18-model-access-one-owner-per-question.md#kept-as-llm-exports-and-why",
       "reopenWhen": "The app's Codex launch goes through a route llm decides.",
       "symbols": [
         {
@@ -928,7 +928,7 @@
         {
           "file": "packages/harness/src/agent/runtime/processRun.ts",
           "symbol": "endProcessChild",
-          "signature": "const endProcessChild = ( runId: RunId, { logger, turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.Effect<void, Error, AgentRunServices> => {…};"
+          "signature": "const endProcessChild = Effect.fnUntraced( function* ( runId: RunId, { turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.fn.Return<void, Error, AgentRunServices> {…}, (ended, _runId, { logger }) => Effect.ensuring( ended, Effect.sync(() => logger.close()), ), );"
         }
       ]
     },
@@ -966,6 +966,20 @@
           "file": "packages/texra/src/tools/zotero/ZoteroAddTool.ts",
           "symbol": "ZoteroAddTool",
           "signature": "export const ZoteroAddTool = defineTool({…})"
+        }
+      ]
+    },
+    {
+      "id": "STORE-quick-check-and-minimum-sqlite-at-open",
+      "candidate": "A bounded PRAGMA quick_check at every store open that moves a failing file aside as a damaged one is, and a recorded minimum SQLite version checked at open (store review F12, after the Codex CLI's 100 ms check)",
+      "why": "The check cannot be bounded on this driver. @effect/sql-sqlite-node 4.1.4 opens node:sqlite's DatabaseSync, which is synchronous and has no progress handler, no interrupt and no statement timeout (its methods on Node 22.23.5: open, close, prepare, exec, function, location, aggregate, createSession, applyChangeset, enableLoadExtension, loadExtension). quick_check(N) bounds the errors it reports, not the pages it reads: it visits every page, so its time grows with the file. Measured on 2026-11-21 (Node 22.23.5, SQLite 3.54.1, page cache warm): 59 ms on a 52 MB store and 135 ms on a 209 MB one, and a cold file adds the read of the whole file. That time would be spent on the host's thread at every open, in the extension host and the desktop's main process included. The one way to bound it is a worker thread that is terminated at the deadline, which is a second connection, a worker entry in three hosts' bundles and a third outcome (not checked) for exactly the large stores, where a file is most likely to be damaged. What it would add is small: SQLITE_CORRUPT and SQLITE_NOTADB at open already move the file aside (openStore), and corruption met mid-session fails that read, since a file a connection holds is never moved. The minimum version was refused with it: the CLI's SQLite follows from the Node version the manifests' engines field already requires, and in the extension host and Electron it is the host's own, so a failed check would leave a person nothing to change, and a warning in a log is a check nobody reads. Which SQLite the lowest allowed Node (22.22.2) carries was not established.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-03-session-store-review.md#3-slices",
+      "reopenWhen": "node:sqlite or the driver gains a progress handler, an interrupt or a statement timeout; a store is found damaged in a way the open did not report; or a SQLite defect is shown to corrupt a store on a SQLite version a supported host ships",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/storeSchema.ts",
+          "symbol": "openStore",
+          "signature": "export const openStore = Effect.fnUntraced(function* <E, R>(connect: Effect.Effect<Sql, E, R | Scope.Scope>, path: string, filename: string, schema: StoreSchema) {…})"
         }
       ]
     }

@@ -87,13 +87,16 @@ its kind is its `type` column.
 
 ### 2.1 One file per storage root
 
-The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/databaseLayer.ts#SESSION_DATABASE_FILE`). An ephemeral
+The store is one SQLite file under the storage root, named for the app's
+settings namespace: `<namespace>.db`, so `texra.db` for TeXRA
+(`utils/system/appNamespace.ts#storeFileName`). An ephemeral
 session runs the same schema in memory
 (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
-The store MUST carry schema version 105 in SQLite's `user_version`
-(`controllers/session/storeSchema.ts#SCHEMA_VERSION`). A process gives the
+A project store MUST carry schema version 106 in SQLite's `user_version`
+(`controllers/session/storeSchema.ts#PROJECT_SCHEMA`), and the global
+storage root's store, which holds current values and the input history and
+no event table, version 107 (`#GLOBAL_SCHEMA`). A process gives the
 schema to an unstamped file and MUST fail the open of a store stamped with a
 schema other than its own, earlier or newer, writing nothing to it
 (`controllers/session/storeSchema.ts#checkStamps`). A file SQLite reports
@@ -529,7 +532,7 @@ exits stops nothing: a session's close interrupts its runs' fibers and MUST
 NOT write a stop or an end for a run nobody stopped, so the run is left as
 its rows stand and reads as interrupted, resumable, at the next open, as
 after a crash (`agent/runtime/runRegistry.ts#interruptAll`,
-`agent/runtime/AgentRunLifecycle.ts#commitEnd`). A run whose
+`agent/runtime/AgentRunLifecycle.ts#endVerdict`). A run whose
 history does not load ends with its `run.end` and its requests uncancelled,
 with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
 run that ends: a native child runs one cycle and ends with its report; a

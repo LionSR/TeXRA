@@ -22,8 +22,7 @@ function summaries(view: SessionView, workspace: string): TaskSummary[] {
     .map((run) => ({
       workspace,
       runId: run.id,
-      label: run.label,
-      description: run.description,
+      label: run.title,
       statusKey: runStatusKey(run),
       launchedAt: run.launchedAt,
       live: run.holder === 'here',

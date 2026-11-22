@@ -130,7 +130,7 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v6: that field is `grants`, the fact it holds, not `approvalPolicy`
     // (an earlier build's row names `approvalPolicy`, not the required
     // `grants`, so it would fail as damaged).
-    'run.start': Object.freeze({ version: 6, listing: 'lifecycle' }),
+    'run.start': Object.freeze({ version: 7, listing: 'lifecycle' }),
     'run.activate': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a recipe's script names its block and options; `toolConfig` is gone
     // (an earlier build's v1 row refuses its run as written by that build,
@@ -159,7 +159,7 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'run.config': Object.freeze({ version: 12, listing: 'own' }),
     // v2: no `shutdown` reason: a process that exits writes nothing for its
     // runs (an earlier build's shutdown stop would fail as damaged).
-    'run.stop': Object.freeze({ version: 2, listing: 'own' }),
+    'run.stop': Object.freeze({ version: 3, listing: 'own' }),
     // v2: a recipe's value is `structured`, with no `documents`.
     // v3: the error's classification as `model.message` v9.
     // v4: an error always carries its `message` (an earlier build's error

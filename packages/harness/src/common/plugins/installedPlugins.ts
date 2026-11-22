@@ -57,7 +57,14 @@ export type PluginOrigin =
   | { readonly kind: 'local'; readonly path: string };
 
 /** `<global storage>/plugins`: each fetched plugin lives in `<name>/` here. */
-const pluginsDir = (env: PluginEnv) => path.join(env.globalStorage, 'plugins');
+const pluginsDir = ({ globalStorage }: Pick<PluginEnv, 'globalStorage'>) =>
+  path.join(globalStorage, 'plugins');
+
+/** Where the processes over `globalStorage` copy the native code they load
+ *  (`@tools/nativePlugins`): beside the managed plugins, under a name no
+ *  plugin has. */
+export const nativeCopiesDir = (globalStorage: string) =>
+  path.join(pluginsDir({ globalStorage }), '.native');
 
 // Remote transports only: a local repository is installed by its path, so a
 // marketplace cannot name `file://` to copy another checkout on this machine.

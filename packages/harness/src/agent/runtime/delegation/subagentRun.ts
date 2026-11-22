@@ -133,6 +133,8 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       readonly runId: RunId;
       /** The grants the child is registered with. */
       readonly grants: ApprovalGrants;
+      /** The spend cap the child is registered with. */
+      readonly maxCostUsd?: number | null;
       readonly approvalMeta?: ApprovalMeta;
     },
   ) {
@@ -151,6 +153,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         call: { callId: parent.callId, card: parent.logId, awaited: false },
       },
       grants,
+      maxCostUsd: launch.maxCostUsd,
     });
 
     const meta = launch.approvalMeta;

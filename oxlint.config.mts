@@ -112,7 +112,7 @@ const APP: ImportBan[] = [
 ];
 
 const HARNESS_ENTRIES =
-  'Outside the harness, import @texra-ai/harness or its public subpaths (/host, /node, /plugins, /schemas, /transcript), never a harness internal.';
+  'Outside the harness, import @texra-ai/harness or its public subpaths (/builtins, /host, /node, /plugins, /schemas, /transcript), never a harness internal.';
 /** The aliases into the harness's sources, and a path into them. */
 const HARNESS_INTERNALS: ImportBan[] = [
   { group: aliasPatterns(['packages/harness']), message: HARNESS_ENTRIES },
@@ -121,7 +121,7 @@ const HARNESS_INTERNALS: ImportBan[] = [
 
 const BROWSER_BUNDLE: ImportBan[] = [
   {
-    regex: '^@texra-ai/harness(/host|/node|/plugins)?$',
+    regex: '^@texra-ai/harness(/builtins|/host|/node|/plugins)?$',
     message: 'Browser bundle: use @texra-ai/harness/schemas or /transcript.',
   },
 ];
@@ -234,11 +234,26 @@ const CORE = [
   'packages/harness/src/effect',
   'packages/llm/src',
   'packages/harness/src/index.ts',
+  'packages/harness/src/builtins.ts',
   'packages/harness/src/host.ts',
   'packages/harness/src/node.ts',
   'packages/harness/src/plugins.ts',
   'packages/harness/src/schemas.ts',
   'packages/harness/src/transcriptEntry.ts',
+];
+
+/**
+ * Code a script's realm evaluates, written as files and shipped as their
+ * text: the realm's two setup scripts and the plugins' script modules. It
+ * runs in QuickJS, not in a host: a promise is the only way it waits, and
+ * the only globals are the language's and the ones the bridge defines.
+ */
+const REALM = [
+  'packages/harness/src/agent/codeSandbox/bridge.js',
+  'packages/harness/src/agent/codeSandbox/determinism.js',
+  'packages/harness/src/tools/plan/goal.js',
+  'packages/texra/src/tools/theory/programs',
+  'packages/texra/src/tools/lean/programs',
 ];
 
 /** Every package but the harness: sources, suites, scripts and tooling. */
@@ -322,7 +337,7 @@ const PROPERTY_ZONES: Zone<PropertyBan>[] = [
     ],
     except: RUNTIME_ENTRIES,
   },
-  { bans: THEN, in: CORE },
+  { bans: THEN, in: CORE, except: REALM },
   { bans: PROCESS_INPUT, in: ['packages/cli/src'], except: CLI_READERS },
   { bans: OUTPUT, in: ['packages/cli/src'], except: CLI_WRITERS },
   {
@@ -364,6 +379,25 @@ export default defineConfig({
           },
         ],
         'typescript/no-explicit-any': 'error',
+        // tsc checks a default import, and the default of a `?raw` import
+        // is the file's text, whatever the file exports.
+        'import/default': 'off',
+      },
+    },
+    {
+      files: REALM.flatMap(globs),
+      globals: {
+        tools: 'readonly',
+        agent: 'readonly',
+        self: 'readonly',
+        program: 'readonly',
+        searchTools: 'readonly',
+        describeTool: 'readonly',
+        section: 'readonly',
+        console: 'readonly',
+      },
+      rules: {
+        'no-undef': 'error',
       },
     },
     {

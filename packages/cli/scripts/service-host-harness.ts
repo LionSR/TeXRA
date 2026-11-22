@@ -27,6 +27,8 @@ import { RunIdSchema } from '@texra-ai/harness/schemas';
 // this window stands without (this file is an exemption in
 // oxlint.config.mts).
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
+import { AppNamespace } from '@texra-ai/harness/node';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   linkService,
   requestOnService,
@@ -48,6 +50,7 @@ const globalValues = Layer.effect(
 ).pipe(
   Layer.provide(globalDatabaseLayer(resolveGlobalStoragePath(storageRoot))),
   Layer.provide(nodePlatformServices),
+  Layer.provide(Layer.succeed(AppNamespace)(TEXRA_SETTINGS.catalog.namespace)),
   Layer.orDie,
 );
 

@@ -15,6 +15,7 @@ import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
 import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
+import { capReached } from '@agent/runtime/spendCap';
 import { ToolRegistry } from '@tools/toolTable';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
@@ -49,7 +50,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import {
   agentChildRunId,
-  type ChildLimits,
   countLaunch,
   earlierChild,
   fingerprint,
@@ -57,7 +57,7 @@ import {
   recoverAgentChild,
   reusable,
   treeCostOf,
-  withinLimits,
+  withinTime,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { executeSubagentInBand } from './childLaunch';
@@ -120,29 +120,32 @@ type ChildLaunch = {
   readonly workingDirectory: string | null | undefined;
   readonly id: string | null | undefined;
   readonly background: boolean | null | undefined;
-} & ChildLimits &
-  (
-    | {
-        readonly program: null;
-        readonly agentName: string;
-        /** An agent the call defines, named `agentName`: no catalog entry. */
-        readonly persona?: InlineAgent['persona'] | null;
-        readonly schema: Record<string, unknown> | null | undefined;
+  /** How long an awaited call waits for the child (`withinTime`). */
+  readonly timeoutMs?: number | null | undefined;
+  /** The child's spend cap, recorded on its run (`run.start.maxCostUsd`). */
+  readonly maxCostUsd?: number | null | undefined;
+} & (
+  | {
+      readonly program: null;
+      readonly agentName: string;
+      /** An agent the call defines, named `agentName`: no catalog entry. */
+      readonly persona?: InlineAgent['persona'] | null;
+      readonly schema: Record<string, unknown> | null | undefined;
+      readonly mediaFiles: readonly string[];
+    }
+  | {
+      readonly program: {
+        readonly name: string;
+        readonly args: Readonly<Record<string, Schema.Json>>;
+      };
+      readonly files: {
+        readonly inputFiles: readonly string[];
+        readonly contextFiles: readonly string[];
         readonly mediaFiles: readonly string[];
-      }
-    | {
-        readonly program: {
-          readonly name: string;
-          readonly args: Readonly<Record<string, Schema.Json>>;
-        };
-        readonly files: {
-          readonly inputFiles: readonly string[];
-          readonly contextFiles: readonly string[];
-          readonly mediaFiles: readonly string[];
-          readonly outputFiles: readonly string[];
-        };
-      }
-  );
+        readonly outputFiles: readonly string[];
+      };
+    }
+);
 
 /**
  * One request shared by a script's `agent` calls and all its attempts
@@ -207,7 +210,17 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
   { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
   key: string | undefined,
 ) {
-  if (result.outcome === 'cancelled')
+  if (result.outcome === 'cancelled') {
+    const capped = capReached(
+      yield* (yield* SessionViewAccess).read([]),
+      runId,
+      (yield* (yield* SessionLog).facts(runId))?.stop?.reason,
+    );
+    if (capped !== null)
+      return errorResult(`'${agentName}' ${capped}`, {
+        name: 'BudgetExceeded',
+        summary: `'${agentName}' reached its cap`,
+      });
     return errorResult(
       `The agent run ${runId} for '${agentName}' was stopped, so this call was skipped.`,
       {
@@ -215,6 +228,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
         summary: `Skipped '${agentName}'`,
       },
     );
+  }
   if (result.outcome !== 'completed')
     return errorResult(
       `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error ? `: ${runEndErrorMessage(result.error)}` : '.'}`,
@@ -392,11 +406,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = noLaterTurn(run);
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
-  // Only the call that waits for a child holds it to a limit: a background
-  // child has no such call, and a limit nothing enforces is rejected.
-  if (!awaited && (launch.timeoutMs != null || launch.maxCostUsd != null))
+  // A time limit is how long a call waits: a background child has no such
+  // call, and a limit nothing enforces is rejected. Its spend cap is the
+  // run's own and holds either way.
+  if (!awaited && launch.timeoutMs != null)
     return errorResult(
-      '`timeoutMs` and `maxCostUsd` limit a child its call waits for, and this call runs in the background. Call it from a script without `background: true`, or drop the limit.',
+      '`timeoutMs` limits how long a call waits for its child, and this call runs in the background. Call it from a script without `background: true`, or drop the limit; `maxCostUsd` holds for a background child too.',
     );
   // A program's launch, a structured call and a call from a listed program
   // reach the child verbatim; any other is handed off with the parent's
@@ -452,7 +467,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       };
   } else {
     const recovered = yield* Effect.result(
-      recoverAgentChild(call, { notify, limits: launch }),
+      recoverAgentChild(call, { notify, timeoutMs: launch.timeoutMs }),
     );
     if (Result.isFailure(recovered))
       return failedResult(agent.name, recovered.failure);
@@ -525,21 +540,22 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     const receipt = yield* launchDetachedSubagent(call, config, {
       runId,
       grants,
+      maxCostUsd: launch.maxCostUsd,
       approvalMeta: decided.approvalMeta,
     });
     // What a script's `await` gets for a child sent to the background.
     return { ...receipt, value: { runId } };
   }
   const launched = yield* Effect.result(
-    withinLimits(
-      runId,
-      launch,
+    withinTime(
+      launch.timeoutMs,
       executeSubagentInBand({
         runId,
         parentId,
         config,
         parentCall: { callId: call.callId, card: call.logId },
         grants,
+        maxCostUsd: launch.maxCostUsd,
         notify,
       }),
     ),
@@ -564,7 +580,7 @@ export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
       "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
     description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
 
-From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\` (past \`timeoutMs\`), \`BudgetExceeded\` (the child and the runs it started spent \`maxCostUsd\` before it finished; the cap is read after each reply, so the spend can pass it by the replies then in flight), \`Skipped\` (the user stopped the child), \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
+From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\` (past \`timeoutMs\`), \`BudgetExceeded\` (the child and the runs it started spent \`maxCostUsd\` before it finished; the cap is read after each reply, so the spend can pass it by the replies then in flight), \`Skipped\` (the user stopped the child), \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up; a background child stopped at its \`maxCostUsd\` says so in that follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
 

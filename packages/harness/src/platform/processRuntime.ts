@@ -28,6 +28,7 @@ import {
 } from 'effect';
 import { diagnosticLogger } from '@logger/effectDiagnostics';
 import type { AppSignals } from '@platform/appSignals';
+import type { AppNamespace } from '@utils/system/appNamespace';
 import {
   DatabaseOpenFailed,
   type CurrentValues,
@@ -101,7 +102,8 @@ export type PlatformServices =
   | GlobalValues
   | StateStores
   | UsageLog
-  | AppSignals;
+  | AppSignals
+  | AppNamespace;
 
 /**
  * The services a step pinned from its plugins' layers (a plugin's

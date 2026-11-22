@@ -149,13 +149,15 @@ export const programOrigin = (name: string): ProgramOrigin => {
 /**
  * Why a run stops. `user` is an explicit stop of the work (a stop button,
  * Ctrl-C on a running turn, an agent's kill); `released`, the end of the
- * call that awaited a child (its script ended, its batch was cut). Both
+ * call that awaited a child (its script ended, its batch was cut); `cap`,
+ * the spend cap the run or a run above it was started with, reached. All
  * cancel the remote background operation the run is observing. A process
  * that exits stops nothing: its runs are left as their rows stand, with no
  * stop and no end, and read as interrupted at the next open.
  */
-export const RunStopReasonSchema = Schema.Literals(['user', 'released']);
-/** Why a run stops: a `user` stop, or its awaiting call's `released`. */
+export const RunStopReasonSchema = Schema.Literals(['user', 'released', 'cap']);
+/** Why a run stops: a `user` stop, its awaiting call's `released`, or a
+ *  spend `cap` reached. */
 export type RunStopReason = typeof RunStopReasonSchema.Type;
 
 /** Why a run ended failed: a local failure in its own words, or a model

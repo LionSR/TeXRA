@@ -69,14 +69,12 @@ Each needs a decision or changes behavior beyond a consolidation.
 Found while landing item 4 and the sweep's other findings, outside what that
 sweep could edit:
 
-- **`isTexFile`** (`packages/texra/src/shared/latexFileTypes.ts`) only
-  forwards to `hasExtension(path, '.tex')`, and the compile check and the
-  media pass call `hasExtension` directly. Inline it, or route those two
-  through it.
-- **`GlobFailed`** is declared in
-  `packages/texra/src/housekeeping/artifactFiles.ts`, which no longer globs;
-  its one user is `packages/texra/src/controllers/session/taskFiles.ts`. It
-  belongs there.
+- **`isTexFile`**: landed 2026-11-21. It only forwarded to
+  `hasExtension(path, '.tex')`, which its two callers now call, as the
+  compile check and the media pass already did.
+- **`GlobFailed`**: landed 2026-11-21. It is declared, file-local, in
+  `packages/texra/src/controllers/session/taskFiles.ts`, the one module that
+  globs; the housekeeping module no longer does.
 - **A revision's inputs are read up to three times.**
   `processInputFiles` (`packages/texra/src/latex/latexMedia.ts`) has the
   figure, dependency and TikZ readers each call `readUncommentedLatex` on

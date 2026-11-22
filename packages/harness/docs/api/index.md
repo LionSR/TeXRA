@@ -12,7 +12,7 @@ What an embedder needs to know, in order:
 
 1. `Sessions.layer({ platform, plugins, client })` builds the process.
    `platform` comes from `nodePlatform()` in `./node`; `plugins` is
-   `harnessBuiltins` from `./plugins`, plus any plugin of your own;
+   `harnessBuiltins` from `./builtins`, plus any plugin of your own;
    `client` names your app to the model providers (`{ name, id }`).
 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
 3. `session.start({ agent, instruction, model })` gives a {@link Run}: read
@@ -36,9 +36,11 @@ with the ones on `./schemas` (`RequestError`).
   types (`SessionView`, `RunView`, `TranscriptView`), and pure view queries.
 - [`@texra-ai/harness/transcript`](./transcript): browser-safe transcript row
   projections and `RemoteSessionView` for UI renderers.
-- [`@texra-ai/harness/plugins`](./plugins): built-in plugins (`harnessBuiltins`)
-  and what a tool or plugin is written with (`defineTool`, `definePlugin`,
-  `ToolContext`, `Settings`, `WorkspaceFs`).
+- [`@texra-ai/harness/builtins`](./builtins): the built-in plugins
+  (`harnessBuiltins`, or one by one).
+- [`@texra-ai/harness/plugins`](./plugins): what a tool or plugin is
+  written with (`defineTool`, `definePlugin`, `ToolContext`, `Settings`,
+  `WorkspaceFs`).
 - [`@texra-ai/harness/node`](./node): `nodePlatform(options)` and Node.js
   filesystem, SQLite, and process building blocks.
 - [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's

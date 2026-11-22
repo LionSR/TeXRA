@@ -1,27 +1,21 @@
 /**
  * The extension's half of its window (`openGuiWindow`): the verbs this host
  * performs, bound onto VS Code's commands, editors, pickers, and dialogs,
- * plus the few requests the extension answers its own way -- its file pickers,
- * its editor's current file, its tab pop-out, its getting-started commands.
+ * plus the few requests the extension answers its own way -- its tab
+ * pop-out, its getting-started commands.
  * Everything else is the one shared body, which decides the order, the
  * guards, and the rejection wording for both GUI hosts. Each handler answers
  * exactly once with an outcome or a request error; a request the extension
  * does not perform is `Rejected` with its reason, never dropped.
  */
-import * as path from 'node:path';
-
 import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { type ProcessServices } from '@texra-ai/harness/host';
-import {
-  withLogChannel,
-  WorkspaceFs,
-  pathToLocationIn,
-} from '@texra-ai/harness/plugins';
-import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
-import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
@@ -34,14 +28,9 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
-import type {
-  GettingStartedAction,
-  HostCommand,
-} from '@texra/shared/session/hostRequest';
+import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type {
   ConfirmQuestion,
@@ -49,7 +38,6 @@ import type {
   NoticeLevel,
 } from '@texra/hosts/uiHosts';
 
-import { fieldTakes } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   TRANSCRIPT_EXPORT_PICK,
@@ -59,12 +47,10 @@ import {
   hostFailed,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
-import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
-import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import {
   type HostCommandFailure,
   type RequestRefusal,
@@ -82,9 +68,6 @@ export interface ExtensionHostRequestsOptions {
    *  scope, so a close of the view cancels a PDF viewer open still
    *  waiting. */
   readonly showBuilt: ShowBuilt;
-  /** The window's bridge and snapshot. */
-  readonly bridge: SessionBridge;
-  readonly snapshot: HostSnapshotSource;
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
@@ -179,14 +162,14 @@ const openExportPath = (
 export const createExtensionHostRequests = Effect.fn(
   'createExtensionHostRequests',
 )(function* (options: ExtensionHostRequestsOptions) {
-  const { snapshot, roots } = options;
+  const { roots } = options;
 
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
   const diffRefresh = yield* FiberHandle.make();
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
 
-  function getOpenedFiles(): Effect.Effect<string[]> {
+  function getOpenedFiles(): Effect.Effect<readonly string[]> {
     const workspaceRoot = roots.workspace;
     if (!workspaceRoot) {
       return Effect.logWarning('No workspace path found for opened files').pipe(
@@ -210,65 +193,6 @@ export const createExtensionHostRequests = Effect.fn(
       ),
     ]);
   }
-
-  /** The editor's current file into a launcher field. */
-  const useCurrentFile = Effect.fn('useCurrentFile')(function* (
-    request: Extract<HostCommand, { kind: 'useCurrentFile' }>,
-  ) {
-    const currentOpenFile = yield* getCurrentFile(roots);
-    if (!currentOpenFile) {
-      return yield* new Rejected({
-        reason:
-          'No file is currently open or the file is not part of the workspace.',
-      });
-    }
-    // Opening a latexdiff artifact (`paper-diff1234abcd.tex`) as the base
-    // file selects the file it was derived from instead, when that file is
-    // still on disk, and its commit rides onto the launcher.
-    if (request.fileType === 'base') {
-      const parsed = parseVersionControlDiffFilename(currentOpenFile);
-      if (parsed) {
-        const found =
-          roots.workspace !== undefined &&
-          (yield* commitExists(roots.workspace, parsed.commitHash));
-        if (found) {
-          options.bridge.surfaceAction({
-            kind: 'launch',
-            patch: { commit: parsed.commitHash },
-          });
-        } else {
-          yield* vscodeUi.notify(
-            'info',
-            `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
-          );
-        }
-        const sourceLocation = pathToLocationIn(
-          roots.workspace,
-          parsed.sourcePath,
-        );
-        const sourceExists =
-          sourceLocation.kind === 'workspace' &&
-          (yield* Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
-            workspaceFs.exists(sourceLocation.relativePath),
-          ));
-        if (sourceExists) {
-          yield* snapshot.refreshFiles;
-          return {
-            kind: 'files',
-            paths: [parsed.sourcePath],
-          } satisfies HostOutcome;
-        }
-        yield* vscodeUi.notify(
-          'info',
-          `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
-        );
-      }
-    }
-    return {
-      kind: 'files',
-      paths: [currentOpenFile],
-    } satisfies HostOutcome;
-  });
 
   /** What each getting-started action runs. */
   const gettingStarted = (action: GettingStartedAction) => {
@@ -326,6 +250,10 @@ export const createExtensionHostRequests = Effect.fn(
         openGettingStarted(options.extensionId),
       ),
     },
+    editor: {
+      currentFile: getCurrentFile(roots),
+      openedFiles: Effect.suspend(getOpenedFiles),
+    },
   };
 
   /**
@@ -338,14 +266,6 @@ export const createExtensionHostRequests = Effect.fn(
   const own: OwnHostHandlers = {
     popOut: () => Effect.as(options.popOutToEditor(), done),
     popBack: () => Effect.as(options.showInSidebar(), done),
-    useCurrentFile: (request) => useCurrentFile(request),
-    addOpenedFiles: (request) =>
-      Effect.map(getOpenedFiles(), (opened): HostOutcome => ({
-        kind: 'files',
-        paths: opened.filter(
-          fieldTakes(getIncludedExtensions(request.fileType)),
-        ),
-      })),
     gettingStarted: (request) =>
       Effect.as(
         runHandler(request.action, gettingStarted(request.action)),

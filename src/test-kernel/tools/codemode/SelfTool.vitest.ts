@@ -6,7 +6,7 @@
  * a cap it never reaches.
  *
  * Failure modes:
- * - a child past its call's `maxCostUsd` runs on (here, forever), or its
+ * - a child past its `maxCostUsd` runs on (here, forever), or its
  *   call rejects while the run is left without a stop and an end;
  * - the script's `await` rejects under another name than `BudgetExceeded`;
  * - a child that stays under its cap is stopped, or its call never returns;
@@ -105,7 +105,7 @@ describe("a script's self() children", { timeout: REAL_RUN_TIMEOUT }, () => {
             Effect.gen(function* () {
               const { rows, root, capped } = yield* limitsRun;
               expect(rowsOf(rows, capped, 'run.stop')).toMatchObject([
-                { reason: 'released' },
+                { reason: 'cap' },
               ]);
               expect(rowsOf(rows, capped, 'run.end')).toMatchObject([
                 { outcome: 'cancelled' },

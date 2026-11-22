@@ -1,8 +1,11 @@
 /**
- * The session store's physical schema: its tables, columns, indexes and PRAGMAs, the open sequence that
- * brings a file to them, and `SCHEMA_VERSION` in SQLite's `user_version`.
+ * The stores' physical schemas: their tables, columns, indexes and PRAGMAs,
+ * the open sequence that brings a file to them, and each schema's `version`
+ * in SQLite's `user_version`. A project store ({@link PROJECT_SCHEMA}) holds
+ * the event tables and its own current values; the global store
+ * ({@link GLOBAL_SCHEMA}) holds current values and the input history alone.
  *
- * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
+ * A schema's `version` names its DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
  * cannot write around. An unstamped file gets the schema. A file stamped
@@ -24,11 +27,53 @@ import {
 
 const CHANNEL = 'sessionDatabase';
 
-/** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 105;
+/** One kind of store's DDL. */
+interface StoreSchema {
+  /** The stamp of this DDL, which a file of another stamp fails against. */
+  readonly version: number;
+  /** The tables a new file gets, with the stamp. */
+  readonly tables: readonly string[];
+  /** What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
+   *  open). */
+  readonly additive: readonly string[];
+}
+
+/** The kinds a store holds, read by the store gate (`rowCodec.ts`). */
+const STORED_KIND = `CREATE TABLE IF NOT EXISTS stored_kind (
+    type    TEXT PRIMARY KEY,
+    version INTEGER NOT NULL
+  ) STRICT, WITHOUT ROWID`;
+/** The current values (`currentValues.ts`), and the index their listing
+ *  by age reads. */
+const CURRENT_VALUE = `CREATE TABLE IF NOT EXISTS current_value (
+    family  TEXT NOT NULL,
+    key     TEXT NOT NULL,
+    value   TEXT NOT NULL,
+    at      INTEGER NOT NULL,
+    PRIMARY KEY (family, key)
+  ) STRICT, WITHOUT ROWID`;
+const CURRENT_VALUE_AT = `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`;
 
 /**
- * The tables every store holds. `commit` is a SQLite keyword, so the column
+ * The global store: the application's current values and the terminal's
+ * input history. It holds no run, so no event table and no projection.
+ */
+export const GLOBAL_SCHEMA: StoreSchema = Object.freeze({
+  version: 107,
+  tables: Object.freeze([
+    STORED_KIND,
+    CURRENT_VALUE,
+    `CREATE TABLE IF NOT EXISTS input_history (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    at    INTEGER NOT NULL,
+    value TEXT NOT NULL
+  ) STRICT`,
+  ]),
+  additive: Object.freeze([CURRENT_VALUE_AT]),
+});
+
+/**
+ * A project store's tables. `commit` is a SQLite keyword, so the column
  * is quoted at every site. `STRICT` makes a wrong-typed value an error at
  * insert rather than a surprise at read.
  *
@@ -47,7 +92,7 @@ const SCHEMA_VERSION = 105;
  * string the codec moved out of the row, which a read inflates back, and 0
  * for a media address the row names, never inflated.
  */
-const TABLES = [
+const PROJECT_TABLES = [
   `CREATE TABLE IF NOT EXISTS event_sequence (
     id           INTEGER PRIMARY KEY,
     kind         TEXT NOT NULL CHECK (kind <> ''),
@@ -79,32 +124,17 @@ const TABLES = [
     inline   INTEGER NOT NULL CHECK (inline IN (0, 1)),
     PRIMARY KEY ("commit", digest)
   ) STRICT, WITHOUT ROWID`,
-  `CREATE TABLE IF NOT EXISTS stored_kind (
-    type    TEXT PRIMARY KEY,
-    version INTEGER NOT NULL
-  ) STRICT, WITHOUT ROWID`,
-  `CREATE TABLE IF NOT EXISTS current_value (
-    family  TEXT NOT NULL,
-    key     TEXT NOT NULL,
-    value   TEXT NOT NULL,
-    at      INTEGER NOT NULL,
-    PRIMARY KEY (family, key)
-  ) STRICT, WITHOUT ROWID`,
-  `CREATE TABLE IF NOT EXISTS input_history (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    at    INTEGER NOT NULL,
-    value TEXT NOT NULL
-  ) STRICT`,
+  STORED_KIND,
+  CURRENT_VALUE,
 ];
 
 /**
- * What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
- * open): the projection tables, which carry their own versions in
- * `projection_state` (`projections.ts`), the indexes, each serving one
- * lookup the reads make, named for the columns it keys, and the blob
- * collector.
+ * What a project store adds without a bump: the projection tables, which
+ * carry their own versions in `projection_state` (`projections.ts`), the
+ * indexes, each serving one lookup the reads make, named for the columns it
+ * keys, and the blob collector.
  */
-const ADDITIVE = [
+const PROJECT_ADDITIVE = [
   `CREATE TABLE IF NOT EXISTS projection_state (
     name           TEXT PRIMARY KEY,
     version        INTEGER NOT NULL,
@@ -126,7 +156,7 @@ const ADDITIVE = [
   `CREATE INDEX IF NOT EXISTS event_aggregate_type ON event(aggregate, type, seq)`,
   `CREATE INDEX IF NOT EXISTS event_type_commit ON event(type, "commit")`,
   `CREATE INDEX IF NOT EXISTS event_blob_digest ON event_blob(digest)`,
-  `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`,
+  CURRENT_VALUE_AT,
   // Collection by reachability: a blob goes with the last row linking it,
   // which the cascade from a collected aggregate removes. The link's
   // foreign key refuses deleting a blob any row still links.
@@ -134,6 +164,14 @@ const ADDITIVE = [
     WHEN NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = OLD.digest)
     BEGIN DELETE FROM blob WHERE digest = OLD.digest; END`,
 ];
+
+/** A project's store: its runs' events, their projections, and the
+ *  project's own current values. */
+export const PROJECT_SCHEMA: StoreSchema = Object.freeze({
+  version: 106,
+  tables: Object.freeze(PROJECT_TABLES),
+  additive: Object.freeze(PROJECT_ADDITIVE),
+});
 
 const verifyPragma = Effect.fnUntraced(function* (
   sql: Sql,
@@ -158,15 +196,19 @@ const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
 /** Whether the file is already this build's store (false: an unstamped
  *  file, which the caller gives the schema). A newer build's schema and an
  *  earlier build's, which this build has no step from, fail the open. */
-const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
+const checkStamps = Effect.fnUntraced(function* (
+  sql: Sql,
+  path: string,
+  { version }: StoreSchema,
+) {
   const stored = Number(yield* pragmaValue(sql, 'user_version'));
-  if (stored === SCHEMA_VERSION) return true;
+  if (stored === version) return true;
   if (stored === 0) return false;
   return yield* new StoreCheckFailed({
     message:
-      stored > SCHEMA_VERSION
-        ? `Session store ${path} has schema ${stored}, newer than this build's ${SCHEMA_VERSION}: a newer build opens it.`
-        : `Session store ${path} was written by an earlier build (schema ${stored}; this build writes ${SCHEMA_VERSION}) and this build keeps no compatibility with it; move it away to create a fresh store there.`,
+      stored > version
+        ? `Session store ${path} has schema ${stored}, newer than this build's ${version}: a newer build opens it.`
+        : `Session store ${path} was written by an earlier build (schema ${stored}; this build writes ${version}) and this build keeps no compatibility with it; move it away to create a fresh store there.`,
   });
 });
 
@@ -193,23 +235,24 @@ const prepareStore = Effect.fnUntraced(function* (
   sql: Sql,
   path: string,
   filename: string,
+  schema: StoreSchema,
 ) {
   const persistent = filename !== IN_MEMORY_STORE;
   yield* run(sql, 'PRAGMA foreign_keys = ON');
   yield* run(sql, 'PRAGMA synchronous = NORMAL');
   yield* verifyPragma(sql, 'journal_mode', persistent ? 'wal' : 'memory');
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  if (!(yield* checkStamps(sql, path))) {
+  if (!(yield* checkStamps(sql, path, schema))) {
     if (persistent) yield* incrementalVacuum(sql);
     yield* Effect.gen(function* () {
       // Another process may have stamped the file while this one waited.
-      if (yield* checkStamps(sql, path)) return;
-      for (const statement of [...TABLES, ...ADDITIVE])
+      if (yield* checkStamps(sql, path, schema)) return;
+      for (const statement of [...schema.tables, ...schema.additive])
         yield* run(sql, statement);
-      yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
+      yield* run(sql, `PRAGMA user_version = ${schema.version}`);
     }).pipe(sql.withTransaction);
   }
-  for (const statement of ADDITIVE) yield* run(sql, statement);
+  for (const statement of schema.additive) yield* run(sql, statement);
   if (persistent) {
     yield* run(sql, 'PRAGMA journal_size_limit = 1048576');
   }
@@ -251,7 +294,7 @@ export const reclaimFreePages = (sql: Sql, path: string) =>
   );
 
 /**
- * Open the store at `filename` through `connect` and prepare it. A file
+ * Open the store at `filename` through `connect` and bring it to `schema`. A file
  * SQLite reports damaged or not a database (`SQLITE_CORRUPT`,
  * `SQLITE_NOTADB`) at open is closed, moved aside with its WAL and
  * shared-memory files to `<file>.corrupt-<stamp>`, and a fresh store opens
@@ -262,6 +305,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   connect: Effect.Effect<Sql, E, R | Scope.Scope>,
   path: string,
   filename: string,
+  schema: StoreSchema,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const outer = yield* Effect.scope;
@@ -269,7 +313,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   // file is moved only while no connection of this process holds it.
   const scope = yield* Scope.fork(outer, 'sequential');
   const first = yield* connect.pipe(
-    Effect.tap((sql) => prepareStore(sql, path, filename)),
+    Effect.tap((sql) => prepareStore(sql, path, filename, schema)),
     Scope.provide(scope),
     Effect.onError(() => Scope.close(scope, Exit.void)),
     Effect.exit,
@@ -286,6 +330,6 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     `Session store ${path} is damaged; it was moved to ${aside} and a fresh store opened.`,
   ).pipe(withLogChannel(CHANNEL));
   const sql = yield* connect;
-  yield* prepareStore(sql, path, filename);
+  yield* prepareStore(sql, path, filename, schema);
   return { sql, movedAside: { path, aside } };
 });

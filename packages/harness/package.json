@@ -35,6 +35,7 @@
     "./schemas": "./src/schemas.ts",
     "./transcript": "./src/transcriptEntry.ts",
     "./plugins": "./src/plugins.ts",
+    "./builtins": "./src/builtins.ts",
     "./host": "./src/host.ts",
     "./node": "./src/node.ts",
     "./package.json": "./package.json"
@@ -58,6 +59,10 @@
       "./plugins": {
         "types": "./dist/types/plugins.d.ts",
         "import": "./dist/plugins.js"
+      },
+      "./builtins": {
+        "types": "./dist/types/builtins.d.ts",
+        "import": "./dist/builtins.js"
       },
       "./host": {
         "types": "./dist/types/host.d.ts",

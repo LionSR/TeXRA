@@ -1,7 +1,7 @@
 /**
  * Ambient module declarations the harness sources need: untyped third-party
  * packages they import and the build-embedded modules (QuickJS WASM bytes,
- * the code sandbox worker). App and host declarations live with the app.
+ * the code sandbox worker, script sources). App and host declarations live with the app.
  */
 
 /** Embedded by every Node host through esbuild's binary loader. */
@@ -16,6 +16,16 @@ declare module '@jitl/quickjs-wasmfile-release-sync/wasm' {
  * `scripts/code-sandbox-worker.mjs`.
  */
 declare module 'virtual:code-sandbox-worker' {
+  const source: string;
+  export default source;
+}
+
+/**
+ * A JavaScript file as its source text: the code a script's realm evaluates,
+ * embedded by every host build through `scripts/code-sandbox-worker.mjs`
+ * and read by Vite itself in the suites.
+ */
+declare module '*.js?raw' {
   const source: string;
   export default source;
 }

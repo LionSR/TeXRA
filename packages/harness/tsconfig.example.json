@@ -13,6 +13,7 @@
       "@texra-ai/harness/schemas": ["./dist/types/schemas.d.ts"],
       "@texra-ai/harness/transcript": ["./dist/types/transcriptEntry.d.ts"],
       "@texra-ai/harness/plugins": ["./dist/types/plugins.d.ts"],
+      "@texra-ai/harness/builtins": ["./dist/types/builtins.d.ts"],
       "@texra-ai/harness/host": ["./dist/types/host.d.ts"],
       "@texra-ai/harness/node": ["./dist/types/node.d.ts"],
       "acme-notes": ["./example/acme-notes/index.d.ts"]

@@ -31,6 +31,7 @@ import {
 } from '@agent/runtime/sessionEventsLayer';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
+import { nativeCopiesDir } from '@common/plugins/installedPlugins';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -60,6 +61,7 @@ import type { ToolTable } from '@tools/toolTable';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { AppNamespace } from '@utils/system/appNamespace';
 import { databaseLayer } from './databaseLayer';
 import { globalDatabaseLayer } from './globalDatabaseLayer';
 import { processStoresLayer } from './appStateStore';
@@ -346,7 +348,11 @@ export function ownerProcessLayer(
   NodeServices
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  const catalog = pluginCatalogLayer(table, mcpConfigPathOf(storageRoot));
+  const catalog = pluginCatalogLayer(
+    table,
+    mcpConfigPathOf(storageRoot),
+    nativeCopiesDir(globalStorage),
+  );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
   const globalDatabase = globalDatabaseLayer(globalStorage).pipe(Layer.orDie);
   const services = Layer.mergeAll(
@@ -395,6 +401,8 @@ export function ownerProcessLayer(
           ),
         ),
         workspaceEnvironmentLayer(workspace),
+        // The app's word for the store file and its variables.
+        Layer.succeed(AppNamespace)(settings.namespace),
       ),
     ),
   );

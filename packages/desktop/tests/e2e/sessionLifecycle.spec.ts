@@ -55,6 +55,7 @@ function inEventDatabase<A, E>(
             Layer.mergeAll(
               Layer.succeed(fixture.SessionWorkspace)({ storage: storagePath }),
               fixture.nodePlatformServices,
+              fixture.appNamespaceLayer,
               // The canonical runs write no plugin rows.
               Layer.succeed(fixture.ToolRegistry)(fixture.toolTable([])),
             ),
@@ -91,6 +92,7 @@ async function writeCanonicalRunFixtures(
         yield* database.appendAll([
           {
             type: 'run.start',
+            maxCostUsd: null,
             aggregateId: id,
             identity: { kind: 'agent', agent: runFixture.agent },
             takesFollowUps: true,

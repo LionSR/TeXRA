@@ -175,8 +175,8 @@ export const fileList = (
 
 /**
  * The fields every child launch takes, `self()` included: the model the
- * child runs on, its card label, and the limits the call that waits for it
- * holds it to (`withinLimits`, `agentChild.ts`).
+ * child runs on, its card label, how long its call waits for it
+ * (`withinTime`, `agentChild.ts`) and its spend cap (`spendCap.ts`).
  */
 export const CHILD_FIELDS = Object.freeze({
   model: optionalInput(
@@ -190,7 +190,7 @@ export const CHILD_FIELDS = Object.freeze({
   }),
   maxCostUsd: optionalInput(
     Schema.Finite.check(Schema.isGreaterThan(0)),
-    'A spend cap in USD on the child and every run it starts: once they have spent it, the child is stopped: `BudgetExceeded`. Only for a call that waits for its child.',
+    'A spend cap in USD on the child and every run it starts, for as long as the child exists: once they have spent it, they are stopped. A call that waits for the child rejects with `BudgetExceeded`; a background child reports it as its result.',
   ),
 });
 
@@ -206,7 +206,7 @@ export const CALL_FIELDS = Object.freeze({
   ...CHILD_FIELDS,
   background: optionalInput(
     Schema.Boolean,
-    'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run. A background child takes no `timeoutMs` or `maxCostUsd`.',
+    'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run. A background child takes no `timeoutMs`.',
   ),
 });
 

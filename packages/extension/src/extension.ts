@@ -9,6 +9,7 @@ import {
   Deferred,
   Effect,
   Exit,
+  Layer,
   ManagedRuntime,
   Result,
   Schema,
@@ -67,6 +68,7 @@ import { makeInlineCriticism } from '@frontend/latex/inlineCriticism';
 import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
+import { HostTelemetrySwitch } from '@telemetry/UsageLogService';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
@@ -156,8 +158,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         usageLog: {
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,
-          // VS Code's own telemetry setting, read live: it overrides ours.
-          hostTelemetryEnabled: () => vscode.env.isTelemetryEnabled,
         },
         // The Output channel owns filtering, so emit every level.
         minimumLogLevel: 'Trace',
@@ -165,7 +165,14 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // the workspace's `.env`, as its tasks do, without it ever being
         // merged into the extension host's shared `process.env`.
         workspace: workspaceRoot,
-      }),
+      }).pipe(
+        // VS Code's own telemetry setting, read live: it overrides ours.
+        Layer.provideMerge(
+          Layer.succeed(HostTelemetrySwitch)(
+            () => vscode.env.isTelemetryEnabled,
+          ),
+        ),
+      ),
     ),
   );
   const runtime: ProcessRuntime = managed;
@@ -231,11 +238,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           ),
         );
       }
-      // The one-time telemetry notice, one information message; VS Code's own
-      // switch being off means nothing is sent, so nothing to announce.
-      const notice = vscode.env.isTelemetryEnabled
-        ? yield* telemetryNoticeIfDue(roots.config)
-        : null;
+      // The one-time telemetry notice, one information message.
+      const notice = yield* telemetryNoticeIfDue(roots.config);
       if (notice) yield* vscodeUi.notify('info', notice);
       return { runtime, fork, roots, hosts: yield* HostWindows, reached };
     }),

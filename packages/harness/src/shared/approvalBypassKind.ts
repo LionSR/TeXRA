@@ -163,6 +163,9 @@ export interface ApprovalGrantSource {
   >;
 }
 
+/** Who bypasses a kind's prompts: a run's autonomous goal, or a human. */
+export type ApprovalBypasser = 'goal' | 'human';
+
 /**
  * Who bypasses one kind's prompts for a run: the nearest run in its ancestry
  * (itself first) that decides the kind, by its autonomous goal's grant
@@ -174,7 +177,7 @@ export function resolveBypass(
   source: ApprovalGrantSource,
   runId: RunId,
   kind: ApprovalBypassKind,
-): 'goal' | 'human' | null {
+): ApprovalBypasser | null {
   let goals = true;
   for (const grants of ancestry(source, runId)) {
     if (goals && grants?.goal.includes(kind)) return 'goal';

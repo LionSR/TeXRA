@@ -9,7 +9,7 @@
  */
 import { Effect, Layer, Result, Schema, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 import { InlinePersonaSchema } from '@texra-ai/harness/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';

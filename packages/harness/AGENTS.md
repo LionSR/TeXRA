@@ -25,7 +25,7 @@ points to a strictly lower layer:
    engine with the built-in tools. They import each other.
 8. `controllers/`: the SQLite session stores and the session composition.
 9. `effect/`: the SDK (`Sessions`, `processLayer`).
-10. The entry files at the root (`index.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
+10. The entry files at the root (`index.ts`, `builtins.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
 
 The known exception: `agent/` and `tools/` form one cycle.
 
@@ -87,7 +87,14 @@ that step's calls (`ToolStep.services`). A plugin's layers are `RcMap`
 entries keyed by id and revision (`LayerKey`), so a replaced native plugin's
 new revision comes up beside the old one, which goes down when the last step
 that pinned it ends; a swap interrupts nothing. A native module is imported
-only when a step or a launch reads the table; a change to the install record
+only when a step or a launch reads the table, from a copy of its plugin
+made for that revision (`copyPlugin`, `common/plugins/pluginDigest.ts`) in
+the process's own directory under `<global storage>/plugins/.native`: Node
+caches a module by its path, so a revision imported from the plugin's own
+folder would run the modules the first revision's entry imported, and the
+copy is the files that were trusted whatever is written there afterwards.
+The directory goes with the process (one a killed process left is removed
+by the next loader); a change to the install record
 only takes out what no longer loads, so listing, installing or reviewing a
 plugin runs none of its code. The host decides how a native tool runs, not
 its definition: the loader (`hostRun`, `tools/nativePlugins.ts`) gives
@@ -121,7 +128,7 @@ can be asked it is denied.
 
 ## Storage format
 
-`storeSchema.ts` (`packages/harness/src/controllers/session/`) stamps every `texra.db` with its schema version and gives the schema to an unstamped file. A store stamped with another schema fails the open unchanged: a newer build's, or an earlier one this build has no step from (there is no migration; a column or table changes only with a stamp bump, and the message says to move the file away). A file SQLite reports damaged is renamed aside and a fresh store opened. The store checks nothing about the filesystem it is on. Row kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read only by the row codec (`rowCodec.ts`). A kind changes with no upcaster (the codec converts no stored row; the first released version that must stay readable across a change brings the first upcaster): bump its version when an older build's row would read wrong, so that row reads as an earlier build's (`DatabaseRowEarlier`) and never as damaged or silently stripped.
+`storeSchema.ts` (`packages/harness/src/controllers/session/`) holds two DDL lists, each with its own stamp: a project store's (`PROJECT_SCHEMA`: the event tables, the projections and the project's current values) and the global store's (`GLOBAL_SCHEMA`: current values and the input history, no event table). It stamps every store file (`<namespace>.db`: the settings catalog's namespace, served as `AppNamespace`, names it and the app's variables, so the harness spells no product) with its schema version and gives the schema to an unstamped file. A store stamped with another schema fails the open unchanged: a newer build's, or an earlier one this build has no step from (there is no migration; a column or table changes only with a stamp bump, and the message says to move the file away). A file SQLite reports damaged is renamed aside and a fresh store opened. The store checks nothing about the filesystem it is on. Row kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read only by the row codec (`rowCodec.ts`). A kind changes with no upcaster (the codec converts no stored row; the first released version that must stay readable across a change brings the first upcaster): bump its version when an older build's row would read wrong, so that row reads as an earlier build's (`DatabaseRowEarlier`) and never as damaged or silently stripped.
 
 ## Core quality
 

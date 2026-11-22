@@ -76,9 +76,9 @@ function reasoningLevelLabel(
 
 /** One verdict as a picker row. */
 function optionRow(verdict: ModelVerdict): ModelOptionData {
-  const { model, availability } = verdict;
+  const { model, availability, unavailableReason } = verdict;
   if (!('config' in verdict)) {
-    return { value: model, label: model, availability };
+    return { value: model, label: model, availability, unavailableReason };
   }
   const { config, source, usageRoute } = verdict;
   const reasoning = reasoningLevelLabel(verdict);
@@ -87,8 +87,9 @@ function optionRow(verdict: ModelVerdict): ModelOptionData {
     kimiCodeServing(config) === 'with-plan'
       ? `Via ${providerDisplayName(source)}`
       : undefined;
-  // The row ships the verdict (its kind, and the subscription that pays);
-  // each surface words it (`modelAvailabilityLabel`).
+  // The row ships the verdict (its kind, why it cannot run, and the
+  // subscription that pays); each surface labels the kind
+  // (`modelAvailabilityLabel`).
   return {
     value: model,
     label: config.label,
@@ -104,6 +105,7 @@ function optionRow(verdict: ModelVerdict): ModelOptionData {
     ...(reasoning ? { reasoning } : {}),
     ...(routeLabel ? { routeLabel } : {}),
     availability,
+    ...(unavailableReason === undefined ? {} : { unavailableReason }),
     ...(usageRoute === undefined ? {} : { usageRoute }),
   };
 }
