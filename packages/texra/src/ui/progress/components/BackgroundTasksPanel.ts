@@ -158,7 +158,7 @@ export class BackgroundTasksPanel extends TexraElement {
       .task-chevron {
         flex-shrink: 0;
         font-size: var(--font-size-xs);
-        color: var(--color-text-muted);
+        color: var(--color-text-secondary);
       }
       :dir(rtl) .task-chevron {
         transform: scaleX(-1);

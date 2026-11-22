@@ -61,7 +61,7 @@ export const fileListStyles: CSSResult = css`
   }
 
   .file-dir {
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
   }
 

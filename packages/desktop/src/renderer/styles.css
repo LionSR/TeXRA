@@ -210,7 +210,7 @@ wa-dialog.desktop-command-palette::part(body) {
   width: 1em;
   height: 1em;
   place-items: center;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-icon);
 }
 
@@ -225,7 +225,7 @@ wa-input.desktop-command-palette-input {
   border-radius: var(--border-radius);
   background: var(--wa-color-surface-raised);
   box-shadow: inset 0 -1px 0 var(--border-hairline);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
@@ -311,7 +311,7 @@ wa-input.desktop-command-palette-input {
   width: var(--control-size-s);
   height: var(--control-size-s);
   place-items: center;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-icon-sm);
 }
 
@@ -362,7 +362,7 @@ wa-input.desktop-command-palette-input {
   display: flex;
   align-items: center;
   gap: var(--wa-space-s);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 
@@ -412,7 +412,7 @@ wa-input.desktop-command-palette-input {
 
 .desktop-empty-workspace-panel p {
   margin: 0 0 var(--wa-space-m);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-lg);
   line-height: var(--line-height-relaxed);
 }
@@ -427,7 +427,7 @@ wa-input.desktop-command-palette-input {
   max-width: 440px;
   margin: 0 auto var(--wa-space-l);
   padding: 0;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size);
   line-height: var(--line-height-normal);
   list-style: none;
@@ -499,7 +499,7 @@ wa-input.desktop-command-palette-input {
 .desktop-log-viewer-header p {
   margin: 0;
   overflow: hidden;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   text-overflow: ellipsis;
@@ -581,7 +581,7 @@ wa-input.desktop-command-palette-input {
 }
 
 .desktop-log-entry::part(icon) {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .desktop-log-entry-summary {
@@ -601,7 +601,7 @@ wa-input.desktop-command-palette-input {
   height: var(--control-size-s);
   border-radius: var(--border-radius);
   background: var(--control-fill);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .desktop-log-entry-level-icon wa-icon {
@@ -638,7 +638,7 @@ wa-input.desktop-command-palette-input {
 }
 
 .desktop-log-entry-time {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-xs);
   white-space: nowrap;
@@ -647,7 +647,7 @@ wa-input.desktop-command-palette-input {
 .desktop-log-entry-preview {
   min-width: 0;
   overflow: hidden;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -659,7 +659,7 @@ wa-input.desktop-command-palette-input {
   overflow: auto;
   border-radius: var(--border-radius-medium);
   background: var(--color-bg-secondary);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
@@ -740,7 +740,7 @@ wa-input.desktop-command-palette-input {
   min-height: 28px;
   padding: 0 var(--wa-space-2xs);
   box-sizing: border-box;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
@@ -760,14 +760,18 @@ wa-input.desktop-command-palette-input {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 24%, transparent)
+  scrollbar-color: color-mix(
+      in srgb,
+      var(--color-text-secondary) 24%,
+      transparent
+    )
     transparent;
 }
 
 .desktop-editor-tree-row {
   display: block;
   width: 100%;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-family: var(--font-family);
   font-size: var(--font-size-sm);
 }
@@ -816,7 +820,7 @@ wa-input.desktop-command-palette-input {
   height: 1em;
   flex: 0 0 1em;
   place-items: center;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .desktop-editor-tree-icon wa-icon {
@@ -827,7 +831,7 @@ wa-input.desktop-command-palette-input {
 }
 
 .desktop-editor-tree-status {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-family: var(--font-family);
   font-size: var(--font-size-xs);
 }

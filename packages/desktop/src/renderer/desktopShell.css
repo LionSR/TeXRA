@@ -125,7 +125,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   padding-inline: var(--wa-space-xs) var(--wa-space-2xs);
 }
 .shell-sidebar-section-label {
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   letter-spacing: 0.02em;
@@ -150,7 +150,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   background: var(--surface-hover);
 }
 .shell-project-row wa-icon {
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-secondary);
 }
 .shell-project-name {
   display: block;
@@ -173,7 +173,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   grid-column: 3;
   width: var(--height-control-compact);
   height: var(--height-control-compact);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-secondary);
 }
 .shell-project-rename {
   margin-inline-start: var(--wa-space-2xs);
@@ -216,7 +216,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-files .desktop-editor-tree-header > span {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-secondary);
 }
 .shell-files .desktop-editor-tree-list {
   display: block;
@@ -233,7 +233,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .desktop-editor-tree-empty {
   padding: var(--wa-space-xs);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 .shell-editor-toolbar {
@@ -251,7 +251,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 .shell-workbench-pdf {
