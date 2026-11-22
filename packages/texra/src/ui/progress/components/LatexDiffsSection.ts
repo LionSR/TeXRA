@@ -242,6 +242,7 @@ export class LatexDiffsSection extends LitElement {
         icon: action.icon,
         text: action.label,
         tooltip: action.tooltip,
+        kind: 'segment',
         onClick: () =>
           this.dispatchEvent(SessionUiEvents.host(this.request(action.action))),
       }),

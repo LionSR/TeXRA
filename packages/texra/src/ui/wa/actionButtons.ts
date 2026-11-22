@@ -10,7 +10,13 @@ import type { IconName } from '@ui/wa/iconNames';
 import { waSpinner } from './spinner';
 import { waIcon } from './webAwesomeIcons';
 
-type ActionButtonKind = 'primary' | 'secondary' | 'ghost' | 'link' | 'danger';
+type ActionButtonKind =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'link'
+  | 'danger'
+  | 'segment';
 /**
  * Step on the shared `--control-size` scale (24 / 28 / 32px). Use this instead
  * of a local `width`/`height` override: the skin derives the icon size and
@@ -52,6 +58,10 @@ const KIND_SKIN = {
     appearance: 'plain',
     variant: 'neutral',
   },
+  // One segment of a `<wa-button-group>`: the base skin, with Web Awesome's
+  // outlined appearance so the group overlaps neighbouring borders instead
+  // of indenting each segment.
+  segment: { appearance: 'outlined', variant: 'neutral' },
 } as const satisfies Record<ActionButtonKind, ActionButtonSkin>;
 
 /** No kind: the base `.action-button` / `.action-icon-button` skin. */
