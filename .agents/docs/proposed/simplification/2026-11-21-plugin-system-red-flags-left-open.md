@@ -32,8 +32,8 @@ not reproduced, it says so.
    withholds it (`withNatives`, `packages/harness/src/tools/toolTable.ts`),
    and a step brings its layers up
    (`pinStep`, `packages/harness/src/tools/sessionTools.ts`). A failure in
-   the third is reported back to the first (`layerFailed`, a second record
-   of failed revisions beside the loader's cache), the step reads the
+   the third is reported back to the first (`layerFailed`, which writes a second
+   record of failed revisions, the loader's `rejected` map, beside its cache), the step reads the
    installed plugins again in a loop until no layer fails, and the catalog
    keeps `previous` beside the revision in use so that a revision already
    published can be stepped back from
