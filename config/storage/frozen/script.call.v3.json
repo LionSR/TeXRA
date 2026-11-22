@@ -1,0 +1,90 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "script.call"
+        ]
+      },
+      "payload": {
+        "type": "object",
+        "properties": {
+          "scriptCallId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "callId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "toolName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input": {},
+          "replay": {
+            "type": "string",
+            "enum": [
+              "safe",
+              "unsafe"
+            ]
+          },
+          "logId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "scriptCallId",
+          "seq",
+          "callId",
+          "toolName",
+          "input",
+          "replay",
+          "logId",
+          "section"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "payload"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

@@ -1,0 +1,374 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "foreground",
+          "background"
+        ]
+      },
+      "system": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "controls": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "maxOutputTokens": {
+                "type": "integer",
+                "maximum": 9007199254740991,
+                "exclusiveMinimum": 0
+              },
+              "store": {
+                "type": "boolean"
+              },
+              "thinkingLevel": {
+                "type": "string",
+                "enum": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ]
+              },
+              "toolChoice": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "auto"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              }
+            },
+            "required": [
+              "maxOutputTokens",
+              "store",
+              "thinkingLevel",
+              "toolChoice"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "maxOutputTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 9007199254740991,
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "temperature": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Infinity",
+                      "-Infinity",
+                      "NaN"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "store": {
+                "type": "boolean"
+              },
+              "toolChoice": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "auto"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              "reasoning": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "effort": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "minimal",
+                              "low",
+                              "medium",
+                              "high",
+                              "xhigh",
+                              "max"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "mode": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "pro"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "summary": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "auto"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "effort",
+                      "mode",
+                      "summary"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "serviceTier": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "fast"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "promptCacheKey": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "maxOutputTokens",
+              "temperature",
+              "store",
+              "toolChoice",
+              "reasoning",
+              "serviceTier"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "maxOutputTokens": {
+                "type": "integer",
+                "maximum": 9007199254740991,
+                "exclusiveMinimum": 0
+              },
+              "toolChoice": {
+                "type": "string",
+                "enum": [
+                  "auto"
+                ]
+              },
+              "thinking": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "disabled"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "mode"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "adaptive"
+                        ]
+                      },
+                      "display": {
+                        "type": "string",
+                        "enum": [
+                          "summarized"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "display"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "enabled"
+                        ]
+                      },
+                      "budgetTokens": {
+                        "type": "integer",
+                        "minimum": 1024,
+                        "maximum": 9007199254740991
+                      },
+                      "display": {
+                        "type": "string",
+                        "enum": [
+                          "summarized"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "budgetTokens",
+                      "display"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              "effort": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cache": {
+                "type": "string",
+                "enum": [
+                  "disabled",
+                  "5m"
+                ]
+              }
+            },
+            "required": [
+              "maxOutputTokens",
+              "toolChoice",
+              "thinking",
+              "effort",
+              "cache"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "agent": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "mode",
+      "system",
+      "tools",
+      "controls",
+      "agent"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

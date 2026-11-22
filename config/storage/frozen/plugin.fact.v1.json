@@ -1,0 +1,52 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "plugin.fact"
+        ]
+      },
+      "plugin": {
+        "type": "string",
+        "minLength": 1
+      },
+      "kind": {
+        "type": "string",
+        "minLength": 1
+      },
+      "version": {
+        "type": "integer",
+        "maximum": 9007199254740991,
+        "exclusiveMinimum": 0
+      },
+      "value": {}
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "plugin",
+      "kind",
+      "version",
+      "value"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

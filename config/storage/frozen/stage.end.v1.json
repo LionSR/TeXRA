@@ -1,0 +1,64 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "stage.end"
+        ]
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "id": {
+        "type": "string"
+      },
+      "status": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "completed"
+            ],
+            "title": "COMPLETED"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "cancelled"
+            ],
+            "title": "CANCELLED"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "failed"
+            ],
+            "title": "FAILED"
+          }
+        ]
+      },
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "required": [
+      "type",
+      "id",
+      "status",
+      "aggregateId"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

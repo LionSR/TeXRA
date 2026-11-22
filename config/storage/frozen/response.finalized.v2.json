@@ -1,0 +1,52 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "response.finalized"
+        ]
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "text": {
+        "type": "string"
+      },
+      "cut": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "length",
+              "content-filter"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "required": [
+      "type",
+      "text",
+      "aggregateId"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

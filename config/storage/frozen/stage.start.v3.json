@@ -1,0 +1,42 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "stage.start"
+        ]
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "id": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "required": [
+      "type",
+      "id",
+      "label",
+      "aggregateId"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

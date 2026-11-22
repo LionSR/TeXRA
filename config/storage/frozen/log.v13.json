@@ -1,0 +1,163 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "log"
+        ]
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "level": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "error"
+            ],
+            "title": "ERROR"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "warn"
+            ],
+            "title": "WARN"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "info"
+            ],
+            "title": "INFO"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "debug"
+            ],
+            "title": "DEBUG"
+          }
+        ]
+      },
+      "message": {
+        "type": "string"
+      },
+      "data": {
+        "anyOf": [
+          {},
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "messageType": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "thinking"
+            ],
+            "title": "THINKING"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "fileList"
+            ],
+            "title": "FILE_LIST"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "toolUse"
+            ],
+            "title": "TOOL_USE"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "webSearch"
+            ],
+            "title": "WEB_SEARCH"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "modelResponse"
+            ],
+            "title": "MODEL_RESPONSE"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "userMessage"
+            ],
+            "title": "USER_MESSAGE"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "progressStatus"
+            ],
+            "title": "PROGRESS_STATUS"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "contextCompactionActivity"
+            ],
+            "title": "CONTEXT_COMPACTION_ACTIVITY"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "error"
+            ],
+            "title": "ERROR"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "contextManagement"
+            ],
+            "title": "CONTEXT_MANAGEMENT"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "default"
+            ],
+            "title": "DEFAULT"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "required": [
+      "type",
+      "level",
+      "message",
+      "aggregateId"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

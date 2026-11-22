@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.0.0-preview.1] - 2026-11-22
+
+This Desktop preview shares project tasks with the CLI. A reconnecting window leaves an incompatible service running. Tools that require an unavailable host capability are omitted from the model request.
+
 TeXRA 1.0. Everything below is relative to 0.40.10.
 
 ### Breaking Changes

@@ -1,0 +1,35 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "absolutePaths": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "acceptedAt": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "Infinity",
+              "-Infinity",
+              "NaN"
+            ]
+          }
+        ]
+      }
+    },
+    "required": [
+      "absolutePaths",
+      "acceptedAt"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

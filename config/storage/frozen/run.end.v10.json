@@ -1,0 +1,332 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "run.end"
+        ]
+      },
+      "outcome": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "completed"
+            ],
+            "title": "COMPLETED"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "cancelled"
+            ],
+            "title": "CANCELLED"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "failed"
+            ],
+            "title": "FAILED"
+          }
+        ]
+      },
+      "error": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "disk-full",
+                  "result-lost",
+                  "unexpected"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "message"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "model"
+                ]
+              },
+              "failure": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "invalid-request",
+                          "authentication",
+                          "context-overflow",
+                          "continuation-gone",
+                          "transport",
+                          "provider-rejection"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "requestId": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "status": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "quota": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "plan": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "chatgpt-subscription",
+                                      "xai-subscription",
+                                      "kimi-code-subscription",
+                                      "glm-coding-plan-subscription"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "planType": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "resetsInMs": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "plan"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "model"
+                        ]
+                      },
+                      "provider": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "partialText": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "message",
+                      "source"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "route"
+                        ]
+                      },
+                      "provider": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "missingApiKey": {
+                        "anyOf": [
+                          {
+                            "type": "boolean",
+                            "enum": [
+                              true
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "session": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "route": {
+                                "type": "string",
+                                "enum": [
+                                  "chatgpt-subscription",
+                                  "xai-subscription"
+                                ]
+                              },
+                              "needsReauth": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "route",
+                              "needsReauth"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "message"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "failure"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "response": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "structured": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "response",
+          "files"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "outcome",
+      "output"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

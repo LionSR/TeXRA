@@ -1,0 +1,255 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "tool.start"
+        ]
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "logId": {
+        "type": "string"
+      },
+      "toolName": {
+        "type": "string"
+      },
+      "input": {},
+      "section": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "attempt": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 9007199254740991
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "card": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "sections": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "text"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "label",
+                        "text"
+                      ],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "status"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "in_progress"
+                              ],
+                              "title": "IN_PROGRESS"
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "completed"
+                              ],
+                              "title": "COMPLETED"
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "failed"
+                              ],
+                              "title": "FAILED"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "label",
+                        "status"
+                      ],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "identifier"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "label",
+                        "value"
+                      ],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "badges"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "badges": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "label",
+                        "badges"
+                      ],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "fileList"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "files": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "path"
+                            ],
+                            "additionalProperties": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "label",
+                        "files"
+                      ],
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "title",
+              "sections"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "required": [
+      "type",
+      "logId",
+      "toolName",
+      "input",
+      "aggregateId"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

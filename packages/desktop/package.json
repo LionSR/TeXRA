@@ -1,6 +1,6 @@
 {
   "name": "@texra/desktop",
-  "version": "0.41.0",
+  "version": "1.0.0-preview.1",
   "description": "TeXRA standalone desktop application",
   "author": "TeXRA.ai <contact@texra.ai>",
   "homepage": "https://texra.ai",

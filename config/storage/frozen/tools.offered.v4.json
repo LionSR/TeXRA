@@ -1,0 +1,120 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "tools.offered"
+        ]
+      },
+      "payload": {
+        "type": "object",
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "digest": {
+                  "type": "string"
+                },
+                "shown": {
+                  "type": "string"
+                },
+                "plugin": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "digest",
+                "shown",
+                "plugin",
+                "revision",
+                "sent"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context": {
+            "type": "string"
+          },
+          "hooks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "modules": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "tools",
+          "skills",
+          "system",
+          "context",
+          "hooks",
+          "modules"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "payload"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

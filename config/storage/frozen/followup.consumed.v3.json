@@ -1,0 +1,120 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "followup.consumed"
+        ]
+      },
+      "followUpId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "disposition": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "turn"
+                ]
+              },
+              "turn": {
+                "type": "integer",
+                "maximum": 9007199254740991,
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "kind",
+              "turn"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "answered"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "applied"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "dropped"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "noop",
+                  "ended",
+                  "closed",
+                  "cancelled"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "followUpId",
+      "disposition"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

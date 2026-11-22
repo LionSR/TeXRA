@@ -1,0 +1,1332 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "task": {
+        "type": "object",
+        "properties": {
+          "intro": {
+            "type": "string"
+          },
+          "requests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "templates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "creates": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "intro",
+          "requests",
+          "templates",
+          "creates"
+        ],
+        "additionalProperties": true
+      },
+      "rounds": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "round": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "outputs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "workspace"
+                            ]
+                          },
+                          "absolutePath": {
+                            "type": "string"
+                          },
+                          "relativePath": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "absolutePath",
+                          "relativePath"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "runStorage"
+                            ]
+                          },
+                          "absolutePath": {
+                            "type": "string"
+                          },
+                          "relativePath": {
+                            "type": "string"
+                          },
+                          "runId": {
+                            "type": "string",
+                            "minLength": 3
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "absolutePath",
+                          "relativePath",
+                          "runId"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "external"
+                            ]
+                          },
+                          "absolutePath": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "absolutePath"
+                        ],
+                        "additionalProperties": true
+                      }
+                    ]
+                  },
+                  "round": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "lineage": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "base": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "workspace"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "runStorage"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  },
+                                  "runId": {
+                                    "type": "string",
+                                    "minLength": 3
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath",
+                                  "runId"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "external"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath"
+                                ],
+                                "additionalProperties": true
+                              }
+                            ]
+                          },
+                          "document": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "workspace"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "runStorage"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  },
+                                  "runId": {
+                                    "type": "string",
+                                    "minLength": 3
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath",
+                                  "runId"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "external"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "base",
+                          "document"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "diff": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "added": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "removed": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "location",
+                  "round",
+                  "lineage",
+                  "diff"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "compile": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "skipped"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "reason"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "checked"
+                      ]
+                    },
+                    "failures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "round": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "output": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "workspace"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "runStorage"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  },
+                                  "runId": {
+                                    "type": "string",
+                                    "minLength": 3
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath",
+                                  "runId"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "external"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath"
+                                ],
+                                "additionalProperties": true
+                              }
+                            ]
+                          },
+                          "log": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "workspace"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "runStorage"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  },
+                                  "relativePath": {
+                                    "type": "string"
+                                  },
+                                  "runId": {
+                                    "type": "string",
+                                    "minLength": 3
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath",
+                                  "relativePath",
+                                  "runId"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "external"
+                                    ]
+                                  },
+                                  "absolutePath": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "absolutePath"
+                                ],
+                                "additionalProperties": true
+                              }
+                            ]
+                          },
+                          "logRelativePath": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "round",
+                          "displayName",
+                          "output",
+                          "log",
+                          "logRelativePath"
+                        ],
+                        "additionalProperties": true
+                      }
+                    },
+                    "rejected": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "failures",
+                    "rejected"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "missingOutputs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "latexdiffs": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "revised": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "runStorage"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath",
+                              "runId"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "external"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath"
+                            ],
+                            "additionalProperties": true
+                          }
+                        ]
+                      },
+                      "document": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "runStorage"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath",
+                              "runId"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "external"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "base": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "runStorage"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath",
+                              "runId"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "external"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath"
+                            ],
+                            "additionalProperties": true
+                          }
+                        ]
+                      },
+                      "baseRound": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "mathMarkup": {
+                        "type": "string",
+                        "enum": [
+                          "off",
+                          "whole",
+                          "coarse",
+                          "fine"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "ok"
+                        ]
+                      },
+                      "diff": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "runStorage"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath",
+                              "runId"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "external"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath"
+                            ],
+                            "additionalProperties": true
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "revised",
+                      "document",
+                      "base",
+                      "baseRound",
+                      "mathMarkup",
+                      "status",
+                      "diff"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "revised": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "runStorage"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath",
+                              "runId"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "external"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath"
+                            ],
+                            "additionalProperties": true
+                          }
+                        ]
+                      },
+                      "document": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "runStorage"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath",
+                              "runId"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "external"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "base": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "runStorage"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              },
+                              "relativePath": {
+                                "type": "string"
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath",
+                              "relativePath",
+                              "runId"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "external"
+                                ]
+                              },
+                              "absolutePath": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "absolutePath"
+                            ],
+                            "additionalProperties": true
+                          }
+                        ]
+                      },
+                      "baseRound": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "mathMarkup": {
+                        "type": "string",
+                        "enum": [
+                          "off",
+                          "whole",
+                          "coarse",
+                          "fine"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "failed"
+                        ]
+                      },
+                      "error": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "revised",
+                      "document",
+                      "base",
+                      "baseRound",
+                      "mathMarkup",
+                      "status",
+                      "error"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              }
+            },
+            "reply": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "workspace"
+                      ]
+                    },
+                    "absolutePath": {
+                      "type": "string"
+                    },
+                    "relativePath": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "absolutePath",
+                    "relativePath"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "runStorage"
+                      ]
+                    },
+                    "absolutePath": {
+                      "type": "string"
+                    },
+                    "relativePath": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string",
+                      "minLength": 3
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "absolutePath",
+                    "relativePath",
+                    "runId"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "external"
+                      ]
+                    },
+                    "absolutePath": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "absolutePath"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "round",
+            "outputs",
+            "compile",
+            "missingOutputs",
+            "latexdiffs",
+            "reply"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "diffs": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "diffRelPath": {
+                  "type": "string"
+                },
+                "largeChange": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path",
+                "diffRelPath",
+                "largeChange"
+              ],
+              "additionalProperties": true
+            }
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "diffsUnavailable": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "task",
+      "rounds"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

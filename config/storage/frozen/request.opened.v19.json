@@ -1,0 +1,967 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "request.opened"
+        ]
+      },
+      "requestId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "payload": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "toolEdit"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "relativePath": {
+                    "type": "string"
+                  },
+                  "sourceTool": {
+                    "type": "string"
+                  },
+                  "addedLines": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "removedLines": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "requestId",
+                  "runId",
+                  "path",
+                  "relativePath",
+                  "sourceTool",
+                  "addedLines",
+                  "removedLines",
+                  "content"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "kind",
+              "data"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "bash"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "cwd": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "requestId",
+                  "runId",
+                  "command"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "kind",
+              "data"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "pluginTrust"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "plugin": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "digest": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "native": {
+                    "type": "boolean"
+                  },
+                  "review": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "requestId",
+                  "runId",
+                  "plugin",
+                  "digest",
+                  "path",
+                  "native",
+                  "review"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "kind",
+              "data"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "retry"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "operation": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "failure": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "invalid-request",
+                              "authentication",
+                              "context-overflow",
+                              "continuation-gone",
+                              "transport",
+                              "provider-rejection"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "requestId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "quota": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "plan": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "chatgpt-subscription",
+                                          "xai-subscription",
+                                          "kimi-code-subscription",
+                                          "glm-coding-plan-subscription"
+                                        ]
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "planType": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "resetsInMs": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "plan"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "model"
+                            ]
+                          },
+                          "provider": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "partialText": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "message",
+                          "source"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "route"
+                            ]
+                          },
+                          "provider": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "missingApiKey": {
+                            "anyOf": [
+                              {
+                                "type": "boolean",
+                                "enum": [
+                                  true
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "session": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "route": {
+                                    "type": "string",
+                                    "enum": [
+                                      "chatgpt-subscription",
+                                      "xai-subscription"
+                                    ]
+                                  },
+                                  "needsReauth": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "route",
+                                  "needsReauth"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "message"
+                        ],
+                        "additionalProperties": true
+                      }
+                    ]
+                  },
+                  "credentialSwitch": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "decline-route"
+                            ]
+                          },
+                          "route": {
+                            "type": "string",
+                            "enum": [
+                              "chatgpt-subscription",
+                              "xai-subscription",
+                              "kimi-code-subscription",
+                              "glm-coding-plan-subscription"
+                            ]
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "openai",
+                              "anthropic",
+                              "google",
+                              "xai",
+                              "deepseek",
+                              "moonshot",
+                              "dashscope",
+                              "minimax",
+                              "glm",
+                              "meta",
+                              "kimiCode"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "route",
+                          "provider"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "new-key"
+                            ]
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "openai",
+                              "anthropic",
+                              "google",
+                              "xai",
+                              "deepseek",
+                              "moonshot",
+                              "dashscope",
+                              "minimax",
+                              "glm",
+                              "meta",
+                              "kimiCode"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "provider"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "requestId",
+                  "runId",
+                  "operation",
+                  "failure",
+                  "credentialSwitch"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "kind",
+              "data"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "proposal"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "system": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "tools": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "memories": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "workingDirectory": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "instruction": {
+                    "type": "string"
+                  },
+                  "script": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "calls": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "toolName": {
+                                  "type": "string"
+                                },
+                                "preview": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "toolName",
+                                "preview"
+                              ],
+                              "additionalProperties": true
+                            }
+                          }
+                        },
+                        "required": [
+                          "title",
+                          "source",
+                          "calls"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "inputFiles": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contextFiles": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "mediaFiles": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "outputFiles": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "options": {
+                    "anyOf": [
+                      {
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "task": {
+                    "type": "boolean"
+                  },
+                  "rootUserInstruction": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 3
+                  }
+                },
+                "required": [
+                  "label",
+                  "model",
+                  "instruction",
+                  "task",
+                  "requestId",
+                  "runId"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "kind",
+              "data"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "planApproval"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "plan": {
+                    "type": "object",
+                    "properties": {
+                      "objective": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The plan document: what to achieve, the approach, and a verifiable stopping condition"
+                      }
+                    },
+                    "required": [
+                      "objective"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "requestId",
+                  "runId",
+                  "plan"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "kind",
+              "data"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "userQuestion"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 3
+                  },
+                  "questions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "header": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 12
+                            },
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "options": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "label": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "description": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "label"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "minItems": 2,
+                          "maxItems": 4
+                        },
+                        "multiSelect": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "allowFreeText": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "options"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "minItems": 1,
+                    "maxItems": 3
+                  },
+                  "context": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "requestId",
+                  "runId",
+                  "questions"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "kind",
+              "data"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "answeredBy": {
+        "type": "string",
+        "enum": [
+          "person",
+          "bash",
+          "toolEdit",
+          "superYolo"
+        ]
+      }
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "requestId",
+      "payload",
+      "answeredBy"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

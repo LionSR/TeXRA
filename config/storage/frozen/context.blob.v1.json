@@ -1,0 +1,49 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "context.blob"
+        ]
+      },
+      "payload": {
+        "type": "object",
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "digest",
+          "value"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "payload"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

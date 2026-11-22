@@ -1,0 +1,100 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "aggregateId": {
+        "type": "string",
+        "minLength": 3
+      },
+      "stageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "approval.policy"
+        ]
+      },
+      "snapshot": {
+        "type": "object",
+        "properties": {
+          "own": {
+            "type": "object",
+            "properties": {
+              "bash": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
+              },
+              "toolEdit": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
+              },
+              "superYolo": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
+              }
+            },
+            "additionalProperties": true
+          },
+          "goal": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "bash",
+                "toolEdit",
+                "superYolo"
+              ]
+            }
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "never",
+                  "ask"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "own",
+          "goal"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "aggregateId",
+      "type",
+      "snapshot"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}

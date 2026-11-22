@@ -1,0 +1,29 @@
+{
+  "dialect": "draft-2020-12",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "pid": {
+        "type": "integer",
+        "maximum": 9007199254740991,
+        "exclusiveMinimum": 0
+      },
+      "startedAt": {
+        "type": "integer",
+        "maximum": 9007199254740991,
+        "exclusiveMinimum": 0
+      },
+      "socket": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "pid",
+      "startedAt",
+      "socket"
+    ],
+    "additionalProperties": true
+  },
+  "definitions": {}
+}
