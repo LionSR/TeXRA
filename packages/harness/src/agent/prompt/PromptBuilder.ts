@@ -138,8 +138,8 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     options: {
       /** The run's session roots: the workspace whose `AGENTS.md` and
        *  `<workspace_info>` it reads, the storage root whose `AGENTS.md`
-       *  stands in when the workspace has none, and the setting slots the
-       *  `<workspace_info>` git reads take. */
+       *  is the person's own, and the setting slots the `<workspace_info>`
+       *  git reads take. */
       roots: WorkspaceRoots;
       /** A persona that declares no tools: no tool-use suffix. */
       textOnly: boolean;

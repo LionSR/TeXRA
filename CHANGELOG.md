@@ -334,6 +334,10 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 
 ### Bug Fixes
 
+- **Your own `AGENTS.md` applies in every project.** `~/.texra/AGENTS.md`
+  was read only when the project had no `AGENTS.md` of its own. Agents now
+  read both, yours first and the project's after it.
+
 - **A project's files can no longer run code when an agent starts in it.**
   A branch or folder name written as a template expression was evaluated
   while the system prompt was built, and the `PATH` or git settings in a

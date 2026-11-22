@@ -569,8 +569,9 @@ interface NodePlatformOptions {
   /**
    * The directory this platform stores run history, checkpoints and its
    * global state under, and reads the user's own files from: its
-   * `mcp.json`, the `AGENTS.md` a workspace without one falls back to, and,
-   * given skill sources, the skills under its `skills/`. Required: the
+   * `mcp.json`, the `AGENTS.md` every workspace's runs follow beside the
+   * workspace's own, and, given skill sources, the skills under its
+   * `skills/`. Required: the
    * package never falls back to a per-user default directory.
    */
   readonly storageDir: string;

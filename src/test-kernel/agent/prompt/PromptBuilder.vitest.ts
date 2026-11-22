@@ -1,5 +1,5 @@
 // Node imports
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import { join } from 'node:path';
 
@@ -97,6 +97,42 @@ describe('PromptBuilder', () => {
         expect(system).toContain('Work in /work.');
         expect(system).toContain('executes every command from /work.');
         expect(system).toContain('ws {{ 7 * 6 }}');
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+  it.effect(
+    "carries the person's own AGENTS.md with the project's, the project's last",
+    () =>
+      Effect.gen(function* () {
+        const storageRoot = mkdtempSync(join(os.tmpdir(), 'texra-prompt-'));
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => rmSync(storageRoot, { recursive: true })),
+        );
+        const workspace = join(storageRoot, 'project');
+        mkdirSync(workspace);
+        writeFileSync(
+          join(storageRoot, 'AGENTS.md'),
+          'Use British spelling.\n',
+        );
+        writeFileSync(join(workspace, 'AGENTS.md'), 'Label equations eq:.\n');
+        // cast: the opening reads only the workspace and the storage root.
+        const roots = { workspace, storageRoot } as WorkspaceRoots;
+        const system = yield* buildOpeningSystemPrompt(
+          'Answer the task.',
+          {
+            inputs: {
+              CWD: '/work',
+              BUILTIN_AGENTS_DIR: '',
+              CUSTOM_AGENTS_DIR: '',
+              AGENT_DOCS_DIR: '',
+            },
+            activated: [],
+          },
+          { roots, textOnly: true, offered: [], memory: [] },
+        );
+        expect(system.indexOf('Use British spelling.')).toBeGreaterThan(-1);
+        expect(system.indexOf('Label equations eq:.')).toBeGreaterThan(
+          system.indexOf('Use British spelling.'),
+        );
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

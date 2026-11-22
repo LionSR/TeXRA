@@ -497,8 +497,8 @@ port) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
 `mcp.json` at the storage root that global storage lies under, and a run's
-system prompt carries the workspace's `AGENTS.md`, or the storage root's when
-the workspace has none.
+system prompt carries the storage root's `AGENTS.md` (the person's own, for
+every workspace) and then the workspace's.
 
 **Memory.** While the `memory.enabled` setting is on (the default), a run
 with file tools has two folders of Markdown notes it reads and writes with
