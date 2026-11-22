@@ -193,7 +193,7 @@
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Connect a model",
-            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run OpenAI models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nEvery agent ships bundled, the orchestrator included; none needs a TeXRA account.",
+            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run OpenAI models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nEverything ships bundled; nothing needs a TeXRA account.",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the provider API key settings"
@@ -233,7 +233,7 @@
           {
             "id": "texra.gettingStarted.firstTask",
             "title": "Your first task",
-            "description": "Open **New task** in the TeXRA panel, say what you want (for example, \"tighten the introduction\"), and send it. Pick **orchestrator** in the agent menu to have it plan the work and hand each part to the right agent.\n\n[New task](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)\n\nEvery task becomes a session. The **Sessions** button at the top of the panel lists them, running or finished, so you can come back to one.\n\nBefore an agent edits a file or runs a command, it asks in the conversation, and edits open in VS Code's diff view so you see each change first. To change how often it asks, set the approval policy under Settings > General > Approval.\n\n[Approval settings](command:texra.walkthroughWorkspaceAction?%5B%22texra.showApprovalSettings%22%5D)",
+            "description": "Open **New task** in the TeXRA panel, say what you want (for example, \"tighten the introduction\"), and send it. For a larger job, the assistant plans the work and hands parts to helper agents or programs.\n\n[New task](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)\n\nEvery task becomes a session. The **Sessions** button at the top of the panel lists them, running or finished, so you can come back to one.\n\nBefore the assistant edits a file or runs a command, it asks in the conversation, and edits open in VS Code's diff view so you see each change first. To change how often it asks, set the approval policy under Settings > General > Approval.\n\n[Approval settings](command:texra.walkthroughWorkspaceAction?%5B%22texra.showApprovalSettings%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/vscode-compare.png",
               "altText": "Screenshot of the VS Code diff view"
