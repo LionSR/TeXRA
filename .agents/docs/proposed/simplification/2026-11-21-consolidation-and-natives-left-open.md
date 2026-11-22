@@ -33,7 +33,9 @@ that adds this note:
    (`packages/texra/src/tools/agentCli/`) expands `~/` and `~\` on every
    platform. One `expandHome(input, home)` beside `homeDirectory` once item 1
    decides how a synchronous caller gets `home`.
-3. **Whether focus is in a text field, two rules.**
+3. Landed 2026-11-22: both renderers read
+   `packages/texra/src/ui/textEntryFocus.ts`, the union of the two rules.
+   Was: **Whether focus is in a text field, two rules.**
    `packages/desktop/src/renderer/desktopShortcutRegistry.ts` counts
    `select` and walks the event's composed path;
    `packages/texra/src/ui/progress/components/RequestPanels.ts` counts any
