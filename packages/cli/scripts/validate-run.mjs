@@ -882,18 +882,15 @@ prompt: |
  * A live owner holds EXCLUSIVE: opening this connection then must fail,
  * rather than manufacturing a snapshot from separately copied DB/WAL files.
  */
-function rowsOf(file, sql, ...params) {
+function storeRows(dir, sql, ...params) {
+  // A store file itself, or the directory of TeXRA's `texra.db`.
+  const file = dir.endsWith('.db') ? dir : path.join(dir, 'texra.db');
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     return db.prepare(sql).all(...params);
   } finally {
     db.close();
   }
-}
-
-/** The rows of the TeXRA store in `dir`. */
-function storeRows(dir, sql, ...params) {
-  return rowsOf(path.join(dir, 'texra.db'), sql, ...params);
 }
 
 /** Observe a service task through the same supported NDJSON attach a user
@@ -1790,15 +1787,13 @@ async function validateSdkResumeApproval() {
       resumed.stdout.trim().split('\n').at(-1),
       'resuming SDK harness',
     );
-    // The workspace's store: the global one beside it holds no runs. The
-    // SDK harness passes no settings catalog, so its store carries the
-    // harness's default namespace, not TeXRA's.
+    // The workspace's store: the global one beside it holds no runs.
     const store = spawnSync(
       'find',
-      [storage, '-path', '*/workspace-storage/*', '-name', 'harness.db'],
+      [storage, '-path', '*/workspace-storage/*', '-name', '*.db'],
       { encoding: 'utf8' },
     ).stdout.trim();
-    const rows = rowsOf(
+    const rows = storeRows(
       store,
       `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
          json_extract(e.data, '$.decision.action') AS decision,
