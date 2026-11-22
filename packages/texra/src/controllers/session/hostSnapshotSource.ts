@@ -47,7 +47,7 @@ import {
   APPROVAL_POLICY_SETTING,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { recentCommitLabels } from '@texra-ai/harness/node';
+import { isPathWithin, recentCommitLabels } from '@texra-ai/harness/node';
 import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import type {
@@ -149,7 +149,9 @@ export interface HostSnapshotSource {
     | Path.Path
     | ChildProcessSpawner
   >;
-  /** The project's files changed on disk, or the surface asked for a relist. */
+  /** The project's files changed on disk outside TeXRA, or the surface
+   *  asked for a relist. TeXRA's own writes (`workspaceFilesWritten`) are
+   *  followed by the source itself. */
   readonly refreshFiles: Effect.Effect<
     void,
     never,
@@ -393,6 +395,20 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
       Effect.andThen(loadCredential, catalogs),
     );
+    // A write TeXRA made inside the project (an accepted output or diff, a
+    // service task's file) can add a file the launcher lists, on every host
+    // alike; a host may also follow edits made outside TeXRA
+    // (`refreshFiles`).
+    const root = options.root;
+    if (root !== undefined)
+      yield* follow(
+        Stream.filter(
+          yield* subscribeAppSignal('workspaceFilesWritten'),
+          ({ absolutePaths }) =>
+            absolutePaths.some((written) => isPathWithin(root, written)),
+        ),
+        loadFiles,
+      );
     // The approval policy is read live as each snapshot is mapped; a
     // settings view's write republishes the inputs so the change shows.
     yield* follow(
