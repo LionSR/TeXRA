@@ -3,7 +3,6 @@
 // Third-party imports
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -152,12 +151,7 @@ export class LatexdiffResults extends TexraElement {
       ${buildDetailsCard({
         summary: { iconName: 'code-compare', label: summaryText },
         body: html`<ul class="latexdiff-content">
-          ${repeat(
-            this.entries,
-            (entry, index) =>
-              `${entry.base.absolutePath}-${entry.revised.absolutePath}-${entry.baseRound ?? 'base'}-${index}`,
-            (entry, index) => this.renderEntry(entry, index),
-          )}
+          ${this.entries.map((entry, index) => this.renderEntry(entry, index))}
         </ul>`,
         open: true,
       })}
