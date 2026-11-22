@@ -47,6 +47,8 @@ export interface PaneKind {
   update?(tab: WorkbenchTab): void;
   /** The tab closed: release what `mount` acquired. */
   release?(tab: WorkbenchTab): void;
+  /** Whether the tab holds unsaved changes; the pane owns the answer. */
+  isDirty?(tab: WorkbenchTab): boolean;
 }
 
 interface WorkbenchControllerDeps {
@@ -101,6 +103,10 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   const subscriptions: { dispose(): void }[] = [];
   const tabFor = (id: string) =>
     getState().workbenchTabs.find((tab) => tab.id === id);
+  const isDirty = (id: string) => {
+    const tab = tabFor(id);
+    return tab !== undefined && (panes[tab.kind].isDirty?.(tab) ?? false);
+  };
   const zoneOf = (id: string) => {
     const tab = tabFor(id);
     return tab && panes[tab.kind].zone;
@@ -218,7 +224,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   function disposeWorkbenchTab(id: string) {
     const tab = tabFor(id);
     if (!tab) return;
-    if (tab.dirty) deps.confirmDiscard(tab.title, () => removeTab(id));
+    if (isDirty(id)) deps.confirmDiscard(tab.title, () => removeTab(id));
     else removeTab(id);
   }
 
@@ -451,6 +457,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       return dock;
     },
     tab: tabFor,
+    isDirty,
     open: openKind,
     close: disposeWorkbenchTab,
   };
@@ -500,8 +507,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
           }
         }
         if (panel.title !== tab.title) panel.api.setTitle(tab.title);
-        if (panel.params?.dirty !== tab.dirty)
-          panel.api.updateParameters({ dirty: tab.dirty });
         panes[tab.kind].update?.(tab);
       }
       const requested = getState().activeTabId;
@@ -530,6 +535,10 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       syncState();
     },
     disposeWorkbenchTab,
+    /** Redraw a tab whose pane's state changed (its unsaved mark). */
+    redrawTab(id: string) {
+      dock?.getPanel(id)?.api.updateParameters({});
+    },
     syncBrowserViewBounds,
     layoutVisibleSurfaces,
     activeTabId: () => dock?.activePanel?.id,

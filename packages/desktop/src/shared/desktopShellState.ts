@@ -46,7 +46,6 @@ const WorkbenchTabSchema = Schema.Struct({
   kind: Schema.Literals(Object.keys(WORKBENCH_KIND_META) as WorkbenchKind[]),
   title: Schema.String,
   target: Schema.optional(Schema.String),
-  dirty: Schema.optional(Schema.Boolean),
   /** A `pdf` tab's build: its frame reloads when a rebuild changes it. */
   build: Schema.optional(Schema.Number),
 });
@@ -171,21 +170,6 @@ export function renameWorkbenchTab(
     ...state,
     workbenchTabs: state.workbenchTabs.map((tab) =>
       tab.id === id ? { ...tab, title: title.trim() } : tab,
-    ),
-  };
-}
-
-export function setWorkbenchTabDirty(
-  state: DesktopShellState,
-  id: string,
-  dirty: boolean,
-): DesktopShellState {
-  if (!state.workbenchTabs.some((tab) => tab.id === id && tab.dirty !== dirty))
-    return state;
-  return {
-    ...state,
-    workbenchTabs: state.workbenchTabs.map((tab) =>
-      tab.id === id ? { ...tab, dirty } : tab,
     ),
   };
 }
