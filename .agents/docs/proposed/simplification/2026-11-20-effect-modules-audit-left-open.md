@@ -73,7 +73,8 @@ landed:
    (`packages/texra/src/controllers/server/windowHost.ts`). Only the
    attachment id arrives late; a `Deferred` for the id lets the server be
    built before the stream opens. A `call` frame before `attached` would
-   then be served and not dropped. Take it when the file is open.
+   then be served and not dropped. Take it when the file is open. Landed
+   2026-11-22 (`2026-11-15-natives-and-owners-left-open.md`).
 3. **The frame decoders copy the whole buffer on every chunk**
    (`takeLines`, `takeFrames` in `packages/harness/src/tools/jsonRpc.ts`). A
    multi-megabyte single-line MCP result is quadratic in copies. Not
