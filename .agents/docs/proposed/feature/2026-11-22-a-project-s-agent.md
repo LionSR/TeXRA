@@ -92,7 +92,8 @@ One researcher on their own machine, in the desktop app, the extension or the
 
 - The desktop window, the extension's view and bare `texra` in a project
   folder open the recorded run when there is one. A new conversation is one
-  action in each host, and `texra chat --new` in the CLI.
+  action in each host; in the CLI it is a flag of `texra chat`, named when
+  it is built.
 - The run list shows the agent first, marked. No second control starts or
   stops being "the agent": **Start over** is the one action.
 - A window with no folder has no project and no agent.
@@ -141,10 +142,11 @@ changed.
 ## Other notes
 
 - **[Programs, not agents](../architecture/2026-11-06-programs-not-agents.md),
-  phase 5.** Independent, in either order. Today the agent's run starts on
-  the default persona; phase 5 deletes the 19 persona files, the agent index
-  and the per-project agent choice, and the run is then the one entry with
-  nothing chosen. This PRD adds no persona for phase 5 to delete.
+  phase 5.** Independent, in either order. Phase 5 leaves one entry agent,
+  an app constant, and turns the other bundled agents into programs; the
+  project's agent is then that entry's run with nothing chosen. Built before
+  phase 5, it is a run of whichever agent the first message started. This
+  PRD adds no persona for phase 5 to delete.
 - **[The script is how an agent runs itself](../architecture/2026-11-19-the-script-is-how-an-agent-runs-itself.md),
   section 4**, says an event starts one short run, not a resident loop. Both
   hold. A registered trigger starts a program for work that needs none of a
