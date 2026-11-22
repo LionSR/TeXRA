@@ -22,7 +22,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
-import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { renderLoadingState } from '@ui/wa/loadingState';
 import {
   renderDisclosureToggle,
   renderSettingsSectionHeading,
@@ -247,7 +247,7 @@ export class ProviderKeyList extends TexraElement {
         })}
         ${
           this.providerKeyStatuses === null
-            ? renderEmptyMessage('Loading key status…')
+            ? renderLoadingState('Loading key status…')
             : html`<div
                 class="settings-disclosure-list"
                 role="list"

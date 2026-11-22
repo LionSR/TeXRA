@@ -40,7 +40,7 @@ export const contextManagementStyles: CSSResult = css`
   }
 
   .stat-item wa-icon {
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
   }
 
   .stat-value {

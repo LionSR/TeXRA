@@ -58,6 +58,71 @@ A sweep of `packages/*/src` for the usual hand-written natives
 manual grouping, `setTimeout` sleeps, unprefixed Node imports, index-based
 dedup, chunked `Promise.all`) found none left beyond the above.
 
+## Landed in the 2026-11-22 sweep (app and hosts)
+
+A sweep of `packages/texra/src` (outside `ui/`), `packages/cli/src`
+(outside the TUI), `packages/desktop/src/main` and `packages/extension/src`
+for hand-written retry, backoff, timeout, poll, queue, debounce, cache,
+cleanup and child-process code, and for helpers ES2022–ES2024, Node or a
+dependency already covers, found one:
+
+- `attachTo` in `packages/texra/src/controllers/server/windowHost.ts` no
+  longer reassigns its call receiver from inside the frame loop (open item 2
+  of `2026-11-20-effect-modules-audit-left-open.md`). The attachment's RPC
+  server is built before the stream opens and an answer waits on a
+  `Deferred` for the id. The service's `attach` sends `attached` first, so
+  the case where a `call` frame arrives first (served now, dropped before)
+  cannot occur against TeXRA's own service.
+
+Everything else the sweep looked at is already on Effect's modules (`Schedule`,
+`Effect.retry`, `timeoutOrElse`, `Deferred`, `Queue`, `acquireRelease`,
+`ChildProcess`, `Stream.callback`), Node's builtins (`hash`, `randomUUID`,
+`stripVTControlCharacters`, `Map.groupBy`, `toSorted`, `.at`, `replaceAll`)
+or a dependency (`@altmetric/identifiers`, `content-disposition`, `which`,
+`diff-match-patch`, `SemVer`).
+
+### Checked and declined on 2026-11-22
+
+- **`spawnService` in `packages/texra/src/controllers/server/client.ts` on
+  Effect's `ChildProcess`.** The service must outlive the window that starts
+  it. The Node spawner's release kills the process group when its scope
+  closes, and `unref` does not change that.
+- **`globSync` in `packages/texra/src/platform/defaults/commandDirs.ts` and
+  `glob` in `controllers/session/taskFiles.ts` on Node's `fs.glob`.**
+  `taskFiles.ts` needs `hasMagic`, `magicalBraces` and
+  `windowsPathsNoEscape`, which Node's glob lacks, and the harness imports
+  `Glob` too, so the dependency stays. Converting only `commandDirs.ts` would
+  add a second glob implementation, whose dotfile and Windows path rules
+  nobody has checked.
+- **`semver` in `packages/cli/scripts/build-bundle.mjs` on `SemVerRange`.**
+  The script calls `minVersion` on the `engines.node` range, and
+  `SemVerRange` has no lowest-version reader (`minSatisfying` needs a
+  candidate list).
+- **`editDistance` in `packages/cli/src/commands/_helpers/editDistance.ts`
+  on effect/cli's suggester.** That module is internal (`cli/internal/
+  auto-suggest.js`), counts a transposition as two edits and caps the
+  distance at 2. Its one caller is in the TUI.
+- **`resolveStreamColor` in `cliContext.ts` on `stream.hasColors()`.** Node
+  reads `FORCE_COLOR` as a color depth and ignores `TERM=dumb` for a forced
+  value. The CLI's `0`/`false`/`no` rules would change.
+- **The update-check latch, `cachedAmbient` and `cachedManifest` in the CLI as
+  `Effect.cached`.** Each runs before any runtime exists, or is read
+  synchronously.
+- **`drainAndStop`'s warning fiber in `UsageLogService.ts` as
+  `Effect.timeoutOrElse`.** The wait must not be abandoned at the deadline,
+  only reported. A timeout would need the same interrupt written twice.
+- **`desktopProjects.ts` `dispose` (a `reduce` of `Effect.ensuring`) as
+  `Effect.forEach`.** `ensuring` runs every later dispose after an earlier
+  one fails or dies; `forEach` stops at the first failure.
+- **The home-directory reads (`commandDirs.ts`, `nodeStorage.ts`,
+  `settingsPluginCommands.ts`, `doctor.ts`, `desktopAppLog.ts`)** stay as
+  item 1 of `2026-11-21-consolidation-and-natives-left-open.md` records
+  them. `os.homedir()` ignores `HOME` on Windows, so replacing the
+  `HOME || USERPROFILE` read is a behavior change, and whether `commandDirs()`
+  gets `home` from its caller is still undecided.
+- **`claudeAgentConfig.ts`'s raw `access`**: credential code, out of this
+  sweep's scope.
+
 ## Checked and declined
 
 - **One `rank` for reasoning efforts and one `envVar`.**

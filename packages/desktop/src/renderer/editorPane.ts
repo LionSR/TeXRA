@@ -15,7 +15,6 @@
 // request supersedes an older one by interrupting it, so no result needs
 // checking for staleness after it arrives.
 
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import {
@@ -46,7 +45,10 @@ import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
 import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
 
-import { createEditorFileNotice } from './editorFileNotice';
+import {
+  createEditorFileNotice,
+  renderNoticeCallout,
+} from './editorFileNotice';
 import {
   buildEditorDirectoryEntries,
   type EditorFileEntry,
@@ -316,13 +318,7 @@ export function createEditorPane(
   }
 
   function treeTemplate(state: TreeState): TemplateResult {
-    if (state.error) {
-      return html`
-        <wa-callout class="desktop-editor-tree-empty" variant="danger">
-          ${waIcon('triangle-exclamation', { slot: 'icon' })} ${state.error}
-        </wa-callout>
-      `;
-    }
+    if (state.error) return renderNoticeCallout(state.error);
     if (state.loading) {
       return renderLoadingState('Loading project files…');
     }

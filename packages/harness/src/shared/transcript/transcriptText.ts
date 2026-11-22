@@ -17,7 +17,8 @@ import { collapseWhitespace, splitContentLines } from '@utils/text/stringUtils';
 export interface TranscriptText {
   /** Lines in the untruncated text; a trailing newline is not a line. */
   readonly lineCount: number;
-  /** The complete text, exactly as the producer wrote it. */
+  /** The complete text, as the producer wrote it; a model or log text
+   *  without the zero-width characters and blank lines it led with. */
   readonly full: string;
   /** Whitespace-collapsed single line — still untruncated. For one-line
    *  density paints and for equality tests between two texts. */
@@ -29,6 +30,17 @@ const EMPTY_TRANSCRIPT_TEXT: TranscriptText = {
   oneLine: '',
   lineCount: 0,
 };
+
+/** Zero-width characters, which paint nothing on any host. */
+const ZERO_WIDTH = /\u200B|\u200C|\u200D|\uFEFF/g;
+
+/** Whether a text paints nothing: it holds only whitespace and zero-width
+ *  characters. The one test the row projector drops a text row by, and a
+ *  painter applies after its own passes (a terminal's control-sequence
+ *  strip). */
+export function paintsNothing(text: string): boolean {
+  return text.replaceAll(ZERO_WIDTH, '').trim() === '';
+}
 
 export function transcriptText(raw: string): TranscriptText {
   if (!raw) return EMPTY_TRANSCRIPT_TEXT;

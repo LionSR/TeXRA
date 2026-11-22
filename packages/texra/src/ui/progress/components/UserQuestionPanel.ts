@@ -80,10 +80,8 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
           : nothing
       }
       <div class="user-question-request__questions">
-        ${repeat(
-          data.questions,
-          (_question, index) => index,
-          (question, index) => this.renderQuestion(question, index),
+        ${data.questions.map((question, index) =>
+          this.renderQuestion(question, index),
         )}
       </div>
       <p class="user-question-request__answer-requirement" role="status">
