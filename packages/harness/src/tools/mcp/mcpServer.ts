@@ -3,8 +3,9 @@
  * environment, initialized, its tools listed, and stopped (SIGTERM, then
  * SIGKILL) when the scope closes. The scope is its project's catalog entry
  * for its spec, revision and project variables (`ToolCatalog`), so the
- * process lives exactly as long as some open run or step of that project
- * holds it.
+ * process lives while some open run or step of that project holds it and
+ * for the catalog's idle time after the last one lets go
+ * (`projectServers`, `./mcpConfig`).
  *
  * JSON-RPC runs over the harness's Effect connection, in newline framing.
  * Each listed tool becomes a runtime tool named `mcp__<server>__<tool>`
