@@ -58,9 +58,9 @@ const CURRENT_VALUE_AT = `CREATE INDEX IF NOT EXISTS current_value_at ON current
  * The global store: the application's current values and the terminal's
  * input history. It holds no run, so no event table and no projection.
  */
-export const GLOBAL_SCHEMA: StoreSchema = {
+export const GLOBAL_SCHEMA: StoreSchema = Object.freeze({
   version: 107,
-  tables: [
+  tables: Object.freeze([
     STORED_KIND,
     CURRENT_VALUE,
     `CREATE TABLE IF NOT EXISTS input_history (
@@ -68,9 +68,9 @@ export const GLOBAL_SCHEMA: StoreSchema = {
     at    INTEGER NOT NULL,
     value TEXT NOT NULL
   ) STRICT`,
-  ],
-  additive: [CURRENT_VALUE_AT],
-};
+  ]),
+  additive: Object.freeze([CURRENT_VALUE_AT]),
+});
 
 /**
  * A project store's tables. `commit` is a SQLite keyword, so the column
@@ -167,11 +167,11 @@ const PROJECT_ADDITIVE = [
 
 /** A project's store: its runs' events, their projections, and the
  *  project's own current values. */
-export const PROJECT_SCHEMA: StoreSchema = {
+export const PROJECT_SCHEMA: StoreSchema = Object.freeze({
   version: 106,
-  tables: PROJECT_TABLES,
-  additive: PROJECT_ADDITIVE,
-};
+  tables: Object.freeze(PROJECT_TABLES),
+  additive: Object.freeze(PROJECT_ADDITIVE),
+});
 
 const verifyPragma = Effect.fnUntraced(function* (
   sql: Sql,
