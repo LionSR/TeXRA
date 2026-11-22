@@ -55,7 +55,10 @@ const KIND_SKIN = {
 } as const satisfies Record<ActionButtonKind, ActionButtonSkin>;
 
 /** No kind: the base `.action-button` / `.action-icon-button` skin. */
-const PLAIN_SKIN: ActionButtonSkin = { appearance: 'plain', variant: 'neutral' };
+const PLAIN_SKIN: ActionButtonSkin = {
+  appearance: 'plain',
+  variant: 'neutral',
+};
 
 /**
  * The main half of a split button: Web Awesome's own accent chrome, matching

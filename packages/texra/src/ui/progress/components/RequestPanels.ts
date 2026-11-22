@@ -108,10 +108,12 @@ export class RequestPanels extends LitElement {
   private handleKeydown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (isTypingKeystroke(event, document)) return;
-    const card = event.composedPath().find(
-      (target): target is BaseRequestPanel =>
-        target instanceof Element && target.hasAttribute(CARD_MARKER),
-    );
+    const card = event
+      .composedPath()
+      .find(
+        (target): target is BaseRequestPanel =>
+          target instanceof Element && target.hasAttribute(CARD_MARKER),
+      );
     if (card?.handleKeyboardShortcut(event.key.toLowerCase())) {
       event.preventDefault();
     }
