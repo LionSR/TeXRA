@@ -138,7 +138,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
 
   /** The agents changed: every agent list view follows the signal, these
    *  pages and every launcher. */
-  const agentsChanged: HostEffect = emitAppSignal('agentsChanged', undefined);
+  const agentsChanged: HostEffect = emitAppSignal(
+    'workspaceAgentsChanged',
+    undefined,
+  );
   /** A mutation moved agent files: the registry is read again first, so
    *  nothing that follows paints the catalog it replaced. */
   const agentFilesChanged = Effect.andThen(

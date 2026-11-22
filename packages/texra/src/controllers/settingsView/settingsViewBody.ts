@@ -480,7 +480,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           // `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
           followSignal('githubSubscriptionsChanged', () => changed('github')),
-          followSignal('agentsChanged', () => changed('agents')),
+          followSignal('workspaceAgentsChanged', () => changed('agents')),
           followSignal('credentialChanged', ({ key }) => {
             const provider = apiKeyEntry(key);
             return provider === undefined || provider === 'unknown'

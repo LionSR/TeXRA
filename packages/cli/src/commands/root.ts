@@ -72,8 +72,8 @@ const EXAMPLES = [
   ],
   ['texra agents list', 'list the available agents'],
   [
-    'texra config agents --default-agent <agent>',
-    'choose the agent new chats in this workspace start on',
+    'texra config agents --agents all',
+    'make every agent visible in this workspace',
   ],
   [
     'texra plugin install github.com/<owner>/<repo>',

@@ -105,7 +105,7 @@ const CLEAR_SCROLLBACK = `${ESC}[3J`;
 const PLUGINS_FORM_KEYS = ['/plugins', { input: '\r', until: 'switch on/off' }];
 const CONFIG_FORM_KEYS = [
   '/config',
-  { input: '\r', until: 'Agents — the default chat agent' },
+  { input: '\r', until: 'Agents — workspace agents' },
 ];
 // `/login`: its rows show at once, saying "Loading current preference"
 // until the account state loads; a loaded row says the state. The harness
@@ -891,9 +891,10 @@ const SCENARIOS = [
     keys: [...CONFIG_FORM_KEYS, '\r'],
     frame: 'viewport',
     expect: [
-      '/config · Default chat agent',
-      'Automatic',
-      'assistant',
+      '/config · Agents',
+      'All agents',
+      'Default chat agent',
+      'Custom selection',
       '↑/↓ navigate',
       'Enter select',
       'Esc back',
@@ -918,7 +919,7 @@ const SCENARIOS = [
     // happens to get.
     keys: [
       ...CONFIG_FORM_KEYS,
-      { input: '\r', until: 'Automatic' },
+      { input: '\r', until: 'All agents' },
       ESC,
       DOWN,
       DOWN,
@@ -940,7 +941,7 @@ const SCENARIOS = [
       'Esc back',
     ],
     unexpect: [
-      '/config · Default chat agent',
+      '/config · Agents',
       'No configurable settings are available here yet.',
       'Platform not initialized',
       '/config · error',

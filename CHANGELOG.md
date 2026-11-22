@@ -99,11 +99,10 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 - **Agent teams and multi-agent presets are removed.** `texra multi-agent`,
   the built-in teams, saved custom teams and the desktop's team dialog are
   gone. Start a lead agent instead
-  (`texra run orchestrator --instruction …`); it delegates to any agent.
-  Every workspace shows every agent: the per-workspace agent selection, its
-  toggles in Settings › Agents, `texra config agents --agents` and
-  `texra agents list --all` are gone. `texra config agents --default-agent`
-  takes an agent or `none`.
+  (`texra run orchestrator --instruction …`); it delegates to the agents the
+  workspace shows. A workspace shows every agent unless you turn some off in
+  Settings › Agents or with `texra config agents --agents <agent,...>`;
+  `--default-agent` takes an agent or `none`.
 - **One approval setting.** A run's approval policy (Block, Ask,
   Auto-approve) decides whether shell commands, file edits, delegations and
   coding-agent launches ask first; under Ask each asks unless you granted it

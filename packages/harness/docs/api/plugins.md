@@ -268,7 +268,7 @@ interface AppSignalPayloads {
   githubSubscriptionsChanged: undefined;
 
   /**
-   * The agent list changed. Keyless on purpose: every listener
+   * The workspace agents changed. Keyless on purpose: every listener
    * re-reads the agent list, so which agent moved carries no information.
    *
    * Emitted, in every process sharing the global store, when the agent
@@ -280,7 +280,7 @@ interface AppSignalPayloads {
    * agent list, and their launchers. Not the CLI: it reads the agent list
    * per command and has no persistent panel that could go stale.
    */
-  agentsChanged: undefined;
+  workspaceAgentsChanged: undefined;
 
   /**
    * The approval policy was written from a settings view or the terminal's

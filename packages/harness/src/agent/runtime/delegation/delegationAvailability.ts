@@ -2,7 +2,7 @@
  * What the delegation tools can launch, and the text that tells the model.
  *
  * The agents a delegation tool can launch, the models a child can run and
- * whether worktrees are on all change while a run lives (an agent file, a
+ * whether worktrees are on all change while a run lives (agent visibility, a
  * new credential, the worktree setting). The step reads them
  * (`readDelegationTargets`) into the run's context; the system text renders
  * them once, at the step that freezes it (`delegationSection`), and a later

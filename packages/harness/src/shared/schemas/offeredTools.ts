@@ -63,7 +63,7 @@ export const ToolsOfferedPayloadSchema = Schema.Struct({
 });
 
 /**
- * What the run's `agent` tool can launch: the agents; the models
+ * What the run's `agent` tool can launch: the visible agents; the models
  * available for delegation (null when they could not be read); and whether
  * worktrees are on (null on a row an earlier build wrote for a step that
  * offered no `agent`).

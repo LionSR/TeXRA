@@ -24,8 +24,8 @@ function runSetup(context: CliContext) {
     });
   }
 
-  // The setup agent owns the session: environment checks and the first
-  // task. Same chat startup path as `texra chat`, with the agent
+  // The setup agent owns the session: environment checks, workspace agents,
+  // first task. Same chat startup path as `texra chat`, with the agent
   // pinned. A credential is the one step no agent can do for the user
   // without one the chat opens on its "Connect a model" panel, and the first
   // message waits for the connection.

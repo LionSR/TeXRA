@@ -111,7 +111,7 @@ interface ResolveChatDefaultsInit {
   readonly modelOverride?: string;
   readonly envAgent?: string;
   readonly envModel?: string;
-  readonly agents?: readonly { readonly name: string }[];
+  readonly visibleToolUseAgents?: readonly { readonly name: string }[];
 }
 
 /**
@@ -135,7 +135,7 @@ export function resolveChatDefaults(
   if (modelDecision === null)
     throw new Error('The chat model decision named no model');
   return {
-    agent: agent ?? pickDefaultToolUseAgent(init.agents),
+    agent: agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
     model: modelDecision.model,
     modelSource: modelDecision.reason,
   };

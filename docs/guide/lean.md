@@ -152,7 +152,7 @@ In VS Code, the setup agent can run the Lean 4 extension's installers (install o
 
 **Diagnostics look stale**: ask the agent to run `lean_file` on the file, or `lean_project` with `restart_server`. A missing Mathlib cache can also cause long stalls; run `fetch_cache`.
 
-**The Lean agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` come with the Lean plugin and are listed while it is on. Check **Settings → Plugins**.
+**The Lean agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are built in, but your workspace's agent selection may hide them. Show them from **Settings → Agents → Library**.
 
 ## Next steps
 

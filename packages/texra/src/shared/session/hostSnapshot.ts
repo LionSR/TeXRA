@@ -86,7 +86,7 @@ export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
-  /** Every agent the agent selector lists. */
+  /** Every agent the workspace's agent selector lists. */
   agentOptions: Schema.Array(AgentOptionDataSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
   /** How a tool call is painted, from what the process's plugins declare

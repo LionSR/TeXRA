@@ -1,4 +1,4 @@
-// `/agent` form. It lists the agents. Before the first message, one
+// `/agent` form. It lists the visible agents. Before the first message, one
 // can be chosen to lead the chat.
 
 import { Box, Text } from 'ink';

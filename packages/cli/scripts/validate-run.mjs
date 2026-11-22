@@ -356,9 +356,9 @@ function validateBundledLeanAgents() {
   }
 }
 
-/** A default chat agent that does not exist is a usage error and stores
- *  nothing. */
-function validateUnknownDefaultAgent() {
+/** A list naming an agent that does not exist is a usage error and stores
+ *  nothing: stored, it would leave the workspace only the agents it names. */
+function validateUnknownWorkspaceAgent() {
   const cwd = makeScratch('texra-cli-agents-cwd-');
   const home = makeScratch('texra-cli-agents-home-');
   const configAgents = (...args) =>
@@ -369,15 +369,15 @@ function validateUnknownDefaultAgent() {
     );
   try {
     assertUsageError(
-      configAgents('--default-agent', 'inherit'),
+      configAgents('--agents', 'assistant,inherit'),
       'texra config agents with a name no agent has',
       'Agent not found: inherit',
     );
     const shown = configAgents();
-    assertSuccess(shown, 'texra config agents after a refused default');
+    assertSuccess(shown, 'texra config agents after a refused list');
     assert(
-      shown.stdout.includes('Default chat agent: (automatic)'),
-      `a refused default should leave the default chat agent unset\nstdout:\n${shown.stdout}`,
+      shown.stdout.includes('Workspace agents: all'),
+      `a refused list should leave the workspace agents unchanged\nstdout:\n${shown.stdout}`,
     );
   } finally {
     removeScratch(cwd);
@@ -3904,7 +3904,7 @@ async function validateCliRunArtifacts(options = {}) {
   }
   validateBinarySmoke();
   validateBundledLeanAgents();
-  validateUnknownDefaultAgent();
+  validateUnknownWorkspaceAgent();
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
   validateRunCommand();

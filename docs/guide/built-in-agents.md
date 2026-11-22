@@ -33,9 +33,9 @@ TeXRA includes built-in agents for derivations, formal proofs, literature search
   ]"
 />
 
-<p class="hero-caption">The agent picker lists the chat agents (a few shown here). Programs are not in the picker: an agent starts one for you.</p>
+<p class="hero-caption">The agent picker lists the chat agents enabled for the workspace (a few shown here). Programs are not in the picker: an agent starts one for you.</p>
 
-The same catalog is available from any terminal with `texra agents list`: one tab-separated `name  description` row per agent, stable for scripts.
+The same catalog is available from any terminal with `texra agents list`: one tab-separated `name  description` row per agent, stable for scripts; `--all` includes hidden agents.
 
 ## Quick reference
 
