@@ -23,9 +23,8 @@ import {
 } from '../state/cliState';
 import { sessionView, runLabelOf, runViewOf } from '../state/sessionView';
 import {
-  mergeLocalNotices,
+  conversationRows,
   notices as noticesSignal,
-  noticesFor,
 } from '../state/transcript';
 import { useSignal } from '../state/useSignal';
 import { useMountScope } from '../state/useMountScope';
@@ -190,12 +189,11 @@ export function StaticConversationTranscript({
   const allNotices = useSignal(noticesSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const source = useMemo((): StaticScrollbackSource => {
-    const stream = runViewOf(view, scrollbackRunId);
-    const runNotices = noticesFor(allNotices, scrollbackRunId);
-    const merged = mergeLocalNotices(stream, runNotices);
+    const merged = conversationRows(view, allNotices, scrollbackRunId);
+    const stream = merged.run;
     return {
       entries:
-        stream === undefined && runNotices.length === 0
+        stream === undefined && merged.rows.length === 0
           ? undefined
           : merged.rows,
       finalRows: merged.finalRows,

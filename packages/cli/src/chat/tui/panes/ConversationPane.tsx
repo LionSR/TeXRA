@@ -6,11 +6,10 @@ import {
 } from '@texra/shared/plugins/documents';
 
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
-import { sessionView, runViewOf } from '../state/sessionView';
+import { sessionView } from '../state/sessionView';
 import {
-  mergeLocalNotices,
+  conversationRows,
   notices as noticesSignal,
-  noticesFor,
 } from '../state/transcript';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
@@ -44,8 +43,8 @@ export function ConversationPane(
   const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
-  const stream = runViewOf(view, activeRunId);
-  const merged = mergeLocalNotices(stream, noticesFor(allNotices, activeRunId));
+  const merged = conversationRows(view, allNotices, activeRunId);
+  const stream = merged.run;
   const displayEntries = pendingTranscriptEntries(
     merged.rows,
     merged.finalRows,
