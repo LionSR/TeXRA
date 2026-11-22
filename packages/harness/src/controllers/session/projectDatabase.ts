@@ -178,7 +178,8 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
           };
         if (store) {
           // Removing an orphan removes its entire directory. An older host may
-          // still hold the project database it created there.
+          // still hold its project database under the fixed pre-v1 filename,
+          // independent of the current global store's naming convention.
           for (const file of [
             storeFileName(namespace, 'project'),
             `${namespace}.db`,
