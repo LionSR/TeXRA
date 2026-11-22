@@ -5,10 +5,9 @@
  * the event tables and its own current values; the global store
  * ({@link GLOBAL_SCHEMA}) holds current values and the input history alone.
  *
- * A schema's `version` names its DDL, never the row vocabulary: rows carry
- * their own versions (`rowVersions.ts`), and the kinds a store holds are
- * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. An unstamped file gets the schema. A file stamped
+ * The physical stamp identifies incompatible DDL and the project store's
+ * v1 baseline. Within that baseline, row kinds carry their own versions
+ * (`rowVersions.ts`) and are checked by `rowCodec.ts`. An unstamped file gets the schema. A file stamped
  * with another schema fails the open unchanged: an earlier one has no step
  * to this one (there is no migration), a later one is a newer build's. A
  * file SQLite reports damaged is renamed aside and a fresh store opened.
@@ -168,7 +167,9 @@ const PROJECT_ADDITIVE = [
 /** A project's store: its runs' events, their projections, and the
  *  project's own current values. */
 export const PROJECT_SCHEMA: StoreSchema = Object.freeze({
-  version: 106,
+  // Refuse an earlier project file restored under the v1 filename: its rows
+  // use development versions, some with the same numbers as the baseline.
+  version: 108,
   tables: Object.freeze(PROJECT_TABLES),
   additive: Object.freeze(PROJECT_ADDITIVE),
 });

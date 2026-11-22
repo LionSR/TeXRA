@@ -61,7 +61,7 @@ malformed JSON), the host warns and ignores the file until it is fixed.
 
 Configuration files are ordinary JSON and store only workspace and user settings.
 Persistent application state—session history, execution records, and run events—is
-stored separately in a local SQLite database (`texra.db`) in workspace storage.
+stored separately in a local SQLite database (`texra.project-v1.db`) in workspace storage.
 TeXRA 1.0 initializes fresh application state and does not import or migrate
 legacy JSON session stores, histories, execution checkpoints, or old values from
 `.vscode/settings.json`.
