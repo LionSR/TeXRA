@@ -13,7 +13,7 @@ import {
   runIdentityName,
   type DisplayRow,
   type TraceDocument,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   emptyHostSnapshot,
   type HostSnapshot,

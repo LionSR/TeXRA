@@ -32,8 +32,8 @@ import {
   rollupOf,
   type RunId,
   formatCompactDuration,
-} from '@texra-ai/harness/schemas';
-import { dispatchedChildren } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { dispatchedChildren } from '@texra-ai/worldline/transcript';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
@@ -45,7 +45,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchDisclosureToggle } from './disclosureToggle';
-import type { SessionView, RunView } from '@texra-ai/harness/schemas';
+import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 
 /** The card's key in `RunSurface.disclosures` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';

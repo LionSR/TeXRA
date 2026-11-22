@@ -8,7 +8,7 @@
  * `programs/`, names its rubric and tools and calls it. They are built into
  * this table as their text.
  */
-import type { Program } from '@texra-ai/harness/plugins';
+import type { Program } from '@texra-ai/worldline/plugins';
 
 import task from './task.js?raw';
 import review from './programs/review.js?raw';

@@ -7,7 +7,7 @@ import {
   formatCompactTokenCount,
   formatResultCount,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** A steady marker, so list updates never animate the whole live region. */
 export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;

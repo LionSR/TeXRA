@@ -3,8 +3,8 @@
 
 import { Effect, Result } from 'effect';
 
-import { type RunId, runBypasses } from '@texra-ai/harness/schemas';
-import { InstalledPlugins } from '@texra-ai/harness/host';
+import { type RunId, runBypasses } from '@texra-ai/worldline/schemas';
+import { InstalledPlugins } from '@texra-ai/worldline/host';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import type { ConnectService } from '../state/attachedTask';

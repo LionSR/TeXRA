@@ -19,14 +19,14 @@ import {
   toErrorMessage,
   pluralize,
   NonNegativeIntSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   nullishWithDefault,
   executed,
   ToolError,
   defineTool,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 
 /**

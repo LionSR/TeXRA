@@ -38,14 +38,18 @@ import {
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { isOutcomeOf } from '@texra-ai/harness';
+import { isOutcomeOf } from '@texra-ai/worldline';
 import {
   formatResultCount,
   type RuntimeCommand,
   Rejected,
   ensureError,
-} from '@texra-ai/harness/schemas';
-import { envFlag, IS_WINDOWS, nodeFileServices } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/schemas';
+import {
+  envFlag,
+  IS_WINDOWS,
+  nodeFileServices,
+} from '@texra-ai/worldline/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,
@@ -61,7 +65,7 @@ import {
   type ServiceInfo,
   type TaskSummary,
 } from './protocol';
-import type { GlobalValues } from '@texra-ai/harness/plugins';
+import type { GlobalValues } from '@texra-ai/worldline/plugins';
 import type { SocketError } from 'effect/socket/Socket';
 
 /** The procedures as a client calls them. */

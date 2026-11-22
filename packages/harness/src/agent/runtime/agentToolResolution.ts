@@ -84,7 +84,7 @@ export const asksApproval = <E, R>(
 export class HostCapabilities extends Context.Service<
   HostCapabilities,
   { readonly of: (storage: string) => ReadonlySet<string> }
->()('@texra-ai/harness/agent/HostCapabilities') {}
+>()('@texra-ai/worldline/agent/HostCapabilities') {}
 
 /** What a step resolves its tools from: fixed at the run's open, but the
  *  approval flag the step reads live. */

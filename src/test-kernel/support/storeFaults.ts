@@ -83,7 +83,7 @@ import { generateRunId } from '@shared/schemas';
 import type { TestApp } from './FakePlatform';
 import { createTempDirPlatform } from './tempDirPlatform';
 import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
-import type { Sessions, HostInteractions } from '@texra-ai/harness';
+import type { Sessions, HostInteractions } from '@texra-ai/worldline';
 
 const WRITES = ['appendAll', 'job'] as const;
 const READS = [

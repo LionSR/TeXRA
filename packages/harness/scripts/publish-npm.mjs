@@ -1,4 +1,4 @@
-// Publishes `@texra-ai/llm` and `@texra-ai/harness` to npm at their shared
+// Publishes `@texra-ai/llm` and `@texra-ai/worldline` to npm at their shared
 // version, llm first: the harness names the llm version as its peer floor.
 //
 //   node packages/harness/scripts/publish-npm.mjs [--dry-run]

@@ -18,7 +18,7 @@ import type {
 import type {
   ExportNode,
   MediaAttachmentKind,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {

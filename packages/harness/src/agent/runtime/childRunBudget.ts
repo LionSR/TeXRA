@@ -53,6 +53,6 @@ export const resolveChildRunConcurrencyBudget = Effect.fn(
  * unlimited.
  */
 export const ChildRunBudget = Context.Reference<Semaphore.Semaphore>(
-  '@texra-ai/harness/session/ChildRunBudget',
+  '@texra-ai/worldline/session/ChildRunBudget',
   { defaultValue: () => Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER) },
 );

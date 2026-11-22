@@ -196,7 +196,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   A server that answers a newer revision is refused the same way, with
   the message saying this client does not accept it yet. SDK: the
   `framing` option is gone from `JsonRpcConnectionOptions` and
-  `JsonRpcProcessOptions` (`@texra-ai/harness/plugins`); a JSON-RPC
+  `JsonRpcProcessOptions` (`@texra-ai/worldline/plugins`); a JSON-RPC
   connection speaks only LSP `Content-Length` framing.
 
 ### Features
@@ -325,14 +325,14 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   names a program only for a program TeXRA ships, and nothing for a chat. Opt out
   with `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1` or
   `DO_NOT_TRACK=1`; opting out now also covers subscription rounds.
-- **Agent SDK: `@texra-ai/harness` and `@texra-ai/llm` are published for
-  the first time.** `@texra-ai/harness` is the agent runtime TeXRA runs on:
+- **Agent SDK: `@texra-ai/worldline` and `@texra-ai/llm` are published for
+  the first time.** `@texra-ai/worldline` is the agent runtime TeXRA runs on:
   sessions with persistent history, resume, fork and approvals, and tools
   and plugins of your own. A run is started with its system text, the tools
   it declares, the instruction and the model, and a run's helper agents are
   written the same way or named from an installed plugin's agents. Its authoring
-  surface is `@texra-ai/harness/plugins` and the built-in plugins are
-  `@texra-ai/harness/builtins`. The store file and the environment
+  surface is `@texra-ai/worldline/plugins` and the built-in plugins are
+  `@texra-ai/worldline/builtins`. The store file and the environment
   variables it reads are named after the embedding app's settings namespace
   (`<namespace>.db`, `<NAMESPACE>_APPROVAL_POLICY`). `@texra-ai/llm` is its
   model access. Both need Node.js 22.22.2 or 24.15 and Effect 4.1.

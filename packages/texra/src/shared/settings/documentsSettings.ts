@@ -7,7 +7,7 @@
 
 // Third-party imports
 import { Schema } from 'effect';
-import { decodingDefault } from '@texra-ai/harness/schemas';
+import { decodingDefault } from '@texra-ai/worldline/schemas';
 
 // Local imports
 import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';

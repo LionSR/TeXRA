@@ -3,17 +3,17 @@
 // an installed plugin on or off; switching an untrusted plugin on shows what
 // it declares and asks first. MCP servers are listed read-only.
 
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Effect } from 'effect';
 
-import { ToolCatalog } from '@texra-ai/harness/plugins';
+import { ToolCatalog } from '@texra-ai/worldline/plugins';
 import {
   InstalledPlugins,
   ToolAvailability,
   type PluginReview,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';

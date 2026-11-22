@@ -14,7 +14,7 @@ import {
   shortPluginId,
   type PluginTrustRequest,
   type RequestPayload,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** The primary answer's word, by what it sends; a kind answered from a
  *  form (a question) submits it. */

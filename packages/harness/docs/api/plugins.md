@@ -1,10 +1,10 @@
-# `@texra-ai/harness/plugins`
+# `@texra-ai/worldline/plugins`
 
 <!-- Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. -->
 
-The plugin authoring surface for `@texra-ai/harness`: what a tool or a
+The plugin authoring surface for `@texra-ai/worldline`: what a tool or a
 plugin is written with. The built-in plugins are
-[`@texra-ai/harness/builtins`](./builtins).
+[`@texra-ai/worldline/builtins`](./builtins).
 
 > **Guide:** Read [Plugins, Tools & Codemode](/api/plugins-and-codemode) for
 > how to author tools and plugins, how step-pinned catalogs work, and how the
@@ -316,7 +316,7 @@ class AppSignals extends Context.Service<
       Scope.Scope
     >;
   }
->()('@texra-ai/harness/AppSignals')
+>()('@texra-ai/worldline/AppSignals')
 ```
 
 ## AppState
@@ -329,7 +329,7 @@ change at its next read.
 
 ```ts
 class AppState extends Context.Service<AppState, AppStateStore>()(
-  '@texra-ai/harness/platform/AppState',
+  '@texra-ai/worldline/platform/AppState',
 )
 ```
 
@@ -511,7 +511,7 @@ The door, as the run loop provides it beside each call ({@link childRuns}).
 
 ```ts
 class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
-  '@texra-ai/harness/agent/ChildRuns',
+  '@texra-ai/worldline/agent/ChildRuns',
 )
 ```
 
@@ -968,7 +968,7 @@ storage root it opened — so it is provided once by the process runtime
 class GlobalStorageFs extends Context.Service<
   GlobalStorageFs,
   RootedFileSystem
->()('@texra-ai/harness/platform/GlobalStorageFs')
+>()('@texra-ai/worldline/platform/GlobalStorageFs')
 ```
 
 ## GlobalValues
@@ -981,7 +981,7 @@ under a family it declares (`ValueFamily`).
 class GlobalValues extends Context.Service<
   GlobalValues,
   CurrentValues
->()('@texra-ai/harness/GlobalValues')
+>()('@texra-ai/worldline/GlobalValues')
 ```
 
 ## HostCapabilities
@@ -996,7 +996,7 @@ A plugin that serves none offers its gated tools nowhere.
 class HostCapabilities extends Context.Service<
   HostCapabilities,
   { readonly of: (storage: string) => ReadonlySet<string> }
->()('@texra-ai/harness/agent/HostCapabilities')
+>()('@texra-ai/worldline/agent/HostCapabilities')
 ```
 
 ## HostResources
@@ -1012,7 +1012,7 @@ class HostResources extends Context.Service<
      *  Absent where none ships: an embedder with no resources. */
     readonly resourcesRoot?: string;
   }
->()('@texra-ai/harness/platform/HostResources')
+>()('@texra-ai/worldline/platform/HostResources')
 ```
 
 ## Hunk
@@ -1423,7 +1423,7 @@ written with.
 
 ```ts
 interface NativePluginHost {
-  /** `@texra-ai/harness/plugins`, as this process loaded it. */
+  /** `@texra-ai/worldline/plugins`, as this process loaded it. */
   readonly plugins: typeof plugins;
   /** `effect`'s authoring modules, as this process loaded them: `Effect`,
    *  `Context`, `Layer`, `Schema`, `Stream`, `Scope` and the data and
@@ -1691,7 +1691,7 @@ that work still owns. The hold is taken before this returns.
 class PluginHold extends Context.Service<
   PluginHold,
   (until: Effect.Effect<void>) => Effect.Effect<void>
->()('@texra-ai/harness/tools/PluginHold')
+>()('@texra-ai/worldline/tools/PluginHold')
 ```
 
 ## PluginLayerServices
@@ -2243,7 +2243,7 @@ the service is that value, not a thunk resolved per member call.
 
 ```ts
 class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
-  '@texra-ai/harness/platform/Secrets',
+  '@texra-ai/worldline/platform/Secrets',
 )
 ```
 
@@ -2371,7 +2371,7 @@ class StateStores extends Context.Service<
       workspaceRoot: string | undefined,
     ) => Effect.Effect<AppStateStore>;
   }
->()('@texra-ai/harness/StateStores')
+>()('@texra-ai/worldline/StateStores')
 ```
 
 ## StateWriteFailed
@@ -2408,7 +2408,7 @@ The session's own storage root (under the process's storage directory).
 
 ```ts
 class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
-  '@texra-ai/harness/platform/StorageFs',
+  '@texra-ai/worldline/platform/StorageFs',
 )
 ```
 
@@ -2558,7 +2558,7 @@ The tool call the running tool serves.
 class ToolContext extends Context.Service<
   ToolContext,
   ToolContextShape
->()('@texra-ai/harness/agent/ToolContext')
+>()('@texra-ai/worldline/agent/ToolContext')
 ```
 
 ## ToolContextShape
@@ -2812,7 +2812,7 @@ or its step read, which holds the native plugins loaded then.
 
 ```ts
 class ToolRegistry extends Context.Service<ToolRegistry, ToolTable>()(
-  '@texra-ai/harness/tools/ToolRegistry',
+  '@texra-ai/worldline/tools/ToolRegistry',
 )
 ```
 
@@ -2973,7 +2973,7 @@ The workspace folder the session works on.
 class WorkspaceFs extends Context.Service<
   WorkspaceFs,
   RootedFileSystem
->()('@texra-ai/harness/platform/WorkspaceFs')
+>()('@texra-ai/worldline/platform/WorkspaceFs')
 ```
 
 ## WorkspacePathResolution

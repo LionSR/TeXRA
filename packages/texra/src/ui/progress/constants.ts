@@ -4,7 +4,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import type { RunView, RunAction } from '@texra-ai/harness/schemas';
+import type { RunView, RunAction } from '@texra-ai/worldline/schemas';
 
 /** What a run action reaches when it is chosen: the header's events, and
  *  its clipboard. */

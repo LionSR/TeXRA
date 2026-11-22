@@ -182,7 +182,7 @@ export class AppSignals extends Context.Service<
       Scope.Scope
     >;
   }
->()('@texra-ai/harness/AppSignals') {
+>()('@texra-ai/worldline/AppSignals') {
   static readonly layer: Layer.Layer<AppSignals> = Layer.effect(
     AppSignals,
     Effect.map(PubSub.unbounded<AppSignalEvent>(), (hub) => ({

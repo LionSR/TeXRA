@@ -7,7 +7,7 @@ import {
   type ApiKeyProviderId,
   providerDisplayName,
 } from '@texra-ai/llm';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { credentialOriginLabel } from '@ui/copy/credentials';
 
@@ -15,7 +15,7 @@ import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { Secrets } from '@texra-ai/harness/plugins';
+import type { Secrets } from '@texra-ai/worldline/plugins';
 import type { Effect } from 'effect';
 import { useChatProcess } from '../chatProcess';
 

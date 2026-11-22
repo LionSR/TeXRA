@@ -1,5 +1,5 @@
 // The script popup: the calls a run's `script` call issued, painted from the
-// shared script-stage model (`scriptStages` in `@texra-ai/harness/transcript`), the one the
+// shared script-stage model (`scriptStages` in `@texra-ai/worldline/transcript`), the one the
 // progress view paints. A foreground surface like the Ctrl-T reader:
 // row-budgeted, and Esc restores the conversation untouched. Its title is
 // the card's summary line; each section lists its calls in issue order. Enter
@@ -7,14 +7,14 @@
 // call's agent, which the script sees as `Skipped`.
 
 // Third-party imports
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI primitives
 import {
   scriptStages,
   type ScriptCallView,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import {
@@ -43,7 +43,7 @@ import { type ScriptPopupView } from '../state/cliState';
 import { killableRunId, runViewOf, sessionView } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 import { RowSegment } from './SubagentList';
-import type { RuntimeCommand, RunId } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand, RunId } from '@texra-ai/worldline/schemas';
 
 /** Rows the popup paints besides its list: the focused call's facts. */
 const POPUP_EXTRA_ROWS = 1;

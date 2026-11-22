@@ -18,7 +18,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import type {
   ContextManagementRow,
   StatItem,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 
 // Local imports - formatter helpers
 import type { FormatResult } from '../baseLogFormatter';

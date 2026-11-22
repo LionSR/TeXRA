@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
-import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
+import { Settings, type SettingsStores } from '@texra-ai/worldline/plugins';
+import { RUN_OUTCOME } from '@texra-ai/worldline/schemas';
 import { finalDocumentOutput } from '@texra/shared/plugins/documentOutputs';
 import { documentsOf } from '@texra/shared/plugins/documents';
-import type { RunEnd } from '@texra-ai/harness';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunEnd } from '@texra-ai/worldline';
+import type { RunView } from '@texra-ai/worldline/schemas';
 import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settings/texraSettings';
 
 /**

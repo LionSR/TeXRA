@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { CommandDirs } from '@texra-ai/harness/node';
+import { CommandDirs } from '@texra-ai/worldline/node';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { inputBox } from '@frontend/ui/dialogs';
@@ -34,7 +34,7 @@ import {
   withLogChannel,
   WorkspaceFs,
   type PlatformSecrets,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 const CHANNEL = 'gitCommands';
 

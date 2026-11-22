@@ -16,7 +16,7 @@ import type {
   BashRequest,
   RunId,
   RuntimeCommand,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 // Every card shares one action row (BaseRequestPanel); the bash card is where
 // it guards the most, so these pin the row's keys here.

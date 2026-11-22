@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { envFlag } from '@texra-ai/harness/node';
+import { envFlag } from '@texra-ai/worldline/node';
 import { withEnv } from '@test/support/testEnv';
 
 describe('envFlag', () => {

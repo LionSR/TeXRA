@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
-import { entryTypeIn, workspaceRelativePath } from '@texra-ai/harness/node';
+import { entryTypeIn, workspaceRelativePath } from '@texra-ai/worldline/node';
 
 type GeneratedLatexdiffArtifactKind =
   | 'workspaceDiff'

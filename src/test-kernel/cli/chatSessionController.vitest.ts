@@ -31,8 +31,8 @@ import {
 } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import type { LocalSession } from '@texra-ai/harness';
-import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import type { LocalSession } from '@texra-ai/worldline';
+import { RunIdSchema, type RunId } from '@texra-ai/worldline/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { scopeRunner } from '@cli/chat/scopeRunner';
 import { createChatSessionController } from '@cli/chat/chatSessionController';

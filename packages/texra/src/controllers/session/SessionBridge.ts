@@ -41,12 +41,12 @@ import {
 } from 'effect';
 import { RpcServer } from 'effect/rpc';
 
-import { type Session } from '@texra-ai/harness';
+import { type Session } from '@texra-ai/worldline';
 import {
   SESSION_CLOSE_DEADLINE_MS,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
@@ -58,7 +58,7 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { serveOverMessages } from '@texra/shared/rpcOverMessages';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import {
   isRequestRefusal,
   type HostCommandFailure,

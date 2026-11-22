@@ -6,7 +6,7 @@ import {
   AgentConfigSchema,
   MESSAGE_TYPES,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { emptyRunEndOutput, LOG_LEVELS } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';

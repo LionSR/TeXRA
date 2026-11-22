@@ -33,7 +33,7 @@ function loadAliases() {
       // Prefer the bare '*' variant (ends with just '/*') — it strips
       // cleanly to a directory path for build tools.  Fall back to the
       // first value when there is no bare variant (e.g. non-wildcard
-      // aliases like "@texra-ai/harness" which map to a single file).
+      // aliases like "@texra-ai/worldline" which map to a single file).
       const best = values.find((v) => v.endsWith('/*')) ?? values[0];
       const pathValue = best.replace('/*', '');
 

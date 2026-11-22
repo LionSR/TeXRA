@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 /**
  * Platform-agnostic diagnostic formatting utilities.
  *

@@ -34,9 +34,9 @@ import {
 } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process';
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { pathExists } from '@texra-ai/harness/node';
-import { formatResultCount, toErrorMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { pathExists } from '@texra-ai/worldline/node';
+import { formatResultCount, toErrorMessage } from '@texra-ai/worldline/schemas';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';

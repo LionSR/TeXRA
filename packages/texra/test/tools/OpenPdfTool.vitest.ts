@@ -13,7 +13,7 @@ import {
 } from '@test/support/testKernel';
 import { EditorHost, type EditorCapabilities } from '@texra/tools/editorHost';
 import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
-import { generateRunId } from '@texra-ai/harness/schemas';
+import { generateRunId } from '@texra-ai/worldline/schemas';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
 type OpenPdfRequest = Parameters<NonNullable<EditorCapabilities['openPdf']>>[0];

@@ -12,7 +12,7 @@
 // The sequences are not DCS-wrapped for tmux or screen, so a multiplexer
 // that does not pass OSC through drops them.
 
-import { stripControlCharacters } from '@texra-ai/harness/schemas';
+import { stripControlCharacters } from '@texra-ai/worldline/schemas';
 
 import { ANSI_BEL, osc } from '@cli/runtime/terminal/ansiEscapes';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';

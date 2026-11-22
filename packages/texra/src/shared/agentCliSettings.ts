@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
-import { decodingDefault } from '@texra-ai/harness/schemas';
-import type { SettingChoiceCopy } from '@texra-ai/harness/schemas';
+import { decodingDefault } from '@texra-ai/worldline/schemas';
+import type { SettingChoiceCopy } from '@texra-ai/worldline/schemas';
 import {
   DEFAULT_EFFORT,
   isCodexModel,

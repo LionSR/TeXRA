@@ -14,7 +14,7 @@ import {
 import type {
   ApprovalBypassKind,
   RequestPayload,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 interface BashRequestProps {
   readonly availableRows?: number;

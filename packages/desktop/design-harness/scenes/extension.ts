@@ -11,7 +11,7 @@ import {
   RunIdSchema,
   type ApprovalGrants,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   buildScenario,
   emptyView,

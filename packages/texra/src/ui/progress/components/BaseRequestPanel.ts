@@ -59,7 +59,7 @@ import {
   type RequestPayload,
   type RunView,
   type RuntimeCommand,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   DELEGATION_APPROVAL_COPY,
   runGrantLabel,

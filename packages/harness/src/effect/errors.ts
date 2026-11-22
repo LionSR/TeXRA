@@ -1,5 +1,5 @@
 /**
- * The failures the Effect surface names (`@texra-ai/harness`). Four are
+ * The failures the Effect surface names (`@texra-ai/worldline`). Four are
  * defined here — the plugin list the package refuses, the tools a launch
  * refuses, the resume refusal, and the run's own failure. The other launch
  * refusal, an input the launch will not run (`LaunchRefused`), is the agent

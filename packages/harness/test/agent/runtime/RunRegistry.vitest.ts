@@ -4,7 +4,7 @@ import { Context, Deferred, Effect, Fiber, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import {
   RunRegistry,
   SessionRunRegistry,

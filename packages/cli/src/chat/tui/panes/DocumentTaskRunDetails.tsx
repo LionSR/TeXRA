@@ -13,7 +13,7 @@ import {
   type Stage,
   formatCompactDuration,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { PENDING_BOX, LIST_BULLET } from '@cli/tui/ui/glyphs';
 import {

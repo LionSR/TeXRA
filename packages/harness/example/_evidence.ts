@@ -8,8 +8,8 @@ import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { Effect } from 'effect';
-import type { LocalSession } from '@texra-ai/harness';
-import type { RunId, ExportNode } from '@texra-ai/harness/schemas';
+import type { LocalSession } from '@texra-ai/worldline';
+import type { RunId, ExportNode } from '@texra-ai/worldline/schemas';
 
 import { scriptReturnsOf } from './_support.ts';
 

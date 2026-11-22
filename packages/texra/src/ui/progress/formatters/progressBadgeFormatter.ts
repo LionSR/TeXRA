@@ -3,7 +3,7 @@ import {
   isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/worldline/schemas';
 
 /**
  * The run header's revision chip: "Revision 2 of 3" on a document task,

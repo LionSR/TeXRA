@@ -7,7 +7,7 @@ import {
   AgentConfigSchema,
   RUN_OUTCOME,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { emptyRunEndOutput } from '@shared/schemas';
 import { deriveContinuation } from '@agent/storage/continuation';
 import { positionRow } from '@agent/runtime/loop/rows';

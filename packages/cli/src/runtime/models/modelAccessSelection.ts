@@ -2,8 +2,8 @@ import { Effect } from 'effect';
 
 import { providerDisplayName } from '@texra-ai/llm';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
-import { isSubscriptionAuthProvider } from '@texra-ai/harness/schemas';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
+import { isSubscriptionAuthProvider } from '@texra-ai/worldline/schemas';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
 import { setModelAccessPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
 import { subscriptionProvider } from '@texra/controllers/modelAccess/subscriptionProviders';

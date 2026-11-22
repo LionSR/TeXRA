@@ -34,7 +34,7 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import { type RunId } from '@texra-ai/harness/schemas';
+import { type RunId } from '@texra-ai/worldline/schemas';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/recordedRequest';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
@@ -70,7 +70,7 @@ import {
 
 // Local file imports
 import { autoDecideRequests } from '@test/agent/progressTestUtils';
-import type { BoundModel } from '@texra-ai/harness/plugins';
+import type { BoundModel } from '@texra-ai/worldline/plugins';
 
 /** A draw at the middle of [0, 1): the gate's ±20 % jitter scales by exactly
  *  1, so a cooled route waits out its exact backoff (1 s, doubling). */

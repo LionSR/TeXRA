@@ -62,7 +62,7 @@ export class RunLive extends Schema.TaggedError<RunLive>()('RunLive', {
  * resumes, opens with them; a sweep with no launch behind it has none.
  */
 export const LaunchKeys = Context.Reference<Readonly<Record<string, string>>>(
-  '@texra-ai/harness/LaunchKeys',
+  '@texra-ai/worldline/LaunchKeys',
   { defaultValue: () => ({}) },
 );
 
@@ -935,7 +935,7 @@ export class SessionRunRegistry implements RunsShape {
 export class RunRegistry extends Context.Service<
   RunRegistry,
   SessionRunRegistry
->()('@texra-ai/harness/session/RunRegistry') {}
+>()('@texra-ai/worldline/session/RunRegistry') {}
 
 /**
  * The services every step of an agent run reads on the way down: what the

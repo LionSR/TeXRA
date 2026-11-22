@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { Command } from 'effect/cli';
 
-import { Skills } from '@texra-ai/harness/host';
+import { Skills } from '@texra-ai/worldline/host';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';

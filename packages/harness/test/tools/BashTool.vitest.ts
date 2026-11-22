@@ -23,7 +23,7 @@ import {
   RUN_OUTCOME,
   type RunId,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import * as resumeRunModule from '@agent/runtime/resumeRun';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -45,7 +45,7 @@ import {
 } from '@test/support/testKernel';
 import { BashTool } from '@tools/bash';
 import { nodeFileServices } from '@utils/files/fsDurability';
-import type { ToolResult } from '@texra-ai/harness/plugins';
+import type { ToolResult } from '@texra-ai/worldline/plugins';
 
 /** What the block's scripted processes do; each case sets its own. */
 let answer: ReturnType<Parameters<typeof scriptedSpawnerLayer>[0]> = {};

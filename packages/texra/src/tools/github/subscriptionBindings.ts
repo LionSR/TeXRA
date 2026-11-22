@@ -4,8 +4,8 @@ import type {
   RunInbox,
   ToolError,
   AppSignals,
-} from '@texra-ai/harness/plugins';
-import type { RunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';
 import type { GitHubServices } from './githubClient';

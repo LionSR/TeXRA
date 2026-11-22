@@ -18,7 +18,7 @@
  * Wire identifiers (`chatgpt`, `grok`) stay internal.
  */
 
-import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 
 /** Shared device-code option description for any account picker. */
 export const DEVICE_CODE_DESCRIPTION =

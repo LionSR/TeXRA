@@ -1,7 +1,7 @@
 import { Result, Schema } from 'effect';
 import { expect, it } from 'vitest';
 
-import { factName, RunIdSchema } from '@texra-ai/harness/schemas';
+import { factName, RunIdSchema } from '@texra-ai/worldline/schemas';
 import { decodeRow, encodeDraft } from '@controllers/session/rowCodec';
 import { ROW_KINDS } from '@shared/schemas';
 import type { FactKinds } from '@tools/plugins';

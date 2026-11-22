@@ -17,7 +17,7 @@ import {
   RunIdSchema,
   type RunView,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { runHistoryRows, storedDraft } from '@agent/runtime/providerMessages';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { SessionRowSchema } from '@shared/schemas';

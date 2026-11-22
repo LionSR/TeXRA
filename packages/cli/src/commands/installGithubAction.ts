@@ -15,7 +15,7 @@ import {
   originUrl,
   pathExists,
   repositoryRoot,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { texraGuideUrl } from '@ui/copy/guide';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';

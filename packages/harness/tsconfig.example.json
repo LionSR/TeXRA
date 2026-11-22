@@ -9,13 +9,13 @@
   "extends": "./example/tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@texra-ai/harness": ["./dist/types/index.d.ts"],
-      "@texra-ai/harness/schemas": ["./dist/types/schemas.d.ts"],
-      "@texra-ai/harness/transcript": ["./dist/types/transcriptEntry.d.ts"],
-      "@texra-ai/harness/plugins": ["./dist/types/plugins.d.ts"],
-      "@texra-ai/harness/builtins": ["./dist/types/builtins.d.ts"],
-      "@texra-ai/harness/host": ["./dist/types/host.d.ts"],
-      "@texra-ai/harness/node": ["./dist/types/node.d.ts"],
+      "@texra-ai/worldline": ["./dist/types/index.d.ts"],
+      "@texra-ai/worldline/schemas": ["./dist/types/schemas.d.ts"],
+      "@texra-ai/worldline/transcript": ["./dist/types/transcriptEntry.d.ts"],
+      "@texra-ai/worldline/plugins": ["./dist/types/plugins.d.ts"],
+      "@texra-ai/worldline/builtins": ["./dist/types/builtins.d.ts"],
+      "@texra-ai/worldline/host": ["./dist/types/host.d.ts"],
+      "@texra-ai/worldline/node": ["./dist/types/node.d.ts"],
       "acme-notes": ["./example/acme-notes/index.d.ts"]
     }
   }

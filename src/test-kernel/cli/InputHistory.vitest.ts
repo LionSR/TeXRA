@@ -4,7 +4,7 @@ import { describe, expect, beforeEach } from 'vitest';
 import { it } from '@effect/vitest';
 import { Effect, Exit, Layer, Scope } from 'effect';
 
-import { GlobalDatabase } from '@texra-ai/harness/node';
+import { GlobalDatabase } from '@texra-ai/worldline/node';
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

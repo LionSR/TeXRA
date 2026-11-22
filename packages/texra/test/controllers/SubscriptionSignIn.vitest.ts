@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AppSignals } from '@texra-ai/harness/plugins';
+import { AppSignals } from '@texra-ai/worldline/plugins';
 import {
   SubscriptionAccounts,
   type SubscriptionDeviceCodePrompt,

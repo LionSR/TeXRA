@@ -7,7 +7,7 @@
 
 import { Effect, SubscriptionRef } from 'effect';
 
-import { getModelLabel, joinFacts } from '@texra-ai/harness/schemas';
+import { getModelLabel, joinFacts } from '@texra-ai/worldline/schemas';
 import type { ScopeRunner } from '../../scopeRunner';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 

@@ -7,7 +7,7 @@ import { Schema } from 'effect';
 import {
   DeclinableUsageRouteSchema,
   ModelAvailabilityKindSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /**
  * Resolved per-model access. Computed once by `readModelOptions` and

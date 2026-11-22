@@ -2,7 +2,7 @@ name: Release
 
 # Fires once a GitHub Release is published. Tags are cut in pairs off the same
 # commit: `vX.Y.Z` for the extension, `cli-vX.Y.Z` for the CLI. The SDK pair
-# (`@texra-ai/llm`, `@texra-ai/harness`) has its own version and its own tag,
+# (`@texra-ai/llm`, `@texra-ai/worldline`) has its own version and its own tag,
 # `sdk-vX.Y.Z`, cut whenever what the two packages ship changed. Creating the
 # tag/release itself stays a manual step (gh release create) so a human still
 # curates the changelog body and decides when to go public; this workflow only
@@ -195,10 +195,10 @@ jobs:
         run: npm install -g npm@^11.5.1
 
       - name: Install the packed tarballs and run the example
-        run: pnpm --filter @texra-ai/harness run example:packed
+        run: pnpm --filter @texra-ai/worldline run example:packed
 
       - name: Dry-run the publish
         run: node packages/harness/scripts/publish-npm.mjs --dry-run
 
-      - name: Publish @texra-ai/llm, then @texra-ai/harness
+      - name: Publish @texra-ai/llm, then @texra-ai/worldline
         run: node packages/harness/scripts/publish-npm.mjs

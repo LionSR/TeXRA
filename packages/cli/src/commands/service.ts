@@ -1,9 +1,9 @@
 import { Deferred, Effect, Exit, References } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { formatResultCount } from '@texra-ai/harness/schemas';
-import { setLogSink } from '@texra-ai/harness/node';
-import { entryLine } from '@texra-ai/harness/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
+import { setLogSink } from '@texra-ai/worldline/node';
+import { entryLine } from '@texra-ai/worldline/schemas';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
 import {
   SERVICE_SUBCOMMAND,

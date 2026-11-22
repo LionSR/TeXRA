@@ -4,14 +4,14 @@ import {
   Cancelled,
   type AgentConfig,
   type RunId,
-} from '@texra-ai/harness/schemas';
-import { presentRunFailure } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { presentRunFailure } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME, setupAgent } from '@texra/agent/entryAgent';
 import type { Dialogs } from '@texra/hosts/uiHosts';
-import type { Run, Session, Notices } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { Run, Session, Notices } from '@texra-ai/worldline';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
 
 /** The setup assistant's log channel, for its launch and what follows it. */
 const CHANNEL = 'SetupAssistant';

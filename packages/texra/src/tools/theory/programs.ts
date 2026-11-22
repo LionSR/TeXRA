@@ -13,7 +13,7 @@
  * A step records the module sources it ran, so a resumed run replays the
  * program it started with.
  */
-import type { Program } from '@texra-ai/harness/plugins';
+import type { Program } from '@texra-ai/worldline/plugins';
 import {
   MERGE_EDITED_FILE,
   type DocumentsOutput,

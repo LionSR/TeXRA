@@ -7,7 +7,7 @@
 import {
   formatCompactDuration,
   formatResultCount,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 export type LeanServerInfo = {
   readonly workspaceRoot: string;

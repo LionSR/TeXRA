@@ -3,13 +3,13 @@ import {
   decodingDefault,
   toErrorMessage,
   type StateKey,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   Settings,
   AppState,
   type ConfigProvider,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   TELEMETRY_ENABLED_SETTING,
   USAGE_LOGGING_SENDS,

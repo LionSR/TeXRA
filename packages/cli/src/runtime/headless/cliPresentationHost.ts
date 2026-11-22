@@ -15,9 +15,9 @@ import type {
   Session,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
-import type { PresentationEventHandlers } from '@texra-ai/harness/host';
-import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline';
+import type { PresentationEventHandlers } from '@texra-ai/worldline/host';
+import type { LogLevel, RunId } from '@texra-ai/worldline/schemas';
 import type { CliContext } from '../platform/cliContext';
 
 interface CliRuntimeHost {

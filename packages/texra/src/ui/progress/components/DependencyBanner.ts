@@ -1,7 +1,7 @@
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { formatWordList } from '@texra-ai/harness/schemas';
+import { formatWordList } from '@texra-ai/worldline/schemas';
 import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { bannerStyles } from '@ui/styles';

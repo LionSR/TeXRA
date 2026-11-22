@@ -12,7 +12,7 @@ import {
   Secrets,
   withLogChannel,
   type SettingsStores,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';

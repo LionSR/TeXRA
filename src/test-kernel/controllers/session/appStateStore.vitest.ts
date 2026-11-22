@@ -12,7 +12,7 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Layer, Result, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AppState } from '@texra-ai/harness/plugins';
+import { AppState } from '@texra-ai/worldline/plugins';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 

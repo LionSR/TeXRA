@@ -3,7 +3,7 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { FakeHost } from '@test/support/testKernel';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

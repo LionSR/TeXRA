@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { platform } from 'node:os';
 import { Box, Text, useInput, useWindowSize } from 'ink';
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import { useLayoutEffect, useState } from 'react';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';

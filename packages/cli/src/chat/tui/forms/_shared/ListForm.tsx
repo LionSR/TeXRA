@@ -15,7 +15,7 @@ import { isCompactRows } from '@cli/tui/ui/theme';
 
 import { FormFrame, renderAsyncListFormTransient } from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { Effect } from 'effect';
 
 const LIST_FORM_FRAME_ROWS = 3;

@@ -11,7 +11,7 @@
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { DiffLabel, DiffSource } from '@texra/hosts/uiHosts';
 import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import type {

@@ -13,8 +13,8 @@ import {
   Secrets,
   Settings,
   type SettingsStores,
-} from '@texra-ai/harness/plugins';
-import { isSubscriptionAuthProvider } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { isSubscriptionAuthProvider } from '@texra-ai/worldline/schemas';
 import { hasUsableApiKey } from '@texra-ai/llm';
 
 // Local imports - app

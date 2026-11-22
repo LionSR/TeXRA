@@ -5,8 +5,8 @@
  */
 import { Effect } from 'effect';
 
-import { Sessions } from '@texra-ai/harness';
-import { type SessionView } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { type SessionView } from '@texra-ai/worldline/schemas';
 
 import { runStatusKey } from '@texra/shared/session/runStatusKey';
 

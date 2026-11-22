@@ -1,7 +1,7 @@
 import type {
   UserQuestionAnswers,
   UserQuestionPrompt,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 export function updateUserQuestionAnswers(
   answers: UserQuestionAnswers,

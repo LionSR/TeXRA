@@ -102,7 +102,7 @@ export class ModelAccess extends Context.Service<
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<string | null, RouteUnavailable>;
   }
->()('@texra-ai/harness/ModelAccess') {}
+>()('@texra-ai/worldline/ModelAccess') {}
 
 /** The settings one binding reads; a subscription session that cannot be
  *  read already fails as its route. */

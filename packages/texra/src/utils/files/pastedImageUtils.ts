@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import { Clock, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
-import { StorageFs, withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { StorageFs, withLogChannel } from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { PASTED_DIR, isPastedImage } from '@texra/shared/utils/pastedImageName';
 
 // Local imports - filesystem

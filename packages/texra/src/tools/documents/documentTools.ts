@@ -23,7 +23,7 @@ import {
   type AgentTrace,
   sourceLocationUnder,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -32,7 +32,7 @@ import {
   type FileLocation,
   NonNegativeIntSchema,
   hasExtension,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';

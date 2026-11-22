@@ -21,14 +21,14 @@ import {
   formatCompactDuration,
   pluralize,
   runNoun,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   scriptStages,
   transcriptTimeline,
   type ScriptStageView,
   type TimelineEntry,
   type TranscriptRow,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { stageStatus } from '@ui/copy/runStatus';
@@ -56,7 +56,7 @@ import type {
   RunView,
   SessionView,
   TranscriptView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 // Local imports - sibling helpers
 // Side-effect import: registers <terminal-output>, which the terminal-stream

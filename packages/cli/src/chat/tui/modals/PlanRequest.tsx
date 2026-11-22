@@ -24,7 +24,7 @@ import {
   confirmCardCompactChromeRows,
   type ConfirmCardKeyRow,
 } from './ConfirmCardState';
-import type { PlanApprovalRequest } from '@texra-ai/harness/schemas';
+import type { PlanApprovalRequest } from '@texra-ai/worldline/schemas';
 
 interface PlanRequestProps {
   readonly availableRows?: number;

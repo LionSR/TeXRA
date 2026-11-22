@@ -2,8 +2,8 @@
 import { Effect } from 'effect';
 
 // Internal imports
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
-import { getBasename } from '@texra-ai/harness/schemas';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/worldline/plugins';
+import { getBasename } from '@texra-ai/worldline/schemas';
 import {
   FILE_HANDLING_RULES,
   LATEX_BUILD_DIRECTORY,

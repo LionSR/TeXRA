@@ -6,7 +6,7 @@ import { layer } from '@effect/vitest';
 import { Layer, Schema } from 'effect';
 import { afterEach, beforeEach, expect } from 'vitest';
 
-import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import { RunIdSchema, type RunId } from '@texra-ai/worldline/schemas';
 import {
   attentionRequests,
   currentApproval,

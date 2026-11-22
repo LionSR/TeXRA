@@ -6,7 +6,7 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
@@ -17,7 +17,7 @@ import { choose, createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/worldline/host';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopHostBridge } from './hostBridge.js';

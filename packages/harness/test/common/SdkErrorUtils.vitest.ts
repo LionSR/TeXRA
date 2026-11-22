@@ -3,7 +3,7 @@ import { APIError, BadRequestError as OpenAIBadRequestError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { RouteUnavailable } from '@texra-ai/harness/host';
+import { RouteUnavailable } from '@texra-ai/worldline/host';
 import { modelFailureOf } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../llm/src/api/openaiResponsesCodec.js';
 import { judgeFailure } from '../../../llm/src/api/verdict.js';

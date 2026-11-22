@@ -13,16 +13,16 @@ import {
   type SessionOpenError,
   Sessions,
   type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
   type ConfigStore,
   openNodeWorkspaceRoots,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   withLogChannel,
   AppState,
   StateStores,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import {

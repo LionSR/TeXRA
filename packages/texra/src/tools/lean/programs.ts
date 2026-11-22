@@ -16,7 +16,7 @@
  * A step records the module sources it ran, so a resumed run replays the
  * program it started with.
  */
-import type { Program } from '@texra-ai/harness/plugins';
+import type { Program } from '@texra-ai/worldline/plugins';
 
 import blueprint from './programs/blueprint.js?raw';
 import leanSearch from './programs/lean-search.js?raw';

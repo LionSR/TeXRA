@@ -15,19 +15,19 @@ import { join } from 'node:path';
 import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 
 // Local imports
-import { processLayer, type ProcessServices } from '@texra-ai/harness/host';
+import { processLayer, type ProcessServices } from '@texra-ai/worldline/host';
 import {
   emitAppSignal,
   Secrets,
   HostResources,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   CommandDirs,
   FileSecrets,
   meansAbsent,
   nodePlatformServices,
   secretsDirectory,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   usageLogLayer,
   type UsageLogOptions,
@@ -41,7 +41,7 @@ import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 import { texraPlugins } from '@texra/tools/registry';
-import type { Sessions, SkillSourceOptions } from '@texra-ai/harness';
+import type { Sessions, SkillSourceOptions } from '@texra-ai/worldline';
 import type { ClientIdentity } from '@texra-ai/llm/node';
 
 /**

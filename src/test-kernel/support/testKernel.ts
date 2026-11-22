@@ -38,7 +38,7 @@ import {
   type LocalSession,
   type OpenOptions,
   type HostInteractions,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
   processLayer,
   ToolAvailability,
@@ -46,8 +46,8 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   type ValidationModel,
-} from '@texra-ai/harness/host';
-import { AppNamespace, nodePlatformServices } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/host';
+import { AppNamespace, nodePlatformServices } from '@texra-ai/worldline/node';
 import {
   AppSignals,
   Secrets,
@@ -58,7 +58,7 @@ import {
   ToolCatalog,
   type StateStore,
   HostResources,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   attachInteractions,
   Interactions,

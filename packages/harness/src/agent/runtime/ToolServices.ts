@@ -119,7 +119,7 @@ export const sessionServices = Effect.map(
 
 /** The door, as the run loop provides it beside each call ({@link childRuns}). */
 export class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
-  '@texra-ai/harness/agent/ChildRuns',
+  '@texra-ai/worldline/agent/ChildRuns',
 ) {}
 
 /** The door of one call: over the call's place in its run and the

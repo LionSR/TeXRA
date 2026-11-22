@@ -17,8 +17,8 @@
  * run's history only through the tool result that used it.
  */
 import { randomUUID } from 'node:crypto';
-import { type PresentationEventHandlers } from '@texra-ai/harness/host';
-import { isPathWithin } from '@texra-ai/harness/node';
+import { type PresentationEventHandlers } from '@texra-ai/worldline/host';
+import { isPathWithin } from '@texra-ai/worldline/node';
 
 import {
   Cause,
@@ -51,7 +51,7 @@ import {
   type HostAttachFrame,
   type Notice,
 } from './hostCalls';
-import { logFailure } from '@texra-ai/harness/plugins';
+import { logFailure } from '@texra-ai/worldline/plugins';
 import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import { linkOver, type Linked, type ServiceLink } from './client';
 import type { WindowClient } from './windowHost';
@@ -59,7 +59,7 @@ import type {
   Session,
   SessionHost,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 
 /** Each runtime notice as the window call that carries it. */
 const CHANNEL = 'service';

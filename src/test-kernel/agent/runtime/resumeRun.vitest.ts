@@ -30,7 +30,7 @@ import { layer } from '@effect/vitest';
 import { Effect, Fiber, Context, Schema } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { Inbox } from '@agent/followUp/Inbox';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -55,7 +55,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** A resume in `session`. */
 const resume = (

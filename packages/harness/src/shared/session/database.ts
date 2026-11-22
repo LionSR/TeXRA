@@ -321,7 +321,7 @@ export class Database extends Context.Service<
       ids: readonly RunId[],
     ) => Effect.Effect<readonly AggregateState[], DatabaseReadFailed>;
   }
->()('@texra-ai/harness/session/Database') {}
+>()('@texra-ai/worldline/session/Database') {}
 
 /** The process's one handle on the global storage root, held for the process
  *  runtime's life: every application record of that root (settings, the
@@ -344,11 +344,11 @@ export class GlobalDatabase extends Context.Service<
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
   }
->()('@texra-ai/harness/session/GlobalDatabase') {}
+>()('@texra-ai/worldline/session/GlobalDatabase') {}
 
 /** Persistent project connections, retained by project and session scopes
  *  until the last borrower releases one (never an ephemeral in-memory one). */
 export class ProjectDatabases extends Context.Service<
   ProjectDatabases,
   RcMap.RcMap<string, Database['Service'], DatabaseOpenFailed>
->()('@texra-ai/harness/session/ProjectDatabases') {}
+>()('@texra-ai/worldline/session/ProjectDatabases') {}

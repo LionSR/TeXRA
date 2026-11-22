@@ -33,12 +33,12 @@ import {
   RuntimeCommandSchema,
   RunIdSchema,
   StoredMediaSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   CommitOrdinalSchema,
   SessionViewInputSchema,
   TranscriptSubscriptionSchema,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import {
   RpcClientMessageSchema,
   RpcServerMessageSchema,

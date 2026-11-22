@@ -90,7 +90,7 @@ export class UsageLog extends Context.Service<
       env?: Readonly<Record<string, string | undefined>>,
     ) => Effect.Effect<void>;
   }
->()('@texra-ai/harness/UsageLog') {
+>()('@texra-ai/worldline/UsageLog') {
   static readonly disabled = Layer.succeed(UsageLog)({
     log: () => Effect.void,
   });

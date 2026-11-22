@@ -1,4 +1,8 @@
-import { Secrets, Settings, type AppSignals } from '@texra-ai/harness/plugins';
+import {
+  Secrets,
+  Settings,
+  type AppSignals,
+} from '@texra-ai/worldline/plugins';
 import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';

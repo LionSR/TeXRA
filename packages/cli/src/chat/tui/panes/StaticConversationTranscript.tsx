@@ -39,8 +39,8 @@ import {
 } from './staticTranscriptRing';
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
-import type { SessionView, RunId } from '@texra-ai/harness/schemas';
-import { isWorking, runNoun } from '@texra-ai/harness/schemas';
+import type { SessionView, RunId } from '@texra-ai/worldline/schemas';
+import { isWorking, runNoun } from '@texra-ai/worldline/schemas';
 
 function shortenCwd(cwd: string): string {
   let home: string;

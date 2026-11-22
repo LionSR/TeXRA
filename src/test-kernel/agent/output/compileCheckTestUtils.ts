@@ -12,7 +12,7 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { runCompileCheck } from '@texra/agent/output/compileCheck';
-import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
+import type { FileLocation, RunId } from '@texra-ai/worldline/schemas';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,

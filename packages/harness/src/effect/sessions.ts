@@ -1,5 +1,5 @@
 /**
- * The public shapes of `@texra-ai/harness`'s sessions and runs: what an
+ * The public shapes of `@texra-ai/worldline`'s sessions and runs: what an
  * embedder or a host composes the process from, the {@link Session} it
  * holds for one root, and the {@link Run} it holds for one run. The
  * `Sessions` service that opens them is `processLayer.ts`'s; the programs

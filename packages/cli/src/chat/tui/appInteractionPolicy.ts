@@ -5,7 +5,7 @@ import type {
   RequestKind,
   RunId,
   SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 // Local imports - shared schemas and utilities
 import type { Key } from 'ink';
 

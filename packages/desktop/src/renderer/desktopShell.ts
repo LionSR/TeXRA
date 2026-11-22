@@ -12,7 +12,7 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { SessionView } from '@texra-ai/harness/schemas';
+import type { SessionView } from '@texra-ai/worldline/schemas';
 import {
   projectName,
   type ProjectDisplay,

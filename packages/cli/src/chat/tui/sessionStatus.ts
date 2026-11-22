@@ -4,7 +4,7 @@ import {
   isEmptyUsage,
   type TokenUsageStats,
   type UsageRoute,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { OWN_API_KEYS, usageRouteBadge } from '@ui/copy/modelAccess';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
@@ -16,7 +16,7 @@ import type {
   ApprovalPolicy,
   RunView,
   SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { BypassState } from './panes/statusBarDisplay';
 
 const QUEUED_MESSAGE_STATUS_LENGTH = 160;

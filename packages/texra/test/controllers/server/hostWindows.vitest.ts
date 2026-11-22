@@ -17,7 +17,7 @@ import {
 import { assert, expect } from 'vitest';
 
 // Local imports
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 import {
   HostWindows,
   makeWindowTable,

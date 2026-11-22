@@ -15,7 +15,7 @@
 
 // Third-party imports
 import { Schema } from 'effect';
-import type { UsageLogEntry } from '@texra-ai/harness/host';
+import type { UsageLogEntry } from '@texra-ai/worldline/host';
 import {
   decodingDefault,
   GIT_AUTHOR_EMAIL_SETTING,
@@ -24,7 +24,7 @@ import {
   settingsCatalog,
   type SettingRow,
   type SettingsCatalog,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 // Local imports
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';

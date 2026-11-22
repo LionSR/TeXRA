@@ -20,7 +20,7 @@ import {
   type RequestPayload,
   type RequestKind,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   approvalDecisionDelivery,
   type SurfaceDecision,
@@ -35,9 +35,9 @@ import {
   appendLocalRequestRefusal,
   reportRequestDefect,
 } from './transcript';
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 import type { ScopeRunner } from '../../scopeRunner';
-import type { RuntimeCommand } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
 
 interface TuiApprovalAdornments {
   /** What a tool edit's card shows: the preview staged for it, or why there

@@ -1,18 +1,18 @@
 import {
   readModelOptions,
   type RunModelCandidate,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import { Array as Arr, Effect, Result } from 'effect';
 
 import { modelConfig } from '@texra-ai/llm';
-import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import { isModelOptionAvailable } from '@texra-ai/worldline/schemas';
 import { decideLaunchModel, modelOptionsFrom } from '@texra/model/modelOptions';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 import {
   type SettingsStores,
   StateReadFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 /**
  * The setup assistant's launch model: the first provider setup model the

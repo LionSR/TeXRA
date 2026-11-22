@@ -112,7 +112,7 @@ const APP: ImportBan[] = [
 ];
 
 const HARNESS_ENTRIES =
-  'Outside the harness, import @texra-ai/harness or its public subpaths (/builtins, /host, /node, /plugins, /schemas, /transcript), never a harness internal.';
+  'Outside the harness, import @texra-ai/worldline or its public subpaths (/builtins, /host, /node, /plugins, /schemas, /transcript), never a harness internal.';
 /** The aliases into the harness's sources, and a path into them. */
 const HARNESS_INTERNALS: ImportBan[] = [
   { group: aliasPatterns(['packages/harness']), message: HARNESS_ENTRIES },
@@ -121,8 +121,8 @@ const HARNESS_INTERNALS: ImportBan[] = [
 
 const BROWSER_BUNDLE: ImportBan[] = [
   {
-    regex: '^@texra-ai/harness(/builtins|/host|/node|/plugins)?$',
-    message: 'Browser bundle: use @texra-ai/harness/schemas or /transcript.',
+    regex: '^@texra-ai/worldline(/builtins|/host|/node|/plugins)?$',
+    message: 'Browser bundle: use @texra-ai/worldline/schemas or /transcript.',
   },
 ];
 

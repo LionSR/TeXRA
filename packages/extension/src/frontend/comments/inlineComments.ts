@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { Effect, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import { IS_WINDOWS } from '@texra-ai/harness/node';
+import { IS_WINDOWS } from '@texra-ai/worldline/node';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import type {

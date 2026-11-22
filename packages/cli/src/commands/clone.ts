@@ -5,7 +5,7 @@ import { Effect, Option } from 'effect';
 import { Argument, Command } from 'effect/cli';
 
 // Internal imports
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
+import { Secrets, type PlatformSecrets } from '@texra-ai/worldline/plugins';
 import {
   cloneOverleafProject,
   type OverleafCloneOutcome,

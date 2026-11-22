@@ -23,7 +23,7 @@ import { Cause, Duration, Effect, Fiber, Option, Ref, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 // Local imports - hosts
 import {

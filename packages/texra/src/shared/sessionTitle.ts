@@ -1,4 +1,4 @@
-import type { SessionTitleState } from '@texra-ai/harness/schemas';
+import type { SessionTitleState } from '@texra-ai/worldline/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 /**

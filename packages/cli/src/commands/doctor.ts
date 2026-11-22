@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { withProcessServices } from '@texra-ai/harness/host';
-import { ensureError } from '@texra-ai/harness/schemas';
-import { nodePlatformServices, setLogSink } from '@texra-ai/harness/node';
+import { withProcessServices } from '@texra-ai/worldline/host';
+import { ensureError } from '@texra-ai/worldline/schemas';
+import { nodePlatformServices, setLogSink } from '@texra-ai/worldline/node';
 import { usageLoggingOptOut } from '@telemetry/UsageLogService';
 import {
   buildDoctorReport,

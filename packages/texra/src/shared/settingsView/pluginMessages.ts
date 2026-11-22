@@ -9,7 +9,7 @@
 // Third-party imports
 import { Schema } from 'effect';
 
-import { SkillNameSchema } from '@texra-ai/harness/schemas';
+import { SkillNameSchema } from '@texra-ai/worldline/schemas';
 // Local imports - shared contracts
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 

@@ -12,7 +12,7 @@ import { Effect, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/worldline/schemas';
 
 /** What the shell prints before its environment, so profile noise ahead of
  *  it is skipped. */

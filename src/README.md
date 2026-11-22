@@ -14,7 +14,7 @@ that tests one package lives in that package's `test/`, under the same tier
 directory name. `src/test-kernel/` may import or mock extension, desktop and
 CLI surfaces, and ships in nothing.
 
-## The harness: `packages/harness/src` (`@texra-ai/harness`)
+## The harness: `packages/harness/src` (`@texra-ai/worldline`)
 
 | Directory      | What it is                                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |

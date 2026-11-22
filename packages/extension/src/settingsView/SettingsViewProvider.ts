@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { Effect, Latch, Predicate } from 'effect';
 
-import { hasExtension } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { hasExtension } from '@texra-ai/worldline/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -20,12 +20,12 @@ import { BundledViewContentProvider } from '../common/webview/BundledViewContent
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type {
   ProcessRuntime,
   ProcessServices,
   ScopedFork,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 
 /** Lift VS Code's rejected post at the typed settings transport boundary. */
 function postToWebview(

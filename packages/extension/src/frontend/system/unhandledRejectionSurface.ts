@@ -8,10 +8,10 @@ import { Effect, Queue } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { formatFatalErrorDetail } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { effectDiagnosticsLayer, IS_WINDOWS } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { formatFatalErrorDetail } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { effectDiagnosticsLayer, IS_WINDOWS } from '@texra-ai/worldline/node';
+import { ensureError } from '@texra-ai/worldline/schemas';
 
 /** The extension entry's own channel. */
 const CHANNEL = 'extension';

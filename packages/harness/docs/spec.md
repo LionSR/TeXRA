@@ -1,6 +1,6 @@
 # The durable protocol
 
-This document specifies the durable protocol of `@texra-ai/harness`: what the
+This document specifies the durable protocol of `@texra-ai/worldline`: what the
 session store guarantees, what a run writes and when, how a run continues from
 its rows, and what survives a crash. It describes the code as it is. It does not
 describe planned behavior.

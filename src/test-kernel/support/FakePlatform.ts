@@ -21,7 +21,7 @@ import {
   type SettingsCatalog,
 } from '@shared/state/stateSettings';
 import type { Plugin } from '@tools/plugins';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { ClientIdentity } from '@texra-ai/llm/node';
 

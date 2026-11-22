@@ -32,20 +32,20 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
-import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { Sessions, type LocalSession } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import {
   definePlugin,
   errorResult,
   executed,
   type Plugin,
   defineTool,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   runEndErrorMessage,
   RunIdSchema,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { API_KEY_PROVIDER_IDS, apiKeyEnvName } from '@texra-ai/llm';
 import { acmeNotes, NoteSchema } from 'acme-notes';
 
@@ -613,7 +613,7 @@ if (crashing) {
   const keyName = keyProvider ? apiKeyEnvName(keyProvider) : undefined;
   const harness = JSON.parse(
     await readFile(
-      join(process.cwd(), 'node_modules/@texra-ai/harness/package.json'),
+      join(process.cwd(), 'node_modules/@texra-ai/worldline/package.json'),
       'utf8',
     ),
   ) as { version: string };

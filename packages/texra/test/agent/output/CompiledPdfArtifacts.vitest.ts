@@ -8,7 +8,7 @@ import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';

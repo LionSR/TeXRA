@@ -1,4 +1,4 @@
-import { getBasename, type WorktreeInfo } from '@texra-ai/harness/schemas';
+import { getBasename, type WorktreeInfo } from '@texra-ai/worldline/schemas';
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 

@@ -2,7 +2,7 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { formatError } from '@texra-ai/harness/schemas';
+import { formatError } from '@texra-ai/worldline/schemas';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { ToolMissing } from '@texra/utils/system/toolChecks';

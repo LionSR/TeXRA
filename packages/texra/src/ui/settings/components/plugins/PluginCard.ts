@@ -4,7 +4,7 @@
  * that use it. Every word comes from the row copy (`@ui/copy/plugins`).
  */
 
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';

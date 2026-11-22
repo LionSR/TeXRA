@@ -7,11 +7,11 @@
  */
 
 import * as path from 'node:path';
-import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/plugins';
+import { type PerKeyLane, withPerKeyLane } from '@texra-ai/worldline/plugins';
 
 import { Effect } from 'effect';
 
-import { executeCommand } from '@texra-ai/harness/node';
+import { executeCommand } from '@texra-ai/worldline/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;

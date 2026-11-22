@@ -2,7 +2,7 @@
 
 **Status: internal. Not published on texra.ai.** A program outside this
 repository embeds the harness through the published package
-`@texra-ai/harness` and its entries (`.`, `/builtins`, `/node`, `/plugins`,
+`@texra-ai/worldline` and its entries (`.`, `/builtins`, `/node`, `/plugins`,
 `/schemas`, `/transcript`), documented in `packages/harness/README.md`. §1 and
 §2 use only those entries. §3 onward also names the internal composition
 behind them (`processLayer` on `/host`, and modules reached through the
@@ -32,14 +32,14 @@ skills })` (`packages/harness/src/effect/processLayer.ts`; the shape is
   process-wide global state), the secret store provider keys are read from,
   and optionally a `resourcesRoot` (the files the host ships beside its code,
   served to plugins as `HostResources`). `nodePlatform({ storageDir,
-  workspaceDir, settings })` from `@texra-ai/harness/node` builds one:
+  workspaceDir, settings })` from `@texra-ai/worldline/node` builds one:
   process-local config and state, the storage layout under `storageDir`
   (required; nothing falls back to a per-user directory), and secrets read
   from the environment (`ANTHROPIC_API_KEY`, …).
 - **`plugins`**: what the runs can use. `harnessBuiltins` from
-  `@texra-ai/harness/builtins` is the harness's own six (`codemode`,
+  `@texra-ai/worldline/builtins` is the harness's own six (`codemode`,
   `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`); an embedder
-  lists its own plugins (`definePlugin` from `@texra-ai/harness/plugins`)
+  lists its own plugins (`definePlugin` from `@texra-ai/worldline/plugins`)
   beside them. A tool a run names that no listed plugin offers fails the run
   before any model call. A list the harness cannot compose (an id listed
   twice, a malformed id, a `requires` naming a plugin not listed, …) fails
@@ -61,7 +61,7 @@ release closes every session it opened, then the process under them.
 
 `session.start(input)` takes the start as data (`StartRequestSchema` in
 `packages/harness/src/shared/session/runtimeRequest.ts`, exported from
-`@texra-ai/harness/schemas`), in one of two forms:
+`@texra-ai/worldline/schemas`), in one of two forms:
 
 - `{ system, tools?, temperature?, label?, instruction, model }`: the run's
   own system text (before what the harness appends: the project's
@@ -86,9 +86,9 @@ minus its scripted model:
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { responseText, Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { nodePlatform } from '@texra-ai/harness/node';
+import { responseText, Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { nodePlatform } from '@texra-ai/worldline/node';
 
 // Process-wide: build it once.
 const platform = nodePlatform({
@@ -149,7 +149,7 @@ A run reaches other runs in three ways, all through its tools:
 - **Programs** (`Plugin.programs`): a plugin's script module started by name,
   from the `program` tool or `program(name, args)` inside a `script`. Its run
   is the module's default export called with the arguments, instruction and
-  files; it asks no model itself. `@texra-ai/harness` ships no program;
+  files; it asks no model itself. `@texra-ai/worldline` ships no program;
   example `10-external-plugin.ts` registers one and starts it from a script.
   An application host that starts a program as a root run builds its config
   with `programLaunch` (on `/host`) and starts it as `{ config }`.

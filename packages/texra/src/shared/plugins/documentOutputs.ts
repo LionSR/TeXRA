@@ -16,7 +16,7 @@ import {
   fileLocationShortDisplayPath,
   NonNegativeIntSchema,
   type DiffStats,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
 
 /** A zero-based round (a document task's revision) number. */

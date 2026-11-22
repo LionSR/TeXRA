@@ -3,7 +3,7 @@
 // with its own way of landing the decision.
 
 import { absurd } from 'effect';
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { AgentProposal } from './AgentProposal';
 import { BashRequest } from './BashRequest';

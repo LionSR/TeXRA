@@ -1,6 +1,6 @@
 import { Effect, Layer } from 'effect';
 
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 import type { Database } from '../../../../scripts/fixtures/sessionDatabase';
 import {
   loadDatabaseFixture,

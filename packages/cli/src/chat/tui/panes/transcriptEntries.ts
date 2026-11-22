@@ -4,7 +4,7 @@ import {
   paintsNothing,
   rowHeadline,
   type TranscriptRowKind,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { errorRowText } from '@ui/copy/modelAccess';

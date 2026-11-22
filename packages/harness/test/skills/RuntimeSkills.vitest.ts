@@ -8,7 +8,7 @@ import {
   resolveToolPath,
   type StepRoot,
   ToolError,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   HostSkillSources,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
@@ -17,7 +17,7 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { DISABLED_SKILLS_SETTING } from '@texra-ai/harness/schemas';
+import { DISABLED_SKILLS_SETTING } from '@texra-ai/worldline/schemas';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 const tempRoots = useTempDirs();

@@ -31,8 +31,8 @@ import {
 } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
-import { Sessions, type LocalSession } from '@texra-ai/harness';
+import { generateRunId, type RunId } from '@texra-ai/worldline/schemas';
+import { Sessions, type LocalSession } from '@texra-ai/worldline';
 import { GOLDEN_AGENTS } from '@cli/runtime/models/validationAgents';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';

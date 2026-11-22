@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { meansAbsent } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/worldline/node';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 
 /**

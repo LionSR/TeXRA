@@ -25,7 +25,7 @@ import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/worldline/plugins';
 import {
   isTransportReason,
   scopedClient,
@@ -33,7 +33,7 @@ import {
   withRequestTimeout,
   ToolError,
   Settings,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { ZOTERO_PORT_SETTING } from '@texra/shared/settings/texraSettings';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s

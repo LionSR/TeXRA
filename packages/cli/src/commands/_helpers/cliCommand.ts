@@ -22,13 +22,13 @@ import {
 import * as NodeServices from '@effect/platform-node/NodeServices';
 
 // Local imports - harness and app
-import { setLogSink } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/worldline/node';
 import {
   APPROVAL_POLICIES,
   ensureError,
   formatWordList,
-} from '@texra-ai/harness/schemas';
-import { withForkFailureReporting } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
 import { CLI_OUTPUT_FORMATS } from '@texra/shared/cliOutputFormat';
 
 // Local imports - CLI

@@ -8,14 +8,14 @@ import { Config, Effect, Option, Predicate, Schema } from 'effect';
 // Local imports
 import { API_KEY_PROVIDER_IDS, apiKeyEntry, apiKey } from '@texra-ai/llm';
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
-import { ToolContext } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/worldline/plugins';
 import {
   CommandDirs,
   homeDirectory,
   withExtendedPath,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   executed,
   ToolError,
@@ -23,7 +23,7 @@ import {
   Secrets,
   withLogChannel,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { probeLatexTools } from '@latex/latexToolchain';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
 import {

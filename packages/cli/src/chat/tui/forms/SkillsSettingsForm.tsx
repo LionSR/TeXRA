@@ -8,9 +8,9 @@ import {
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   joinFacts,
-} from '@texra-ai/harness/schemas';
-import { Skills } from '@texra-ai/harness/host';
-import { Settings } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { Skills } from '@texra-ai/worldline/host';
+import { Settings } from '@texra-ai/worldline/plugins';
 import {
   setSkillEnabled,
   settingWriteFailure,

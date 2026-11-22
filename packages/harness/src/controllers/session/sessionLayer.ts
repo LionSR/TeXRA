@@ -145,7 +145,7 @@ class SessionMap extends Context.Service<
     SessionServices,
     DatabaseOpenFailed | DatabaseReadFailed
   >
->()('@texra-ai/harness/session/SessionMap') {
+>()('@texra-ai/worldline/session/SessionMap') {
   static readonly layer = Layer.effect(
     SessionMap,
     Effect.suspend(() => {

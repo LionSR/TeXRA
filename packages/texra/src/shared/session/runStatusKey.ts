@@ -12,7 +12,7 @@ import {
   RunPositionSchema,
   type RunStanding,
   type RunView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /**
  * Each way a run's status reads: the outcome it ended on, where its loop

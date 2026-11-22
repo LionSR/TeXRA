@@ -7,7 +7,7 @@ import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { waSpinner } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
+import type { CompactionActivityStatus } from '@texra-ai/worldline/transcript';
 
 /** Non-collapsible transcript activity row for one context compaction. */
 @customElement('compaction-activity')

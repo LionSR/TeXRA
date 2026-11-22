@@ -11,7 +11,7 @@
  */
 
 // Local imports
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename } from '@texra-ai/worldline/schemas';
 
 const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
   // LaTeX ecosystem

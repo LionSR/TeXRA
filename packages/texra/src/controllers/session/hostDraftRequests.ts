@@ -14,8 +14,8 @@ import {
 import { MODEL_CONFIGS } from '@texra-ai/llm';
 import { transcribeAudio } from '@texra-ai/llm/node';
 
-import { type WorkspaceRoots } from '@texra-ai/harness';
-import { ownKeyCredential } from '@texra-ai/harness/host';
+import { type WorkspaceRoots } from '@texra-ai/worldline';
+import { ownKeyCredential } from '@texra-ai/worldline/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -35,8 +35,8 @@ import {
   withLogChannel,
   type StorageFs,
   AppState,
-} from '@texra-ai/harness/plugins';
-import { Cancelled, Rejected } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { Cancelled, Rejected } from '@texra-ai/worldline/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';

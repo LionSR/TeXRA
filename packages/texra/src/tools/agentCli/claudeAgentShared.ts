@@ -6,7 +6,7 @@ import {
   type TokenUsageStats,
   type ToolUseLog,
   type ToolCallStatus,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { Effect, Number as Num, Predicate } from 'effect';
 
 import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
@@ -23,7 +23,7 @@ import {
   Settings,
   type SettingsStores,
   type StateReadFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import type { ModelConfig } from '@texra-ai/llm';
 
 import type {

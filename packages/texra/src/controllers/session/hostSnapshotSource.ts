@@ -34,7 +34,7 @@ import {
   appSignalStream,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   Settings,
   logFailure,
@@ -42,12 +42,12 @@ import {
   type Secrets,
   type SettingsStores,
   AppState,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   APPROVAL_POLICY_SETTING,
   ensureError,
-} from '@texra-ai/harness/schemas';
-import { isPathWithin, recentCommitLabels } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/schemas';
+import { isPathWithin, recentCommitLabels } from '@texra-ai/worldline/node';
 import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import type {

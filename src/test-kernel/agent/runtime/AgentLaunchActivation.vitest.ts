@@ -18,9 +18,9 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import { GOLDEN_AGENTS } from '@cli/runtime/models/validationAgents';
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { startChildRun } from '@agent/runtime/delegation/childLaunch';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';

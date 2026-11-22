@@ -10,7 +10,7 @@ import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { setLogSink } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/worldline/node';
 import { downloadArxivSource } from '@latex/arxivProcessor';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

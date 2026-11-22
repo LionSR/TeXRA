@@ -1,6 +1,6 @@
 import { Record as EffectRecord } from 'effect';
 
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,

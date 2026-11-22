@@ -108,7 +108,7 @@ never on its message:
 
 The package itself retries nothing. Retry,
 pricing and persistence belong to the caller
-([`@texra-ai/harness`](../harness/README.md) is one).
+([`@texra-ai/worldline`](../harness/README.md) is one).
 
 The other failures are tagged errors too:
 

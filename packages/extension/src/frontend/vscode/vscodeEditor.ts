@@ -7,7 +7,7 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 
 /**

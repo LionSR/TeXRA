@@ -146,7 +146,7 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@texra-ai/harness':
+      '@texra-ai/worldline':
         specifier: workspace:*
         version: link:packages/harness
       '@texra-ai/llm':
@@ -221,7 +221,7 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@texra-ai/harness':
+      '@texra-ai/worldline':
         specifier: workspace:*
         version: link:../harness
       '@texra-ai/llm':
@@ -318,7 +318,7 @@ importers:
       '@playwright/test':
         specifier: ^1.65.1
         version: 1.65.1
-      '@texra-ai/harness':
+      '@texra-ai/worldline':
         specifier: workspace:*
         version: link:../harness
       '@texra-ai/llm':
@@ -369,7 +369,7 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@texra-ai/harness':
+      '@texra-ai/worldline':
         specifier: workspace:*
         version: link:../harness
       '@texra-ai/llm':
@@ -560,7 +560,7 @@ importers:
       '@openai/codex-sdk':
         specifier: 'catalog:'
         version: 0.170.0
-      '@texra-ai/harness':
+      '@texra-ai/worldline':
         specifier: workspace:*
         version: link:../harness
       '@texra-ai/llm':
@@ -645,7 +645,7 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@texra-ai/harness':
+      '@texra-ai/worldline':
         specifier: workspace:*
         version: link:../harness
       '@typescript/native':

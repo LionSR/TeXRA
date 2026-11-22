@@ -1,11 +1,11 @@
 import { Effect, Schema, SchemaIssue } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   AgentConfigSchema,
   type AgentConfig,
   Rejected,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /**
  * A fresh launch's configuration, decoded: what a launcher form, an action

@@ -16,7 +16,7 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/worldline/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { makeDesktopPrompts } from './desktopPromptController.js';
 import type {

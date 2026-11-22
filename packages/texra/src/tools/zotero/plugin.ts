@@ -7,7 +7,7 @@
 import { Duration, Effect, type Cause } from 'effect';
 
 // Local imports
-import { scopedClient, Settings } from '@texra-ai/harness/plugins';
+import { scopedClient, Settings } from '@texra-ai/worldline/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 import {

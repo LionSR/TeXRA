@@ -58,7 +58,7 @@
     "@babel/preset-typescript": "^8.0.7",
     "@effect/platform-node": "catalog:",
     "@lit-labs/signals": "^0.3.0",
-    "@texra-ai/harness": "workspace:*",
+    "@texra-ai/worldline": "workspace:*",
     "@texra-ai/llm": "workspace:*",
     "@types/react": "^19.3.0",
     "@typescript/native": "npm:typescript@^7.0.2",

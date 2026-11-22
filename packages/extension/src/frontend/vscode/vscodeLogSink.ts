@@ -11,8 +11,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import type { LogSink } from '@texra-ai/harness/node';
-import { entryDetail, entryLine } from '@texra-ai/harness/schemas';
+import type { LogSink } from '@texra-ai/worldline/node';
+import { entryDetail, entryLine } from '@texra-ai/worldline/schemas';
 
 export function createVsCodeLogSink(): LogSink {
   let output: vscode.LogOutputChannel | undefined;

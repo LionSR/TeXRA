@@ -4,7 +4,7 @@
 // navigation in the middle, and Enter and Esc last. Ad-hoc footer text is a
 // review-blocker.
 
-import { FACT_SEPARATOR, joinFacts } from '@texra-ai/harness/schemas';
+import { FACT_SEPARATOR, joinFacts } from '@texra-ai/worldline/schemas';
 import { Box, Text } from 'ink';
 
 export interface KeyHint {

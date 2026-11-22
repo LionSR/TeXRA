@@ -9,8 +9,8 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports - core
-import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
-import { pluralize } from '@texra-ai/harness/schemas';
+import { executed, ToolError, defineTool } from '@texra-ai/worldline/plugins';
+import { pluralize } from '@texra-ai/worldline/schemas';
 
 // Local imports - zotero
 import { callBetterBibTeX } from './bbtClient';

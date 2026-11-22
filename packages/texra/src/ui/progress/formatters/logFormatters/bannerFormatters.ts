@@ -20,7 +20,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { renderMarkdownHtml } from '../markdownRenderer';
 import { buildCopyButton, buildDetailsCard } from '../htmlBuilders';
-import type { StreamingTextRow } from '@texra-ai/harness/transcript';
+import type { StreamingTextRow } from '@texra-ai/worldline/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 type BannerConfig = {

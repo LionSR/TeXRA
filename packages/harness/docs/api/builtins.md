@@ -1,8 +1,8 @@
-# `@texra-ai/harness/builtins`
+# `@texra-ai/worldline/builtins`
 
 <!-- Generated from `packages/harness/src/builtins.ts` by `npm run docgen`; do not edit. -->
 
-The harness's built-in plugins for `@texra-ai/harness`: what a process
+The harness's built-in plugins for `@texra-ai/worldline`: what a process
 lists in `Sessions.layer({ platform, plugins, client })` beside its own.
 
 > **Guide:** Read [Plugins, Tools & Codemode](/api/plugins-and-codemode) for
@@ -21,7 +21,7 @@ lists in `Sessions.layer({ platform, plugins, client })` beside its own.
   [`web`](#web).
 
 A plugin or tool of your own is written with
-[`@texra-ai/harness/plugins`](./plugins), which imports none of these.
+[`@texra-ai/worldline/plugins`](./plugins), which imports none of these.
 
 ## AGENT_TOOL_NAME
 

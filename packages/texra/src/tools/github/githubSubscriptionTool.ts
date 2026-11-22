@@ -19,7 +19,7 @@
 
 import { Duration, Effect, Result, Schema } from 'effect';
 
-import { ToolContext } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/worldline/plugins';
 import {
   ChildRuns,
   type RunInbox,
@@ -31,8 +31,8 @@ import {
   type ToolResult,
   Secrets,
   optionalInput,
-} from '@texra-ai/harness/plugins';
-import { formatResultCount, type RunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { formatResultCount, type RunId } from '@texra-ai/worldline/schemas';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -58,7 +58,7 @@ import {
   currentBranch,
   originDefaultBranch,
   originUrl,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { GhIssueSchema } from './prTypes';
 

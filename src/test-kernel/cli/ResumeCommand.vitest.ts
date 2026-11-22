@@ -18,8 +18,8 @@ import { Effect, Fiber, Schedule, Schema } from 'effect';
 import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { setLogSink } from '@texra-ai/harness/node';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { setLogSink } from '@texra-ai/worldline/node';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 import { runCli } from '@cli/commands/root';
 import { runHeadlessAgent } from '@cli/commands/run';

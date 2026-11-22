@@ -7,7 +7,7 @@
 import {
   truncateWithEllipsis,
   formatResultCount,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   Array as Arr,
   Cause,
@@ -28,7 +28,7 @@ import {
   ToolError,
   ToolResult,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';

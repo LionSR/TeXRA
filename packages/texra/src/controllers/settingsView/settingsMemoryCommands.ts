@@ -4,9 +4,9 @@
  */
 import { Effect } from 'effect';
 
-import { MemoryStore, StorageFs } from '@texra-ai/harness/plugins';
+import { MemoryStore, StorageFs } from '@texra-ai/worldline/plugins';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 
 import {
   hostStatePage,

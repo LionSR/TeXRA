@@ -8,8 +8,8 @@ import {
   type PluginListing,
   type PluginReview,
   type PluginUpdate,
-} from '@texra-ai/harness/host';
-import { shortPluginId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import { shortPluginId } from '@texra-ai/worldline/schemas';
 
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {

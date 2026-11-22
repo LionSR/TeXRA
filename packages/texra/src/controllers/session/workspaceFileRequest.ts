@@ -22,16 +22,16 @@ import {
   normalizeFilePath,
   Rejected,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
-import { OFFICE_EXTENSIONS } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { OFFICE_EXTENSIONS } from '@texra-ai/worldline/host';
 import {
   entryTypeIn,
   meansAbsent,
   readDirectoryTypedTolerant,
   readNormalizedFile,
   isPathWithin,
-} from '@texra-ai/harness/node';
-import { WorkspaceFs } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/node';
+import { WorkspaceFs } from '@texra-ai/worldline/plugins';
 
 // Local imports - app
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';

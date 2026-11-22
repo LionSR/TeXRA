@@ -10,7 +10,7 @@ import {
 import { describe, expect } from 'vitest';
 
 // Local imports - tools
-import { retryTransientFetch } from '@texra-ai/harness/plugins';
+import { retryTransientFetch } from '@texra-ai/worldline/plugins';
 
 const request = HttpClientRequest.get('https://example.com');
 

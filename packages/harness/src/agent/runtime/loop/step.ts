@@ -95,7 +95,7 @@ import { AGENT_SKILLS_ENABLED_SETTING } from '@shared/state/stateSettings';
  *  plugin layers and MCP servers, built in the session's scope and closed
  *  with it. A run holds what it declares here, and each step pins from it. */
 export class ProjectTools extends Context.Service<ProjectTools, SessionTools>()(
-  '@texra-ai/harness/session/ProjectTools',
+  '@texra-ai/worldline/session/ProjectTools',
 ) {}
 
 /** The tools one step offers. */

@@ -1,6 +1,6 @@
 import { Effect, Result, Schema } from 'effect';
-import type { ProcessServices } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import type { ProcessServices } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 
 /** A renderer command: a named command and whatever fields it carries. */
 export const DesktopCommandMessageSchema = Schema.StructWithRest(

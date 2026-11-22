@@ -14,7 +14,7 @@ import {
   readNormalizedFile,
   workspaceRelativePath,
   isPathWithin,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   toErrorMessage,
   countLines,
@@ -23,7 +23,7 @@ import {
   escapeAttr,
   formatHunkLines,
   normalizeFilePath,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import { outputSlotName } from '@texra/agent/output/compileCheck';
 import {
@@ -37,14 +37,14 @@ import {
   documentsSummary,
   type DocumentsOutput,
 } from '@texra/shared/plugins/documents';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import {
   type ProgramResult,
   type ProgramChange,
   withLogChannel,
   runDirUnder,
   buildDiffHunks,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 /**
  * The unified diff of `before` into `after`, `undefined` when nothing

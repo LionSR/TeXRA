@@ -297,19 +297,19 @@ export class RunHistory extends Context.Service<
       RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed | E
     >;
   }
->()('@texra-ai/harness/session/RunHistory') {}
+>()('@texra-ai/worldline/session/RunHistory') {}
 
 /** The session's approvals: approval policy, prompt lanes and each run's
  *  grants. */
 export class Approvals extends Context.Service<
   Approvals,
   ApprovalsWithPermission
->()('@texra-ai/harness/session/Approvals') {}
+>()('@texra-ai/worldline/session/Approvals') {}
 
 /** The session log: the session's doors to its store, on its one publisher,
  *  which the run history commits through. */
 export class SessionLog extends Context.Service<SessionLog, SessionLogShape>()(
-  '@texra-ai/harness/session/SessionLog',
+  '@texra-ai/worldline/session/SessionLog',
 ) {}
 
 /** The session's view: the one state every renderer reads, and the local
@@ -317,7 +317,7 @@ export class SessionLog extends Context.Service<SessionLog, SessionLogShape>()(
 export class SessionViewAccess extends Context.Service<
   SessionViewAccess,
   SessionViewAccessShape
->()('@texra-ai/harness/session/SessionViewAccess') {}
+>()('@texra-ai/worldline/session/SessionViewAccess') {}
 
 /** A correctable query refusal: SQLite's error or the exceeded limit. */
 export class HistoryQueryRefused extends Schema.TaggedError<HistoryQueryRefused>()(
@@ -373,4 +373,4 @@ export class HistoryQuery extends Context.Service<
       HistoryQueryRefused | HistoryQueryFailed | DatabaseReadFailed
     >;
   }
->()('@texra-ai/harness/session/HistoryQuery') {}
+>()('@texra-ai/worldline/session/HistoryQuery') {}

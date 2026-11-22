@@ -7,7 +7,7 @@ import {
   nullishWithDefault,
   ToolError,
   defineTool,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 
 // Local file imports

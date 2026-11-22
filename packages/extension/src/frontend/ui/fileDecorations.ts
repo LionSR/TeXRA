@@ -1,10 +1,10 @@
 import { Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import { onAppSignal } from '@texra-ai/harness/host';
-import { logFailure, type AppSignals } from '@texra-ai/harness/plugins';
+import { onAppSignal } from '@texra-ai/worldline/host';
+import { logFailure, type AppSignals } from '@texra-ai/worldline/plugins';
 import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 
 const CHANNEL = 'FileDecorations';
 

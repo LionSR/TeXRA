@@ -8,8 +8,8 @@
  */
 import { Effect } from 'effect';
 
-import { readNormalizedFile } from '@texra-ai/harness/node';
-import { WorkspaceFs } from '@texra-ai/harness/plugins';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
+import { WorkspaceFs } from '@texra-ai/worldline/plugins';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { getFileListConfig } from '@texra/common/files/fileListingRules';
 import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';

@@ -3,7 +3,7 @@ import { Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
 /**

@@ -7,7 +7,7 @@ import {
   type AgentProposalRequest,
   type ProposalEdit,
   getModelLabel,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';

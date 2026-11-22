@@ -1,8 +1,8 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { pathExists } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { pathExists } from '@texra-ai/worldline/node';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import {
@@ -11,7 +11,7 @@ import {
   readUncommentedLatex,
 } from './latexParsingUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/worldline/plugins';
 
 const CHINESE_PACKAGES = [
   'xeCJK',

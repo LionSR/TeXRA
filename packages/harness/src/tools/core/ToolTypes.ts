@@ -264,4 +264,4 @@ export interface ToolContextShape {
 export class ToolContext extends Context.Service<
   ToolContext,
   ToolContextShape
->()('@texra-ai/harness/agent/ToolContext') {}
+>()('@texra-ai/worldline/agent/ToolContext') {}

@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { Effect, Predicate } from 'effect';
 
 // Local imports
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 
 // Local file imports
 import {

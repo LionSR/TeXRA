@@ -15,21 +15,21 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
-import { type ProcessServices } from '@texra-ai/harness/host';
+import { type Session, type WorkspaceRoots } from '@texra-ai/worldline';
+import { type ProcessServices } from '@texra-ai/worldline/host';
 import {
   Settings,
   withLogChannel,
   type StorageFs,
   type WorkspaceFs,
   pathToLocationIn,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   Rejected,
   runActionRefusal,
   type RunId,
   type SettingRow,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,

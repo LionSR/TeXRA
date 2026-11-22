@@ -1,12 +1,12 @@
 import { Predicate } from 'effect';
-import { fileLocationAddressPath } from '@texra-ai/harness/schemas';
+import { fileLocationAddressPath } from '@texra-ai/worldline/schemas';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import {
   compileFailuresOf,
   formatRoundLabel,
 } from '@texra/shared/plugins/documentOutputs';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/worldline/schemas';
 
 /**
  * The plain-text facts of a task for a bug report or a new chat: the header

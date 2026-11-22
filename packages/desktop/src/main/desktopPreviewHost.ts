@@ -6,9 +6,9 @@ import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 import {
   type ProcessRuntime,
   withProcessServices,
-} from '@texra-ai/harness/host';
-import { meansAbsent } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import { meansAbsent } from '@texra-ai/worldline/node';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { externalOpenFailed, HostFailed } from '@texra/hosts/uiHosts';
 import type {
@@ -18,8 +18,8 @@ import type {
 
 import { DESKTOP_PDF_COMMANDS } from '../shared/desktopPdfMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
-import type { FileLocation } from '@texra-ai/harness/schemas';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface DesktopShellAdapter {

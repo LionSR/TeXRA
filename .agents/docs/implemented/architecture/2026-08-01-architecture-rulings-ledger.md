@@ -454,7 +454,7 @@ The lane landed its run-guard unification without opening them.
 **Evidence.** The SDK surface is built and fenced: ESLint forbids
 `packages/harness/src/**`, `packages/texra/src/**` and `packages/llm/src/**`
 from importing host layers, and `config/ratchets/harness-deep-import-baseline.json`
-freezes the remaining edges. `@texra-ai/harness` is npm-releasable at 0.x, so
+freezes the remaining edges. `@texra-ai/worldline` is npm-releasable at 0.x, so
 the default `R` is a published contract, not a free choice. Changing it would
 be a contract move made by a lane that had no stake in the contract.
 
@@ -648,7 +648,7 @@ hand-written `_tag` error structs, the Zod-specific helpers, the
 `Data.TaggedError` classes (now `Schema.TaggedError`). Measured before the
 ruling: ~340 files, 273 exported schemas, 388 derived types; no external SDK
 exchanges Zod with us (providers and MCP take JSON Schema), so the only
-contracts that change are our own `@texra-ai/harness` plugin API and
+contracts that change are our own `@texra-ai/worldline` plugin API and
 `llm-zoo`'s exported schemas. The reverse path, a model- or script-authored
 JSON Schema compiled to a validator, is `SchemaRepresentation.fromJsonSchemaDocument`.
 
@@ -690,7 +690,7 @@ is closed; its reopen trigger names the one event that reopens it.
 ### 1.0 identity, account and telemetry (D1-D3)
 
 **Ruling.** 1.0 is a self-improving harness with TeXRA as its app (the
-2026-10-02 split: `@texra-ai/harness` and the app `@texra-ai/texra`, built
+2026-10-02 split: `@texra-ai/worldline` and the app `@texra-ai/texra`, built
 from first-party plugins); the CLI and SDK are the primary headless host.
 
 - **D1.** TeXRA sign-in is removed from all three hosts (the Account tab,
@@ -777,7 +777,7 @@ registry and `PluginModule` are not built until a named plugin cannot be
 MCP + hooks + data. (First-party plugins are code: durable-harness HQ1,
 2026-10-02. D11's "the SDK is not advertised until a consumer is named" was
 reversed by the owner's 2026-10-06 decision 9 and 2026-10-15 direction:
-`@texra-ai/harness` and `@texra-ai/llm` are npm-releasable, and they publish
+`@texra-ai/worldline` and `@texra-ai/llm` are npm-releasable, and they publish
 together from an `sdk-v` release the owner cuts.)
 
 **Reopen.** That named plugin exists.

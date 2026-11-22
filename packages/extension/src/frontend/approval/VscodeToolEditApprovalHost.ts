@@ -12,8 +12,8 @@ import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
-import type { ScopedFork } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import type { ScopedFork } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   VscodeDiffViewHost,
   type DiffSession,

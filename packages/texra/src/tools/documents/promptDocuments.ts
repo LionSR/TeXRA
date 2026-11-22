@@ -7,8 +7,8 @@ import { basename, isAbsolute, join } from 'node:path';
 
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import { pathToLocationIn } from '@texra-ai/harness/plugins';
-import { readNormalizedFile } from '@texra-ai/harness/node';
+import { pathToLocationIn } from '@texra-ai/worldline/plugins';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
 
 /**
  * The name a prompt shows a file by, which the reply's documents take.

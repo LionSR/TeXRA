@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 

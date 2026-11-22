@@ -4,15 +4,15 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { withSessionFs } from '@texra-ai/harness/host';
-import { MemoryStore } from '@texra-ai/harness/plugins';
+import { withSessionFs } from '@texra-ai/worldline/host';
+import { MemoryStore } from '@texra-ai/worldline/plugins';
 import {
   CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
 } from '@cli/runtime/memory';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { MemoryViewItem } from '@texra-ai/harness/schemas';
+import type { MemoryViewItem } from '@texra-ai/worldline/schemas';
 import { useChatProcess } from '../chatProcess';
 
 interface MemoryListFormProps {

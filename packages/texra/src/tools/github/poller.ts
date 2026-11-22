@@ -21,7 +21,7 @@ import {
   emitAppSignal,
   withLogChannel,
   type AppSignals,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { shouldDropBotEvent } from './botFilter';
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';
 import { formatSubscriptionHalted, type WebhookEvent } from './formatUtils';

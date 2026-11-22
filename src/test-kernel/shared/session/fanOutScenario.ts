@@ -16,7 +16,7 @@ import {
   type RunIdentity,
   RunIdSchema,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { emptyRunEndOutput, type RunParent } from '@shared/schemas';
 import {
@@ -24,7 +24,7 @@ import {
   type SessionViewUpdater,
 } from '@shared/session/sessionViewUpdate';
 import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
-import type { SessionViewInput } from '@texra-ai/harness/transcript';
+import type { SessionViewInput } from '@texra-ai/worldline/transcript';
 
 export const ROOT = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
 export const CHILD = Schema.decodeUnknownSync(RunIdSchema)('bbbbbbbbbbbb');

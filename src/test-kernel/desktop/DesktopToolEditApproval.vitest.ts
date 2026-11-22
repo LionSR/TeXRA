@@ -14,8 +14,8 @@ import {
 } from 'effect';
 import { afterEach, expect, vi } from 'vitest';
 
-import type { ProcessServices } from '@texra-ai/harness/host';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import type { ProcessServices } from '@texra-ai/worldline/host';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { DesktopToolEditApprovalHost } from '@desktop/main/desktopToolEditApproval';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';

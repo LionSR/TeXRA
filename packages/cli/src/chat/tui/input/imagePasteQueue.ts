@@ -7,7 +7,7 @@ import { Effect, Fiber, FiberHandle, FiberSet } from 'effect';
 import { useState } from 'react';
 
 // Local imports
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { ScopeRunner } from '../../scopeRunner';
 
 export interface ImagePastes {

@@ -1,7 +1,7 @@
 import { Effect, Fiber, FiberSet, type Scope } from 'effect';
 import { RpcClient } from 'effect/rpc';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import {
   DESKTOP_PROMPT_COMMANDS,

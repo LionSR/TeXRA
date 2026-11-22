@@ -12,9 +12,12 @@ import {
   appSignalStream,
   type ProcessServices,
   type RunModelDecisionReason,
-} from '@texra-ai/harness/host';
-import { type SettingsStores, withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import {
+  type SettingsStores,
+  withLogChannel,
+} from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { CliPlatformServices } from '@cli/runtime/platform/initPlatform';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 

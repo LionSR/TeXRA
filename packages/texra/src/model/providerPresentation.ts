@@ -9,11 +9,11 @@ import {
   Settings,
   type SettingsStores,
   type StateReadFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { Effect } from 'effect';
 
 import { providerDisplayName } from '@texra-ai/llm';
-import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import { providerRegionSetting } from '@texra-ai/worldline/schemas';
 import { KEY_PAGES, type Regional } from '@texra/shared/model/keyPages';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 

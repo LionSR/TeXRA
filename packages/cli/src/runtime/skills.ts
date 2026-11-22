@@ -2,12 +2,12 @@
 import { Effect } from 'effect';
 
 // Local imports - skills
-import type { SkillLoadIssue } from '@texra-ai/harness/host';
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
+import type { SkillLoadIssue } from '@texra-ai/worldline/host';
+import { Settings, type SettingsStores } from '@texra-ai/worldline/plugins';
 import {
   AGENT_SKILLS_ENABLED_SETTING,
   type SkillDisplayItem,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /**
  * The notice a skill listing leads with while `texra.skills.enabled` is off:

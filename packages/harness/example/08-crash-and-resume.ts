@@ -22,10 +22,14 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { definePlugin, executed, defineTool } from '@texra-ai/harness/plugins';
-import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import {
+  definePlugin,
+  executed,
+  defineTool,
+} from '@texra-ai/worldline/plugins';
+import { type RunId, RunIdSchema } from '@texra-ai/worldline/schemas';
 
 import {
   EXAMPLE_CLIENT,

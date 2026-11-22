@@ -9,12 +9,12 @@ import { Effect, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/worldline/schemas';
 import { priceTurnUsage, reportUsage } from '@agent/runtime/run/pricing';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import type { BoundModel } from '@texra-ai/harness/plugins';
+import type { BoundModel } from '@texra-ai/worldline/plugins';
 import type { UsageLog } from '@shared/usageLog';
 
 import type { Model, TurnResult } from '@texra-ai/llm';

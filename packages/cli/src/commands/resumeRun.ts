@@ -2,8 +2,8 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
-import { pathExists } from '@texra-ai/harness/node';
-import { programOf, type RunId } from '@texra-ai/harness/schemas';
+import { pathExists } from '@texra-ai/worldline/node';
+import { programOf, type RunId } from '@texra-ai/worldline/schemas';
 import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';

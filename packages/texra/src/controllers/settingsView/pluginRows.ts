@@ -7,14 +7,14 @@
  */
 import { Effect } from 'effect';
 
-import { type WorkspaceRoots } from '@texra-ai/harness';
+import { type WorkspaceRoots } from '@texra-ai/worldline';
 import {
   InstalledPlugins,
   mcpConfigPathOf,
   readMcpConfig,
   type ExternalToolCheckResult,
   type PluginEnv,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';

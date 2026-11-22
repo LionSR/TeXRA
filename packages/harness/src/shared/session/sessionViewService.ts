@@ -53,7 +53,7 @@ export class SessionViewService extends Context.Service<
      */
     readonly changes: Stream.Stream<SessionView>;
   }
->()('@texra-ai/harness/session/SessionView') {
+>()('@texra-ai/worldline/session/SessionView') {
   static readonly layer = Layer.effect(
     SessionViewService,
     Effect.gen(function* () {
@@ -137,7 +137,7 @@ export class RemoteSessionView extends Context.Service<
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
   }
->()('@texra-ai/harness/session/RemoteSessionView') {
+>()('@texra-ai/worldline/session/RemoteSessionView') {
   /** Fresh per call: two views never share an updater, even in one memo
    *  map. */
   static layer(

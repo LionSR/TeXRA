@@ -16,7 +16,7 @@ import {
   type ContextStateData,
   type TokenUsageStats,
   formatCompactTokenCount,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { contextGaugeTone, contextUsageText } from '@ui/copy/contextGauge';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';

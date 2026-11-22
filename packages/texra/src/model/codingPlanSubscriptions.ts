@@ -1,4 +1,4 @@
-import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import { providerRegionSetting } from '@texra-ai/worldline/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,

@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { pathToLocationIn } from '@texra-ai/harness/plugins';
+import { pathToLocationIn } from '@texra-ai/worldline/plugins';
 import { extractTikzPictures } from '@latex/tikzPictures';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
