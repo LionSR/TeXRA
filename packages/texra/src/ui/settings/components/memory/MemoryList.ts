@@ -75,7 +75,7 @@ export class MemoryList extends TexraElement {
       return renderEmptyState({
         icon: 'database',
         title: 'No saved memories yet',
-        body: 'Memories are created automatically when the assistant learns something worth remembering across conversations.',
+        body: 'Saved automatically as the assistant learns project details across tasks.',
         headingTag: 'h3',
       });
     }

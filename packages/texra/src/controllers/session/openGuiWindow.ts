@@ -525,7 +525,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           if (!currentPath)
             return yield* new Rejected({
               reason:
-                'No file is currently open or the file is not part of the workspace.',
+                'No file is currently open or the file is outside this project.',
             });
           // Project-relative inside the project, absolute outside it or
           // with no folder open.
@@ -592,7 +592,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
             yield* host.notify(
               'info',
-              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-project item')}.`,
             );
           }
           return { kind: 'files', paths: attached.paths };
@@ -616,7 +616,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           )
             return yield* new Rejected({
               reason:
-                'Choose one of the open workspace folders as the working directory.',
+                'Choose one of the open project folders as the working directory.',
             });
           const config = yield* prepareSurfaceLaunch(request, roots);
           // The launcher has told, in this window, why a run did not start:

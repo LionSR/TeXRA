@@ -128,7 +128,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
           <summary class="ldiff-sum">
             <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
             <wa-icon class="ldiff-ic" library="texra" name="diff"></wa-icon>
-            <span class="ldiff-lbl">Latexdiff result</span>
+            <span class="ldiff-lbl">latexdiff result</span>
           </summary>
           <div class="ldiff-row">
             <wa-icon class="ldiff-ok" library="texra" name="check"></wa-icon>

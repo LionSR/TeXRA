@@ -342,7 +342,7 @@ export async function runChat(
   const unbindSessionView = bindSessionView(runtime, runSession.view, {
     onFailure: (error) => {
       sessionViewFailureSignal.set(
-        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
+        `Session updates stopped: ${toErrorMessage(error)} Press Ctrl-C and restart texra (use the latest texra version if this persists).`,
       );
     },
   });

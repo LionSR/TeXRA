@@ -46,5 +46,5 @@ export function formatInteractiveTerminalFailure(
   const fallback = options.dumbTerminalOptions?.nonInteractiveFallback;
   const fallbackHint =
     fallback == null ? '' : ` For non-interactive runs, use ${fallback}.`;
-  return `${commandName} ${options.dumbTerminalCommand} needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with \`TERM=xterm-256color\`.${fallbackHint}`;
+  return `${commandName} ${options.dumbTerminalCommand} needs an interactive terminal (TERM=dumb disables cursor controls). Try \`TERM=xterm-256color\`.${fallbackHint}`;
 }

@@ -149,10 +149,7 @@ function printSecretChecklist(slug: GitHubSlug | null): void {
   writeTextStdout('Next — set a provider API key so the review can run:');
   writeTextStdout(`  gh secret set DEEPSEEK_API_KEY${repoFlag}`);
   writeTextStdout(
-    'Prefer an open-weight provider when you can. TeXRA auto-selects from',
-  );
-  writeTextStdout(
-    'whichever key is set (DeepSeek → Anthropic → OpenAI → Google → xAI).',
+    'TeXRA auto-selects from whichever key is set (DeepSeek → Anthropic → OpenAI → Google → xAI).',
   );
 }
 
@@ -413,7 +410,7 @@ export const installGithubActionCommand = cliCommand('install-github-action', {
     pr: Flag.Boolean('pr').pipe(
       Flag.withDefault(true),
       Flag.withDescription(
-        'Push the branch and open a pull request; --no-pr: only scaffold and commit; do not push or open a PR',
+        'Push branch and open a pull request (--no-pr to only commit locally)',
       ),
     ),
   },

@@ -106,19 +106,13 @@ export const lean4: TexraPlugin = texraPlugin({
       'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below.',
     setup: {
       installGuide:
-        'TeXRA spawns `lake env lean --server` itself, one process per\n' +
-        'Lake project, stopped when the last run using it ends. Every\n' +
-        'build needs `lake` (from elan/Lean) on PATH.\n\n' +
-        'Setup:\n' +
-        '  1. Install elan: `curl https://elan.lean-lang.org/elan-init.sh -sSf | sh`\n' +
-        '     (in VS Code, the "lean4" extension (leanprover.lean4) can\n' +
-        '     install elan for you)\n' +
-        '  2. Make sure `lake` is on PATH in a fresh shell\n' +
-        '  3. Open a folder containing a lakefile.lean / lakefile.toml',
+        'Setup (requires `lake` on PATH):\n' +
+        '  1. Install elan: `curl https://elan.lean-lang.org/elan-init.sh -sSf | sh` (or install the VS Code Lean 4 extension)\n' +
+        '  2. Open a folder with a `lakefile.lean` or `lakefile.toml`',
       installUrl: 'https://leanprover-community.github.io/install/',
       installExtensionId: LEAN4_EXTENSION_ID,
       configNotes:
-        'Requires `lake` on PATH in every build; each Lake project can have its own language server, which stops when the last run using it ends, surfaced below.',
+        'Runs one `lake env lean --server` per Lake project while tasks use it.',
     },
   },
 });

@@ -26,7 +26,7 @@ const CHANNEL = 'ActiveFileGuards';
  */
 const GUARD_FAILURE_MESSAGES = {
   noEditor: {
-    user: 'No active editor found. Open a LaTeX file in the editor and try again.',
+    user: 'Open a LaTeX file first.',
     logTail: 'no active editor found.',
     level: 'warn',
   },

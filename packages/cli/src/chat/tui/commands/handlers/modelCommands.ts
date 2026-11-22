@@ -21,7 +21,7 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
         reason: 'explicit-override',
       });
       setCliSessionModelOverride(selection.model);
-      appendLocalNotice(`Root model set to ${selection.model}.`);
+      appendLocalNotice(`Model set to ${selection.model}.`);
       return;
     }
 
@@ -33,7 +33,7 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
     const runId = rootRunId.get();
     if (runId === undefined) {
       setTransientNotice(
-        'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
+        'Model switching requires an active chat. Start a new one with `texra chat --model=<name>`.',
       );
       return;
     }

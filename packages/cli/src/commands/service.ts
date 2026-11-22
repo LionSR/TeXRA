@@ -116,7 +116,7 @@ export const serveCommand = cliCommand(SERVICE_SUBCOMMAND, {
       ),
       Flag.withMetavar('seconds'),
       Flag.withDescription(
-        `Exit after this long with no project open and no task starting, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
+        `Exit after this many idle seconds with no active projects or tasks (default ${DEFAULT_IDLE_SECONDS})`,
       ),
       Flag.withDefault(DEFAULT_IDLE_SECONDS),
     ),
@@ -157,7 +157,7 @@ const emitStatus = (info: ServiceInfo | null) =>
   });
 
 const statusCommand = cliCommand('status', {
-  description: 'Show whether the TeXRA service runs',
+  description: 'Show TeXRA service status',
   config: {},
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
@@ -169,8 +169,7 @@ const statusCommand = cliCommand('status', {
 });
 
 const stopCommand = cliCommand('stop', {
-  description:
-    'Stop the TeXRA service; its running tasks stop and can be resumed',
+  description: 'Stop the TeXRA service (running tasks can be resumed later)',
   config: {},
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
@@ -189,7 +188,7 @@ const stopCommand = cliCommand('stop', {
 });
 
 const restartCommand = cliCommand('restart', {
-  description: 'Stop the TeXRA service and start it',
+  description: 'Restart the TeXRA service',
   config: {},
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,

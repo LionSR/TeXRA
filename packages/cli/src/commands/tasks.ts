@@ -67,8 +67,8 @@ const taskNamed = (client: ServiceClient, id: string) =>
           new CliUsageError({
             message:
               found.matches.length === 0
-                ? `No task ${id}. \`texra tasks list\` shows the tasks.`
-                : `${found.matches.length} tasks start with ${id}; give more of the id.`,
+                ? `Task not found: ${id}. Run \`texra tasks list\` to see tasks.`
+                : `${found.matches.length} tasks start with ${id}; give more of the ID.`,
           }),
         ),
   );
@@ -154,7 +154,7 @@ const attachCommand = cliCommand('attach', {
       });
       if (outcome !== null) return runOutcomeExitCode(outcome);
       writeTextStderr(
-        `Task ${task.runId} has not ended, and no TeXRA service is running it: the process that ran it stopped. Nothing more will come from it until it is resumed. \`texra tasks send ${task.runId} "<text>"\` continues it.`,
+        `Task ${task.runId} stopped unexpectedly. Resume it with \`texra tasks send ${task.runId} "<message>"\`.`,
       );
       return CliExitCode.AgentError;
     }).pipe(Effect.scoped);
@@ -246,7 +246,7 @@ const sendCommand = cliCommand('send', {
           cliResult(
             'task',
             { runId: task.runId, status },
-            `Follow-up ${status} to ${task.runId}.`,
+            `Follow-up ${status} for ${task.runId}.`,
           ),
         );
       }),

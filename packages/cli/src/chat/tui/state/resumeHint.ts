@@ -72,7 +72,7 @@ export function oneShotResumeNotice(
 ): string | undefined {
   if (run?.takesFollowUps !== false || run.outcome === null) return undefined;
   const name = commandName || DEFAULT_RESUME_COMMAND_NAME;
-  return `Task ${runId} ran once and takes no messages. See it with \`${name} history show ${runId}\`, or continue it in a new task with \`${name} resume ${runId} --fork\`.`;
+  return `Task ${runId} is a one-shot task and cannot accept follow-up messages. View it with \`${name} history show ${runId}\`, or fork it with \`${name} resume ${runId} --fork\`.`;
 }
 
 /** The task's metered usage: the root run and every descendant. */

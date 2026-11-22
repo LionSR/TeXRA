@@ -44,7 +44,7 @@ export const COMMAND_CATALOG = Object.freeze([
   }),
   Object.freeze({
     id: 'texra.cleanBuild',
-    title: 'Delete All build/ Folders in Workspace',
+    title: 'Delete All build/ Folders in Project',
   }),
   Object.freeze({
     id: 'texra.cloneOverleafProject',
@@ -60,7 +60,7 @@ export const COMMAND_CATALOG = Object.freeze([
   }),
   Object.freeze({
     id: 'texra.getTeXCount',
-    title: 'Count Words in Current TeX File',
+    title: 'Count Words in Current LaTeX File',
   }),
   Object.freeze({
     id: 'texra.compileTikzFigures',
@@ -72,7 +72,7 @@ export const COMMAND_CATALOG = Object.freeze([
   }),
   Object.freeze({
     id: 'texra.execute',
-    title: 'Execute Agent',
+    title: 'Run Task',
     keybinding: Object.freeze({ key: 'ctrl+alt+e', mac: 'cmd+option+e' }),
   }),
   Object.freeze({ id: 'texra.setApiKey', title: 'Set API Key' }),

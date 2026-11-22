@@ -96,7 +96,7 @@ function attachDroppedPaths(
     return Effect.fail(
       new Rejected({
         reason:
-          'No dropped files were attached. Use regular files inside this workspace with supported TeXRA extensions.',
+          'No dropped files were attached. Drop regular files from this project with supported extensions.',
       }),
     );
   }

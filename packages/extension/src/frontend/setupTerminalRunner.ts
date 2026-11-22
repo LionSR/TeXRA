@@ -46,7 +46,7 @@ export const runTerminalCommand = Effect.fn('setupTerminalRunner.runCommand')(
       catch: (cause) =>
         new TerminalRunFailed({
           reason: 'terminal-unavailable',
-          message: 'VS Code would not open an integrated terminal.',
+          message: 'Could not open an integrated terminal.',
           command: args.command,
           cause,
         }),
@@ -130,7 +130,7 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
     catch: (cause) =>
       new TerminalRunFailed({
         reason: 'execution-failed',
-        message: 'The integrated terminal refused to run the command.',
+        message: 'Could not run the command in the integrated terminal.',
         command: args.command,
         cause,
       }),

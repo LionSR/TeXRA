@@ -90,7 +90,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
       ? verdict.reasoning?.sent
       : undefined;
   if (sent !== undefined && 'refused' in sent) {
-    return yield* failUsage(`A run cannot use ${id}: ${sent.refused}`);
+    return yield* failUsage(`Cannot use ${id}: ${sent.refused}`);
   }
 
   const record = cliModelRecord(entry);
@@ -114,7 +114,7 @@ const modelsShowCommand = cliCommand('show', {
   config: {
     id: Argument.String('id').pipe(
       Argument.withDescription(
-        'Model id from `texra models list` (case-insensitive)',
+        'Model ID from `texra models list` (case-insensitive)',
       ),
     ),
   },
@@ -171,8 +171,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
 });
 
 const modelsEnabledCommand = cliCommand('enabled', {
-  description:
-    'List models enabled for pickers (`/model`, lead model). Use enable/disable to change.',
+  description: 'List models enabled in pickers (`/model`)',
   config: {},
   run: () => listEnabledModels(),
   catchExitCode: reportModelPlatformFailure,

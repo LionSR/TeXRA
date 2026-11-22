@@ -241,7 +241,7 @@ export function createLogsPane(): LogsPaneController {
             ${action('file-export', 'Export', () =>
               postToMain({ command: DESKTOP_LOG_COMMANDS.EXPORT_LOG }),
             )}
-            ${action('folder-open', 'Open Folder', () =>
+            ${action('folder-open', 'Open Logs Folder', () =>
               postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER }),
             )}
           </div>

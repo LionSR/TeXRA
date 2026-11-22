@@ -134,7 +134,7 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = {
   ),
   title: 'Agents at once',
   description:
-    "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free.",
+    'Maximum agents a task can run in parallel (0 uses your CPU count). Extra agents wait for a slot.',
 } as const satisfies SettingRow<number>;
 
 /**
@@ -152,7 +152,7 @@ export const GOAL_MAX_COST_SETTING = {
   configTarget: 'global',
   title: 'Goal spend cap (USD)',
   description:
-    'Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
+    'Maximum spend (USD) across rounds before an autonomous goal pauses. Set to 0 for no cap.',
 } as const satisfies SettingRow<number>;
 
 /**
@@ -172,7 +172,7 @@ export const GOAL_STRATEGY_SETTING = {
   configTarget: 'global',
   title: 'Goal strategy',
   description:
-    "The script module a plan run as a goal runs, by its import specifier (`builtIn:<module>`): its `goal(objective, { maxCostUsd })` export decides the rounds, what context each starts from and when to stop, and resolves to the goal's result. Defaults to the goal plugin's own module.",
+    'Built-in script module (`builtIn:<name>`) that controls autonomous goal rounds and stopping.',
 } as const satisfies SettingRow<string>;
 
 // The provider toggles below are `configTarget: 'global'`: they describe how
@@ -190,7 +190,7 @@ export const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING = {
   configTarget: 'global',
   title: 'Server-side conversation state',
   description:
-    "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
+    "Keep conversation state on Google's servers so each turn sends only new messages. Turn off to resend the full history each turn.",
 } as const satisfies SettingRow<boolean>;
 
 export const OPENAI_FAST_TIER_SETTING = {
@@ -200,7 +200,7 @@ export const OPENAI_FAST_TIER_SETTING = {
   configTarget: 'global',
   title: 'Fast mode',
   description:
-    "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
+    "Use OpenAI's fast service tier on supported models (faster responses at a higher per-token price).",
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -219,7 +219,7 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = {
   ),
   title: 'Compaction threshold',
   description:
-    "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
+    'Summarize earlier messages when a conversation reaches this percentage of the context limit (0 disables).',
 } as const satisfies SettingRow<number>;
 
 /** The number of automatic retries after the initial model request. */
@@ -232,16 +232,16 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
   ),
   title: 'Automatic retries',
   description:
-    'Additional automatic retries after the initial model request (0–5). A request cut off by a stop or a crash counts as none: its run sends it again when resumed.',
+    'Automatic retries after a failed model request (0–5). Interrupted requests retry when resumed.',
 } as const satisfies SettingRow<number>;
 
 export const CHATGPT_PREFER_SUBSCRIPTION_SETTING = {
   key: 'chatgptCodex.preferSubscription',
   slot: 'config',
   schema: booleanWithDefault(false),
-  title: 'Prefer the ChatGPT subscription',
+  title: 'ChatGPT subscription',
   description:
-    'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing takes the input window the Codex backend grants each model; use chatgptCodex.contextWindowK to override it.',
+    'Route supported OpenAI models through your signed-in ChatGPT subscription instead of an API key (experimental).',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -266,16 +266,16 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = {
   ),
   title: 'Subscription input token budget (K tokens)',
   description:
-    "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it; a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
+    "Input token budget (in thousands, up to 872) for ChatGPT subscription routing. Leave empty to use each model's default.",
 } as const satisfies SettingRow<number | null>;
 
 export const XAI_PREFER_SUBSCRIPTION_SETTING = {
   key: 'xaiGrok.preferSubscription',
   slot: 'config',
   schema: booleanWithDefault(false),
-  title: 'Prefer the Grok subscription',
+  title: 'Grok subscription',
   description:
-    'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
+    'Route xAI models through your signed-in Grok subscription instead of an API key (experimental).',
 } as const satisfies SettingRow<boolean>;
 
 export const MAX_IMAGE_DIMENSION_SETTING = {
@@ -287,7 +287,7 @@ export const MAX_IMAGE_DIMENSION_SETTING = {
   ),
   title: 'Maximum image size (px)',
   description:
-    'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
+    'Resize attached images larger than this dimension (width or height, in pixels).',
 } as const satisfies SettingRow<number>;
 
 /**
@@ -301,8 +301,7 @@ export const DEBUG_MODE_SETTING = {
   slot: 'config',
   schema: booleanWithDefault(false),
   title: 'Verbose transcript',
-  description:
-    "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet).",
+  description: 'Show debug entries and full tool payloads in task transcripts.',
 } as const satisfies SettingRow<boolean>;
 
 export const SAVE_MODEL_IO_SETTING = {
@@ -311,7 +310,7 @@ export const SAVE_MODEL_IO_SETTING = {
   schema: booleanWithDefault(false),
   title: 'Save model requests and responses',
   description:
-    'Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
+    'Save raw model requests and responses (JSON) and final prompts (XML) for debugging.',
 } as const satisfies SettingRow<boolean>;
 
 /** Whether agents receive the skills discovered from every source. */
@@ -320,8 +319,7 @@ export const AGENT_SKILLS_ENABLED_SETTING = {
   slot: 'config',
   schema: booleanWithDefault(false),
   title: 'Enable skills for agents',
-  description:
-    'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
+  description: 'Include enabled skills in agent prompts (off by default).',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -352,7 +350,7 @@ export const DISABLED_SKILLS_SETTING = {
   slot: 'config',
   schema: decodingDefault(Schema.Array(QualifiedSkillNameSchema), []),
   title: 'Skills',
-  description: 'Enable or disable individual skills in this workspace.',
+  description: 'Enable or disable individual skills in this project.',
 } as const satisfies SettingRow<readonly string[]>;
 
 export const DISABLED_SKILL_SOURCES_SETTING = {
@@ -363,7 +361,7 @@ export const DISABLED_SKILL_SOURCES_SETTING = {
   ]),
   title: 'Skill sources',
   description:
-    'Enable or disable skill source groups in this workspace. The imported group, the `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the workspace and in the home directory, is off until enabled.',
+    'Enable or disable skill folders in this project. Imported folders (.agents, .claude, .codex, .gemini) start off.',
 } as const satisfies SettingRow<
   readonly (typeof ActiveSkillSourceScopeSchema.Type)[]
 >;
@@ -413,9 +411,9 @@ export const GIT_WORKTREE_SUPPORT_SETTING = {
   key: 'git.worktreeSupport',
   slot: 'repoState',
   schema: booleanWithDefault(false),
-  title: 'Subagent worktrees',
+  title: 'Agent worktrees',
   description:
-    'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
+    'Run parallel agents in isolated git worktrees so edits do not conflict.',
 } as const satisfies SettingRow<boolean>;
 
 // --- Agent coordination ---------------------------------------------
@@ -440,8 +438,8 @@ export const MEMORY_ENABLED_SETTING = {
   key: 'memory.enabled',
   slot: 'globalState',
   schema: booleanWithDefault(true),
-  title: 'Enable memory for chat agents',
-  description: 'Remember useful details across chat sessions.',
+  title: 'Enable memory',
+  description: 'Remember useful details across tasks.',
 } as const satisfies SettingRow<boolean>;
 
 /** The OpenAI WebSocket transport (experimental). */
@@ -451,7 +449,7 @@ export const WEBSOCKET_OPENAI_SETTING = {
   schema: booleanWithDefault(false),
   title: 'OpenAI WebSocket',
   description:
-    'EXPERIMENTAL: send OpenAI Responses requests over a persistent WebSocket (lower latency for tool-use loops). Applies only to an OpenAI API key on the default endpoint; the ChatGPT subscription and background responses keep HTTP. Off by default.',
+    'Experimental: send OpenAI API-key requests over WebSocket for lower latency (off by default).',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -465,7 +463,7 @@ export const HELPER_MODEL_SETTING = {
   schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
   description:
-    "Model used for a run's auxiliary calls, such as session descriptions and the helper calls of an app's features. When unset, a run's helper calls use the run's own model.",
+    "Model for quick helper steps like task titles and merges. Leave empty to use the task's own model.",
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {
@@ -474,7 +472,7 @@ export const KIMI_CODE_PREFER_SETTING = {
   schema: booleanWithDefault(false),
   title: 'Kimi Code subscription',
   description:
-    'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
+    'Route dual-backend Kimi models (K3) through Kimi Code when a Kimi Code API key is set.',
 } as const satisfies SettingRow<boolean>;
 
 export const GLM_CODING_PLAN_SETTING = {
@@ -483,7 +481,7 @@ export const GLM_CODING_PLAN_SETTING = {
   schema: booleanWithDefault(false),
   title: 'GLM Coding Plan',
   description:
-    "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; the plan's quota is shown and its limits are reported as plan limits. Ignored while a custom GLM endpoint is set.",
+    'Use your GLM API key with GLM Coding Plan quota tracking (ignored with a custom endpoint).',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -494,9 +492,9 @@ export const TOOL_PATH_PROTECTION_SETTING = {
   key: 'tools.restrictPathsToWorkingDirectory',
   slot: 'workspaceState',
   schema: booleanWithDefault(true),
-  title: 'Restrict tool paths to the working directory',
+  title: 'Restrict tools to project folder',
   description:
-    'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',
+    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Turn off only if an agent needs outside files.',
 } as const satisfies SettingRow<boolean>;
 
 // ============================================================================

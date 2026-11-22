@@ -31,7 +31,7 @@ export function ApiKeyEntryForm(
 
   return (
     <TextEntryForm
-      title="Use my own provider API key"
+      title="Add a provider API key"
       helper={
         <>
           <Text dimColor>Provider: {label}</Text>
@@ -43,7 +43,7 @@ export function ApiKeyEntryForm(
           ) : null}
         </>
       }
-      placeholder="enter your API key (hidden)"
+      placeholder="Enter your API key (hidden)"
       hint={
         <>
           Stored in TeXRA secrets on Enter — or set{' '}

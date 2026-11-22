@@ -178,7 +178,7 @@ export class ModelSelectionList extends TexraSignalElement {
     if (status === undefined || status.available) return nothing;
 
     const title = status.missingKey
-      ? `${status.label}${DETAIL_SEPARATOR}add a key in API configuration`
+      ? `${status.label}${DETAIL_SEPARATOR}add a key in API keys`
       : status.label;
     const iconName = status.missingKey ? 'key' : 'triangle-exclamation';
     const className = status.missingKey
@@ -352,7 +352,7 @@ export class ModelSelectionList extends TexraSignalElement {
         >
           <span slot="label" class="visually-hidden">Helper model</span>
           <span slot="hint" class="visually-hidden"
-            >Used for quick background tasks, such as intelligent merge.</span
+            >Used for quick helper steps such as Merge.</span
           >
           ${helperOptions.map(
             (m) => html`
@@ -363,7 +363,7 @@ export class ModelSelectionList extends TexraSignalElement {
           )}
         </wa-select>
         <span class="helper-model-help" aria-hidden="true">
-          Used for quick background tasks, such as intelligent merge.
+          Used for quick helper steps such as Merge.
         </span>
       </div>
     `;
@@ -377,7 +377,7 @@ export class ModelSelectionList extends TexraSignalElement {
         ${renderSettingsSectionHeading({
           title: 'Model selection',
           description:
-            'Choose which models agents can use and the model used for quick background tasks.',
+            'Choose which models agents can use and the model used for quick helper steps.',
           icon: 'server',
         })}
         ${this.renderHelperModelDropdown()}

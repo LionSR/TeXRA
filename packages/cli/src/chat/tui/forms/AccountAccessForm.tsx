@@ -134,7 +134,6 @@ function buildAccountAccessFormItems(
     accountItems.push({
       value: { kind: 'logout', target: 'all' },
       label: 'Sign out of all accounts',
-      description: 'Sign out of every signed-in account',
     });
   }
   return [...toggleItems, ...accountItems, API_KEY_ITEM];

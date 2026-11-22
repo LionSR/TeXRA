@@ -561,7 +561,7 @@ export class SessionComposer extends TexraElement {
         <textarea
           id="composer-text"
           name=${compact ? 'follow-up-message' : 'instruction'}
-          placeholder=${compact ? 'Follow-up' : 'Describe the outcome you want…'}
+          placeholder=${compact ? 'Follow-up' : 'Ask TeXRA…'}
           rows="2"
           autocomplete="off"
           spellcheck="true"

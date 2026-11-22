@@ -20,5 +20,5 @@ export const PLUGINS_TUI = Object.freeze({
   addUsage:
     'Usage: /plugins add <github.com/owner/repo[@ref], a repository URL, or a folder> [--plugin <name>]',
   added: (names: readonly string[]) =>
-    `Added ${names.join(', ')}. Switch it on in /plugins to review what it declares and trust it.`,
+    `Added ${names.join(', ')}. Enable ${names.length === 1 ? 'it' : 'them'} in /plugins to review and trust.`,
 });

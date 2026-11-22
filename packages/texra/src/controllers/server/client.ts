@@ -595,14 +595,14 @@ const ensureService = Effect.fn('server.ensureService')(function* (
       return !announceRetirement || failure.kind !== 'unreadable'
         ? Effect.fail(error)
         : announceRetirement(
-            "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
+            'Stopping an incompatible TeXRA service after its active tasks finish, then starting this version.',
           ).pipe(
             Effect.andThen(
               stopService(failure.socket, true).pipe(
                 Effect.mapError(
                   (stopFailure) =>
                     new ServiceUnavailable({
-                      reason: `The older TeXRA service could not be asked to retire: ${stopFailure.message}`,
+                      reason: `Could not stop the older TeXRA service: ${stopFailure.message}`,
                     }),
                 ),
               ),
@@ -623,14 +623,14 @@ const ensureService = Effect.fn('server.ensureService')(function* (
     // With no task running it exits at once: nothing to wait for.
     yield* (leaving.running > 0 ? announceRetirement : Effect.logInfo)(
       leaving.draining
-        ? `The TeXRA service ${leaving.version} (pid ${leaving.pid}) is finishing its ${tasks} before it exits; waiting for it.`
-        : `Retiring the TeXRA service ${leaving.version} (protocol ${leaving.protocol}): it finishes its ${tasks} and exits, then this build's starts.`,
+        ? `Waiting for TeXRA service ${leaving.version} (pid ${leaving.pid}) to finish ${tasks} and exit.`
+        : `Updating TeXRA service ${leaving.version}: waiting for ${tasks} to finish before restarting.`,
     );
     yield* stopService(leaving.socket, true).pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({
-            reason: `The older TeXRA service (pid ${leaving.pid}) could not be asked to retire: ${error.message}`,
+            reason: `Could not stop the older TeXRA service (pid ${leaving.pid}): ${error.message}`,
           }),
       ),
     );
@@ -660,7 +660,7 @@ const ensureService = Effect.fn('server.ensureService')(function* (
     // refuses this one at once. Past the deadline, the last probe's reason
     // stands; only "not yet up" reads as the start having failed.
     const notYetUp = new ServiceUnavailable({
-      reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${log}).`,
+      reason: `TeXRA service did not respond within ${START_TIMEOUT} (log: ${log}).`,
       failure: { kind: 'startFailed' },
     });
     const lastRefusal = yield* Ref.make(notYetUp);
@@ -699,7 +699,7 @@ const ensureService = Effect.fn('server.ensureService')(function* (
         Effect.flatMap(crashed, (how) =>
           Effect.fail(
             new ServiceUnavailable({
-              reason: `The TeXRA service ${how} before it answered (its log: ${log}).`,
+              reason: `TeXRA service ${how} before responding (log: ${log}).`,
               failure: { kind: 'startFailed' },
             }),
           ),

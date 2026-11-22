@@ -88,7 +88,7 @@ export const transcriptSlashCommandOutput: SlashCommandOutput = {
 };
 
 /** What a chat says to do when no model can run: its own `/key`. */
-export const CHAT_KEY_RECOVERY = 'Add a provider API key with `/key`.';
+export const CHAT_KEY_RECOVERY = 'Add a provider API key with /key.';
 
 /** The model a chat run takes, worded in the chat's terms when none can. */
 export const selectChatModel = (

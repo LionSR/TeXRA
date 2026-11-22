@@ -860,7 +860,7 @@ const SCENARIOS = [
       'Mark agent commits',
       'Agent commit author',
       'Agent commit email',
-      'Subagent worktrees',
+      'Agent worktrees',
       '↑/↓ navigate',
       'Enter toggle / edit / open',
       'Esc back',

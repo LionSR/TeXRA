@@ -112,7 +112,7 @@ export class ProgressDocumentTaskFileActionsController {
         reason:
           request.base.kind === 'file'
             ? 'Choose a base file and an edited file first.'
-            : 'The run records no file this output revises.',
+            : 'No original file is linked to this output.',
       });
     }
     switch (action) {

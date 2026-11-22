@@ -59,16 +59,17 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
       : '`Ctrl-J` inserts a newline';
   return [
     '**Keyboard**',
-    `- \`Enter\` sends (a working agent reads it at its next step) · \`Shift-Tab\` sends it for the end of the agent's turn · ${newline}`,
-    '- `↑`/`↓` browse input history · `Ctrl-R` searches it',
+    '- `Enter` sends · `Shift-Tab` queues for the end of the turn · ' + newline,
+    '- `↑`/`↓` browse input history · `Ctrl-R` searches history',
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
-    '- `Esc` closes panels, returns to the parent agent, and rejects an open approval · `Ctrl-C` stops the active response, or exits when idle',
-    "- `Ctrl-T` opens the focused agent's full output in a scrollable reader (PgUp/PgDn pages)",
-    "- `Ctrl-O` lists the calls of the focused agent's script: open a call's agent, review what it waits on, or skip it",
+    '- `Esc` closes panels, returns to parent, or rejects an open prompt',
+    '- `Ctrl-C` stops the active response (or exits when idle)',
+    '- `Ctrl-T` opens the full output in a scrollable reader (PgUp/PgDn)',
+    '- `Ctrl-O` opens script calls to inspect or skip',
     `- \`Tab\` ${AGENT_LIST.openHelp}`,
-    `- \`${focusChord}\` focuses an agent in the agent-list order`,
+    `- \`${focusChord}\` focuses an agent by number`,
   ].join('\n');
 }
 
@@ -79,7 +80,7 @@ export function formatSlashCommandHelp(
   return [
     ...commandSections(commands),
     keyboardSection(options),
-    'Typing while a response is running queues your message as a follow-up.',
-    'Goal mode: press `r` on a plan approval to run the plan as a goal, which works on it in rounds until a separate judge confirms completion, approving commands on its own; `a` also approves edits and agent work.',
+    'Typing while a response is running queues a follow-up.',
+    'Goal mode: press `r` on a plan to run it autonomously (commands auto-approved); press `a` to also auto-approve edits and agent work.',
   ].join('\n\n');
 }

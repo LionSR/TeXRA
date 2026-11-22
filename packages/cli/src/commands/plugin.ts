@@ -254,8 +254,7 @@ const pluginShowCommand = cliCommand('show', {
 });
 
 const pluginRemoveCommand = cliCommand('remove', {
-  description:
-    'Remove an installed plugin; what it wrote to history is kept, unread',
+  description: 'Remove an installed plugin',
   config: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
   run: (_, input) =>
@@ -265,9 +264,9 @@ const pluginRemoveCommand = cliCommand('remove', {
           const result = { removed: removed.name, path: removed.path };
           let text = `Removed ${removed.name}.`;
           if (removed.leftover)
-            text = `${removed.name} was already forgotten; removed its leftover directory ${removed.path}.`;
+            text = `${removed.name} was already uninstalled; removed leftover folder ${removed.path}.`;
           else if (removed.local)
-            text = `Removed ${removed.name}. Its directory ${removed.path} is yours and was left in place.`;
+            text = `Removed ${removed.name} (left your local folder ${removed.path} intact).`;
           return emitCliResult(commandResult('plugin remove', result, text));
         }),
       ),
@@ -275,8 +274,7 @@ const pluginRemoveCommand = cliCommand('remove', {
 });
 
 const pluginEnableCommand = cliCommand('enable', {
-  description:
-    'Enable an installed plugin, asking to trust the version it is at',
+  description: 'Enable an installed plugin (prompts to trust if needed)',
   config: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
   run: (_, input) =>
@@ -292,7 +290,7 @@ const pluginEnableCommand = cliCommand('enable', {
               'plugin enable',
               result,
               outcome === 'enabled'
-                ? `Enabled ${input.name}. Open runs load it at their next step.`
+                ? `Enabled ${input.name}. Active tasks load it on the next turn.`
                 : PLUGINS_PAGE.declined(input.name),
             ),
           ).pipe(
@@ -308,8 +306,7 @@ const pluginEnableCommand = cliCommand('enable', {
 });
 
 const pluginDisableCommand = cliCommand('disable', {
-  description:
-    'Disable an installed plugin without removing it: it contributes nothing from the next step',
+  description: 'Disable an installed plugin without removing it',
   config: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
   run: (_, input) =>

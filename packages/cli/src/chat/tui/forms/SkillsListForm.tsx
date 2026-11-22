@@ -94,7 +94,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
           {skillIssueSummaryDetail(result)}
         </>
       )}
-      emptyMessage="No skills yet. Add one under .texra/skills in this workspace or in your home directory, then reopen /skills."
+      emptyMessage="No skills yet. Add one under .texra/skills in this project or in your home directory, then reopen /skills."
       action="activate"
       onSelect={props.onSelect}
       onCancel={props.onClose}

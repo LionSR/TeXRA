@@ -111,7 +111,7 @@ const previewFinalOutput = (absolutePath: string) =>
       preserveFocus: false,
     });
     vscode.window.setStatusBarMessage(
-      'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
+      'Revised file opened in preview. Review or accept it in the Tasks panel.',
       8000,
     );
   });
@@ -222,7 +222,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               (cause) =>
                 new PdfOpenFailed({
                   path: location.absolutePath,
-                  message: 'VS Code would not open the PDF in its viewer.',
+                  message: 'Could not open the PDF in VS Code.',
                   cause,
                 }),
             ),
@@ -669,9 +669,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // The toast is the delivered surface when the view cannot be made
     // visible, even if the user dismisses it without retrying the reveal.
     const selection = yield* vscodeUi.ask('info', launchNotice(config), {
-      modal: false,
-      detail:
-        'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
       items: ['Show Tasks'],
     });
     if (!selection) return;

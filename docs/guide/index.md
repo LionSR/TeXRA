@@ -4,12 +4,11 @@ import RunParityHero from '../.vitepress/components/RunParityHero.vue';
 
 # TeXRA
 
-An open-source AI theorist for VS Code and the terminal. It
-attempts real theory work: deriving results, checking derivations in
-Wolfram, and formalizing proofs in Lean 4. It takes on open problems in
-long autonomous runs, splitting large jobs across helper agents and
-programs, helping you do good, verifiable work. Manuscript preparation, LaTeX tooling, and figures
-serve as supporting capabilities within your research project.
+An open-source AI theorist for VS Code, desktop, and the terminal. It handles
+real theory work: deriving results, checking derivations in Wolfram, and
+formalizing proofs in Lean 4, splitting large jobs across helper agents and
+programs. Manuscript preparation, LaTeX tooling, and figures sit alongside your
+research project.
 
 <GuideIntroHero />
 
@@ -17,9 +16,10 @@ serve as supporting capabilities within your research project.
 
 ## Get started
 
-- [**Installation**](./installation.md): VS Code extension or the `texra` CLI
+- [**Installation**](./installation.md): VS Code extension, desktop app, or the `texra` CLI
 - [**First run**](./first-run.md): open a `.tex` file, watch one program work
 - [**Quick start**](./quick-start.md): the longer walkthrough in VS Code
+- [**Desktop app**](./desktop.md): standalone app (coming soon)
 
 ## Use it
 
@@ -58,15 +58,15 @@ General-purpose chatbots struggle with this:
 
 TeXRA's assistant and programs call real tools and return verifiable output.
 
-## Three surfaces, one system
+## Three apps, one system
 
 The VS Code extension, the desktop app, and the `texra` CLI share the same
-assistant, programs, credentials, and run history. A run started in the CLI appears live in
-the extension's **Tasks** list, and vice versa.
+assistant, programs, credentials, and task history. A task started in the CLI appears live in
+the extension and desktop **Tasks** list, and vice versa.
 
 <RunParityHero />
 
-<p class="hero-caption">One run seen from two surfaces: the same execution id lands in the terminal's output and the extension's Tasks list.</p>
+<p class="hero-caption">The same task appears live across the terminal and the extension's Tasks list.</p>
 
 ```mermaid
 graph TB

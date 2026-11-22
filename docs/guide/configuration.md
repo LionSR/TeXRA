@@ -21,18 +21,18 @@ The page remembers the sub-tab you last opened while Settings stays open.
   **Models** (which models appear, and the helper model).
 - **Agents**: **Skills**, and **Advanced** (compaction, retries, and
   multi-agent coordination).
-- **Memory**: the notes TeXRA keeps across tasks.
+- **Memory**: the memories TeXRA keeps across tasks.
 - **Plugins**: everything that adds tools or programs: TeXRA's plugins (such
   as Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
   plugins, and your MCP servers. Each plugin can be switched on or off.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
 - **General**: **Appearance** (desktop app only), **Approval** (the approval
-  policy, working-directory protection, and the goal spend cap), **Privacy**
+  policy, project-folder protection, and the goal spend cap), **Privacy**
   (telemetry), and **Git** (the GitHub token and Git commit attribution).
 
-Commands such as **TeXRA: Agent Settings** or **TeXRA: Git Settings**
-open their page on the matching sub-tab.
+Commands such as **TeXRA: Model Settings**, **TeXRA: Approval Settings**, or **TeXRA: Git Settings**
+open the matching section directly.
 
 Settings that benefit from an ordinary control appear directly in these views.
 A few settings with no control, such as the maximum image size and the debug
@@ -41,7 +41,7 @@ implementation constants are not exposed as configuration.
 
 ## Where settings live
 
-For an open project, all three hosts read:
+For an open project, all three apps read:
 
 ```text
 <project>/.texra/config.json
@@ -53,18 +53,9 @@ User-wide values are stored in:
 ~/.texra/v1/global-storage/config.json
 ```
 
-Project values override user-wide values. Explicit command-line flags and
-environment variables override saved values when a command documents such an
-override. If the project directory is read-only, saving a project setting
-fails with an error; if `.texra/config.json` cannot be read (for example,
-malformed JSON), the host warns and ignores the file until it is fixed.
+Project values override user-wide values, and CLI flags / environment variables override saved values where supported. If `.texra/config.json` is unreadable (e.g., malformed JSON), TeXRA warns and ignores it until fixed.
 
-Configuration files are ordinary JSON and store only workspace and user settings.
-Persistent application state—session history, execution records, and run events—is
-stored separately in a local SQLite database (`texra.project-v1.db`) in workspace storage.
-TeXRA 1.0 initializes fresh application state and does not import or migrate
-legacy JSON session stores, histories, execution checkpoints, or old values from
-`.vscode/settings.json`.
+Task history is stored separately in a local SQLite database (`texra.project-v1.db`) under `~/.texra` (TeXRA 1.0 starts with fresh state and does not migrate legacy JSON stores or `.vscode/settings.json`).
 
 The JSON files use flat `texra.*` keys. For example:
 
@@ -81,8 +72,8 @@ them at the intended project or user scope.
 
 The approval policy is the main exception to the project scope: a project
 file can be supplied by a repository you clone, so TeXRA never reads it from
-there. It is kept per workspace in your own storage, and a value in your user
-file applies to every workspace. The goal spend cap and the user-wide provider
+there. It is kept per project in your own storage, and a value in your user
+file applies to every project. The goal spend cap and the user-wide provider
 switches (such as OpenAI fast mode) are likewise read only from your user
 file. A project file that sets any of these is ignored with a warning naming
 the key.
@@ -98,10 +89,7 @@ visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
 their provider rows with their usage meters. There is no TeXRA account; everything ships
 bundled.
 
-Saved provider keys and subscription tokens live in `~/.texra/secrets/` (an
-owner-only folder shared across the extension, desktop app, and CLI), never in
-the JSON configuration files. Environment-variable keys are available to any
-TeXRA host launched with that environment.
+Saved provider keys and subscription tokens live in `~/.texra/secrets/` (shared across VS Code, desktop, and CLI), never in JSON configuration files. Environment-variable keys are available to any TeXRA app launched with that environment.
 
 ## Project instructions (AGENTS.md)
 
@@ -128,31 +116,16 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records the model name, the provider API it
-was called through, the billing route (API key or subscription), token
-counts, the cost at list prices, response time, the time of the call, the
-task identifier, version, and host. A call made by a program TeXRA ships also
-carries that program's name, and a draft polish in the composer carries
-`polish`. A chat sends no name, and neither does a program from an installed
-plugin or one the assistant wrote, so a name you or a plugin wrote is never
-sent. No account is
-involved: each install sends a random anonymous install ID (a UUID made the
-first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
-not send prompt text, document content, file paths, or error text. The first
-TeXRA host you run with telemetry on tells you this once; the others share
-that record and stay quiet. Turning telemetry off stops all usage
-reporting and the ID is not created.
+When telemetry is enabled, TeXRA records anonymous usage metadata: model, provider API, billing route, token counts, list-price cost, response time, timestamp, task ID, version, app, and built-in program name (or `polish`). Custom plugin names, prompts, document content, file paths, and error text are never sent.
 
-The CLI, the extension, and the desktop app share one install ID. It lives in
-the global settings database, `~/.texra/v1/global-storage/texra.db`. To reset
-it, quit every TeXRA host and run:
+No account is involved: TeXRA uses a random install ID (`X-TeXRA-Install-Id`) shared across VS Code, desktop, and CLI, and notifies you once on first run. Turning telemetry off stops all reporting.
+
+To reset the install ID, quit all TeXRA apps and run:
 
 ```bash
 sqlite3 ~/.texra/v1/global-storage/texra.db \
   "DELETE FROM current_value WHERE family = 'app-state' AND key = 'texra.telemetry.installId'"
 ```
-
-A new ID is made on the next send.
 
 ## Goal mode
 

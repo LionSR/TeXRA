@@ -113,7 +113,7 @@ function projectStatus(
       label: sectionCountLabel(section, String(rollup[section])),
     };
   const unseen = unseenRuns(project.surface, project.view).size;
-  if (unseen > 0) return { tone: 'unseen', label: `${unseen} finished` };
+  if (unseen > 0) return { tone: 'unseen', label: `${unseen} completed` };
   return undefined;
 }
 
@@ -218,7 +218,7 @@ export function shellSidebarTemplate(
   );
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
-      <nav class="shell-sidebar-primary" aria-label="Task actions">
+      <nav class="shell-sidebar-primary" aria-label="Quick actions">
         ${sidebarAction({
           icon: 'magnifying-glass',
           label: model.commandsLabel,

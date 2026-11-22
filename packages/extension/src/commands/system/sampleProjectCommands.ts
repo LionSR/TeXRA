@@ -80,7 +80,7 @@ export const createSampleProject: (
     const workspaceFs = yield* WorkspaceFs;
     if (!workspaceFs.root) {
       yield* showLoggedMessage(
-        'Open a workspace to create the sample project.',
+        'Open a project folder to create the sample project.',
       );
       return;
     }
@@ -88,7 +88,7 @@ export const createSampleProject: (
     const destFolder = 'texra-sample';
     if (yield* workspaceFs.exists(destFolder)) {
       yield* showLoggedInfoMessage(
-        'Sample project already exists in workspace.',
+        'Sample project already exists in this project.',
       );
       return;
     }

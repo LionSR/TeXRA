@@ -98,7 +98,7 @@ function coerceSettingInput(
   const parsed = Number(trimmed);
   return Number.isFinite(parsed)
     ? { ok: true, value: parsed }
-    : { ok: false, message: 'Enter a finite number.' };
+    : { ok: false, message: 'Enter a valid number.' };
 }
 
 /** Coerce text input, then run the setting's own schema before writing. */
@@ -115,6 +115,13 @@ function validateSettingInput(
 
   return { ok: false, message: parsed.failure.message };
 }
+
+const SLOT_SCOPE_LABEL: Readonly<Record<TexraSettingRow['slot'], string>> = {
+  config: 'config',
+  workspaceState: 'project',
+  repoState: 'repo',
+  globalState: 'global',
+};
 
 /** A setting's current value as the list shows it: an enum value by its
  *  choice label, the label every settings UI shows. */
@@ -138,7 +145,7 @@ function buildConfigListItems(
       label: entry.title,
       description: joinFacts([
         valueText,
-        entry.slot,
+        SLOT_SCOPE_LABEL[entry.slot],
         kind === 'readonly' && 'read-only',
       ]),
       disabled: kind === 'readonly',
@@ -287,7 +294,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         key={entry.key}
         title={`/config · ${entry.title}`}
         initialValue={current == null ? '' : String(current)}
-        placeholder={isNumber ? 'enter a number' : 'enter a value'}
+        placeholder={isNumber ? 'Enter a number' : 'Enter a value'}
         masked={false}
         rawSubmit
         extraHints={RESET_HINTS}

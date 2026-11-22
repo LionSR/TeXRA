@@ -382,9 +382,9 @@ export const texraPlugins = (host: {
       ...memoryWorkflow,
       icons: { memory: 'database', executions: 'clock-rotate-left' },
       dashboard: {
-        name: 'Memory & Executions',
+        name: 'Memory & Task History',
         description:
-          'Persistent memory across sessions and the executions view of the runs an agent launched.',
+          'Persistent memory across tasks and inspection of agents launched during a task.',
       },
     },
     {
@@ -392,10 +392,10 @@ export const texraPlugins = (host: {
       dashboard: {
         name: 'Goal Mode',
         description:
-          'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
+          'Propose a plan and run it autonomously across rounds until complete or input is needed.',
         setup: {
           configNotes:
-            "No local install required. Turning this off removes the plan tool from every agent and stops goal turns, from each run's next step.",
+            'Turning this off disables the plan tool and stops goal rounds on the next turn.',
         },
       },
     },
@@ -408,10 +408,10 @@ export const texraPlugins = (host: {
       dashboard: {
         name: 'Multi-Agent Workflow',
         description:
-          'Let the assistant hand work to other agents and start programs as children of its run: one at a time, or fanned out and joined from a script, resuming safely after interruption.',
+          'Let the assistant delegate work to helper agents and programs, sequentially or in parallel.',
         setup: {
           configNotes:
-            "No local install required. Turning this off removes the agent and program tools from the assistant and from every agent it starts, from each run's next step, so nothing delegates or starts a program.",
+            'Turning this off removes delegation and program tools on the next turn.',
         },
       },
     },

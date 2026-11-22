@@ -38,7 +38,7 @@ return its report. The rest of this page is about the document programs.
 
 ## Basic execution flow
 
-A program's run asks no model itself. For each revision it builds a prompt, hands it to a fresh child agent, and then extracts, compiles and diffs the documents in the child's reply:
+A document program orchestrates revisions in code: for each revision it builds a prompt, invokes a fresh helper agent, and extracts, compiles, and diffs the documents from the reply:
 
 ```mermaid
 sequenceDiagram

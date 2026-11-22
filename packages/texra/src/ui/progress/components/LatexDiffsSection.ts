@@ -48,15 +48,14 @@ const EDITED_REVIEW_ACTIONS: readonly DiffActionSpec[] = [
     id: 'latexdiffButton',
     icon: 'plus-minus',
     label: 'Diff vs. edited',
-    tooltip:
-      'Run latexdiff on the base and edited files and open the marked-up result',
+    tooltip: 'Run latexdiff and open the marked-up result',
     action: 'latexdiff',
   },
   {
     id: 'compareButton',
     icon: 'code-compare',
     label: 'Compare',
-    tooltip: 'Open the base and edited files side by side in the diff editor',
+    tooltip: 'Compare base and edited files side by side',
     action: 'compare',
   },
 ];
@@ -67,16 +66,14 @@ const EDITED_APPLY_ACTIONS: readonly DiffActionSpec[] = [
     id: 'mergeButton',
     icon: 'code-merge',
     label: 'Merge',
-    tooltip:
-      'Create a new version of the base file by merging the edits suggested by the edited file',
+    tooltip: 'Merge edits into a new version of the base file',
     action: 'merge',
   },
   {
     id: 'acceptButton',
     icon: 'check',
     label: 'Accept',
-    tooltip:
-      'Accept the changes from the edited file and overwrite the base file',
+    tooltip: 'Overwrite the base file with the edited file',
     action: 'accept',
   },
 ];
@@ -87,8 +84,7 @@ const COMMIT_DIFF_ACTIONS: readonly DiffActionSpec[] = [
     id: 'latexdiffvcButton',
     icon: 'plus-minus',
     label: 'Diff vs. commit',
-    tooltip:
-      'Run latexdiff-vc on the base file against its version at the selected commit',
+    tooltip: 'Run latexdiff-vc against the selected commit',
     action: 'latexdiffvc',
   },
 ];
@@ -99,16 +95,14 @@ const COMMIT_MANAGE_ACTIONS: readonly DiffActionSpec[] = [
     id: 'packLatexdiffvcButton',
     icon: 'box-archive',
     label: 'Move to Diffs folder',
-    tooltip:
-      "Move this commit's diff .tex and .pdf into a dated folder under Diffs and delete their build files",
+    tooltip: 'Archive this commit diff under Diffs and clean build files',
     action: 'packLatexdiffvc',
   },
   {
     id: 'cleanLatexdiffvcButton',
     icon: 'trash',
     label: 'Delete diff files',
-    tooltip:
-      "Delete this commit's diff .tex, .pdf and build files; Diff vs. commit makes them again",
+    tooltip: 'Delete this commit diff and its build files',
     action: 'cleanLatexdiffvc',
   },
 ];

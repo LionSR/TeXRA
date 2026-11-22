@@ -5,24 +5,17 @@ import InstallTroubleshootCards from '../.vitepress/components/InstallTroublesho
 
 # Installation guide
 
-This guide covers installing TeXRA as a VS Code extension or standalone CLI, along with the system dependencies for compiling, diffing, and rendering LaTeX documents. Using the assistant for chat, code, or Lean requires only an API key or connected provider subscription; local LaTeX tools are required when building previews, generating visual diffs, and formatting equations.
+Install TeXRA as a VS Code extension, a standalone CLI, or the upcoming [Desktop App](./desktop.md). Chat, coding, and Lean tasks need only an API key or provider subscription; local LaTeX tools are needed for compiling PDFs, generating diffs, and formatting `.tex` files.
 
 ## System requirements
 
-TeXRA runs on all major operating systems. Minimum requirements:
+- **Operating System**: macOS, Windows, or Linux
+- **VS Code**: 1.125+ (for the extension) or **Node.js 22.22.2+ (22.x) / 24.15+** (for the CLI)
+- **Internet Connection**: Required for model API calls
 
-- **Visual Studio Code**: Version 1.125 or newer (for the VS Code extension)
-- **Operating System**: Windows, macOS, or Linux
-- **Internet Connection**: Required for API access to language models
-
-## Usage logging
-
-A fresh install logs anonymous usage metadata (built-in program name when running a shipped program, model, provider API,
-billing route, token counts, cost at list prices, response time, time of the
-call, task ID, version, host) under a random install ID, and says so once on first
-run. There is no sign-in. Turn it off with `TEXRA_NO_TELEMETRY=1`,
-`DO_NOT_TRACK=1`, or `"texra.telemetry.enabled": false`. Details, including how
-to reset the ID: [Usage logging](./configuration.md#usage-logging).
+::: info Usage logging
+TeXRA logs anonymous usage metadata (model, token counts, cost, timing — never prompts, files, or paths) under a random install ID. Opt out anytime with `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`, or `"texra.telemetry.enabled": false`. See [Usage logging](./configuration.md#usage-logging).
+:::
 
 ## Installing the extension
 
@@ -44,27 +37,11 @@ You can also install TeXRA in your preferred editor through a protocol link:
 
 ### CLI
 
-The standalone `texra` command is published to npm. Install it globally (requires
-Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later):
+Install globally via npm (requires Node.js 22.22.2+ in 22.x, or 24.15+):
 
 ```bash
 npm install -g @texra-ai/cli
 ```
-
-On Linux and WSL a system-wide Node.js puts global packages under
-`/usr/local/lib/node_modules`, which your user cannot write to, so the install
-fails with `EACCES`. Install Node.js through a version manager such as
-[nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm), or
-point npm at a directory you own, and then reinstall without `sudo`:
-
-```bash
-npm config set prefix ~/.npm-global
-export PATH="$HOME/.npm-global/bin:$PATH"   # add this to ~/.bashrc or ~/.zshrc
-npm install -g @texra-ai/cli
-```
-
-A `sudo` install still works — the packaged files only need to be readable — but
-upgrades then also need `sudo`.
 
 Or with [Homebrew](https://github.com/texra-ai/homebrew-tap) on macOS and Linux:
 
@@ -72,7 +49,21 @@ Or with [Homebrew](https://github.com/texra-ai/homebrew-tap) on macOS and Linux:
 brew install texra-ai/tap/texra
 ```
 
-Read the [TeXRA CLI guide](./texra-cli.md) for usage, shell completion, and workspace defaults.
+::: details Linux / WSL `EACCES` permission errors with npm
+If a system-wide Node.js install fails with `EACCES`, use a version manager ([nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm)) or point npm at a user-owned prefix:
+
+```bash
+npm config set prefix ~/.npm-global
+export PATH="$HOME/.npm-global/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc
+npm install -g @texra-ai/cli
+```
+:::
+
+Read the [TeXRA CLI guide](./texra-cli.md) for usage, shell completion, and project defaults.
+
+### Desktop App
+
+Standalone installers for macOS, Windows, and Linux are coming soon. See the [Desktop App guide](./desktop.md).
 
 ### From VSIX file
 
@@ -80,20 +71,20 @@ To install from a release `.vsix` archive (`texra-<version>.vsix`), right-click 
 
 ## Installing system dependencies
 
-For compiling and diffing LaTeX documents, you need a local **LaTeX distribution** (optional if you only use TeXRA for chat, code, or Lean). Perl (for `latexdiff` and `latexindent`), GraphicsMagick/ImageMagick, and Ghostscript unlock specific optional features:
+For compiling and diffing LaTeX documents, you need a local **LaTeX distribution** (optional if you only use TeXRA for chat, code, or Lean). Perl (for `latexdiff` and `latexindent`), GraphicsMagick/ImageMagick, and Ghostscript add optional features:
 
 <FeatureCards
   min="220px"
   :cards="[
     { icon: 'file-code', title: 'LaTeX distribution', tag: 'For LaTeX', tagVariant: 'accent', desc: 'Required for compiling and rendering .tex; optional for chat, code, or Lean.', chips: [{ text: 'MiKTeX / TeX Live', variant: 'neutral' }] },
-    { icon: 'diff-multiple', title: 'Perl', tag: 'Optional', tagVariant: 'neutral', desc: 'Backs the latexindent and latexdiff scripts.', chips: [{ text: 'auto-format', variant: 'info' }, { text: 'LaTeX diffs', variant: 'info' }] },
+    { icon: 'diff-multiple', title: 'Perl', tag: 'Optional', tagVariant: 'neutral', desc: 'Backs the latexindent and latexdiff scripts.', chips: [{ text: 'auto-format', variant: 'info' }, { text: 'latexdiff', variant: 'info' }] },
     { icon: 'image', title: 'GraphicsMagick / ImageMagick', tag: 'Optional', tagVariant: 'neutral', desc: 'Figure and image processing.', chips: [{ text: 'figures', variant: 'info' }] },
     { icon: 'file-pdf', title: 'Ghostscript', tag: 'Optional', tagVariant: 'neutral', desc: 'Rasterizes PDF figures for the image tools above.', chips: [{ text: 'figures', variant: 'info' }] }
   ]"
 />
 
 ::: tip Check what's detected with `texra doctor`
-Run `texra doctor` to inspect what TeXRA detected: Node.js, workspace and packaged resources, available models, usage logging, the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`), and the workspace config file. Optional image tools (GraphicsMagick/ImageMagick and Ghostscript) are checked on demand when a figure tool runs.
+Run `texra doctor` to inspect what TeXRA detected: Node.js, project folder and packaged resources, available models, usage logging, the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`), and the project config file. Optional image tools (GraphicsMagick/ImageMagick and Ghostscript) are checked on demand when a figure tool runs.
 :::
 
 <DoctorReportCard />
@@ -174,7 +165,7 @@ pdflatex --version
 ### Perl
 
 ::: info OPTIONAL
-Perl backs the `latexindent` and `latexdiff` LaTeX tools (both are Perl scripts). You only need it if you use auto-formatting or LaTeX diffs. It ships with macOS and with TeX Live, and is present on most Linux installs, but **not** with MiKTeX, and not on minimal or container Linux images. Check with `perl --version` rather than assuming.
+Perl backs the `latexindent` and `latexdiff` LaTeX tools (both are Perl scripts). You only need it if you use auto-formatting or `latexdiff`. It ships with macOS and with TeX Live, and is present on most Linux installs, but **not** with MiKTeX, and not on minimal or container Linux images. Check with `perl --version` rather than assuming.
 :::
 
 #### Windows
@@ -189,7 +180,7 @@ TeX Live for Windows ships its own Perl, so `latexindent` and `latexdiff` work w
 perl --version
 ```
 
-If you skip this on MiKTeX, TeXRA still compiles documents; only auto-formatting and LaTeX diffs are unavailable. The setup assistant flags the missing dependency and points to the same download.
+If you skip this on MiKTeX, TeXRA still compiles documents; only auto-formatting and `latexdiff` are unavailable. The Setup Assistant flags the missing dependency and points to the same download.
 
 #### macOS
 
@@ -273,9 +264,9 @@ sudo apt-get install ghostscript
 
 TeXRA talks to model providers directly with an API key you supply. You need a key from at least one provider (Anthropic, OpenAI, Google, etc.), and you give it to TeXRA the same way on every platform: the key is named `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` and so on.
 
-### In the VS Code extension
+### In VS Code or the desktop app
 
-The shortest path: open the TeXRA Settings, go to the **Models** page, and select the provider you want. Paste the key and it is saved in `~/.texra/secrets/`, a folder only your user can read, shared by every TeXRA app. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project: each task of that project reads it as it starts (so an edited key applies to the next task), and its keys win over the ones in your environment. A `DO_NOT_TRACK=1` or `TEXRA_NO_TELEMETRY=1` there turns usage logging off for that project's tasks.
+Open **Settings → Models → API keys**, select a provider, and paste your key (saved in `~/.texra/secrets/`, readable only by your user and shared across all TeXRA apps). You can also run **TeXRA: Set API Key** from the Command Palette or add keys to a `.env` file in your project folder (project `.env` values override shell variables for that project).
 
 <ApiKeysHero />
 
@@ -283,16 +274,16 @@ The shortest path: open the TeXRA Settings, go to the **Models** page, and selec
 
 ### In the CLI
 
-Set the provider key in your shell, then check that it is picked up:
+Export a provider key in your shell and verify with `texra doctor`:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-…
 texra doctor
 ```
 
-A project's `.env` file works here too: every task of the project reads it, in every TeXRA app. A key you set only in this terminal (`OPENAI_API_KEY=… texra chat`) travels with the tasks this terminal starts, so it reaches them in the TeXRA service too, which keeps running when the terminal closes. To keep a key for every terminal, save it with `texra setup` or put it in the project's `.env`.
+Project `.env` files work here too. Keys exported in a terminal are forwarded to tasks started from that terminal; to save a key permanently, run `texra setup` or put it in `.env`.
 
-If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the OpenAI models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models:
+To use a provider subscription instead of an API key (ChatGPT, Grok, Kimi Code, or GLM Coding Plan — see [Models](./models.md)):
 
 ```bash
 texra auth chatgpt login
@@ -300,7 +291,7 @@ texra auth grok login
 texra auth chatgpt status
 ```
 
-Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and workspace defaults.
+Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and project defaults.
 
 ::: info Getting API Keys
 

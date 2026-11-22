@@ -100,7 +100,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // said, since nothing after this would say it.
   const stores = yield* cliPlatform;
   if (Result.isFailure(stores.service))
-    writeTextStderr(`This task runs here: ${stores.service.failure.message}`);
+    writeTextStderr(`Running locally: ${stores.service.failure.message}`);
   const runSession = yield* stores.runSession;
   const configResult = yield* Effect.result(runSession.records(id).readConfig);
   if (Result.isFailure(configResult)) {
@@ -109,12 +109,12 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   }
   const config = configResult.success;
   if (!config) {
-    return yield* failUsage(`Run not found: ${id}`);
+    return yield* failUsage(`Task not found: ${id}`);
   }
   const documentTask = programOf(config) !== null;
   if (fork && documentTask) {
     return yield* failUsage(
-      `Task ${id} is a program run: only a conversation can be forked.`,
+      `Task ${id} is a program task; only conversations can be forked.`,
     );
   }
   // A fork reads the source's committed rows, whoever holds it, and the
@@ -164,7 +164,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // chat's new rounds take it.
   if (context.requestedApprovalPolicy !== undefined)
     writeTextStderr(
-      `The requested approval policy (${approvalPolicyLabel(context.requestedApprovalPolicy)}) does not change task ${id}: it resumes under the approval it was launched with${documentTask ? '' : "; the chat's new messages take it"}.`,
+      `Note: task ${id} resumes with its original approval policy (not ${approvalPolicyLabel(context.requestedApprovalPolicy)})${documentTask ? '' : '; new messages use the requested policy'}.`,
     );
 
   // A chat resume reopens the interactive TUI, so headless callers are
@@ -177,7 +177,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       const runCommand = `${commandName} run`;
       return yield* failUsage(
         formatInteractiveTerminalFailure(terminalFailure, {
-          headlessMessage: `Resuming continues an interactive chat session, run \`${formatResumeCommand(
+          headlessMessage: `Resuming opens an interactive chat; run \`${formatResumeCommand(
             commandName,
             id,
             { approvalPolicy: context.approvalPolicy },

@@ -47,8 +47,8 @@ export function EnabledModelsForm(
       availableRows={props.availableRows}
       description={
         <Text dimColor>
-          Enable models for `/model` and lead-model pickers. Does not change API
-          keys or access mode.
+          Enable models for /model pickers. Does not change API keys or
+          subscriptions.
         </Text>
       }
       action="toggle"

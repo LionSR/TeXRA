@@ -70,14 +70,14 @@ export class ToolsSheet extends TexraElement {
   override render(): TemplateResult {
     return html`
       <wa-drawer
-        label="LaTeXDiffs"
+        label="latexdiff"
         placement="bottom"
         without-header
         light-dismiss
         @wa-after-hide=${this.handleAfterHide}
       >
         <div class="overlay-header">
-          <span class="overlay-title">LaTeXDiffs</span>
+          <span class="overlay-title">latexdiff</span>
           ${renderIconActionButton({
             id: 'tools-sheet-close',
             icon: 'xmark',

@@ -67,26 +67,26 @@ export function dockGroupActions(
         activate: () => actions.open(kind, group),
       })),
       {
-        label: 'Split group right',
+        label: 'Split right',
         dividerBefore: true,
         activate: () => split('right'),
       },
-      { label: 'Split group below', activate: () => split('below') },
+      { label: 'Split down', activate: () => split('below') },
       {
-        label: group.api.isMaximized() ? 'Restore group' : 'Maximize group',
+        label: group.api.isMaximized() ? 'Restore pane' : 'Maximize pane',
         activate: () => {
           if (group.api.isMaximized()) group.api.exitMaximized();
           else group.api.maximize();
         },
       },
-      { label: 'Close group', dividerBefore: true, activate: closeGroup },
+      { label: 'Close pane', dividerBefore: true, activate: closeGroup },
     ]);
     render(
       html`
         <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
           ${renderIconActionButton({
             icon: 'plus',
-            label: 'Group actions',
+            label: 'Pane actions',
             slot: 'trigger',
             size: 'm',
           })}
@@ -167,12 +167,12 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
       },
     });
     const menu = actionMenu([
-      moveToNewGroup('right', 'Move tab to new group right'),
-      moveToNewGroup('bottom', 'Move tab to new group below'),
-      moveToNewGroup('left', 'Move tab to new group left'),
-      moveToNewGroup('top', 'Move tab to new group above'),
+      moveToNewGroup('right', 'Move right'),
+      moveToNewGroup('bottom', 'Move down'),
+      moveToNewGroup('left', 'Move left'),
+      moveToNewGroup('top', 'Move up'),
       ...groups.map((group, index) => ({
-        label: `Move to ${group.activePanel?.title ?? `empty group ${index + 1}`}`,
+        label: `Move to ${group.activePanel?.title ?? `empty pane ${index + 1}`}`,
         dividerBefore: index === 0,
         activate: () => panel?.api.moveTo({ group }),
       })),

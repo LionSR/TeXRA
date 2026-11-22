@@ -185,18 +185,14 @@ const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
       case 'AuthFailure': {
         yield* Effect.logError(`Clone failed: ${outcome.error}`);
         const selected = yield* announce(
-          vscodeUi.ask(
-            'error',
-            `${CLONE_COPY.authFailed} ${CLONE_COPY.authDetail(remote)}`,
-            {
-              items: remote.isOverleaf
-                ? ['Get New Token', 'How to get a token']
-                : ['Retry'],
-            },
-          ),
+          vscodeUi.ask('error', CLONE_COPY.authDetail(remote), {
+            items: remote.isOverleaf
+              ? ['Get new token', 'How to get a token']
+              : [],
+          }),
           undefined,
         );
-        if (selected === 'Get New Token') {
+        if (selected === 'Get new token') {
           yield* openUrl(OVERLEAF_GIT_TOKEN_URL);
         } else if (selected === 'How to get a token') {
           yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
@@ -229,7 +225,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
     // one the command root provided; this depth only reads it.
     const workspaceRoot = (yield* WorkspaceFs).root;
     if (!workspaceRoot) {
-      yield* showLoggedMessage('Open a workspace folder first.');
+      yield* showLoggedMessage('Open a project folder first.');
       return;
     }
     const label = cloneProviderLabel(remote);

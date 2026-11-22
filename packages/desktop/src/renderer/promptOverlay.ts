@@ -73,9 +73,9 @@ export function createDesktopPromptOverlay(
   const shell = createOverlayDialog({
     appRoot,
     prefix: 'desktop-prompt',
-    ariaLabel: 'Input requested',
-    closeLabel: 'Cancel prompt',
-    title: 'Input requested',
+    ariaLabel: 'Input',
+    closeLabel: 'Cancel',
+    title: 'Input',
     content: form,
   });
   const dialog = shell.dialog;
@@ -106,7 +106,8 @@ export function createDesktopPromptOverlay(
     current = message;
     shell.titleEl.textContent = message.title;
     input.type = message.password ? 'password' : 'text';
-    input.label = message.prompt;
+    input.label = message.prompt === message.title ? '' : message.prompt;
+    input.setAttribute('aria-label', message.prompt);
     input.value = '';
     dialog.setAttribute('aria-label', message.title);
     dialog.open = true;

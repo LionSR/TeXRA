@@ -123,7 +123,7 @@ export const claudeAgent: TexraPlugin = texraPlugin({
   dashboard: {
     name: 'Claude Code CLI',
     description:
-      'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf. Use it to delegate focused exploration or implementation while another agent stays in charge.',
+      'Claude Code agent runtime for delegating code exploration, editing, and shell tasks.',
     settings: CLAUDE_AGENT_SETTINGS,
     setup: {
       installGuide:

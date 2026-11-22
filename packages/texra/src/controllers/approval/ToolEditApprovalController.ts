@@ -106,7 +106,7 @@ export function readToolEditPreview(
   return session.request({ kind: 'request.preview', runId, requestId }).pipe(
     Effect.flatMap(({ preview }) =>
       preview === null
-        ? unavailable('the session holds no preview of this edit')
+        ? unavailable('no preview is available for this edit')
         : Effect.succeed<ToolEditPreviewRead>({
             kind: 'preview',
             content: preview,
@@ -115,7 +115,7 @@ export function readToolEditPreview(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : unavailable(`the session did not send it (${toErrorMessage(cause)})`),
+        : unavailable(`could not load preview (${toErrorMessage(cause)})`),
     ),
   );
 }
