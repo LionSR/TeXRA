@@ -166,6 +166,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         parent: options.parent ?? null,
         provenance: options.provenance ?? null,
         grants: options.grants ?? NO_APPROVAL_GRANTS,
+        maxCostUsd: options.maxCostUsd ?? null,
       } satisfies Registration['start']);
   const rows: SessionRowDraft[] = [
     ...(start === null ? [] : [start]),

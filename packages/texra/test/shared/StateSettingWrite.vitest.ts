@@ -4,8 +4,9 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { AppSignals, Settings } from '@texra-ai/harness/plugins';
+import { AppSignals, Secrets, Settings } from '@texra-ai/harness/plugins';
 import { DISABLED_SKILLS_SETTING } from '@texra-ai/harness/schemas';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import {
   applyStateSettingUpdate,
@@ -44,7 +45,10 @@ describe('applyStateSettingUpdate', () => {
           roots,
         ),
       ).toEqual({ kind: 'ignored' });
-    }).pipe(Effect.provide(AppSignals.layer)),
+    }).pipe(
+      Effect.provide(AppSignals.layer),
+      Effect.provideService(Secrets, new FakeSecrets()),
+    ),
   );
 
   it.effect('toggles a skill over the stored list, not a stale copy', () =>
@@ -63,6 +67,9 @@ describe('applyStateSettingUpdate', () => {
       expect(yield* Settings.get(roots, DISABLED_SKILLS_SETTING)).toEqual([
         'second',
       ]);
-    }).pipe(Effect.provide(AppSignals.layer)),
+    }).pipe(
+      Effect.provide(AppSignals.layer),
+      Effect.provideService(Secrets, new FakeSecrets()),
+    ),
   );
 });

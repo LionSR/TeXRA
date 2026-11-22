@@ -92,7 +92,10 @@ layer(
     ({ providerEndpoint, modelBaseUrl, baseUrl, usageRoute }) =>
       Effect.gen(function* () {
         const { roots } = yield* FakeHost;
-        yield* roots.globalState.update('endpoint.glm', providerEndpoint);
+        yield* roots.globalState.update(
+          'endpoint.glm.openai-responses',
+          providerEndpoint,
+        );
         if (modelBaseUrl) MODEL_CONFIGS['glm/glm-5.3'].baseUrl = modelBaseUrl;
 
         const endpoint = yield* boundEndpoint({

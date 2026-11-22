@@ -140,8 +140,11 @@ may lack followed: the markdown-files line of the tool-call section
 (`bash`) and its "grep or read" of the bibliography, and the
 `<workspace_info>` advice before a git command (`bash`). Still open: the
 `./host` helpers (fourteen files under `packages/texra/src/tools` still
-import `@texra-ai/harness/host`, #15120 moves them) and the `./plugins`
-split. M4 and H9 were not re-read.
+import `@texra-ai/harness/host`, #15120 moves them). M4 and H9 were not
+re-read. Landed on 2026-11-21: the `./plugins` split. The built-in plugins
+are `@texra-ai/harness/builtins`, and `./plugins` is the authoring surface
+alone (the comparison is in the general-package note, "The built-ins leave
+`./plugins`").
 
 The earlier version's list of work "safe at any time", read again on
 2026-11-19:
@@ -222,12 +225,19 @@ What is left for the owner falls into five kinds. Nothing below was touched.
 - The two-DDL split of the stores. `AGENTS.md` rules out copying the old
   data forward, so the choices are a new global file beside the old one or a
   "move it away" message, and either leaves today's settings, project
-  records and input history unread.
+  records and input history unread. Landed 2026-11-21: two DDL lists and two
+  stamps in `storeSchema.ts`, no migration; a development build's stores
+  fail their open with the "move it away" message (1.0 is unshipped and
+  `release/0.40` writes no such file).
 - A bounded `quick_check` at open that moves a failing file aside (store
-  review F12). A file moved aside stays aside.
+  review F12). A file moved aside stays aside. Closed 2026-11-21, not done:
+  the driver cannot bound it (`.agents/docs/refuted-candidates.json`,
+  `STORE-quick-check-and-minimum-sqlite-at-open`).
 - Renaming `texra.db` and the `TEXRA_*` variables to app-supplied names.
-  Whether `release/0.40` writes a `texra.db` was not established; if it
-  does, the rename is of this kind.
+  Landed 2026-11-21: they derive from the settings catalog's namespace
+  (`AppNamespace`), so TeXRA's own names do not change and nothing an
+  install holds moves. `release/0.40` writes no `texra.db` (its tree names
+  the file only in a PRD under `docs/prds/`).
 - Programs phase 5 and its question 1 (are project and user skill
   directories still loaded; are an installed plugin's agents kept as
   sub-runs or not loaded). Phase 5 deletes the agent catalog and changes
@@ -236,9 +246,11 @@ What is left for the owner falls into five kinds. Nothing below was touched.
 
 **It changes what a person gets by default.**
 
-- Model access: which models the launcher lists; whether a delegation may
-  name a model the list hides; what the GUI does when a plan is turned on
-  while signed out.
+- Model access: decided and landed on 2026-11-21
+  (`.agents/docs/implemented/simplification/2026-11-18-model-access-one-owner-per-question.md`):
+  the launcher lists what the terminal lists, a delegation names only a
+  model it was told, and a plan turned on while signed out is not written
+  until the sign-in the host starts succeeds.
 - Subscriptions: which credential serves a person who holds both a plan and
   a key (it decides who is billed); dropping "Experimental" from the ChatGPT
   plan; the four features of that note (limit reset time, helper model,
@@ -246,8 +258,10 @@ What is left for the owner falls into five kinds. Nothing below was touched.
 - Windows: accept that a second window or the CLI is rejected, or build the
   named-pipe service first.
 - What a saved `endpoint.<provider>` means after a backend changes protocol.
-  It is urgent in one respect: `config.json` is additive-only from 1.0, so
-  the choice is cheap only before the release.
+  Decided and landed on 2026-11-21: the stored key names the protocol
+  (`endpoint.<provider>.<protocol>`, read from llm's `BACKEND_PROTOCOLS`),
+  so a provider that changes protocol gets a new, empty key and the URL
+  saved for the old one stays stored and unread.
 - Whether `history delete` waits for its own cleanup; `StartOptions.continues`;
   the meaning of `plan: null` on a rejected plan; the facts-on-the-result
   shape for tools; the `ToolFileAttachment` content union for outside

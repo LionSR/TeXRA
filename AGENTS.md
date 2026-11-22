@@ -116,9 +116,9 @@ aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
 `packages/harness/src` (an ESM package) a relative import names its `.js` file.
 
 **The harness boundary is frozen, not open.** The app and hosts reach the
-harness only through `@texra-ai/harness` and its subpaths (`/host`, `/node`,
-`/plugins`, `/schemas`, `/transcript`); a host holds the `LocalSession` that
-`Sessions.open` returns. The harness imports nothing from the app,
+harness only through `@texra-ai/harness` and its subpaths (`/builtins`,
+`/host`, `/node`, `/plugins`, `/schemas`, `/transcript`); a host holds the
+`LocalSession` that `Sessions.open` returns. The harness imports nothing from the app,
 and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
 `npm run lint`) also fails:
 

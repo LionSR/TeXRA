@@ -11,13 +11,15 @@
 // Third-party imports
 import { Effect, Layer } from 'effect';
 import {
-  HostCapabilities,
   codemode,
   fileOps,
   goal,
   memoryWorkflow,
   multiAgent,
   web,
+} from '@texra-ai/harness/builtins';
+import {
+  HostCapabilities,
   definePlugin,
   type Plugin,
 } from '@texra-ai/harness/plugins';
@@ -99,7 +101,8 @@ import {
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
-import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
+import { type WriteFilter } from '@texra-ai/harness/builtins';
+import { Settings } from '@texra-ai/harness/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */

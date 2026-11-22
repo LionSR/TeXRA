@@ -120,7 +120,7 @@ function run(command, args, options = {}) {
     env[validationEnv] = '1';
     env[validationFlagEnv] = options.validationFlagPath;
     // Every request the model sees must rebuild from the rows (#13394).
-    env.TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT = '1';
+    env.HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT = '1';
   }
 
   const result = spawnSync(command, args, {
@@ -429,7 +429,7 @@ function createInteractivePtyEnv(overrides = {}) {
     TERM: 'xterm-256color',
     FORCE_COLOR: '3',
     TEXRA_NO_UPDATE_CHECK: '1',
-    TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
+    HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
     ...overrides,
   };
   // Exercise the same interactive path a real terminal uses. CI markers make
@@ -1745,7 +1745,7 @@ async function validateSdkResumeApproval() {
           ...validationModelProviderEnv,
           [validationEnv]: '1',
           [validationFlagEnv]: validationFlagPath,
-          TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
+          HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
         },
       },
     );

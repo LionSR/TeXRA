@@ -28,6 +28,7 @@ import {
   wakeIfOwed,
   wakePendingNotes,
 } from '@agent/followUp/ToolUseFollowUp';
+import { stopRunsAtCap } from '@agent/runtime/spendCap';
 import { lastReportRecipients } from '@agent/storage/runLifecycle';
 import {
   ChildRunBudget,
@@ -336,6 +337,7 @@ export const sessionOwnersLayer = (
       ).pipe(Effect.forkIn(consumers));
       yield* sweepLeftoverRuns.pipe(Effect.provide(session), Effect.forkScoped);
       yield* wakePendingNotes.pipe(Effect.provide(session), Effect.forkScoped);
+      yield* stopRunsAtCap.pipe(Effect.provide(session), Effect.forkScoped);
       yield* Effect.forkScoped(deletions.pending);
       yield* (yield* ToolAvailability).hold(roots);
       return session;

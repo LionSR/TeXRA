@@ -121,7 +121,8 @@ Steps:
 4. **Verify from the registry.** In an empty directory, `npm install
    @texra-ai/harness @texra-ai/llm @effect/platform-node
    @effect/sql-sqlite-node effect` and import `@texra-ai/harness`,
-   `@texra-ai/harness/node` and `@texra-ai/harness/plugins`.
+   `@texra-ai/harness/node`, `@texra-ai/harness/builtins` and
+   `@texra-ai/harness/plugins`.
 
 **First publish, once per package.** npm attaches a Trusted Publisher only to
 a package that exists, so the owner publishes the first version by hand,

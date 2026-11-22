@@ -1,4 +1,5 @@
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import type { ModelAccessStatus } from '@texra/controllers/modelAccess/modelAccessPreference';
 import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuthStatus';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
@@ -16,27 +17,11 @@ type CliSubscriptionProvider =
   | SubscriptionAuthStatus['provider']
   | CodingPlanSubscription['id'];
 
-interface CliCodingPlanStatus {
-  readonly preferred: boolean;
-  readonly keySet: boolean;
-}
-
 export type CliModelAccessSelection = {
   readonly provider: CliSubscriptionProvider;
   /** The preference state the selection turns on or off. */
   readonly state: 'off' | 'on';
 };
-
-export interface CliModelAccessStatus {
-  /** Each OAuth subscription's session and independent preference: the
-   *  shape every settings view reads, keyed by its provider. */
-  readonly subscriptions: Readonly<
-    Record<SubscriptionAuthStatus['provider'], SubscriptionAuthStatus>
-  >;
-  readonly codingPlans: Readonly<
-    Record<CodingPlanSubscriptionId, CliCodingPlanStatus>
-  >;
-}
 
 interface CliModelAccessItem {
   readonly value: CliModelAccessSelection;
@@ -48,7 +33,7 @@ interface CliModelAccessItem {
 export type CliModelAccessItemsInput =
   | {
       readonly kind: 'loaded';
-      readonly access: CliModelAccessStatus;
+      readonly access: ModelAccessStatus;
     }
   | {
       readonly kind: 'pending';
@@ -87,15 +72,15 @@ function formatCliKeyedSubscriptionPreference(
 
 /** Read one plan from the canonical status map. */
 export function cliCodingPlanStatus(
-  status: CliModelAccessStatus,
+  status: ModelAccessStatus,
   plan: CodingPlanSubscription,
-): CliCodingPlanStatus {
+): ModelAccessStatus['codingPlans'][CodingPlanSubscriptionId] {
   return status.codingPlans[plan.id];
 }
 
 /** Format any catalogued coding-plan preference. */
 export function formatCliCodingPlanPreference(
-  status: CliModelAccessStatus,
+  status: ModelAccessStatus,
   plan: CodingPlanSubscription,
 ): string {
   const state = cliCodingPlanStatus(status, plan);
@@ -164,7 +149,7 @@ interface CliAccountAccessRow {
  * sign-in path, and a second row would be two controls for one action.
  */
 export function buildCliAccountAccessRows(
-  status: CliModelAccessStatus,
+  status: ModelAccessStatus,
 ): readonly CliAccountAccessRow[] {
   const rows: CliAccountAccessRow[] = [];
   for (const provider of SUBSCRIPTION_AUTH_PROVIDERS) {

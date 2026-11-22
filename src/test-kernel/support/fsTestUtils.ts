@@ -22,12 +22,13 @@ import {
 import { GlobalValues } from '@platform/processRuntime';
 import { GlobalDatabase } from '@shared/session/database';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+import { AppNamespace } from '@utils/system/appNamespace';
 
 import { nodeSpawnerLayer } from './childProcessTestLayer';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * The `FileSystem`, `Path` and `ChildProcessSpawner` services
+ * The `FileSystem`, `Path`, `ChildProcessSpawner` and `AppNamespace` services
  * `processLayer` provides once per process, for a suite that runs a
  * real-filesystem or child-process program on `it.effect`'s own runtime
  * rather than the installed one. The spawner is the harness's lazy one.
@@ -36,6 +37,9 @@ export const nodePlatformLayer = Layer.mergeAll(
   NodeFileSystem.layer,
   NodePath.layer,
   nodeSpawnerLayer,
+  // TeXRA's namespace, as its hosts' catalog gives it: the stores a suite
+  // opens by hand are `texra.db`, the file the fixtures hold.
+  Layer.succeed(AppNamespace)('texra'),
 );
 
 /**

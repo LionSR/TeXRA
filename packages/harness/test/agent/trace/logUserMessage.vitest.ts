@@ -55,6 +55,7 @@ describe('logUserMessage', () => {
           read: 'all',
           event: {
             type: 'run.start',
+            maxCostUsd: null,
             aggregateId: draft.aggregateId,
             identity: { kind: 'agent', agent: 'chat' },
             takesFollowUps: true,

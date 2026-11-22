@@ -48,6 +48,7 @@ function traceDocument(
 function runStart(): Record<string, unknown> {
   return {
     type: 'run.start',
+    maxCostUsd: null,
     identity: { kind: 'agent', agent: 'assistant' },
     takesFollowUps: false,
     worktree: null,

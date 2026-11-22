@@ -739,7 +739,8 @@ export class SessionRunRegistry implements RunsShape {
    * meanwhile end with the stop ({@link endUnopened}). A run whose id has
    * nothing here and no rows yet is a launch still on its way, refused
    * when it arrives. A run a file operation holds is stopped once the
-   * operation ends. A
+   * operation ends. A stop whose row the store refuses still interrupts
+   * the fibers it reaches here and fails with the store's error. A
    * closing session records no stop: the fiber is interrupted and the run
    * left as its rows stand.
    */
@@ -780,11 +781,17 @@ export class SessionRunRegistry implements RunsShape {
               (took) => ({ took, unknown: false }),
             );
           // Its `run.stop` row, then the runs under it, then its fiber's
-          // interruption.
+          // interruption. A stop the store refused still stops the work:
+          // the fibers it reaches here are interrupted with no row, so the
+          // runs read as interrupted at their next open, and the failure
+          // goes to the caller.
           case 'live':
             return this.inSession(stopRun(runId, reason, false)).pipe(
               Effect.andThen(under),
-              Effect.andThen(
+              Effect.onError(() =>
+                cascade ? this.interruptUnder(runId) : Effect.void,
+              ),
+              Effect.ensuring(
                 Effect.sync(() => claim.live.fiber.interruptUnsafe()),
               ),
               Effect.as({ took: true, unknown: false }),
@@ -866,6 +873,14 @@ export class SessionRunRegistry implements RunsShape {
         discard: true,
       }),
     );
+  }
+
+  /** Interrupt every fiber held here under `runId`, writing nothing: a
+   *  stop whose row the store refused. */
+  private interruptUnder(runId: RunId): Effect.Effect<void> {
+    return Effect.map(this.heldUnder(runId), (held) => {
+      for (const id of held) this.interrupt(id);
+    });
   }
 
   /** The session is closing: refuse every run started from here on, and

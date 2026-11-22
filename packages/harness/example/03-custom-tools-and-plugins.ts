@@ -8,10 +8,10 @@
  */
 import { Effect, Layer, Schema } from 'effect';
 import { Sessions } from '@texra-ai/harness';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 import {
   definePlugin,
   executed,
-  harnessBuiltins,
   nullishWithDefault,
   defineTool,
 } from '@texra-ai/harness/plugins';

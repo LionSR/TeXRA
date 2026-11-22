@@ -182,6 +182,10 @@ const RunStartEventSchema = durable('run.start', {
    *  authority. The name is `grants`, the fact it holds: the project's
    *  `approvalPolicy` setting is a separate owner. */
   grants: ApprovalGrantsSchema,
+  /** The spend in USD at which the run is stopped, with every run under
+   *  it (`treeUsage`); null for a run with no cap. A fact of the run for
+   *  its whole life: a resume continues under it. */
+  maxCostUsd: Schema.NullOr(Schema.Finite.check(Schema.isGreaterThan(0))),
 });
 
 /** The run directories to remove with this lifecycle, derived by the database. */

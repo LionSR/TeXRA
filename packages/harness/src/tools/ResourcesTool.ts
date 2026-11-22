@@ -3,12 +3,12 @@
  * knows them. The time, the models that can run now with how each is
  * billed and its listed prices, what is known of each subscription plan's
  * quota and when it was learned, and what the run has spent with any cap
- * a waiting call holds it to. It reads and changes nothing else; its
+ * it or a run above it was started with. It reads and changes nothing else; its
  * result is journaled with the call, so a script that replays reads the
  * same answer.
  */
 // Third-party imports
-import { Clock, Effect, Option, Result, Schema, Struct } from 'effect';
+import { Clock, Effect, Result, Schema, Struct } from 'effect';
 import { PLAN_ROUTES, requestRates, type ModelConfig } from '@texra-ai/llm';
 import type { PlanUsageWindow } from '@texra-ai/llm/node';
 
@@ -17,7 +17,6 @@ import {
   PlanQuotas,
   type PlanQuota,
 } from '@agent/runtime/modelAccess/planQuotas';
-import { CHILD_FIELDS } from '@agent/runtime/delegation/inputFields';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
@@ -26,7 +25,7 @@ import {
   toJsonValue,
   type RunId,
 } from '@shared/schemas';
-import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 import { defineTool } from '@tools/core/definition';
 import { formatLocalTime } from '@utils/text/stringUtils';
@@ -170,48 +169,26 @@ const plansNow = Effect.fn('resources.plans')(function* (call: RunToolCall) {
   );
 });
 
-/** The spend cap a child launch's input holds its child to, as the launch
- *  reads it. */
-const decodeCap = Schema.decodeUnknownOption(
-  Schema.Struct(Struct.pick(CHILD_FIELDS, ['maxCostUsd'])),
-);
-
 /**
- * The spend caps `runId` runs under: each run on its way to the root that a
- * call launched with `maxCostUsd` and still waits for, with what that run
- * and the runs under it have spent. A call that has its result holds
- * nothing any more.
+ * The spend caps `runId` runs under: each run on its way to the root that
+ * was started with one, with what that run and the runs under it have
+ * spent.
  */
-const capsOver = Effect.fn('resources.caps')(function* (
-  view: SessionView,
-  runId: RunId,
-) {
-  const log = yield* SessionLog;
+function capsOver(view: SessionView, runId: RunId) {
   const caps: { runId: string; maxCostUsd: number; spentUsd: number }[] = [];
   for (
     let run = view.runs.get(runId);
-    run?.launch?.card != null;
-    run = view.runs.get(run.launch.id)
-  ) {
-    const card = run.launch.card;
-    const rows = yield* log.history(run.launch.id, undefined, [
-      'tool.intent',
-      'tool.result',
-    ]);
-    const intent = rows.find(
-      (row) => row.type === 'tool.intent' && row.payload.logId === card,
-    );
-    const answered = rows.some(
-      (row) => row.type === 'tool.result' && row.payload.logId === card,
-    );
-    const maxCostUsd = Option.getOrUndefined(
-      decodeCap(intent?.type === 'tool.intent' ? intent.payload.input : {}),
-    )?.maxCostUsd;
-    if (!answered && maxCostUsd != null)
-      caps.push({ runId: run.id, maxCostUsd, spentUsd: run.treeUsage.cost });
-  }
+    run !== undefined;
+    run = run.launch === null ? undefined : view.runs.get(run.launch.id)
+  )
+    if (run.maxCostUsd !== null)
+      caps.push({
+        runId: run.id,
+        maxCostUsd: run.maxCostUsd,
+        spentUsd: run.treeUsage.cost,
+      });
   return caps;
-});
+}
 
 /** What the call's run, and it with every run under it, have spent. */
 const spendNow = Effect.fn('resources.spend')(function* (call: RunToolCall) {
@@ -220,7 +197,7 @@ const spendNow = Effect.fn('resources.spend')(function* (call: RunToolCall) {
   return {
     runUsd: run?.usage.cost ?? 0,
     treeUsd: run?.treeUsage.cost ?? 0,
-    caps: yield* capsOver(view, call.run.runId),
+    caps: capsOver(view, call.run.runId),
   };
 });
 
@@ -314,7 +291,7 @@ It answers:
 - \`now\`: the current time in this machine's zone: ISO 8601 with its UTC offset, then the zone's name in brackets. Every time in the answer is written the same way.
 - \`models\`: the models a run can use now, each with \`billing\` (the subscription plan its next request is paid by, or \`api-key:<provider>\`) and its listed prices in US dollars per million tokens (input, cached input, output; \`aboveInputTokens\` when a longer prompt is billed at other rates). A request paid by a plan costs nothing per token; the listed prices are what the provider's API key is billed.
 - \`plans\`: each subscription plan, whether it carries requests now (\`on\`), and what is known of its quota: each window's share remaining and when it resets, with \`asOf\`, when that was learned and from which \`source\`. A plan's quota endpoint is asked at most every 30 seconds; a plan whose replies state its quota is known only as of its last reply, which may be long ago. \`failed\` names why a quota read gave nothing; \`unknown\` says why nothing is known.
-- \`spend\`: what this run has spent in US dollars (\`runUsd\`), and with every run it started (\`treeUsd\`), and \`caps\`: each spend cap a waiting call holds this run or a run it belongs to to; that run and the runs it started are stopped once their spend reaches \`maxCostUsd\`.
+- \`spend\`: what this run has spent in US dollars (\`runUsd\`), and with every run it started (\`treeUsd\`), and \`caps\`: each spend cap this run or a run it belongs to was started with; that run and the runs it started are stopped once their spend reaches \`maxCostUsd\`.
 
 A field that could not be read is replaced by one that says why (\`modelsUnknown\`, \`plansUnknown\`).`,
   schema: Schema.Struct({}),

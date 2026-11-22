@@ -186,6 +186,7 @@ export function buildScenario({ proposal = false } = {}) {
 
   log.emit(ROOT, T.root, {
     type: 'run.start',
+    maxCostUsd: null,
     identity: ROOT_IDENTITY,
     worktree: { workingDirectory: '/paper' },
     parent: null,
@@ -224,6 +225,7 @@ export function buildScenario({ proposal = false } = {}) {
   // The child agent run: its run.start carries the whole parent edge.
   log.emit(CHILD, T.child, {
     type: 'run.start',
+    maxCostUsd: null,
     identity: CHILD_IDENTITY,
     parent: {
       ...log.parent(ROOT),
@@ -280,6 +282,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
+    maxCostUsd: null,
     identity: GRANDCHILD_IDENTITY,
     takesFollowUps: false,
     parent: log.parent(CHILD),
@@ -336,6 +339,7 @@ export function buildScenario({ proposal = false } = {}) {
   // A top-level process run, newer than the root: leads the order.
   log.emit(PROCESS, T.process, {
     type: 'run.start',
+    maxCostUsd: null,
     identity: { kind: 'process', tool: 'bash' },
     parent: null,
     provenance: null,

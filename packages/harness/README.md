@@ -66,7 +66,7 @@ and files.
 import { Effect, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 
 const platform = nodePlatform({
   agentsDir: './agents',
@@ -380,10 +380,12 @@ the session store's source; in short:
 
 ## Generated files and deletion
 
-Under its storage root a session owns the store (`texra.db`) and one
+Under its storage root a session owns the store (`<namespace>.db`, named
+for the settings catalog's namespace: `harness.db` unless `nodePlatform`
+is given a catalog of the embedder's own) and one
 directory per run, `executions/<runId>/`, holding the files the run
 generated. A deletion removes nothing else: the project's own files are
-never touched, and a store moved aside (`texra.db.corrupt-<ms>`) is never read again
+never touched, and a store moved aside (`<namespace>.db.corrupt-<ms>`) is never read again
 and goes only when a person deletes it (`deleteStorageInventory`, which
 `texra doctor --prune-storage` runs after asking).
 
@@ -437,14 +439,15 @@ files.
 
 ## Entry points
 
-| Entry                          | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                                                                                      |
-| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                                                                                          |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                                                                                    |
-| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                                                                                   |
-| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise                                                                        |
+| Entry                          | Contents                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                         |
+| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                             |
+| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                       |
+| `@texra-ai/harness/builtins`   | The built-in plugins: `harnessBuiltins`, or one by one (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                                                                                                                                                                                                                              |
+| `@texra-ai/harness/plugins`    | What a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                      |
+| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise           |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
 exports, with their TSDoc and declarations, are listed in its API reference

@@ -17,7 +17,7 @@ import { describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
 import { HARNESS_APP } from '@test/support/FakePlatform';
 
 describe('Sessions.layer', () => {

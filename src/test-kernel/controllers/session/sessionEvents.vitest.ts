@@ -95,6 +95,7 @@ const STORE_WRITER = `
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/databaseLayer';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
+import { AppNamespace } from '@utils/system/appNamespace';
 import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { Database } from '@shared/session/database';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
@@ -104,10 +105,11 @@ const append = Effect.flatMap(Database, (db) =>
   db.appendAll([{ type: 'run.start', aggregateId: run,
     identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
     worktree: null, parent: null, provenance: null,
-    grants: { own: {}, goal: [] } }]));
+    grants: { own: {}, goal: [] }, maxCostUsd: null }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
   Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
+  Layer.provide(Layer.succeed(AppNamespace)('texra')),
   Layer.provide(nodePlatformServices)))));
 `;
 
@@ -214,6 +216,7 @@ const graph = (
   > = databaseLayer('ephemeral').pipe(
     Layer.orDie,
     Layer.provide(storePluginsLayer),
+    Layer.provide(nodePlatformLayer),
   ),
 ) => {
   const roots = createFakeWorkspaceRoots({ storagePath: '/workspace/framing' });
@@ -748,7 +751,7 @@ describe('the session event table and its one publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 106;
+    const format = 9999;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(
