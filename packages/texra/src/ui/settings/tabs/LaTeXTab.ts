@@ -320,7 +320,6 @@ export class LaTeXTab extends TexraSignalElement {
           icon: 'terminal',
           text: 'Run in Terminal',
           kind: 'secondary',
-          appearance: 'outlined',
           title: `Run ${pmName} installer in a terminal`,
           onClick: () => this.handleRunInTerminal(installCommand),
         })}
@@ -377,7 +376,6 @@ export class LaTeXTab extends TexraSignalElement {
                   icon: 'arrow-rotate-left',
                   text: 'Reset',
                   kind: 'secondary',
-                  appearance: 'outlined',
                   title: 'Reset this setting to default',
                   onClick: () => this.handleApply(field, true),
                 })
@@ -385,7 +383,6 @@ export class LaTeXTab extends TexraSignalElement {
                   icon: 'check',
                   text: 'Apply',
                   kind: 'secondary',
-                  appearance: 'outlined',
                   title: 'Apply this setting',
                   onClick: () => this.handleApply(field),
                 })
@@ -434,7 +431,6 @@ export class LaTeXTab extends TexraSignalElement {
                 icon: 'check-double',
                 text: 'Apply all',
                 kind: 'secondary',
-                appearance: 'outlined',
                 title: 'Apply all recommended settings',
                 onClick: () => this.handleApply(),
               }),

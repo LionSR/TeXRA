@@ -9,7 +9,7 @@ import {
   implicitDefaultToolUseAgents,
   pickDefaultToolUseAgent,
 } from '@texra/shared/constants/agents';
-import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
+import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 import {
   buildInitConfig,

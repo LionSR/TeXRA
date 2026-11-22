@@ -6,10 +6,9 @@ import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
 
 import { BACK_HINT, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { POINTER } from '@cli/tui/ui/glyphs';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 
-import { TextInput } from '@cli/chat/tui/input/TextInput';
+import { PromptInput } from '@cli/chat/tui/input/TextInput';
 import { FormFrame } from './FormFrame';
 
 interface TextEntryFormProps {
@@ -54,29 +53,27 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
       ]}
     >
       {props.helper}
-      <Box marginTop={props.helper === undefined ? 0 : 1}>
-        <Text>{`${POINTER} `}</Text>
-        <TextInput
-          value={value}
-          masked={props.masked ?? true}
-          placeholder={props.placeholder}
-          onChange={(next) => {
-            setValue(next);
-            setSubmitError(undefined);
-          }}
-          // Esc backs out, except while a save is in flight: the save closure
-          // isn't tied to this component's lifecycle, so backing out mid-save
-          // would still persist the value and exit.
-          onEscape={() => {
-            if (!props.saving) props.onCancel();
-          }}
-          onSubmit={(raw) => {
-            const submitted = props.rawSubmit ? raw : raw.trim();
-            if (props.saving || (!props.rawSubmit && !submitted)) return;
-            setSubmitError(props.onSubmit(submitted) ?? undefined);
-          }}
-        />
-      </Box>
+      <PromptInput
+        marginTop={props.helper === undefined ? 0 : 1}
+        value={value}
+        masked={props.masked ?? true}
+        placeholder={props.placeholder}
+        onChange={(next) => {
+          setValue(next);
+          setSubmitError(undefined);
+        }}
+        // Esc backs out, except while a save is in flight: the save closure
+        // isn't tied to this component's lifecycle, so backing out mid-save
+        // would still persist the value and exit.
+        onEscape={() => {
+          if (!props.saving) props.onCancel();
+        }}
+        onSubmit={(raw) => {
+          const submitted = props.rawSubmit ? raw : raw.trim();
+          if (props.saving || (!props.rawSubmit && !submitted)) return;
+          setSubmitError(props.onSubmit(submitted) ?? undefined);
+        }}
+      />
       {status || props.saving ? (
         <Box marginTop={1} flexDirection="column">
           {status}

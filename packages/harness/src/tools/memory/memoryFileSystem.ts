@@ -146,12 +146,10 @@ const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
     if (size === 0) {
       return { text: '', truncated: false };
     }
-    const chunks = yield* Stream.runCollect(
+    const bytes = yield* Stream.mkUint8Array(
       storageFs.stream(storagePath, { bytesToRead: Math.min(maxBytes, size) }),
     );
-    const text = Buffer.concat(
-      chunks.map((chunk) => Buffer.from(chunk)),
-    ).toString('utf-8');
+    const text = Buffer.from(bytes).toString('utf-8');
     return {
       text: text.replaceAll('\r\n', '\n'),
       truncated: size > maxBytes,

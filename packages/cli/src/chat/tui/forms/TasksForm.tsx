@@ -16,7 +16,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { POINTER } from '@cli/tui/ui/glyphs';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import {
   approvalDecisionDelivery,
@@ -29,7 +28,7 @@ import {
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
-import { TextInput } from '../input/TextInput';
+import { PromptInput } from '../input/TextInput';
 import { ApprovalModal } from '../modals/ApprovalModal';
 import {
   followAttachedTask,
@@ -305,33 +304,31 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           <Text key={index}>{line}</Text>
         ))}
         {composing && (
-          <Box marginTop={1}>
-            <Text>{`${POINTER} `}</Text>
-            <TextInput
-              value={draft}
-              placeholder="Message this task"
-              onChange={setDraft}
-              onEscape={props.onClose}
-              onSubmit={(text) => {
-                const message = text.trim();
-                if (!message) return;
-                setDraft('');
-                act(
-                  (ready) =>
-                    ready
-                      .request({
-                        kind: 'followUp.send',
-                        runId: task.runId,
-                        text: message,
-                      })
-                      .pipe(Effect.asVoid),
-                  // Not sent: the draft comes back to send again, and `act`
-                  // shows the refusal.
-                  () => setDraft((held) => held || message),
-                );
-              }}
-            />
-          </Box>
+          <PromptInput
+            marginTop={1}
+            value={draft}
+            placeholder="Message this task"
+            onChange={setDraft}
+            onEscape={props.onClose}
+            onSubmit={(text) => {
+              const message = text.trim();
+              if (!message) return;
+              setDraft('');
+              act(
+                (ready) =>
+                  ready
+                    .request({
+                      kind: 'followUp.send',
+                      runId: task.runId,
+                      text: message,
+                    })
+                    .pipe(Effect.asVoid),
+                // Not sent: the draft comes back to send again, and `act`
+                // shows the refusal.
+                () => setDraft((held) => held || message),
+              );
+            }}
+          />
         )}
         {notice && <ToneLine tone="warning" text={notice} />}
       </FormFrame>

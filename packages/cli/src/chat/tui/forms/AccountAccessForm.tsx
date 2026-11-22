@@ -25,7 +25,6 @@ import {
 import {
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
-  ONBOARDING_CHOICE_CHATGPT,
 } from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
@@ -141,18 +140,6 @@ function buildAccountAccessFormItems(
   return [...toggleItems, ...accountItems, API_KEY_ITEM];
 }
 
-/** Each subscription's first-run row, by the provider it signs in to. */
-const CONNECT_CHOICES = Object.freeze({
-  chatgpt: ONBOARDING_CHOICE_CHATGPT,
-  grok: {
-    label: 'Use Grok subscription',
-    description: 'Grok models through SuperGrok; no API key needed',
-  },
-} satisfies Record<
-  SubscriptionProviderId,
-  { readonly label: string; readonly description: string }
->);
-
 /** The key row of both panels: in `/login` it comes last, so the
  *  subscription rows keep their number hotkeys. */
 const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
@@ -171,8 +158,8 @@ const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
   ...SUBSCRIPTION_AUTH_PROVIDERS.map(
     (provider): SelectItem<AccountAccessFormValue> => ({
       value: { kind: 'access', selection: { provider, state: 'on' } },
-      label: CONNECT_CHOICES[provider].label,
-      description: CONNECT_CHOICES[provider].description,
+      label: SUBSCRIPTION_AUTH_COPY[provider].connect.label,
+      description: SUBSCRIPTION_AUTH_COPY[provider].connect.description,
     }),
   ),
   API_KEY_ITEM,

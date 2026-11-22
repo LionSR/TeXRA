@@ -59,6 +59,18 @@ landed:
 - The chat launch's `resolved` flag and the service session's repeated watch
   ending.
 
+On 2026-11-22, by the owner's decision:
+
+- **The stdio MCP client is effect/ai's `McpClient` on MCP 2025-11-25**
+  (`packages/harness/src/tools/mcp/mcpServer.ts`), and the JSON-RPC
+  connection keeps only the Content-Length framing; the MCP client no longer
+  uses `connectJsonRpcProcess`, whose one user is now the Lean server. A
+  server on an older revision no longer starts; its failure names the
+  revision it answered and the one required, and says to update it. The
+  official TypeScript SDK has answered 2025-11-25 since 1.25 (December
+  2025). The refusal `EFF-ADOPT-mcp-client` is rewritten to refuse a client
+  of our own for older servers.
+
 ## Open
 
 1. **The chat's launch and resume claim a root launch the same way.**
@@ -73,11 +85,13 @@ landed:
    (`packages/texra/src/controllers/server/windowHost.ts`). Only the
    attachment id arrives late; a `Deferred` for the id lets the server be
    built before the stream opens. A `call` frame before `attached` would
-   then be served and not dropped. Take it when the file is open.
-3. **The frame decoders copy the whole buffer on every chunk**
-   (`takeLines`, `takeFrames` in `packages/harness/src/tools/jsonRpc.ts`). A
-   multi-megabyte single-line MCP result is quadratic in copies. Not
-   measured. The fix is a scan offset and a chunk list, not an Effect module.
+   then be served and not dropped. Take it when the file is open. Landed
+   2026-11-22 (`2026-11-15-natives-and-owners-left-open.md`).
+3. **The frame decoder copies the whole buffer on every chunk**
+   (`takeFrames` in `packages/harness/src/tools/jsonRpc.ts`). A
+   multi-megabyte LSP reply is quadratic in copies. Not measured. The fix is
+   a scan offset and a chunk list, not an Effect module. (The line decoder
+   went with the MCP client.)
 4. **Lean passes no `cancel` hook**, so an interrupted LSP request is never
    cancelled on the server with `$/cancelRequest`. A behavior gap, not a
    helper.
@@ -91,15 +105,6 @@ landed:
   server speaks. `RpcClient` needs a static `RpcGroup`; MCP tool names and
   LSP methods are open strings, and the connection also answers the peer's
   requests and sends each protocol's cancel notification.
-- **Its line reader onto `effect/encoding` `Ndjson`.** `NdjsonError` carries
-  only a kind, so the close reason would lose the offending text. A bare
-  `\r` ends a line, an unterminated last line is parsed and not dropped,
-  and invalid UTF-8 fails the stream.
-- **`McpSchema` codecs for the result structs in
-  `packages/harness/src/tools/mcp/mcpServer.ts`.** The strictness that
-  refused the client lives in the schemas: a closed content-block union,
-  optional fields that reject `null`, image data decoded to bytes nothing
-  reads.
 - **The service wire protocol and child-output line splitting** are already
   `RpcServer` / `RpcClient` over a socket with NDJSON, and
   `Stream.splitLines`.

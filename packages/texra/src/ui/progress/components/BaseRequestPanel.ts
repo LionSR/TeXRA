@@ -333,9 +333,7 @@ export abstract class BaseRequestPanel<
 
     const main = renderLabeledActionButtonParts({
       ...button,
-      nativeChrome: true,
-      appearance: 'accent',
-      variant: 'brand',
+      splitMain: true,
     });
     const { menu, tooltip } = renderSplitButtonMenuParts({
       classPrefix: 'request-grant',

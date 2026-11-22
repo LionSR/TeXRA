@@ -10,7 +10,6 @@ import {
   BorderedPanel,
 } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, keyHintSpans, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { POINTER } from '@cli/tui/ui/glyphs';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 import {
   declineDecision,
@@ -28,7 +27,7 @@ import {
 } from './ConfirmCardState';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
 import { REJECTION_NOTE_PROMPT } from '@ui/copy/requestCards';
-import { TextInput } from '../input/TextInput';
+import { PromptInput } from '../input/TextInput';
 
 /** Rejection-note prompt for every ConfirmCard-based approval modal. */
 
@@ -66,21 +65,19 @@ export function ConfirmCard({
 
   function feedbackInput(marginTop: number): React.JSX.Element {
     return (
-      <Box marginTop={marginTop}>
-        <Text>{`${POINTER} `}</Text>
-        <TextInput
-          value={feedback}
-          placeholder={REJECTION_NOTE_PROMPT}
-          onChange={setFeedback}
-          onEscape={() => {
-            setFeedbackMode(false);
-            setFeedback('');
-          }}
-          onSubmit={(value) =>
-            onDecide(declineDecision(keyOptions.kind, value.trim()))
-          }
-        />
-      </Box>
+      <PromptInput
+        marginTop={marginTop}
+        value={feedback}
+        placeholder={REJECTION_NOTE_PROMPT}
+        onChange={setFeedback}
+        onEscape={() => {
+          setFeedbackMode(false);
+          setFeedback('');
+        }}
+        onSubmit={(value) =>
+          onDecide(declineDecision(keyOptions.kind, value.trim()))
+        }
+      />
     );
   }
 

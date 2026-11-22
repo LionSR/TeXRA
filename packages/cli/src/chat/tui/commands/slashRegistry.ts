@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react';
 
+import { API_KEY_PATTERN_SOURCE } from '@texra-ai/llm';
 import {
   editDistance,
   typoSuggestionThreshold,
@@ -272,13 +273,21 @@ function isAdjacentTransposition(left: string, right: string): boolean {
   );
 }
 
+/** A provider key or a GitHub token at the start of a string. The input is
+ *  lowercased before it is checked, hence the `i`. */
+const LEADING_CREDENTIAL = new RegExp(
+  `^(?:gh[pousr]_|${API_KEY_PATTERN_SOURCE})`,
+  'iu',
+);
+
 function hasConcatenatedCredentialPrefix(
   token: string,
   commandName: string,
 ): boolean {
-  if (!token.startsWith(commandName)) return false;
-  const remainder = token.slice(commandName.length);
-  return /^(?:sk[-_]|gh[pousr]_|AIza|xai-)/iu.test(remainder);
+  return (
+    token.startsWith(commandName) &&
+    LEADING_CREDENTIAL.test(token.slice(commandName.length))
+  );
 }
 
 const SlashContext = createContext<SlashCommandContext | undefined>(undefined);

@@ -38,9 +38,8 @@ export function mcpConfigPathOf(storageRoot: string): string {
 /** The plugin id of the configured server named `server`. */
 export const mcpPluginId = (server: string): string => `mcp:${server}`;
 
-/** A revision key as app state stores it: 32 random bytes, hex. */
-/** The per-install key MCP env values are digested under: 32 random bytes,
- *  hex. */
+/** The per-install key MCP env values are digested under, as app state
+ *  stores it: 32 random bytes, hex. */
 const MCP_REVISION_KEY = {
   key: 'mcp.revisionKey',
   slot: 'globalState',

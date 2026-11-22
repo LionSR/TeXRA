@@ -146,7 +146,14 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
     items.push(reasoning === undefined ? item : { ...item, reasoning });
   }
 
-  return items.toSorted((a, b) => a.name.localeCompare(b.name));
+  // Name order, except that a current fast-first-response model leads its
+  // provider's list; the Models tab groups by provider in this order.
+  const leads = (item: ModelSelectionItem): boolean =>
+    !item.deprecated && item.isFast === true;
+  return items.toSorted(
+    (a, b) =>
+      Number(leads(b)) - Number(leads(a)) || a.name.localeCompare(b.name),
+  );
 });
 
 /**

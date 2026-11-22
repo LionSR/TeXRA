@@ -17,6 +17,7 @@ import {
   RequestShowErrorPayloadSchema,
   type OpenFilePayload,
 } from '@texra-ai/harness/schemas';
+import { RpcClientMessageSchema } from '@texra/shared/rpcOverMessages';
 import { ManualCriticismEntrySchema } from '@texra/tools/editorHost';
 import { GenericDiagnosticSchema } from '@texra/utils/diagnostics/diagnosticFormatting';
 
@@ -98,12 +99,15 @@ export const ASKED_WITHIN = Object.freeze({
 
 /** A frame of `host.attach`: the attachment's id first, then the service's
  *  calls on the window, each one of `rpc`'s messages to the window's
- *  `WindowRpcs` server, which `rpc` itself decodes. */
+ *  `WindowRpcs` server. */
 export const HostAttachFrameSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('attached'),
     attachment: Schema.String,
   }),
-  Schema.Struct({ kind: Schema.Literal('call'), message: Schema.Json }),
+  Schema.Struct({
+    kind: Schema.Literal('call'),
+    message: RpcClientMessageSchema,
+  }),
 ]);
 export type HostAttachFrame = typeof HostAttachFrameSchema.Type;

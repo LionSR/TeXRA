@@ -53,15 +53,6 @@ interface ProviderGroup {
   deprecated: readonly ModelSelectionItem[];
 }
 
-/** Stable sort: fast-first-response models bubble to the top of their provider. */
-function sortFastFirst(
-  items: readonly ModelSelectionItem[],
-): readonly ModelSelectionItem[] {
-  return items.toSorted(
-    (a, b) => Number(Boolean(b.isFast)) - Number(Boolean(a.isFast)),
-  );
-}
-
 /** What the row's availability kind means and says. */
 function availabilityOf({ availability, usageRoute }: ModelSelectionItem) {
   return {
@@ -97,7 +88,7 @@ export class ModelSelectionList extends TexraSignalElement {
       return {
         provider,
         displayName: providerDisplayName(provider),
-        current: sortFastFirst(models.filter((m) => !m.deprecated)),
+        current: models.filter((m) => !m.deprecated),
         deprecated: models.filter((m) => m.deprecated),
       };
     });

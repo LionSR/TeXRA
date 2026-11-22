@@ -3,6 +3,7 @@
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
+import { focusRingStyles } from '@ui/styles/controlStyles';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 
@@ -10,6 +11,7 @@ import { conversationContentStyles } from './ConversationContent.styles';
 export class ProcessRunContent extends BaseRunContent {
   static override styles = [
     conversationContentStyles,
+    focusRingStyles,
     css`
       .process-command {
         padding-top: var(--wa-space-xs);
@@ -40,11 +42,6 @@ export class ProcessRunContent extends BaseRunContent {
         min-width: 0;
       }
 
-      .command-strip:focus-visible {
-        outline: var(--focus-ring-width) solid var(--wa-color-focus);
-        outline-offset: calc(-1 * var(--focus-ring-offset));
-      }
-
       .prompt {
         color: var(--wa-color-terminal-ansi-green);
         font-weight: var(--font-weight-semibold);
@@ -73,7 +70,7 @@ export class ProcessRunContent extends BaseRunContent {
             ? html`
                 <div class="conversation-column process-command">
                   <div
-                    class="command-strip"
+                    class="command-strip focus-ring-inset"
                     role="region"
                     aria-label="Command"
                     tabindex="0"

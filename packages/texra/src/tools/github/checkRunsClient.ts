@@ -18,6 +18,7 @@ import {
   type GitHubServices,
 } from './githubClient';
 import type { RateLimiterError } from 'effect/persistence/RateLimiter';
+import { shortSha } from './formatUtils';
 import { logWarning } from './poller';
 import {
   GhCheckAnnotationArraySchema,
@@ -213,7 +214,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
       return Effect.succeed(neededPages);
     }
     return Effect.logWarning(
-      `Pagination cap hit${midWalk ? ' mid-walk' : ''} for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
+      `Pagination cap hit${midWalk ? ' mid-walk' : ''} for ${owner}/${repo}@${shortSha(sha)} check-runs.`,
     ).pipe(
       Effect.annotateLogs({
         data: { totalCount, neededPages, cappedAt: MAX_CHECK_RUNS_PAGES },
@@ -260,7 +261,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
   let totalPages = yield* pagesForCheckRuns(seedTotal);
   if (totalPages > 1) {
     yield* Effect.logInfo(
-      `Pagination for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
+      `Pagination for ${owner}/${repo}@${shortSha(sha)} check-runs.`,
     ).pipe(
       Effect.annotateLogs({ data: { totalCount: seedTotal, totalPages } }),
     );

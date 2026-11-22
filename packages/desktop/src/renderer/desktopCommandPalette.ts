@@ -24,17 +24,17 @@ import {
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface';
 
-// Single row: a command, or a project the Switch Project command lists. `meta` is the trailing label (an accelerator hint, a
-// category, etc.). `category` is an optional, separate field included in the
-// search haystack without being displayed — useful when `meta` is reserved for
-// an accelerator but the row should still match category-name queries.
+// Single row: a command, or a project the Switch Project command lists. `meta`
+// is the trailing label (an accelerator hint). `category` heads the row's
+// group and is searched, so a category name finds rows whose `meta` is an
+// accelerator.
 interface CommandPaletteEntry {
   /** Unique among the rows shown together. */
   readonly id: string;
   readonly label: string;
   readonly icon: IconName;
   readonly meta?: string;
-  readonly category?: string;
+  readonly category: string;
   run(): void;
 }
 
@@ -98,7 +98,7 @@ function filterCommandPaletteEntries(
 ): CommandPaletteEntry[] {
   return entries.filter((entry) =>
     matchesQuery(
-      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`,
+      `${entry.label} ${entry.category} ${entry.meta ?? ''} ${entry.id}`,
       query,
     ),
   );
@@ -178,9 +178,7 @@ export function createDesktopCommandPalette({
   };
 
   const renderTemplate = (): void => {
-    const groups = [
-      ...Map.groupBy(visibleEntries, (entry) => entry.category ?? 'Other'),
-    ];
+    const groups = [...Map.groupBy(visibleEntries, (entry) => entry.category)];
     const activeEntry =
       activeIndex >= 0 ? visibleEntries[activeIndex] : undefined;
     render(

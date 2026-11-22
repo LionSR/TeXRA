@@ -55,6 +55,9 @@ The items below each need a decision or are too small to stand alone.
    and the extension's watcher goes. Whether that is an Effect
    `FileSystem.watch` or the app signal plus the editor's save decides how
    much moves, so it is a change of its own.
+   TeXRA's own writes landed on 2026-11-22: the snapshot source follows
+   `workspaceFilesWritten`. Edits made outside TeXRA are item 1 of
+   `2026-11-22-responsibility-audit-left-open.md`.
 3. **The CLI writes its four-step model choice twice.**
    `resolveChatDefaults` (`packages/cli/src/runtime/models/chatDefaults.ts`)
    and `cliRunModelCandidates` (`packages/cli/src/runtime/models/runModel.ts`)

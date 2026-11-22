@@ -89,12 +89,11 @@ export interface ToolStep {
 /** One session's (one project's) side of the catalog. */
 export interface SessionTools {
   /** Read the switches (`off`: the ids held off; only a switched plugin's
-   *  count) and, with `installed`, the installed plugins, and pin the tools
-   *  that read gives, with the run's `held` servers' tools, for the
-   *  caller's scope. */
+   *  count) and the installed plugins, and pin the tools that read gives,
+   *  with the run's `held` servers' tools, for the caller's scope. */
   readonly pin: <E>(
     off: Effect.Effect<ReadonlySet<string>, E>,
-    options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
+    held?: HeldPlugins,
   ) => Effect.Effect<ToolStep, E, Scope.Scope>;
   /** The plugin table now: the listed plugins and the native ones the
    *  installed plugins load as read now. A launch no run's step made reads
@@ -114,7 +113,7 @@ export interface SessionTools {
 
 /** The installed plugins as one read found them, with the table the
  *  listed plugins and their native plugins make. */
-export interface CatalogRead {
+interface CatalogRead {
   readonly installed: Effect.Success<InstalledToolReader>;
   readonly table: ToolTable;
   /** Why an installed plugin, or its native entry, is not loaded. */
@@ -123,8 +122,6 @@ export interface CatalogRead {
 
 /** The process side every session's catalog reads. */
 export interface ProcessCatalog {
-  /** The listed plugins' table, which every table the reads make extends. */
-  readonly listed: ToolTable;
   /** Each built-in plugin, in list order, with its entries digested once. */
   readonly builtIn: readonly {
     readonly plugin: Plugin;
@@ -273,35 +270,16 @@ export const follow = (
 /** A plugin that has no layer of a kind holds none. */
 const NOTHING = Effect.void;
 
-/** Reads no plugins, from configuration or installed. */
-export const NONE = Effect.succeed({
-  plugins: [],
-  warnings: [],
-  enabled: new Set<string>(),
-});
-
 /** One step's pin over its session's resources. */
 const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   shared: ProcessCatalog,
   session: SessionResources,
   off: Effect.Effect<ReadonlySet<string>, E>,
-  options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
+  held?: HeldPlugins,
 ): Effect.fn.Return<ToolStep, E, Scope.Scope> {
-  const [offSet, first] = yield* Effect.all(
-    [
-      off,
-      options?.installed === true
-        ? shared.read
-        : // Without the installed plugins, no native one: the listed
-          // plugins' table.
-          Effect.map(NONE, (installed) => ({
-            installed,
-            table: shared.listed,
-            warnings: [],
-          })),
-    ],
-    { concurrency: 'unbounded' },
-  );
+  const [offSet, first] = yield* Effect.all([off, shared.read], {
+    concurrency: 'unbounded',
+  });
   // The native plugins the read loaded, as the table accepted them, each
   // with its layers up for the step before the step offers anything of it.
   // A revision whose layer fails to build, or dies building, is recorded
@@ -388,7 +366,7 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
     ),
     ...[
       ...Map.groupBy(
-        options?.held?.entries ?? new Map<string, ToolEntry>(),
+        held?.entries ?? new Map<string, ToolEntry>(),
         ([, entry]) => entry.plugin,
       ),
     ].map(([owner, own]) => [owner, new Map(own)] as const),
@@ -470,10 +448,8 @@ export const sessionTools = Effect.fnUntraced(function* (
   const servers = yield* projectServers(shared.spawner, shared.loader);
   const resources = { layers, holdServer: servers.holdServer };
   return {
-    pin: <E>(
-      off: Effect.Effect<ReadonlySet<string>, E>,
-      options?: Parameters<SessionTools['pin']>[1],
-    ) => pinStep(shared, resources, off, options),
+    pin: <E>(off: Effect.Effect<ReadonlySet<string>, E>, held?: HeldPlugins) =>
+      pinStep(shared, resources, off, held),
     table: Effect.map(shared.read, ({ table }) => table),
     published: SubscriptionRef.get(shared.live),
     hold: (declared, root) =>

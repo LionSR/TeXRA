@@ -20,7 +20,7 @@ import * as path from 'node:path';
 
 import { Effect, type FileSystem } from 'effect';
 
-import { inheritedEnv } from '@texra-ai/harness/node';
+import { inheritedEnv, IS_WINDOWS } from '@texra-ai/harness/node';
 import {
   binaryIfPresent,
   findCliBinary,
@@ -87,7 +87,7 @@ const PLATFORM_INFO: Record<string, PlatformInfo> = {
 };
 
 /** Native CLI binary filename for the current platform. */
-const CODEX_BINARY_NAME = process.platform === 'win32' ? 'codex.exe' : 'codex';
+const CODEX_BINARY_NAME = IS_WINDOWS ? 'codex.exe' : 'codex';
 
 /**
  * Locate the native Codex binary inside a resolved package directory.

@@ -617,8 +617,6 @@ export class SessionComposer extends TexraElement {
               label: sendLabel,
               tooltip: sendLabel,
               className: 'composer-primary-action',
-              appearance: 'filled',
-              variant: 'brand',
               size: 'l',
               busy: sending,
               disabled: !canSend || sending,

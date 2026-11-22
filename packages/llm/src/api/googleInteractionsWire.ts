@@ -4,7 +4,7 @@
  * `googleInteractions.ts` decodes these into canonical parts.
  */
 import type { Interactions } from '@google/genai';
-import { Schema, SchemaGetter, Struct } from 'effect';
+import { Record, Schema, SchemaGetter, Struct } from 'effect';
 
 import { CountSchema, JsonObjectSchema } from '../protocol.js';
 
@@ -58,7 +58,7 @@ const WireStepSchema = WireCompletedStepSchema.check(
     (step) =>
       step.type !== 'function_call' ||
       step.arguments === undefined ||
-      Object.keys(step.arguments).length === 0,
+      Record.isEmptyRecord(step.arguments),
   ),
 );
 /** An interaction's token counts as Google reports them. */

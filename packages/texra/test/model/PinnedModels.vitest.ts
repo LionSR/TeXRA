@@ -10,7 +10,10 @@ import {
 } from '@texra-ai/llm';
 import { Settings } from '@texra-ai/harness/plugins';
 import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
-import { CURATED_MODELS } from '@texra/model/curatedModels';
+import {
+  CLI_CHEAP_START_MODEL,
+  CURATED_MODELS,
+} from '@texra/model/curatedModels';
 import {
   CLAUDE_AGENT_MODEL_VALUES,
   CODEX_MODEL_VALUES,
@@ -33,6 +36,7 @@ const PINNED: readonly (readonly [string, string])[] = [
     'helper model setting',
     Settings.defaultOf(TEXRA_SETTINGS.catalog, HELPER_MODEL_SETTING) ?? '',
   ],
+  ['terminal start model', CLI_CHEAP_START_MODEL],
   ...CURATED_MODELS.map((model) => ['CURATED_MODELS', model] as const),
   ...Object.entries(SETUP_MODEL_BY_PROVIDER).map(
     ([provider, model]) => [`setup model for ${provider}`, model] as const,

@@ -78,7 +78,9 @@ import {
 
 // Local imports
 import {
+  NAMED_KINDS,
   NATIVE_ENTRY_FILE,
+  SINGLE_KINDS,
   type NativeEntry,
 } from '@common/plugins/nativeEntry';
 import { copyPlugin } from '@common/plugins/pluginDigest';
@@ -87,7 +89,7 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { installedPluginId } from '@common/plugins/pluginTrust';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type { ToolResult } from '@shared/schemas';
+import { shortPluginId, type ToolResult } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { Plugin } from '@tools/plugins';
@@ -179,7 +181,7 @@ export const notLoaded = (
   cause?: unknown,
 ): NativePluginFailed =>
   new NativePluginFailed({
-    message: `The native code of ${id}${revision === undefined ? '' : ` at revision ${revision.slice(0, 12)}`} is not loaded: ${reason}`,
+    message: `The native code of ${id}${revision === undefined ? '' : ` at revision ${shortPluginId(revision)}`} is not loaded: ${reason}`,
     ...(cause === undefined ? {} : { cause }),
   });
 
@@ -237,14 +239,23 @@ const REFUSED_FIELDS = {
     'it declares injected tools; its tools reach every run that takes the installed plugins’ tools',
 } as const;
 
+/** The names a plugin has of each named kind. */
+const NAMED = {
+  tool: (plugin) =>
+    (plugin.tools ?? []).map(({ definition }) => definition.name),
+  program: (plugin) => Object.keys(plugin.programs ?? {}),
+  module: (plugin) => Object.keys(plugin.scriptModules ?? {}),
+} satisfies Record<
+  keyof typeof NAMED_KINDS,
+  (plugin: Plugin) => readonly string[]
+>;
+
 /** What a plugin contributes, in `provides` words. */
 const contributions = (plugin: Plugin): readonly string[] => [
-  ...(plugin.tools ?? []).map(({ definition }) => `tool:${definition.name}`),
-  ...Object.keys(plugin.programs ?? {}).map((name) => `program:${name}`),
-  ...Object.keys(plugin.scriptModules ?? {}).map((name) => `module:${name}`),
-  ...(plugin.processLayer === undefined ? [] : ['processLayer']),
-  ...(plugin.sessionLayer === undefined ? [] : ['sessionLayer']),
-  ...(plugin.prompt === undefined ? [] : ['prompt']),
+  ...Object.entries(NAMED).flatMap(([word, names]) =>
+    names(plugin).map((name) => `${word}:${name}`),
+  ),
+  ...Struct.keys(SINGLE_KINDS).filter((word) => plugin[word] !== undefined),
 ];
 
 /**
@@ -497,33 +508,24 @@ class EntryRevision implements Equal.Equal {
  * and imports nothing: what a reader that must run no plugin's code reads.
  * Each revision is imported from a copy of its plugin in this process's
  * directory under `copies`, made at the first load and removed with the
- * loader's scope; a loader given no directory loads nothing, and says so.
+ * loader's scope.
  */
-export const nativeLoader = Effect.fnUntraced(function* (
-  copies: string | undefined,
-) {
+export const nativeLoader = Effect.fnUntraced(function* (copies: string) {
   const fs = yield* FileSystem.FileSystem;
   const scope = yield* Effect.scope;
   // Made at the first load: a process that loads no native code makes none.
-  const home =
-    copies === undefined
-      ? Effect.fail(
+  const home = yield* Effect.cached(
+    processCopies(copies).pipe(
+      Scope.provide(scope),
+      Effect.provideService(FileSystem.FileSystem, fs),
+      Effect.mapError(
+        (error) =>
           new PluginError({
-            message: 'this process keeps no copies of native code',
+            message: `no directory could be made for its copy: ${error.message}`,
           }),
-        )
-      : yield* Effect.cached(
-          processCopies(copies).pipe(
-            Scope.provide(scope),
-            Effect.provideService(FileSystem.FileSystem, fs),
-            Effect.mapError(
-              (error) =>
-                new PluginError({
-                  message: `no directory could be made for its copy: ${error.message}`,
-                }),
-            ),
-          ),
-        );
+      ),
+    ),
+  );
   const cache = yield* Cache.make({
     capacity: Number.POSITIVE_INFINITY,
     lookup: ({ source, entry, revision }: EntryRevision) =>

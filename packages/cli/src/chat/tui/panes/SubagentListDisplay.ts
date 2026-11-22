@@ -29,10 +29,10 @@ export function childRowMetadataText({
 }: {
   readonly elapsed: string | null | undefined;
   readonly outputTokens: number | undefined;
-  readonly toolCallCount?: number | undefined;
+  readonly toolCallCount: number;
 }): string | undefined {
   const toolCalls =
-    toolCallCount !== undefined && toolCallCount > 0
+    toolCallCount > 0
       ? formatResultCount(toolCallCount, 'tool call')
       : undefined;
   const tokens =

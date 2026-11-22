@@ -48,7 +48,7 @@ import { RpcSerialization, RpcServer } from 'effect/rpc';
 
 import { type LocalSession, Sessions } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
-import { canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
+import { canonicalizeWorkspaceRoot, IS_WINDOWS } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   AppState,
@@ -305,7 +305,7 @@ export const serve = Effect.fn('server.serve')(function* (
   ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable | Error,
   ProcessServices | Sessions | HostWindows | Scope.Scope
 > {
-  if (process.platform === 'win32')
+  if (IS_WINDOWS)
     return yield* new ServiceListenFailed({
       socket: '',
       cause: new Error(WINDOWS_UNSUPPORTED),

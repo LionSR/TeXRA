@@ -365,6 +365,14 @@ const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepsee
 const INPUT_HISTORY_LIMIT: 1000
 ```
 
+## IS_WINDOWS
+
+Whether the current platform is Windows (cached at module load).
+
+```ts
+const IS_WINDOWS: boolean
+```
+
 ## isGitRepository
 
 Whether `cwd` is inside a git work tree. A bare repository and the inside

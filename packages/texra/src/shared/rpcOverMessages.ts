@@ -15,6 +15,31 @@
 import { Effect, Queue, Schema } from 'effect';
 import { RpcClient, RpcServer, type RpcMessage } from 'effect/rpc';
 
+/** Whether a value has `rpc`'s message shape: an object with a string
+ *  `_tag`. `rpc` reads the rest itself, and answers a message it cannot
+ *  read under the request's id. */
+const hasRpcTag = (value: unknown): boolean =>
+  typeof value === 'object' &&
+  value !== null &&
+  '_tag' in value &&
+  typeof value._tag === 'string';
+
+/** An `rpc` message from a client, as a channel's envelope carries it. */
+export const RpcClientMessageSchema = Schema.Unknown.pipe(
+  Schema.refine(
+    (value): value is RpcMessage.FromClientEncoded => hasRpcTag(value),
+    { expected: 'an rpc message' },
+  ),
+);
+
+/** An `rpc` message from a server, as a channel's envelope carries it. */
+export const RpcServerMessageSchema = Schema.Unknown.pipe(
+  Schema.refine(
+    (value): value is RpcMessage.FromServerEncoded => hasRpcTag(value),
+    { expected: 'an rpc message' },
+  ),
+);
+
 /**
  * A server's end. `receive` hands it one message from the client `client`
  * names; one live client at a time: a message from a new client retires the

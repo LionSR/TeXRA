@@ -3,7 +3,6 @@ import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { queuedMessagesTitle } from '@ui/copy/queuedMessages';
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -117,31 +116,27 @@ export class QueuedFollowUps extends TexraElement {
     return html`
       <wa-details class="queued-collapsible" summary=${summary} open>
         <ol class="queued-follow-ups-list" aria-label="Queued messages">
-          ${repeat(
-            this.messages,
-            (_message, index) => index,
-            (message, index) => {
-              const { display, full } = this.truncateMessage(message);
-              const itemId = `queued-follow-up-${index}`;
-              return html`
-                <li
-                  id=${itemId}
-                  class="queued-follow-up-item"
-                  tabindex=${full ? '0' : nothing}
-                >
-                  ${waIcon('comment', { className: 'queued-follow-up-icon' })}
-                  <bdi class="queued-follow-up-text">${display}</bdi>
-                </li>
-                ${
-                  full
-                    ? html`<wa-tooltip for=${itemId} dir="auto"
-                        >${full}</wa-tooltip
-                      >`
-                    : nothing
-                }
-              `;
-            },
-          )}
+          ${this.messages.map((message, index) => {
+            const { display, full } = this.truncateMessage(message);
+            const itemId = `queued-follow-up-${index}`;
+            return html`
+              <li
+                id=${itemId}
+                class="queued-follow-up-item"
+                tabindex=${full ? '0' : nothing}
+              >
+                ${waIcon('comment', { className: 'queued-follow-up-icon' })}
+                <bdi class="queued-follow-up-text">${display}</bdi>
+              </li>
+              ${
+                full
+                  ? html`<wa-tooltip for=${itemId} dir="auto"
+                      >${full}</wa-tooltip
+                    >`
+                  : nothing
+              }
+            `;
+          })}
         </ol>
       </wa-details>
     `;

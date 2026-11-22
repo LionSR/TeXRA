@@ -68,7 +68,7 @@ export function createOverlayDialog(
         icon: 'xmark',
         label: options.closeLabel,
         size: 's',
-        className: `${prefix}-close icon-button focus-ring-inset`,
+        className: `${prefix}-close focus-ring-inset`,
         onClick: () => {
           dialog.open = false;
         },
