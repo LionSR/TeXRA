@@ -85,6 +85,10 @@ programs 提案把三个函数写成一个 `start` 的三个糖。今天它们�
   `packages/harness/src/agent/runtime/delegation/agentChild.ts`）：它跟着
   session 视图里这棵树的花费走，到了就用已有的 `released` 停掉子运行和它
   下面的 run。没有加定时器、存储字段、行版本或设置。
+  2026-11-21 改了：上限记在子运行的 `run.start` 上（`maxCostUsd`），由
+  session 的一个观察者执行（`stopRunsAtCap`，
+  `packages/harness/src/agent/runtime/spendCap.ts`），停止原因是 `cap`；
+  `withinLimits` 只剩超时，改名 `withinTime`。
 - 没选的做法是让子运行自己知道上限、在每次计费请求前查。那样能早停一次
   请求，代价是 `run.config` 上多一个存下来的字段、沿父链找祖先的上限、
   以及改 run loop。

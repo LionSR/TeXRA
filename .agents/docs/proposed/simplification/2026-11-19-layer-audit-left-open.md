@@ -134,6 +134,11 @@ desktop refuses both. They can move into `openGuiWindow` behind two host
 bindings, `currentFile` and `openedFiles`. Decision needed: does the desktop
 offer these buttons?
 
+Landed 2026-11-21: both requests are the shared body's, over an optional
+`editor` binding with those two verbs; the extension binds it, and the
+desktop, which binds none, refuses both as before. Whether the desktop
+offers the buttons is still open.
+
 ## 8. TeXRA's name in the harness
 
 The harness still carries TeXRA's name and LaTeX in a few places:
@@ -160,7 +165,9 @@ embedder's domain or name in any string it sends a model or shows a user
 app). The remaining `texra` strings an embedder's
 users still see (the store file `texra.db`, `TEXRA_APPROVAL_POLICY`,
 `TEXRA_SKILL_DIR`) are persisted names and env keys, a format change
-deferred to the release (design doc, "Re-check (2026-11-19)").
+deferred to the release (design doc, "Re-check (2026-11-19)"). Landed
+2026-11-21: they derive from the settings catalog's namespace
+(`AppNamespace`), so an embedder's carry its own word.
 
 ## Checked and left alone
 

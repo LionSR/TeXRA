@@ -272,30 +272,28 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             : focusChanged,
         ),
         draftRequests,
-        host: (parts) =>
-          createExtensionHostRequests({
-            ...parts,
-            roots,
-            showBuilt,
-            extensionPath: context.extensionPath,
-            extensionId: context.extension.id,
-            ...settings,
-            popOutToEditor: () => onView((view) => view.popOutToEditor()),
-            showInSidebar: () => showInSidebar,
-          }).pipe(
-            Effect.map((requests) => ({
-              ...requests,
-              notices: createAgentPresentationHost(roots, runtime, showBuilt),
-              window: editor,
-              runs: {
-                openFinalOutput: previewFinalOutput,
-                showRunView: () => onView((view) => view.showProgressView()),
-                // Or name the run in a toast when the list cannot be shown.
-                revealProgress: (config: AgentConfig) =>
-                  onView((view) => view.revealProgress(config)),
-              },
-            })),
-          ),
+        host: createExtensionHostRequests({
+          roots,
+          showBuilt,
+          extensionPath: context.extensionPath,
+          extensionId: context.extension.id,
+          ...settings,
+          popOutToEditor: () => onView((view) => view.popOutToEditor()),
+          showInSidebar: () => showInSidebar,
+        }).pipe(
+          Effect.map((requests) => ({
+            ...requests,
+            notices: createAgentPresentationHost(roots, runtime, showBuilt),
+            window: editor,
+            runs: {
+              openFinalOutput: previewFinalOutput,
+              showRunView: () => onView((view) => view.showProgressView()),
+              // Or name the run in a toast when the list cannot be shown.
+              revealProgress: (config: AgentConfig) =>
+                onView((view) => view.revealProgress(config)),
+            },
+          })),
+        ),
       });
       const view = new ProgressViewProvider({
         window: gui,

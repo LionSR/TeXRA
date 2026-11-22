@@ -36,6 +36,7 @@ import {
   SessionGraph,
 } from '@test/support/testKernel';
 import { texraPlugins } from '@texra/tools/registry';
+import { nativeCopiesDir } from '@common/plugins/installedPlugins';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { toolTable } from '@tools/toolTable';
 
@@ -112,6 +113,7 @@ function runLayer(
       pluginCatalogLayer(
         toolTable(texraPlugins({ name: 'vscode' })),
         mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
+        nativeCopiesDir(createFakeWorkspaceRoots().globalStorage),
       ).pipe(
         Layer.provide(
           Layer.mergeAll(

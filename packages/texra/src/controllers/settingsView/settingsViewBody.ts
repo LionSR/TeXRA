@@ -25,6 +25,7 @@ import { apiKeyEntry } from '@texra-ai/llm';
 
 import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
 import {
+  Settings,
   type StorageFs,
   emitAppSignal,
   type AppSignal,
@@ -49,6 +50,7 @@ import {
   allSubscriptionUsage,
   invalidateSubscriptionUsage,
 } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
+import { setModelAccessPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
 import { settingsAgentCommands } from '@texra/controllers/settingsView/settingsAgentCommands';
 import { settingsGitCommands } from '@texra/controllers/settingsView/settingsGitCommands';
 import {
@@ -58,6 +60,7 @@ import {
   type SettingsInput,
   type SettingsInputCounts,
   type SettingsPage,
+  type SettingsViewInboundHandlerRegistry,
 } from '@texra/controllers/settingsView/settingsHostBindings';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
 import {
@@ -65,14 +68,12 @@ import {
   setReasoningLevel,
 } from '@texra/controllers/settingsView/modelSelection';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
-import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage';
 import {
+  buildProfilePage,
   removeProviderKey,
   setProviderKey,
 } from '@texra/controllers/settingsView/providerKeyActions';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
 import {
   applyStateSettingUpdate,
   setSkillEnabled,
@@ -80,6 +81,7 @@ import {
   type StateSettingUpdateResult,
   type WritableRow,
 } from '@texra/controllers/settingsView/stateSettingWrite';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
@@ -128,9 +130,23 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     // ── Pages ──
 
     const pages: ReadonlyArray<SettingsPage<ProcessServices | StorageFs>> = [
+      // A derived snapshot is the catalog rows tagged for it, each read
+      // with its row's default and validation.
       ...DERIVED_SETTINGS_SNAPSHOTS.map((snapshot) => ({
         follows: ['settings'] as const,
-        build: buildSettingsSnapshotMessage(snapshot, roots),
+        build: Effect.map(
+          Effect.forEach(TEXRA_SETTINGS.snapshotEntries(snapshot), (entry) =>
+            Effect.map(
+              Settings.get(roots, entry),
+              (value) => [entry.key, value] as const,
+            ),
+          ),
+          (values) => ({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+            snapshot,
+            values: Object.fromEntries(values),
+          }),
+        ),
       })),
       hostStatePage(
         'profile',
@@ -222,16 +238,22 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         ),
       );
     };
-    const setPreferSubscription = (
+    /** A subscription switched on while signed out is not written: the
+     *  window's sign-in follows, which turns it on when it succeeds. */
+    const setSubscriptionPreference = (
       providerId: SubscriptionProviderId,
       enabled: boolean,
-    ) => {
-      const provider = subscriptionProvider(providerId);
-      return subscriptionChange(
-        `Could not update the ${provider.displayName} subscription preference`,
-        provider.setPreferSubscription(roots, enabled),
+    ) =>
+      subscriptionChange(
+        `Could not update the ${subscriptionProvider(providerId).displayName} subscription preference`,
+        Effect.flatMap(
+          setModelAccessPreference(roots, providerId, enabled),
+          (outcome) =>
+            outcome === 'needs-sign-in'
+              ? signInSubscription(providerId)
+              : Effect.void,
+        ),
       );
-    };
 
     // ── Catalog-backed settings rows ──
 
@@ -242,7 +264,8 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       if (result.kind === 'ignored') return;
       const failure = settingWriteFailure(result);
       if (failure !== undefined)
-        yield* result.kind === 'workspace-required'
+        yield* result.kind === 'workspace-required' ||
+        result.kind === 'needs-key'
           ? notice(failure.message)
           : alert(failure.message);
       yield* changed('settings');
@@ -344,7 +367,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       signInSubscription: (message) => signInSubscription(message.provider),
       signOutSubscription: (message) => signOutSubscription(message.provider),
       setSubscriptionPreference: (message) =>
-        setPreferSubscription(message.provider, message.enabled),
+        setSubscriptionPreference(message.provider, message.enabled),
       getSubscriptionUsage: (message) =>
         Effect.andThen(
           message.forceRefresh === true

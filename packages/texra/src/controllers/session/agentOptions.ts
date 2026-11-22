@@ -4,7 +4,7 @@
  */
 import { Effect } from 'effect';
 
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/builtins';
 import {
   AgentCatalog,
   agentToolNames,

@@ -31,11 +31,8 @@
  */
 import { Effect, Layer, Schema, Stream } from 'effect';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
-import {
-  definePlugin,
-  harnessBuiltins,
-  defineTool,
-} from '@texra-ai/harness/plugins';
+import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
 import {
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,

@@ -31,7 +31,6 @@ import {
   SubscriptionRef,
 } from 'effect';
 import {
-  getEnabledModels,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
@@ -283,10 +282,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const loadModels = yield* producer(
       'the models',
       Effect.gen(function* () {
-        const modelOptions = yield* loadModelOptions(
-          stores,
-          yield* getEnabledModels(stores),
-        );
+        const modelOptions = yield* loadModelOptions(stores);
         yield* SubscriptionRef.update(inputs, (s) => ({
           ...s,
           catalogs: { ...s.catalogs, modelOptions },

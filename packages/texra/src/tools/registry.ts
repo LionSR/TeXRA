@@ -11,13 +11,15 @@
 // Third-party imports
 import { Effect, Layer } from 'effect';
 import {
-  HostCapabilities,
   codemode,
   fileOps,
   goal,
   memoryWorkflow,
   multiAgent,
   web,
+} from '@texra-ai/harness/builtins';
+import {
+  HostCapabilities,
   definePlugin,
   type Plugin,
 } from '@texra-ai/harness/plugins';
@@ -31,7 +33,7 @@ import { texraPlugin } from '@texra/tools/texraPlugin';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
-import { isTexFile } from '@texra/shared/latexFileTypes';
+import { hasExtension } from '@texra-ai/harness/schemas';
 
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
@@ -99,7 +101,8 @@ import {
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
-import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
+import { type WriteFilter } from '@texra-ai/harness/builtins';
+import { Settings } from '@texra-ai/harness/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
@@ -146,7 +149,7 @@ export type TexraPlugin = Plugin & {
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
  *  replacement rules of the call's workspace. */
 const texWriteFilter: WriteFilter = (path, content, config) => {
-  if (!isTexFile(path)) return Effect.succeed(content);
+  if (!hasExtension(path, '.tex')) return Effect.succeed(content);
   const replaced = replacementEngine.applyToTexWrite(content, config);
   return logReplacementDiagnostics(replaced.diagnostics).pipe(
     Effect.as(replaced.text),

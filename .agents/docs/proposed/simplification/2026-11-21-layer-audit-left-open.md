@@ -69,6 +69,9 @@ sign-in and sign-out path emits one of the two signals.
 
 ## 4. The task list shows the agent name, not the task's title
 
+Landed: `TaskSummary.label` is the run's `title` and the unread
+`description` is gone; the protocol digest changes with the shape.
+
 `TaskSummary` (`packages/texra/src/controllers/server/protocol.ts`) carries
 `label` and a `description` nobody reads; `texra tasks list` and `/tasks`
 print `label` (the agent) where the web and `/resume` show `run.title`. It is
@@ -76,6 +79,11 @@ a service wire shape between builds, so the field change needs the protocol's
 version rule.
 
 ## 5. `texra models show` rewords why a model cannot run
+
+Landed: `ModelOptionData` carries `unavailableReason`, which
+`texra models show` prints as its `reason:` line; `formatCliModelRecovery`
+is gone, and only the shell's `texra setup` pointer for a missing key stays
+the terminal's.
 
 `ModelVerdict.unavailableReason` (`packages/harness/src/model/computeModelOptions.ts`)
 is dropped by `ModelOptionData`, so `formatCliModelRecovery`
@@ -87,9 +95,10 @@ the copies have drifted (unserved, unreadable key, unknown model).
 - `finishedToolCalls` (`packages/cli/src/runtime/headless/runProgressRenderer.ts`)
   is imported by the TUI's child list; the count is a transcript read, and the
   headless line and the TUI word it two ways ("tools: 5", "5 tool calls").
-- The usage-logging notice (`telemetryNoticeIfDue`) does not read the host
-  telemetry switch the send gate reads, so the extension checks it at the call
-  site (`extension.ts`).
+- Landed: the usage-logging notice (`telemetryNoticeIfDue`) did not read the
+  host telemetry switch the send gate reads, so the extension checked it at
+  the call site (`extension.ts`). The switch is now one `Context.Reference`
+  (`HostTelemetrySwitch`) the extension provides and both read.
 - "Can Codex run this model" (`agentCliSettings.ts`) restates llm's private
   `codexSubscriptionOf`.
 - The model enable list is projected twice (`enabledModels.ts` in the CLI,

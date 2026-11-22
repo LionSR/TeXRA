@@ -5,8 +5,7 @@ import { describe, expect } from 'vitest';
 
 import { GlobalValues } from '@texra-ai/harness/plugins';
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { globalValuesOver } from '@test/support/fsTestUtils';
+import { globalValuesOver, nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   claimServiceRecord,
   readServiceRecord,
@@ -31,7 +30,7 @@ const withGlobalValues = <A, E>(program: Effect.Effect<A, E, GlobalValues>) =>
         Effect.provide(
           globalValuesOver(
             globalDatabaseLayer(storage).pipe(
-              Layer.provide(nodeSpawnerLayer),
+              Layer.provide(nodePlatformLayer),
               Layer.orDie,
             ),
           ),

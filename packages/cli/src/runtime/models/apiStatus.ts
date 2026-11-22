@@ -25,9 +25,11 @@ import {
   formatCliSubscriptionPreference,
   cliCodingPlanStatus,
   subscriptionAccountLabel,
-  type CliModelAccessStatus,
 } from './modelAccessRoute';
-import { readCliModelAccessStatus } from './modelAccessSelection';
+import {
+  readModelAccessStatus,
+  type ModelAccessStatus,
+} from '@texra/controllers/modelAccess/modelAccessPreference';
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
   if (!signedIn) return 'signed out';
@@ -35,7 +37,7 @@ function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
 }
 
 interface CliModelAccessOverview {
-  readonly access: CliModelAccessStatus;
+  readonly access: ModelAccessStatus;
   readonly lines: readonly string[];
 }
 
@@ -47,7 +49,7 @@ interface CliModelAccessOverview {
 export const loadCliModelAccessOverview = Effect.fn(
   'apiStatus.loadCliModelAccessOverview',
 )(function* (stores: SettingsStores) {
-  const access = yield* readCliModelAccessStatus(stores);
+  const access = yield* readModelAccessStatus(stores);
   const lines = [
     ...SUBSCRIPTION_AUTH_PROVIDERS.map(
       (provider) =>
@@ -99,7 +101,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
 )(function* (stores: SettingsStores) {
   const [access, keyStatuses] = yield* Effect.all(
     [
-      readCliModelAccessStatus(stores),
+      readModelAccessStatus(stores),
       Effect.flatMap(Secrets, apiKeyOrigins),
     ] as const,
     { concurrency: 'unbounded' },

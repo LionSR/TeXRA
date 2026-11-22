@@ -88,7 +88,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const applyUpdate = Effect.fn('applyUpdate')(function* (
     entry: TexraSettingRow,
     value: unknown,
-  ): Effect.fn.Return<void, SettingsRequestFailed, AppSignals> {
+  ): Effect.fn.Return<void, SettingsRequestFailed, AppSignals | Secrets> {
     const result = yield* applyStateSettingUpdate(entry, value, roots);
     // ConfigForm rolls its optimistic value back on a failure and reports
     // it, so a refused write must fail rather than read as applied.

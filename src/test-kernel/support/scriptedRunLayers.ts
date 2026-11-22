@@ -280,6 +280,7 @@ const testEntry = (
           rows: [],
           start: {
             type: 'run.start',
+            maxCostUsd: null,
             aggregateId: runId,
             identity: { kind: 'agent', agent: config.agent },
             takesFollowUps: false,

@@ -796,9 +796,9 @@ started; that is no longer so for R6 and for part of R10.
   (`packages/cli/src/chat/chatSessionController.ts`). Still open:
   `packages/cli/src/commands/_helpers/exitCode.ts` and its `setExitCode`
   (15 references), with no `exitCodeOf`; `launchRootRun` in the chat
-  controller; the `GuiSession` name (12 references), `useCurrentFile` in the
-  extension and `runningTasks` in the service, none of which was read
-  further.
+  controller; the `GuiSession` name (12 references) and `runningTasks` in
+  the service, neither of which was read further. `useCurrentFile` left the
+  extension on 2026-11-21: the shared window body answers it.
 - **Second-order:** F7's hook is gone (`registerCliStateResetHook`). E4's
   trust half is gone (`isTrustedScript`); `handedDown` is still read at seven
   places in `agent/runtime/loop/runLoop.ts`. E3's `staleHook` is gone; the

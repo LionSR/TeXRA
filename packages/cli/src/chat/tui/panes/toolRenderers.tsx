@@ -21,7 +21,8 @@ import {
   type ToolSectionFile,
   type TranscriptText,
 } from '@texra-ai/harness/transcript';
-import { AGENT_TOOL_NAME, buildDiffHunks } from '@texra-ai/harness/plugins';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/builtins';
+import { buildDiffHunks } from '@texra-ai/harness/plugins';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   safeTerminalText,

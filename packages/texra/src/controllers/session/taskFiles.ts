@@ -22,8 +22,21 @@ import {
 // Local imports
 import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-import { GlobFailed } from '@texra/housekeeping/artifactFiles';
 import type { HostFailed } from '@texra/hosts/uiHosts';
+
+/**
+ * A glob that did not expand. The `glob` package rejects, and a named path
+ * that cannot be listed is a failure of the request, not a defect, so the
+ * rejection is typed here instead of caught raw.
+ */
+class GlobFailed extends Schema.TaggedError<GlobFailed>()('GlobFailed', {
+  pattern: Schema.String,
+  cause: Schema.Defect(),
+}) {
+  override get message(): string {
+    return `Failed to list ${this.pattern}: ${String(this.cause)}`;
+  }
+}
 
 const TaskFileRoleSchema = Schema.Literals(['input', 'context']);
 

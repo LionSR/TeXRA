@@ -1,21 +1,69 @@
 /**
  * Shared provider-key policy: every surface that sets or removes a provider's
  * API key goes through these, so the secret name, the confirmation and the
- * notice cannot drift between hosts. A host passes its own `dialogs` and
+ * notice cannot drift between hosts, and the settings view's profile page
+ * reads each key's status here. A host passes its own `dialogs` and
  * presents a failure at its own entry.
  */
 import { Effect, Schema } from 'effect';
 
-import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
+import {
+  API_KEY_PROVIDER_IDS,
+  apiKeyOrigins,
+  apiKeySecretName,
+  isApiProvider,
+} from '@texra-ai/llm';
 import {
   Secrets,
+  Settings,
   type SettingsStores,
   type StateReadFailed,
 } from '@texra-ai/harness/plugins';
+import { providerEndpointSetting } from '@texra-ai/harness/schemas';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
+import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
 import { PROVIDER_KEY_COPY } from '@ui/copy/credentials';
+
+/**
+ * The settings view's profile page: every canonical provider id with its key
+ * status, read from the process `Secrets`, and its native controls, read
+ * from the three setting slots.
+ */
+export const buildProfilePage = Effect.fn('buildProfilePage')(function* (
+  stores: SettingsStores,
+): Effect.fn.Return<SettingsHostState['profile'], Error, Secrets> {
+  const origins = yield* apiKeyOrigins(yield* Secrets);
+  return {
+    providerKeyStatuses: yield* Effect.forEach(
+      API_KEY_PROVIDER_IDS,
+      Effect.fnUntraced(function* (provider) {
+        const endpoint = providerEndpointSetting(provider);
+        return {
+          provider,
+          displayName: yield* getProviderDisplayName(stores, provider),
+          status: origins[provider],
+          customEndpoint: endpoint
+            ? yield* Settings.get(stores, endpoint)
+            : null,
+          providerSettings: yield* Effect.forEach(
+            TEXRA_SETTINGS.modelsTab(provider),
+            ({ entry, surface }) =>
+              Settings.get(stores, entry).pipe(
+                Effect.map((value) => ({
+                  ...surface,
+                  key: entry.key,
+                  value: value === true,
+                })),
+              ),
+          ),
+        };
+      }),
+    ),
+  };
+});
 
 /**
  * A key write or removal that failed. A committed change repaints nothing

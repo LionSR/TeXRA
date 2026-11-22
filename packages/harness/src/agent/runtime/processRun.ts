@@ -9,7 +9,7 @@
  * exit other than 0, or the failure a provider's SDK reported with no exit
  * of its own. The process's output goes to the run's trace as it
  * arrives (`AgentTrace.output`); a row of it the store refused fails the
- * run, as it fails any run (`commitEnd`). A stop interrupts the turn, and
+ * run, as it fails any run (`endVerdict`). A stop interrupts the turn, and
  * a stopped process run delivers nothing: its interruption is the fact. A
  * process run is never resumed: a later turn of the same thread is a new
  * run, and a message to one is refused (`takesFollowUps: false`).
@@ -88,32 +88,49 @@ interface OpenedProcess {
 /**
  * The run's terminal, from every exit of its turn (a stop landing
  * mid-turn included, which stays the fiber's exit): the end every run
- * program commits (`commitEnd`). The end's transaction delivers the
- * report; one that never wrote fails the fiber, its terminal fact gone.
+ * program commits (`commitEnd`), on the verdict every run program reads
+ * (`endVerdict`). The end's transaction delivers the report; one that
+ * never wrote fails the fiber, its terminal fact gone.
  */
-const endProcessChild = (
-  runId: RunId,
-  { logger, turn }: OpenedProcess,
-  exit: Exit.Exit<ProcessReport, Error>,
-): Effect.Effect<void, Error, AgentRunServices> => {
-  const { outcome, error } = endVerdict(
-    Exit.map(exit, (report) =>
-      failureOf(report) === undefined
-        ? RUN_OUTCOME.COMPLETED
-        : RUN_OUTCOME.FAILED,
+const endProcessChild = Effect.fnUntraced(
+  function* (
+    runId: RunId,
+    { turn }: OpenedProcess,
+    exit: Exit.Exit<ProcessReport, Error>,
+  ): Effect.fn.Return<void, Error, AgentRunServices> {
+    const verdict = yield* endVerdict(
+      runId,
+      Exit.map(exit, (report) =>
+        failureOf(report) === undefined
+          ? RUN_OUTCOME.COMPLETED
+          : RUN_OUTCOME.FAILED,
+      ),
+    );
+    const { report, error, leading } = endingOf(
+      runId,
+      turn,
+      exit,
+      verdict.thrown,
+    );
+    yield* commitEnd(exit, {
+      runId,
+      outcome: verdict.outcome,
+      error: error ?? verdict.lost,
+      leading,
+      // Rows the store refused, on a turn with no failure of its own, are
+      // the delivery's failure too: the parent reads what the end says.
+      report:
+        report !== null && error === undefined && verdict.lost !== undefined
+          ? { ...report, message: runEndErrorMessage(verdict.lost) }
+          : report,
+    });
+  },
+  (ended, _runId, { logger }) =>
+    Effect.ensuring(
+      ended,
+      Effect.sync(() => logger.close()),
     ),
-  );
-  const { report, ...ending } = endingOf(runId, turn, exit, error);
-  // A failure the end adds to the turn's own verdict (rows the store
-  // refused) is the delivery's too: the parent reads what the end says.
-  return commitEnd(exit, { runId, outcome, ...ending }, (end) =>
-    Effect.succeed(
-      report !== null && end.error !== undefined && ending.error === undefined
-        ? { ...report, message: runEndErrorMessage(end.error) }
-        : report,
-    ),
-  ).pipe(Effect.ensuring(Effect.sync(() => logger.close())));
-};
+);
 
 /** A returned turn's failure: its exit's, or the one it reported. */
 const failureOf = ({ exit, failure }: ProcessReport): string | undefined => {

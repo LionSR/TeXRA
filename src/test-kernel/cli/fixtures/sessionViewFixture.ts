@@ -65,6 +65,7 @@ export function viewWith(
   for (const run of runs) {
     log.emit(run.id, 1, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: 'agent' },
       parent: run.parentId === undefined ? null : log.parent(run.parentId),
       provenance: null,

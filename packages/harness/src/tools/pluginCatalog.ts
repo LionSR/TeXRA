@@ -41,7 +41,8 @@ const SWITCH_READ = Schedule.exponential('200 millis');
 /**
  * The process's `ToolRegistry` over the validated table and the tool catalog
  * (`ToolCatalog`) over it, with the MCP servers of `mcpConfigPath` (a host's is
- * the user's `~/.texra/mcp.json`) and the installed plugins.
+ * the user's `~/.texra/mcp.json`) and the installed plugins, whose native
+ * code this process copies under `nativeCopies` to load it.
  * `processLayer` passes the table it validated at build. The layer takes the process `FileSystem`
  * that `processLayer` serves, to read that file, and its
  * `AppState`, which holds the key MCP env values are digested under, the
@@ -52,7 +53,11 @@ const SWITCH_READ = Schedule.exponential('200 millis');
  * the record. A native plugin enabled meanwhile is imported only when a
  * step or a launch next reads the table.
  */
-export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
+export const pluginCatalogLayer = (
+  table: ToolTable,
+  mcpConfigPath: string,
+  nativeCopies: string,
+) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -138,6 +143,7 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
         loader: mcpPluginLoader(fs, mcpConfigPath, envKey),
         installed,
         installedChanges: appState.changes([INSTALLED_PLUGINS_KEY.key]),
+        nativeCopies,
         switches,
       });
     }),

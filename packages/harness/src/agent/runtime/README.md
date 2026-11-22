@@ -59,9 +59,11 @@ file, so `npm run gate:docs` fails when one moves.
   [`executeAgent`](executeAgent.ts) (the one run program, fresh or resumed:
   the run's entry, whether it ends after one cycle, its services, its
   description, and the masked region whose exit is its terminal);
-  [`AgentRunLifecycle`](AgentRunLifecycle.ts) (the end: `endRun`, the
-  terminal's classification of an exit, and `commitEnd`, the one end both
-  run programs commit, through `agent/storage/runLifecycle`'s `endRunRows`);
+  [`AgentRunLifecycle`](AgentRunLifecycle.ts) (the end: `endVerdict`, the
+  one decision of a run's outcome from its exit and the rows the store
+  refused; `endRun`, the native run's terminal; and `commitEnd`, the one
+  end both run programs commit with that verdict, through
+  `agent/storage/runLifecycle`'s `endRunRows`);
   [`runReport`](runReport.ts) (a run's unclassified report to its
   terminal); [`resumeRun`](resumeRun.ts) (the cross-host resume entry, root
   or recovered child: the run's activation from the call, joined by a

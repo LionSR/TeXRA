@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, absurd } from 'effect';
+import { Effect } from 'effect';
 
 import { LaunchRefused } from '@texra-ai/harness';
 
@@ -159,31 +159,6 @@ export function formatNoListableModelsMessage(
   ].join('\n');
 }
 
-function formatCliModelRecovery(model: ModelOptionData): string | undefined {
-  if (isModelOptionAvailable(model)) return undefined;
-
-  const availability = model.availability;
-
-  switch (availability) {
-    case 'missing-key':
-      return CLI_SETUP_RECOVERY;
-    case 'key-unreadable':
-      return 'The API key could not be read from secret storage: check that the store is unlocked and readable, then retry.';
-    case 'provider-key':
-      return undefined;
-    case 'retired':
-      return 'Choose an active model.';
-    case 'unserved':
-      return 'Only OpenRouter or GitHub Copilot serves this model, which TeXRA no longer supports: choose another model.';
-    case 'subscription-access':
-      return undefined;
-    case 'unknown-model':
-      return 'Choose a model that is available in the current registry.';
-    default:
-      return absurd(availability);
-  }
-}
-
 export function formatCliModelDetails(model: ModelOptionData): string {
   const lines: string[] = [];
   lines.push(`id: ${model.value}`);
@@ -191,8 +166,11 @@ export function formatCliModelDetails(model: ModelOptionData): string {
   if (model.provider) lines.push(`provider: ${model.provider}`);
   lines.push(`status: ${cliModelStatus(model)}`);
   lines.push(`availability: ${modelAvailabilityLabel(model)}`);
-  const recovery = formatCliModelRecovery(model);
-  if (recovery) lines.push(`recovery: ${recovery}`);
+  // Why it cannot run is the verdict's own sentence; how to add a key
+  // from a shell is the terminal's.
+  if (model.unavailableReason) lines.push(`reason: ${model.unavailableReason}`);
+  if (model.availability === 'missing-key')
+    lines.push(`recovery: ${CLI_SETUP_RECOVERY}`);
   if (model.context) lines.push(`context: ${model.context}`);
   if (model.cost) lines.push(`cost: ${model.cost}`);
   if (model.hint) {

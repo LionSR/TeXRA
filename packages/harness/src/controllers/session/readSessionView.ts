@@ -25,6 +25,7 @@ import {
 import type { SessionView } from '@shared/session/sessionView';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
+import type { AppNamespace } from '@utils/system/appNamespace';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 import { databaseLayer } from './databaseLayer';
@@ -72,7 +73,7 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
 ): Effect.fn.Return<
   Option.Option<SessionView>,
   DatabaseOpenFailed,
-  FileSystem.FileSystem | ProjectDatabases | ToolRegistry
+  FileSystem.FileSystem | ProjectDatabases | ToolRegistry | AppNamespace
 > {
   const databases = yield* ProjectDatabases;
   const read = Effect.gen(function* () {

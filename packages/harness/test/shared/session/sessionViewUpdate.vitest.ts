@@ -100,6 +100,7 @@ describe('session view update', () => {
     const log = new Log();
     log.emit(ROOT, T.root, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: 'custom:search' },
       parent: null,
       provenance: null,
@@ -140,6 +141,7 @@ describe('session view update', () => {
     const log = new Log();
     log.emit(ROOT, T.root, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: 'custom:search' },
       parent: null,
       provenance: null,
@@ -180,6 +182,7 @@ describe('session view update', () => {
     const log = new Log();
     log.emit(ROOT, T.root, {
       type: 'run.start',
+      maxCostUsd: null,
       identity: { kind: 'agent', agent: 'custom:search' },
       parent: null,
       provenance: null,

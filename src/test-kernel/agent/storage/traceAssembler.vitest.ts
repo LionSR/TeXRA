@@ -93,6 +93,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         // producer, no siblings and no writable host.
         expect(trace.events[0]).toMatchObject({
           type: 'run.start',
+          maxCostUsd: null,
           parent: null,
           provenance: null,
           takesFollowUps: false,

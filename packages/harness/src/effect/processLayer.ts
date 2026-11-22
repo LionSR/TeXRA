@@ -48,6 +48,7 @@ import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { ToolRegistry, toolTable, type ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { AppNamespace } from '@utils/system/appNamespace';
 
 import { PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -141,7 +142,7 @@ export class Sessions extends Context.Service<
 >()('@texra-ai/harness/Sessions') {
   /**
    * The Effect embedder's entry: compose the process from its platform and
-   * its plugins (`harnessBuiltins` from `@texra-ai/harness/plugins`, or a
+   * its plugins (`harnessBuiltins` from `@texra-ai/harness/builtins`, or a
    * list of the embedder's own beside them), and serve its sessions for
    * this layer's lifetime; the layer's release closes every session still
    * open. A list the harness cannot compose fails with
@@ -262,6 +263,7 @@ function sessionsLayer(
           ChildProcessSpawner,
           ProjectDatabases,
           ToolRegistry,
+          AppNamespace,
         )(yield* Effect.context<ProcessServices | ProjectDatabases>());
         return yield* makeSessions(
           yield* SessionOwner,

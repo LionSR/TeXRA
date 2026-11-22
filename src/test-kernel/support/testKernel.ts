@@ -48,7 +48,7 @@ import {
   type ProcessServices,
   type ValidationModel,
 } from '@texra-ai/harness/host';
-import { nodePlatformServices } from '@texra-ai/harness/node';
+import { AppNamespace, nodePlatformServices } from '@texra-ai/harness/node';
 import {
   AppSignals,
   Secrets,
@@ -216,6 +216,7 @@ const PROCESS_SERVICES = [
   StateStores,
   UsageLog,
   AppSignals,
+  AppNamespace,
   AgentCatalog,
   RouteRetries,
   PlanQuotas,

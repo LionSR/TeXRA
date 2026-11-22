@@ -169,7 +169,12 @@ its service tag is in `packages/harness/src/shared/session/database.ts`.
   `reclaimable` have no reference.
 - **F11: landed on 2026-11-19.** `.gitattributes` checks out `config/storage/**`
   and `src/test-kernel/fixtures/storage/**` with LF line ends.
-- **F12: open.** `quick_check` has no reference.
+- **F12: closed on 2026-11-21, not done.** `node:sqlite` gives no way to
+  bound or interrupt a pragma, and `quick_check` reads every page (59 ms on
+  52 MB, 135 ms on 209 MB, cache warm), so it would block the host's thread
+  at every open; the minimum SQLite version goes with it. Recorded in
+  `.agents/docs/refuted-candidates.json`
+  (`STORE-quick-check-and-minimum-sqlite-at-open`), with what reopens it.
 - **F13: in the tree.** `aggregate_change` and `changedSince` have no
   reference, and the `data_version` poll is forked for the global store alone
   (`if (mode === 'global')` in `databaseLayer.ts`).

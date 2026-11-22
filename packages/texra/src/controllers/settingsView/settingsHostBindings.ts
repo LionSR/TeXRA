@@ -21,6 +21,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type {
   SettingsHostPage,
   SettingsHostState,
+  SettingsViewInboundMessage,
   SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -70,6 +71,14 @@ export interface SettingsHostBindings {
    *  install the extension it names. */
   readonly editor?: EditorIntegrationShape;
 }
+
+/** The program each command of the view runs, one per command; the body
+ *  runs them at the host's entry. */
+export type SettingsViewInboundHandlerRegistry<R = ProcessServices> = {
+  [K in SettingsViewInboundMessage['command']]: (
+    message: Extract<SettingsViewInboundMessage, { command: K }>,
+  ) => Effect.Effect<unknown, Error, R>;
+};
 
 /**
  * What a settings page's data is read from. A mutation says which input it

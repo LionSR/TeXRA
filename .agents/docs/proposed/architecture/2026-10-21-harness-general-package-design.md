@@ -481,7 +481,41 @@ Open, for the owner:
   data.
 - Names an embedder's users see that carry the app's word: the store file
   `texra.db`, the `TEXRA_APPROVAL_POLICY` and `TEXRA_SKILL_DIR` variables,
-  and "Another TeXRA process holds this project".
+  and "Another TeXRA process holds this project". Landed 2026-11-21: the
+  store file and the two variables derive from the settings catalog's
+  namespace (`AppNamespace`, `utils/system/appNamespace.ts`, served by the
+  process layer and exported from `./node`); the message lost the product
+  name on 2026-11-20.
+
+### The built-ins leave `./plugins` (2026-11-21)
+
+`./plugins` held two things with different readers: what a tool or plugin is
+written with, and the harness's own plugins an embedder lists in
+`Sessions.layer`. Ruled on 2026-11-19 to split before the first publish,
+after comparing two designs:
+
+|                                     | (a) built-ins move to `./builtins`         | (b) authoring moves to a new entry                  |
+| ----------------------------------- | ------------------------------------------ | --------------------------------------------------- |
+| A plugin author imports             | `./plugins`, as today                      | a new name; `./plugins` no longer means "write one" |
+| An embedder imports                 | `harnessBuiltins` from `./builtins`        | `./plugins`, as today                               |
+| Files that change their import      | 20 (15 of them the package's own examples) | 294                                                 |
+| A native plugin's `harness.plugins` | the authoring surface under its own name   | renamed, or a name that no longer matches its entry |
+| What the authoring entry loads      | 998 kB of the built package (was 3.6 MB)   | the same, under the other name                      |
+
+(a) is taken. The names agree with what each holds (a plugin is written
+with `./plugins`; `harnessBuiltins` comes from `./builtins`), the entry a
+native plugin is handed keeps its name, and fifteen times fewer files move.
+The weight is the same either way: the built-in tools (the shell, the web
+fetcher, the script sandbox and its worker) are 2.6 MB that only the entry
+listing them loads, so a plugin package's tests no longer load them.
+
+`./builtins` exports nine names: `harnessBuiltins`, `codemode`, `fileOps`,
+`goal`, `memoryWorkflow`, `multiAgent`, `web`, `AGENT_TOOL_NAME` (the
+`multiAgent` plugin's tool name) and `WriteFilter` (the option `fileOps`
+takes). `./plugins` is 154 names and imports none of them, so a native
+plugin (`NativePluginHost.plugins`) is no longer handed the built-ins to
+list again. No name was renamed and nothing is re-exported from the old
+entry.
 
 ### Sequencing with work in flight
 

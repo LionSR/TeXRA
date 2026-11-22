@@ -260,6 +260,8 @@ export interface RegisterRunOptions {
   readonly description?: string;
   readonly provenance?: RunProvenance; // a fork's source and cut
   readonly grants?: ApprovalGrants; // the grants it starts with
+  /** The spend cap its launch named (`run.start.maxCostUsd`). */
+  readonly maxCostUsd?: number | null;
   /** A fork's history, which its opening commits in place of a prompt
    *  (`forkSeed`): the run is born on it, not resumed onto it, bound as its
    *  source was at the cut (`binding`: what its `run.config` row records). */

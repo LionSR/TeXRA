@@ -7,11 +7,15 @@
  * export is a function the harness calls with both ({@link NativePluginHost}),
  * so the tags, layers and fibers it builds are the host's own, whether the
  * host is bundled or not; Node never resolves `effect` from the plugin's
- * folder. Each trust digest is imported once per process, as a URL of its
- * own (`harness.mjs?rev=<revision>`), so an edited and trusted-again entry is a
- * fresh module beside the old one. A module the entry imports is cached by
- * Node under its own URL and imported once per process: a revision reaches
- * only what the entry itself holds.
+ * folder. Each trust digest is imported once per process, from a copy of
+ * the plugin made for that digest (`copyPlugin`), so an edited and
+ * trusted-again plugin is fresh modules beside the old ones, the entry and
+ * every module it imports: Node caches a module by its path, and the path
+ * the plugin was installed at would answer the modules of the revision
+ * imported first. The code that runs is the files that were trusted,
+ * whatever is written to the plugin's folder afterwards, so the entry's
+ * `import.meta.url` names its copy. This process's copies go when its
+ * loader's scope closes.
  *
  * The returned value is checked at this boundary: its shape, its id (its
  * installed plugin's name), that it contributes exactly what its header's
@@ -29,6 +33,7 @@
  * declares about approval, concurrency or scripts.
  */
 // Node imports
+import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // Third-party imports
@@ -47,6 +52,7 @@ import {
   Equal,
   Exit,
   Fiber,
+  FileSystem,
   Function as Fn,
   Hash,
   HashMap,
@@ -71,7 +77,12 @@ import {
 } from 'effect';
 
 // Local imports
-import type { NativeEntry } from '@common/plugins/nativeEntry';
+import {
+  NATIVE_ENTRY_FILE,
+  type NativeEntry,
+} from '@common/plugins/nativeEntry';
+import { copyPlugin } from '@common/plugins/pluginDigest';
+import { PluginError } from '@common/plugins/pluginManifest';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { installedPluginId } from '@common/plugins/pluginTrust';
@@ -359,17 +370,62 @@ const checked = (
   });
 };
 
-/** Import `entry` of `source` as `revision` and call its default export;
- *  a failure is logged once, as the load is kept. */
+/** Whether a process with the id `pid` is running on this machine. */
+const running = (pid: number): boolean => {
+  try {
+    // Signal 0 sends nothing: it only checks that the process can be signalled.
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // Another user's process is refused, and is running.
+    return Predicate.hasProperty(error, 'code') && error.code === 'EPERM';
+  }
+};
+
+/**
+ * This process's directory under `dir`, where it copies the native code it
+ * loads, removed with the scope. A process that is killed leaves its
+ * directory behind, so the directories of processes no longer running are
+ * removed first (one whose process id another process took since stays
+ * until that one exits).
+ */
+const processCopies = Effect.fnUntraced(function* (dir: string) {
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs.makeDirectory(dir, { recursive: true });
+  yield* Effect.forEach(yield* fs.readDirectory(dir), (name) => {
+    const pid = /^(\d+)-/.exec(name)?.[1];
+    return pid === undefined || running(Number.parseInt(pid, 10))
+      ? Effect.void
+      : fs.remove(path.join(dir, name), { recursive: true, force: true });
+  }).pipe(
+    // Another process may be removing the same ones.
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Copies of native code that exited processes left in ${dir} were not all removed: ${error.message}`,
+      ).pipe(withLogChannel('plugins')),
+    ),
+  );
+  return yield* fs.makeTempDirectoryScoped({
+    directory: dir,
+    prefix: `${process.pid}-`,
+  });
+});
+
+/** Import `entry` of `source` as `revision`, from a copy of its plugin
+ *  under `copies`, and call its default export; a failure is logged once,
+ *  as the load is kept. */
 const importEntry = (
   source: LoadablePlugin,
   entry: NativeEntry,
   revision: string,
-): Effect.Effect<NativePlugin, NativePluginFailed> => {
+  copies: Effect.Effect<string, PluginError>,
+): Effect.Effect<NativePlugin, NativePluginFailed, FileSystem.FileSystem> => {
   const failed = (reason: string, cause?: unknown) =>
     notLoaded(installedPluginId(source.record.name), revision, reason, cause);
-  const url = `${pathToFileURL(entry.file).href}?rev=${revision}`;
   return Effect.gen(function* () {
+    const copy = yield* Effect.map(copies, (dir) => path.join(dir, revision));
+    yield* copyPlugin(path.dirname(entry.file), copy);
+    const url = pathToFileURL(path.join(copy, NATIVE_ENTRY_FILE)).href;
     const module: unknown = yield* Effect.tryPromise({
       try: () => import(/* @vite-ignore */ url),
       catch: (cause) =>
@@ -394,6 +450,9 @@ const importEntry = (
     if (Result.isFailure(loaded)) return yield* failed(loaded.failure);
     return { plugin: loaded.success, revision };
   }).pipe(
+    Effect.catchTag('PluginError', (error) =>
+      Effect.fail(failed(error.message, error)),
+    ),
     Effect.tapError((error) =>
       Effect.logWarning(error.message).pipe(withLogChannel('plugins')),
     ),
@@ -436,16 +495,44 @@ class EntryRevision implements Equal.Equal {
  * revision whose services did not come up (`reject`): `load` answers its
  * failure from then on. `imported` answers the plugin a load already gave,
  * and imports nothing: what a reader that must run no plugin's code reads.
+ * Each revision is imported from a copy of its plugin in this process's
+ * directory under `copies`, made at the first load and removed with the
+ * loader's scope; a loader given no directory loads nothing, and says so.
  */
-export const nativeLoader = Effect.map(
-  Cache.make({
+export const nativeLoader = Effect.fnUntraced(function* (
+  copies: string | undefined,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const scope = yield* Effect.scope;
+  // Made at the first load: a process that loads no native code makes none.
+  const home =
+    copies === undefined
+      ? Effect.fail(
+          new PluginError({
+            message: 'this process keeps no copies of native code',
+          }),
+        )
+      : yield* Effect.cached(
+          processCopies(copies).pipe(
+            Scope.provide(scope),
+            Effect.provideService(FileSystem.FileSystem, fs),
+            Effect.mapError(
+              (error) =>
+                new PluginError({
+                  message: `no directory could be made for its copy: ${error.message}`,
+                }),
+            ),
+          ),
+        );
+  const cache = yield* Cache.make({
     capacity: Number.POSITIVE_INFINITY,
     lookup: ({ source, entry, revision }: EntryRevision) =>
-      importEntry(source, entry, revision),
-  }),
-  (
-    cache,
-  ): {
+      importEntry(source, entry, revision, home).pipe(
+        Effect.provideService(FileSystem.FileSystem, fs),
+      ),
+  });
+  const rejected = new Map<string, NativePluginFailed>();
+  const loader: {
     readonly load: (
       source: LoadablePlugin,
     ) => Effect.Effect<NativePlugin, NativePluginFailed>;
@@ -458,37 +545,35 @@ export const nativeLoader = Effect.map(
     ) => Effect.Effect<void>;
     /** Whether `native` was rejected. */
     readonly rejected: (native: NativePlugin) => boolean;
-  } => {
-    const rejected = new Map<string, NativePluginFailed>();
-    return {
-      load: (source) =>
-        Effect.suspend(() => {
-          const entry = source.plugin.native;
-          if (entry === null)
-            return Effect.fail(
-              notLoaded(
-                installedPluginId(source.record.name),
-                undefined,
-                'it has no native entry',
-              ),
-            );
-          const key = new EntryRevision(source, entry);
-          const failed = rejected.get(key.revision);
-          return failed === undefined
-            ? Cache.get(cache, key)
-            : Effect.fail(failed);
-        }),
-      imported: (source) => {
+  } = {
+    load: (source) =>
+      Effect.suspend(() => {
         const entry = source.plugin.native;
-        return entry === null
-          ? Effect.succeedNone
-          : Cache.getSuccess(cache, new EntryRevision(source, entry));
-      },
-      reject: ({ plugin, revision }, reason) =>
-        Effect.sync(() =>
-          rejected.set(revision, notLoaded(plugin.id, revision, reason)),
-        ),
-      rejected: ({ revision }) => rejected.has(revision),
-    };
-  },
-);
+        if (entry === null)
+          return Effect.fail(
+            notLoaded(
+              installedPluginId(source.record.name),
+              undefined,
+              'it has no native entry',
+            ),
+          );
+        const key = new EntryRevision(source, entry);
+        const failed = rejected.get(key.revision);
+        return failed === undefined
+          ? Cache.get(cache, key)
+          : Effect.fail(failed);
+      }),
+    imported: (source) => {
+      const entry = source.plugin.native;
+      return entry === null
+        ? Effect.succeedNone
+        : Cache.getSuccess(cache, new EntryRevision(source, entry));
+    },
+    reject: ({ plugin, revision }, reason) =>
+      Effect.sync(() =>
+        rejected.set(revision, notLoaded(plugin.id, revision, reason)),
+      ),
+    rejected: ({ revision }) => rejected.has(revision),
+  };
+  return loader;
+});

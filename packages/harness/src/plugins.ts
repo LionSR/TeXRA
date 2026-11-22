@@ -1,6 +1,7 @@
 /**
- * Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
- * `@texra-ai/harness`.
+ * The plugin authoring surface for `@texra-ai/harness`: what a tool or a
+ * plugin is written with. The built-in plugins are
+ * [`@texra-ai/harness/builtins`](./builtins).
  *
  * > **Guide:** Read [Plugins, Tools & Codemode](/api/plugins-and-codemode) for
  * > how to author tools and plugins, how step-pinned catalogs work, and how the
@@ -8,12 +9,6 @@
  *
  * ### Key exports by role
  *
- * - **Built-in plugins**: [`harnessBuiltins`](#harnessbuiltins) bundles
- *   [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal),
- *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
- *   (the `agent` tool, [`AGENT_TOOL_NAME`](#agent_tool_name), and the
- *   `program` tool), and [`web`](#web) for
- *   `Sessions.layer({ platform, plugins, client })`.
  * - **Plugin & tool authoring**: [`defineTool`](#definetool),
  *   [`definePlugin`](#defineplugin) and the
  *   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),

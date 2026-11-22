@@ -134,7 +134,9 @@ export const ToolCatalogOwner = Context.Service<
  * their native plugins `installed` reads at each step (none when omitted),
  * read again at each of `installedChanges` (the install record changed, so
  * a native plugin disabled or replaced anywhere goes down then; one enabled
- * is imported when a step or a launch next reads, never by this read),
+ * is imported when a step or a launch next reads, never by this read), the
+ * directory this process copies the native code it loads under
+ * (`nativeCopies`; omitted, none loads),
  * and the `switches` as they stand and on each change (the ids held off;
  * before the first, every switched plugin is off; omitted, none ever is).
  */
@@ -144,6 +146,7 @@ export const toolCatalogLayer = (
     readonly loader?: PluginLoader;
     readonly installed?: InstalledToolReader;
     readonly installedChanges?: Stream.Stream<unknown>;
+    readonly nativeCopies?: string;
     readonly switches?: Stream.Stream<ReadonlySet<string>>;
   } = {},
 ): Layer.Layer<
@@ -186,7 +189,9 @@ export const toolCatalogLayer = (
         of.natives
           .map(({ plugin, revision }) => new LayerKey(plugin, revision).name)
           .join('\0');
-      const loader = yield* nativeLoader;
+      const loader = yield* nativeLoader(options.nativeCopies).pipe(
+        Effect.provide(process),
+      );
       // Each native plugin's revision the table held before the one it
       // holds now, while its installed plugin stays enabled: kept in memory
       // only, for when the one in use stops loading. A disabled or removed
