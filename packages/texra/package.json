@@ -34,8 +34,7 @@
     "monaco-editor": "^0.57.0",
     "pretty-bytes": "catalog:",
     "sortablejs": "^1.15.7",
-    "which": "catalog:",
-    "yaml": "catalog:"
+    "which": "catalog:"
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",

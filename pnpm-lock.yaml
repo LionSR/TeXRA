@@ -629,9 +629,6 @@ importers:
       which:
         specifier: 'catalog:'
         version: 7.0.0
-      yaml:
-        specifier: 'catalog:'
-        version: 2.9.1
     devDependencies:
       '@types/diff-match-patch':
         specifier: ^1.0.36
