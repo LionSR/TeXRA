@@ -1319,6 +1319,45 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
 `extractBibliography.ts`，九个 bundled agent 的工具表和提示词里对它们的
 引用。存法没有变：存过这些调用的 run 照旧能读，卡片用通用图标。
 
+### 第 5 期的实施切片（2026-11-22，负责人：现在整期做）
+
+三片，每片合入时树是绿的：
+
+1. **应用和 host 改成单一入口**（harness 的机制先不动）。入口 agent 是
+   app 的一个常量（`packages/texra/src/agent/entryAgent.ts`：基础文本和声
+   明的工具表），每个 host 用 inline persona 启动它；`setup` 和编译失败
+   后的修复是同一个入口加 host 写的第一条指令（setup 的启动点名 setup
+   插件的工具）。删：`packages/extension/resources/agents/` 的 19 个文件、
+   lean4 的 agents、TeXRA 自己的 skills 和 multi-agent 的 skill 目录、
+   `docs/agent-creation`；launch form 的 agent 选择、设置页 Agents 的
+   library 分区和选择面板、customize 和 newer-built-in 提示、
+   `texra agents`、`--agent`、`/agent`、`config agents`、
+   `tasks start <agent>`、`texra.showAgents`、默认 agent 的常量。各能力的
+   那几句从 `assistant.yaml` 搬到各自插件的 `prompt` 段。
+2. **harness 删 agent 目录，`run.config` 变存法。** `agent`、
+   `agentSource`、`delegationAgentScope` 去掉，换成直接放在 config 上的
+   `system`、`tools`、`temperature` 和 `label`（卡片和目录名用的显示名）；
+   `StartRequest` 是 `{ system, tools, instruction, model }` 或
+   `{ config }`；`agent` 工具的输入去掉 `persona`，直接取 `system` 和
+   `tools`，`agentName` 只认安装式插件带的 agent（问题 1），启动时解析成
+   system 和 tools 存进 config，恢复不再查任何目录。删
+   `agent/index/` 的 catalog、目录服务和 YAML 扫描、`agent/workspaceAgents/`、
+   `agentCatalogFollower`、`AgentDirectoriesPort`、两个设置行和它们在
+   `./host`、`./schemas`、根入口上的导出。`run.config` 升行版本，重生成
+   golden store。
+3. **文档**：`built-in-agents`、`custom-agents`、`multi-agent-workflows`、
+   `agent-architecture`、`texra-cli` 重写，其余改措辞；changelog；
+   `AGENTS.md`。
+
+这一期**不做**的两处，都不是存法：
+
+- **只声明小核心。** 入口 agent 的工具表仍是今天 `assistant.yaml` 列的那
+  些，全部声明。"声明一张短表，其余靠搜索"要先有本文"入口只有一个
+  agent"末尾说的那个整套聊天 journey 作证据。
+- **"开着就能调"和 MCP 配了就能调。** 工具仍按表点名才进 run；入口的表
+  里用 `mcp__<server>__*` 点名配置了的 server 由 app 在启动时算出。按步
+  跟着插件开关走要改 `resolveStepTools` 的注入规则，另作一片。
+
 ## 负责人问题
 
 决定页上的十一处都选了。剩下两处（第 1 处已于 2026-11-21 定）：
