@@ -332,12 +332,21 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
 
   // The approval went back to the asking task, which lists the child it
   // started and the child's two revisions, which the child started in
-  // turn. Once the app shows them done, the child's row comes first.
+  // turn: each row is named by its run's label, so the program's revisions
+  // are `Revision 1` and `Revision 2`. Once the app shows them done, the
+  // child's row opens the child.
   const started = page.getByRole('listitem', {
     name: 'Open edit: Completed',
   });
-  await expect(started).toHaveCount(3, { timeout: 60_000 });
-  await started.first().click();
+  for (const name of [
+    'Open edit: Completed',
+    'Open Revision 1: Completed',
+    'Open Revision 2: Completed',
+  ])
+    await expect(page.getByRole('listitem', { name })).toHaveCount(1, {
+      timeout: 60_000,
+    });
+  await started.click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('edit');
   await expect(
     page.getByRole('navigation', { name: 'Started by' }).getByRole('button'),
