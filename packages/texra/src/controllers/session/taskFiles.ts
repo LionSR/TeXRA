@@ -20,7 +20,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
+import { IS_WINDOWS, meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
@@ -128,7 +128,7 @@ const reject = (reason: TaskFilesReason) => new TaskFilesRejected({ reason });
 // syntax; Windows glob mode has no backslash escape.
 const GLOB_OPTIONS = {
   magicalBraces: true,
-  windowsPathsNoEscape: process.platform === 'win32',
+  windowsPathsNoEscape: IS_WINDOWS,
 };
 
 /** Whether a named path is a glob the resolution would expand, for a host

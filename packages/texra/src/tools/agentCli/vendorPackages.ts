@@ -32,7 +32,11 @@ import {
 import which from 'which';
 
 import { logFailure } from '@texra-ai/harness/plugins';
-import { executeCommand, withCommandDirs } from '@texra-ai/harness/node';
+import {
+  executeCommand,
+  IS_WINDOWS,
+  withCommandDirs,
+} from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -256,7 +260,7 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
     which.sync(config.pathCommand, {
       nothrow: true,
       path: PATH,
-      ...(process.platform === 'win32' ? { pathExt: '.EXE' } : {}),
+      ...(IS_WINDOWS ? { pathExt: '.EXE' } : {}),
     }) ?? undefined
   );
 });
