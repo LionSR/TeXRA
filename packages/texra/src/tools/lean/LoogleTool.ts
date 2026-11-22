@@ -8,7 +8,7 @@ import {
   truncateWithEllipsis,
   formatResultCount,
 } from '@texra-ai/harness/schemas';
-import { Array as Arr, Cause, Effect, Schema } from 'effect';
+import { Array as Arr, Cause, Effect, Number as Num, Schema } from 'effect';
 import { HttpClientResponse } from 'effect/http';
 
 import {
@@ -249,7 +249,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
     return `## Query: \`${q}\`\n\n${resultText}`;
   });
 
-  const totalHits = results.reduce((sum, r) => sum + r.hits.length, 0);
+  const totalHits = Num.sumAll(results.map((r) => r.hits.length));
   const allFailed = results.every(({ result }) => result.status === 'error');
   const counted = formatResultCount(queries.length, 'query');
   let summary: string;

@@ -6,7 +6,7 @@
  * tokenizer does not split `inputFiles` or `read_file` the way a tool name
  * needs.
  */
-import { Predicate } from 'effect';
+import { Number as Num, Predicate } from 'effect';
 import { inputSchema, mapSubschemas } from '@tools/core/toolSchema';
 import { type ScriptDoor } from '@agent/runtime/RunCall';
 
@@ -74,8 +74,7 @@ export function searchTools(
     return { definition, counts, length };
   });
   const average =
-    documents.reduce((sum, { length }) => sum + length, 0) / documents.length ||
-    1;
+    Num.sumAll(documents.map(({ length }) => length)) / documents.length || 1;
   const idf = new Map(
     terms.map((term) => {
       const n = documents.filter(({ counts }) => counts.has(term)).length;
