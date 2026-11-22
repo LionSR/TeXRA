@@ -2649,7 +2649,7 @@ Keep file-oriented tools inside the active working directory unless the
 user explicitly grants them access to arbitrary filesystem paths.
 
 ```ts
-const TOOL_PATH_PROTECTION_SETTING: { readonly key: "tools.restrictPathsToWorkingDirectory"; readonly slot: "workspaceState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Restrict tools to project folder"; readonly description: "Keep file, search, and PDF tools inside the current project folder. Turn off only if an agent needs outside files."; }
+const TOOL_PATH_PROTECTION_SETTING: { readonly key: "tools.restrictPathsToWorkingDirectory"; readonly slot: "workspaceState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Restrict tools to project folder"; readonly description: "Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Turn off only if an agent needs outside files."; }
 ```
 
 ## ToolCallLog

@@ -80,8 +80,8 @@ Lean 4 proofs, and splits large jobs across helper agents.
 Tailor it with a project `AGENTS.md`, skills, and plugins that add skills,
 MCP servers, and custom programs.
 
-File edits and shell commands ask for approval by default; switch to
-**Auto-approve** for autonomous runs.
+New projects default to **Auto-approve** for autonomous tasks; switch to **Ask**
+or **Block** anytime in **Settings → General → Approval**.
 
 ## Models
 

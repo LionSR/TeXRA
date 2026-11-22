@@ -225,7 +225,7 @@ export class ProviderKeyList extends TexraElement {
           </div>
         </div>
         ${
-          planCredits && isExpanded
+          planCredits && (isExpanded || entry.status !== 'secret')
             ? renderPlanCreditsHint(planCredits)
             : nothing
         }

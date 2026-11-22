@@ -494,7 +494,7 @@ export const TOOL_PATH_PROTECTION_SETTING = {
   schema: booleanWithDefault(true),
   title: 'Restrict tools to project folder',
   description:
-    'Keep file, search, and PDF tools inside the current project folder. Turn off only if an agent needs outside files.',
+    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Turn off only if an agent needs outside files.',
 } as const satisfies SettingRow<boolean>;
 
 // ============================================================================

@@ -116,7 +116,7 @@ const OutputFormat = GlobalFlag.Setting('output-format')({
 const ApprovalPolicy = GlobalFlag.Setting('approval-policy')({
   flag: Flag.Literals('approval-policy', APPROVAL_POLICIES).pipe(
     Flag.withDescription(
-      'Approval policy: never (Block), ask (Ask), or yolo (Auto-approve)',
+      'Approval policy: never (Block), ask (Ask), or yolo (Auto-approve; default)',
     ),
     Flag.optional,
   ),

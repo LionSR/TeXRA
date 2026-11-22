@@ -37,7 +37,7 @@ In the terminal client, `/plugins` lists the same integrations with their
 state and switches each one on or off. Install and sign in to each CLI with its
 own installer and sign-in command.
 
-Each integration's options live on its row and are scoped to the current project. Per-call approval prompts follow **Settings → General → Approval**: **Ask** (default), **Block**, or **Auto-approve**. Choose **Ask** to review each launch, or approve all agent work for the task on its first request card. When you approve a single launch, Codex runs in `workspace-write` mode and Claude Code in `acceptEdits`; under **Auto-approve** (or an all-agent-work grant), both run with full permissions. Codex never stops to ask on its own.
+Each integration's options live on its row and are scoped to the current project. Per-call approval prompts follow **Settings → General → Approval**: **Auto-approve** (default), **Ask**, or **Block**. Choose **Ask** to review each launch, or approve all agent work for the task on its first request card. When you approve a single launch, Codex runs in `workspace-write` mode and Claude Code in `acceptEdits`; under **Auto-approve** (or an all-agent-work grant), both run with full permissions. Codex never stops to ask on its own.
 
 Both CLIs are installed once per machine and shared by VS Code, the desktop app, and the CLI. Neither ships inside TeXRA, so TeXRA uses whichever version is installed on your machine.
 
