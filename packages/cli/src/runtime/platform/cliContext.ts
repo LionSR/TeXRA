@@ -23,7 +23,6 @@ import {
 } from '@texra-ai/harness/node';
 import {
   APPROVAL_POLICY_SETTING,
-  APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseApprovalPolicy,
   launchPolicy,
   type ApprovalPolicy,
@@ -60,8 +59,8 @@ export interface CliContext {
    *  headless guards and resume hints read. */
   readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
-   *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
-   *  config: what a service launch sends to narrow its own task. */
+   *  `TEXRA_APPROVAL_POLICY`), absent when it follows the config: what a
+   *  service launch sends to narrow its own task. */
   readonly requestedApprovalPolicy?: ApprovalPolicy;
   /**
    * The diagnostics emission threshold this process's runtime builds with,
@@ -308,8 +307,8 @@ export interface CliGlobalArgs {
   readonly noColor?: boolean;
   /**
    * `--no-input`: the conventional "disable all prompts" switch. Forces
-   * headless mode and defaults approval-gated actions to `never` unless the
-   * user explicitly selects another approval policy.
+   * headless mode, where nothing prompts; the approval policy is decided as
+   * for any other invocation.
    */
   readonly noInput?: boolean;
   readonly skillSourcePaths?: readonly string[];
@@ -444,21 +443,17 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     const noColor = init.globalArgs.noColor === true;
     const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
     const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
-    const noInput = init.globalArgs.noInput === true;
     // The flag is validated by its parse (`Flag.Literals`) and the config tiers by
     // the catalog row's own schema, which also supplies the value when no tier
     // set one — the environment is the only tier that can still carry an
-    // unvalidated string. `--no-input` skips the env and config tiers
-    // entirely, so it also skips their warnings.
+    // unvalidated string.
     const requestedApprovalPolicy: ApprovalPolicy | undefined =
       init.globalArgs.approvalPolicy ??
-      (noInput
-        ? APPROVAL_POLICY_NO_INPUT_DEFAULT
-        : yield* pickEnv(
-            approvalPolicyEnv(TEXRA_SETTINGS.catalog.namespace),
-            parseApprovalPolicy,
-            configWarnings,
-          ));
+      (yield* pickEnv(
+        approvalPolicyEnv(TEXRA_SETTINGS.catalog.namespace),
+        parseApprovalPolicy,
+        configWarnings,
+      ));
     const approvalPolicy = effectiveApprovalPolicy(
       requestedApprovalPolicy,
       projectApprovalPolicy(config),
@@ -508,8 +503,8 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
 
 /**
  * What a launch asks for with the policy this invocation requested
- * explicitly (its flag, `TEXRA_APPROVAL_POLICY`, `--no-input`, a chat's
- * `/approval`); none follows the project's. An explicit Auto-approve is an
+ * explicitly (its flag, `TEXRA_APPROVAL_POLICY`, a chat's `/approval`); none
+ * follows the project's. An explicit Auto-approve is an
  * Auto-approve launch; any other policy is the limit the launch narrows its
  * run to. Local and service launches alike.
  */

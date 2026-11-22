@@ -8,6 +8,12 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 
 ### Breaking Changes
 
+- **`--no-input` no longer blocks commands and edits.** It still makes a
+  command run without prompting, as `--print` does, but it used to set the
+  approval policy to Block as well. The policy now comes from
+  `--approval-policy`, `TEXRA_APPROVAL_POLICY` or your settings, as for any
+  other command; pass `--approval-policy never` to block.
+
 - **Agents no longer ask before running commands or editing files.** The
   approval policy now defaults to Auto-approve. Set it to **Ask** in
   Settings → General → Approval (or `/approval` in the terminal) to review

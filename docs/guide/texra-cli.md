@@ -555,7 +555,7 @@ Attached to a task that has not ended and that no service runs any more
 says so and exits 1; `texra tasks send` continues such a task.
 An id may be shortened to any prefix only one task has. `tasks start` runs
 the task under the project's approval policy; an approval policy it asks for
-(`--approval-policy`, `--no-input`, `TEXRA_APPROVAL_POLICY`) applies to that
+(`--approval-policy`, `TEXRA_APPROVAL_POLICY`) applies to that
 task alone: it narrows the project's, and `yolo` auto-approves the task
 unless the project's policy is `never`. It never changes the project's policy. A service task that asks
 for approval waits for an answer: `texra tasks attach` only watches, so
@@ -673,8 +673,8 @@ for every workspace. A project file that sets it is ignored and `texra doctor` r
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. The approval policy a
-command asks for (`--approval-policy`, `TEXRA_APPROVAL_POLICY`, or
-`--no-input`, which asks for `never`) does not replace the stored one: it can
+command asks for (`--approval-policy` or `TEXRA_APPROVAL_POLICY`) does not
+replace the stored one: it can
 only narrow it for that command's tasks, and `yolo` auto-approves them unless
 the stored policy is `never`. Run
 `texra doctor` to see which workspace config file was loaded and whether any

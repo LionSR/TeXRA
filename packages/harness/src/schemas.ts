@@ -152,7 +152,6 @@ export { decodingDefault, decodingDefaultType } from '@shared/schemas';
 export {
   APPROVAL_POLICIES,
   APPROVAL_POLICY_DEFAULT,
-  APPROVAL_POLICY_NO_INPUT_DEFAULT,
   ApprovalPolicySchema,
   parseApprovalPolicy,
   type ApprovalPolicy,

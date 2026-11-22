@@ -278,19 +278,6 @@ edits run without asking. A person narrows it to `ask` or `never`.
 const APPROVAL_POLICY_DEFAULT: ApprovalPolicy
 ```
 
-## APPROVAL_POLICY_NO_INPUT_DEFAULT
-
-The policy a `--no-input` run falls back to. Deliberately divergent from
-{@link APPROVAL_POLICY_DEFAULT}: a run that cannot present a prompt
-denies instead of hanging, and `buildCliContext` narrows the candidate list
-to the explicit `--approval-policy` flag alone — a persisted or env-provided
-`yolo` must not silently auto-approve a headless run that nobody is watching.
-Changing that requires changing headless discipline, not just this constant.
-
-```ts
-const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy
-```
-
 ## APPROVAL_POLICY_SETTING
 
 The approval policy. Strict on purpose: `settingEnumOptions` derives the

@@ -154,7 +154,7 @@ describe('CLI config values a row rejects', () => {
 });
 
 describe('CLI color/no-input flag wiring', () => {
-  it('--no-input forces headless mode and defaults approval policy to never', async () => {
+  it('--no-input forces headless mode and leaves the approval policy alone', async () => {
     const context = await cliContext({
       // stdin is a TTY, so without --no-input this would be interactive.
       ambient: {
@@ -168,6 +168,6 @@ describe('CLI color/no-input flag wiring', () => {
       globalArgs: { cwd: tmpdir(), noInput: true },
     });
     expect(context.mode).toBe('headless');
-    expect(context.approvalPolicy).toBe('never');
+    expect(context.approvalPolicy).toBe('yolo');
   });
 });
