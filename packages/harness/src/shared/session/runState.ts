@@ -27,6 +27,10 @@ import {
   type SessionRow,
   type SessionRowDraft,
 } from '@shared/schemas';
+import {
+  estimateContentTokens,
+  tokenRate,
+} from '@shared/runs/contextUtilization';
 import { NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
   applyRunRow,
@@ -131,6 +135,10 @@ export type RunState = Omit<RunRowState, 'at'> &
     /** An edit (not an empty one: a model switch) changed the view since
      *  `lastTurn`, whose count measures a history it no longer holds. */
     readonly countStale: boolean;
+    /** The rate ({@link tokenRate}) the view measured at as the run's last
+     *  edit changed it: what an estimate reads while no count measures the
+     *  view. 1 until an edit. */
+    readonly measuredRate: number;
     readonly pendingResponse: PendingResponse | null;
     /** The `seq` of the latest `run.activate`, when a process last took
      *  the run: a decision after it (`RequestState.decidedAt`) is one
@@ -150,6 +158,9 @@ export type RunState = Omit<RunRowState, 'at'> &
     /** The address of the context its model was told; `null` until a step
      *  opens it (the first, and after a view edit). */
     readonly offeredContext: string | null;
+    /** The estimate of what each request sends beside its messages: the
+     *  latest offered set's system text and the declarations it sends. */
+    readonly offeredEstimate: number;
     /** What it pinned besides: skills listed, hooks, module addresses. */
     readonly offeredWith: Pick<
       RowOf<'tools.offered'>['payload'],
@@ -201,6 +212,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   invocation: null,
   lastTurn: null,
   countStale: false,
+  measuredRate: 1,
   pendingResponse: null,
   activatedAt: null,
   steppedAt: null,
@@ -211,6 +223,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   offeredWith: { skills: [], hooks: [], modules: {} },
   offeredSystem: null,
   offeredContext: null,
+  offeredEstimate: 0,
   contents: {},
   hookOutcomes: {},
 });
@@ -384,6 +397,8 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
         offeredContext: null,
         usage: addUsage(state.usage, p.usage),
         contextEdits: agent ? waiting : state.contextEdits,
+        // The count stops measuring the view here: keep the rate it gave.
+        measuredRate: tokenRate(state),
         countStale:
           state.countStale ||
           p.range.from !== p.range.to ||
@@ -402,6 +417,19 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
         offeredWith: Struct.pick(payload, ['skills', 'hooks', 'modules']),
         offeredSystem: payload.system,
         offeredContext: payload.context,
+        // The batch stores the content the set names before this row.
+        // The context row is a record of the sections the system text
+        // already holds, so it is not counted again.
+        offeredEstimate: [
+          payload.system,
+          ...payload.tools.flatMap(({ sent, shown }) => (sent ? [shown] : [])),
+        ].reduce(
+          (sum, address) =>
+            address === null
+              ? sum
+              : sum + estimateContentTokens(state.contents[address]),
+          0,
+        ),
       }),
   },
   'context.blob': {

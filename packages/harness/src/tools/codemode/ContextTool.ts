@@ -19,10 +19,11 @@ import {
   agentReplacement,
   COMPACTION_SUMMARY_PREFIX,
 } from '@agent/runtime/run/compaction';
+import { contextTokens } from '@agent/runtime/run/contextTokens';
 import {
-  contextTokens,
   estimateMessageTokens,
-} from '@agent/runtime/run/contextTokens';
+  tokenRate,
+} from '@shared/runs/contextUtilization';
 import {
   CONTEXT_TOOL_NAME,
   ContextReplaceSchema,
@@ -129,6 +130,7 @@ const view = Effect.fn('context.view')(function* (
 ): Effect.fn.Return<ToolResult, ToolError> {
   const state = yield* viewOf(call);
   const bound = yield* ScopedRef.get(call.run.model);
+  const rate = tokenRate(state);
   const messages = state.messages.map((message, index) => {
     const text = messageText(message);
     const flat = text.replaceAll(/\s+/g, ' ').trim();
@@ -136,7 +138,7 @@ const view = Effect.fn('context.view')(function* (
       index,
       role: message.role,
       kind: kindOf(message, text),
-      tokens: estimateMessageTokens([message]),
+      tokens: Math.ceil(rate * estimateMessageTokens([message])),
       preview:
         flat.length > PREVIEW_LENGTH
           ? `${flat.slice(0, PREVIEW_LENGTH)}…`
@@ -199,9 +201,11 @@ const replace = Effect.fn('context.replace')(function* (
     return yield* refused(
       'it would separate a tool call from its result. A message that calls tools and the tool results right after it must both be in the range or both outside it.',
     );
-  const freed =
-    estimateMessageTokens(messages.slice(from, to)) -
-    estimateMessageTokens([replacement]);
+  const freed = Math.ceil(
+    tokenRate(state) *
+      (estimateMessageTokens(messages.slice(from, to)) -
+        estimateMessageTokens([replacement])),
+  );
   const value = Schema.encodeSync(ContextReplaceSchema)({
     action: 'replace',
     from,
