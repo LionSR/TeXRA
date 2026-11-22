@@ -6,7 +6,7 @@ import { ActivatedSkillsSchema } from './activeSkills';
 import { FileFieldsSchema } from './fileFields';
 
 /** A run's sampling temperature; the model's own range is narrower. */
-const TemperatureSchema = Schema.Number.check(
+export const TemperatureSchema = Schema.Number.check(
   Schema.isGreaterThanOrEqualTo(0),
 ).check(Schema.isLessThanOrEqualTo(1));
 
