@@ -4,7 +4,7 @@ import { Effect, SubscriptionRef, Context, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
   publishTestRunStart,

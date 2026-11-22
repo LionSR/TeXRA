@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { Cancelled } from '@texra-ai/harness/schemas';
+import { Cancelled } from '@texra-ai/worldline/schemas';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -20,7 +20,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
-import type { AppSignals, SettingsStores } from '@texra-ai/harness/plugins';
+import type { AppSignals, SettingsStores } from '@texra-ai/worldline/plugins';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 

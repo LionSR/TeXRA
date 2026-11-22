@@ -9,7 +9,7 @@
  * locally and only a Windows user sees the extension fail to apply.
  */
 import { describe, expect, it } from 'vitest';
-import { withExtendedPath } from '@texra-ai/harness/node';
+import { withExtendedPath } from '@texra-ai/worldline/node';
 
 /** The keys of `env` that name the PATH variable, whatever their casing. */
 function pathKeys(env: NodeJS.ProcessEnv): string[] {

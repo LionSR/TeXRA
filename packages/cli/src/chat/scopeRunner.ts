@@ -7,13 +7,13 @@
 import { Effect, Exit, Scope } from 'effect';
 
 // Local imports
-import type { Sessions } from '@texra-ai/harness';
+import type { Sessions } from '@texra-ai/worldline';
 import {
   scopedFork,
   type ProcessRuntime,
   type ProcessServices,
   type ScopedFork,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 
 /** What the process runtime serves to the work a runner starts. */
 type Services = ProcessServices | Sessions;

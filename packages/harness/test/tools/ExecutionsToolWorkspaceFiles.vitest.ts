@@ -11,7 +11,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { errorOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';

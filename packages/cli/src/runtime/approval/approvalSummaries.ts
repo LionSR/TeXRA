@@ -10,7 +10,7 @@ import {
   type UserQuestionRequest,
   formatClippedList,
   formatHunkLines,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CHILD_AGENT_COPY } from '@ui/copy/delegationApproval';

@@ -16,9 +16,9 @@
 import { Effect, FileSystem, Schema } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { executeCommand, machineGit } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { executeCommand, machineGit } from '@texra-ai/worldline/node';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import {
   overleafGitClone,
   overleafTokenSpec,

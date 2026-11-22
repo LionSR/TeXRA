@@ -9,12 +9,12 @@ import {
   type RunOutcome,
   type RunView,
   type Stage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type {
   CompactionActivityStatus,
   ToolRowModel,
   ToolRowStatus,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import {
   runSection,
   runStatusKey,

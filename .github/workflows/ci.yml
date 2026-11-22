@@ -445,7 +445,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # Packs @texra-ai/llm and @texra-ai/harness, installs both tarballs into
+  # Packs @texra-ai/llm and @texra-ai/worldline, installs both tarballs into
   # a temporary directory outside the repository with plain npm (no workspace
   # links, no lockfile), type-checks packages/harness/example against them,
   # and runs it. The workspace's lockfile cannot see what a consumer's fresh
@@ -468,7 +468,7 @@ jobs:
         uses: ./.github/actions/setup-workspace
 
       - name: Install the packed tarballs and run the example
-        run: pnpm --filter @texra-ai/harness run example:packed
+        run: pnpm --filter @texra-ai/worldline run example:packed
 
   runtime-validation:
     name: runtime validation (linux)

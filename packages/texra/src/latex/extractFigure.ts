@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, Predicate } from 'effect';
 
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 
 import {
   existingExternalPath,

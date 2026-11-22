@@ -14,7 +14,7 @@ import {
   normalizeFilePath,
   fileLocationDisplayPath,
   type FileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 

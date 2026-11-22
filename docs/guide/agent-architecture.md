@@ -97,27 +97,29 @@ Each revision's prompt is one message holding the conversation so far: the progr
 
 A `program` call can switch on extra context with `args`, each a boolean: `attachTeXCount` adds word counts, `autoExtractFigure` and `autoExtractTikzFigure` attach the figures the input includes, and `autoCompileInputPdf` attaches the compiled input PDF.
 
-**Review revisions:**
+### Built-in review pass
 
-Each program fixes its own number of revisions. `edit`, `annotate`, `enhance`, `transcribe`, `slides` and `poster` run two: a first revision, then one that reviews the first against the original and outputs the corrected documents. `apply` and `merge` run one. A second revision is saved to its own path (`r1/paper.tex`). A run ends earlier only on failure or cancellation.
+Each program fixes its own number of revisions. `edit`, `annotate`, `enhance`, `transcribe`, `slides`, and `poster` run two: a first revision (`r0/`), then a review pass (`r1/`) that rereads the first revision against the original and outputs the corrected documents. `apply` and `merge` run one. A run ends earlier only on failure or cancellation.
 
-`annotate` also checks each revision itself: when a revision changed text outside its `\criticize{}` comments, the next one is told to restore the original.
+`annotate` also checks each revision itself: when a revision changes text outside its `\criticize{}` comments, the next revision is told to restore the original.
 
-**Critic review (opt-in):** Started with `args: { reflect: true }` on a `program` call, a program has a critic review every revision but the last. After the revision is compiled and diffed, the critic reads the requests so far, the diff of each output against the document the run started from, and the compile result, and answers with grounded corrections, each tied to a location, plus the single most valuable optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the same; reflection adds one critic call between revisions, so it has no effect on `apply` and `merge`.
+### Optional critic review (`reflect`)
+
+Started with `args: { reflect: true }` on a `program` call, a program inserts an independent critic between revisions. After each revision (except the last) is compiled and diffed, the critic reads the requests so far, the diff against the original input, and the compile result, then returns grounded corrections tied to locations plus one high-value optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the same, so `reflect: true` has no effect on single-revision programs (`apply` and `merge`).
 
 ::: warning Potential XML Issues
 Occasionally an LLM generates slightly malformed XML, especially for very long or complex outputs. TeXRA closes an unclosed `<document>` tag itself and tries to recover untagged files, and it keeps every revision's raw reply (`r{n}/output.xml`, for example `r0/output.xml`). If a file still fails to extract, open that `.xml` file to recover the text. Read the [Troubleshooting guide](./troubleshooting.md#missing-or-truncated-output-files) for details.
 :::
 
-### Reflection
+### Second-revision diff example
 
 After the first revision (`r0/`), a two-revision program evaluates and refines its work in the second (`r1/`):
 
 <div class="reflection-pdf-viewer">
   <div class="pdf-tabs">
-    <button type="button" class="pdf-tab active" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Original vs. revision 1</button>
+    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Original vs. revision 1</button>
     <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diff.pdf">Original vs. revision 2</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf">Revision 1 vs. revision 2</button>
+    <button type="button" class="pdf-tab active" data-pdf="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf">Revision 1 vs. revision 2</button>
   </div>
   <iframe src="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf" id="pdf-frame" class="reflection-pdf-frame"></iframe>
   <a href="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf" target="_blank" id="pdf-link" class="reflection-pdf-link">View full example</a>

@@ -7,7 +7,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { ClassInfo } from 'lit/directives/class-map.js';
 import { buildDetailsCard } from '@ui/progress/formatters/htmlBuilders';
 import type { IconName } from '@ui/wa/iconNames';
-import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
+import type { TranscriptRowBase } from '@texra-ai/worldline/transcript';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';

@@ -5,7 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { expect } from 'vitest';
 
-import { InstalledPlugins, Skills } from '@texra-ai/harness/host';
+import { InstalledPlugins, Skills } from '@texra-ai/worldline/host';
 import { pluginDataDir } from '@common/plugins/pluginHooks';
 import {
   disablePlugin,

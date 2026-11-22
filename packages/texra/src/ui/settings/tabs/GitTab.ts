@@ -10,7 +10,7 @@ import {
   GIT_AUTHOR_NAME_SETTING,
   GIT_MARK_COMMITS_SETTING,
   type SettingRow,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { CredentialOrigin } from '@texra-ai/llm';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';

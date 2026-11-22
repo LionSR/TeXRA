@@ -16,7 +16,7 @@ import {
   meansAbsent,
   isNotADirectoryError,
   toPosixPath,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import {
   finalDocumentOutput,

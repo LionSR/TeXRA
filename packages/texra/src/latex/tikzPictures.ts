@@ -12,13 +12,13 @@ import {
   type SettingsStores,
   WorkspaceFs,
   pathToLocationIn,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 // Local imports - latex utils
 import { readUncommentedLatex } from './latexParsingUtils';
 import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settings/texraSettings';
 
 /**

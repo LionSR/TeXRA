@@ -5,7 +5,7 @@ import {
   RunIdSchema,
   fileLocationDisplayPath,
   type RunStorageFileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { pairOutputsWithBases } from '@texra/agent/output/lineageMapping';
 
 describe('document task output lineage mapping', () => {

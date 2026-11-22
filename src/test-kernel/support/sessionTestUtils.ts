@@ -25,7 +25,7 @@ import { type ApprovalPolicy } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
 import { FakeHost } from '@test/support/testKernel';
 import { runStart } from '@test/support/sessionRows';
-import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/worldline/schemas';
 
 /**
  * Commit rows on the session's log, in the caller's fiber: a batch the

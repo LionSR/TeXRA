@@ -22,13 +22,13 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, PubSub, Schema, Stream } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import {
   definePlugin,
   defineTool,
   AppSignals,
-} from '@texra-ai/harness/plugins';
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { SessionViewAccess } from '@shared/session/runHistory';

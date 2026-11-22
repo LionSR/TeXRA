@@ -54,7 +54,7 @@ export interface PlatformSecrets extends CredentialStore {
  * the service is that value, not a thunk resolved per member call.
  */
 export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
-  '@texra-ai/harness/platform/Secrets',
+  '@texra-ai/worldline/platform/Secrets',
 ) {
   static layer(
     secrets: PlatformSecrets,

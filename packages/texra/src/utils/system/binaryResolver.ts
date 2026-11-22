@@ -3,15 +3,15 @@ import * as path from 'node:path';
 import { Context, Effect } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { hasExtension } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { hasExtension } from '@texra-ai/worldline/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   CommandDirs,
   executeCommand,
   existsAtAbsolute,
   IS_WINDOWS,
   whichOnExtendedPath,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const WINDOWS_EXTENSIONLESS_PERL_TOOLS = new Set([

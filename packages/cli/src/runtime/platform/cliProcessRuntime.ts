@@ -9,16 +9,16 @@
  */
 import { Layer, ManagedRuntime } from 'effect';
 
-import type { Sessions } from '@texra-ai/harness';
-import { type ProcessServices } from '@texra-ai/harness/host';
-import { Secrets } from '@texra-ai/harness/plugins';
-import { withForkFailureReporting } from '@texra-ai/harness/transcript';
+import type { Sessions } from '@texra-ai/worldline';
+import { type ProcessServices } from '@texra-ai/worldline/host';
+import { Secrets } from '@texra-ai/worldline/plugins';
+import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
 import {
   effectDiagnosticsLayer,
   FileSecrets,
   nodePlatformServices,
   secretsDirectory,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import type { HostWindows } from '@texra/controllers/server/hostWindows';
 import {
   TEXRA_CLIENT,

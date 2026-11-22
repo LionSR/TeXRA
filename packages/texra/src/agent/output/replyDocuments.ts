@@ -7,7 +7,7 @@
  * reads and writes around them are this module's.
  */
 import * as path from 'node:path';
-import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
+import { entryTypeIn, readNormalizedFile } from '@texra-ai/worldline/node';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 
 import { Effect, FileSystem } from 'effect';
@@ -17,7 +17,7 @@ import {
   fileLocationDisplayPath,
   type FileLocation,
   formatResultCount,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import replacementEngine, {
   logReplacementDiagnostics,
@@ -47,7 +47,7 @@ import {
   normalizeDocumentName,
   type ExpectedDocuments,
 } from './extraction/filenameHeaders';
-import type { AgentTrace, ConfigProvider } from '@texra-ai/harness/plugins';
+import type { AgentTrace, ConfigProvider } from '@texra-ai/worldline/plugins';
 
 /** What the extraction reads of the run. */
 interface ReplyContext {

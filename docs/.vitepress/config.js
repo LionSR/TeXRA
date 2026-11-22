@@ -18,15 +18,15 @@ const apiSidebar = [
     ],
   },
   {
-    text: '@texra-ai/harness Reference',
+    text: '@texra-ai/worldline Reference',
     items: [
-      { text: 'harness', link: '/api/harness/' },
-      { text: 'harness/schemas', link: '/api/harness/schemas' },
-      { text: 'harness/transcript', link: '/api/harness/transcript' },
-      { text: 'harness/plugins', link: '/api/harness/plugins' },
-      { text: 'harness/builtins', link: '/api/harness/builtins' },
-      { text: 'harness/node', link: '/api/harness/node' },
-      { text: 'harness/host', link: '/api/harness/host' },
+      { text: 'worldline', link: '/api/harness/' },
+      { text: 'worldline/schemas', link: '/api/harness/schemas' },
+      { text: 'worldline/transcript', link: '/api/harness/transcript' },
+      { text: 'worldline/plugins', link: '/api/harness/plugins' },
+      { text: 'worldline/builtins', link: '/api/harness/builtins' },
+      { text: 'worldline/node', link: '/api/harness/node' },
+      { text: 'worldline/host', link: '/api/harness/host' },
     ],
   },
   {
@@ -54,7 +54,7 @@ const guideSidebar = [
       { text: 'The assistant and programs', link: '/guide/programs' },
       {
         text: 'How programs work',
-        link: '/guide/agent-architecture.md',
+        link: '/guide/agent-architecture',
       },
       { text: 'Tailoring TeXRA', link: '/guide/customizing' },
       {
@@ -76,7 +76,7 @@ const guideSidebar = [
       { text: 'LaTeX Tools', link: '/guide/latex-tools' },
       {
         text: 'Working with Figures',
-        link: '/guide/working-with-figures.md',
+        link: '/guide/working-with-figures',
       },
       { text: 'TikZ Figures', link: '/guide/tikz-figures' },
       { text: 'Multiple Output', link: '/guide/multiple-output' },
@@ -100,10 +100,10 @@ const guideSidebar = [
     text: 'Reference',
     items: [
       { text: 'Configuration', link: '/guide/configuration' },
-      { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
-      { text: 'Best Practices', link: '/guide/best-practices.md' },
+      { text: 'LaTeX Compilation', link: '/guide/latex-compilation' },
+      { text: 'Best Practices', link: '/guide/best-practices' },
       { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-      { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
+      { text: 'Acknowledgments', link: '/guide/acknowledgments' },
       { text: 'Open Source Projects', link: '/guide/open-source' },
       { text: 'Work produced with TeXRA', link: '/work-using-texra' },
     ],

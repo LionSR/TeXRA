@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
-import { InstalledPlugins } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
-import { RUN_OUTCOME, type RunOutcome } from '@texra-ai/harness/schemas';
+import { InstalledPlugins } from '@texra-ai/worldline/host';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
+import { RUN_OUTCOME, type RunOutcome } from '@texra-ai/worldline/schemas';
 import type { CliPluginPin, CliRunResult } from '@cli/schemas/cliOutput';
 import { runStatusLabel } from '@ui/copy/runStatus';
 

@@ -6,19 +6,19 @@ import {
   toErrorMessage,
   fileLocationDisplayPath,
   type FileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   readNormalizedFile,
   getPathSegments,
   toPosixPath,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { rewriteTexInputs } from '@latex/latexParsingUtils';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 import { pairOutputsWithBases } from './lineageMapping';
-import type { AgentTrace } from '@texra-ai/harness/plugins';
+import type { AgentTrace } from '@texra-ai/worldline/plugins';
 
 /** A LaTeX `\input` path trimmed, with POSIX separators and `.`/`..` resolved. */
 function normalizeLatexPath(value: string): string {

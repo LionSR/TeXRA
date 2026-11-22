@@ -5,8 +5,8 @@
 import { Clock, Effect, Option } from 'effect';
 
 // Local imports
-import { definePlugin } from '@texra-ai/harness/plugins';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { definePlugin } from '@texra-ai/worldline/plugins';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 import { findCommand } from '@texra/utils/system/binaryResolver';

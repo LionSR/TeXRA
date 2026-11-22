@@ -1,4 +1,4 @@
-import { pluralize } from '@texra-ai/harness/schemas';
+import { pluralize } from '@texra-ai/worldline/schemas';
 
 /** The heading over the messages waiting for the run to take them, in every
  *  host: `Queued messages (2)`. */

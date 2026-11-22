@@ -11,8 +11,8 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { GlobTool } from '@tools/glob';
-import type { PluginToolServices } from '@texra-ai/harness/plugins';
-import { TOOL_PATH_PROTECTION_SETTING } from '@texra-ai/harness/schemas';
+import type { PluginToolServices } from '@texra-ai/worldline/plugins';
+import { TOOL_PATH_PROTECTION_SETTING } from '@texra-ai/worldline/schemas';
 
 /**
  * A glob run in which one match's `stat` fails: the tool's own failure policy

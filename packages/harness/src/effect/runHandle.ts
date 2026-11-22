@@ -1,5 +1,5 @@
 /**
- * The {@link Run} of `@texra-ai/harness`: one activation of a run, as a
+ * The {@link Run} of `@texra-ai/worldline`: one activation of a run, as a
  * view over its session's rows. It is `(session, runId, activation)`, the
  * activation's commit, and holds nothing: the run is its registry's, which
  * a launch or resume hands it to before this is built

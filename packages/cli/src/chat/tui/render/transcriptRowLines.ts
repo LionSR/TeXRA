@@ -1,6 +1,6 @@
 // Terminal paint of a shared transcript row's body.
 //
-// `@texra-ai/harness/transcript` carries every text untruncated plus the measurements
+// `@texra-ai/worldline/transcript` carries every text untruncated plus the measurements
 // needed to elide it; this module is where the terminal spends its own budget
 // — a head/tail line slice with a `N lines hidden` marker, and a terminal-safe pass
 // over text a producer wrote. Nothing here truncates the model.
@@ -9,7 +9,7 @@ import {
   elideText,
   transcriptText,
   type TranscriptText,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';

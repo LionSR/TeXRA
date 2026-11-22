@@ -2,7 +2,7 @@ import { Schema, Struct } from 'effect';
 import {
   NonNegativeIntSchema,
   PlanQuotaFailureSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /**
  * The subscriptions whose usage is reported. Storage owns the enum, so a

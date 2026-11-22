@@ -8,7 +8,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
-import type { SessionView, RunView } from '@texra-ai/harness/schemas';
+import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 
 import './ToolUseRunContent';
 import './DocumentTaskRunContent';

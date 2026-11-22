@@ -22,9 +22,9 @@
  *    and whose return is the script's result.
  */
 import { Effect, Layer, Schema } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { RunIdSchema, type RunId } from '@texra-ai/worldline/schemas';
 import { acmeNotes, NoteSchema } from 'acme-notes';
 
 import {

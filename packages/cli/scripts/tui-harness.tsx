@@ -30,15 +30,15 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { MODEL_SELECTION_KEY } from '@texra-ai/harness/host';
-import { nodeFileServices } from '@texra-ai/harness/node';
+import { MODEL_SELECTION_KEY } from '@texra-ai/worldline/host';
+import { nodeFileServices } from '@texra-ai/worldline/node';
 import {
   Secrets,
   ToolCatalog,
   type DraftBlob,
   buildDiffHunks,
   countLineChanges,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   acceptsFollowUp,
   AgentConfigSchema,
@@ -65,7 +65,7 @@ import {
   type SessionRowDraft,
   type ToolEditContent,
   type UserQuestionRequest,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
 import {

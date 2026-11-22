@@ -7,7 +7,7 @@
 import { app, Notification, type BrowserWindow } from 'electron';
 import { Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
-import { attentionOf } from '@texra-ai/harness/schemas';
+import { attentionOf } from '@texra-ai/worldline/schemas';
 import { runAttentionLine, runStatus } from '@ui/copy/runStatus';
 
 import type {
@@ -15,7 +15,7 @@ import type {
   DesktopProjectRegistry,
 } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
-import type { SessionView, RunId } from '@texra-ai/harness/schemas';
+import type { SessionView, RunId } from '@texra-ai/worldline/schemas';
 
 /** The host's attention surfaces. */
 interface DesktopAttentionPort {

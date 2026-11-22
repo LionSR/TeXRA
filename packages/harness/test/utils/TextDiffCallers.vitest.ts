@@ -7,7 +7,7 @@ import { Context, Effect, Layer } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { approvedWriteConflict } from '@texra-ai/harness/plugins';
+import { approvedWriteConflict } from '@texra-ai/worldline/plugins';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { writeApprovedContent } from '@tools/approval/approvedWrite';

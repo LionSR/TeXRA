@@ -2,7 +2,7 @@ import { Stream } from 'effect';
 
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
-import type { RunId, RunView, SessionView } from '@texra-ai/harness/schemas';
+import type { RunId, RunView, SessionView } from '@texra-ai/worldline/schemas';
 
 /**
  * The output files a run's documents fact names, every revision's, each time

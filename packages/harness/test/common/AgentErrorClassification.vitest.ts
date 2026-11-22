@@ -4,7 +4,7 @@ import { classifySqliteError, SqlError } from 'effect/sql/SqlError';
 import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
-import { RouteUnavailable } from '@texra-ai/harness/host';
+import { RouteUnavailable } from '@texra-ai/worldline/host';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { DatabaseWriteFailed } from '@shared/session/database';
 

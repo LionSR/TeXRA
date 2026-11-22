@@ -5,8 +5,8 @@
  */
 import { Cause, Effect, Schema, SubscriptionRef } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { formatError } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { formatError } from '@texra-ai/worldline/schemas';
 import type {
   Dialogs,
   ExternalOpener,
@@ -24,8 +24,8 @@ import type {
   SettingsViewInboundMessage,
   SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ProcessServices } from '@texra-ai/harness/host';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { ProcessServices } from '@texra-ai/worldline/host';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 
@@ -51,7 +51,6 @@ export interface SettingsHostBindings {
   openPath(filePath: string): HostEffect;
   /** Show a file or folder in the system file manager. */
   revealPath(filePath: string): HostEffect;
-  pickFolder(title: string): HostEffect<string | undefined>;
   /** Run one subscription's sign-in (`SubscriptionProvider.signIn`) over
    *  this host's prompts and answer the account. The body tells the user how
    *  it ended; a user who backs out of a prompt fails with `Cancelled`,
@@ -89,7 +88,6 @@ export type SettingsInput =
   | 'credentials'
   | 'subscriptions'
   | 'usage'
-  | 'agents'
   | 'github'
   | 'memory'
   | 'plugins'

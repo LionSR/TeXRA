@@ -20,7 +20,7 @@ import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { designTokens } from '@ui/styles';
 import { delegateKeyActivation, getComposedPathElement } from './composedPath';
 import { logStyles } from '../styles/logStyles';
-import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
+import type { RunView, SessionView, RunId } from '@texra-ai/worldline/schemas';
 
 @customElement('log-list')
 export class LogList extends LitElement {

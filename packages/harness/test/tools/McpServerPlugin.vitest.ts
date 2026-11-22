@@ -25,7 +25,7 @@ import {
 } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { ProjectTools, stepFor } from '@agent/runtime/loop/step';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import type { SessionServices } from '@agent/runtime/rootLaunch';

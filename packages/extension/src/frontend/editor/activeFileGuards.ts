@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { workspaceRelativePath } from '@texra-ai/harness/node';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   reportingFailure,
   showLoggedErrorMessage,
@@ -14,7 +14,7 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 const CHANNEL = 'ActiveFileGuards';
 

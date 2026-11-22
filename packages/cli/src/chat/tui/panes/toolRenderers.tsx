@@ -1,7 +1,7 @@
 // Tool-row rendering: one styled-line model is the single source of truth.
 //
 // The row's *content* is decided once, host-agnostically, by `toolRowModel`
-// (`@texra-ai/harness/transcript`): header label and preview, the structured sections
+// (`@texra-ai/worldline/transcript`): header label and preview, the structured sections
 // that describe the call, whether the output block is shown and why not. This
 // module is only the terminal's paint of that model — spans (text +
 // color/dim/bold) plus the head/tail elision the terminal spends its own
@@ -12,7 +12,7 @@
 // beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
-import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import { truncateWithEllipsis } from '@texra-ai/worldline/schemas';
 import {
   CUT_BY_RUN_END_NOTE,
   isMcpToolName,
@@ -20,9 +20,9 @@ import {
   type ToolSection,
   type ToolSectionFile,
   type TranscriptText,
-} from '@texra-ai/harness/transcript';
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/builtins';
-import { buildDiffHunks } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/transcript';
+import { AGENT_TOOL_NAME } from '@texra-ai/worldline/builtins';
+import { buildDiffHunks } from '@texra-ai/worldline/plugins';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   safeTerminalText,

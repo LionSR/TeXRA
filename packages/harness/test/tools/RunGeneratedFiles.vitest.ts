@@ -2,10 +2,10 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem, Layer, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { listRunGeneratedFiles } from '@texra-ai/harness/host';
+import { listRunGeneratedFiles } from '@texra-ai/worldline/host';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 describe('listRunGeneratedFiles', () => {
   // The run directory's own probe: a storage failure there is a fault, not

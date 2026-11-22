@@ -21,8 +21,8 @@ import { dirname, join } from 'node:path';
 import { Effect, FileSystem, type Path, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { withSessionFs } from '@texra-ai/harness/host';
-import { meansAbsent, executeCommand } from '@texra-ai/harness/node';
+import { withSessionFs } from '@texra-ai/worldline/host';
+import { meansAbsent, executeCommand } from '@texra-ai/worldline/node';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
@@ -30,7 +30,7 @@ import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,
 } from '@texra/utils/files/pastedImageUtils';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 

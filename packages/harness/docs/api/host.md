@@ -1,8 +1,8 @@
-# `@texra-ai/harness/host`
+# `@texra-ai/worldline/host`
 
 <!-- Generated from `packages/harness/src/host.ts` by `npm run docgen`; do not edit. -->
 
-`@texra-ai/harness/host`: what a full application host composes beyond
+`@texra-ai/worldline/host`: what a full application host composes beyond
 the root entry. TeXRA's editor extension, desktop app and terminal app
 read it; an embedder that runs agents from a program needs none of it.
 
@@ -478,7 +478,7 @@ The process's plan quotas ({@link PlanQuotasShape}).
 
 ```ts
 class PlanQuotas extends Context.Service<PlanQuotas, PlanQuotasShape>()(
-  '@texra-ai/harness/PlanQuotas',
+  '@texra-ai/worldline/PlanQuotas',
 )
 ```
 
@@ -733,7 +733,7 @@ the run's usage, which every host's run list shows.
 
 The filesystem, path and child-process spawner are a requirement, as the
 model is: the root provides `nodePlatformServices`
-(`@texra-ai/harness/node`) once, and every session and run of the process
+(`@texra-ai/worldline/node`) once, and every session and run of the process
 reads the files and starts the children that layer gives it.
 
 ```ts
@@ -1037,7 +1037,7 @@ credential for every run of every project.
 class RouteRetries extends Context.Service<
   RouteRetries,
   ModelRetryGate
->()('@texra-ai/harness/RouteRetries')
+>()('@texra-ai/worldline/RouteRetries')
 ```
 
 ## RouteUnavailable
@@ -1349,7 +1349,7 @@ class ToolAvailability extends Context.Service<
       roots: ToolProbeInputs,
     ) => Effect.Effect<void, never, Scope.Scope>;
   }
->()('@texra-ai/harness/tools/ToolAvailability')
+>()('@texra-ai/worldline/tools/ToolAvailability')
 ```
 
 ## UsageAttribution
@@ -1385,7 +1385,7 @@ class UsageLog extends Context.Service<
       env?: Readonly<Record<string, string | undefined>>,
     ) => Effect.Effect<void>;
   }
->()('@texra-ai/harness/UsageLog')
+>()('@texra-ai/worldline/UsageLog')
 ```
 
 ## UsageLogEntry
@@ -1426,7 +1426,7 @@ class ValidationModel extends Context.Service<
       readonly origin: ModelOrigin;
     };
   }
->()('@texra-ai/harness/ValidationModel')
+>()('@texra-ai/worldline/ValidationModel')
 ```
 
 ## withProcessServices

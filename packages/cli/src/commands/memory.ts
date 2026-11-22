@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 import { Argument, Command } from 'effect/cli';
 
-import { withSessionFs } from '@texra-ai/harness/host';
-import { MemoryStore } from '@texra-ai/harness/plugins';
+import { withSessionFs } from '@texra-ai/worldline/host';
+import { MemoryStore } from '@texra-ai/worldline/plugins';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';

@@ -3,9 +3,9 @@ import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
 import { apiKeySecretName, type ApiKeyProviderId } from '@texra-ai/llm';
-import type { Session } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness/plugins';
-import { RunIdSchema, type RuntimeCommand } from '@texra-ai/harness/schemas';
+import type { Session } from '@texra-ai/worldline';
+import { Secrets } from '@texra-ai/worldline/plugins';
+import { RunIdSchema, type RuntimeCommand } from '@texra-ai/worldline/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { SessionGraph } from '@test/support/testKernel';

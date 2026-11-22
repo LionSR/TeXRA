@@ -14,7 +14,7 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import { TexraSignalElement } from '@ui/litBase';
 import {

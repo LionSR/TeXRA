@@ -3,7 +3,7 @@
  * progress view's log lines and the desktop Logs tab cannot mark one severity
  * two ways. Each host colours the icon from its own level classes.
  */
-import type { LogLevel } from '@texra-ai/harness/schemas';
+import type { LogLevel } from '@texra-ai/worldline/schemas';
 import type { IconName } from '@ui/wa/iconNames';
 
 export interface LogLevelLook {

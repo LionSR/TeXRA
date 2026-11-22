@@ -1,13 +1,13 @@
 import { Effect } from 'effect';
 
-import { meansAbsent } from '@texra-ai/harness/node';
-import { MemoryStore } from '@texra-ai/harness/plugins';
+import { meansAbsent } from '@texra-ai/worldline/node';
+import { MemoryStore } from '@texra-ai/worldline/plugins';
 import {
   formatResultCount,
   type MemoryViewItem,
   truncateSummary,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { memoryItemFacts } from '@ui/copy/memory';
 import { moreRowsText } from '@cli/tui/overflowText';
 import { CliUsageError } from './platform/cliContext';

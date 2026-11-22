@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
+import { meansAbsent, entryTypeIn } from '@texra-ai/worldline/node';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
@@ -11,7 +11,7 @@ import {
   type RunId,
   type FileLocation,
   type RunStorageFileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { latexdiff } from '@latex/latexdiff';
 import {
   latexdiffPairs,
@@ -40,7 +40,7 @@ import {
   Settings,
   withLogChannel,
   type WorkspaceFs,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,

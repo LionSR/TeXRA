@@ -1,7 +1,7 @@
 /** The run a terminal launch starts. */
 import { Effect, Schema } from 'effect';
 
-import { envVar } from '@texra-ai/harness/node';
+import { envVar } from '@texra-ai/worldline/node';
 import { entryAgent } from '@texra/agent/entryAgent';
 import type { ChatLaunch } from '@texra/shared/session/surface';
 

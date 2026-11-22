@@ -6,7 +6,7 @@ import {
   type AgentProposalRequest,
   type ApprovalBypassKind,
   FACT_SEPARATOR,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';

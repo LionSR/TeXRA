@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   type RequestDecision,
   type RequestPayload,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   REJECTION_NOTE_PROMPT,
   requestPrimaryLabel,

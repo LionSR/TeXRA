@@ -23,7 +23,7 @@
 import { Effect, Result, Schema, Stream } from 'effect';
 import { RpcServer } from 'effect/rpc';
 
-import { Rejected, type TraceDocument } from '@texra-ai/harness/schemas';
+import { Rejected, type TraceDocument } from '@texra-ai/worldline/schemas';
 import {
   ClientEnvelopeSchema,
   SessionRpcs,

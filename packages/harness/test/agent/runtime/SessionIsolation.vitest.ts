@@ -6,8 +6,8 @@ import { layer } from '@effect/vitest';
 import { Effect, Schema, Context, Deferred, Fiber } from 'effect';
 
 import { expect } from 'vitest';
-import { Sessions } from '@texra-ai/harness';
-import { RUN_OUTCOME, RunIdSchema } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { RUN_OUTCOME, RunIdSchema } from '@texra-ai/worldline/schemas';
 import { endRunRows } from '@agent/storage/runLifecycle';
 
 import { RunRegistry } from '@agent/runtime/runRegistry';

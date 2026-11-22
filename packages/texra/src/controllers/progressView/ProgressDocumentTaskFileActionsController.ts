@@ -15,21 +15,21 @@ import {
   pathToLocationIn,
   reportDiffTimeout,
   unifiedDiffText,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   meansAbsent,
   entryTypeIn,
   readNormalizedFile,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   toErrorMessage,
   type RunId,
   Rejected,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { ConfirmQuestion } from '@texra/hosts/uiHosts';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { HostRunActions } from '../session/hostRunActions';
 import {
   compareTarget,

@@ -11,7 +11,7 @@ import { runCli } from '@cli/commands/root';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { SessionGraph } from '@test/support/testKernel';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/worldline/host';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),

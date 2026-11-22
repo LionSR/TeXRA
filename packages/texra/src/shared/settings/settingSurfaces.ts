@@ -48,7 +48,7 @@ import {
   MAX_IMAGE_DIMENSION_SETTING,
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { KEY_PAGES } from '@texra/shared/model/keyPages';
 import type { SettingsViewSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 

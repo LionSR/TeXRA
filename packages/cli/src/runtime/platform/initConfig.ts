@@ -8,7 +8,7 @@ import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { meansAbsent, writeFileAtomic } from '@texra-ai/harness/node';
+import { meansAbsent, writeFileAtomic } from '@texra-ai/worldline/node';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 

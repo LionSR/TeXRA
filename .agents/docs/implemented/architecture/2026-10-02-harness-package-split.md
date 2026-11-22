@@ -24,11 +24,11 @@ copied from a peer's.
 
 ## 1. The three packages
 
-| Package             | Path               | Owns                                                                                                                                                                                                              |
-| ------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness` | `packages/harness` | The run's history, the loop, sessions and storage, the Registry and Step, the ports, the binding of a run's model choice to settings, trust, MCP and data plugins, the built-in plugins, the transcript row model |
-| `@texra-ai/llm`     | `packages/llm`     | Model access: the turn contract, the model catalog and routing, providers, the wire protocols behind one binder, subscription sign-in. Settings and credentials arrive as inputs                                  |
-| `@texra-ai/texra`   | `packages/texra`   | The app plugins, the documents plugin, LaTeX, the UI kit, the app's settings rows, the host-side controllers, telemetry. Private: it is not published                                                             |
+| Package               | Path               | Owns                                                                                                                                                                                                              |
+| --------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/worldline` | `packages/harness` | The run's history, the loop, sessions and storage, the Registry and Step, the ports, the binding of a run's model choice to settings, trust, MCP and data plugins, the built-in plugins, the transcript row model |
+| `@texra-ai/llm`       | `packages/llm`     | Model access: the turn contract, the model catalog and routing, providers, the wire protocols behind one binder, subscription sign-in. Settings and credentials arrive as inputs                                  |
+| `@texra-ai/texra`     | `packages/texra`   | The app plugins, the documents plugin, LaTeX, the UI kit, the app's settings rows, the host-side controllers, telemetry. Private: it is not published                                                             |
 
 The three hosts (`packages/cli`, `packages/desktop`, `packages/extension`) and
 `packages/trace-viewer` stay separate packages. They are TeXRA products built
@@ -43,7 +43,7 @@ from there.
 
 The transcript row model is part of the session view, so it lives in the harness
 at `packages/harness/src/shared/transcript/` (`@shared/transcript`), published
-to renderers as `@texra-ai/harness/transcript`. The kit, styles, markdown and
+to renderers as `@texra-ai/worldline/transcript`. The kit, styles, markdown and
 KaTeX, and the copy tables are app code in `packages/texra/src/ui/` (`@ui/*`).
 App-specific presentation (the Codex cards, the `latexdiff` row) is app code
 over the row model.
@@ -244,7 +244,7 @@ ledgers keep theirs: the architecture rulings ledger and the Lean plugin's
 SQ1 was confirmed by the owner; SQ2 to SQ6 were ruled as recommended on
 2026-10-03.
 
-1. **SQ1, names and paths.** `@texra-ai/harness` at `packages/harness`,
+1. **SQ1, names and paths.** `@texra-ai/worldline` at `packages/harness`,
    `@texra-ai/llm`, and the app `@texra-ai/texra` at `packages/texra` (the
    owner: "why not just texra?"; the workspace name `texra` is the VS Code
    extension's). The theorist is the first bundle inside the app, not the whole

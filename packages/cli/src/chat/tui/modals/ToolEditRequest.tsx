@@ -25,7 +25,7 @@ import {
   type ToolEditContent,
   formatResultCount,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { ToolEditTuiRequest } from '../state/approvalQueue';
 import { formatLineChanges } from '@ui/copy/format';
 import { REQUEST_ASK } from '@ui/copy/requestCards';

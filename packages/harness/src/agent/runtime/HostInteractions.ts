@@ -190,7 +190,7 @@ interface SessionInteractions extends Notices {
 export class Interactions extends Context.Service<
   Interactions,
   SessionInteractions
->()('@texra-ai/harness/session/Interactions') {
+>()('@texra-ai/worldline/session/Interactions') {
   /**
    * The interactions of a session opened with `opened`, for the session's
    * scope. Its close disposes the attached host, then the opened one, each

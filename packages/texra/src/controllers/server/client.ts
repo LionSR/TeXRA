@@ -38,14 +38,18 @@ import {
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { isOutcomeOf } from '@texra-ai/harness';
+import { isOutcomeOf } from '@texra-ai/worldline';
 import {
   formatResultCount,
   type RuntimeCommand,
   Rejected,
   ensureError,
-} from '@texra-ai/harness/schemas';
-import { envFlag, IS_WINDOWS, nodeFileServices } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/schemas';
+import {
+  envFlag,
+  IS_WINDOWS,
+  nodeFileServices,
+} from '@texra-ai/worldline/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,
@@ -61,7 +65,7 @@ import {
   type ServiceInfo,
   type TaskSummary,
 } from './protocol';
-import type { GlobalValues } from '@texra-ai/harness/plugins';
+import type { GlobalValues } from '@texra-ai/worldline/plugins';
 import type { SocketError } from 'effect/socket/Socket';
 
 /** The procedures as a client calls them. */
@@ -194,8 +198,8 @@ const NO_SERVICE = 'TEXRA_NO_SERVICE';
 /** Why a caller that starts no service holds none. */
 const NONE_RUNNING = 'no TeXRA service is running';
 
-/** How long a started service has to answer its first hello: it loads the
- *  agent catalog first, which a loaded machine makes slow. */
+/** How long a started service has to answer its first hello: it builds
+ *  its process before it answers, which a loaded machine makes slow. */
 const START_TIMEOUT = '60 seconds';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';

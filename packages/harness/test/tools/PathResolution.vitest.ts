@@ -10,7 +10,7 @@ import {
   assertNoParentTraversal,
   resolveToolPath,
   ToolError,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { FakeHost } from '@test/support/testKernel';
 import { assertWritable } from '@tools/pathResolution';
 import { canonicalizePath } from '@utils/files/externalRoots';

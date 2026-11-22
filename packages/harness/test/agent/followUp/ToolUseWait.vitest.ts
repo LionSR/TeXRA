@@ -8,7 +8,7 @@ import { Effect, Fiber, Layer, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { generateRunId } from '@texra-ai/harness/schemas';
+import { generateRunId } from '@texra-ai/worldline/schemas';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';

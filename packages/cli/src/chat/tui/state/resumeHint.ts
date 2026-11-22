@@ -6,8 +6,8 @@ import {
   isEmptyUsage,
   type RunId,
   type TokenUsageStats,
-} from '@texra-ai/harness/schemas';
-import { IS_WINDOWS } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/schemas';
+import { IS_WINDOWS } from '@texra-ai/worldline/node';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -18,7 +18,7 @@ import type {
   ApprovalPolicy,
   RunView,
   SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 interface ResumeCommandOptions {
   readonly cwd?: string;

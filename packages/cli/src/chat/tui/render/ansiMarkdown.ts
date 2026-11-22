@@ -16,7 +16,7 @@ import { LRUCache } from 'lru-cache';
 import MarkdownIt, { type RendererRule, type Token } from 'markdown-it';
 import pico from 'picocolors';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
@@ -130,7 +130,7 @@ function tableColWidths(
   });
 
   // Content fits — keep the table compact (no full-width dead gaps).
-  if (natural.reduce((sum, w) => sum + w, 0) <= usable) return natural;
+  if (Num.sumAll(natural) <= usable) return natural;
 
   // Content overflows — distribute the usable width evenly and cap at `width`.
   const base = Math.floor(usable / numCols);

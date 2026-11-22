@@ -8,9 +8,9 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
-import { hasExtension } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { pathExists, readNormalizedFile } from '@texra-ai/worldline/node';
+import { hasExtension } from '@texra-ai/worldline/schemas';
 
 const CHANNEL = 'LatexParsing';
 

@@ -15,7 +15,7 @@ import {
   Cancelled,
   Rejected,
   Unavailable,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { HostFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
 
 /**

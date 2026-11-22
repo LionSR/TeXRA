@@ -19,7 +19,7 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { IS_WINDOWS } from '@texra-ai/harness/node';
+import { IS_WINDOWS } from '@texra-ai/worldline/node';
 
 import {
   binaryIfPresent,

@@ -27,7 +27,7 @@ import {
   generateRunId,
   RunIdSchema,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   persistentTestSession,
   REAL_RUN_TIMEOUT,

@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { SubscriptionPreference } from '@texra-ai/harness/host';
+import { SubscriptionPreference } from '@texra-ai/worldline/host';
 import { FakeHost } from '@test/support/testKernel';
 
 const CODEX_PREFER_SUBSCRIPTION_KEY = 'chatgptCodex.preferSubscription';

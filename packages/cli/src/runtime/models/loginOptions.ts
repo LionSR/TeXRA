@@ -1,4 +1,4 @@
-import { isSubscriptionAuthProvider } from '@texra-ai/harness/schemas';
+import { isSubscriptionAuthProvider } from '@texra-ai/worldline/schemas';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 
 /** A `/login` request: one subscription provider and its sign-in transport. */

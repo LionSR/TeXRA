@@ -8,7 +8,7 @@ import {
   apiKeySecretName,
   hasUsableApiKey,
 } from '@texra-ai/llm';
-import { executed, defineTool, Secrets } from '@texra-ai/harness/plugins';
+import { executed, defineTool, Secrets } from '@texra-ai/worldline/plugins';
 
 // Local file imports
 

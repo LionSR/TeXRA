@@ -1,6 +1,6 @@
 # Plugins, Tools & Codemode
 
-File operations, shell execution, web search, memory, goal loops, multi-agent delegation, and QuickJS orchestration are implemented as plugins in [`@texra-ai/harness/builtins`](./harness/builtins); a plugin of your own is written with [`@texra-ai/harness/plugins`](./harness/plugins).
+File operations, shell execution, web search, memory, goal loops, multi-agent delegation, and QuickJS orchestration are implemented as plugins in [`@texra-ai/worldline/builtins`](./harness/builtins); a plugin of your own is written with [`@texra-ai/worldline/plugins`](./harness/plugins).
 
 ## Built-in plugins (`harnessBuiltins`)
 
@@ -13,16 +13,16 @@ Pass [`harnessBuiltins`](./harness/builtins#harnessbuiltins) (or a subset) plus 
 | [`multiAgent`](./harness/builtins#multiagent)         | `'multi-agent'`     | `agent` ([`AGENT_TOOL_NAME`](./harness/builtins#agent_tool_name)) for launching awaited or background specialist child runs.            |
 | [`web`](./harness/builtins#web)                       | `'web'`             | Local `web_search` and `web_fetch` tools.                                                                                               |
 | [`memoryWorkflow`](./harness/builtins#memoryworkflow) | `'memory-workflow'` | Persistent `memory` tool ([`MemoryStore`](./harness/plugins#memorystore)), `executions` history tool, and memory prompt section.        |
-| [`goal`](./harness/builtins#goal)                     | `'goal'`            | `plan` tool and goal execution recipe over `codemode`.                                                                                  |
+| [`goal`](./harness/builtins#goal)                     | `'goal'`            | `plan` tool and goal execution program over `codemode`.                                                                                 |
 
 ## Writing custom tools (`defineTool`)
 
-Use [`defineTool`](./harness/#definetool) to declare a tool's Effect Schema, concurrency lane, replay contract, and execution body (see [`03-custom-tools-and-plugins.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/03-custom-tools-and-plugins.ts)):
+Use [`defineTool`](./harness/plugins#definetool) to declare a tool's Effect Schema, concurrency lane, replay contract, and execution body (see [`03-custom-tools-and-plugins.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/03-custom-tools-and-plugins.ts)):
 
 ```ts
 import { Effect, Schema } from 'effect';
-import { defineTool } from '@texra-ai/harness/plugins';
-import { executed, nullishWithDefault } from '@texra-ai/harness/plugins';
+import { defineTool } from '@texra-ai/worldline/plugins';
+import { executed, nullishWithDefault } from '@texra-ai/worldline/plugins';
 
 export const countEquationsTool = defineTool({
   name: 'count_equations',
@@ -67,12 +67,12 @@ export const countEquationsTool = defineTool({
   - `'unsafe'` (default): side-effecting tools that recovery never re-runs automatically after an unclean crash.
 - **`guard` and `requiresApproval`**: declaring `guard: { writes, command }` or `requiresApproval: true` checks writable workspace paths and prompts for human approval before `tool.intent` commits and before `execute` runs. A tool whose body opens its own request (an edit's review, a question) declares `requiresApproval: 'inBody'`.
 
-Pass run-scoped tools directly to `session.start({ tools: [countEquationsTool], ... })` (and pass the same `tools` array to `session.resume`), or register them process-wide in a plugin with [`definePlugin`](./harness/plugins#defineplugin).
+Pass run-scoped tools directly to `session.start({ runTools: [countEquationsTool], ... })` (and pass the same `runTools` array to `session.resume`), or register them process-wide in a plugin with [`definePlugin`](./harness/plugins#defineplugin).
 
 ## Packaging plugins (`definePlugin`)
 
 ```ts
-import { definePlugin } from '@texra-ai/harness/plugins';
+import { definePlugin } from '@texra-ai/worldline/plugins';
 
 export const latexMetricsPlugin = definePlugin({
   id: 'latex-metrics',
@@ -89,7 +89,6 @@ A [`PluginDefinition`](./harness/plugins#plugindefinition) can declare:
 - **`injectedWhen`**: maps tool names to a boolean setting row (or `true`) to inject those tools into every tool-using agent while the plugin is enabled.
 - **`processLayer` and `sessionLayer`**: lazy Effect `Layer`s ([`ProcessPluginLayer`](./harness/plugins#processpluginlayer), [`SessionPluginLayer`](./harness/plugins#sessionpluginlayer)) up while the plugin is switched on or a step pins it. Work that outlives a step keeps the session layer alive with [`PluginHold`](./harness/plugins#pluginhold).
 - **`prompt`**: [`PromptSection`](./harness/plugins#promptsection) appended to the system prompt while active.
-- **`decision`**: [`RequestDecisionHook`](./harness/plugins#requestdecisionhook) run when a request of the plugin's kind is decided.
 - **`factKinds`**: [`FactKind`](./harness/plugins#factkind) schemas and fork policy for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`; `fork: 'copy'` carries a run's row into its forks).
 - **`scriptModules`** and **`requires`**: script module sources a `script` imports as `builtIn:<name>`, and the ids of the plugins this one runs on.
 - **`programs`**: those of its `scriptModules` that are started by name ([`Program`](./harness/plugins#program)): each a run opened on `script.kind: 'program'`, which imports the module and calls its default export with the launch's arguments, instruction and files.
@@ -98,7 +97,7 @@ An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail
 
 ### Runtime services inside a tool body
 
-Inside `execute`, yield services from [`@texra-ai/harness/plugins`](./harness/plugins):
+Inside `execute`, yield services from [`@texra-ai/worldline/plugins`](./harness/plugins):
 
 - **[`ToolContext`](./harness/plugins#toolcontext)** (`requireRun`, `callerRun`): the calling run's identity, workspace roots (`env.roots`), working directory, and `CallRequests`.
 - **[`ChildRuns`](./harness/plugins#childruns)**: launch an external process as a child run (`ChildRuns.launchProcess`) and reach a run of the session by id.
@@ -116,8 +115,16 @@ The [`codemode`](./harness/builtins#codemode) plugin exposes the `script` tool, 
 ```js
 const matches = await tools.grep({ pattern: 'Theorem 3', path: 'sections/' });
 const [proofCheck, proseReview] = await Promise.all([
-  agent('Check the proof of Theorem 3.', { agentName: 'review' }),
-  agent('Tighten the exposition around Theorem 3.', { agentName: 'polish' }),
+  agent('Check every step of the proof of Theorem 3.', {
+    label: 'proof-check',
+    system: 'Verify each mathematical step and report any gaps.',
+    tools: ['read_file', 'grep'],
+  }),
+  agent('Tighten the exposition around Theorem 3 without changing the math.', {
+    label: 'prose-review',
+    system: 'Suggest concise wording improvements while preserving all claims.',
+    tools: ['read_file'],
+  }),
 ]);
 return { matches: matches.output, proofCheck, proseReview };
 ```

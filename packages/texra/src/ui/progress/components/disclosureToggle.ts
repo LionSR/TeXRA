@@ -1,6 +1,6 @@
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { isOwnDetailsToggle } from '@ui/litControllers/detailsToggle';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 /**
  * Dispatch a `<wa-details>` disclosure's open/close as a surface action. Wired to

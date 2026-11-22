@@ -5,9 +5,9 @@ import {
   runIdentityName,
   type RunId,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { writeNdjsonStdout } from '../platform/logSinks';
-import type { LocalSession } from '@texra-ai/harness';
+import type { LocalSession } from '@texra-ai/worldline';
 
 /**
  * One live child on the `run.children` record, from the session view's own row. The

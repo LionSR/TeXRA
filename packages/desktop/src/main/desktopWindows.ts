@@ -1,11 +1,11 @@
 import { Effect, Exit, FiberSet, Scope, Semaphore } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
-import { workspaceEnvironmentLayer } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { workspaceEnvironmentLayer } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/worldline/host';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 /**
  * Run a program on the process runtime as a fiber of the window's scope: it

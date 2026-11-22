@@ -24,7 +24,7 @@ import {
 // Local imports - TUI input and presentation
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
-import { DETAIL_SEPARATOR } from '@texra-ai/harness/schemas';
+import { DETAIL_SEPARATOR } from '@texra-ai/worldline/schemas';
 import { nextListIndex } from '@ui/wa/listInteraction';
 
 /** `index` held to a valid index of a `length`-item list (0 when empty). */

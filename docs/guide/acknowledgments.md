@@ -30,7 +30,7 @@ A selection of work by the TeXRA team and collaborators that uses these multi-ag
   The position paper on how language agents can accelerate theoretical and computational physics.
 
 - **He, X., Lu, S., & Zeng, B.** (2025). [_Co-Designing Quantum Codes with Transversal Diagonal Gates via Multi-Agent Systems_](https://arxiv.org/abs/2510.20728). arXiv:2510.20728.
-  Pairs symbolic synthesis and search with Lean 4 formal verification to produce a certified catalogue of 14,116 nonadditive quantum codes with prescribed transversal diagonal gates, resolving the transversal-$T$ problem for distance-3 codes.
+  Pairs symbolic synthesis and search with Lean 4 formal verification to produce a certified catalog of 14,116 nonadditive quantum codes with prescribed transversal diagonal gates, resolving the transversal-_T_ problem for distance-3 codes.
 
 - **Lu, S., Tjoa, E., & Cirac, J. I.** (2026). [_Multi-agent Autoformalization of Tensor Network Theory_](https://arxiv.org/abs/2607.07857). arXiv:2607.07857.
   Autoformalizes the fundamental theorem of matrix-product states in Lean 4 with a team of specialist agents in TeXRA and releases the [TNLean](https://github.com/LionSR/TNLean) library.

@@ -1,5 +1,5 @@
 // Local imports
-import { hasExtension } from '@texra-ai/harness/schemas';
+import { hasExtension } from '@texra-ai/worldline/schemas';
 
 /**
  * LaTeX file extensions that can be compiled to PDF.

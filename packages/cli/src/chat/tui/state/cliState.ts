@@ -11,8 +11,8 @@ import {
   type RunId,
   descendantRuns,
   FACT_SEPARATOR,
-} from '@texra-ai/harness/schemas';
-import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { compareByNewestCreationTime } from '@texra-ai/worldline/transcript';
 import type { ChatLaunch } from '@texra/shared/session/surface';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import {
@@ -31,8 +31,8 @@ import type { RootLaunch } from './sessionRunState';
 import type { LocalNotice } from './transcript';
 import type { FormSlot } from './formSlot';
 import type { ApprovalSurface } from './approvalQueue';
-import type { RunModelDecisionReason } from '@texra-ai/harness/host';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunModelDecisionReason } from '@texra-ai/worldline/host';
+import type { RunView } from '@texra-ai/worldline/schemas';
 
 // ---------------------------------------------------------------------------
 // types

@@ -258,7 +258,7 @@ first, then drains the committed prefix, then yields text, so a committed
 levels (local runtime, text chunks, transcript subscriptions) are
 `SubscriptionRef`s in `packages/harness/src/controllers/session/sessionSources.ts`.
 Across a process boundary, `RemoteSessionView` folds the inputs its
-transport serves (`@texra-ai/harness/transcript`).
+transport serves (`@texra-ai/worldline/transcript`).
 
 ### 7.3 `WorkspaceRoots` and the per-session layer
 

@@ -24,12 +24,12 @@ import {
   type ModelVerdict,
   type RunModelCandidate,
   type RunModelDecision,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   formatCompactTokenCount,
   formatCostUsd,
   isModelOptionAvailable,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** Format per-million input and output prices for display. */
 function formatCost(

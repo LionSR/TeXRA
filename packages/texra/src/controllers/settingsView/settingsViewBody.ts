@@ -23,7 +23,11 @@ import {
 } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
 
-import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
+import {
+  setModelEnabled,
+  Skills,
+  withSessionFs,
+} from '@texra-ai/worldline/host';
 import {
   Settings,
   type StorageFs,
@@ -32,12 +36,12 @@ import {
   type AppSignalPayloads,
   type PerKeyLane,
   withPerKeyLane,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
-} from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { appSignalStream } from '@texra-ai/worldline/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import {
@@ -91,8 +95,8 @@ import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsHandlers = SettingsViewInboundHandlerRegistry<

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
-import { redactSecrets } from '@texra-ai/harness/host';
+import { redactSecrets } from '@texra-ai/worldline/host';
 import { redactDisplayValue } from '@logger/redaction';
 
 /**

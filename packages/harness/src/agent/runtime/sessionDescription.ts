@@ -81,7 +81,7 @@ export function getDisplayedInstruction(
  * run is never labelled and keeps its agent name.
  */
 export const LabelsRootRuns = Context.Reference<boolean>(
-  '@texra-ai/harness/agent/LabelsRootRuns',
+  '@texra-ai/worldline/agent/LabelsRootRuns',
   { defaultValue: () => false },
 );
 

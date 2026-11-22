@@ -48,9 +48,9 @@ import {
 
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import { definePlugin } from '@texra-ai/harness/plugins';
+import { Sessions } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import { definePlugin } from '@texra-ai/worldline/plugins';
 
 import {
   type RunId,
@@ -58,7 +58,7 @@ import {
   type SessionRow,
   type SessionRowDraft,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { LocalRuntimeStateSchema } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';

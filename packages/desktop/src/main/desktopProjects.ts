@@ -17,16 +17,19 @@ import {
   type Path,
 } from 'effect';
 
-import { Sessions } from '@texra-ai/harness';
-import { meansAbsent, canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import {
+  meansAbsent,
+  canonicalizeWorkspaceRoot,
+} from '@texra-ai/worldline/node';
+import { ensureError, toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   withLogChannel,
   AppState,
   StateStores,
   withPerKeyLane,
   type PerKeyLane,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   projectDisplayOf,
   type ProjectDisplay,
@@ -40,8 +43,8 @@ import {
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { noticeIn } from './desktopDialogs.js';
-import type { ConfigStore } from '@texra-ai/harness/node';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { ConfigStore } from '@texra-ai/worldline/node';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface DesktopProjectFacts {

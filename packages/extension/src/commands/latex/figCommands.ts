@@ -12,15 +12,15 @@ import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { compileTikzPictures, extractTikzPictures } from '@latex/tikzPictures';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import {
   type StorageFs,
   type WorkspaceFs,
   withLogChannel,
   pathToLocationIn,
-} from '@texra-ai/harness/plugins';
-import { pluralize } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { pluralize } from '@texra-ai/worldline/schemas';
 
 const CHANNEL = 'FigCommands';
 

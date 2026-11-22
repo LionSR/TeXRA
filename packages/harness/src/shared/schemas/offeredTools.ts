@@ -63,9 +63,9 @@ export const ToolsOfferedPayloadSchema = Schema.Struct({
 });
 
 /**
- * What the run's `agent` tool can launch: the visible agents; the models
- * available for delegation (null when they could not be read); and whether
- * worktrees are on (null on a row an earlier build wrote for a step that
+ * What the run's `agent` tool can launch: the installed plugins' agents;
+ * the models available for delegation (null when they could not be read);
+ * and whether worktrees are on (null on a row an earlier build wrote for a step that
  * offered no `agent`).
  */
 const DelegationTargetsSchema = Schema.Struct({
@@ -92,8 +92,9 @@ export const PromptSectionsSchema = Schema.Struct({
 export type PromptSections = typeof PromptSectionsSchema.Type;
 
 /**
- * One piece of model-facing content: a tool declaration, a system text, a
- * resolved agent definition or a request's recorded context. Stored once
+ * One piece of model-facing content: a tool declaration, a system text,
+ * the agent a request ran as (its label, system text, tools and
+ * temperature) or a request's recorded context. Stored once
  * per run, before the first row that names its digest, and removed only
  * with the run.
  */

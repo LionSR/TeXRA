@@ -23,7 +23,7 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
 import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
-import type { RuntimeCommand } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {

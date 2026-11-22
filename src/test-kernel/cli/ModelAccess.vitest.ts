@@ -6,7 +6,7 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
-import type { RunModelDecisionReason } from '@texra-ai/harness/host';
+import type { RunModelDecisionReason } from '@texra-ai/worldline/host';
 
 /** A model whose key this host lacks; its DeepSeek siblings can run. */
 const MISSING_KEY_MODEL = 'anthropic/claude-opus-5-5';

@@ -6,8 +6,8 @@ import {
   type TokenUsageStats,
   type ToolUseLog,
   type ToolCallStatus,
-} from '@texra-ai/harness/schemas';
-import { Effect, Predicate } from 'effect';
+} from '@texra-ai/worldline/schemas';
+import { Effect, Number as Num, Predicate } from 'effect';
 
 import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
 import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
@@ -23,7 +23,7 @@ import {
   Settings,
   type SettingsStores,
   type StateReadFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import type { ModelConfig } from '@texra-ai/llm';
 
 import type {
@@ -181,7 +181,7 @@ export function claudeResultUsage(
   if (models.length === 0) return null;
 
   const sum = (pick: (model: ModelUsage) => number): number =>
-    models.reduce((total, model) => total + pick(model), 0);
+    Num.sumAll(models.map(pick));
   return claudeUsageStats(
     sum((model) => model.inputTokens),
     sum((model) => model.outputTokens),

@@ -15,9 +15,9 @@ import path from 'node:path';
 
 import { Effect, FileSystem, Schema } from 'effect';
 
-import { withFileWriteLane } from '@texra-ai/harness/plugins';
-import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
-import { Rejected } from '@texra-ai/harness/schemas';
+import { withFileWriteLane } from '@texra-ai/worldline/plugins';
+import { meansAbsent, readNormalizedFile } from '@texra-ai/worldline/node';
+import { Rejected } from '@texra-ai/worldline/schemas';
 
 /** What the file must be for the write to land: anything, not there, or
  *  holding `contents` as the editor reads a file (`readNormalizedFile`). A

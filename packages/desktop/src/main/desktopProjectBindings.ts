@@ -9,8 +9,8 @@ import { homedir } from 'node:os';
 
 import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
-import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/worldline/host';
+import { logFailure, withLogChannel } from '@texra-ai/worldline/plugins';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {

@@ -7,7 +7,7 @@ import {
   toErrorMessage,
   RUN_OUTCOME,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { CliDocumentTaskResult } from '@cli/schemas/cliOutput';
 import { documentsOf } from '@texra/shared/plugins/documents';
 
@@ -67,14 +67,14 @@ import {
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
-import type { Sessions } from '@texra-ai/harness';
+import type { Sessions } from '@texra-ai/worldline';
 import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import {
   programLaunch,
   programsNow,
   type ProcessServices,
-} from '@texra-ai/harness/host';
-import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import type { AgentConfigPayload } from '@texra-ai/worldline/schemas';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for a program over several inputs; --output is only for a single final artifact.';

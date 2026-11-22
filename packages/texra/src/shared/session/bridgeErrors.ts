@@ -6,7 +6,7 @@
  */
 import { Schema } from 'effect';
 
-import { RequestErrorSchema } from '@texra-ai/harness/schemas';
+import { RequestErrorSchema } from '@texra-ai/worldline/schemas';
 
 /** The request could not be parsed. */
 export class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {

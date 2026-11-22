@@ -7,7 +7,7 @@
 import { Predicate, Schema, SchemaAST } from 'effect';
 
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
-import type { SettingRow } from '@texra-ai/harness/schemas';
+import type { SettingRow } from '@texra-ai/worldline/schemas';
 
 /** A row a plugin declares, with the short label its Plugins-page card shows
  *  (the card already names the plugin, so 'Model' rather than 'Codex model'). */

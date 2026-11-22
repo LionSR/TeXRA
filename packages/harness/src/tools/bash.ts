@@ -1,5 +1,5 @@
 // Third-party imports
-import { Clock, Effect, Schema, type Scope } from 'effect';
+import { Clock, Duration, Effect, Schema, type Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
@@ -320,7 +320,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
 
   if (result.end._tag === 'TimedOut') {
     const parts: string[] = [
-      `Foreground command timed out after ${timeoutMs / 1000}s.`,
+      `Foreground command timed out after ${Duration.format(Duration.millis(timeoutMs))}.`,
     ];
     if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
     if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);

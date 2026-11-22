@@ -7,7 +7,7 @@ import {
   type RunId,
   type RunView,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports

@@ -11,7 +11,7 @@ import {
   ReasoningEffort,
   routeConfig,
 } from '@texra-ai/llm';
-import { Secrets } from '@texra-ai/harness/plugins';
+import { Secrets } from '@texra-ai/worldline/plugins';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { FakeHost } from '@test/support/testKernel';
 import type { HostRecord } from '@test/support/fakeHost';

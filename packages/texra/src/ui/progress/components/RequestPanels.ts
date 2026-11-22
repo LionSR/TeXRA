@@ -18,10 +18,10 @@ import { html as staticHtml, literal } from 'lit/static-html.js';
 import {
   type PendingRequest,
   type RequestPayload,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/worldline/schemas';
 import { isTypingKeystroke, textEntryHasFocus } from '@ui/wa/keyActivation';
 
 // Local imports - progress view component types

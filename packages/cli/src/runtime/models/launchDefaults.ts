@@ -4,8 +4,8 @@ import {
   decideRunModel,
   type RunModelCandidate,
   type RunModelDecisionReason,
-} from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 
 import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import {
@@ -19,7 +19,7 @@ import {
 } from '../platform/cliContext';
 import { writeTextStderr } from '../platform/logSinks';
 import { selectCliRunnableModel } from './modelAccess';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(

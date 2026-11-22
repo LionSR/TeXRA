@@ -6,7 +6,7 @@
  */
 import { Schema, Struct } from 'effect';
 
-import { MemoryViewItemSchema } from '@texra-ai/harness/schemas';
+import { MemoryViewItemSchema } from '@texra-ai/worldline/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { commandOnly } from './messageFactories';
 

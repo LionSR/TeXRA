@@ -56,7 +56,7 @@ const AGENT_CALL_LIMIT = 1000;
 
 /** The key of the children a script has launched (`ScriptScope.shared`). */
 const AgentLaunches = Context.Service<Deferred.Deferred<{ count: number }>>(
-  '@texra-ai/harness/agent/AgentLaunches',
+  '@texra-ai/worldline/agent/AgentLaunches',
 );
 
 /**
@@ -290,7 +290,7 @@ const spentBy = (call: RunToolCall) =>
 /** The key of the reuse keys a script's calls claimed, each with the call
  *  that claimed it (`ScriptScope.shared`). */
 const AgentKeys = Context.Service<Deferred.Deferred<Map<string, string>>>(
-  '@texra-ai/harness/agent/AgentKeys',
+  '@texra-ai/worldline/agent/AgentKeys',
 );
 
 /**

@@ -1,6 +1,6 @@
 import { app, dialog } from 'electron';
 
-import { formatFatalErrorDetail } from '@texra-ai/harness/host';
+import { formatFatalErrorDetail } from '@texra-ai/worldline/host';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 
 /**

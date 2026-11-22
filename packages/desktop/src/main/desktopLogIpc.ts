@@ -1,7 +1,7 @@
 import { basename, dirname } from 'node:path';
 import { Effect, FiberHandle, FileSystem, Stream } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 
 import {
   DESKTOP_LOG_COMMANDS,

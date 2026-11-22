@@ -13,7 +13,7 @@ import './MemoryItem';
 
 // Local imports - pagination
 import { paginate, type PageChangeDetail } from '../shared/Pagination';
-import type { MemoryViewItem } from '@texra-ai/harness/schemas';
+import type { MemoryViewItem } from '@texra-ai/worldline/schemas';
 
 function hasSameMemoryOrder(
   previous: readonly MemoryViewItem[] | undefined,

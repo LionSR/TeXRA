@@ -39,9 +39,9 @@ import {
   type OutcomeOf,
   type Session,
   type WorkspaceRoots,
-} from '@texra-ai/harness';
-import { followPendingRequests } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline';
+import { followPendingRequests } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   toErrorMessage,
   type PendingRequest,
@@ -49,7 +49,7 @@ import {
   type ToolEditContent,
   type ToolEditRequest,
   type RuntimeCommand,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { HostCommand } from '@texra/shared/session/hostRequest';

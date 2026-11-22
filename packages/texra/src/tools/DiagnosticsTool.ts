@@ -2,10 +2,10 @@
 
 // Third-party imports
 import { Effect, Schema } from 'effect';
-import { ToolContext } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/worldline/plugins';
 
 // Local imports
-import { settingName, toErrorMessage } from '@texra-ai/harness/schemas';
+import { settingName, toErrorMessage } from '@texra-ai/worldline/schemas';
 import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 import {
   resolveToolPath,
@@ -15,7 +15,7 @@ import {
   defineTool,
   type ToolResult,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   countBySeverity,
   formatCounts,

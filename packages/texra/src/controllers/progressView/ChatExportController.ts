@@ -17,8 +17,8 @@ import {
   WorkspaceFs,
   pathToLocationIn,
   HostResources,
-} from '@texra-ai/harness/plugins';
-import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { toErrorMessage, Rejected } from '@texra-ai/worldline/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
@@ -30,8 +30,8 @@ import {
   TraceViewerMissing,
 } from '@texra/agent/export/standaloneTraceHtml';
 import { TranscriptExportFailed } from './exportTranscript';
-import type { Session } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { Session } from '@texra-ai/worldline';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 /** Write one export beneath its run's storage directory. */
 const writeExport = Effect.fn('writeTranscript.writeExport')(function* (

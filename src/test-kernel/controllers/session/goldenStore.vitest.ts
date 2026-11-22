@@ -52,9 +52,9 @@ import {
   type RunId,
   RunIdSchema,
   type SessionView,
-} from '@texra-ai/harness/schemas';
-import { Sessions } from '@texra-ai/harness';
-import { ValidationModel } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { ValidationModel } from '@texra-ai/worldline/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/makeRunHistory';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';

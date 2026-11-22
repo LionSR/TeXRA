@@ -28,13 +28,12 @@ export const texraHosted = Layer.provideMerge(
 );
 
 /** TeXRA's plugins that own row kinds, as those only: what a store under
- *  test reads their rows with, and a catalog under test scans the bundled
- *  agents with. */
+ *  test reads their rows with. */
 const FACT_KIND_PLUGINS: readonly Plugin[] = [
   { id: 'theory', factKinds: APP_FACT_KINDS.theory },
 ];
 
-/** The plugin table a store or catalog suite runs over: every row kind
+/** The plugin table a store suite runs over: every row kind
  *  TeXRA's plugins own, and no tool. */
 export const storePluginsLayer = Layer.succeed(ToolRegistry)(
   toolTable([...FACT_KIND_PLUGINS]),

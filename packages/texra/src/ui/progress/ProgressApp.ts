@@ -18,7 +18,7 @@
  */
 
 // Third-party imports
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename } from '@texra-ai/worldline/schemas';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -69,7 +69,7 @@ import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
 import { editedProposal } from './proposalEdit';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
-import type { SessionView, RunView } from '@texra-ai/harness/schemas';
+import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 
 registerTeXRAWebAwesomeIcons();
 

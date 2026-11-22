@@ -1,5 +1,5 @@
 /**
- * The sessions of `@texra-ai/harness` and the runs on them.
+ * The sessions of `@texra-ai/worldline` and the runs on them.
  *
  * `Sessions` is a projection of the process's `SessionOwner`: it opens,
  * lists and closes through that one owner, so a root

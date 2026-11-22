@@ -2,7 +2,7 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
 import { Effect, Layer, Schema } from 'effect';
-import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { AgentConfigSchema } from '@texra-ai/worldline/schemas';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';

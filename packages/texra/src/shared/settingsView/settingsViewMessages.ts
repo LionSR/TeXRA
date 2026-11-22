@@ -16,7 +16,7 @@ import {
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   ToolDependencyStatusSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   API_KEY_PROVIDER_IDS,

@@ -1,4 +1,4 @@
-import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
+import { getBasename, normalizeFilePath } from '@texra-ai/worldline/schemas';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import {
   getIncludedExtensions,

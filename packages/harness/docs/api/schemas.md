@@ -1,9 +1,9 @@
-# `@texra-ai/harness/schemas`
+# `@texra-ai/worldline/schemas`
 
 <!-- Generated from `packages/harness/src/schemas.ts` by `npm run docgen`; do not edit. -->
 
 Browser-safe Effect Schemas, derived types, and pure read helpers for
-`@texra-ai/harness`.
+`@texra-ai/worldline`.
 
 > **Guide:** Read [Views, Transcripts & Renderers](/api/views-and-transcripts)
 > and [Durable Protocol & Recovery](/api/durable-protocol) for how views,
@@ -884,6 +884,18 @@ delivery and summary and a shell command's result read it.
 
 ```ts
 function formatWallTime(durationMs: number): string
+```
+
+## formatWordList
+
+Items as an English list joined by `and` or `or` (`a`, `a or b`,
+`a, b, or c`), so every sentence that names several things reads the same.
+
+```ts
+function formatWordList(
+  items: Iterable<string>,
+  conjunction: keyof typeof WORD_LISTS,
+): string
 ```
 
 ## generateRunId

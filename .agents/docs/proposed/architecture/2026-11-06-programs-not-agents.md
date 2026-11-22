@@ -14,8 +14,9 @@ status: proposed
 
 正文里的"今天"和各处度量说的是基线 `d173e42`。此后第 1、2、6 期已随
 #14968 落地（2026-11-17 对照 `c78e9f9` 的源码核对过，逐项见"分期"）；第
-3 期随 #15020 落地，第 4 期已实现（见"分期"第 4 条）；第 5 期没有动，
-第 7 期等"负责人问题"2。
+3 期随 #15020 落地，第 4 期已实现（见"分期"第 4 条）；第 5 期的三片随
+#15180 落地（2026-11-22 核对，见"第 5 期的实施切片"），只剩那里"不做"的
+两处；第 7 期等"负责人问题"2。
 
 ## 摘要
 
@@ -1218,7 +1219,8 @@ history 的行。
 
 每一期独立可合，存法只变两次，各自落在需要它的那一期。第 1、2、6 期
 已随 #14968 落地，每一期末尾写了核对到什么、还剩什么；第 3 期随 #15020
-落地，第 4 期已实现；第 5 期未做，第 7 期等"负责人问题"2。
+落地，第 4 期已实现；第 5 期随 #15180 落地（"不做"的两处除外），第 7 期等
+"负责人问题"2。
 
 1. **按名启动和它的存法**（harness 加 documents 的启动路径；用户看不到
    变化）。`Plugin.programs`；`script` 的 `recipe` 成员换成 `program` 成
@@ -1386,7 +1388,32 @@ run 直接写在命令里（`--agent { label, system, tools }`，经
 `TEXRA_INTERNAL_VALIDATE_AGENT` 交给 CLI），golden 的那几个放在
 `packages/cli/src/runtime/models/validationAgents.ts`。
 
-还剩：第 3 片的文档（`docs/guide/**` 的几页、changelog）；只声明小核心和
+**第 3 片已落地（2026-11-22）。** 文档也随 #15180 合入：`built-in-agents`
+和 `custom-agents` 两页删了，侧栏不再列它们，`docs/` 里没有链接指向它
+们；替代它们的是 `docs/guide/programs.md`（入口、八个文档程序、十一个任
+务程序、lean4 的四个，和 0.40 的 agent 名到程序名的对照）和
+`docs/guide/customizing.md`（`AGENTS.md`、memory、插件开关、skills 的来源、
+安装式插件、自己写的程序）；`multi-agent-workflows`、`agent-architecture`、
+`texra-cli` 重写，其余各页改了措辞；changelog 的 Breaking Changes 有
+"One assistant instead of an agent menu"和"Custom agents and TeXRA's
+bundled skills are removed"，Features 有任务程序和插件；根 `AGENTS.md`
+和 `packages/harness/AGENTS.md` 写的是入口 agent 和 config 上的
+`system`、`tools`。2026-11-22 对照源码核对过：`docs/guide/**` 里
+`texra agents`、`--agent`、`/agent`、`config agents`、`texra.showAgents`、
+`texra.agent`、`TEXRA_AGENT`、agent 选择和 agent 文件都是 0 处（只剩
+0.40 迁移说明里点名它们的那两段）；页面写的程序名对得上 `TASKS`
+（`packages/texra/src/tools/tasks/programs.ts`）、theory 和 lean4 的
+`programs/*.js`；TUI 的斜杠命令、`texra run <program | chat>`、
+`texra skills list`、`texra plugin install|enable`、"Multi-Agent Workflow"
+开关、脚本的 1000 个 agent、30 秒 CPU、64 MB 和 60 分钟都对得上代码。这
+次补了一处：`customizing.md` 写出安装式插件的 agent 和入口按
+`<plugin>:<name>` 调它（`delegationSection`、`pluginAgents.ts`）。
+留给 #15163 合入之后的三行（那个 PR 改着这几个文件）：根 `AGENTS.md`
+的进程服务举例仍写 `AgentDirectories`（已换成 `HostResources`），
+"Prompts" 一条仍列 "bundled agents"；`docs/guide/configuration.md`
+仍写 **TeXRA: Agent Settings** 命令（#15180 删了它）。
+
+还剩：只声明小核心和
 "开着就能调"、MCP 配了就能调（下面"不做"两条）；`delegation_targets` 一
 节仍列安装式插件的 agent、可用模型和 worktree 开关，没有并进 `agent` 工
 具的描述（描述要进缓存前缀，不能随插件开关变）。

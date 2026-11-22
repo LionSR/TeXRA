@@ -18,20 +18,20 @@
 import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
-import { type WorkspaceRoots } from '@texra-ai/harness';
-import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
+import { type WorkspaceRoots } from '@texra-ai/worldline';
+import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
 import {
   type TokenUsageStats,
   type ToolUseLog,
   type ToolCallStatus,
   MESSAGE_TYPES,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   ToolError,
   type AgentTrace,
   type ToolCardHandle,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
 // Local file imports
@@ -53,7 +53,7 @@ import {
   buildCodexTurnToolLog,
   codexCallCard,
 } from './codexShared';
-import { defineTool, withLogChannel } from '@texra-ai/harness/plugins';
+import { defineTool, withLogChannel } from '@texra-ai/worldline/plugins';
 
 // Third-party type imports (import/order places these after local imports)
 import type {

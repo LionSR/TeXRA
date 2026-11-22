@@ -45,7 +45,7 @@ export class ValidationModel extends Context.Service<
       readonly origin: ModelOrigin;
     };
   }
->()('@texra-ai/harness/ValidationModel') {}
+>()('@texra-ai/worldline/ValidationModel') {}
 
 /** A run's route: llm's decision, or the canned validation model. */
 type RunRoute = ModelRoute | { readonly kind: 'validation' };

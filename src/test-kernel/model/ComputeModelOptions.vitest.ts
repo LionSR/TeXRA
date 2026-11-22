@@ -9,9 +9,9 @@ import {
   MODEL_CONFIGS,
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
-import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
-import { readModelOptions } from '@texra-ai/harness/host';
-import { Secrets } from '@texra-ai/harness/plugins';
+import { isModelOptionAvailable } from '@texra-ai/worldline/schemas';
+import { readModelOptions } from '@texra-ai/worldline/host';
+import { Secrets } from '@texra-ai/worldline/plugins';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
 import { FakeHost } from '@test/support/testKernel';
 import { modelOptionsFrom } from '@texra/model/modelOptions';

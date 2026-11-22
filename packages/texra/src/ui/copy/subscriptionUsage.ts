@@ -10,7 +10,7 @@ import {
   formatResetDuration,
   FACT_SEPARATOR,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { formatRelativeTime } from '@ui/copy/format';
 import type { RunTone } from '@ui/copy/runStatus';
 

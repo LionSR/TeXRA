@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { runDirUnder } from '@texra-ai/harness/plugins';
+import { runDirUnder } from '@texra-ai/worldline/plugins';
 
 import { Effect, FileSystem, Path, PlatformError, Schema } from 'effect';
 
@@ -9,7 +9,7 @@ import {
   RUN_OUTCOME,
   formatResultCount,
   pluralize,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type {
   CliRunResult,
   CliDocumentTaskResult,
@@ -28,7 +28,7 @@ import {
 } from '@texra/controllers/progressView/documentTaskOutputs';
 
 import { CliUsageError, type CliContext } from '../platform/cliContext';
-import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
+import type { AgentConfigPayload } from '@texra-ai/worldline/schemas';
 
 /** A destination the person cannot write, in the words of the flag that
  *  named it. */

@@ -11,13 +11,13 @@ import {
   descendantRuns,
   type RunView,
   type SessionView,
-} from '@texra-ai/harness/schemas';
-import { scriptStages } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { scriptStages } from '@texra-ai/worldline/transcript';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { runStatus } from '@ui/copy/runStatus';
 import { scriptCallLine, scriptStageSummary } from '@ui/copy/scriptStage';
 
-import type { LocalSession } from '@texra-ai/harness';
+import type { LocalSession } from '@texra-ai/worldline';
 
 /** The plain script output also subscribes the transcripts it prints,
  *  since transcript rows load only for subscribed aggregates. */

@@ -4,7 +4,7 @@ import type {
   RequestDecision,
   UserQuestionAnswers,
   UserQuestionPrompt,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** An empty answer set skips the question; otherwise it submits the answers.
  *  A plain skip carries no feedback: the tool's own "The user declined to

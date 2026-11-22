@@ -44,7 +44,7 @@ interface ProxyPolicy {
  * pooled connections.
  */
 const HttpAgents = Context.Reference<Map<string, Dispatcher>>(
-  '@texra-ai/harness/HttpAgents',
+  '@texra-ai/worldline/HttpAgents',
   { defaultValue: () => new Map() },
 );
 
@@ -150,7 +150,7 @@ const fetchThrough =
  * run's project.
  */
 export class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
-  '@texra-ai/harness/ModelFetch',
+  '@texra-ai/worldline/ModelFetch',
 ) {}
 
 /**

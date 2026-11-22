@@ -2,8 +2,8 @@ import { it } from '@effect/vitest';
 import { Effect, ManagedRuntime, Schedule } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { withForkFailureReporting } from '@texra-ai/harness/transcript';
-import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
+import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
+import { effectDiagnosticsLayer } from '@texra-ai/worldline/node';
 
 import { captureLogEntries } from '@test/support/logSinkCapture';
 

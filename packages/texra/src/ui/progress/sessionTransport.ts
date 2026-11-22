@@ -25,8 +25,8 @@ import {
   type OutcomeSchema,
   type RunId,
   type RuntimeCommand,
-} from '@texra-ai/harness/schemas';
-import type { TranscriptInterest } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import type { TranscriptInterest } from '@texra-ai/worldline/transcript';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
@@ -44,7 +44,7 @@ import {
   remoteSessionView,
 } from '@texra/shared/session/webviewSessionLayer';
 import { callOverMessages } from '@texra/shared/rpcOverMessages';
-import type { SessionView } from '@texra-ai/harness/schemas';
+import type { SessionView } from '@texra-ai/worldline/schemas';
 import { Invalid, type BridgeError } from '@texra/shared/session/bridgeErrors';
 
 /** What the transport hands the surfaces: the host's action, or its own

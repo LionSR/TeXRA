@@ -3,7 +3,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
-import { runsInWsl } from '@texra-ai/harness/node';
+import { runsInWsl } from '@texra-ai/worldline/node';
 import { externalOpenFailed, type HostFailed } from '@texra/hosts/uiHosts';
 
 /**

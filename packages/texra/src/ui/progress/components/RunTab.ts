@@ -8,7 +8,7 @@ import {
   formatResultCount,
   joinFacts,
   runNoun,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   LitElement,
   html,
@@ -59,7 +59,7 @@ import {
 import { formatRelativeTime } from '@ui/copy/format';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { runTabStyles } from './RunTab.styles';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/worldline/schemas';
 
 /** How the row reads: a request anywhere under the run (its own, or a
  *  descendant's) waits on the user, which the row says in the status

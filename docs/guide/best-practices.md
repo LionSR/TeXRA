@@ -34,7 +34,7 @@ Match model capability to task complexity: overpowered models waste money, under
 
 <p class="hero-caption">Find the row that matches your task, then pick one of the recommended model handles.</p>
 
-Read the [AI models](./models.md) for detailed comparisons.
+Read the [AI models guide](./models.md) for detailed comparisons.
 
 ## Project and LaTeX organization
 

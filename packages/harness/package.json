@@ -1,7 +1,7 @@
 {
-  "name": "@texra-ai/harness",
+  "name": "@texra-ai/worldline",
   "version": "0.1.0",
-  "description": "Embeddable agent runtime from TeXRA, in Effect: sessions, durable runs, tools and plugins",
+  "description": "Worldline, an embeddable agent runtime from TeXRA, in Effect: sessions, durable runs, tools and plugins",
   "keywords": [
     "agent",
     "llm",

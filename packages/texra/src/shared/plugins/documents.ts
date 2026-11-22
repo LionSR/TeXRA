@@ -9,7 +9,7 @@
  */
 import { Schema } from 'effect';
 
-import { factName, type ToolFact } from '@texra-ai/harness/schemas';
+import { factName, type ToolFact } from '@texra-ai/worldline/schemas';
 import {
   DocumentDiffsSchema,
   RoundOutputSchema,
@@ -19,7 +19,7 @@ import {
   type DocumentsResult,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/worldline/schemas';
 
 /** The id of the plugin that owns the document programs, their tools and
  *  their rows. */

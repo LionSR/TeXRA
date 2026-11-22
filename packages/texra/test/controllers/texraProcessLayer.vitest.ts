@@ -10,8 +10,8 @@ import { Context, Effect, Exit, Layer, Queue, Scope, Stream } from 'effect';
 import { getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { expect } from 'vitest';
 
-import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
-import { AppSignals, Secrets } from '@texra-ai/harness/plugins';
+import { FileSecrets, secretsDirectory } from '@texra-ai/worldline/node';
+import { AppSignals, Secrets } from '@texra-ai/worldline/plugins';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 

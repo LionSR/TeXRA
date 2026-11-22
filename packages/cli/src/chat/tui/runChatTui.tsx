@@ -7,6 +7,7 @@
 
 import {
   Cause,
+  Duration,
   Effect,
   Exit,
   FiberHandle,
@@ -17,7 +18,7 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/worldline/host';
 import {
   APPROVAL_POLICY_SETTING,
   type RuntimeCommand,
@@ -25,9 +26,12 @@ import {
   type AgentConfig,
   type ApprovalPolicy,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
-import { isWorking } from '@texra-ai/harness/schemas';
-import { SESSION_CLOSE_DEADLINE_MS, Settings } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { isWorking } from '@texra-ai/worldline/schemas';
+import {
+  SESSION_CLOSE_DEADLINE_MS,
+  Settings,
+} from '@texra-ai/worldline/plugins';
 import {
   effectiveApprovalPolicy,
   launchApprovalNotice,
@@ -42,7 +46,7 @@ import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { silentLogSink, writeTextStderr } from '@cli/runtime/platform/logSinks';
-import { setLogSink } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/worldline/node';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
   acquireTuiTerminal,
@@ -614,7 +618,7 @@ export async function runChat(
         orElse: () =>
           Effect.fail(
             new Cause.TimeoutError(
-              `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+              `the session's rows were not all written within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
             ),
           ),
       }),

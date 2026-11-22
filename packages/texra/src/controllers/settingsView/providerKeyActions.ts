@@ -18,8 +18,8 @@ import {
   Settings,
   type SettingsStores,
   type StateReadFailed,
-} from '@texra-ai/harness/plugins';
-import { providerEndpointSetting } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { providerEndpointSetting } from '@texra-ai/worldline/schemas';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';

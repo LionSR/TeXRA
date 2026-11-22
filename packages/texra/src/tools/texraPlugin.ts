@@ -3,7 +3,7 @@
  * a harness plugin, for one that also carries its card and icons.
  */
 // Local imports - harness
-import { definePlugin } from '@texra-ai/harness/plugins';
+import { definePlugin } from '@texra-ai/worldline/plugins';
 
 // Local imports - tools
 import type { TexraPlugin } from '@texra/tools/registry';

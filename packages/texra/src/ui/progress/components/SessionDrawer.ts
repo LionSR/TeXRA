@@ -26,7 +26,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
-import type { SessionView } from '@texra-ai/harness/schemas';
+import type { SessionView } from '@texra-ai/worldline/schemas';
 import './RunTabs';
 import { renderTaskFilter, taskFilterStyles } from './taskFilter';
 

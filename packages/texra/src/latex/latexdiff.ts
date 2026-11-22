@@ -11,20 +11,20 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Schema } from 'effect';
+import { Duration, Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
-import { redactSecrets } from '@texra-ai/harness/host';
-import { Settings } from '@texra-ai/harness/plugins';
-import { readNormalizedFile } from '@texra-ai/harness/node';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import { redactSecrets } from '@texra-ai/worldline/host';
+import { Settings } from '@texra-ai/worldline/plugins';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 import { DISPLAY_MATH_ENVIRONMENTS } from '@replacement/constants';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { repositoryRoot } from '@texra-ai/harness/node';
+import { repositoryRoot } from '@texra-ai/worldline/node';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
@@ -54,7 +54,7 @@ class LatexdiffFailed extends Schema.TaggedError<LatexdiffFailed>()(
   override get message(): string {
     const variant = this.flatten ? '' : ' (without --flatten)';
     if (this.timedOut) {
-      return `${this.commandType} operation timed out after ${this.timeoutMs}ms${variant}`;
+      return `${this.commandType} operation timed out after ${Duration.format(Duration.millis(this.timeoutMs))}${variant}`;
     }
     return this.stderr
       ? `Failed to run ${this.commandType}${variant}: ${this.stderr}`

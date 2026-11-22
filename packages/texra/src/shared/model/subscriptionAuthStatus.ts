@@ -2,7 +2,7 @@
  *  and every host's account surface shows it, and how its account is named. */
 import { Schema } from 'effect';
 
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 
 /**
  * Outbound: backend → frontend subscription sign-in status, addressed by

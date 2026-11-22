@@ -3,8 +3,8 @@ import { Argument, Command } from 'effect/cli';
 
 import { MODELS } from '@texra-ai/llm';
 
-import { getEnabledModels, readModelOptions } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { getEnabledModels, readModelOptions } from '@texra-ai/worldline/host';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { enabledLabel } from '@ui/copy/format';
 
 import {

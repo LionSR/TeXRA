@@ -8,10 +8,10 @@ import {
   providerDisplayName,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
-import { type Session } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness/plugins';
-import type { ProcessServices } from '@texra-ai/harness/host';
-import { Rejected, Unavailable } from '@texra-ai/harness/schemas';
+import { type Session } from '@texra-ai/worldline';
+import { Secrets } from '@texra-ai/worldline/plugins';
+import type { ProcessServices } from '@texra-ai/worldline/host';
+import { Rejected, Unavailable } from '@texra-ai/worldline/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   isRequestRefusal,

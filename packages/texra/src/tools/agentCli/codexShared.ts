@@ -1,5 +1,5 @@
 import { Duration } from 'effect';
-import { buildMcpToolName } from '@texra-ai/harness/transcript';
+import { buildMcpToolName } from '@texra-ai/worldline/transcript';
 import {
   collapseWhitespace,
   getBasename,
@@ -8,7 +8,7 @@ import {
   type ToolCallStatus,
   type ToolCard,
   type ToolUseLog,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type {
   CommandExecutionItem,
   FileChangeItem,

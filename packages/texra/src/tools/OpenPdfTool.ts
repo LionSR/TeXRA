@@ -3,14 +3,14 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
-import { ToolContext, pathToLocationIn } from '@texra-ai/harness/plugins';
-import { meansAbsent, isPathWithin } from '@texra-ai/harness/node';
+import { ToolContext, pathToLocationIn } from '@texra-ai/worldline/plugins';
+import { meansAbsent, isPathWithin } from '@texra-ai/worldline/node';
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
   type FileLocation,
   hasExtension,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   resolveToolPath,
   runDirUnder,
@@ -18,7 +18,7 @@ import {
   executed,
   ToolError,
   defineTool,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 // Local imports
 

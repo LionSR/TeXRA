@@ -23,9 +23,9 @@
  *    `cancelled` with nothing left held.
  */
 import { Effect, Exit, Fiber, Layer, Option, Stream } from 'effect';
-import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { Sessions, type LocalSession } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 

@@ -2,14 +2,14 @@ import { layer } from '@effect/vitest';
 import { Effect, Schema, Context } from 'effect';
 import { expect, vi } from 'vitest';
 
-import { DatabaseReadFailed } from '@texra-ai/harness';
+import { DatabaseReadFailed } from '@texra-ai/worldline';
 import {
   RunIdSchema,
   type AgentConfig,
   AgentConfigSchema,
   type RunId,
   type RunIdentity,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { listRuns } from '@agent/storage/runListing';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';

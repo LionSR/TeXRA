@@ -1,6 +1,6 @@
 /**
  * Browser-safe Effect Schemas, derived types, and pure read helpers for
- * `@texra-ai/harness`.
+ * `@texra-ai/worldline`.
  *
  * > **Guide:** Read [Views, Transcripts & Renderers](/api/views-and-transcripts)
  * > and [Durable Protocol & Recovery](/api/durable-protocol) for how views,
@@ -291,6 +291,7 @@ export {
   formatResetDuration,
   formatResultCount,
   formatWallTime,
+  formatWordList,
   joinFacts,
   pluralize,
   previewLabel,

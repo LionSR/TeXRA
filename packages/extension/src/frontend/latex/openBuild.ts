@@ -4,7 +4,7 @@ import {
   getFileStem,
   type FileLocation,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import * as vscode from 'vscode';
 import {
@@ -19,7 +19,7 @@ import {
   type Scope,
 } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -27,7 +27,7 @@ import { compileForDisplay } from '@texra/controllers/approval/latexPreview';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 
 // Local imports - utilities
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'OpenBuildUtils';

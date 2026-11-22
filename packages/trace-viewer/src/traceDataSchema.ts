@@ -14,7 +14,7 @@ import {
   toErrorMessage,
   TraceDocumentSchema,
   type TraceDocument,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 
 const INCOMPATIBLE =

@@ -15,9 +15,9 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Logger, References } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { Sessions } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import { HARNESS_APP } from '@test/support/FakePlatform';
 
 describe('Sessions.layer', () => {

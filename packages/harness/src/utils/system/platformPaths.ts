@@ -39,7 +39,7 @@ export const envNameKey = (name: string): string =>
  * Absent, none.
  */
 export const CommandDirs = Context.Reference<() => readonly string[]>(
-  '@texra-ai/harness/CommandDirs',
+  '@texra-ai/worldline/CommandDirs',
   { defaultValue: () => () => [] },
 );
 

@@ -2,7 +2,7 @@ import { Effect, Schema, SubscriptionRef, Context } from 'effect';
 import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
-import { RunIdSchema, AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema, AgentConfigSchema } from '@texra-ai/worldline/schemas';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';

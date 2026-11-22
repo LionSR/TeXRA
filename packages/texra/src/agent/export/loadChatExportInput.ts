@@ -21,10 +21,10 @@
 
 import { DateTime, Effect, Schema } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import type { Session } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { Session } from '@texra-ai/worldline';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 /**
  * A stored run's export input could not be read: the run record read or the

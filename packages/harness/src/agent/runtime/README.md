@@ -124,5 +124,5 @@ Most of these files have many direct importers in the harness and the tests,
 so moving them is churn without a design gain. A group becomes a
 subdirectory only when a refactor already rewrites its call sites, as the
 Effect 4 cutover did for `loop/` and `run/`. Hosts import nothing from here:
-they hold the public `LocalSession` (`@texra-ai/harness`). Harness code
+they hold the public `LocalSession` (`@texra-ai/worldline`). Harness code
 imports the specific `@agent/runtime/<File>` module; there is no barrel.

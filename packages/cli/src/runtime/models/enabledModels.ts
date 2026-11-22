@@ -22,13 +22,13 @@ import {
   getEnabledModels,
   setModelEnabled,
   MODEL_SELECTION_KEY,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   type SettingsStores,
   StateWriteFailed,
   type StateReadFailed,
-} from '@texra-ai/harness/plugins';
-import { getModelLabel } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { getModelLabel } from '@texra-ai/worldline/schemas';
 
 import { resolveKnownCliModelId } from '../platform/cliConfig';
 

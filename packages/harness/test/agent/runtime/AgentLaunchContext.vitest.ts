@@ -5,7 +5,7 @@ import {
   RunIdSchema,
   AgentConfigSchema,
   runBypasses,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { activationRows, registerRun } from '@agent/storage/runLifecycle';

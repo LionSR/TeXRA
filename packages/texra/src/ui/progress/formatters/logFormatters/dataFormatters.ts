@@ -11,7 +11,7 @@ import { html } from 'lit';
 
 // Local imports - shared schemas and utilities
 import { buildDetailsCard, buildFileListRender } from '../htmlBuilders';
-import type { FileListRow } from '@texra-ai/harness/transcript';
+import type { FileListRow } from '@texra-ai/worldline/transcript';
 
 // Local imports - formatter helpers
 import type { FormatResult } from '../baseLogFormatter';

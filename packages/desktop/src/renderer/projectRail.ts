@@ -2,7 +2,7 @@
 // actions, the Files toggle, and reopening a collapsed rail when a request
 // lands off screen.
 
-import { attentionOf } from '@texra-ai/harness/schemas';
+import { attentionOf } from '@texra-ai/worldline/schemas';
 import { postToMain } from './messageRoutes';
 import { shownRun } from '@texra/shared/session/surface';
 import type { createSessionSurfaces } from '@ui/progress/sessionSurfaces';

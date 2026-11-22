@@ -6,8 +6,8 @@ import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
-import { mcpConfigPathOf, ValidationModel } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { mcpConfigPathOf, ValidationModel } from '@texra-ai/worldline/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import { stored, type InvokeRequest } from '@agent/runtime/run/recordedRequest';
 import { stepFor } from '@agent/runtime/loop/step';
@@ -48,7 +48,7 @@ import {
   AppState,
   Secrets,
   type ITool,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { SessionRoots } from '@platform/rootedFs';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { HARNESS_APP } from '@test/support/FakePlatform';

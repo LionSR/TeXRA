@@ -27,7 +27,7 @@ export interface AppStateStore extends StateStore {
  * change at its next read.
  */
 export class AppState extends Context.Service<AppState, AppStateStore>()(
-  '@texra-ai/harness/platform/AppState',
+  '@texra-ai/worldline/platform/AppState',
 ) {
   static layer(store: StateStore): Layer.Layer<AppState> {
     return Layer.succeed(AppState)({
@@ -40,7 +40,7 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
 }
 
 // ---------------------------------------------------------------------------
-// Agent directories
+// Host resources
 // ---------------------------------------------------------------------------
 
 /**
@@ -54,4 +54,4 @@ export class HostResources extends Context.Service<
      *  Absent where none ships: an embedder with no resources. */
     readonly resourcesRoot?: string;
   }
->()('@texra-ai/harness/platform/HostResources') {}
+>()('@texra-ai/worldline/platform/HostResources') {}

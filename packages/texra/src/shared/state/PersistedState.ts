@@ -1,6 +1,6 @@
 import { Predicate, Result, Schema } from 'effect';
 
-import { formatIssuesForDiagnostics } from '@texra-ai/harness/schemas';
+import { formatIssuesForDiagnostics } from '@texra-ai/worldline/schemas';
 
 /** A renderer's synchronous key-value store; `undefined` removes a key. */
 export interface KeyValueStore {

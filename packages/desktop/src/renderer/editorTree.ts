@@ -1,5 +1,5 @@
 // Third-party imports
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { normalizeFilePath } from '@texra-ai/worldline/schemas';
 
 export interface EditorFileEntry {
   /** Workspace-relative path used as the editor's file-system key. */

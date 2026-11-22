@@ -84,7 +84,7 @@ export class SessionOwner extends Context.Service<
      *  then close every held session at once, under one deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
   }
->()('@texra-ai/harness/SessionOwner') {}
+>()('@texra-ai/worldline/SessionOwner') {}
 
 /** A root launch as `session.start` hands it over: the configuration it
  *  resolved, the run id it minted, the start's options in its own words

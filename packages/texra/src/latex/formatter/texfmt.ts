@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports - log
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 

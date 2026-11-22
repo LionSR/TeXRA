@@ -17,12 +17,12 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { Run, Session, Notices } from '@texra-ai/harness';
+import type { Run, Session, Notices } from '@texra-ai/worldline';
 import {
   presentRunFailure,
   type ProcessRuntime,
   type ProcessServices,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   type RuntimeCommand,
   type RunView,
@@ -35,7 +35,7 @@ import {
   Rejected,
   acceptsFollowUp,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
@@ -72,7 +72,7 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
+import type { ApprovalPolicy } from '@texra-ai/worldline/schemas';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import {
   EMPTY_DRAFT,
@@ -83,7 +83,7 @@ import {
   type InputDraft,
 } from './tui/input/draftAttachments';
 import type { ModelConnection } from './tui/modelConnection';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 // ---------------------------------------------------------------------------

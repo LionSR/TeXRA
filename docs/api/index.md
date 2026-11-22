@@ -1,6 +1,6 @@
 # Philosophy & Architecture
 
-[`@texra-ai/harness`](./harness/) and [`@texra-ai/llm`](./llm/) are TeXRA's runtime packages, written in [Effect](https://effect.website). The VS Code extension, desktop app, and CLI are hosts over these two packages.
+[`@texra-ai/worldline`](./harness/) and [`@texra-ai/llm`](./llm/) are TeXRA's runtime packages, written in [Effect](https://effect.website). The VS Code extension, desktop app, and CLI are hosts over these two packages.
 
 > **0.x:** Both packages are versioned independently of the TeXRA app and may change in any `0.x` minor release.
 
@@ -39,9 +39,9 @@ Service tags hold capabilities fixed for their scope; per-run values (`runId`, a
 
 Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemode-script-and-tool-discovery) provides the `script` tool—a QuickJS worker that calls the run's tools (`await tools.read_file(...)`, `await agent(...)`, `await self(...)`) with deterministic replay across crashes—and [`Plugin`](./harness/plugins#plugin)s contribute tools, prompt sections, Effect layers, versioned durable rows (`FactKind`), and programs started by name (`Program`).
 
-The harness's own tools are six plugins of that same type ([`harnessBuiltins`](./plugins-and-codemode#built-in-plugins-harnessbuiltins)). The TeXRA app passes the same six (with `file-ops` given TeXRA's write filter) plus thirteen of its own, among them LaTeX, arXiv, Zotero, Lean and document tasks. An embedder passes its own list to `Sessions.layer({ platform, plugins, client })`, and a built-in left out of the list offers no tools. Switching a plugin off withdraws its tools, prompt section and layers at the run's next step; the rows it wrote stay in the store.
+The harness's own tools are six plugins of that same type ([`harnessBuiltins`](./plugins-and-codemode#built-in-plugins-harnessbuiltins)). The TeXRA app passes the same six (with `file-ops` given TeXRA's write filter) plus eleven of its own, among them LaTeX, arXiv, Zotero, Lean, Wolfram, coding-agent integrations, and document/task programs. An embedder passes its own list to `Sessions.layer({ platform, plugins, client })`, and a built-in left out of the list offers no tools. Switching a plugin off withdraws its tools, prompt section, and layers at the run's next step; the rows it wrote stay in the store.
 
-Third-party plugins load as data, not code. The harness reads the Claude Code and Codex plugin layouts (`skills/`, `commands/`, `agents/`, `.mcp.json`), connects to MCP servers, and runs hooks as separate processes, and each installed plugin needs a trust decision before it loads.
+Third-party plugins are reviewed and trusted before they load. The harness reads Claude Code and Codex plugin layouts (`skills/`, `commands/`, `agents/`, `.mcp.json`, `programs/`), connects to MCP servers, and runs hooks as separate processes. An installed plugin may also ship a native `harness.mjs` entry that returns a `Plugin`: once explicitly trusted at its file digest, it runs in-process from a snapshot of the trusted files and joins the plugin table from the next step of every run.
 
 The loop, the store and its single writer, requests, retries and model access are not plugins. They implement rules 1 to 3, so a plugin can add a tool but cannot change when the tool's result is recorded or whether a crashed run resumes.
 
@@ -57,31 +57,31 @@ The loop, the store and its single writer, requests, retries and model access ar
 
 Exports are split by runtime environment so browser and webview bundles never pull in Node.js built-ins or vendor SDKs:
 
-| Entry                                                  | Environment  | Contents                                                                                                                                            | Guide & Reference                                                                  |
-| ------------------------------------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`@texra-ai/harness`](./harness/)                      | Any (Effect) | `Sessions`, `Session`, `LocalSession`, `Run`, and tagged errors: what an embedder needs                                                             | [Durable Protocol](./durable-protocol) · [Reference](./harness/)                   |
-| [`@texra-ai/harness/schemas`](./harness/schemas)       | Browser-safe | Effect Schemas, `SessionView` / `RunView` / `TranscriptView` types, view queries, `RuntimeCommandSchema`, approval policies, `TraceDocumentSchema`  | [Views & Transcripts](./views-and-transcripts) · [Reference](./harness/schemas)    |
-| [`@texra-ai/harness/transcript`](./harness/transcript) | Browser-safe | `RemoteSessionView`, `SessionInputs`, `TranscriptRow`, `ToolRowModel` sections, `rowHeadline`, `transcriptText`, `elideText`                        | [Views & Transcripts](./views-and-transcripts) · [Reference](./harness/transcript) |
-| [`@texra-ai/harness/builtins`](./harness/builtins)     | Any (Effect) | `harnessBuiltins` (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                            | [Plugins & Codemode](./plugins-and-codemode) · [Reference](./harness/builtins)     |
-| [`@texra-ai/harness/plugins`](./harness/plugins)       | Any (Effect) | `defineTool`, `definePlugin`, `ToolContext`, `ChildRuns`, `Settings`, `WorkspaceFs`, `Secrets`, edit approvals                                      | [Plugins & Codemode](./plugins-and-codemode) · [Reference](./harness/plugins)      |
-| [`@texra-ai/harness/node`](./harness/node)             | Node.js      | `nodePlatform(options)`, workspace roots, SQLite database handles, command execution, binary probing, atomic file writes                            | [Reference](./harness/node)                                                        |
-| [`@texra-ai/harness/host`](./harness/host)             | Node.js      | `processLayer`, program launches, skills, installed plugins, model options, `HostInteractions`: what a full app host composes; no stability promise | [Reference](./harness/host)                                                        |
-| [`@texra-ai/llm`](./llm/)                              | Browser-safe | `Model` (`prepareTurn`, `streamTurn`), `completedTurn`, `ModelError`, `selectModel`, `decideModelRoute`, `turnCost`                                 | [Model Layer](./model-layer) · [Reference](./llm/)                                 |
-| [`@texra-ai/llm/node`](./llm/node)                     | Node.js      | `bindModel(spec)` and subscription OAuth flows (`codex`, `xai`)                                                                                     | [Model Layer](./model-layer) · [Reference](./llm/node)                             |
+| Entry                                                    | Environment  | Contents                                                                                                                                            | Guide & Reference                                                                  |
+| -------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`@texra-ai/worldline`](./harness/)                      | Any (Effect) | `Sessions`, `Session`, `LocalSession`, `Run`, and tagged errors: what an embedder needs                                                             | [Durable Protocol](./durable-protocol) · [Reference](./harness/)                   |
+| [`@texra-ai/worldline/schemas`](./harness/schemas)       | Browser-safe | Effect Schemas, `SessionView` / `RunView` / `TranscriptView` types, view queries, `RuntimeCommandSchema`, approval policies, `TraceDocumentSchema`  | [Views & Transcripts](./views-and-transcripts) · [Reference](./harness/schemas)    |
+| [`@texra-ai/worldline/transcript`](./harness/transcript) | Browser-safe | `RemoteSessionView`, `SessionInputs`, `TranscriptRow`, `ToolRowModel` sections, `rowHeadline`, `transcriptText`, `elideText`                        | [Views & Transcripts](./views-and-transcripts) · [Reference](./harness/transcript) |
+| [`@texra-ai/worldline/builtins`](./harness/builtins)     | Any (Effect) | `harnessBuiltins` (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                            | [Plugins & Codemode](./plugins-and-codemode) · [Reference](./harness/builtins)     |
+| [`@texra-ai/worldline/plugins`](./harness/plugins)       | Any (Effect) | `defineTool`, `definePlugin`, `ToolContext`, `ChildRuns`, `Settings`, `WorkspaceFs`, `Secrets`, edit approvals                                      | [Plugins & Codemode](./plugins-and-codemode) · [Reference](./harness/plugins)      |
+| [`@texra-ai/worldline/node`](./harness/node)             | Node.js      | `nodePlatform(options)`, workspace roots, SQLite database handles, command execution, binary probing, atomic file writes                            | [Reference](./harness/node)                                                        |
+| [`@texra-ai/worldline/host`](./harness/host)             | Node.js      | `processLayer`, program launches, skills, installed plugins, model options, `HostInteractions`: what a full app host composes; no stability promise | [Reference](./harness/host)                                                        |
+| [`@texra-ai/llm`](./llm/)                                | Browser-safe | `Model` (`prepareTurn`, `streamTurn`), `completedTurn`, `ModelError`, `selectModel`, `decideModelRoute`, `turnCost`                                 | [Model Layer](./model-layer) · [Reference](./llm/)                                 |
+| [`@texra-ai/llm/node`](./llm/node)                       | Node.js      | `bindModel(spec)` and subscription OAuth flows (`codex`, `xai`)                                                                                     | [Model Layer](./model-layer) · [Reference](./llm/node)                             |
 
 ## Install and minimal example
 
 Requires Node.js `>=22.22.2` (in 22.x) or `>=24.15.0`, ESM only. `effect`, `@effect/platform-node` and `@effect/sql-sqlite-node` (all `^4.1.2`), and `@texra-ai/llm`, are peer dependencies, so the process shares one copy of `effect` and `@texra-ai/llm`:
 
 ```bash
-npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
+npm install @texra-ai/worldline @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
 ```
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { responseText, Sessions } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { responseText, Sessions } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 
 const platform = nodePlatform({
   storageDir: './.agent-storage',
@@ -124,10 +124,10 @@ console.log(end.outcome, end.output.response);
 
 ## Runnable examples (`packages/harness/example/`)
 
-The repository includes fourteen self-contained programs in [`packages/harness/example/`](https://github.com/LionSR/TeXRA/tree/main/packages/harness/example) that pack `@texra-ai/llm` and `@texra-ai/harness` into tarballs, install them into a fresh temporary directory with `npm install`, type-check them with `skipLibCheck: false`, and execute them without an API key:
+The repository includes fourteen self-contained programs in [`packages/harness/example/`](https://github.com/LionSR/TeXRA/tree/main/packages/harness/example) that pack `@texra-ai/llm` and `@texra-ai/worldline` into tarballs, install them into a fresh temporary directory with `npm install`, type-check them with `skipLibCheck: false`, and execute them without an API key:
 
 ```bash
-corepack pnpm --filter @texra-ai/harness run example:packed
+corepack pnpm --filter @texra-ai/worldline run example:packed
 ```
 
 | Example                                                                                                                                 | What it exercises                                                                                                                                                                                                                                            |

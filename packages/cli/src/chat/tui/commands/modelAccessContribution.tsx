@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';
 
-import { Secrets } from '@texra-ai/harness/plugins';
+import { Secrets } from '@texra-ai/worldline/plugins';
 import { parseChatLoginSlashArgs } from '@cli/runtime/models/loginOptions';
 
 import {

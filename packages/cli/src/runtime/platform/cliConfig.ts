@@ -3,18 +3,18 @@ import { Effect, Predicate, Result, Schema } from 'effect';
 
 // Local imports - platform
 import { modelConfig, MODELS } from '@texra-ai/llm';
-import { mcpConfigPathOf, readMcpConfig } from '@texra-ai/harness/host';
+import { mcpConfigPathOf, readMcpConfig } from '@texra-ai/worldline/host';
 import {
   Settings,
   type SettingsStores,
   type ConfigProvider,
-} from '@texra-ai/harness/plugins';
-import type { SettingRow } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import type { SettingRow } from '@texra-ai/worldline/schemas';
 import {
   JsonConfigProvider,
   nodeFileServices,
   type JsonStore,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 
 // Local imports - shared
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';

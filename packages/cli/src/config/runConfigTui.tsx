@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { useApp, useWindowSize } from 'ink';
 
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/worldline/host';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { scopeRunner } from '../chat/scopeRunner';
 import { ChatProcessProvider, type ChatProcess } from '../chat/tui/chatProcess';

@@ -51,7 +51,7 @@ returns a `DefinedTool` with its definition, execution flags, `guard` and
 `call`. An app writes a plugin with `definePlugin`, which checks at compile
 time that a tool needing a service is served by one of its plugin's own
 layers, then erases that type. Authors import all of this from
-`@texra-ai/harness/plugins` (`packages/harness/src/plugins.ts`).
+`@texra-ai/worldline/plugins` (`packages/harness/src/plugins.ts`).
 
 `toolTable` (`packages/harness/src/tools/toolTable.ts`) builds the process's
 `ToolTable` from the ordered plugin list and refuses a defective list when it

@@ -6,7 +6,7 @@ import { Deferred, Effect, Fiber, Layer, Queue, Context } from 'effect';
 import { assert, expect, vi } from 'vitest';
 
 // Local imports
-import { generateRunId } from '@texra-ai/harness/schemas';
+import { generateRunId } from '@texra-ai/worldline/schemas';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
@@ -31,7 +31,7 @@ import {
   isolatedTestSession,
   SessionGraph,
 } from '@test/support/testKernel';
-import type { ITool } from '@texra-ai/harness/plugins';
+import type { ITool } from '@texra-ai/worldline/plugins';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 

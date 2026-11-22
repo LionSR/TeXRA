@@ -9,7 +9,7 @@ import { useInput, useStdin, type Key, type StdinProps } from 'ink';
 import { Cause, Effect, Fiber, FiberHandle } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   isEscapeInput,
   isPlainReturnInput,
@@ -18,7 +18,7 @@ import {
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { useMountScope } from '@cli/chat/tui/state/useMountScope';
 import { useChatProcess } from '@cli/chat/tui/chatProcess';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { ScopeRunner } from '@cli/chat/scopeRunner';
 
 interface AsyncResource<T, R = ProcessServices> {

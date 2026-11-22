@@ -8,8 +8,8 @@ import {
   type AppSignals,
   Secrets,
   ToolCatalog,
-} from '@texra-ai/harness/plugins';
-import type { RunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import type { RunId } from '@texra-ai/worldline/schemas';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
 import {
   SubscriptionTargetPath,

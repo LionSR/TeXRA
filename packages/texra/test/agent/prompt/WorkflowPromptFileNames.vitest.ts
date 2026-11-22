@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { labelFileName } from '@texra-ai/harness/schemas';
+import { labelFileName } from '@texra-ai/worldline/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import {

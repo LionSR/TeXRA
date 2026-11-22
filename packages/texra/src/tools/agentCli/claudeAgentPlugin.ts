@@ -10,7 +10,7 @@ import {
   definePlugin,
   Secrets,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { CLAUDE_AGENT_SETTINGS } from '@texra/shared/settings/integrationSettings';
 import {
   ClaudeAgentSessions,

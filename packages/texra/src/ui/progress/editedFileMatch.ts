@@ -4,7 +4,7 @@
  * surface's base with this rule, so a base change never leaves a file of
  * another base selected.
  */
-import { getFileStem } from '@texra-ai/harness/schemas';
+import { getFileStem } from '@texra-ai/worldline/schemas';
 
 /**
  * Trailing/embedded `_r{N}` round token (`<base>_r{round}`), owned here for

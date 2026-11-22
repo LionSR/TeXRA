@@ -4,9 +4,8 @@
  * repository URL or a folder the host asks for, enable (showing what the
  * plugin declares in a host dialog and recording the trust the user gives),
  * disable, update and remove; and opening the user's `mcp.json`, which the
- * page lists read-only. Each change repaints the page and reloads the agent
- * catalog, which lists the plugin's agents; a run picks the change up at its
- * next step.
+ * page lists read-only. Each change repaints the page; a run picks the
+ * change up at its next step, which reads the install record itself.
  */
 // Third-party imports
 import * as os from 'node:os';
@@ -19,7 +18,7 @@ import {
   PluginRequestError,
   type PluginEnv,
   type PluginReview,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 
@@ -119,8 +118,8 @@ export function settingsPluginCommands(ports: {
                 `Plugin ${message.action} failed`,
                 act({ ...message, action: message.action }),
               )
-              // The agent catalog follows the install record on its own, and
-              // every launcher follows the catalog.
+              // A run reads the install record at its next step on its own;
+              // only the page repaints.
               .pipe(Effect.andThen(present.changed('plugins'))),
     },
   };

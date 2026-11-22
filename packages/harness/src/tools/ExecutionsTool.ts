@@ -45,7 +45,11 @@ import { readCompletedRunConversation } from '@agent/storage/completedRunArchive
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { getPathSegments } from '@utils/core/pathCore';
-import { formatCount, splitContentLines } from '@utils/text/stringUtils';
+import {
+  formatCount,
+  formatWordList,
+  splitContentLines,
+} from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -348,7 +352,10 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
       ({ actions }) => actions[input.action],
     );
     return yield* new ToolError(
-      `action='${input.action}' runs on ${validOn.map(({ path }) => path).join(' or ')}, not on ${route.path}.`,
+      `action='${input.action}' runs on ${formatWordList(
+        validOn.map(({ path }) => path),
+        'or',
+      )}, not on ${route.path}.`,
     );
   }
   return yield* handle({

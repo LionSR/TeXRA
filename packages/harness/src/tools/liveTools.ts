@@ -100,7 +100,7 @@ export interface ToolCatalogShape {
 
 /** The process's tool catalog. */
 export const ToolCatalog = Context.Service<ToolCatalog, ToolCatalogShape>(
-  '@texra-ai/harness/tools/ToolCatalog',
+  '@texra-ai/worldline/tools/ToolCatalog',
 );
 
 /** The owner's catalog's identifier: what the process's owner requires. */
@@ -125,7 +125,7 @@ export const ToolCatalogOwner = Context.Service<
       Scope.Scope | SubscriptionAccounts
     >;
   }
->('@texra-ai/harness/tools/ToolCatalogOwner');
+>('@texra-ai/worldline/tools/ToolCatalogOwner');
 
 /**
  * The catalog over `table`, the listed plugins', served with it as the

@@ -15,7 +15,7 @@ import {
   readModelOptions,
   type ModelVerdict,
   REASONING_LEVELS_KEY,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
@@ -30,7 +30,7 @@ import {
   type Secrets,
   type SettingsStores,
   StateWriteFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 import { SettingsRequestFailed } from './settingsHostBindings';
 

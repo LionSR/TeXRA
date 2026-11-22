@@ -11,7 +11,7 @@ import {
   parseVersion,
 } from './release-version.mjs';
 
-// The app's manifests. `@texra-ai/harness` and `@texra-ai/llm` are versioned
+// The app's manifests. `@texra-ai/worldline` and `@texra-ai/llm` are versioned
 // on their own, as the npm packages they are, so a release leaves them be.
 const MANIFEST_PATHS = [
   'package.json',

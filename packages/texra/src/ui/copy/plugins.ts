@@ -12,7 +12,7 @@ import {
   joinFacts,
   shortPluginId,
   type ToolDependencyStatus,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 const TOOL_DEPENDENCY_STATUS_FALLBACK_LABELS = {
   available: 'Ready',

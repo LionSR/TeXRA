@@ -3,20 +3,20 @@ import path from 'node:path';
 import {
   normalizeFilePath,
   type FileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 // Third-party imports
 import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 
 // Local imports
-import { readNormalizedFile } from '@texra-ai/harness/node';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
 import {
   withLogChannel,
   WorkspaceFs,
   emitAppSignal,
   type AppSignals,
   pathToLocationIn,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   generateDiffFileName,
   WORKSPACE_DIFF_SUFFIX,

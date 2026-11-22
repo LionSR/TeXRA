@@ -5,7 +5,7 @@ import InstallTroubleshootCards from '../.vitepress/components/InstallTroublesho
 
 # Installation guide
 
-This guide covers installing TeXRA as a VS Code extension or standalone CLI, along with the optional system dependencies for compiling, diffing, and rendering LaTeX documents. Running agents requires only an API key or connected model provider; local LaTeX tools are used for building previews, generating visual diffs, and formatting equations.
+This guide covers installing TeXRA as a VS Code extension or standalone CLI, along with the system dependencies for compiling, diffing, and rendering LaTeX documents. Using the assistant for chat, code, or Lean requires only an API key or connected provider subscription; local LaTeX tools are required when building previews, generating visual diffs, and formatting equations.
 
 ## System requirements
 
@@ -17,7 +17,7 @@ TeXRA runs on all major operating systems. Minimum requirements:
 
 ## Usage logging
 
-A fresh install logs anonymous usage metadata (agent, model, provider API,
+A fresh install logs anonymous usage metadata (built-in program name when running a shipped program, model, provider API,
 billing route, token counts, cost at list prices, response time, time of the
 call, task ID, version, host) under a random install ID, and says so once on first
 run. There is no sign-in. Turn it off with `TEXRA_NO_TELEMETRY=1`,
@@ -78,14 +78,14 @@ Read the [TeXRA CLI guide](./texra-cli.md) for usage, shell completion, and work
 
 To install from a release `.vsix` archive (`texra-<version>.vsix`), right-click the file in the VS Code Explorer and select **Install Extension VSIX**, or run `code --install-extension texra-<version>.vsix`.
 
-## Installing required dependencies
+## Installing system dependencies
 
-Only a **LaTeX distribution** is required for compiling documents; Perl (for `latexdiff` and `latexindent`), GraphicsMagick/ImageMagick, and Ghostscript unlock specific optional features:
+For compiling and diffing LaTeX documents, you need a local **LaTeX distribution** (optional if you only use TeXRA for chat, code, or Lean). Perl (for `latexdiff` and `latexindent`), GraphicsMagick/ImageMagick, and Ghostscript unlock specific optional features:
 
 <FeatureCards
   min="220px"
   :cards="[
-    { icon: 'file-code', title: 'LaTeX distribution', tag: 'Required', tagVariant: 'accent', desc: 'Core document processing: compiling and rendering .tex.', chips: [{ text: 'MiKTeX / TeX Live', variant: 'neutral' }] },
+    { icon: 'file-code', title: 'LaTeX distribution', tag: 'For LaTeX', tagVariant: 'accent', desc: 'Required for compiling and rendering .tex; optional for chat, code, or Lean.', chips: [{ text: 'MiKTeX / TeX Live', variant: 'neutral' }] },
     { icon: 'diff-multiple', title: 'Perl', tag: 'Optional', tagVariant: 'neutral', desc: 'Backs the latexindent and latexdiff scripts.', chips: [{ text: 'auto-format', variant: 'info' }, { text: 'LaTeX diffs', variant: 'info' }] },
     { icon: 'image', title: 'GraphicsMagick / ImageMagick', tag: 'Optional', tagVariant: 'neutral', desc: 'Figure and image processing.', chips: [{ text: 'figures', variant: 'info' }] },
     { icon: 'file-pdf', title: 'Ghostscript', tag: 'Optional', tagVariant: 'neutral', desc: 'Rasterizes PDF figures for the image tools above.', chips: [{ text: 'figures', variant: 'info' }] }
@@ -111,7 +111,7 @@ Each section below also links to the official installer if you prefer not to use
 ### LaTeX distribution
 
 ::: tip IMPORTANT
-TeXRA needs a LaTeX distribution to process LaTeX documents.
+TeXRA needs a local LaTeX distribution to compile `.tex` documents and visual diffs.
 :::
 
 #### Windows
