@@ -207,6 +207,9 @@ const runGoal = (session: LocalSession, opening: string) =>
       instruction: opening,
       model: route.model,
       interactive: true,
+      // The plan is a person's to answer here: under the default policy it
+      // would be approved unasked, as a plan and never as a goal.
+      approval: 'ask',
     });
     const ended = (current: SessionView) =>
       [...current.runs.values()].find(
