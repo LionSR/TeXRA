@@ -59,10 +59,21 @@ const toolCalls = (offered: readonly string[]) =>
   ].join('\n');
 
 /**
+ * What a child run is told of its place: its answer is its task's result,
+ * and the run that started it can answer a question, since a later message
+ * to a child continues it from where it ended. A task written in a few
+ * sentences by a run that holds far more context is the common way a child
+ * goes wrong, and a guess reads to its parent like a finding.
+ */
+const CHILD_RUN_INSTRUCTIONS = `<child_run>
+Another run started this one for the task in its first message, and reads your final answer as that task's result. If the task leaves out something you need and nothing you can read answers it, do not guess. Open your answer with what is missing and what you need to go on, then give whatever part of the result does not depend on it. The run that started you can reply, and you continue from here with everything you have read.
+</child_run>`;
+
+/**
  * The context a step renders: the tools it offers and the sections it adds
  * after the run's recorded prompt, by name, in order: how to issue tool
- * calls, the skills the step lists, then each pinned plugin's section, in
- * plugin id order. They are built from the step (its settings, offered tools
+ * calls, a child run's place, the skills the step lists, then each pinned
+ * plugin's section, in plugin id order. They are built from the step (its settings, offered tools
  * and pinned contributors) and the skill catalog it discovers, so a setting
  * change reaches the next request, and a resume rebuilds them.
  */
@@ -75,6 +86,7 @@ export function stepInstructions(
     // A step that offers no tool (a document reviser, the critic) has no
     // calls to make.
     ...(ctx.offered.length > 0 ? [['tool-call', toolCalls(ctx.offered)]] : []),
+    ...(ctx.isChild ? [['child run', CHILD_RUN_INSTRUCTIONS]] : []),
     ...(skills.length > 0
       ? [
           [
