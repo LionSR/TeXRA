@@ -453,7 +453,8 @@ composes (its secret store and, optionally, a resources root plugins read)
 plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under, and a run's
+`mcp.json` at the storage root that global storage lies under (stdio servers
+speaking MCP 2025-11-25; one answering an older revision does not start), and a run's
 system prompt carries the workspace's `AGENTS.md`, or the storage root's when
 the workspace has none.
 `nodePlatform()` supplies all of them: process-local config and state,

@@ -18,7 +18,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Number as Num, Result } from 'effect';
 
 // Local imports - shared contracts
-import type { InstalledPlugin, PluginTrust } from '@shared/schemas';
+import {
+  shortPluginId,
+  type InstalledPlugin,
+  type PluginTrust,
+} from '@shared/schemas';
 
 // Local imports - plugin record, reading and digest
 import type { SettingsStores } from '@shared/config/settings';
@@ -130,7 +134,7 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
 ) {
   const skillCount = yield* pluginSkillCount(record, plugin);
   const lines = [
-    `Source: ${record.commit ? `${record.source} at ${record.commit.slice(0, 12)}` : `${record.source} (local)`}`,
+    `Source: ${record.commit ? `${record.source} at ${shortPluginId(record.commit)}` : `${record.source} (local)`}`,
     `Skills: ${skillCount}; commands: ${plugin.commands.length}; agents: ${plugin.agents.length} (loaded as ${plugin.name}:<name>)`,
   ];
   if (plugin.mcpServers.length === 0) lines.push('MCP servers: none');

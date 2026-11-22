@@ -103,6 +103,7 @@ export type {
   SecretsOperation,
 } from './providers/credentials.js';
 export {
+  API_KEY_PATTERN_SOURCE,
   API_KEY_PROVIDER_IDS,
   BACKEND_PROTOCOLS,
   findModelProviderPlugin,
@@ -141,6 +142,7 @@ export type { SelectedModel } from './models/modelSelection.js';
 export {
   codexBackendModelId,
   decideModelRoute,
+  isCodexModel,
   isUnservedModel,
   kimiCodeServing,
   OWN_KEY_ROUTE_FACTS,

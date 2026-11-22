@@ -89,7 +89,7 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { installedPluginId } from '@common/plugins/pluginTrust';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type { ToolResult } from '@shared/schemas';
+import { shortPluginId, type ToolResult } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { Plugin } from '@tools/plugins';
@@ -181,7 +181,7 @@ export const notLoaded = (
   cause?: unknown,
 ): NativePluginFailed =>
   new NativePluginFailed({
-    message: `The native code of ${id}${revision === undefined ? '' : ` at revision ${revision.slice(0, 12)}`} is not loaded: ${reason}`,
+    message: `The native code of ${id}${revision === undefined ? '' : ` at revision ${shortPluginId(revision)}`} is not loaded: ${reason}`,
     ...(cause === undefined ? {} : { cause }),
   });
 

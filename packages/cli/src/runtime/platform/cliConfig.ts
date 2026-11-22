@@ -29,18 +29,6 @@ import {
 
 // Local imports - utilities
 
-/**
- * The model a `texra` command starts on when nothing else names one.
- *
- * A deliberate cheap-start choice, not a recommendation: the terminal client
- * is the surface someone tries first, often with one freshly pasted provider
- * key, so the built-in default is the cheapest capable model rather than the
- * strongest. `--model`, `TEXRA_MODEL`, and the `texra.model` /
- * `texra.chat.model` / `texra.run.model` rows all outrank it, and a model this
- * machine cannot run falls back to an available one with a notice.
- */
-export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
-
 /** The `texra.*` command sections: `texra.chat` and `texra.run`. */
 const COMMAND_SECTIONS = {
   chat: CLI_CHAT_SETTING,

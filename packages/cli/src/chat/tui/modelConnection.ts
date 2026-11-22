@@ -1,13 +1,19 @@
 // The chat's "no model connected yet" state: the fact itself, the wait a
 // message typed before connecting goes through, and re-resolving the chat's
-// model once a credential lands. The "Connect a model" panel is the `/login` form in
+// model once a credential lands (every model-access change this process
+// announces). The "Connect a model" panel is the `/login` form in
 // connect mode; everything else about the state lives here.
 
 import { signal } from '@lit-labs/signals';
-import { Effect, Latch } from 'effect';
+import { Effect, Latch, Stream } from 'effect';
 
-import { type RunModelDecisionReason } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { apiKeyEntry } from '@texra-ai/llm';
+import {
+  appSignalStream,
+  type ProcessServices,
+  type RunModelDecisionReason,
+} from '@texra-ai/harness/host';
+import { type SettingsStores, withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { CliPlatformServices } from '@cli/runtime/platform/initPlatform';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
@@ -21,10 +27,21 @@ import {
   appendLocalErrorTranscript,
   appendLocalNotice,
 } from './state/transcript';
-import {
-  selectChatModel,
-  type SlashCommandContext,
-} from './commands/handlers/slashContext';
+import { selectChatModel } from './commands/handlers/slashContext';
+
+/** A change in this process to what routes a model: a provider key, or an
+ *  access preference (every sign-in and sign-out writes one). */
+export const modelAccessChanges: Stream.Stream<void, never, ProcessServices> =
+  Stream.merge(
+    appSignalStream('credentialChanged').pipe(
+      Stream.filter(({ key }) => {
+        // An unknown provider's key routes no model.
+        const provider = apiKeyEntry(key);
+        return provider !== undefined && provider !== 'unknown';
+      }),
+    ),
+    appSignalStream('modelAccessChanged'),
+  ).pipe(Stream.as(undefined));
 
 /**
  * No model route is usable yet: the chat opened without a credential, so the
@@ -89,23 +106,30 @@ export const checkModelConnection = Effect.fn('checkModelConnection')(
 );
 
 /**
- * Re-check after an account change. When a model can answer now: clear the
- * state, resolve the chat's model the way startup does, then let the waiting
- * messages go.
+ * While the chat has no model, re-check on every model-access change, from
+ * whichever surface made it (`/login`, `/key`, `/config`, a settings view).
+ * When a model can answer: clear the state, resolve the chat's model the way
+ * startup does, then let the waiting messages go.
  */
-export const connectChatModel = Effect.fn('connectChatModel')(function* (
-  context: SlashCommandContext,
+export const followModelConnection = (
+  stores: SettingsStores,
+  modelSource: RunModelDecisionReason,
+  connection: ModelConnection,
+): Effect.Effect<void, never, ProcessServices> =>
+  Stream.runForEach(modelAccessChanges, () =>
+    connectChatModel(stores, modelSource, connection),
+  );
+
+const connectChatModel = Effect.fn('connectChatModel')(function* (
+  stores: SettingsStores,
   modelSource: RunModelDecisionReason,
   connection: ModelConnection,
 ) {
   if (!modelConnectionNeeded.get()) return;
-  const { stores } = context;
   // A check that cannot be answered fails to the transcript report below and
   // leaves the panel state as it was.
   const ready = yield* hasUsableSetupCredential(stores);
-  // Checked again after the read: a recheck forked by an earlier form may
-  // have connected meanwhile, and only one connects.
-  if (!ready || !modelConnectionNeeded.get()) return;
+  if (!ready) return;
   modelConnectionNeeded.set(false);
   // The waiting messages go once the model is resolved, or once resolving it
   // failed or stopped: a failure is said in the transcript, and a run

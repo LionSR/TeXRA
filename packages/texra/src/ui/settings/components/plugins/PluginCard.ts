@@ -291,7 +291,6 @@ export class PluginCard extends TexraElement {
                 icon: 'shield',
                 text: PLUGINS_PAGE.review,
                 kind: 'secondary',
-                appearance: 'outlined',
                 onClick: () => this.pluginAction('enable'),
               })
             : nothing
@@ -300,14 +299,12 @@ export class PluginCard extends TexraElement {
           icon: 'rotate-right',
           text: PLUGINS_PAGE.update,
           kind: 'secondary',
-          appearance: 'outlined',
           onClick: () => this.pluginAction('update'),
         })}
         ${renderLabeledActionButton({
           icon: 'trash',
           text: PLUGINS_PAGE.remove,
           kind: 'secondary',
-          appearance: 'outlined',
           onClick: () => this.pluginAction('remove'),
         })}
       </div>

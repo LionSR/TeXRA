@@ -4,7 +4,7 @@ import { Flag } from 'effect/cli';
 import { pathExists } from '@texra-ai/harness/node';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
-import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
+import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 import {
   buildInitConfig,

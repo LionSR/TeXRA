@@ -71,7 +71,7 @@ function renderLabel(row: TranscriptRow): string {
 /** Create an error fallback template when formatting fails. */
 function formatRenderError(label: string, errorMsg: string): TemplateResult {
   // prettier-ignore
-  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">${waIcon('triangle-exclamation')}</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
+  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">${waIcon('circle-exclamation')}</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
 }
 
 /** Format a transcript row as a TemplateResult for direct Lit rendering. */

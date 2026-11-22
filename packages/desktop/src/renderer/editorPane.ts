@@ -139,8 +139,9 @@ interface EditorPaneCallbacks {
     contents: string,
     base: string | null,
   ): Effect.Effect<'saved' | 'changedOnDisk', EditorPaneError>;
-  /** Reports dirty state so the tab strip can show its indicator. */
-  onDirtyChange(path: string, dirty: boolean): void;
+  /** A path's unsaved state changed; the tab strip redraws its mark, which
+   *  it reads back through `hasUnsavedChanges`. */
+  onDirtyChange(path: string): void;
   /**
    * A tree row was activated. The pane does NOT load the file itself: the shell
    * owns tabs, so it creates (or focuses) the editor tab and calls back into
@@ -286,7 +287,7 @@ export function createEditorPane(
       ...state,
       dirty: withMember(state.dirty, path, dirty),
     }));
-    callbacks.onDirtyChange(path, dirty);
+    callbacks.onDirtyChange(path);
   }
   const isDirty = (path: string): boolean =>
     SubscriptionRef.getUnsafe(tree).dirty.has(path);

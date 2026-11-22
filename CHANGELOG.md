@@ -186,6 +186,18 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   renames `sourceLabel` to `label` and `source` to `sourcePath`. The chat's
   exit line spells out its token counts.
 - **The CLI needs Node.js 22.22.2 or later in 22.x, or 24.15 or later.**
+- **MCP servers must speak MCP 2025-11-25.** A server that only speaks an
+  older protocol revision (one built on the TypeScript MCP SDK before 1.25,
+  December 2025, such as `@modelcontextprotocol/server-github`) no longer
+  starts. Its tools are not offered; the rest of the run goes on, and the
+  run's transcript and the log say `MCP server "<name>" did not start: it
+  answered MCP revision 2025-06-18, but MCP 2025-11-25 is required; update
+  the server (its MCP SDK is older)`. Update the server to a current release.
+  A server that answers a newer revision is refused the same way, with
+  the message saying this client does not accept it yet. SDK: the
+  `framing` option is gone from `JsonRpcConnectionOptions` and
+  `JsonRpcProcessOptions` (`@texra-ai/harness/plugins`); a JSON-RPC
+  connection speaks only LSP `Content-Length` framing.
 
 ### Features
 
@@ -263,7 +275,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   code (`harness.mjs`), which loads while TeXRA runs once you trust it
   yourself and runs from a copy of the files you trusted. Agents get a `plugin_manager` tool, and switching a plugin on or
   off reaches open conversations at their next step.
-- **MCP servers.** List local stdio servers in `~/.texra/mcp.json` (the
+- **MCP servers.** List local stdio servers speaking MCP 2025-11-25 in `~/.texra/mcp.json` (the
   shape of Claude Code's `.mcp.json`), or install a plugin that carries
   them. A plugin's servers are offered to the assistant while the plugin is
   on; a server listed only in `mcp.json` is offered to a run whose tools name

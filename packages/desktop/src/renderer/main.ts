@@ -3,7 +3,6 @@
 // JetBrains Mono the code/terminal/path surfaces; both are self-hosted rather
 // than fetched, since the app must render identically offline.
 import { Schema } from 'effect';
-import type { RpcMessage } from 'effect/rpc';
 import {
   decodingDefault,
   extractErrorMessage,
@@ -352,9 +351,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
           ${renderLabeledActionButton({
             icon: 'folder-open',
             text: 'Open project folder',
-            appearance: 'filled',
-            variant: 'brand',
-            className: 'btn-primary',
+            kind: 'primary',
             onClick: () =>
               postToMain({
                 command: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
@@ -419,7 +416,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
       icon: 'table-columns',
       label: sidebarToggleLabel,
       tooltip: sidebarToggleLabel,
-      className: 'shell-header-button icon-button',
+      className: 'shell-header-button',
       size: 's',
       onClick: () => updateShell(toggleSidebar(shellState())),
     })}
@@ -762,9 +759,7 @@ const routeMessage = createMessageRoutes({
     for (const project of projectWorkbenches.values())
       project.pdfPane.reportLoadFailure(message.pdfUrl, message.reason);
   },
-  'desktop:showPrompt': ({ message }) =>
-    // cast: `rpc` reads its own message.
-    promptOverlay.receive(message as unknown as RpcMessage.FromClientEncoded),
+  'desktop:showPrompt': ({ message }) => promptOverlay.receive(message),
   'desktop:terminal:data': (message) =>
     projectWorkbenches
       .get(message.session)

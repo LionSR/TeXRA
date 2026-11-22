@@ -344,6 +344,7 @@ export {
   getProposalFileGroups,
   GoalResultSchema,
   InstalledPluginSchema,
+  shortPluginId,
   HARNESS_INSTRUCTION_KEY,
   isEmptyUsage,
   isModelOptionAvailable,

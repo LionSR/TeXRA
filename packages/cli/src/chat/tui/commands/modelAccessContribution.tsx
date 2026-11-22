@@ -44,7 +44,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
 } {
   function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     const context = useSlashContext();
-    const { stores, chat } = context;
+    const { stores } = context;
     const bound = bindSelection<AccountAction>(
       context,
       props,
@@ -65,10 +65,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
         }
       },
       {
-        onDone: (value) => {
-          props.onDone(value);
-          chat.fork(context.onAccountChanged());
-        },
+        onDone: props.onDone,
         completion: 'busy',
         busyTitle: (value) => {
           switch (value.kind) {
@@ -107,7 +104,6 @@ export function modelAccessContribution(): SlashCommandContribution & {
 
   function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const context = useSlashContext();
-    const { chat } = context;
     // A failed status read is said in the transcript; the rows then read
     // "Status unavailable".
     const apiKeys = useAsyncResource({
@@ -130,7 +126,6 @@ export function modelAccessContribution(): SlashCommandContribution & {
           // every host; only the coding-plan tip is this surface's to write.
           if (modelNotice) appendLocalNotice(modelNotice);
           props.onDone(provider);
-          chat.fork(context.onAccountChanged());
         }}
         onCancel={() => props.onDone(undefined)}
       />
@@ -168,9 +163,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
     handler: (remainder, context) =>
       remainder.trim().toLowerCase() === 'status'
         ? showCliAccountStatus(context.stores)
-        : loginFromChat(remainder, context).pipe(
-            Effect.andThen(context.onAccountChanged()),
-          ),
+        : loginFromChat(remainder, context),
     formComponent: AccountAccessFormAdapter,
   };
   return { pluginId: 'model-access', commands: [key, login], login };

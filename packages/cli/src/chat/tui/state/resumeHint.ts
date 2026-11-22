@@ -7,6 +7,7 @@ import {
   type RunId,
   type TokenUsageStats,
 } from '@texra-ai/harness/schemas';
+import { IS_WINDOWS } from '@texra-ai/harness/node';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -30,7 +31,7 @@ interface ResumeCommandOptions {
 
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';
 /** The shell a person pastes the hint into: PowerShell on Windows. */
-const SHELL_FORMAT = process.platform === 'win32' ? 'powershell' : 'posix';
+const SHELL_FORMAT = IS_WINDOWS ? 'powershell' : 'posix';
 
 /** A path from argv or the working directory, which holds no NUL to fail on. */
 const shellArgument = (value: string): string =>

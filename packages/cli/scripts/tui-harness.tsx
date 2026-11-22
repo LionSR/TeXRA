@@ -1981,7 +1981,6 @@ const harnessSlashContext: SlashCommandContext = {
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  onAccountChanged: () => Effect.void,
 };
 // An interruptible harness run is a root launch on its way to the session,
 // ended when the harness is interrupted, so the status bar derives the

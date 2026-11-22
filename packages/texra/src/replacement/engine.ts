@@ -2,7 +2,7 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { Effect, Result } from 'effect';
+import { Effect, Record, Result } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import {
@@ -277,7 +277,7 @@ function getAllReplacementsRegex(config: ConfigProvider): RegexRuleSet[] {
   const enabledRules = Object.entries(REGEX_RULES)
     .filter(([name]) => enabled.has(name))
     .map(([, rules]) => rules);
-  if (Object.keys(customReplacements).length === 0) {
+  if (Record.isEmptyRecord(customReplacements)) {
     return enabledRules;
   }
 

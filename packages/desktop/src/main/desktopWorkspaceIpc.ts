@@ -8,9 +8,6 @@
 
 import { Effect } from 'effect';
 
-import { onAppSignal } from '@texra-ai/harness/host';
-import { isPathWithin } from '@texra-ai/harness/node';
-import type { AppSignals } from '@texra-ai/harness/plugins';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import {
@@ -32,12 +29,6 @@ interface DesktopWorkspaceIpcOptions {
    * differs from the renderer's own coordinates under display zoom.
    */
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
-  /**
-   * Root of this binding's project; none for the no-workspace session. The
-   * file signal hears every project's writes, and only this root's re-list
-   * the tree.
-   */
-  readonly workspaceRoot: string | undefined;
 }
 
 interface DesktopWorkspaceIpc {
@@ -55,32 +46,21 @@ interface DesktopWorkspaceIpc {
   disposeRendererResources(): void;
 
   /**
-   * Tells the renderer to re-list its file tree when a write lands inside
-   * this project, until interrupted. The window forks it into the project
-   * binding's scope, which a renderer reload replaces along with this IPC.
+   * Tells the renderer to re-list its file tree. The project's binding runs
+   * it on each write TeXRA makes inside the project (the host snapshot's
+   * `filesWritten`): accepted outputs and diffs write straight to disk, past
+   * the editor's own write path, and the tree caches its listing with no
+   * watcher behind it.
    */
-  readonly followFilesWritten: Effect.Effect<void, never, AppSignals>;
+  readonly filesChanged: Effect.Effect<void>;
 }
 
 export function createDesktopWorkspaceIpc(
   post: (message: DesktopWorkspaceReply) => void,
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
-  // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
-  // the editor's own write path, and the file tree caches its listing with no
-  // watcher behind it — this signal is its only notice, and without it the
-  // tree stays stale until the user hits Refresh. A write outside the
-  // workspace root cannot appear in the tree, so it is not worth a re-list.
-  const followFilesWritten = onAppSignal(
-    'workspaceFilesWritten',
-    ({ absolutePaths }) => {
-      const root = options.workspaceRoot;
-      if (!root) return;
-      if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
-      post({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
-      });
-    },
+  const filesChanged = Effect.sync(() =>
+    post({ command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED }),
   );
 
   function startTerminal(
@@ -126,7 +106,7 @@ export function createDesktopWorkspaceIpc(
       options.browserViews.disposeAll();
     },
 
-    followFilesWritten,
+    filesChanged,
 
     handle(data) {
       switch (data.command) {

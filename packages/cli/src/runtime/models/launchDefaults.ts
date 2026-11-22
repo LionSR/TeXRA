@@ -7,8 +7,8 @@ import {
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
+import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import {
-  CLI_CHEAP_START_MODEL,
   cliCommandDefaults,
   resolveKnownCliModelId,
 } from '../platform/cliConfig';

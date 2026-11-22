@@ -37,6 +37,7 @@ import {
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
+import { shortPluginId } from '@shared/schemas';
 import { withLogChannel } from '@logger/effectLog';
 import { AppSignals } from '@platform/appSignals';
 import { AppState } from '@platform/interfaces';
@@ -233,7 +234,7 @@ export const toolCatalogLayer = (
             notes.push(
               stand === undefined
                 ? failed.message
-                : `${failed.message}; revision ${stand.revision.slice(0, 12)} stays in use until the plugin is fixed or disabled.`,
+                : `${failed.message}; revision ${shortPluginId(stand.revision)} stays in use until the plugin is fixed or disabled.`,
             );
           const fresh = new Set<NativePlugin>();
           const candidates = (yield* Effect.forEach(

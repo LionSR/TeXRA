@@ -3,8 +3,9 @@
  *
  * The extension/desktop welcome card and the walkthrough import these strings
  * instead of paraphrasing each other, so the choice order can never drift
- * between surfaces; the CLI's "Connect a model" panel shares the title and
- * the ChatGPT choice and the key choice's description, and labels the key
+ * between surfaces; the CLI's "Connect a model" panel shares the title, the
+ * subscriptions' connect rows (`accountAuth.ts`) and the key choice's
+ * description, and labels the key
  * choice as its own `/key` row does.
  * Surface-specific hints (e.g. "run `texra auth chatgpt login`" vs. a settings link) stay
  * in the surface that owns them.
@@ -16,6 +17,7 @@
 
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import type { IconName } from '@ui/wa/iconNames';
+import { CHATGPT_AUTH } from './accountAuth';
 import { OWN_API_KEYS } from './modelAccess';
 
 /** The one credential prompt: the extension/desktop card and the CLI's
@@ -28,12 +30,9 @@ export const ONBOARDING_CARD_TITLE = 'Connect a model';
  */
 export const TEXRA_TAGLINE = 'Your AI theorist. It proposes; you decide.';
 
-/** State 0 choice 1. */
-export const ONBOARDING_CHOICE_CHATGPT = {
-  label: 'Use ChatGPT subscription',
-  description:
-    'OpenAI models through ChatGPT Plus, Pro, or Team; no API key needed',
-} as const;
+/** State 0 choice 1: the ChatGPT subscription's connect row, as the
+ *  terminal's connect panel words it. */
+export const ONBOARDING_CHOICE_CHATGPT = CHATGPT_AUTH.connect;
 
 /**
  * State 0 choice 2. Same name as the model-access setting's option, so the

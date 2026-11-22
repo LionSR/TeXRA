@@ -9,11 +9,10 @@ import {
   CommandDirs,
   executeCommand,
   existsAtAbsolute,
+  IS_WINDOWS,
   whichOnExtendedPath,
 } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-const IS_WINDOWS = process.platform === 'win32';
 
 const WINDOWS_EXTENSIONLESS_PERL_TOOLS = new Set([
   'latexdiff',

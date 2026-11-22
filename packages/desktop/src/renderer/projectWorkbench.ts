@@ -18,7 +18,6 @@ import {
   initialDesktopShellState,
   openWorkbenchTab,
   workbenchTabId,
-  setWorkbenchTabDirty,
   type DesktopShellState,
   type WorkbenchKind,
 } from '../shared/desktopShellState';
@@ -58,13 +57,7 @@ export function createProjectWorkbench(options: {
   // a workbench share the record. It is decoded once, here, and from then on
   // this workbench holds the layout and is the blob's one writer.
   const restored = restoredLayout(session, surface.surface$.get().workbench);
-  let state: DesktopShellState = {
-    ...restored,
-    workbenchTabs: restored.workbenchTabs.map((tab) => ({
-      ...tab,
-      dirty: false,
-    })),
-  };
+  let state: DesktopShellState = restored;
   surfaces.act(session, { kind: 'workbench', layout: state });
 
   let disposed = false;
@@ -136,10 +129,8 @@ export function createProjectWorkbench(options: {
         },
       ),
     onRequestOpen: openDocument,
-    onDirtyChange: (path, dirty) =>
-      updateState(
-        setWorkbenchTabDirty(getState(), workbenchTabId('editor', path), dirty),
-      ),
+    onDirtyChange: (path) =>
+      workbench.redrawTab(workbenchTabId('editor', path)),
     onError: (error) => {
       // Closing a project rejects its pending I/O as part of disposal.
       if (!disposed) console.error('TeXRA editor pane', error);
@@ -237,6 +228,7 @@ export function createProjectWorkbench(options: {
         editors.get(tab.id)?.dispose();
         editors.delete(tab.id);
       },
+      isDirty: (tab) => editors.get(tab.id)?.hasUnsavedChanges() ?? false,
     },
     terminal: {
       zone: 'bottom',

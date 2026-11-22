@@ -66,6 +66,7 @@ import {
   NonNegativeIntSchema,
   ExportNodeSchema,
 } from '@texra-ai/harness/schemas';
+import { RpcServerMessageSchema } from '@texra/shared/rpcOverMessages';
 import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
 import { CommitOrdinalSchema } from '@texra-ai/harness/transcript';
 
@@ -377,7 +378,7 @@ export const TexraRpcs = RpcGroup.make(
   /** A window's reply to one of the service's calls on it (`WindowRpcs`),
    *  as `rpc`'s own message. */
   Rpc.make('host.answer', {
-    payload: { attachment: Schema.String, message: Schema.Json },
+    payload: { attachment: Schema.String, message: RpcServerMessageSchema },
   }),
 );
 

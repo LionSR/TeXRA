@@ -73,7 +73,9 @@ two halves:
   host: refresh or check again `arrows-rotate`; retry, restart or update
   `rotate-right`; reset to a default `arrow-rotate-left`; export
   `file-export`; open outside TeXRA `arrow-up-right-from-square`; dismiss
-  or remove `xmark`; delete `trash`; stop `circle-stop`. A log level's icon
+  or remove from a list `xmark`; delete what is stored `trash`; stop
+  `circle-stop`; an error or failure notice `circle-exclamation`, a warning
+  `triangle-exclamation` (`TONE_GLYPH`, `copy/runStatus.ts`). A log level's icon
   and word come from `copy/logLevels.ts`, a run status's from
   `copy/runStatus.ts`.
 - **Icons and menus.** `waIcon()` uses a square canvas. Dropdown items reserve

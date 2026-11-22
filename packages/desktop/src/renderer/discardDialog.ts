@@ -47,8 +47,8 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
     renderElement(
       renderLabeledActionButton({
         text: 'Cancel',
-        appearance: 'outlined',
-        className: 'desktop-discard-cancel btn-secondary',
+        kind: 'secondary',
+        className: 'desktop-discard-cancel',
         onClick: () => {
           dialog.open = false;
         },

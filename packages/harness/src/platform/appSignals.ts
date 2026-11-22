@@ -126,10 +126,12 @@ export interface AppSignalPayloads {
    * in every process that folds the run (the arm's `writes`); a host's own
    * write (an accepted diff, the progress view's Accept) emits here directly.
    *
-   * Consumed by: extension (VS Code's `FileDecorationProvider` badges the
-   * written Explorer entries) and desktop (its file tree caches a directory
-   * listing and has no filesystem watcher, so this is the only notice it gets
-   * that a write landed behind its back). Not the CLI: it has no file tree or
+   * Consumed by: each GUI window's host snapshot (a write inside its project
+   * re-lists the launcher's files, and the desktop's file tree follows the
+   * same filtered stream, since it caches a directory listing with no
+   * filesystem watcher), the extension's `FileDecorationProvider` (it
+   * badges the written Explorer entries), and the service, which forwards
+   * its tasks' writes to their windows. Not the CLI: it has no file tree or
    * decoration surface — accepted paths are printed into the transcript by the
    * tool row, which is built from the tool result and cannot go stale.
    */

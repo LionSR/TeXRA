@@ -30,7 +30,7 @@ import {
   type PresentationEventHandlers,
   type ProcessServices,
 } from '@texra-ai/harness/host';
-import { commitExists } from '@texra-ai/harness/node';
+import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   AppSignals,
   pathToLocationIn,
@@ -197,9 +197,9 @@ export interface SharedHostCommandBindings {
     readonly signInChatGpt: HostVerb<void>;
     readonly openGettingStarted: HostVerb<void>;
   };
-  /** The host's code editor, where it has one. Its files are
-   *  project-relative paths, or absolute for a file outside the project;
-   *  which of them a launcher field takes is decided in the body below. */
+  /** The host's code editor, where it has one. Its files are absolute
+   *  paths; the body below turns them into the launcher's
+   *  project-relative ones. */
   readonly editor?: {
     /** The file the editor shows; null when none is open. */
     readonly currentFile: HostVerb<string | null>;
@@ -519,13 +519,17 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         }
         case 'useCurrentFile': {
-          const current = yield* (yield* editor("The editor's current file"))
-            .currentFile;
-          if (!current)
+          const currentPath = yield* (yield* editor(
+            "The editor's current file",
+          )).currentFile;
+          if (!currentPath)
             return yield* new Rejected({
               reason:
                 'No file is currently open or the file is not part of the workspace.',
             });
+          // Project-relative inside the project, absolute outside it or
+          // with no folder open.
+          const current = workspaceRelativePath(roots.workspace, currentPath);
           // A latexdiff artifact (`paper-diff1234abcd.tex`) taken as the base
           // file selects the file it was derived from instead, when that
           // file is still on disk, and its commit rides onto the launcher.
@@ -565,9 +569,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'addOpenedFiles': {
           const opened = yield* (yield* editor("The editor's open files"))
             .openedFiles;
+          // A file open in two tabs is listed once.
+          const paths = new Set(
+            opened.map((file) => workspaceRelativePath(roots.workspace, file)),
+          );
           return {
             kind: 'files',
-            paths: opened.filter(
+            paths: [...paths].filter(
               fieldTakes(getIncludedExtensions(request.fileType)),
             ),
           };

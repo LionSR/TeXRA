@@ -31,6 +31,9 @@ import { Deferred, Effect, Ref, Schema, type Scope, Stream } from 'effect';
 import { HttpServer, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { Socket } from 'effect/socket';
 
+// Local imports
+import { API_KEY_PATTERN_SOURCE } from '../src/providers/providerPlugins.js';
+
 /** One recorded request and the provider's answer to it. */
 const ExchangeSchema = Schema.Struct({
   method: Schema.String,
@@ -49,11 +52,9 @@ const ExchangeSchema = Schema.Struct({
 });
 export type Exchange = typeof ExchangeSchema.Type;
 
-/**
- * A credential's shape in any of the routes' formats: an OpenAI-style
- * `sk-` key, a bearer header, a Google API key.
- */
-const LEAKED_SECRET = /sk-[A-Za-z0-9]|Bearer|AIza/;
+/** A credential in any of the routes' formats: a provider key or a bearer
+ *  header. */
+const LEAKED_SECRET = new RegExp(`${API_KEY_PATTERN_SOURCE}|Bearer`);
 
 const CassetteSchema = Schema.Struct({
   exchanges: Schema.Array(ExchangeSchema),
