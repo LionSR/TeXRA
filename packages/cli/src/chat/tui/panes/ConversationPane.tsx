@@ -6,7 +6,7 @@ import {
 } from '@texra/shared/plugins/documents';
 
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
-import { sessionView } from '../state/sessionView';
+import { sessionView, runViewOf } from '../state/sessionView';
 import {
   conversationRows,
   notices as noticesSignal,
@@ -43,8 +43,8 @@ export function ConversationPane(
   const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
-  const merged = conversationRows(view, allNotices, activeRunId);
-  const stream = merged.run;
+  const stream = runViewOf(view, activeRunId);
+  const merged = conversationRows(stream, allNotices, activeRunId);
   const displayEntries = pendingTranscriptEntries(
     merged.rows,
     merged.finalRows,

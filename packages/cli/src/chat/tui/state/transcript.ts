@@ -27,7 +27,7 @@ import {
   sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
-import type { RunView, RunId, SessionView } from '@texra-ai/harness/schemas';
+import type { RunView, RunId } from '@texra-ai/harness/schemas';
 
 /**
  * The runs whose transcript tier this terminal keeps resident: its
@@ -166,20 +166,15 @@ export function clearLocalTranscript(): void {
  * identity across merges). Both conversation panes read this one join.
  */
 export function conversationRows(
-  view: SessionView,
+  run: RunView | undefined,
   all: readonly LocalNotice[],
   runId: RunId | undefined,
-): {
-  readonly run: RunView | undefined;
-  readonly rows: readonly TranscriptRow[];
-  readonly finalRows: number;
-} {
-  const run = runViewOf(view, runId);
+): { readonly rows: readonly TranscriptRow[]; readonly finalRows: number } {
   const rows = run?.transcript.rows ?? [];
   const finalRows = run?.transcript.finalRows ?? 0;
   const runNotices =
     runId === undefined ? [] : all.filter((notice) => notice.runId === runId);
-  if (runNotices.length === 0) return { run, rows, finalRows };
+  if (runNotices.length === 0) return { rows, finalRows };
   const finalSeq = finalRows === 0 ? 0 : rowSeq(rows[finalRows - 1]);
   const out: TranscriptRow[] = [];
   let next = 0;
@@ -197,7 +192,6 @@ export function conversationRows(
   }
   for (; next < rows.length; next += 1) out.push(rows[next]);
   return {
-    run,
     rows: out,
     finalRows:
       finalRows +

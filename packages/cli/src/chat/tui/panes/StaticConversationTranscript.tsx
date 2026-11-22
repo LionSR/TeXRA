@@ -189,8 +189,8 @@ export function StaticConversationTranscript({
   const allNotices = useSignal(noticesSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const source = useMemo((): StaticScrollbackSource => {
-    const merged = conversationRows(view, allNotices, scrollbackRunId);
-    const stream = merged.run;
+    const stream = runViewOf(view, scrollbackRunId);
+    const merged = conversationRows(stream, allNotices, scrollbackRunId);
     return {
       entries:
         stream === undefined && merged.rows.length === 0
