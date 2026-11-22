@@ -24,6 +24,7 @@ import {
 } from 'node:util';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import { splitValidationAgent } from './validationAgent.mjs';
 import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
@@ -100,11 +101,14 @@ function isolatedCliHomeEnv(home, overrides = {}) {
   };
 }
 
-function run(command, args, options = {}) {
+function run(command, written, options = {}) {
+  // A command's `--agent <name>` is this script's notation, not the CLI's.
+  const { command: args, env: agentEnv } = splitValidationAgent(written);
   const env = {
     ...process.env,
     CI: '1',
     ...options.env,
+    ...agentEnv,
   };
   if (options.validationModel) {
     if (!options.validationFlagPath) {
@@ -279,28 +283,6 @@ function validateBinarySmoke() {
     'version output should be non-empty',
   );
 
-  const agentsText = run(process.execPath, [binaryPath, 'agents', 'list']);
-  assertSuccess(agentsText, 'texra agents list');
-  assert(
-    agentsText.stdout.trim().length > 0,
-    'agents list should prove resource-backed agent loading',
-  );
-
-  const agentsNdjson = run(process.execPath, [
-    binaryPath,
-    '--output-format',
-    'ndjson',
-    'agents',
-    'list',
-  ]);
-  assertSuccess(agentsNdjson, 'texra --output-format ndjson agents list');
-  assert(
-    parseNdjson(agentsNdjson.stdout, 'agents list NDJSON').every(
-      (record) => record.kind === 'agent',
-    ),
-    'agents list NDJSON records should have kind=agent',
-  );
-
   // A reference a run's bind refuses is refused here too, in its words.
   assertUsageError(
     run(process.execPath, [
@@ -312,77 +294,6 @@ function validateBinarySmoke() {
     'texra models show <model that always thinks>@none',
     'cannot turn thinking off',
   );
-}
-
-function validateBundledLeanAgents() {
-  const cwd = makeScratch('texra-cli-list-cwd-');
-  const home = makeScratch('texra-cli-list-home-');
-  try {
-    // The Lean agents ship bundled (#13080), so a fresh home lists them
-    // without any sign-in.
-    const ndjson = run(
-      process.execPath,
-      [
-        binaryPath,
-        'agents',
-        'list',
-        '--cwd',
-        cwd,
-        '--output-format',
-        'ndjson',
-        '--no-color',
-      ],
-      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
-    );
-    assertSuccess(ndjson, 'texra agents list NDJSON in a fresh home');
-    const names = parseNdjson(ndjson.stdout, 'agents list NDJSON').map(
-      (record) => record.agent?.name,
-    );
-    for (const lean of [
-      'lean',
-      'leanSearch',
-      'leanSimplifier',
-      'leanBlueprint',
-      'leanOrchestrator',
-    ]) {
-      assert(
-        names.includes(lean),
-        `agents list should include the bundled ${lean} agent without auth\nstdout:\n${ndjson.stdout}`,
-      );
-    }
-  } finally {
-    removeScratch(cwd);
-    removeScratch(home);
-  }
-}
-
-/** A list naming an agent that does not exist is a usage error and stores
- *  nothing: stored, it would leave the workspace only the agents it names. */
-function validateUnknownWorkspaceAgent() {
-  const cwd = makeScratch('texra-cli-agents-cwd-');
-  const home = makeScratch('texra-cli-agents-home-');
-  const configAgents = (...args) =>
-    run(
-      process.execPath,
-      [binaryPath, 'config', 'agents', ...args, '--cwd', cwd, '--no-color'],
-      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
-    );
-  try {
-    assertUsageError(
-      configAgents('--agents', 'assistant,inherit'),
-      'texra config agents with a name no agent has',
-      'Agent not found: inherit',
-    );
-    const shown = configAgents();
-    assertSuccess(shown, 'texra config agents after a refused list');
-    assert(
-      shown.stdout.includes('Workspace agents: all'),
-      `a refused list should leave the workspace agents unchanged\nstdout:\n${shown.stdout}`,
-    );
-  } finally {
-    removeScratch(cwd);
-    removeScratch(home);
-  }
 }
 
 function validateFileFlagMissingValues() {
@@ -414,7 +325,7 @@ function validateFileFlagMissingValues() {
     run(process.execPath, [
       binaryPath,
       'run',
-      'review',
+      'chat',
       '--instruction-file',
       '--print',
     ]),
@@ -450,10 +361,11 @@ async function loadPtySpawn(label) {
   return ptySpawn;
 }
 
-async function runTexraPty(args, options = {}) {
+async function runTexraPty(written, options = {}) {
+  const { command: args, env: agentEnv } = splitValidationAgent(written);
   const label = options.label ?? `texra ${args.join(' ')}`;
   const ptySpawn = await loadPtySpawn(label);
-  const env = createInteractivePtyEnv(options.env);
+  const env = { ...createInteractivePtyEnv(options.env), ...agentEnv };
 
   return await new Promise((resolve, reject) => {
     let output = '';
@@ -765,7 +677,7 @@ function validateToolUseAgentRunCommand() {
       [
         binaryPath,
         'run',
-        'review',
+        'chat',
         '--instruction-file',
         'review-prompt.md',
         '--context',
@@ -835,6 +747,8 @@ prompt: |
       [
         binaryPath,
         'run',
+        'chat',
+        '--agent',
         'history_query_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -883,7 +797,9 @@ prompt: |
  * rather than manufacturing a snapshot from separately copied DB/WAL files.
  */
 function storeRows(dir, sql, ...params) {
-  const db = new DatabaseSync(path.join(dir, 'texra.db'), { readOnly: true });
+  // A store file itself, or the directory of TeXRA's `texra.db`.
+  const file = dir.endsWith('.db') ? dir : path.join(dir, 'texra.db');
+  const db = new DatabaseSync(file, { readOnly: true });
   try {
     return db.prepare(sql).all(...params);
   } finally {
@@ -1003,6 +919,8 @@ prompt: |
         [
           binaryPath,
           'run',
+          'chat',
+          '--agent',
           'echo_validation',
           '--model',
           'openai/gpt-5.6-sol',
@@ -1239,6 +1157,8 @@ if (!input.stop_hook_active)
     const result = cli(
       [
         'run',
+        'chat',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -1383,7 +1303,9 @@ prompt: |
     const listing = cli(['plugin', 'list']);
     assertSuccess(listing, 'texra plugin list');
     const chat = cli([
-      ...runArgs('program_list_validation', 'yolo'),
+      ...runArgs('chat', 'yolo'),
+      '--agent',
+      'program_list_validation',
       '--instruction',
       'Which programs can you start?',
     ]);
@@ -1578,6 +1500,8 @@ prompt: |
     const nativeRun = () => {
       const started = cli([
         'run',
+        'chat',
+        '--agent',
         'native_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -1788,11 +1712,11 @@ async function validateSdkResumeApproval() {
     // The workspace's store: the global one beside it holds no runs.
     const store = spawnSync(
       'find',
-      [storage, '-path', '*/workspace-storage/*', '-name', 'texra.db'],
+      [storage, '-path', '*/workspace-storage/*', '-name', '*.db'],
       { encoding: 'utf8' },
     ).stdout.trim();
     const rows = storeRows(
-      path.dirname(store),
+      store,
       `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
          json_extract(e.data, '$.decision.action') AS decision,
          json_extract(e.data, '$.payload.callId') AS callId
@@ -2155,6 +2079,7 @@ async function validateThresholdCompaction() {
         binaryPath,
         'tasks',
         'start',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2281,7 +2206,7 @@ async function validateServiceChatsSeeEachOther() {
         const plain = stripVTControlCharacters(pty.output).slice(from);
         const steps = [
           ['opening', 'list', '/ commands', ['/tasks', '\r']],
-          ['list', 'attach', 'echo_validation', ['\r']],
+          ['list', 'attach', 'Hello there', ['\r']],
           ['attach', 'done', 'Hello there | And again', ['\u001b', ETX, ETX]],
         ];
         const step = steps.find(([at]) => at === phase);
@@ -2383,6 +2308,7 @@ prompt: |
       [
         'tasks',
         'start',
+        '--agent',
         'park_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2553,6 +2479,7 @@ prompt: |
       [
         'tasks',
         'start',
+        '--agent',
         'diag_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2675,6 +2602,7 @@ async function validateServiceSessionIdle() {
       [
         'tasks',
         'start',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2715,6 +2643,7 @@ async function validateServiceSessionIdle() {
       [
         'tasks',
         'start',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2792,6 +2721,7 @@ prompt: |
       [
         'tasks',
         'start',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2821,6 +2751,7 @@ prompt: |
         binaryPath,
         'tasks',
         'start',
+        '--agent',
         'env_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2854,6 +2785,7 @@ prompt: |
         binaryPath,
         'tasks',
         'start',
+        '--agent',
         'env_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -2956,6 +2888,7 @@ prompt: |
           binaryPath,
           'tasks',
           'start',
+          '--agent',
           agent,
           '--model',
           'openai/gpt-5.6-sol',
@@ -3116,6 +3049,7 @@ prompt: |
       [
         'tasks',
         'start',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -3152,6 +3086,7 @@ prompt: |
       [
         'tasks',
         'start',
+        '--agent',
         'approval_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -3183,6 +3118,7 @@ prompt: |
       [
         'tasks',
         'start',
+        '--agent',
         'approval_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -3327,6 +3263,7 @@ prompt: |
       [
         'tasks',
         'start',
+        '--agent',
         'approval_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -3352,7 +3289,7 @@ prompt: |
         // One step per chunk: each waits for output after the last one's.
         const steps = [
           ['opening', 'list', '/ commands', ['/tasks', '\r']],
-          ['list', 'attach', 'approval_validation', ['\r']],
+          ['list', 'attach', 'Run the command', ['\r']],
           ['attach', 'approved', 'Run a command', ['y']],
           ['approved', 'sent', 'The approved command ran.', ['Ping', '\r']],
         ];
@@ -3460,6 +3397,7 @@ async function validateServiceSharedTask() {
       [
         'tasks',
         'start',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -3532,6 +3470,7 @@ async function validateServiceSharedTask() {
       [
         'tasks',
         'start',
+        '--agent',
         'echo_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -3796,6 +3735,8 @@ prompt: |
       [
         binaryPath,
         'run',
+        'chat',
+        '--agent',
         'script_fanout_validation',
         '--model',
         'openai/gpt-5.6-sol',
@@ -3894,8 +3835,6 @@ async function validateCliRunArtifacts(options = {}) {
     buildValidationBundle();
   }
   validateBinarySmoke();
-  validateBundledLeanAgents();
-  validateUnknownWorkspaceAgent();
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
   validateRunCommand();

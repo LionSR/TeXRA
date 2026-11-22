@@ -85,6 +85,7 @@ import { OpenPdfTool } from './OpenPdfTool';
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
 import { SETUP_PROMPT } from './setup/setupPrompt';
+import { TASK_MODULES, TASK_PROGRAMS } from './tasks/programs';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
@@ -206,6 +207,8 @@ const core = (
   ...definePlugin<EditorHost>({
     id: 'core',
     tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
+    scriptModules: TASK_MODULES,
+    programs: TASK_PROGRAMS,
     // The section writes math for a rendered reply: a run that writes a
     // document, with no tool offered, gets none of it (`$$\\begin{align}`
     // inside a .tex file does not compile).

@@ -125,13 +125,6 @@ const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_EDIT_APPROVAL: '1',
   HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
 });
-const VISIBLE_AGENTS = [
-  'research',
-  'review',
-  'latexFixer',
-  'numerics',
-  'presenter',
-].join('||');
 const TWO_OPENAI_MODELS = [
   'openai/gpt-5.5-2026-04-23',
   'openai/gpt-5.5-pro-2026-04-23',
@@ -646,18 +639,6 @@ const SCENARIOS = [
     unexpect: ['/\u0015/model', '/model · error'],
   },
   {
-    name: 'slash-palette-esc-retypes-command',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
-    },
-    keys: ['/', `${ESC}/agent\r`],
-    expect: ['/agent', 'Agents', 'Choose an agent for this chat.'],
-    unexpect: ['//agent', 'Harness received: //agent', '/agent · error'],
-  },
-  {
     // The colon spelling of Shift+Return some terminals send acts exactly
     // like `ESC[13;2u` (the palette accepts its selection) and never leaks
     // into the draft as text.
@@ -694,78 +675,6 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: ['Harness received: first line\n  second line'],
     unexpect: ['first linesecond line', 'ERROR'],
-  },
-  {
-    name: 'agent-form',
-    frame: 'scrollback',
-    // The harness mirrors `texra chat`: agent selection is open exactly while
-    // the chat holds no root run, so a fixture whose root has ended gets the
-    // selectable picker and its "Choose an agent" description, not the
-    // read-only `texra chat --agent <name>` hint.
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
-    },
-    keys: ['/agent', '\r'],
-    expect: [
-      '/agent',
-      'Agents',
-      'research',
-      'review',
-      'latexFixer',
-      'Current: chat (hidden from picker)',
-      'Choose an agent for this chat.',
-      '1-5/Enter select',
-      'Esc close',
-    ],
-    unexpect: [
-      'Platform not initialized',
-      '/agent · error',
-      'texra --agent=<name>',
-      'creator',
-      'latexDiff',
-      'lean',
-      'setup',
-      'tool-use; built-in',
-      'delegating; built-in',
-      'orchestrator; built-in',
-    ],
-  },
-  {
-    name: 'agent-form-80-cols',
-    frame: 'scrollback',
-    cols: 80,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
-    },
-    keys: ['/agent', '\r'],
-    expect: [
-      '/agent',
-      'Agents',
-      'research',
-      'review',
-      'latexFixer',
-      'Current: chat (hidden from picker)',
-      'Choose an agent for this chat.',
-      '1-5/Enter select',
-      'Esc close',
-    ],
-    unexpect: [
-      'Platform not initialized',
-      '/agent · error',
-      'texra --agent=<name>',
-      'creator',
-      'latexDiff',
-      'lean',
-      'setup',
-      'tool-use; built-in',
-      'delegating; built-in',
-      'orchestrator; built-in',
-    ],
-    maxLineColumns: 80,
   },
   {
     name: 'model-form',
@@ -1103,28 +1012,6 @@ const SCENARIOS = [
       '/skills · error',
       'Platform not initialized',
     ],
-  },
-  {
-    name: 'compact-agent-form',
-    rows: 12,
-    cols: 80,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
-    },
-    keys: ['/agent', '\r'],
-    frame: 'viewport',
-    expect: [
-      '/agent',
-      'Current: chat (hidden from picker)',
-      'Agents',
-      '+4 more',
-      '↑/↓ navigate',
-      '1-5/Enter select',
-      'Esc close',
-    ],
-    unexpect: ['Platform not initialized', '/agent · error'],
   },
   {
     name: 'compact-model-form',
