@@ -20,7 +20,11 @@ import {
 } from 'effect';
 
 // Local imports
-import { IS_WINDOWS, meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
+import {
+  IS_WINDOWS,
+  meansAbsent,
+  relativeToRoot,
+} from '@texra-ai/harness/node';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
