@@ -31,6 +31,7 @@ import {
   type IconActionButtonOptions,
 } from '@ui/wa/actionButtons';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { renderLoadingState } from '@ui/wa/loadingState';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { memoryItemFacts } from '@ui/copy/memory';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
@@ -233,7 +234,7 @@ export class MemoryItem extends TexraElement {
     if (item.preview === undefined) {
       return item.previewError === true
         ? renderEmptyMessage('Unable to load contents.')
-        : renderEmptyMessage('Loading contents…');
+        : renderLoadingState('Loading contents…');
     }
     if (!item.preview.trim()) {
       return renderEmptyMessage('This note is empty.');
