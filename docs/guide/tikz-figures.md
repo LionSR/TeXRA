@@ -84,7 +84,7 @@ When automatic extraction is enabled, each `tikzpicture` in your selected files 
   { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
   { icon: 'file-submodule', title: 'Extract', desc: 'A standalone LaTeX document per figure.', chips: [{ text: 'fig1.tex', variant: 'neutral' }, { text: 'fig2.tex', variant: 'neutral' }, { text: 'fig3.tex', variant: 'neutral' }] },
   { icon: 'play-circle', title: 'Compile', desc: 'pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
-  { icon: 'output', title: 'Attach', desc: 'Models with native PDF support read the PDFs directly; others get rasterised PNGs via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: 'PDF or PNG', variant: 'success', icon: 'eye' }] },
+  { icon: 'output', title: 'Attach', desc: 'Models with native PDF support read the PDFs directly; others get rasterized PNGs via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: 'PDF or PNG', variant: 'success', icon: 'eye' }] },
   { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered output.', chips: [{ text: 'code + image', variant: 'accent' }] }
 ]" />
 

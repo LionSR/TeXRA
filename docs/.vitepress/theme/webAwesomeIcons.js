@@ -19,6 +19,7 @@ import { faBook } from '@fortawesome/free-solid-svg-icons/faBook';
 import { faBox } from '@fortawesome/free-solid-svg-icons/faBox';
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons/faBoxArchive';
 import { faBullseye } from '@fortawesome/free-solid-svg-icons/faBullseye';
+import { faCaretLeft } from '@fortawesome/free-solid-svg-icons/faCaretLeft';
 import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine';
 import { faCheck } from '@fortawesome/free-solid-svg-icons/faCheck';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown';
@@ -32,6 +33,7 @@ import { faCircleStop } from '@fortawesome/free-solid-svg-icons/faCircleStop';
 import { faCircleUser } from '@fortawesome/free-solid-svg-icons/faCircleUser';
 import { faCircleXmark } from '@fortawesome/free-solid-svg-icons/faCircleXmark';
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
+import { faClone } from '@fortawesome/free-solid-svg-icons/faClone';
 import { faCloud } from '@fortawesome/free-solid-svg-icons/faCloud';
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown';
 import { faCloudArrowUp } from '@fortawesome/free-solid-svg-icons/faCloudArrowUp';
@@ -71,11 +73,13 @@ import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
 import { faLink } from '@fortawesome/free-solid-svg-icons/faLink';
 import { faListCheck } from '@fortawesome/free-solid-svg-icons/faListCheck';
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
+import { faMicrochip } from '@fortawesome/free-solid-svg-icons/faMicrochip';
 import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
 import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
+import { faPlug } from '@fortawesome/free-solid-svg-icons/faPlug';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faPlusMinus } from '@fortawesome/free-solid-svg-icons/faPlusMinus';
 import { faReply } from '@fortawesome/free-solid-svg-icons/faReply';
@@ -125,6 +129,7 @@ const icons = {
   bullseye: faBullseye,
   box: faBox,
   'box-archive': faBoxArchive,
+  'caret-left': faCaretLeft,
   'chart-line': faChartLine,
   check: faCheck,
   'chevron-down': faChevronDown,
@@ -138,6 +143,7 @@ const icons = {
   'circle-user': faCircleUser,
   'circle-xmark': faCircleXmark,
   'clock-rotate-left': faClockRotateLeft,
+  clone: faClone,
   cloud: faCloud,
   'cloud-arrow-down': faCloudArrowDown,
   'cloud-arrow-up': faCloudArrowUp,
@@ -177,11 +183,13 @@ const icons = {
   link: faLink,
   'list-check': faListCheck,
   'magnifying-glass': faMagnifyingGlass,
+  microchip: faMicrochip,
   microphone: faMicrophone,
   'note-sticky': faNoteSticky,
   palette: faPalette,
   pencil: faPencil,
   play: faPlay,
+  plug: faPlug,
   plus: faPlus,
   'plus-minus': faPlusMinus,
   reply: faReply,
@@ -214,7 +222,9 @@ const icons = {
 const CODICON_ALIASES = {
   account: 'circle-user',
   add: 'plus',
+  alert: 'triangle-exclamation',
   archive: 'box-archive',
+  'arrow-repeat': 'arrows-rotate',
   beaker: 'flask',
   'circle-slash': 'circle-xmark',
   'clear-all': 'eraser',
@@ -223,6 +233,7 @@ const CODICON_ALIASES = {
   'cloud-download': 'cloud-arrow-down',
   'cloud-upload': 'cloud-arrow-up',
   'comment-discussion': 'comments',
+  cpu: 'microchip',
   dashboard: 'gear',
   debug: 'play',
   'debug-alt': 'play',
@@ -255,6 +266,7 @@ const CODICON_ALIASES = {
   'play-circle': 'play',
   pulse: 'chart-line',
   refresh: 'rotate-right',
+  'repo-clone': 'clone',
   save: 'floppy-disk',
   search: 'magnifying-glass',
   'settings-gear': 'gear',

@@ -11,6 +11,10 @@ directory, but they have different publication boundaries.
   repo-root `CHANGELOG.md` and `TERMS_OF_SERVICE.md`.
 - `guide/` contains public user guides, except pages explicitly excluded in
   `.vitepress/publicDocs.js`.
+- `api/` contains the SDK guide pages (`index.md`, `durable-protocol.md`,
+  `views-and-transcripts.md`, `plugins-and-codemode.md`, `model-layer.md`); its
+  `harness/` and `llm/` reference folders are copied at build time from
+  `packages/harness/docs/api/` and `packages/llm/docs/api/` by `sync-content`.
 - `public/` contains static assets copied directly into the website.
 
 `docs/.vitepress/publicDocs.js` is the source of truth for what VitePress may

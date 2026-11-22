@@ -62,7 +62,12 @@ The Lean plugin also ships four programs. Three are fixed procedures that check 
 | `blueprint`     | Writes or brings up to date a LeanBlueprint document (its `.tex` files).                                                                                                                                                                                         | `leanblueprint web` builds it and `leanblueprint checkdecls` finds every `\lean` declaration in the built project. Up to two rounds. Needs the `leanblueprint` CLI. |
 | `lean-search`   | Finds what Mathlib and the project already have for the statement, API or formalization question in the instruction: exact and close matches with their names, types and imports, and what is missing. It edits no file unless the instruction asks for a draft. | No check: one helper agent, whose report is the answer.                                                                                                             |
 
-The instruction narrows the job ("prove only `oddSum_eq_sq`", "add entries for the new lemmas in `Basic.lean`"); for `lean-search` it is the question. Each checked program answers with its check's verdict and the agent's account of what it did. A new blueprint starts from `leanblueprint new`; pass the files it creates. `blueprint` stops at once if `leanblueprint` is not installed (`pip install leanblueprint`). `prove` finds a new axiom by reading the files you pass, so it does not see one declared in another file they import; `#print axioms` on a theorem is the full answer. `lean-simplify` checks for new axioms the same way. The assistant is told of the four programs only where `lake` is found, as it is offered the Lean tools only there.
+Key details for running Lean programs:
+
+- **Narrowing scope:** Pass an instruction to limit the job (for example `"prove only oddSum_eq_sq"` or `"add entries for the new lemmas in Basic.lean"`). For `lean-search`, the instruction is the question itself.
+- **Verdict and checks:** Each checked program returns its verification verdict alongside the helper agent's summary. `prove` and `lean-simplify` check for new `axiom` declarations only in the files you pass, not in imported files; run `#print axioms` on a theorem for the full axiom audit.
+- **Blueprints:** Initialize a new blueprint with `leanblueprint new`, then pass the generated files to `blueprint`. It stops immediately if the `leanblueprint` CLI is not installed (`pip install leanblueprint`).
+- **Availability:** The assistant is told about all four programs only when `lake` is on `PATH`, matching how Lean tools are offered.
 
 ```bash
 texra run prove --input Proofs/Basic.lean --instruction "Prove the two lemmas about oddSum"

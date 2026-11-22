@@ -2,7 +2,7 @@
 
 _Effective Date: February 9, 2026_
 
-_Last Updated: September 30, 2026_
+_Last Updated: November 22, 2026_
 
 ---
 
@@ -16,7 +16,7 @@ The source code for the VS Code extension, desktop application, and command-line
 
 ## 2. Description of Service
 
-TeXRA is an AI-powered platform for LaTeX research and writing. The Service currently includes a Visual Studio Code extension and may expand to include web applications, APIs, and other interfaces. The Service connects to third-party large language model (LLM) providers — including but not limited to Anthropic (Claude), OpenAI (GPT), and Google (Gemini) — to deliver its features.
+TeXRA is an AI-powered platform for LaTeX research and writing. The Service includes a Visual Studio Code extension, a desktop application, and a command-line interface, and may expand to include web applications, APIs, and other interfaces. The Service connects to third-party large language model (LLM) providers — including but not limited to Anthropic (Claude), OpenAI (GPT), and Google (Gemini) — to deliver its features.
 
 We reserve the right to modify, suspend, or discontinue the Service (or any part of it) at any time, with or without notice. We shall not be liable to you or any third party for any modification, suspension, or discontinuation of the Service.
 
@@ -38,7 +38,7 @@ We reserve all rights not expressly granted in these Terms.
 
 ## 5. API Keys and TeXRA Accounts
 
-- **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled in this mode.
+- **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys saved through TeXRA are stored locally on your device in an owner-only folder (`~/.texra/secrets/`, readable only by your user account, not keychain-encrypted), or read from your environment, and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled in this mode.
 - **TeXRA Accounts**: From version 1.0, TeXRA has no TeXRA account and never asks you to sign in to a TeXRA service. Earlier versions offer an optional account that unlocks account-backed features such as the hosted research-agent catalog; signing in does not route your model requests through TeXRA servers. Those accounts and account-backed features remain available to earlier versions for as long as we operate them, are subject to fair-use limits, and may be modified or discontinued at any time.
 - **Account Integrity**: For accounts used with earlier versions, you may only create and operate one account for your own personal use. To prevent abuse of account-backed resources, sign-up may be restricted by automated checks on the email address and the underlying identity provider account. In particular, we may reject sign-ups that:
   1. use a disposable, temporary, or throwaway email provider;
@@ -73,9 +73,9 @@ If you voluntarily provide suggestions, ideas, enhancement requests, or other fe
 
 ## 9. Privacy and Data Handling
 
-- **Personal API Keys and Provider Subscriptions (Local Processing)**: All calls to AI providers are made directly from your local device to the provider's endpoints, using your own API keys or provider subscription credentials. Your document content is not sent to or routed through TeXRA servers. Your API keys are stored locally (e.g., via VS Code's built-in Secret Storage or equivalent platform-specific secure storage) and are never transmitted to us.
+- **Personal API Keys and Provider Subscriptions (Local Processing)**: All calls to AI providers are made directly from your local device to the provider's endpoints, using your own API keys or provider subscription credentials. Your document content is not sent to or routed through TeXRA servers. Your API keys and subscription tokens are stored locally in an owner-only folder on your device (`~/.texra/secrets/`, mode 0600, not keychain-encrypted) or supplied through your environment, and are never transmitted to us.
 - **Third-Party Providers**: Your content is transmitted to the respective AI provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
-- **Telemetry**: Current versions of TeXRA collect anonymous usage metadata — such as the agent (a bundled agent's name, otherwise "custom"), the model and provider, token counts, response time, and the TeXRA version and host — to monitor service health and improve the product. Each installation also sends a random anonymous install identifier, generated on your device the first time telemetry is on; the VS Code extension, desktop application, and command-line interface on the same device share one identifier. It is not derived from your hardware, name, email, or any account, and is not linked to one; deleting the stored identifier resets it. Telemetry does not include Your Content, file names or paths, prompts, or error text. Telemetry is on by default. You can turn it off at any time in the settings, with the `TEXRA_NO_TELEMETRY` or `DO_NOT_TRACK` environment variable, or (in the VS Code extension) with VS Code's telemetry setting; while it is off, no identifier is created or sent. Earlier versions collected similar metadata only while you were signed in to a TeXRA account.
+- **Telemetry**: Current versions of TeXRA collect anonymous usage metadata — such as the built-in program name (or `"polish"` for composer draft polish; chats and user- or plugin-defined programs send no name), the model and provider, token counts, response time, and the TeXRA version and host — to monitor service health and improve the product. Each installation also sends a random anonymous install identifier, generated on your device the first time telemetry is on; the VS Code extension, desktop application, and command-line interface on the same device share one identifier. It is not derived from your hardware, name, email, or any account, and is not linked to one; deleting the stored identifier resets it. Telemetry does not include Your Content, file names or paths, prompts, or error text. Telemetry is on by default. You can turn it off at any time in the settings, with the `TEXRA_NO_TELEMETRY` or `DO_NOT_TRACK` environment variable, or (in the VS Code extension) with VS Code's telemetry setting; while it is off, no identifier is created or sent. Earlier versions collected similar metadata only while you were signed in to a TeXRA account.
 
 ## 10. AI and Machine Learning
 

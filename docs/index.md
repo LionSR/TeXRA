@@ -164,7 +164,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <div class="case-card">
       <span class="case-label">Derive</span>
       <h3>Steady-state entanglement in a driven spin chain</h3>
-      <p>The <code>research</code> agent builds the Lindblad superoperator, solves for the steady state in Wolfram, computes the concurrence analytically, and cross-checks with exact diagonalization in Julia at N=8.</p>
+      <p>The assistant (or the <code>derive</code> program) builds the Lindblad superoperator, solves for the steady state in Wolfram, computes the concurrence analytically, and cross-checks with exact diagonalization in Julia at N=8.</p>
     </div>
     <div class="case-card">
       <span class="case-label">Write</span>
@@ -174,7 +174,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <div class="case-card">
       <span class="case-label">Verify</span>
       <h3>Formalizing subadditivity of entropy in Lean 4</h3>
-      <p>The <code>lean</code> agent searches Loogle for the right Mathlib lemma, reads the proof state, adds a missing hypothesis, and produces a proof that compiles with zero errors.</p>
+      <p>The assistant (or the <code>prove</code> program) searches Loogle for the right Mathlib lemma, reads the proof state, adds a missing hypothesis, and produces a proof that compiles with zero errors.</p>
     </div>
   </div>
 </section>
@@ -195,7 +195,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>What models does it support?</summary>
-    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code and the GLM Coding Plan). Each agent a lead delegates to can run a different model.</p>
+    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, Meta Muse Spark, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code and the GLM Coding Plan). Each helper agent or program the assistant starts can run a different model.</p>
   </details>
 
   <details>
@@ -210,12 +210,12 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Can I use it without VS Code?</summary>
-    <p>Yes. The <code>@texra-ai/cli</code> terminal client runs the same agents and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
+    <p>Yes. The <code>@texra-ai/cli</code> terminal client runs the same assistant, programs, and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
   </details>
 
   <details>
     <summary>Is my data private?</summary>
-    <p>Yes. Model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model. TeXRA sends anonymous usage metadata (agent, model, token counts), never prompts or document content, and you can turn it off; read <a href="/guide/configuration#usage-logging">Usage logging</a>.</p>
+    <p>Yes. Model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model. TeXRA sends anonymous usage metadata (built-in program name, model, token counts), never prompts or document content, and you can turn it off; read <a href="/guide/configuration#usage-logging">Usage logging</a>.</p>
   </details>
 
   <details>

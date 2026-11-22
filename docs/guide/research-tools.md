@@ -82,7 +82,7 @@ Add this arXiv paper to my Zotero library.
 <p class="hero-caption">How the assistant drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
 
 ::: tip Default bibliography path
-Name your project's main `.bib` file once so the assistant knows where to look up citations: they are told its path and search it with `grep` or `read_file`. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
+Name your project's main `.bib` file once so the assistant knows where to look up citations: it is told its path and searches it with `grep` or `read_file`. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
 :::
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram

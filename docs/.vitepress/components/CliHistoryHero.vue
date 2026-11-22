@@ -15,13 +15,13 @@ const rows = [
     id: '9f3a6c81d24e',
     ts: '2025-11-04T14:31:08.412Z',
     agent: 'edit',
-    status: 'completed (can continue)',
+    status: 'completed',
     input: 'draft.tex',
   },
   {
     id: 'c4e19b07a52d',
     ts: '2025-11-04T11:02:44.917Z',
-    agent: 'research',
+    agent: 'assistant',
     status: 'no outcome (can resume)',
     input: 'sections/intro.tex',
   },
@@ -66,7 +66,7 @@ const rows = [
         <span class="mk-term-cmd">texra resume c4e19b07a52d</span>
       </div>
       <div class="chh-note">
-        reopens the stored session in the chat TUI, on the saved agent and model
+        reopens the stored session in the chat TUI, on its saved model
       </div>
     </div>
   </TermWindow>

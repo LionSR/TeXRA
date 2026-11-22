@@ -18,7 +18,7 @@ subscriptions.
 Development on `main` targets **TeXRA 1.0** (work in progress, not the
 currently published release), which reorganizes the interface around
 **projects**, stores application state in SQLite, and runs asynchronous
-execution on Effect (see the [1.0 development direction](AGENTS.md#texra-10-direction)).
+execution on Effect (see the [1.0 development direction](https://github.com/LionSR/TeXRA/blob/main/AGENTS.md#texra-10-direction)).
 Version 1.0 starts with fresh application state and does not migrate previous
 JSON settings, session histories, or execution checkpoints; research files in
 your project are untouched.
@@ -80,7 +80,7 @@ piece.
 - Task programs hand one job to a helper agent with that job's checklist:
   `review`, `search`, `derive`, `solve`, `experiment`, `code`,
   `review-code`, `simplify`, `test`, `fix-latex`, `latexdiff`.
-- Lean programs check their work with Lean: `prove`, `blueprint`.
+- Lean programs work with Lean 4 projects: `prove`, `lean-simplify`, `blueprint`, `lean-search`.
 
 Tailor it with a project `AGENTS.md`, skills, and plugins that carry skills,
 MCP servers and programs of your own.
@@ -91,7 +91,7 @@ skips approval for autonomous runs.
 ## Models
 
 Bring your own keys for OpenAI, Anthropic, Google Gemini, DeepSeek,
-xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, or any OpenAI-compatible endpoint. Each helper agent or program the assistant
+xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, Meta Muse Spark, or any OpenAI-compatible endpoint. Each helper agent or program the assistant
 starts can run a different model — pair a flagship reasoner for planning with
 cheaper, faster models for routine sub-tasks.
 
@@ -136,7 +136,7 @@ Contact: [contact@texra.ai](mailto:contact@texra.ai).
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+Licensed under the [Apache License, Version 2.0](https://github.com/LionSR/TeXRA/blob/main/LICENSE).
 © TeXRA Team 2024–2026.
 
 [Terms of Service](https://texra.ai/terms) · [Provider list](https://texra.ai/providers)

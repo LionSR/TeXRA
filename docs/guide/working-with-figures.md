@@ -56,7 +56,7 @@ TeXRA recognizes these media types by default:
     {
       icon: 'file-pdf',
       title: 'Documents',
-      desc: 'Native PDF input on models that support it (Claude, Gemini, GPT-5.x, Muse, GLM-5V-Turbo), otherwise rasterized pages.',
+      desc: 'Native PDF input on models that support it (Claude, Gemini, OpenAI, Muse Spark), otherwise rasterized pages.',
       chips: [{ text: '.pdf', variant: 'info' }],
     },
     {
@@ -104,7 +104,7 @@ A chat agent has no dedicated extraction tool. It finds the figures a document i
 
 When you provide media files, they are handed to the model according to its capabilities:
 
-- **Vision models** (GPT-5.6, Claude Fable 5.1 / Opus 5 / Sonnet 5, Gemini 3.1 Pro, …): images are encoded and attached to the prompt.
+- **Vision models** (GPT-6.1 Sol, Claude Fable 5.1 / Opus 5.5 / Sonnet 5.5, Gemini 4 Argon, …): images are encoded and attached to the prompt.
 - **Audio models**: audio files are uploaded for transcription.
 - **Non-multimodal models**: only filenames are passed as context.
 

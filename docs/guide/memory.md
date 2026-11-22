@@ -5,22 +5,22 @@ import CliMemoryHero from '../.vitepress/components/CliMemoryHero.vue';
 
 # Memory
 
-Agents in TeXRA can save notes that persist across conversations. The next time you start a chat, even days later, the agent loads those notes and picks up where it left off, without you having to re-explain the project.
+The assistant (and the helper agents it starts) can save notes that persist across conversations. The next time you start a chat, even days later, the assistant loads those notes and picks up where you left off without needing to re-explain the project.
 
 <MemoryHero />
 
-<p class="hero-caption">The Memory tab in Settings: toggle memory for chat agents, and browse, pin, open, or delete the notes agents have saved.</p>
+<p class="hero-caption">The Memory tab in Settings: toggle memory on or off, and browse, pin, open, or delete the notes saved for your project.</p>
 
 ## What memory is for
 
-Memory is for facts the agent should remember about **your project**, not the conversation itself. Good things to save:
+Memory is for facts the assistant should remember about **your project**, not the conversation itself. Good things to save:
 
 - Conventions you want enforced (label prefixes, citation styles, notation choices)
 - Project structure (where figures live, which file is the main document)
-- Decisions you've made that the agent would otherwise revisit
+- Decisions you've made that the assistant would otherwise revisit
 - Pitfalls you keep hitting (a compiler quirk, a finicky package, a flaky reference)
 
-Memory is **not** a chat transcript. The agent doesn't replay old conversations; it reads the notes you've curated.
+Memory is **not** a chat transcript. The assistant doesn't replay old conversations; it reads the notes you've curated.
 
 ## Enabling memory
 
@@ -28,9 +28,9 @@ Memory is **on by default**. To turn it off, open **Settings** (Command Palette 
 
 When memory is on, every chat has access to the `memory` tool: it can create, view, update, rename, delete, pin, and unpin notes under `/memories`.
 
-## How an agent uses memory
+## How memory is used
 
-Agents work with memory through a small set of commands on the `memory` tool:
+The assistant and helper agents work with memory through a small set of commands on the `memory` tool:
 
 | Command       | What it does                                                               |
 | ------------- | -------------------------------------------------------------------------- |
@@ -43,7 +43,7 @@ Agents work with memory through a small set of commands on the `memory` tool:
 | `pin`         | Mark a note as a **core long-term memory** (loaded at every session start) |
 | `unpin`       | Remove the pinned status                                                   |
 
-Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live in the shared TeXRA root at `~/.texra/v1/workspace-storage/<workspace-name>-<hash>/memories/`, which the VS Code extension, the desktop app, and the CLI all share for the same workspace. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned. That header is what the metadata strip in Settings shows.
+Every note is a Markdown file. The assistant sees them at `/memories/<name>.md`; on disk they live in the shared TeXRA root at `~/.texra/v1/workspace-storage/<workspace-name>-<hash>/memories/`, which the VS Code extension, the desktop app, and the CLI all share for the same workspace. Each file carries a small YAML header recording which run last modified it, when, and whether it's pinned. That header is what the metadata strip in Settings shows.
 
 <MemoryCommandsHero />
 
