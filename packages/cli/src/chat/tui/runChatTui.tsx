@@ -38,7 +38,7 @@ import {
   projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
-import { linkedClient } from '@texra/controllers/server/client';
+import { linkedClient, linkOutage } from '@texra/controllers/server/client';
 
 import { resolveChatDefaults } from '@cli/runtime/models/launchDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
@@ -352,12 +352,11 @@ export async function runChat(
       // The service went away (retired by a newer build, or it died) and
       // the link reaches it again: the chat says so, rather than going
       // quiet.
-      Stream.runForEach(link.client.changes.pipe(Stream.drop(1)), (client) =>
-        Effect.sync(() =>
-          appendLocalNotice(
-            client === null
-              ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
-              : 'Reconnected to the TeXRA service.',
+      linkOutage(link).pipe(
+        Stream.drop(1),
+        Stream.runForEach((outage) =>
+          Effect.sync(() =>
+            appendLocalNotice(outage ?? 'Reconnected to the TeXRA service.'),
           ),
         ),
       ),
