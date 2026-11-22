@@ -204,7 +204,7 @@ export interface Session {
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
    * returned to you and shown to no host: an input the launch will not run
-   * is a `LaunchRefused`, which for an unknown agent or model carries
+   * is a `LaunchRefused`, which for an unknown model carries
    * the notice a host shows for it.
    */
   readonly start: (

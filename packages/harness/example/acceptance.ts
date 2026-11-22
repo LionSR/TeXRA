@@ -6,7 +6,7 @@
  * leaves behind: the run's outcome, the calls it made, the child runs, the
  * facts and the artifacts. No check reads exact text or counts requests.
  *
- * 1. `codemode`: an agent file with a plugin tool, its script module and
+ * 1. `codemode`: an agent with a plugin tool, its script module and
  *    `executions`. The model reads the `script` description, writes a
  *    program that outlines a draft through the module, runs two `self()`
  *    review rounds (the second chosen from the first's structured result)
