@@ -30,6 +30,13 @@ export const CHATGPT_AUTH = Object.freeze({
   subscriptionLabel: 'ChatGPT subscription',
   signInLabel: 'Sign in with ChatGPT',
   signInDescription: 'Use a ChatGPT subscription',
+  /** The row that connects a model through it before any is connected: the
+   *  welcome card, the credential banner and the terminal's connect panel. */
+  connect: Object.freeze({
+    label: 'Use ChatGPT subscription',
+    description:
+      'OpenAI models through ChatGPT Plus, Pro, or Team; no API key needed',
+  }),
   signOutLabel: 'Sign out of ChatGPT',
   deviceCodeLabel: 'Sign in to ChatGPT with a code',
   startingDevice: 'Starting ChatGPT device-code sign-in.',
@@ -43,6 +50,10 @@ export const GROK_AUTH = Object.freeze({
   subscriptionLabel: 'Grok subscription',
   signInLabel: 'Sign in with Grok',
   signInDescription: 'Use a Grok / SuperGrok subscription',
+  connect: Object.freeze({
+    label: 'Use Grok subscription',
+    description: 'Grok models through SuperGrok; no API key needed',
+  }),
   signOutLabel: 'Sign out of Grok',
   deviceCodeLabel: 'Sign in to Grok with a code',
   startingDevice: 'Starting Grok device-code sign-in.',
