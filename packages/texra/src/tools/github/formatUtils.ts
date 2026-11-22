@@ -104,6 +104,11 @@ export function truncate(s: string | null | undefined, max: number): string {
   return truncateWithEllipsis((s ?? '').trim(), max);
 }
 
+/** A commit SHA in the seven-character short form git and GitHub print. */
+export function shortSha(sha: string): string {
+  return sha.slice(0, 7);
+}
+
 /**
  * "New comment on <ref> by <author>:" event for a subscribed issue or pull
  * request. GitHub delivers general PR comments over the same `issue_comment`

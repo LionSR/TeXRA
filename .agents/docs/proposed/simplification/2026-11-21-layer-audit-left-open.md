@@ -36,6 +36,13 @@ What follows is left open, in the order worth taking.
 
 ## 1. A provider's API-key shapes live in the harness logger
 
+Landed 2026-11-22: llm states each key provider's shapes (`API_KEY_SHAPES`,
+`packages/llm/src/providers/providerPlugins.ts`, total over
+`ApiKeyProviderId`) and exports them as one source,
+`API_KEY_PATTERN_SOURCE`, which the log redactor, the TUI's
+concatenated-credential check and the live-cassette leak check read. The
+TUI now knows Google's `AQ.` keys and requires a full key shape.
+
 `PROVIDER_KEY_PATTERNS_BY_PROVIDER` (`packages/harness/src/logger/redaction.ts`)
 is a provider fact, pinned to llm's provider list by `satisfies`. The TUI
 restates a subset of the prefixes (`hasConcatenatedCredentialPrefix`,
@@ -58,6 +65,13 @@ Decision needed first: the session switches live in `config` and the
 coding-plan ones in `globalState`.
 
 ## 3. The TUI re-checks model access through a hand-passed callback
+
+Landed 2026-11-22: every sign-in, sign-out and preference write emits
+`modelAccessChanged` and every key write `credentialChanged`, so the chat
+follows the stream the status bar follows (`modelAccessChanges`,
+`packages/cli/src/chat/tui/modelConnection.ts`) while it has no model. The
+callback and its three call sites are gone, and a key saved in `/config`
+or a settings view connects a waiting chat.
 
 `onAccountChanged` (`slashContext.ts`) is called by hand at three sites in
 `modelAccessContribution.tsx`; the `/config` → API keys save never calls it,
@@ -92,15 +106,17 @@ the copies have drifted (unserved, unreadable key, unknown model).
 
 ## 6. Smaller single-owner moves
 
-- `finishedToolCalls` (`packages/cli/src/runtime/headless/runProgressRenderer.ts`)
-  is imported by the TUI's child list; the count is a transcript read, and the
-  headless line and the TUI word it two ways ("tools: 5", "5 tool calls").
+- Landed: `finishedToolCalls` in the CLI's headless renderer counted a run's
+  finished tool cards for the status line and the TUI's child list; the
+  session view now carries the count (`RunView.toolCalls`). The two wordings
+  ("tools: 5", "5 tool calls") stay.
 - Landed: the usage-logging notice (`telemetryNoticeIfDue`) did not read the
   host telemetry switch the send gate reads, so the extension checked it at
   the call site (`extension.ts`). The switch is now one `Context.Reference`
   (`HostTelemetrySwitch`) the extension provides and both read.
-- "Can Codex run this model" (`agentCliSettings.ts`) restates llm's private
-  `codexSubscriptionOf`.
+- Landed 2026-11-22: "can Codex run this model" is llm's `isCodexModel`
+  (`packages/llm/src/models/modelRoute.ts`), over the same
+  `codexSubscriptionOf` the ChatGPT route reads.
 - The model enable list is projected twice (`enabledModels.ts` in the CLI,
   `modelSelection.ts` in settings), with different membership, provider key
   and order. Decision needed: are unserved models listed.

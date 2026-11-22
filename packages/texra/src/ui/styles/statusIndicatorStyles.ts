@@ -14,6 +14,6 @@ export const statusIndicatorStyles: CSSResult = css`
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
-    background-color: var(--tone-color, var(--color-text-muted));
+    background-color: var(--tone-color, var(--color-text-secondary));
   }
 `;

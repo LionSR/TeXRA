@@ -56,7 +56,7 @@ export class RunTabs extends TexraElement {
       }
       .group-heading .group-count {
         font-weight: var(--font-weight-normal);
-        color: var(--color-text-muted);
+        color: var(--color-text-secondary);
       }
       .group-heading:is(.group-waiting, .group-interrupted) {
         color: var(--color-warning);

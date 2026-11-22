@@ -37,6 +37,7 @@ import {
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
+import { shortPluginId } from '@shared/schemas';
 import { withLogChannel } from '@logger/effectLog';
 import { AppSignals } from '@platform/appSignals';
 import { AppState } from '@platform/interfaces';
@@ -51,7 +52,6 @@ import {
   follow,
   heldKeys,
   LayerKey,
-  NONE,
   sessionTools,
   type SessionTools,
   type ProcessCatalog,
@@ -131,31 +131,35 @@ export const ToolCatalogOwner = Context.Service<
  * The catalog over `table`, the listed plugins', served with it as the
  * `ToolRegistry` a reader outside any run reads: the configured MCP servers
  * `loader` reads for a run's declared tools, the installed plugins and
- * their native plugins `installed` reads at each step (none when omitted),
- * read again at each of `installedChanges` (the install record changed, so
- * a native plugin disabled or replaced anywhere goes down then; one enabled
- * is imported when a step or a launch next reads, never by this read), the
- * directory this process copies the native code it loads under
- * (`nativeCopies`; omitted, none loads),
- * and the `switches` as they stand and on each change (the ids held off;
- * before the first, every switched plugin is off; omitted, none ever is).
+ * their native plugins `installed` reads at each step, read again at each
+ * of `installedChanges` (the install record changed, so a native plugin
+ * disabled or replaced anywhere goes down then; one enabled is imported
+ * when a step or a launch next reads, never by this read), the directory
+ * this process copies the native code it loads under (`nativeCopies`), and
+ * the `switches` as they stand and on each change (the ids held off; before
+ * the first, every switched plugin is off).
  */
 export const toolCatalogLayer = (
   table: ToolTable,
-  options: {
-    readonly loader?: PluginLoader;
-    readonly installed?: InstalledToolReader;
-    readonly installedChanges?: Stream.Stream<unknown>;
-    readonly nativeCopies?: string;
-    readonly switches?: Stream.Stream<ReadonlySet<string>>;
-  } = {},
+  {
+    loader: servers,
+    installed,
+    installedChanges,
+    nativeCopies,
+    switches,
+  }: {
+    readonly loader: PluginLoader;
+    readonly installed: InstalledToolReader;
+    readonly installedChanges: Stream.Stream<unknown>;
+    readonly nativeCopies: string;
+    readonly switches: Stream.Stream<ReadonlySet<string>>;
+  },
 ): Layer.Layer<
   ToolCatalog | ToolCatalogOwner | ToolRegistry,
   never,
   Exclude<PluginLayerServices, ToolCatalog>
 > => {
   const plugins = [...table.entries.values()];
-  const installed = options.installed ?? NONE;
   // Only a plugin with a switch (`toggle`, the one the dashboard and the
   // CLI show) is switched: a stored id of any other switches nothing.
   const onOf = (off: ReadonlySet<string>): ReadonlySet<string> =>
@@ -178,9 +182,8 @@ export const toolCatalogLayer = (
       const on = yield* SubscriptionRef.make(
         onOf(new Set(table.entries.keys())),
       );
-      yield* Stream.runForEach(
-        options.switches ?? Stream.succeed(new Set<string>()),
-        (off) => SubscriptionRef.set(on, onOf(off)),
+      yield* Stream.runForEach(switches, (off) =>
+        SubscriptionRef.set(on, onOf(off)),
       ).pipe(Effect.forkScoped);
       const live = yield* SubscriptionRef.make(table);
       // The native revisions a table holds, one key each: a read that
@@ -189,7 +192,7 @@ export const toolCatalogLayer = (
         of.natives
           .map(({ plugin, revision }) => new LayerKey(plugin, revision).name)
           .join('\0');
-      const loader = yield* nativeLoader(options.nativeCopies).pipe(
+      const loader = yield* nativeLoader(nativeCopies).pipe(
         Effect.provide(process),
       );
       // Each native plugin's revision the table held before the one it
@@ -231,7 +234,7 @@ export const toolCatalogLayer = (
             notes.push(
               stand === undefined
                 ? failed.message
-                : `${failed.message}; revision ${stand.revision.slice(0, 12)} stays in use until the plugin is fixed or disabled.`,
+                : `${failed.message}; revision ${shortPluginId(stand.revision)} stays in use until the plugin is fixed or disabled.`,
             );
           const fresh = new Set<NativePlugin>();
           const candidates = (yield* Effect.forEach(
@@ -292,9 +295,9 @@ export const toolCatalogLayer = (
           };
         });
       const read = readWith(true);
-      yield* Stream.runForEach(options.installedChanges ?? Stream.empty, () =>
-        readWith(false),
-      ).pipe(Effect.forkScoped);
+      yield* Stream.runForEach(installedChanges, () => readWith(false)).pipe(
+        Effect.forkScoped,
+      );
       // A process layer may read this catalog.
       const processLayers: RcMap.RcMap<LayerKey, PluginContext> =
         yield* RcMap.make({
@@ -305,7 +308,6 @@ export const toolCatalogLayer = (
             ),
         });
       const shared: ProcessCatalog = {
-        listed: table,
         builtIn: plugins.map((plugin) => ({
           plugin,
           entries: entriesOf(plugin.id, plugin.tools ?? []),
@@ -317,7 +319,7 @@ export const toolCatalogLayer = (
         layerFailed: loader.reject,
         processLayers,
         spawner: Context.get(process, ChildProcessSpawner),
-        loader: options.loader ?? (() => NONE),
+        loader: servers,
       };
       yield* follow(
         heldKeys(shared, ({ processLayer }) => processLayer),

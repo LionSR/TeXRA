@@ -57,7 +57,6 @@ function createContext(
     resumeTask: (_id: RunId) => Effect.void,
     activateSkill: vi.fn(),
     getModelSwitchDisabledReason: () => Effect.undefined,
-    onAccountChanged: () => Effect.void,
   };
 }
 

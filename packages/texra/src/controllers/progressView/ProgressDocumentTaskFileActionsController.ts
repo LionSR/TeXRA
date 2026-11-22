@@ -36,7 +36,10 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import type { latexdiffVerbs } from '@texra/controllers/session/latexdiffVerbs';
-import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  isRequestRefusal,
+  type HostCommandFailure,
+} from '@texra/controllers/session/hostCallFailure';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 
 const CHANNEL = 'ProgressDocumentTaskFileActions';
@@ -127,11 +130,30 @@ export class ProgressDocumentTaskFileActionsController {
             });
           }
         }
-        return yield* this.deps.host.openDiff(
-          base,
-          file,
-          `Compare: ${path.basename(file)} ↔ ${path.basename(base)}`,
-        );
+        // A diff view that would not open is worded here too, as a
+        // rejection the surface shows, on every host.
+        return yield* this.deps.host
+          .openDiff(
+            base,
+            file,
+            `Compare: ${path.basename(file)} ↔ ${path.basename(base)}`,
+          )
+          .pipe(
+            Effect.catch((error) =>
+              isRequestRefusal(error)
+                ? Effect.fail(error)
+                : Effect.logError('Failed to open the comparison', error).pipe(
+                    withLogChannel(CHANNEL),
+                    Effect.andThen(
+                      Effect.fail(
+                        new Rejected({
+                          reason: `Could not open the comparison: ${toErrorMessage(error)}`,
+                        }),
+                      ),
+                    ),
+                  ),
+            ),
+          );
       }
       case 'accept':
         return yield* this.acceptFile(

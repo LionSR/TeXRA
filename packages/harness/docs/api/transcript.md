@@ -35,7 +35,8 @@ renderer, and static trace viewer).
   `ToolFileListSection`, `ToolFileGroupsSection`) structure tool inputs and
   outputs without custom per-tool UI parsing.
 - **Text budgets & headlines**: [`rowHeadline`](#rowheadline),
-  [`transcriptText`](#transcripttext), [`elideText`](#elidetext), and
+  [`transcriptText`](#transcripttext), [`elideText`](#elidetext),
+  [`paintsNothing`](#paintsnothing), and
   [`TextBudget`](#textbudget) format and truncate row text for terminal and
   compact UIs.
 
@@ -305,6 +306,17 @@ registry name it wraps.
 function normalizeToolName(toolName: string): string
 ```
 
+## paintsNothing
+
+Whether a text paints nothing: it holds only whitespace and zero-width
+characters. The one test the row projector drops a text row by, and a
+painter applies after its own passes (a terminal's control-sequence
+strip).
+
+```ts
+function paintsNothing(text: string): boolean
+```
+
 ## PayloadLanguage
 
 Serialization format {@link stringifyPayload} chose for a value.
@@ -495,7 +507,7 @@ One labeled number from a context-management row.
 ```ts
 interface StatItem {
   /** Stable key hosts use to pick an icon; never shown as-is. */
-  readonly key: string;
+  readonly key: 'maxTokens' | 'utilization' | 'contextWindow' | 'details';
   readonly label: string;
   readonly value: string;
 }
@@ -905,7 +917,8 @@ One text-bearing field of a transcript row.
 interface TranscriptText {
   /** Lines in the untruncated text; a trailing newline is not a line. */
   readonly lineCount: number;
-  /** The complete text, exactly as the producer wrote it. */
+  /** The complete text, as the producer wrote it; a model or log text
+   *  without the zero-width characters and blank lines it led with. */
   readonly full: string;
   /** Whitespace-collapsed single line — still untruncated. For one-line
    *  density paints and for equality tests between two texts. */

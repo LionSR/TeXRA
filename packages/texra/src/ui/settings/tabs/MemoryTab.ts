@@ -18,7 +18,6 @@ const openFolderButton = (folder: MemoryFolderScope, text: string) =>
     icon: 'folder-open',
     text,
     kind: 'secondary',
-    appearance: 'outlined',
     onClick: () =>
       postToHost({
         command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,

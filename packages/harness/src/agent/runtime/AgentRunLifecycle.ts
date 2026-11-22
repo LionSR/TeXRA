@@ -70,8 +70,16 @@ export const endVerdict = Effect.fnUntraced(function* (
     Cause.hasInterrupts(exit.cause) &&
     (yield* RunRegistry).closing &&
     (yield* log.facts(runId))?.stop == null
-  )
+  ) {
+    // Nobody reads this fiber's exit, so a failure beside the interruption
+    // (a finalizer that failed as the close unwound it) is said here.
+    if (!Cause.hasInterruptsOnly(exit.cause))
+      yield* logFailure(
+        RUN_LIFECYCLE_CHANNEL,
+        `Run ${runId} also failed as the session closed`,
+      )({ runId, error: Cause.squash(exit.cause) });
     return yield* Effect.failCause(exit.cause);
+  }
   const lost = yield* log.lost(runId);
   const returned = Exit.isSuccess(exit)
     ? exit.value

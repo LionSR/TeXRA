@@ -170,7 +170,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             height: Math.round(bounds.height * zoom),
           };
         },
-        workspaceRoot: project.roots.workspace,
       });
       return {
         workspace,
@@ -197,9 +196,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         yield* terminalCwd(project.roots.workspace),
       );
       const hosts = host.forProject(project);
-      yield* Effect.forkScoped(workspace.followFilesWritten, {
-        startImmediately: true,
-      });
       // The window's focus, told to the service as a VS Code window's is:
       // the project's host calls go to the window the user last worked in.
       // The window shows one project at a time, so only that project's
@@ -268,6 +264,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         }),
       });
       const { bridge, snapshot, settingsRuns } = gui;
+      yield* Effect.forkScoped(
+        Stream.runForEach(snapshot.filesWritten, () => workspace.filesChanged),
+        { startImmediately: true },
+      );
       // Registered after the host requests, so a port's release (its map
       // entry, its transcript set, `onPortClosed`) precedes their release, as
       // the extension's `dispose` orders them; awaited, unlike the bridge's.

@@ -94,7 +94,7 @@ import {
 import { openRegisteredCliSlashForm } from './commands/slashForms';
 import {
   checkModelConnection,
-  connectChatModel,
+  followModelConnection,
   makeModelConnection,
   modelConnectionNeeded,
 } from './modelConnection';
@@ -518,9 +518,10 @@ export async function runChat(
     resumeTask: chatController.resumeTask,
     activateSkill: chatController.activateSkill,
     getModelSwitchDisabledReason,
-    onAccountChanged: () =>
-      connectChatModel(slashContext, defaults.modelSource, modelConnection),
   };
+  chat.fork(
+    followModelConnection(services, defaults.modelSource, modelConnection),
+  );
 
   // Ink owns the terminal from here: a diagnostic line would land inside
   // the frame it redraws, so the chat's diagnostics go nowhere.

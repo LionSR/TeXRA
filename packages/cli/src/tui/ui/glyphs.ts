@@ -22,7 +22,7 @@ export const STATUS_DOT = '●';
 /** Decorative brand marker at the head of the status bar (aria-hidden). */
 export const STATUS_DIAMOND = '◆';
 
-/** Warning marker for inline failure notices (e.g. render-error fallback). */
+/** The warning tone's marker (`TONE_PAINT`). */
 export const WARNING = '⚠';
 
 /** Heading marker for a round's results in the document task run details. */

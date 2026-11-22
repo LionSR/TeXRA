@@ -1,68 +1,15 @@
 import { stripVTControlCharacters } from 'node:util';
 
 import {
+  paintsNothing,
   rowHeadline,
   type TranscriptRowKind,
 } from '@texra-ai/harness/transcript';
-import {
-  ANSI_ESCAPE_START,
-  ansiEscapeEnd,
-} from '@cli/runtime/terminal/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { errorRowText } from '@ui/copy/modelAccess';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
-
-const INVISIBLE_TRANSCRIPT_CHARS = new Set([
-  '\u200B',
-  '\u200C',
-  '\u200D',
-  '\uFEFF',
-]);
-
-function isInvisibleTranscriptChar(char: string | undefined): boolean {
-  return char !== undefined && INVISIBLE_TRANSCRIPT_CHARS.has(char);
-}
-
-function terminalVisibleTranscriptText(text: string): string {
-  let out = '';
-  for (const char of stripVTControlCharacters(text)) {
-    if (!isInvisibleTranscriptChar(char)) out += char;
-  }
-  return out;
-}
-
-function trimAssistantTranscriptLead(text: string): string {
-  let index = 0;
-  let consumedInvisibleLead = false;
-  let leadingAnsi = '';
-  while (index < text.length) {
-    if (text[index] === ANSI_ESCAPE_START) {
-      const end = ansiEscapeEnd(text, index);
-      leadingAnsi += text.slice(index, end);
-      index = end;
-      continue;
-    }
-    if (isInvisibleTranscriptChar(text[index])) {
-      index += 1;
-      consumedInvisibleLead = true;
-      continue;
-    }
-    const newline = /^[ \t]*\r?\n/.exec(text.slice(index));
-    if (newline) {
-      index += newline[0].length;
-      consumedInvisibleLead = true;
-      continue;
-    }
-    break;
-  }
-  if (!consumedInvisibleLead) return text;
-  const tail = text.slice(index);
-  return terminalVisibleTranscriptText(tail).trim().length > 0
-    ? leadingAnsi + tail
-    : tail;
-}
 
 /**
  * The headline a row leads with: the one line its terminal paint starts from.
@@ -91,15 +38,9 @@ export function transcriptRowHeadline(row: TranscriptRow): string {
 function deriveTranscriptRowHeadline(row: TranscriptRow): string {
   switch (row.kind) {
     case 'assistant':
-      return normalizeKnownHtmlForCliMarkdown(
-        trimAssistantTranscriptLead(row.text.full),
-      );
+      return normalizeKnownHtmlForCliMarkdown(row.text.full);
     case 'log':
-      return safeTerminalText(
-        normalizeKnownHtmlForCliMarkdown(
-          trimAssistantTranscriptLead(row.text.full),
-        ),
-      );
+      return safeTerminalText(normalizeKnownHtmlForCliMarkdown(row.text.full));
     case 'error':
       return safeTerminalText(errorRowText(row).summary);
     case 'progressStatus':
@@ -131,11 +72,14 @@ const ROW_KIND_IS_WIDGET = {
   webSearch: true,
 } as const satisfies Record<TranscriptRowKind, boolean>;
 
+/** A text row whose headline still paints once the terminal's own passes
+ *  ran: the projector drops text rows that paint nothing on any host, but
+ *  the HTML normalize and the control-sequence strip can leave one painting
+ *  nothing (model text that leads with escapes), and a user row may carry
+ *  no text. */
 export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
   if (ROW_KIND_IS_WIDGET[row.kind]) return true;
-  return (
-    terminalVisibleTranscriptText(transcriptRowHeadline(row)).trim().length > 0
-  );
+  return !paintsNothing(stripVTControlCharacters(transcriptRowHeadline(row)));
 }
 
 /** Whether the row at `index` is inside the session view's final prefix

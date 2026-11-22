@@ -21,11 +21,11 @@
  * same `parseTraceData` boundary.
  */
 import { Effect, Result, Schema, Stream } from 'effect';
-import { RpcServer, type RpcMessage } from 'effect/rpc';
+import { RpcServer } from 'effect/rpc';
 
 import { Rejected, type TraceDocument } from '@texra-ai/harness/schemas';
 import {
-  SessionEnvelopeSchema,
+  ClientEnvelopeSchema,
   SessionRpcs,
   type SessionWire,
 } from '@texra/shared/session/sessionFrames';
@@ -120,16 +120,13 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
   );
   const bridge: HostBridgeApi = {
     postMessage(message) {
-      const parsed = Schema.decodeUnknownResult(SessionEnvelopeSchema)(message);
+      const parsed = Schema.decodeUnknownResult(ClientEnvelopeSchema)(message);
       if (Result.isFailure(parsed)) {
         console.warn('[trace-viewer] unrecognized shell message', message);
         return;
       }
       const { client, message: rpc } = parsed.success;
-      // cast: `rpc` reads its own message.
-      Effect.runFork(
-        served.receive(client, rpc as unknown as RpcMessage.FromClientEncoded),
-      );
+      Effect.runFork(served.receive(client, rpc));
     },
     getState: () => state,
     setState: (next) => {

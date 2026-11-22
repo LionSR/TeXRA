@@ -354,6 +354,7 @@ export {
   GoalResultSchema,
   InlinePersonaSchema,
   InstalledPluginSchema,
+  shortPluginId,
   HARNESS_INSTRUCTION_KEY,
   isEmptyUsage,
   isModelOptionAvailable,

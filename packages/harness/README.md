@@ -496,7 +496,8 @@ composes (the agent directories, secrets and the resume
 port) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under, and a run's
+`mcp.json` at the storage root that global storage lies under (stdio servers
+speaking MCP 2025-11-25; one answering an older revision does not start), and a run's
 system prompt carries the storage root's `AGENTS.md` (the person's own, for
 every workspace) and then the workspace's.
 

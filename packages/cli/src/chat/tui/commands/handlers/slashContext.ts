@@ -65,9 +65,6 @@ export interface SlashCommandContext {
   readonly activateSkill: (name: string) => void;
   /** Why `/model` cannot switch the running root to a model, if it cannot. */
   readonly getModelSwitchDisabledReason: GetModelSwitchDisabledReason;
-  /** After a sign-in, sign-out, preference, or key save finishes: the chat
-   *  re-checks whether a model can answer now. */
-  readonly onAccountChanged: () => Effect.Effect<void, never, ProcessServices>;
 }
 
 /** Output boundary shared by direct slash dispatch and busy form submission. */

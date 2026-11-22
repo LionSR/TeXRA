@@ -83,8 +83,7 @@ export {
   type DiffHunks,
   type Hunk,
 } from '@tools/unifiedDiff';
-// JSON-RPC 2.0 over a child process's stdio (a language server's framing,
-// or one message per line).
+// JSON-RPC 2.0 over a child process's stdio, in a language server's framing.
 export {
   connectJsonRpcProcess,
   makeJsonRpcConnection,

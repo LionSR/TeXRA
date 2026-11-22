@@ -163,8 +163,6 @@ export class AgentSelectionPanel extends TexraElement {
           label: 'Customize agent',
           title: 'Create an editable copy in your custom agents folder',
           className: 'catalog-action-btn',
-          appearance: 'filled',
-          variant: 'brand',
           kind: 'primary',
           onClick: () =>
             postToHost({

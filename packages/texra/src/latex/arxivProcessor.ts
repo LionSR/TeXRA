@@ -330,7 +330,7 @@ const gunzip = NodeStream.pipeThroughDuplex({
 /**
  * Extract `tarPath`, gzipped or not, into `destDir`, a directory made for
  * it. The archive is untrusted: only its files and directories are written,
- * each beneath `destDir`, and nothing is overwritten. A link, or a path that
+ * each beneath `destDir`; a path named twice keeps its last entry. A link, or a path that
  * leaves the directory, is skipped and named in the log; with no link ever
  * made, a path inside the directory stays inside it. Interruption (the
  * deadline's included) stops the writes.
@@ -367,7 +367,7 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
           return fs.makeDirectory(target.value, { recursive: true });
         return Effect.andThen(
           fs.makeDirectory(paths.dirname(target.value), { recursive: true }),
-          Stream.run(body, fs.sink(target.value, { flag: 'wx' })),
+          Stream.run(body, fs.sink(target.value)),
         );
       }),
     );

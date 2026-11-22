@@ -281,10 +281,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const off = grants.toolsFixed
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
-    const pinned = yield* (yield* ProjectTools).pin(off, {
-      installed: true,
-      held: run.toolInputs.held,
-    });
+    const pinned = yield* (yield* ProjectTools).pin(off, run.toolInputs.held);
     const { policy, ...gates } = yield* liveToolGates(run);
     // The step resolves against the table it read, as its calls do.
     const resolved = yield* resolveStepTools(pinned.entries, {

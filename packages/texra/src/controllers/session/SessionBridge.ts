@@ -39,7 +39,7 @@ import {
   Scope,
   Stream,
 } from 'effect';
-import { RpcServer, type RpcMessage } from 'effect/rpc';
+import { RpcServer } from 'effect/rpc';
 
 import { type Session } from '@texra-ai/harness';
 import {
@@ -50,7 +50,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
-  SessionEnvelopeSchema,
+  ClientEnvelopeSchema,
   SessionRpcs,
   type HostOutcome,
   type HostSurfaceAction,
@@ -229,9 +229,8 @@ export class SessionBridge {
         receive: (message) =>
           Effect.suspend(() => {
             if (this.ports.get(port.id) !== entry) return Effect.void;
-            const parsed = Schema.decodeUnknownResult(SessionEnvelopeSchema)(
-              message,
-            );
+            const parsed =
+              Schema.decodeUnknownResult(ClientEnvelopeSchema)(message);
             if (!Result.isSuccess(parsed))
               return Effect.logWarning(
                 `Unparseable message from port ${port.id}: ${parsed.failure.message}`,
@@ -241,12 +240,7 @@ export class SessionBridge {
               return Effect.logWarning(
                 `Port ${port.id} addressed session ${envelope.session}; this session is ${this.key}`,
               ).pipe(withLogChannel(CHANNEL));
-            // cast: `rpc` reads its own message and answers one it cannot
-            // read under the request's id.
-            return receive(
-              envelope.client,
-              envelope.message as unknown as RpcMessage.FromClientEncoded,
-            );
+            return receive(envelope.client, envelope.message);
           }),
         surfaceAction: (action) => {
           if (this.ports.get(port.id) === entry)

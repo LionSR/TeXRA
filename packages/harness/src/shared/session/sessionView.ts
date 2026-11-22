@@ -188,6 +188,10 @@ const RunViewSchema = Schema.Struct({
   /** The spend cap the run was started with (`run.start.maxCostUsd`),
    *  which `treeUsage.cost` is held to; null for none. */
   maxCostUsd: Schema.NullOr(Schema.Finite),
+  /** The tool calls the run has finished (completed or failed), counted
+   *  from its transcript's tool cards while the view builds its transcript,
+   *  so no host counts rows. */
+  toolCalls: Count,
   /** The newest thinking row is still streaming. */
   thinkingActive: Schema.Boolean,
   /** A context compaction is in progress. */

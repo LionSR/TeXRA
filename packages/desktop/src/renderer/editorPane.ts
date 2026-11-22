@@ -15,7 +15,6 @@
 // request supersedes an older one by interrupting it, so no result needs
 // checking for staleness after it arrives.
 
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import {
@@ -46,7 +45,10 @@ import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
 import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
 
-import { createEditorFileNotice } from './editorFileNotice';
+import {
+  createEditorFileNotice,
+  renderNoticeCallout,
+} from './editorFileNotice';
 import {
   buildEditorDirectoryEntries,
   type EditorFileEntry,
@@ -138,8 +140,9 @@ interface EditorPaneCallbacks {
     base: string | null,
   ): Effect.Effect<'saved' | 'changedOnDisk', EditorPaneError>;
   isReadOnly?(path: string): boolean;
-  /** Reports dirty state so the tab strip can show its indicator. */
-  onDirtyChange(path: string, dirty: boolean): void;
+  /** A path's unsaved state changed; the tab strip redraws its mark, which
+   *  it reads back through `hasUnsavedChanges`. */
+  onDirtyChange(path: string): void;
   /**
    * A tree row was activated. The pane does NOT load the file itself: the shell
    * owns tabs, so it creates (or focuses) the editor tab and calls back into
@@ -285,7 +288,7 @@ export function createEditorPane(
       ...state,
       dirty: withMember(state.dirty, path, dirty),
     }));
-    callbacks.onDirtyChange(path, dirty);
+    callbacks.onDirtyChange(path);
   }
   const isDirty = (path: string): boolean =>
     SubscriptionRef.getUnsafe(tree).dirty.has(path);
@@ -315,13 +318,7 @@ export function createEditorPane(
   }
 
   function treeTemplate(state: TreeState): TemplateResult {
-    if (state.error) {
-      return html`
-        <wa-callout class="desktop-editor-tree-empty" variant="danger">
-          ${waIcon('triangle-exclamation', { slot: 'icon' })} ${state.error}
-        </wa-callout>
-      `;
-    }
+    if (state.error) return renderNoticeCallout(state.error);
     if (state.loading) {
       return renderLoadingState('Loading project files…');
     }

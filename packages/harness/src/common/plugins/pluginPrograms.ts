@@ -43,7 +43,7 @@ const PROGRAM_NAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const DESCRIPTION_MAX_LENGTH = 300;
 
 /** One program, as read from its file. */
-export interface PluginProgram {
+interface PluginProgram {
   /** `<prefix>:<name>`: what it is started by, and its module's specifier. */
   readonly name: string;
   readonly description: string;
@@ -63,7 +63,7 @@ export interface PluginPrograms {
 /** The list a file's header declares beside its `description`: a
  *  program's `uses` (the tools it is offered), or a native entry's
  *  `provides` (what its plugin contributes, `./nativeEntry`). */
-export interface HeaderList {
+interface HeaderList {
   readonly name: 'uses' | 'provides';
   /** What the list holds, and an example, for a refusal. */
   readonly holds: string;
@@ -85,7 +85,7 @@ const USES: HeaderList = {
  */
 export const readDeclaredFile = Effect.fn('readDeclaredFile')(function* (
   file: string,
-  list: HeaderList = USES,
+  list: HeaderList,
 ): Effect.fn.Return<
   Result.Result<
     {
@@ -133,7 +133,7 @@ const ESCAPES: Readonly<Record<string, string>> = {
  */
 function readDeclarations(
   source: string,
-  list: HeaderList = USES,
+  list: HeaderList,
 ): Result.Result<
   { readonly description: string; readonly names: readonly string[] },
   string
@@ -305,7 +305,7 @@ export const readPrograms = Effect.fn('readPrograms')(function* ({
           return refused(
             'its name must be lowercase letters, digits and hyphens',
           );
-        const declared = yield* readDeclaredFile(path.join(root, entry));
+        const declared = yield* readDeclaredFile(path.join(root, entry), USES);
         if (declared === null) return refused('it is no longer there');
         if (Result.isFailure(declared)) return refused(declared.failure);
         const { description, names, source } = declared.success;
