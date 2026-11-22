@@ -1349,6 +1349,21 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
    `agent-architecture`、`texra-cli` 重写，其余改措辞；changelog；
    `AGENTS.md`。
 
+**第 1 片已落地（2026-11-22）。** 负责人在实施中补了一条：大多数 persona
+不是消失，而是变成程序。`core` 插件登记了十一个任务程序
+（`packages/texra/src/tools/tasks/programs.ts`）：`review`、`search`、
+`derive`（原 `research`）、`code`（`coder` 和 `engineer` 合并）、
+`review-code`、`simplify`（`simplifier` 和 `codeSimplifier` 合并）、
+`test`、`experiment`（原 `numerics`）、`solve`（原 `prover`）、
+`fix-latex`、`latexdiff`。每个是一个子运行，system 是那件事的 rubric，
+共用 `builtIn:task`。没有变成程序的：`orchestrator` 和 `assistant` 合成入
+口；`presenter` 由 `slides` 和 `poster` 覆盖；`progressCheck` 审的是
+orchestrator 的一轮，goal 的 judge 已是它的替代；`creator` 随 custom
+agent 删；lean4 的五个 agent 由 `prove` 和 `blueprint` 覆盖。它们都登记
+在 `core` 上而不是各自工具的插件上：`builtIn:task` 是一个模块名，放在一
+个总是开着的插件上才能被每个程序 import。校验脚本仍用 custom agent 目
+录，经 `TEXRA_INTERNAL_VALIDATE_AGENT` 点名（第 2 片改成 inline persona）。
+
 这一期**不做**的两处，都不是存法：
 
 - **只声明小核心。** 入口 agent 的工具表仍是今天 `assistant.yaml` 列的那
