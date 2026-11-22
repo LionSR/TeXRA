@@ -5,7 +5,7 @@
 // a single string and never trigger `onSubmit` on the first embedded `\n`.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, useInput, usePaste, type Key } from 'ink';
+import { Box, Text, useInput, usePaste, type Key } from 'ink';
 import { Cause, Effect } from 'effect';
 
 import {
@@ -35,7 +35,7 @@ import {
 import { NO_IMAGE_PASTES, type ImagePastes } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
 import type { ProcessServices } from '@texra-ai/harness/host';
-import { GLYPH_CARET } from '@cli/tui/ui/glyphs';
+import { GLYPH_CARET, POINTER } from '@cli/tui/ui/glyphs';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
@@ -100,6 +100,20 @@ interface TextInputProps {
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
+}
+
+/** A text input behind the pointer gutter: the one-line answer a card or
+ *  form asks for. */
+export function PromptInput({
+  marginTop = 0,
+  ...props
+}: TextInputProps & { readonly marginTop?: number }): React.JSX.Element {
+  return (
+    <Box marginTop={marginTop}>
+      <Text>{`${POINTER} `}</Text>
+      <TextInput {...props} />
+    </Box>
+  );
 }
 
 export function TextInput(props: TextInputProps): React.JSX.Element {
