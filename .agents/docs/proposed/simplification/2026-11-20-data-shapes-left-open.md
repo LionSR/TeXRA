@@ -40,6 +40,13 @@ whose serialization needs a JSON codec for the field; a `Schema.declare`
 needs that annotation, and the right encoded form (`Json` vs `Record`)
 should be decided once for all four. Check `RpcSerialization` first.
 
+Landed 2026-11-22: `RpcClientMessageSchema` and `RpcServerMessageSchema`
+(`packages/texra/src/shared/rpcOverMessages.ts`) refine `Schema.Unknown` to
+`rpc`'s encoded types, which `Schema.toCodecJson` passes through, so the
+socket carriers need no declared codec. The session envelope is
+`ClientEnvelopeSchema` and `ServerEnvelopeSchema`, `SessionWire` their union,
+and the ten casts are gone.
+
 ## 4. The desktop `WorkbenchTab` is a union written as optionals
 
 `WorkbenchTab` (`packages/desktop/src/shared/desktopShellState.ts`) has
@@ -56,6 +63,14 @@ Held back: the persisted shell state changes (a stored layout from an
 earlier build fails its decode unless the workbench drops it), and the
 renderer's tab code was reworked in #15026; let it settle first, as the
 2026-11-18 note said of the terminal pane.
+
+Landed 2026-11-22: `dirty` is gone from the tab and the dock panel's
+parameters; the dock asks the editor pane (`PaneKind.isDirty`) and an edit
+only redraws the tab. A stored tab that still carries `dirty` decodes, since
+structs ignore undeclared keys. The union on `kind` stays open: every pane
+handler takes the whole `WorkbenchTab` through `panes[tab.kind]`, so
+per-kind members would trade the `target` checks for correlated casts
+there; take it with a typed pane table.
 
 ## 5. Smaller
 
