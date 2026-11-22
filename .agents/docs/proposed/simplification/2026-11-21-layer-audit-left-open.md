@@ -66,6 +66,13 @@ coding-plan ones in `globalState`.
 
 ## 3. The TUI re-checks model access through a hand-passed callback
 
+Landed 2026-11-22: every sign-in, sign-out and preference write emits
+`modelAccessChanged` and every key write `credentialChanged`, so the chat
+follows the stream the status bar follows (`modelAccessChanges`,
+`packages/cli/src/chat/tui/modelConnection.ts`) while it has no model. The
+callback and its three call sites are gone, and a key saved in `/config`
+or a settings view connects a waiting chat.
+
 `onAccountChanged` (`slashContext.ts`) is called by hand at three sites in
 `modelAccessContribution.tsx`; the `/config` → API keys save never calls it,
 so a chat waiting on "Connect a model" stays blocked after a key is saved
