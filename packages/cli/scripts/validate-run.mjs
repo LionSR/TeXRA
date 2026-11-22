@@ -842,8 +842,10 @@ function validateHistoryQueryRunCommand() {
  * rather than manufacturing a snapshot from separately copied DB/WAL files.
  */
 function storeRows(dir, sql, ...params) {
-  // A store file itself, or the directory of TeXRA's `texra.db`.
-  const file = dir.endsWith('.db') ? dir : path.join(dir, 'texra.db');
+  // A store file itself, or the directory of TeXRA's `texra.project-v1.db`.
+  const file = dir.endsWith('.db')
+    ? dir
+    : path.join(dir, 'texra.project-v1.db');
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     return db.prepare(sql).all(...params);
@@ -1702,7 +1704,7 @@ async function validateSdkResumeApproval() {
     // The workspace's store: the global one beside it holds no runs.
     const store = spawnSync(
       'find',
-      [storage, '-path', '*/workspace-storage/*', '-name', '*.db'],
+      [storage, '-path', '*/workspace-storage/*', '-name', '*.project-v1.db'],
       { encoding: 'utf8' },
     ).stdout.trim();
     const rows = storeRows(
@@ -2566,9 +2568,12 @@ async function validateServiceSessionIdle() {
     const sessionOpen = (prefix) => {
       const dir = readdirSync(storage).find((name) => name.startsWith(prefix));
       assert(dir !== undefined, `the ${prefix} project should have a store`);
-      const db = new DatabaseSync(path.join(storage, dir, 'texra.db'), {
-        readOnly: true,
-      });
+      const db = new DatabaseSync(
+        path.join(storage, dir, 'texra.project-v1.db'),
+        {
+          readOnly: true,
+        },
+      );
       try {
         db.prepare('SELECT 1 FROM event LIMIT 1').all();
         return false;

@@ -55,7 +55,7 @@ User-wide values are stored in:
 
 Project values override user-wide values, and CLI flags / environment variables override saved values where supported. If `.texra/config.json` is unreadable (e.g., malformed JSON), TeXRA warns and ignores it until fixed.
 
-Task history is stored separately in `~/.texra` (TeXRA 1.0 starts with fresh state and does not migrate legacy JSON stores or `.vscode/settings.json`).
+Task history is stored separately in a local SQLite database (`texra.project-v1.db`) under `~/.texra` (TeXRA 1.0 starts with fresh state and does not migrate legacy JSON stores or `.vscode/settings.json`).
 
 The JSON files use flat `texra.*` keys. For example:
 
@@ -72,8 +72,8 @@ them at the intended project or user scope.
 
 The approval policy is the main exception to the project scope: a project
 file can be supplied by a repository you clone, so TeXRA never reads it from
-there. It is kept per workspace in your own storage, and a value in your user
-file applies to every workspace. The goal spend cap and the user-wide provider
+there. It is kept per project in your own storage, and a value in your user
+file applies to every project. The goal spend cap and the user-wide provider
 switches (such as OpenAI fast mode) are likewise read only from your user
 file. A project file that sets any of these is ignored with a warning naming
 the key.
