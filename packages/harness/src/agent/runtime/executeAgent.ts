@@ -8,7 +8,7 @@
  * through `resumeRun`, and a child's launch through `startChildRun`
  * (`delegation/childLaunch.ts`).
  */
-import { Clock, ConfigProvider, Effect, Layer } from 'effect';
+import { Clock, ConfigProvider, Effect, Layer, Record } from 'effect';
 
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@tools/core/ToolTypes';
@@ -228,7 +228,7 @@ const withLaunchKeys = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> =>
   Effect.flatMap(Effect.service(LaunchKeys), (apiKeys) => {
-    if (Object.keys(apiKeys).length === 0) return effect;
+    if (Record.isEmptyRecord(apiKeys)) return effect;
     return Effect.flatMap(ProjectEnvironment, (project) => {
       const variables = { ...apiKeys, ...project };
       return effect.pipe(

@@ -1,3 +1,5 @@
+import { Record } from 'effect';
+
 import type {
   RequestDecision,
   UserQuestionAnswers,
@@ -10,7 +12,7 @@ import type {
 export function userQuestionDecision(
   answers: UserQuestionAnswers,
 ): RequestDecision {
-  if (Object.keys(answers).length === 0) {
+  if (Record.isEmptyRecord(answers)) {
     return { action: 'skip' };
   }
   return { action: 'submit', answers };

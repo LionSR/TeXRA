@@ -366,7 +366,7 @@ export const inputSchema = (
     definition.schema,
   );
   const root = withObjectRoot(definition, schema);
-  return Object.keys(definitions).length === 0
+  return EffectRecord.isEmptyRecord(definitions)
     ? root
     : { ...root, $defs: definitions };
 };
