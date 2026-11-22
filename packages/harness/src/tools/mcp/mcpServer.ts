@@ -302,14 +302,19 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
   }).pipe(
     Effect.provideService(McpClient.Transport, transport),
     // At initialization the client refuses only a server that answered
-    // another revision; for a stdio server that means an older MCP SDK.
-    Effect.mapError((error) =>
-      error.reason._tag === 'UnsupportedError'
-        ? new McpStartError({
-            message: `it answered MCP revision ${answered() ?? '(none)'}, but MCP ${PROTOCOL.protocolVersion} is required; update the server (its MCP SDK is older)`,
-          })
-        : error,
-    ),
+    // another revision. Revisions are dates, so an earlier one is an older
+    // MCP SDK the server can update; a later one is ahead of this client.
+    Effect.mapError((error) => {
+      if (error.reason._tag !== 'UnsupportedError') return error;
+      const revision = answered();
+      const advice =
+        revision === undefined || revision < PROTOCOL.protocolVersion
+          ? 'update the server (its MCP SDK is older)'
+          : 'this client does not accept a newer revision yet';
+      return new McpStartError({
+        message: `it answered MCP revision ${revision ?? '(none)'}, but MCP ${PROTOCOL.protocolVersion} is required; ${advice}`,
+      });
+    }),
   );
   const tools = new Map<string, ITool<Error, PluginToolServices>>();
   // A server that declares no tools capability lists none.

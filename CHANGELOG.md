@@ -180,6 +180,11 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   run's transcript and the log say `MCP server "<name>" did not start: it
   answered MCP revision 2025-06-18, but MCP 2025-11-25 is required; update
   the server (its MCP SDK is older)`. Update the server to a current release.
+  A server that answers a newer revision is refused the same way, with
+  the message saying this client does not accept it yet. SDK: the
+  `framing` option is gone from `JsonRpcConnectionOptions` and
+  `JsonRpcProcessOptions` (`@texra-ai/harness/plugins`); a JSON-RPC
+  connection speaks only LSP `Content-Length` framing.
 
 ### Features
 
