@@ -13,12 +13,11 @@
 // the CLI log sink is silent while Ink owns the screen, and a write to the
 // terminal from here would land inside the frame.
 
-import { Box, Text } from 'ink';
+import { Box } from 'ink';
 import { Component, type ReactNode } from 'react';
 
 import { toErrorMessage, truncateSummary } from '@texra-ai/harness/schemas';
-import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { WARNING } from '@cli/tui/ui/glyphs';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 
 interface EntryErrorBoundaryProps {
   // Names the failed entry in the inline marker (e.g. its
@@ -66,9 +65,10 @@ export class EntryErrorBoundary extends Component<
         {/* Not dimmed: this is the only signal that an entry failed to
             render, and dimming the one message reporting a failure is the
             opposite of what its salience should be. */}
-        <Text color={COLOR_ERROR}>
-          {`${WARNING} failed to render ${this.props.label ?? 'entry'}${detail ? `: ${detail}` : ''}`}
-        </Text>
+        <ToneLine
+          tone="danger"
+          text={`failed to render ${this.props.label ?? 'entry'}${detail ? `: ${detail}` : ''}`}
+        />
       </Box>
     );
   }

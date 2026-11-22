@@ -351,9 +351,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
           ${renderLabeledActionButton({
             icon: 'folder-open',
             text: 'Open project folder',
-            appearance: 'filled',
-            variant: 'brand',
-            className: 'btn-primary',
+            kind: 'primary',
             onClick: () =>
               postToMain({
                 command: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
@@ -418,7 +416,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
       icon: 'table-columns',
       label: sidebarToggleLabel,
       tooltip: sidebarToggleLabel,
-      className: 'shell-header-button icon-button',
+      className: 'shell-header-button',
       size: 's',
       onClick: () => updateShell(toggleSidebar(shellState())),
     })}

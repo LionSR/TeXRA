@@ -26,7 +26,7 @@ export function renderNoticeCallout(
   buttons: unknown = nothing,
 ): TemplateResult {
   return html`<wa-callout variant="danger" size="s" role="alert">
-    ${waIcon('triangle-exclamation', { slot: 'icon' })}
+    ${waIcon('circle-exclamation', { slot: 'icon' })}
     <span class="desktop-editor-notice-text">${message}</span>
     ${buttons}
   </wa-callout>`;

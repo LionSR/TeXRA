@@ -3,7 +3,7 @@
  * a focus ring, and a settings row look like in every TeXRA host.
  *
  * Four button skins (`.btn-primary` / `.btn-secondary` / `.btn-ghost` /
- * `.icon-button`), the modifiers (`.is-link` / `.is-danger` / `.is-row` /
+ * `.action-icon-button`), the modifiers (`.is-link` / `.is-danger` / `.is-row` /
  * `.is-row-content` / `.is-compact`), two input skins
  * (`formControlStyles` / `.input-plain`). A surface that needs something else
  * belongs in this file, not in a local override — a per-component skin is how
@@ -14,9 +14,8 @@
  * (`packages/desktop/src/renderer/designTokens.ts`), so both trees render
  * from this one definition.
  *
- * `.action-button` / `.action-icon-button` are selector aliases for the same
- * skins, kept because `renderIconActionButton` emits them and per-component
- * overrides target them.
+ * `renderLabeledActionButton` and `renderIconActionButton` (`@ui/wa/actionButtons`)
+ * emit these classes: a caller names a `kind` and a `size`, never a class.
  */
 
 import { css, unsafeCSS, type CSSResult } from 'lit';
@@ -24,11 +23,11 @@ import { css, unsafeCSS, type CSSResult } from 'lit';
 import { compactFormControlStyles } from './selectStyles';
 
 /**
- * The six selector aliases that share the button skins — declared once so
- * the rules below cannot drift from each other.
+ * The five selectors that share the button skins — declared once so the
+ * rules below cannot drift from each other.
  */
 const INTERACTIVE_CONTROLS: CSSResult = unsafeCSS(
-  '.btn-primary, .btn-secondary, .btn-ghost, .action-button, .icon-button, .action-icon-button',
+  '.btn-primary, .btn-secondary, .btn-ghost, .action-button, .action-icon-button',
 );
 
 /**
@@ -56,7 +55,7 @@ export const focusRingStyles: CSSResult = css`
  *   .btn-primary    the one accent fill; at most one per view
  *   .btn-secondary  neutral fill with a quiet border
  *   .btn-ghost      transparent until hovered — the workhorse
- *   .icon-button    square, icon-only, sized by --control-size
+ *   .action-icon-button  square, icon-only, sized by --control-size
  *   .is-link        on .btn-ghost: reads as a text link
  *   .is-danger      red text, never a red fill (that is dialog-only)
  *
@@ -265,7 +264,6 @@ export const buttonStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  .icon-button,
   .action-icon-button {
     flex-shrink: 0;
     /* Toolbar actions share a square target, independently of label size. */
@@ -274,11 +272,6 @@ export const buttonStyles: CSSResult = css`
     height: var(--control-size);
   }
 
-  .icon-button {
-    --control-size: var(--control-size-m);
-  }
-
-  .icon-button::part(base),
   .action-icon-button::part(base) {
     display: flex;
     align-items: center;
@@ -298,7 +291,6 @@ export const buttonStyles: CSSResult = css`
       color var(--transition-fast);
   }
 
-  .icon-button::part(label),
   .action-icon-button::part(label) {
     display: flex;
     align-items: center;
@@ -307,44 +299,37 @@ export const buttonStyles: CSSResult = css`
     height: 100%;
   }
 
-  .icon-button::part(base):hover,
   .action-icon-button::part(base):hover {
     background: var(--surface-hover);
     color: var(--wa-color-text-normal);
   }
 
   /* Pressed and toggled-on are the shared overlays, like every state. */
-  .icon-button::part(base):active,
   .action-icon-button::part(base):active {
     background: var(--surface-active);
   }
 
-  .icon-button[aria-pressed='true']::part(base),
   .action-icon-button[aria-pressed='true']::part(base) {
     background: var(--surface-selected);
     color: var(--wa-color-text-normal);
   }
 
-  .icon-button wa-icon,
   .action-icon-button wa-icon {
     font-size: var(--font-size-icon-sm);
   }
 
   /* The three size steps. A caller picks one via the size option on
-     renderIconActionButton (or the class directly); anything needing a fourth
+     renderIconActionButton; anything needing a fourth
      sets --control-size on the host rather than a width/height pair, so the
      radius and icon size stay in proportion. */
-  .icon-button.is-size-s,
   .action-icon-button.is-size-s {
     --control-size: var(--control-size-s);
   }
 
-  .icon-button.is-size-m,
   .action-icon-button.is-size-m {
     --control-size: var(--control-size-m);
   }
 
-  .icon-button.is-size-l,
   .action-icon-button.is-size-l {
     --control-size: var(--control-size-l);
   }
@@ -354,7 +339,6 @@ export const buttonStyles: CSSResult = css`
       .btn-secondary,
       .btn-ghost,
       .action-button:not(.btn-primary):not(.btn-secondary),
-      .icon-button,
       .action-icon-button
     )[disabled]::part(base) {
     cursor: not-allowed;
@@ -373,7 +357,6 @@ export const buttonStyles: CSSResult = css`
   :is(
       .btn-ghost,
       .action-button:not(.btn-primary):not(.btn-secondary),
-      .icon-button,
       .action-icon-button
     )[disabled]::part(base):is(:hover, :active) {
     background: transparent;
@@ -456,7 +439,7 @@ export const buttonStyles: CSSResult = css`
 /**
  * Bordered surface for a decorative leading icon.
  *
- * This is deliberately separate from `.icon-button`: it is presentation, not
+ * This is deliberately separate from `.action-icon-button`: it is presentation, not
  * an interactive target, so it has no hover/focus/pressed states. The shared
  * size classes let call sites align decorative icons with adjacent controls
  * without repeating one-off width/height/radius declarations.

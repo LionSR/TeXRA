@@ -170,7 +170,7 @@ export class FileSelectGroup extends LitElement {
               }
               ${renderIconActionButton({
                 id: `file-select-remove-${index}`,
-                icon: 'trash',
+                icon: 'xmark',
                 label: `Remove ${file}`,
                 tooltip: `Remove: ${file}`,
                 className: 'remove-button',

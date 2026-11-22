@@ -50,8 +50,8 @@ export function createDesktopPromptOverlay(
   const cancelButton = renderElement(
     renderLabeledActionButton({
       text: 'Cancel',
-      appearance: 'outlined',
-      className: 'desktop-prompt-cancel btn-secondary',
+      kind: 'secondary',
+      className: 'desktop-prompt-cancel',
       onClick: () => answer(null),
     }),
   );
@@ -59,9 +59,8 @@ export function createDesktopPromptOverlay(
   const submitButton = renderElement(
     renderLabeledActionButton({
       text: 'Save',
-      appearance: 'filled',
-      variant: 'brand',
-      className: 'desktop-prompt-submit btn-primary',
+      kind: 'primary',
+      className: 'desktop-prompt-submit',
       // The shared button helper always renders type="button", so submit is
       // driven explicitly rather than relying on native type="submit".
       onClick: () => form.requestSubmit(),

@@ -202,7 +202,6 @@ export class AgentsTab extends TexraSignalElement {
                 text: 'Change folder',
                 label: 'Change custom agents folder',
                 kind: 'secondary',
-                appearance: 'outlined',
                 onClick: () => this.handleChangeCustomDir(),
               })}
               ${
@@ -213,7 +212,6 @@ export class AgentsTab extends TexraSignalElement {
                       text: 'Use default folder',
                       label: 'Reset custom agents folder',
                       kind: 'secondary',
-                      appearance: 'outlined',
                       onClick: () => this.handleResetCustomDir(),
                     })
               }
