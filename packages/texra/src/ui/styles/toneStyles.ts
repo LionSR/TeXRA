@@ -16,7 +16,7 @@ export const toneStyles: CSSResult = css`
   }
 
   .tone-neutral {
-    --tone-color: var(--color-text-muted);
+    --tone-color: var(--color-text-secondary);
   }
 
   @media (forced-colors: active) {

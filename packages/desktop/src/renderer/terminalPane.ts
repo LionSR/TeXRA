@@ -11,11 +11,10 @@
 
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
-import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 import { render } from 'lit';
 
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { resolveXtermTheme } from '@ui/wa/xtermTheme';
+import { resolveXtermTheme, xtermStyles } from '@ui/wa/xtermTheme';
 
 /** xterm takes a numeric font size: the desktop chrome's computed size, so
  *  the terminal follows the CSS type scale instead of a separate number. */
@@ -76,8 +75,8 @@ interface TerminalSession {
 
 /**
  * xterm ships its CSS as a stylesheet rather than shadow-scoped styles. The
- * panes render in the light DOM, so the renderer's entry injects it once, at
- * document level.
+ * panes render in the light DOM, so the renderer's entry injects the kit's
+ * copy of it once, at document level.
  */
 export function injectXtermStyles(): void {
   const style = document.createElement('style');

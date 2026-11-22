@@ -1,11 +1,11 @@
 /**
  * Local CLI rows: notices the TUI itself prints into a conversation (a model
  * fallback, a skill activation, a slash-command result). They are not
- * events and never part of the session view; they are one list of `{ runId, row }`, and the conversation panes
- * merge them into the run's rows by the notice row's `seqNo` (the position
- * it was written after) at render: a join of two inputs ordered by the same
- * transcript seq, so a row the session view's residency cap drops never
- * shifts a notice.
+ * events and never part of the session view; they are one list of
+ * `{ runId, row }`, joined into the run's rows by the notice row's `seqNo`
+ * (the position it was written after) in {@link conversationRows}: a join of
+ * two inputs ordered by the same transcript seq, so a row the session view's
+ * residency cap drops never shifts a notice.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -156,29 +156,24 @@ export function clearLocalTranscript(): void {
   focusRun(null, { when: 'local' });
 }
 
-export function noticesFor(
-  all: readonly LocalNotice[],
-  runId: RunId | undefined,
-): readonly LocalNotice[] {
-  return runId === undefined
-    ? []
-    : all.filter((notice) => notice.runId === runId);
-}
-
 /**
- * The run's rows with its notices inserted after the last row whose seq is at
- * or below their own `seqNo`, in notice order: the merged index is the print
+ * A run's rows as the conversation paints them: its transcript with this
+ * TUI's notices for it inserted after the last row whose seq is at or below
+ * their own `seqNo`, in notice order, so the merged index is the print
  * order. A notice written before the run's first row goes ahead of it. The
  * merged `finalRows` is the finished prefix plus every notice anchored
  * inside it (a notice is immutable the moment it is written, and keeps its
- * identity across merges).
+ * identity across merges). Both conversation panes read this one join.
  */
-export function mergeLocalNotices(
+export function conversationRows(
   run: RunView | undefined,
-  runNotices: readonly LocalNotice[],
+  all: readonly LocalNotice[],
+  runId: RunId | undefined,
 ): { readonly rows: readonly TranscriptRow[]; readonly finalRows: number } {
   const rows = run?.transcript.rows ?? [];
   const finalRows = run?.transcript.finalRows ?? 0;
+  const runNotices =
+    runId === undefined ? [] : all.filter((notice) => notice.runId === runId);
   if (runNotices.length === 0) return { rows, finalRows };
   const finalSeq = finalRows === 0 ? 0 : rowSeq(rows[finalRows - 1]);
   const out: TranscriptRow[] = [];

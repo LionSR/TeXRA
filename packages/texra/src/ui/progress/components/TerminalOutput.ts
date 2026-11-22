@@ -5,9 +5,8 @@ import { customElement, property } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
-import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
-import { resolveXtermTheme } from '@ui/wa/xtermTheme';
+import { resolveXtermTheme, xtermStyles } from '@ui/wa/xtermTheme';
 
 const MIN_SCROLLBACK = 4_000;
 

@@ -10,15 +10,14 @@
 //   export const description = 'One line: what it adds.';
 //   export const provides = ['tool:word_count', 'processLayer', 'prompt'];
 //
-// `provides` names each contribution: `tool:<name>`, `program:<name>`,
-// `module:<name>` (a script module), `processLayer`, `sessionLayer` and
-// `prompt`.
+// `provides` names each contribution, in the words of `NAMED_KINDS` and
+// `SINGLE_KINDS`.
 
 // Node imports
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result, Struct } from 'effect';
 
 // Local imports
 import { readDeclaredFile } from './pluginPrograms';
@@ -35,43 +34,51 @@ export interface NativeEntry {
   readonly provides: readonly string[];
 }
 
-/** One contribution `provides` may name. */
-const CONTRIBUTION =
-  /^(?:(?:tool|program|module):[A-Za-z0-9_-]+|processLayer|sessionLayer|prompt)$/;
+/** The kinds of contribution a plugin may have several of, each named in
+ *  `provides` as `<word>:<name>`: the word, and what a review calls them. */
+export const NAMED_KINDS = Object.freeze({
+  tool: 'tools',
+  program: 'programs',
+  module: 'script modules',
+} as const);
 
-/** What the review says of each kind of contribution, as `describe`
- *  groups them. */
-const KINDS = [
-  ['tool:', 'tools'],
-  ['program:', 'programs'],
-  ['module:', 'script modules'],
-] as const;
+/** The kinds a plugin has one of or none, each named in `provides` by its
+ *  word, the plugin's field of that name: the word, and what a review says
+ *  of it. */
+export const SINGLE_KINDS = Object.freeze({
+  processLayer: 'services held for the life of the process',
+  sessionLayer: 'services held for each open session',
+  prompt: 'a section of every request’s system text',
+} as const);
+
+/** How `provides` names each kind, as a message or a description lists
+ *  them. */
+export const PROVIDES_WORDS: readonly string[] = Object.freeze([
+  ...Struct.keys(NAMED_KINDS).map((word) => `${word}:<name>`),
+  ...Struct.keys(SINGLE_KINDS),
+]);
+
+/** One contribution `provides` may name. */
+const CONTRIBUTION = new RegExp(
+  `^(?:(?:${Struct.keys(NAMED_KINDS).join('|')}):[A-Za-z0-9_-]+|${Struct.keys(SINGLE_KINDS).join('|')})$`,
+);
 
 /**
  * The contributions a native entry declares, one phrase each, for the
- * trust review and a listing: its tools, programs and script modules by
- * name, and whether it holds process services, session services or a
- * prompt section.
+ * trust review and a listing: those of each named kind by name, then what
+ * it has of the single kinds.
  */
 export const describeProvides = (provides: readonly string[]): string => {
-  const named = KINDS.flatMap(([prefix, label]) => {
+  const named = Object.entries(NAMED_KINDS).flatMap(([word, label]) => {
     const names = provides.flatMap((item) =>
-      item.startsWith(prefix) ? [item.slice(prefix.length)] : [],
+      item.startsWith(`${word}:`) ? [item.slice(word.length + 1)] : [],
     );
     return names.length === 0 ? [] : [`${label} ${names.join(', ')}`];
   });
-  const held = [
-    ...(provides.includes('processLayer')
-      ? ['services held for the life of the process']
-      : []),
-    ...(provides.includes('sessionLayer')
-      ? ['services held for each open session']
-      : []),
-    ...(provides.includes('prompt')
-      ? ['a section of every request’s system text']
-      : []),
-  ];
-  return [...named, ...held].join('; ') || 'nothing';
+  const single = Object.entries(SINGLE_KINDS).flatMap(([word, says]) =>
+    provides.includes(word) ? [says] : [],
+  );
+  return [...named, ...single].join('; ') || 'nothing';
 };
 
 /**
@@ -107,7 +114,7 @@ export const readNativeEntry = Effect.fn('readNativeEntry')(function* (
   const unknown = names.find((name) => !CONTRIBUTION.test(name));
   if (unknown !== undefined)
     return refused(
-      `\`provides\` names ${JSON.stringify(unknown)}, which is not tool:<name>, program:<name>, module:<name>, processLayer, sessionLayer or prompt`,
+      `\`provides\` names ${JSON.stringify(unknown)}, which is not one of ${PROVIDES_WORDS.join(', ')}`,
     );
   return {
     entry: { file, description, provides: [...new Set(names)] },

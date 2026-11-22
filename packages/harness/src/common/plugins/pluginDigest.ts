@@ -140,9 +140,11 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
 
 /**
  * Copy what the plugin at `root` ships into the new directory `dest`: the
- * files the digest reads, so the copy is the plugin as it was trusted
- * whatever is written to `root` afterwards. A link to something the plugin
- * ships points at the copy of it, and any other link at what it pointed at.
+ * files the digest reads, as they are when the copy is made, so nothing
+ * written to `root` afterwards reaches it. The copy is not digested: a
+ * write between the read that found the plugin trusted and this copy is
+ * copied with the rest. A link to something the plugin ships points at the
+ * copy of it, and any other link at what it pointed at.
  */
 export const copyPlugin = Effect.fn('pluginDigest.copyPlugin')(
   function* (root: string, dest: string) {

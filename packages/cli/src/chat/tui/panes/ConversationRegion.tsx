@@ -95,13 +95,9 @@ export function ConversationRegion({
   });
 
   const activePlan = activeRun ? planOf(activeRun) : null;
-  const queuedFollowUpMessages = (
-    activeRunId === undefined
-      ? []
-      : (view.runs.get(activeRunId)?.queuedFollowUps ?? [])
-  ).map((followUp) => followUp.text);
+  const queuedFollowUps = activeRun?.queuedFollowUps ?? [];
   const queuedFollowUpPanelWanted =
-    !foregroundOpen && queuedFollowUpMessages.length > 0;
+    !foregroundOpen && queuedFollowUps.length > 0;
   // InputBar publishes the live content height so multi-line drafts shrink
   // the transcript instead of pushing pinned chrome off-screen.
   const inputRows =
@@ -109,7 +105,7 @@ export function ConversationRegion({
   const footerRows =
     PINNED_CHROME_ROWS.status + (inputBarVisible ? inputRows : 0);
   const requestedQueuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
+    ? queuedFollowUpPanelRowCount(queuedFollowUps)
     : 0;
   const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
     ? Num.clamp(requestedQueuedFollowUpPanelRows, {
@@ -199,7 +195,7 @@ export function ConversationRegion({
         {queuedFollowUpPanelVisible ? (
           <QueuedFollowUpsPanel
             maxRows={queuedFollowUpPanelRows}
-            messages={queuedFollowUpMessages}
+            followUps={queuedFollowUps}
             width={columns}
           />
         ) : null}

@@ -274,12 +274,24 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
   const fs = yield* FileSystem.FileSystem;
   const started = yield* Clock.currentTimeMillis;
   const appDirs = (yield* CommandDirs)();
+  // A hook with no `args` is a shell command line; one with them is run as
+  // written.
   const shell = hookShell(appDirs);
-  if (hook.args === undefined && shell === null)
+  const invocation =
+    hook.args !== undefined
+      ? ([
+          expand(hook.command, places),
+          hook.args.map((a) => expand(a, places)),
+        ] as const)
+      : shell === null
+        ? null
+        : ([shell, ['-c', hook.command]] as const);
+  if (invocation === null)
     return {
       run: { kind: 'unstartable', message: `${hook.command}: ${NO_SHELL}` },
       durationMs: 0,
     };
+  const [command, args] = invocation;
   const env = withExtendedPath(
     {
       PATH: process.env.PATH ?? '/usr/bin:/bin',
@@ -290,10 +302,6 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
     },
     appDirs,
   );
-  const [command, args] =
-    hook.args === undefined
-      ? [shell ?? '/bin/sh', ['-c', hook.command]]
-      : [expand(hook.command, places), hook.args.map((a) => expand(a, places))];
   const run: HookRun = yield* Effect.gen(function* () {
     yield* fs.makeDirectory(places.pluginData, { recursive: true });
     const handle = yield* ChildProcess.make(command, args, {

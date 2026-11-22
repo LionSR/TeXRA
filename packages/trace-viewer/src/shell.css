@@ -56,5 +56,5 @@ body .trace-scrubber input[type='range'] {
 
 body .trace-scrubber output {
   white-space: nowrap;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }

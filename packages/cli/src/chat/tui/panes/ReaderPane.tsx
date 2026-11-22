@@ -11,22 +11,21 @@
 import { useCallback, useMemo } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
-import {
-  planOf,
-  type RunId,
-  type TranscriptView,
-} from '@texra-ai/harness/schemas';
+import { planOf, type RunId } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { sessionView, runViewOf } from '../state/sessionView';
+import {
+  conversationRows,
+  notices as noticesSignal,
+} from '../state/transcript';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
-const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 
 interface ReaderProps {
   readonly availableRows: number;
@@ -88,20 +87,25 @@ function ReaderPane({
   );
 }
 
-/** A run's full transcript, live while the reader is open. */
+/** A run's full transcript with this TUI's notices for it, as the
+ *  conversation shows them, live while the reader is open. */
 export function TranscriptReader(props: ReaderProps): React.JSX.Element {
   const view = useSignal(sessionView());
-  // The transcript value, never its `rows` array: the session view appends and
-  // patches rows in place and replaces the transcript on every change (a
-  // new row, a patched row, a text chunk), so the transcript is the
-  // identity the text below keys on to stay live while the reader is open.
-  const transcript =
-    runViewOf(view, props.runId)?.transcript ?? EMPTY_TRANSCRIPT;
+  const allNotices = useSignal(noticesSignal);
+  // The run value, never its rows array: the session view patches rows in
+  // place and replaces the run (and its transcript) on every change (a new
+  // row, a patched row, a text chunk), so the run and the notices are the
+  // identities the text below keys on to stay live while the reader is open.
+  const run = runViewOf(view, props.runId);
   const text = useCallback(
     (width: number) =>
-      transcriptToLines(transcript.rows, width).join('\n').trimEnd() ||
-      EMPTY_TRANSCRIPT_TEXT,
-    [transcript],
+      transcriptToLines(
+        conversationRows(run, allNotices, props.runId).rows,
+        width,
+      )
+        .join('\n')
+        .trimEnd() || EMPTY_TRANSCRIPT_TEXT,
+    [run, allNotices, props.runId],
   );
   return (
     <ReaderPane {...props} hiddenNoun="transcript rows" laidOut text={text} />
