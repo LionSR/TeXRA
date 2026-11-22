@@ -173,7 +173,6 @@ export function nativeToolTestLayer(
           Effect.gen(function* () {
             const pinned = yield* Context.get(session, ProjectTools).pin(
               Effect.succeed(new Set<string>()),
-              { installed: true },
             );
             return yield* pinned.services(
               new Set(pinned.plugins.map(({ id }) => id)),
