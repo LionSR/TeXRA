@@ -72,7 +72,8 @@ export const SUBSCRIPTION_AUTH_COPY = Object.freeze({
 
 /**
  * The two prompts a subscription sign-in shows (`SubscriptionSignInPresenter`),
- * worded once. A host adds only its title, buttons and waiting line.
+ * worded once, with their buttons. A host adds only its title and waiting
+ * line.
  */
 export const SIGN_IN_PROMPT = Object.freeze({
   /** Where to enter the one-time code. `copied`: the host put the code on
@@ -90,6 +91,17 @@ export const SIGN_IN_PROMPT = Object.freeze({
   /** A prompt the host failed to show. */
   presentFailed: (providerDisplayName: string): string =>
     `The ${providerDisplayName} sign-in instructions could not be shown`,
+  /** The sign-in link prompt's button that copies the link. */
+  copyLinkLabel: 'Copy Sign-in Link',
+  /** After the link is copied: where to paste it (`copyTarget`: the
+   *  service whose browser session owns the account). */
+  linkCopied: (copyTarget: string): string =>
+    `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
+  /** The one-time-code prompt's button that opens the verification page. */
+  openVerificationLabel: 'Open Verification Page',
+  /** Why a sign-in asked for a browser callback shows a one-time code. */
+  deviceCodeFallback: (providerDisplayName: string): string =>
+    `No browser could take the sign-in callback, so ${providerDisplayName} is signing in with a one-time code instead.`,
 });
 
 /**

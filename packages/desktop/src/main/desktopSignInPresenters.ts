@@ -33,7 +33,9 @@ export function desktopSignInPresenters(
         type: 'info',
         message: `Signing in with ${names.displayName}`,
         detail: `Opened your default browser. ${SIGN_IN_PROMPT.otherBrowser(names.sessionName)}\n\n${url}`,
-        choices: [{ label: 'Copy Sign-in Link', value: url, default: true }],
+        choices: [
+          { label: SIGN_IN_PROMPT.copyLinkLabel, value: url, default: true },
+        ],
         close: 'Close',
       }).pipe(
         Effect.flatMap((copy) => (copy ? copyToClipboard(copy) : Effect.void)),
@@ -55,13 +57,12 @@ export function desktopSignInPresenters(
           type: 'info',
           message: `Sign in with ${displayName}`,
           detail:
-            `No browser could take the sign-in callback, so ${displayName} ` +
-            'is signing in with a one-time code instead.\n\n' +
+            `${SIGN_IN_PROMPT.deviceCodeFallback(displayName)}\n\n` +
             `${SIGN_IN_PROMPT.deviceCodeSteps(displayName, prompt, copied)}\n\n` +
             'TeXRA is waiting for you to approve it.',
           choices: [
             {
-              label: 'Open Verification Page',
+              label: SIGN_IN_PROMPT.openVerificationLabel,
               value: prompt.verificationUrlComplete ?? prompt.verificationUrl,
               default: true,
             },
