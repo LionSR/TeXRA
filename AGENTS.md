@@ -231,8 +231,11 @@ points, and the event and card channels: `packages/harness/AGENTS.md`.
 
 Every host starts one agent, the entry agent: an app constant
 (`packages/texra/src/agent/entryAgent.ts`: its base text and the tools it
-declares), launched as an inline persona. TeXRA ships no agent files; each
-plugin says what its tools are for in its `prompt` section. A plugin registers
+declares). There are no agent files: a chat run's config records its own
+`system` text, `tools` and display `label`, and an `agent` call writes its
+child's the same way (an installed plugin's agent, `<plugin>:<name>`, is read
+into the child's config at the call). Each plugin says what its tools are for
+in its `prompt` section. A plugin registers
 programs (`Plugin.programs`): script modules started by name, each a run
 opened on `script.kind: 'program'`. The `theory` plugin's programs are in
 `packages/texra/src/tools/theory/programs.ts`. An installed plugin carries

@@ -1364,14 +1364,47 @@ agent 删；lean4 的五个 agent 由 `prove` 和 `blueprint` 覆盖。它们都
 个总是开着的插件上才能被每个程序 import。校验脚本仍用 custom agent 目
 录，经 `TEXRA_INTERNAL_VALIDATE_AGENT` 点名（第 2 片改成 inline persona）。
 
+**第 2 片已落地（2026-11-22）。** harness 不再知道 agent 文件：`agent/index/`
+的 catalog、目录服务、YAML 扫描、`agent/workspaceAgents/`、
+`agentCatalogFollower`、`AgentDirectoriesPort`（换成只带 `resourcesRoot`
+的 `HostResources`）、两个设置行、外部根目录的全局登记和它在提示变量、
+`workspace_info` 里的那几行都删了。`run.config` 升到 v13：chat run 直接带
+`system`、`tools`、`temperature` 和 `label`，没有 `agent`、`agentSource`、
+`delegationAgentScope`；`request.opened` 升到 v19、`request.decided` 升到
+v6（提案和它的修改不再带 agent）。`StartRequest` 是
+`{ system, tools?, temperature?, label?, instruction, model }` 或
+`{ config }`，run 自己的工具改名 `runTools`。`agent()` 的输入去掉
+`persona`，取 `system`、`tools`；`agentName` 只认安装式插件的 agent，在调
+用时读成 system 和 tools 存进子运行的 config，没列工具的拿 Claude Code
+对应的那组。恢复不再查任何目录，所以"agent 不在了"这种恢复拒绝
+（`blocked`、`AgentUnavailable`、`agentNotFound` 通知）也删了。"Run
+again…" 对任何 chat run 都能用：表单带上那个 run 记的 system 和 tools。
+十一个任务程序和 theory 的一样写成 `programs/*.js` 文件；lean4 加了
+`lean-search` 和 `lean-simplify` 两个程序（原 `leanSearch`、
+`leanSimplifier`，`prove`、`blueprint` 不覆盖它们）。校验脚本把要启动的
+run 直接写在命令里（`--agent { label, system, tools }`，经
+`TEXRA_INTERNAL_VALIDATE_AGENT` 交给 CLI），golden 的那几个放在
+`packages/cli/src/runtime/models/validationAgents.ts`。
+
+还剩：第 3 片的文档（`docs/guide/**` 的几页、changelog）；只声明小核心和
+"开着就能调"、MCP 配了就能调（下面"不做"两条）；`delegation_targets` 一
+节仍列安装式插件的 agent、可用模型和 worktree 开关，没有并进 `agent` 工
+具的描述（描述要进缓存前缀，不能随插件开关变）。
+
 这一期**不做**的两处，都不是存法：
 
 - **只声明小核心。** 入口 agent 的工具表仍是今天 `assistant.yaml` 列的那
   些，全部声明。"声明一张短表，其余靠搜索"要先有本文"入口只有一个
   agent"末尾说的那个整套聊天 journey 作证据。
-- **"开着就能调"和 MCP 配了就能调。** 工具仍按表点名才进 run；入口的表
-  里用 `mcp__<server>__*` 点名配置了的 server 由 app 在启动时算出。按步
-  跟着插件开关走要改 `resolveStepTools` 的注入规则，另作一片。
+- **"开着就能调"和 MCP 配了就能调。** 工具仍按表点名才进 run。MCP 这一
+  期没有动：入口的表里不点名任何 `mcp__<server>__*`，配置了的 server 仍要
+  run 的 `tools` 点名才进 run（嵌入方或 `agent()` 写的子运行可以点名），
+  所以入口 agent 用不到它们。在 app 里给入口的表补上
+  `mcp__<server>__*` 不便宜：入口是 `entryAgent()` 这个纯常量，七个启动点
+  （CLI 的 run、tasks、TUI，两个 GUI 的表单，编译修复，setup）各在不同的
+  Effect 环境里，要读 `<storage>/mcp.json` 就得每处都拿到存储根和文件系统，
+  或者再加一个所有启动都经过的 app 层。按步跟着插件开关走、配了就能调，
+  要改 `resolveStepTools` 的注入规则，另作一片，那时 MCP 一起解决。
 
 ## 负责人问题
 
