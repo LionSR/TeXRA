@@ -37,6 +37,16 @@ keeps out of a child process's environment, for one.
 const API_KEY_ENV_NAMES: readonly string[]
 ```
 
+## API_KEY_PATTERN_SOURCE
+
+Any provider's API key, as one regular expression source with no anchors
+and no flags: a log redactor wraps it in word boundaries and makes it
+global, an input check anchors it.
+
+```ts
+const API_KEY_PATTERN_SOURCE: string
+```
+
 ## API_KEY_PROVIDER_IDS
 
 Provider IDs where users can configure direct API keys — the single source
@@ -453,6 +463,16 @@ rate-limit headers.
 
 ```ts
 const isAuthFailureStatus: (status: number | undefined) => boolean
+```
+
+## isCodexModel
+
+Whether the Codex backend runs `config` for TeXRA: an OpenAI model it
+serves on a ChatGPT subscription that TeXRA serves too. The Codex CLI's
+model choices are these.
+
+```ts
+function isCodexModel(config: ModelConfig): boolean
 ```
 
 ## isUnservedModel

@@ -113,8 +113,9 @@ the copies have drifted (unserved, unreadable key, unknown model).
   host telemetry switch the send gate reads, so the extension checked it at
   the call site (`extension.ts`). The switch is now one `Context.Reference`
   (`HostTelemetrySwitch`) the extension provides and both read.
-- "Can Codex run this model" (`agentCliSettings.ts`) restates llm's private
-  `codexSubscriptionOf`.
+- Landed 2026-11-22: "can Codex run this model" is llm's `isCodexModel`
+  (`packages/llm/src/models/modelRoute.ts`), over the same
+  `codexSubscriptionOf` the ChatGPT route reads.
 - The model enable list is projected twice (`enabledModels.ts` in the CLI,
   `modelSelection.ts` in settings), with different membership, provider key
   and order. Decision needed: are unserved models listed.
