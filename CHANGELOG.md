@@ -24,9 +24,9 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   Key** or `texra auth`, and sign in to ChatGPT or Grok again. ChatGPT
   sign-in is browser-only.
 - **The TeXRA account is gone.** `texra login`, `texra logout`, the VS Code
-  and desktop sign-in, the Account tab and hosted agents are removed. Every
-  built-in agent ships with the app and works offline, and model calls run
-  on your own key or subscription. The hosted agents `elevate`, `humanize`
+  and desktop sign-in, the Account tab and hosted agents are removed.
+  Everything ships with the app and works offline, and model calls run on
+  your own key or subscription. The hosted agents `elevate`, `humanize`
   and `verifyFix` are not bundled.
 - **OpenRouter and GitHub Copilot are no longer supported.** The OpenRouter
   switch and key, the "Copilot in VS Code" subscription route and the
@@ -34,8 +34,8 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `#texra_crossref_search`) are removed. Models only those routes served are
   no longer offered, and a model that used one now takes its own provider's
   key or subscription.
-- **Models are named `provider/id[@effort]`.** Settings, agent files,
-  `--model` and `TEXRA_MODEL` take names such as
+- **Models are named `provider/id[@effort]`.** Settings, `--model` and
+  `TEXRA_MODEL` take names such as
   `anthropic/claude-opus-5-5@high`; `@none` turns thinking off where the
   model allows it. The old short names (`opus55`, `sonnet46T`, `gpt56`) are
   no longer read. Thinking and non-thinking versions of a model are one
@@ -44,8 +44,8 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   custom base URL is stored for the API it serves (OpenAI Responses,
   Anthropic Messages or Gemini Interactions), and the field says which. A
   URL saved by 0.40 is not read.
-- **Requests to Anthropic changed.** They no longer send a temperature (an
-  agent's `temperature` still applies to other providers), and the API key
+- **Requests to Anthropic changed.** They no longer send a temperature, and
+  the API key
   goes out as `Authorization: Bearer` instead of `X-Api-Key`: update a
   gateway or proxy that reads only `X-Api-Key`.
 - **OpenAI requests always use the Responses API.** The "Use the Responses
@@ -64,29 +64,44 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   and `poster`. What to change and from which point of view is the
   instruction: `edit` covers a proofread and a restructuring, `annotate` a
   referee and a first reader. Start one with
-  `texra run <program> --input <file>` or ask an agent. `texra run` no longer
+  `texra run <program> --input <file>` or ask the assistant. `texra run` no longer
   takes `--reflect`, `--attachTeXCount`, `--autoExtractFigure`,
   `--autoExtractTikzFigure` or `--autoCompileInputPdf`, and the launch form
   no longer lists document tasks. A response cut off at the model's output
   limit is kept as that revision's output, with a warning, instead of being
   continued.
-- **An agent file is a flat chat persona.** An agent YAML is `name`,
-  `description`, `prompt`, `tools` and `temperature` at the top level; the
-  difference between workflow and tool-use agents is gone. A file with
-  `settings:`/`prompts:` nesting, `agentCategory`, `inherits:` or a `task:`
-  block is reported as unloadable, naming the key. A prompt is rendered with
-  `CWD`, `BUILTIN_AGENTS_DIR`, `CUSTOM_AGENTS_DIR` and `AGENT_DOCS_DIR`
-  only: your message and files reach the agent as the conversation, so
-  `{{ INSTRUCTION }}`, the file variables, `{{ MODEL }}`, `{{ ROUNDS }}`,
-  `{{ DEFAULT_BIB_PATH }}`, the agent lists, the `IS_*_MODEL` conditions and
-  `{% include %}` no longer work. `texra agents list` takes no `--category`.
+- **One assistant instead of an agent menu.** Every task starts the same
+  way: say what you want in the launch form, `texra chat` or bare `texra`;
+  there is no agent to pick. The assistant does the work itself, hands parts
+  to helper agents it sets up for each part, or starts a program. The jobs
+  of the bundled agents are programs you start by name
+  (`texra run <program> --input <file>`) or ask the assistant for: `review`, `search`,
+  `derive` (was `research`), `solve` (was `prover`), `experiment` (was
+  `numerics`), `code` (was `coder` and `engineer`), `review-code` (was
+  `codeReviewer`), `simplify` (was `simplifier` and `codeSimplifier`),
+  `test` (was `testEngineer`), `fix-latex` (was `latexFixer`) and
+  `latexdiff` (was `latexDiff`). Slides and posters are the `slides` and
+  `poster` programs, and the Lean agents' jobs are the Lean plugin's `prove`
+  and `blueprint`. `orchestrator`, `assistant`, `progressCheck` and
+  `creator` have no replacement of their own: the assistant plans and
+  delegates, and a goal's judge checks its rounds. Setup and the fix after a
+  failed compile are the assistant, started with a first message written
+  for that job.
+- **Custom agents and TeXRA's bundled skills are removed.** Agent YAML files
+  and the custom agents folder are no longer read, and the Agents library in
+  Settings, customizing a built-in agent, `texra agents`, `--agent`,
+  `/agent`, `texra config agents`, the default-agent settings
+  (`texra.agent`, `texra.chat.agent`, `TEXRA_AGENT`), the agent step of
+  `texra init` and the **TeXRA: Show Agents** command are gone. Put a
+  project's standing rules in `AGENTS.md`; add skills from installed plugins
+  or your skill folders (the Skills settings stay); package a repeatable
+  procedure as a plugin program.
 - **`agent` and `script` replace the delegation tools.** `delegate_agent`,
   `delegate_workflow` and `delegate_multi_agents` are gone: `agent` runs a
-  named agent, and a multi-agent workflow is a `script` whose
+  helper agent, and a multi-agent workflow is a `script` whose
   `await agent(...)` calls fan out and join in plain JavaScript. There are
-  no saved workflow script files. A custom agent that lists a removed tool
-  loads without it, with a warning naming the tool. A subagent gets the
-  tools it declares, whatever its parent was offered.
+  no saved workflow script files. A helper agent gets the tools it is given,
+  whatever its parent was offered.
 - **Removed tools.** `todo_write` (and the Todos panel), `crossref_search`,
   `arxiv_metadata` (`arxiv_search` hits carry abstract, authors and dates),
   `texcount` and `wolfram` (agents run `texcount` and `wolframscript`
@@ -98,11 +113,8 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   takes only the file.
 - **Agent teams and multi-agent presets are removed.** `texra multi-agent`,
   the built-in teams, saved custom teams and the desktop's team dialog are
-  gone. Start a lead agent instead
-  (`texra run orchestrator --instruction …`); it delegates to the agents the
-  workspace shows. A workspace shows every agent unless you turn some off in
-  Settings › Agents or with `texra config agents --agents <agent,...>`;
-  `--default-agent` takes an agent or `none`.
+  gone. Ask the assistant instead: it splits a large job across helper
+  agents and programs.
 - **One approval setting.** A run's approval policy (Block, Ask,
   Auto-approve) decides whether shell commands, file edits, delegations and
   coding-agent launches ask first; under Ask each asks unless you granted it
@@ -114,7 +126,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   with a warning, so a cloned repository cannot loosen your approvals, and
   `texra init` no longer writes one. Approving an MCP tool, `codex` or
   `claude_code` call no longer grants later shell commands, and the setup
-  agent's configuration tools now ask.
+  assistant's configuration tools now ask.
 - **Goal mode is a plugin and a script.** Turn it on or off in Settings ›
   Plugins; `texra.goal.enabled` is no longer read. **Run as goal** on a plan
   runs the goal as background rounds of the same agent, and the `plan` tool
@@ -140,9 +152,9 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   TeXRA's own Markdown conversion.
 - **VS Code: Lean tools need `lake` on `PATH`.** They no longer go through
   the Lean 4 extension and no longer open the file or move the cursor.
-- **VS Code: commands removed.** The Create agent with AI wizard (run the
-  `creator` agent), the Agent Review panel in Source Control (ask
-  `codeReviewer`), Clean All LLM Output Files, Extract TikZ Figures from
+- **VS Code: commands removed.** The Create agent with AI wizard, the Agent
+  Review panel in Source Control (run the `review-code` program), Clean All
+  LLM Output Files, Extract TikZ Figures from
   Current File, Indent All LaTeX Files, Import or
   Create LaTeX Project and `texra.showMultiAgent`. **New Task** replaces
   Show Launcher and New Session.
@@ -151,7 +163,8 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 - **Pack archives only the run's folder.** It no longer copies the input
   document's workspace PDF or deletes its LaTeX build files.
 - **CLI: commands and flags.** Bare `texra` opens a chat, and
-  `texra orchestrate` is gone. `texra agents run` is `texra run`.
+  `texra orchestrate` is gone. `texra run` takes a program, or `chat` for
+  one answer from the assistant.
   `texra tools` is removed: switch plugins in `/plugins` and manage
   installed ones with `texra plugin`. `texra help <command>` is
   `texra <command> --help`; `-V` and the `--no-` form of flags that are off
@@ -199,14 +212,14 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   leaves the original as it was; **Fork from here** on one of your messages
   forks before it, keeping its images. **Rename…** (`/rename <title>`) gives
   a task your own title. A finished task's **Run again…** opens the New task
-  form filled from that task, and an agent's proposal card has **Edit** to
-  change what it would start before approving it.
-- **Scripts: agents write code to call their tools.** Chat agents are sent
-  the `script` tool and call their other tools from JavaScript
+  form filled from that task, and the assistant's proposal card has **Edit**
+  to change what it would start before approving it.
+- **Scripts: the assistant writes code to call its tools.** It is sent the
+  `script` tool and call their other tools from JavaScript
   (`await tools.read_file({ path })`, `Promise.all`, loops, `try`/`catch`),
   in a sandbox, each call under the usual approvals. In a script,
-  `agent(prompt, options)` runs a named agent or one defined on the spot,
-  `self(prompt, options)` runs the same agent again, `program(name, args)`
+  `agent(prompt, options)` runs a helper agent defined on the spot,
+  `self(prompt, options)` runs the assistant again, `program(name, args)`
   starts a program, and `searchTools` and `describeTool` find tools the
   agent was not sent. A script can run in the background and report when it
   ends. Its card lists its agents with their status and cost, and each
@@ -229,7 +242,10 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   as `own:<name>` from its next step. Any run in a project can message
   another with `executions send`, and an agent reports to whoever gave it
   the work.
-- **Programs.** Besides the eight document programs, the Lean plugin has
+- **Programs.** Besides the eight document programs, eleven task programs
+  each hand one job to a helper agent with that job's checklist (`review`,
+  `search`, `derive`, `solve`, `experiment`, `code`, `review-code`,
+  `simplify`, `test`, `fix-latex`, `latexdiff`), and the Lean plugin has
   `prove` (completes the proofs in the `.lean` files you pass, checked with
   Lean's diagnostics) and `blueprint`. A document program takes
   `reflect: true` to have a critic read each revision's diff and compile
@@ -246,9 +262,9 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   yourself and runs from a copy of the files you trusted. Agents get a `plugin_manager` tool, and switching a plugin on or
   off reaches open conversations at their next step.
 - **MCP servers.** List local stdio servers in `~/.texra/mcp.json` (the
-  shape of Claude Code's `.mcp.json`) and name their tools in an agent's
-  `tools:` as `mcp__<server>__<tool>`. Each call asks like a shell command,
-  and a server does not inherit your API-key environment variables.
+  shape of Claude Code's `.mcp.json`), or install a plugin that carries
+  them. Each call asks like a shell command, and a server does not inherit
+  your API-key environment variables.
 - **Settings in six pages.** Models, Agents, Plugins, LaTeX, Memory and
   General, with sub-tabs, and a gear in the TeXRA panel header.
   Plugins lists TeXRA's own plugins, installed ones and MCP servers in one
@@ -277,18 +293,12 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   token. Where you add a key, TeXRA points out the API credits Claude and
   ChatGPT plans include.
 - **One model list everywhere.** The launcher, the terminal's `/model` and
-  an agent's delegation list the same models: signed in to ChatGPT, every
+  the assistant's delegation list the same models: signed in to ChatGPT, every
   model the subscription serves appears without being enabled one by one,
   and a default model switched off in Settings › Models stays hidden.
   Turning on a subscription while signed out starts the sign-in, and a
   coding plan (Kimi Code, GLM Coding Plan) turns on only once its API key is
   set; TeXRA says which key to add.
-- **Lead and Lean agents are built in.** `orchestrator`, `search`,
-  `simplifier`, `presenter` and `progressCheck` ship with every install, and
-  the Lean agents and skills come with the Lean plugin.
-- **A customized built-in agent tells you when TeXRA ships a newer
-  version**, with View built-in, Reset and Keep mine;
-  `texra agents customize|reset|keep` do the same from the terminal.
 - **History takes several times less disk.** Long tool output, attachments
   and prompts are stored compressed and once per project.
   `texra doctor --prune-storage` lists history left by deleted projects and
@@ -310,7 +320,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   math converts to LaTeX, in `gather`, `multline`, `alignat`, `flalign` and
   `eqnarray` too. The VS Code LaTeX commands accept `.ltx` and `.latex`
   files. `write_file` creates missing folders. zsh completion completes
-  model and agent names. `texra` warns about a config value of the wrong
+  model names. `texra` warns about a config value of the wrong
   type and suggests a mistyped flag or subcommand.
 
 ### Bug Fixes

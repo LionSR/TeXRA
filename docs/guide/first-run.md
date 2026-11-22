@@ -64,12 +64,12 @@ EOF
 
 1. Open the folder that holds `draft.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
-3. Keep the default agent in the **Agent** menu and pick
+3. Pick
    **Sonnet 5.5** (`anthropic/claude-sonnet-5-5`) from the **Model** menu (or any available model).
 4. Type an instruction that names the file:
    > Polish draft.tex: tighten the prose. Preserve all math and citations.
 5. Select **Start task** (the arrow button).
-6. The agent proposes an `edit` run on `draft.tex`. Check the files and the
+6. The assistant proposes an `edit` run on `draft.tex`. Check the files and the
    instruction on the proposal card, then approve it.
 
 The Tasks view opens and streams the run. When it finishes, the
@@ -122,15 +122,15 @@ rereads its own output and corrects it.
 <p class="hero-caption"><code>edit</code> is a two-revision program: the first revision drafts from your instruction, the second reviews its own output against a fixed checklist and corrects it into <code>r1/draft.tex</code>.</p>
 
 A program like `edit` does not call tools. It reads input, runs
-its revisions, and writes a diff. Agents with tools
+its revisions, and writes a diff. The assistant itself
 can read across your project, search literature, verify algebra in
-Wolfram, prove theorems in Lean 4, and compile LaTeX. Read the
-[built-in agents catalog](./built-in-agents.md).
+Wolfram, prove theorems in Lean 4, and compile LaTeX. Read
+[The assistant and programs](./programs.md).
 
 ## Next steps
 
 - [**Polish a draft**](./workflows/polish-a-draft.md): the `edit` program in depth: revisions, limits, multi-file projects
-- [**Built-in agents**](./built-in-agents.md): the full catalog, including the programs and the `research`, `review`, and `lean` agents
+- [**The assistant and programs**](./programs.md): what you can ask for, and every program you can start
 - [**Models**](./models.md): choosing a model that matches the work
 - [**TeXRA CLI**](./texra-cli.md): sign-in, workspace defaults, headless output formats
 - [**LaTeX Diff**](./latex-diff.md): compiled PDF comparison of revisions

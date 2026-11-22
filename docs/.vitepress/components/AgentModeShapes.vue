@@ -1,10 +1,9 @@
 <script setup>
-// Frameless figure for the Quick Reference "Type" column: the two execution
-// SHAPES a built-in agent runs in. A chat = a loop (instruction → read ·
-// edit · run tool → repeat → done); a program = a linear pipeline (input
-// file → edit → versioned diff). The agent-picker dropdown above already shows the
-// LIST; this shows WHY the two behave differently — why `chat`/
-// `research` feel conversational while `edit` hands back a diff.
+// Frameless figure for guide/programs.md: the two execution shapes. A chat
+// = a loop (instruction → read · edit · run tool → repeat → done); a
+// document program = a linear pipeline (input file → edit → versioned diff).
+// It shows why the assistant feels conversational while `edit` hands back a
+// diff.
 //
 // Frameless and .mockup-scoped, so it inherits --mk-* and flips with the docs
 // theme. Composes StatusPill for the type badge + step/tool chips — no bespoke
@@ -15,7 +14,11 @@ const loopSteps = ['read', 'edit', 'run tool'];
 </script>
 
 <template>
-  <div class="mockup ams" role="group" aria-label="Agent execution shapes">
+  <div
+    class="mockup ams"
+    role="group"
+    aria-label="Chat and program execution shapes"
+  >
     <!-- Chat: a loop -->
     <section class="ams-col">
       <header class="ams-head">

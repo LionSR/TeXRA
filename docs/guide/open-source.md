@@ -9,7 +9,7 @@ Research tools benefit from community collaboration. TeXRA's client software is 
 [![GitHub](https://img.shields.io/github/stars/LionSR/TeXRA)](https://github.com/LionSR/TeXRA)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/LionSR/TeXRA/blob/main/LICENSE)
 
-TeXRA's client software is licensed under the Apache License 2.0: the agent runtime, the specialist agents that derive, check, and formalize results, and all three hosts over it. The hosted services that earlier versions used (TeXRA accounts, the remote-agent catalog, the account-linked usage reporting) remain governed by the Terms of Service.
+TeXRA's client software is licensed under the Apache License 2.0: the agent runtime, the assistant and programs that derive, check, and formalize results, and all three hosts over it. The hosted services that earlier versions used (TeXRA accounts, the remote-agent catalog, the account-linked usage reporting) remain governed by the Terms of Service.
 
 [TeXRA on GitHub](https://github.com/LionSR/TeXRA)
 
@@ -81,7 +81,7 @@ const anthropicModels = from(ModelProvider.ANTHROPIC);
 [![GitHub](https://img.shields.io/github/stars/texra-ai/mcp-server-mathematica)](https://github.com/texra-ai/mcp-server-mathematica)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/mcp-server-mathematica/blob/main/LICENSE)
 
-While TeXRA's built-in agents call `wolframscript` directly through the shell, **mcp-server-mathematica** exposes the same symbolic computation and derivation-verification workflows to any MCP-compatible client (such as Cursor or Claude Desktop) over a local `wolframscript` installation.
+While TeXRA's assistant calls `wolframscript` directly through the shell, **mcp-server-mathematica** exposes the same symbolic computation and derivation-verification workflows to any MCP-compatible client (such as Cursor or Claude Desktop) over a local `wolframscript` installation.
 
 ### Highlights
 

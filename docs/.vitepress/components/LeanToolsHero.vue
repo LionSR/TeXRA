@@ -1,5 +1,5 @@
 <script setup>
-// Frameless slice of what a Lean-capable agent actually does under the hood:
+// Frameless slice of what the assistant actually does with Lean under the hood:
 // the five Lean tools documented in guide/lean.md, rendered as tool-use cards
 // the way they surface in the ProgressBoard / CLI tool-call log. Standalone
 // (no MockupFrame / window chrome) — just the focused card stack.
@@ -51,7 +51,7 @@ const tools = [
 
 <template>
   <MockCard
-    title="lean"
+    title="Lean tools"
     icon="beaker"
     sub="tool calls · this run"
     class="lean-tools"

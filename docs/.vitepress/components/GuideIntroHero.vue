@@ -1,7 +1,7 @@
 <script setup>
-// Docs front-door product slice: the orchestrator (a tool-use agent) has
-// delegated one task to a team of specialists. Clicking a delegation row in
-// the Progress sidebar switches the editor to that specialist's artifact —
+// Docs front-door product slice: the assistant has split one task across
+// three programs. Clicking a delegation row in the Progress sidebar switches
+// the editor to that program's artifact —
 // grounded literature search, a Wolfram cross-check, a Lean 4 proof.
 // Mirrors StreamHeader.ts, BackgroundTasksPanel.ts, and the
 // agent tool-use card from toolFormatters.ts.
@@ -13,7 +13,7 @@ const view = ref('search');
 
 <template>
   <MockupFrame title="entanglement-paper — texra" class="tall">
-    <!-- Progress sidebar: orchestrator + specialist list -->
+    <!-- Progress sidebar: the assistant + the programs it started -->
     <aside class="board">
       <div class="board-tabs">
         <span class="bt"
@@ -25,7 +25,7 @@ const view = ref('search');
       </div>
 
       <div class="stream-head">
-        <span class="sh-name">orchestrator</span>
+        <span class="sh-name">assistant</span>
         <span class="sh-dot" title="Running"></span>
         <span class="goal-chip"
           ><wa-icon class="goal-ic" library="texra" name="compass"></wa-icon
@@ -62,7 +62,7 @@ const view = ref('search');
           </div>
 
           <div class="reason">
-            I'll split this across three specialists and assemble their results.
+            I'll split this across three programs and assemble their results.
           </div>
 
           <button
@@ -77,7 +77,7 @@ const view = ref('search');
             ></wa-icon>
             <wa-icon class="tc-ic" library="texra" name="circle-user"></wa-icon>
             <span class="tc-label"
-              ><span class="tc-tool">agent</span> — search · arXiv</span
+              ><span class="tc-tool">program</span> — search · arXiv</span
             >
             <span class="tc-time">0:31</span>
           </button>
@@ -94,8 +94,7 @@ const view = ref('search');
             ></wa-icon>
             <wa-icon class="tc-ic" library="texra" name="circle-user"></wa-icon>
             <span class="tc-label"
-              ><span class="tc-tool">agent</span> — research · derive in
-              Wolfram</span
+              ><span class="tc-tool">program</span> — derive · Wolfram</span
             >
             <span class="tc-time">1:12</span>
           </button>
@@ -118,13 +117,14 @@ const view = ref('search');
                 name="circle-user"
               ></wa-icon>
               <span class="tc-label"
-                ><span class="tc-tool">agent</span> — lean</span
+                ><span class="tc-tool">program</span> — prove</span
               >
               <span class="tc-time tc-timer">0:24</span>
             </div>
             <div class="tc-body">
               <div class="tc-row">
-                <span class="tc-k">Agent</span><code class="tc-code">lean</code
+                <span class="tc-k">Program</span
+                ><code class="tc-code">prove</code
                 ><span class="tc-model">(anthropic/claude-opus-5-5)</span>
               </div>
               <div class="tc-row">
@@ -144,7 +144,7 @@ const view = ref('search');
       </div>
     </aside>
 
-    <!-- Editor: the active specialist's artifact -->
+    <!-- Editor: the active program's artifact -->
     <div class="result">
       <div class="tabs">
         <button

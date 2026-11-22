@@ -57,7 +57,7 @@ TeXRA groups files into three categories:
 
 <p class="hero-caption">Three categories: Input is read + edited, Context is read-only, Media carries visual and audio content.</p>
 
-Input and Context belong to a [program](./built-in-agents.md#programs) run: the files it revises and the files it only reads. A chat agent reads project files with its own tools, so a chat takes only Media attachments.
+Input and Context belong to a [program](./programs.md) run: the files it revises and the files it only reads. The assistant reads project files with its own tools, so a chat takes only Media attachments.
 
 Read the [Working with figures](./working-with-figures.md) guide for supported media formats and automatic figure extraction.
 
