@@ -6,7 +6,7 @@ import { Layer } from 'effect';
 import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 // Local imports
-import { definePlugin } from '@texra-ai/harness/plugins';
+import { definePlugin } from '@texra-ai/worldline/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 import { ArxivDownloadTool } from './ArxivDownloadTool';

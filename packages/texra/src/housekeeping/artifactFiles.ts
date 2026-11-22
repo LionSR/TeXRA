@@ -14,11 +14,11 @@ import {
   meansAbsent,
   relativeToRoot,
   workspaceRelativePath,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   withLogChannel,
   type RootedFileSystem,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { CHANNEL } from './constants';

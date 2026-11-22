@@ -12,9 +12,9 @@ import { randomUUID } from 'node:crypto';
 import { computed } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { transcriptText } from '@texra-ai/harness/transcript';
-import { toErrorMessage, type RequestError } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { transcriptText } from '@texra-ai/worldline/transcript';
+import { toErrorMessage, type RequestError } from '@texra-ai/worldline/schemas';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import {
@@ -27,7 +27,7 @@ import {
   sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
-import type { RunView, RunId } from '@texra-ai/harness/schemas';
+import type { RunView, RunId } from '@texra-ai/worldline/schemas';
 
 /**
  * The runs whose transcript tier this terminal keeps resident: its

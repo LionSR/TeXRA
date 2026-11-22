@@ -7,9 +7,9 @@
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Schema } from 'effect';
 
-import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
-import { executed, defineTool } from '@texra-ai/harness/plugins';
-import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
+import { meansAbsent, readNormalizedFile } from '@texra-ai/worldline/node';
+import { executed, defineTool } from '@texra-ai/worldline/plugins';
+import { fileLocationDisplayPath } from '@texra-ai/worldline/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
 import { roundOf, type Documents } from '@texra/tools/documents/documentState';
 import {

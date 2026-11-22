@@ -2,7 +2,7 @@
 // width, with a colored title and a key-hint footer (`Esc close` unless the
 // form names its own keys).
 
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import { Text, useWindowSize } from 'ink';
 
 import { CLOSE_HINTS, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';

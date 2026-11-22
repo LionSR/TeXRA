@@ -16,7 +16,7 @@ import { customElement, property } from 'lit/decorators.js';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type SubscriptionAuthProvider,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
   codexAccountLabel,

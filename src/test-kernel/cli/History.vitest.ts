@@ -10,7 +10,7 @@ import {
   type RunId,
   type RunOutcome,
   type RunRecord,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { emptyRunEndOutput } from '@shared/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {

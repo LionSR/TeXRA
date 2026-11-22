@@ -10,12 +10,12 @@ import {
   ensureError,
   entryLine,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   setLogSink,
   type LogEntry,
   type LogSink as HostLogSink,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,

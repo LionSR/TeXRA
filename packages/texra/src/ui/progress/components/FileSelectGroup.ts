@@ -2,7 +2,7 @@ import {
   getBasename,
   normalizeFilePath,
   formatResultCount,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';

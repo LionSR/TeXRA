@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { Schema } from 'effect';
-import { RunIdSchema, type TraceDocument } from '@texra-ai/harness/schemas';
-import { DisplayRowSchema } from '@texra-ai/harness/transcript';
+import { RunIdSchema, type TraceDocument } from '@texra-ai/worldline/schemas';
+import { DisplayRowSchema } from '@texra-ai/worldline/transcript';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 // Relative import: `packages/trace-viewer` is a separate workspace package

@@ -31,7 +31,7 @@ import type {
   GhReview,
   GhReviewComment,
 } from './prTypes';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 
 // A single linter run can emit hundreds; show the first N + overflow hint.
 const MAX_ANNOTATIONS_PER_RUN = 20;

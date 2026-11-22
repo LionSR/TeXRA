@@ -5,8 +5,8 @@
 import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron';
 import { Effect, Predicate, type Scope } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   HostFailed,
   type ConfirmQuestion,

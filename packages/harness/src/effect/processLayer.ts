@@ -138,10 +138,10 @@ export class Sessions extends Context.Service<
       DatabaseReadFailed
     >;
   }
->()('@texra-ai/harness/Sessions') {
+>()('@texra-ai/worldline/Sessions') {
   /**
    * The Effect embedder's entry: compose the process from its platform and
-   * its plugins (`harnessBuiltins` from `@texra-ai/harness/builtins`, or a
+   * its plugins (`harnessBuiltins` from `@texra-ai/worldline/builtins`, or a
    * list of the embedder's own beside them), and serve its sessions for
    * this layer's lifetime; the layer's release closes every session still
    * open. A list the harness cannot compose fails with
@@ -205,7 +205,7 @@ export class Sessions extends Context.Service<
  *
  * The filesystem, path and child-process spawner are a requirement, as the
  * model is: the root provides `nodePlatformServices`
- * (`@texra-ai/harness/node`) once, and every session and run of the process
+ * (`@texra-ai/worldline/node`) once, and every session and run of the process
  * reads the files and starts the children that layer gives it.
  */
 export function processLayer(

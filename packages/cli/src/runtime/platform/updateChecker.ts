@@ -1,8 +1,8 @@
 import { fileURLToPath } from 'node:url';
 
 import { Cause, Effect, Exit, Option, Result, Schema } from 'effect';
-import { executeCommand, envFlag } from '@texra-ai/harness/node';
-import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
+import { executeCommand, envFlag } from '@texra-ai/worldline/node';
+import { logFailure, withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   fetchJsonStringField,
   UPDATE_CHECK_SKIP_ENV,
@@ -21,7 +21,7 @@ import { CliExitCode } from './exitCodes';
 import { runForegroundCommand } from './foregroundCommand';
 import { confirmCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from '../terminal/style';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { HttpClient } from 'effect/http';
 import type { PlatformError } from 'effect/PlatformError';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

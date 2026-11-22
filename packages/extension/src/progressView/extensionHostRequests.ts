@@ -11,10 +11,10 @@
 import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
-import { type WorkspaceRoots } from '@texra-ai/harness';
-import { type ProcessServices } from '@texra-ai/harness/host';
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { type WorkspaceRoots } from '@texra-ai/worldline';
+import { type ProcessServices } from '@texra-ai/worldline/host';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';

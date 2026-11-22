@@ -11,7 +11,7 @@ import {
   getBasename,
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */

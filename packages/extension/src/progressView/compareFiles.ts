@@ -3,8 +3,8 @@ import { Effect, FiberHandle } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { refreshDiffOnLayoutChange } from '@frontend/ui/diffView';
 

@@ -1,14 +1,14 @@
 import { Effect, type FileSystem, type Path } from 'effect';
 
-import { withSessionFs } from '@texra-ai/harness/host';
-import { MemoryStore } from '@texra-ai/harness/plugins';
+import { withSessionFs } from '@texra-ai/worldline/host';
+import { MemoryStore } from '@texra-ai/worldline/plugins';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
   loadCliMemoryDetail,
 } from '@cli/runtime/memory';
 import { openInfoPane } from '@cli/chat/tui/state/cliState';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 /** The roots the chat surface holds, which its memory reads run over. */
 type MemoryRoots = Pick<WorkspaceRoots, 'workspace' | 'storage'>;

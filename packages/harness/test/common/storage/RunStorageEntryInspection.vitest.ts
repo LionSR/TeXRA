@@ -4,11 +4,11 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { runEntryUnder } from '@texra-ai/harness/plugins';
+import { runEntryUnder } from '@texra-ai/worldline/plugins';
 
 // Local imports
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 
 const runId = RunIdSchema.make('abcdef123456');
 const storageRoot = path.resolve(path.sep, 'storage');

@@ -1,5 +1,5 @@
 // Local imports - harness
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 
 /** Shared status-view summary: before the status loads there is no label, so the
  *  summary is the `checking` placeholder while loading (unless the load

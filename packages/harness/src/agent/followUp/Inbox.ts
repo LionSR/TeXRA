@@ -295,5 +295,5 @@ const queued = (input: RunRowsRead<'input'>): boolean =>
  *  which every message to a run is accepted through. Built by the session
  *  layer and disposed with the session. */
 export class Inbox extends Context.Service<Inbox, SessionInbox>()(
-  '@texra-ai/harness/session/Inbox',
+  '@texra-ai/worldline/session/Inbox',
 ) {}

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { nodeFileServices } from '@texra-ai/harness/node';
+import { nodeFileServices } from '@texra-ai/worldline/node';
 import {
   buildCliContext,
   isQuiet,

@@ -24,7 +24,7 @@ import {
   IS_WINDOWS,
   meansAbsent,
   relativeToRoot,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 

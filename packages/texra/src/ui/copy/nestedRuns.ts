@@ -21,13 +21,13 @@
 import { Record } from 'effect';
 
 // Local imports
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/worldline/schemas';
 import {
   formatResultCount,
   joinFacts,
   NESTED_NOUNS,
   runNoun,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { sectionCountLabel } from '@ui/copy/runStatus';
 
 /** The agents a task started. */

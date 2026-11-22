@@ -1,5 +1,5 @@
 /**
- * `@texra-ai/harness/host`: what a full application host composes beyond
+ * `@texra-ai/worldline/host`: what a full application host composes beyond
  * the root entry. TeXRA's editor extension, desktop app and terminal app
  * read it; an embedder that runs agents from a program needs none of it.
  *

@@ -1,6 +1,6 @@
 # Views, Transcripts & Renderers
 
-[`@texra-ai/harness/schemas`](./harness/schemas) and [`@texra-ai/harness/transcript`](./harness/transcript) are browser-safe subpaths (zero Node.js built-ins or vendor SDK imports) that project committed session rows and live stream chunks into read-only [`SessionView`](./harness/schemas#sessionview) snapshots and [`TranscriptRow`](./harness/transcript#transcriptrow) items for the CLI TUI, VS Code webviews, desktop renderer, and static trace viewer.
+[`@texra-ai/worldline/schemas`](./harness/schemas) and [`@texra-ai/worldline/transcript`](./harness/transcript) are browser-safe subpaths (zero Node.js built-ins or vendor SDK imports) that project committed session rows and live stream chunks into read-only [`SessionView`](./harness/schemas#sessionview) snapshots and [`TranscriptRow`](./harness/transcript#transcriptrow) items for the CLI TUI, VS Code webviews, desktop renderer, and static trace viewer.
 
 ## Observing `SessionView` and formatting `TranscriptRow`s
 
@@ -13,12 +13,12 @@ import {
   attentionOf,
   generateRunId,
   sessionActivity,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   elideText,
   rowHeadline,
   type TranscriptRow,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 
 function formatRow(row: TranscriptRow): string {
   const headline = rowHeadline(row) ?? row.kind;
@@ -74,7 +74,7 @@ Runtime execution never reads `SessionView`. Every emitted `SessionView` is deep
 
 Where a run stands is three facts on its `RunView`, decided once by the reducer: `position` (`ready` before its first activation and after an end, `running` inside a turn, `waiting` between turns), `outcome` (how its `run.end` ended it, or `null`), and `holder` (`here` while a launch in this process drives it, until its end). A run with no outcome that nobody holds is interrupted (`isInterrupted`); one held here inside a turn is working (`isWorking`; `runStartedAt` is set only while it is busy on its turn, not while it waits on a person). Words, tones and list sections are the host's, read from these facts.
 
-### Pure view queries (`@texra-ai/harness/schemas`)
+### Pure view queries (`@texra-ai/worldline/schemas`)
 
 - **[`sessionActivity(view)`](./harness/schemas#sessionactivity)**: returns `'approval' | 'running' | 'idle'` for window titles and status indicators.
 - **[`attentionOf(view, previous?)`](./harness/schemas#attentionof)**: returns the pending [`PendingRequest`](./harness/schemas#pendingrequest)s (`requests`) and, since `previous`, newly arrived requests (`arrived`) and runs that ended (`finished`).
@@ -118,4 +118,4 @@ Each [`ToolRow`](./harness/transcript#toolrow) pre-computes a [`ToolRowModel`](.
 
 ### Static trace export (`TraceDocument`)
 
-`session.records(runId).readTrace` exports a run into a self-contained [`TraceDocument`](./harness/schemas#tracedocument) (validated by [`TraceDocumentSchema`](./harness/schemas#tracedocumentschema) and inspected with [`readTraceFacts`](./harness/schemas#readtracefacts) in `@texra-ai/harness/schemas`) for offline viewing in `packages/trace-viewer`.
+`session.records(runId).readTrace` exports a run into a self-contained [`TraceDocument`](./harness/schemas#tracedocument) (validated by [`TraceDocumentSchema`](./harness/schemas#tracedocumentschema) and inspected with [`readTraceFacts`](./harness/schemas#readtracefacts) in `@texra-ai/worldline/schemas`) for offline viewing in `packages/trace-viewer`.

@@ -24,13 +24,13 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { buildCopyButton } from '../htmlBuilders';
-import type { LogLevel } from '@texra-ai/harness/schemas';
+import type { LogLevel } from '@texra-ai/worldline/schemas';
 import type {
   ErrorRow,
   LogRow,
   ProgressStatusRow,
   UserRow,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 /** Level-decorated icon shared by the progress-status and default formatters;

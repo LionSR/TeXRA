@@ -13,15 +13,15 @@ import {
   buildDiffHunks,
   countLineChanges,
   reportDiffTimeout,
-} from '@texra-ai/harness/plugins';
-import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/plugins';
+import { meansAbsent, readNormalizedFile } from '@texra-ai/worldline/node';
 import {
   toErrorMessage,
   countLines,
   fileLocationDisplayPath,
   type DiffStats,
   type FileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
 import { pairOutputsWithBases } from './lineageMapping';

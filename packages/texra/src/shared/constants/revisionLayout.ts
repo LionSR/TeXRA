@@ -11,7 +11,7 @@
  */
 import { Result, Schema, SchemaTransformation } from 'effect';
 
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 
 /** The fixed basename of every document task output file (no extension). */
 export const DOCUMENT_OUTPUT_BASENAME = 'output';

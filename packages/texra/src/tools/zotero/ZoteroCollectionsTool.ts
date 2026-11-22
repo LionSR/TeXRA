@@ -13,8 +13,8 @@
 import { Effect, Predicate, Schema } from 'effect';
 
 // Local imports - core
-import { executed, defineTool } from '@texra-ai/harness/plugins';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { executed, defineTool } from '@texra-ai/worldline/plugins';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 
 // Local imports - zotero
 import {

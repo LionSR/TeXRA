@@ -20,14 +20,14 @@ import {
   type Semaphore,
 } from 'effect';
 
-import { withSessionFs } from '@texra-ai/harness/host';
+import { withSessionFs } from '@texra-ai/worldline/host';
 import {
   logFailure,
   pathToLocationIn,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
-import { meansAbsent } from '@texra-ai/harness/node';
-import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { meansAbsent } from '@texra-ai/worldline/node';
+import { toErrorMessage, type FileLocation } from '@texra-ai/worldline/schemas';
 import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { removeBestEffort } from '@texra/common/files/removeBestEffort';
@@ -37,7 +37,7 @@ import {
   generateDiffFileName,
   WORKSPACE_DIFF_SUFFIX,
 } from '@latex/latexdiff/diffFileNameManager';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'latexPreview';

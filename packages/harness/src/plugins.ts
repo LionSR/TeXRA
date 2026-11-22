@@ -1,7 +1,7 @@
 /**
- * The plugin authoring surface for `@texra-ai/harness`: what a tool or a
+ * The plugin authoring surface for `@texra-ai/worldline`: what a tool or a
  * plugin is written with. The built-in plugins are
- * [`@texra-ai/harness/builtins`](./builtins).
+ * [`@texra-ai/worldline/builtins`](./builtins).
  *
  * > **Guide:** Read [Plugins, Tools & Codemode](/api/plugins-and-codemode) for
  * > how to author tools and plugins, how step-pinned catalogs work, and how the

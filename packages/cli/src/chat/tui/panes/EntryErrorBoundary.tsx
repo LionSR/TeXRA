@@ -16,7 +16,7 @@
 import { Box } from 'ink';
 import { Component, type ReactNode } from 'react';
 
-import { toErrorMessage, truncateSummary } from '@texra-ai/harness/schemas';
+import { toErrorMessage, truncateSummary } from '@texra-ai/worldline/schemas';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 
 interface EntryErrorBoundaryProps {

@@ -16,7 +16,7 @@ import { Context, Effect, Exit, Fiber, Layer, Schema, Scope } from 'effect';
 import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
+import type { AgentConfigPayload } from '@texra-ai/worldline/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import {
   provideCliInvocation,

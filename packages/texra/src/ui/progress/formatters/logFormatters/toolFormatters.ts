@@ -4,13 +4,13 @@
  * Everything this card says about a call — its header label and preview, the
  * structured sections, whether the output block is shown at all, the error
  * text and the user instruction — comes from `ToolRow.model`
- * (`toolRowModel` in `@texra-ai/harness/transcript`), and the error note of
+ * (`toolRowModel` in `@texra-ai/worldline/transcript`), and the error note of
  * a call the run's end cut short is `CUT_BY_RUN_END_NOTE` beside it. This file paints that model with Lit and applies the webview's own
  * widths, icons, and live controls.
  */
 
 // Third-party imports - Lit template utilities
-import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import { truncateWithEllipsis } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
@@ -18,7 +18,7 @@ import {
   CUT_BY_RUN_END_NOTE,
   toolDisplayKind,
   normalizeToolName,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   statusGlyph,
@@ -37,7 +37,7 @@ import {
   buildToolSection,
   renderToolSections,
 } from './toolFormatters/toolSections';
-import type { ToolRow } from '@texra-ai/harness/transcript';
+import type { ToolRow } from '@texra-ai/worldline/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 // Side-effect import - register the <tool-timer> element rendered below

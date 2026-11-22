@@ -16,7 +16,7 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { followGitHubTokenRejections } from '@texra/controllers/session/windowNotices';
 import {
@@ -74,7 +74,7 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/worldline/host';
 import type {
   DesktopProjectRegistry,
   DesktopProjectsState,

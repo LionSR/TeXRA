@@ -5,10 +5,10 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { definePlugin, Secrets } from '@texra-ai/harness/plugins';
+import { definePlugin, Secrets } from '@texra-ai/worldline/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { texraPlugin } from '@texra/tools/texraPlugin';
-import { isGitRepository } from '@texra-ai/harness/node';
+import { isGitRepository } from '@texra-ai/worldline/node';
 import { getGitHubToken, GITHUB_TOKEN_STORAGE_KEY } from './githubAuth';
 import { GitHubSubscriptionTool } from './githubSubscriptionTool';
 import {

@@ -5,8 +5,8 @@
  */
 import { Cause, Effect, Schema, SubscriptionRef } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { formatError } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { formatError } from '@texra-ai/worldline/schemas';
 import type {
   Dialogs,
   ExternalOpener,
@@ -24,8 +24,8 @@ import type {
   SettingsViewInboundMessage,
   SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ProcessServices } from '@texra-ai/harness/host';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { ProcessServices } from '@texra-ai/worldline/host';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 

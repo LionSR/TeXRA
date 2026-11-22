@@ -21,16 +21,16 @@
 
 // Third-party imports
 import { Effect, Schema, type Scope, Stream } from 'effect';
-import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
+import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
 
 // Local imports
-import { MESSAGE_TYPES, type ToolUseLog } from '@texra-ai/harness/schemas';
+import { MESSAGE_TYPES, type ToolUseLog } from '@texra-ai/worldline/schemas';
 import {
   ToolError,
   type AgentTrace,
   defineTool,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   AgentCliEffortSchema,
   ClaudeAgentModelSchema,

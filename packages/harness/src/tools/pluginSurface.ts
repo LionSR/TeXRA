@@ -1,5 +1,5 @@
 /**
- * The plugin authoring surface: what `@texra-ai/harness/plugins` exports
+ * The plugin authoring surface: what `@texra-ai/worldline/plugins` exports
  * (that entry is this module), and what a native plugin's entry is handed
  * at run time as `harness.plugins` (`@tools/nativePlugins`), so a plugin
  * loaded from a folder runs on this process's own harness and `effect`.

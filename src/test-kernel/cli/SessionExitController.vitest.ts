@@ -10,7 +10,7 @@ import type { TuiTerminal } from '@cli/tui/terminalCleanup';
 import { SessionGraph } from '@test/support/testKernel';
 import { spyOnStreamWrite } from './fixtures/streamWriteSpy';
 import { boundTestSessionView } from './fixtures/sessionViewFixture';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 /** The flush failure the exit must survive. */
 class FlushFailed extends Schema.TaggedError<FlushFailed>()('FlushFailed', {

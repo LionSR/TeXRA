@@ -3,7 +3,7 @@
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
-import { providerEndpointSetting } from '@texra-ai/harness/schemas';
+import { providerEndpointSetting } from '@texra-ai/worldline/schemas';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';

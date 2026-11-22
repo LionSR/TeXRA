@@ -22,22 +22,22 @@ import type {
   WorkspaceRoots,
   HostPresentation,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
   type PresentationEventHandlers,
   type ProcessServices,
-} from '@texra-ai/harness/host';
-import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/host';
+import { commitExists, workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   AppSignals,
   pathToLocationIn,
   ToolRegistry,
   type StorageFs,
   WorkspaceFs,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
@@ -90,13 +90,13 @@ import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 import {
   formatResultCount,
   Cancelled,
   Rejected,
   Unavailable,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
 import {

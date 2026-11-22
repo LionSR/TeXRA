@@ -17,13 +17,13 @@ import { layer } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
-import { InstalledPlugins } from '@texra-ai/harness/host';
+import { Sessions } from '@texra-ai/worldline';
+import { InstalledPlugins } from '@texra-ai/worldline/host';
 import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { decideRequest } from '@agent/runtime/requests';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { rootRun } from '@agent/runtime/rootLaunch';

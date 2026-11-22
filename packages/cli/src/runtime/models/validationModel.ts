@@ -25,8 +25,8 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@texra-ai/llm';
-import { ValidationModel } from '@texra-ai/harness/host';
-import { envVar } from '@texra-ai/harness/node';
+import { ValidationModel } from '@texra-ai/worldline/host';
+import { envVar } from '@texra-ai/worldline/node';
 
 // Local imports - component
 import {

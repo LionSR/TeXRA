@@ -15,7 +15,7 @@ import {
   parseApprovalPolicy,
   APPROVAL_POLICY_SETTING,
   TOOL_PATH_PROTECTION_SETTING,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { TexraSignalElement } from '@ui/litBase';

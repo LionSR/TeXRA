@@ -11,7 +11,7 @@
  */
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { SurfaceAction } from '@texra/shared/session/surface';
-import type { RuntimeCommand } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
 
 const SESSION_UI_EVENT = {
   runtime: 'runtime-request',

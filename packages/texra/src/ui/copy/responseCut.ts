@@ -1,4 +1,4 @@
-import type { StreamingTextRow } from '@texra-ai/harness/transcript';
+import type { StreamingTextRow } from '@texra-ai/worldline/transcript';
 
 /**
  * What an assistant row says under an answer the model ended early

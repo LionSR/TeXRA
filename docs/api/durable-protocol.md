@@ -1,6 +1,6 @@
 # Durable Protocol & Recovery
 
-A run's state in [`@texra-ai/harness`](./harness/) is the reduction of the append-only rows committed to its session database (`texra.db`). If a process exits or crashes mid-run, the next process that opens the storage root lists the run as interrupted, and `session.resume(runId)` continues it from its last write point.
+A run's state in [`@texra-ai/worldline`](./harness/) is the reduction of the append-only rows committed to its session database (`texra.db`). If a process exits or crashes mid-run, the next process that opens the storage root lists the run as interrupted, and `session.resume(runId)` continues it from its last write point.
 
 ## Approvals, commands, and resume in code
 
@@ -10,8 +10,11 @@ Attach a [`SessionHost`](./harness/#sessionhost) with [`session.attach({ approve
 
 ```ts
 import { Effect } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { isInterrupted, type PendingRequest } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import {
+  isInterrupted,
+  type PendingRequest,
+} from '@texra-ai/worldline/schemas';
 
 const resumeInterruptedRuns = Effect.gen(function* () {
   const sessions = yield* Sessions;

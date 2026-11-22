@@ -5,12 +5,12 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { Skills, type SkillLoadIssue } from '@texra-ai/harness/host';
+import { Skills, type SkillLoadIssue } from '@texra-ai/worldline/host';
 import {
   formatResultCount,
   joinFacts,
   type SkillDisplayItem,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 

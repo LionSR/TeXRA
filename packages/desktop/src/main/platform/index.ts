@@ -1,10 +1,10 @@
 import { app } from 'electron';
 import { Effect, ManagedRuntime, Scope } from 'effect';
 
-import { type WorkspaceRoots } from '@texra-ai/harness';
-import { type ProcessServices } from '@texra-ai/harness/host';
-import { withForkFailureReporting } from '@texra-ai/harness/transcript';
-import { nodeFileServices } from '@texra-ai/harness/node';
+import { type WorkspaceRoots } from '@texra-ai/worldline';
+import { type ProcessServices } from '@texra-ai/worldline/host';
+import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
+import { nodeFileServices } from '@texra-ai/worldline/node';
 import { openProjectRoots } from '@texra/controllers/session/openProjectSession';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
@@ -15,10 +15,10 @@ import {
 } from '@texra/controllers/texraProcessLayer';
 
 // Local file imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { adoptLoginShellEnvironment } from '@texra/platform/defaults/loginShellEnvironment';
 import { desktopLayout, type DesktopLayout } from './paths.js';
-import type { ConfigStore } from '@texra-ai/harness/node';
+import type { ConfigStore } from '@texra-ai/worldline/node';
 interface ElectronPlatformInitResult {
   /**
    * The no-workspace roots: what the window shows before a folder is open,

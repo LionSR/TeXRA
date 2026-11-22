@@ -1,4 +1,4 @@
-# `@texra-ai/harness/transcript`
+# `@texra-ai/worldline/transcript`
 
 <!-- Generated from `packages/harness/src/transcriptEntry.ts` by `npm run docgen`; do not edit. -->
 
@@ -360,7 +360,7 @@ class RemoteSessionView extends Context.Service<
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
   }
->()('@texra-ai/harness/session/RemoteSessionView')
+>()('@texra-ai/worldline/session/RemoteSessionView')
 ```
 
 ## rowHeadline
@@ -482,7 +482,7 @@ class SessionInputs extends Context.Service<
       previousDebug: boolean,
     ) => Stream.Stream<readonly SessionViewInput[]>;
   }
->()('@texra-ai/harness/session/SessionInputs')
+>()('@texra-ai/worldline/session/SessionInputs')
 ```
 
 ## SessionViewInput

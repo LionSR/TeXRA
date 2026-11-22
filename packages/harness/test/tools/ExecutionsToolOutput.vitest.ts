@@ -22,7 +22,7 @@ import {
   APPROVAL_POLICY_SETTING,
   type RunId,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';

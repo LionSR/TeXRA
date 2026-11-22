@@ -1,6 +1,6 @@
 # Plugins, Tools & Codemode
 
-File operations, shell execution, web search, memory, goal loops, multi-agent delegation, and QuickJS orchestration are implemented as plugins in [`@texra-ai/harness/builtins`](./harness/builtins); a plugin of your own is written with [`@texra-ai/harness/plugins`](./harness/plugins).
+File operations, shell execution, web search, memory, goal loops, multi-agent delegation, and QuickJS orchestration are implemented as plugins in [`@texra-ai/worldline/builtins`](./harness/builtins); a plugin of your own is written with [`@texra-ai/worldline/plugins`](./harness/plugins).
 
 ## Built-in plugins (`harnessBuiltins`)
 
@@ -21,8 +21,8 @@ Use [`defineTool`](./harness/#definetool) to declare a tool's Effect Schema, con
 
 ```ts
 import { Effect, Schema } from 'effect';
-import { defineTool } from '@texra-ai/harness/plugins';
-import { executed, nullishWithDefault } from '@texra-ai/harness/plugins';
+import { defineTool } from '@texra-ai/worldline/plugins';
+import { executed, nullishWithDefault } from '@texra-ai/worldline/plugins';
 
 export const countEquationsTool = defineTool({
   name: 'count_equations',
@@ -72,7 +72,7 @@ Pass run-scoped tools directly to `session.start({ tools: [countEquationsTool], 
 ## Packaging plugins (`definePlugin`)
 
 ```ts
-import { definePlugin } from '@texra-ai/harness/plugins';
+import { definePlugin } from '@texra-ai/worldline/plugins';
 
 export const latexMetricsPlugin = definePlugin({
   id: 'latex-metrics',
@@ -98,7 +98,7 @@ An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail
 
 ### Runtime services inside a tool body
 
-Inside `execute`, yield services from [`@texra-ai/harness/plugins`](./harness/plugins):
+Inside `execute`, yield services from [`@texra-ai/worldline/plugins`](./harness/plugins):
 
 - **[`ToolContext`](./harness/plugins#toolcontext)** (`requireRun`, `callerRun`): the calling run's identity, workspace roots (`env.roots`), working directory, and `CallRequests`.
 - **[`ChildRuns`](./harness/plugins#childruns)**: launch an external process as a child run (`ChildRuns.launchProcess`) and reach a run of the session by id.

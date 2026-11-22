@@ -6,8 +6,8 @@
  */
 import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
 
-import { ToolAvailability } from '@texra-ai/harness/host';
-import { logFailure, ToolCatalog } from '@texra-ai/harness/plugins';
+import { ToolAvailability } from '@texra-ai/worldline/host';
+import { logFailure, ToolCatalog } from '@texra-ai/worldline/plugins';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,

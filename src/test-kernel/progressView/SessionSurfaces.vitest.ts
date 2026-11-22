@@ -19,8 +19,8 @@ import {
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { WebviewTransport } from '@ui/progress/sessionTransport';
-import type { RuntimeCommand } from '@texra-ai/harness/schemas';
-import { Rejected } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
+import { Rejected } from '@texra-ai/worldline/schemas';
 
 const transport = vi.hoisted(() => ({
   receive: vi.fn(),

@@ -13,7 +13,7 @@ import {
 import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
@@ -22,7 +22,7 @@ import {
 } from '@shared/session/sessionView';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runView } from '../../src/effect/runHandle';
-import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
+import type { TranscriptSubscription } from '@texra-ai/worldline/transcript';
 
 /** A session view run entry as the package's fold keys it. */
 interface FakeRunView {

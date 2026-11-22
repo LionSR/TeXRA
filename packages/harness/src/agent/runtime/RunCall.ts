@@ -180,7 +180,7 @@ export const noLaterTurn = (
 /** The current call's place in its run, which the run loop provides beside
  *  each call. */
 export class RunCall extends Context.Service<RunCall, RunCallShape>()(
-  '@texra-ai/harness/agent/RunCall',
+  '@texra-ai/worldline/agent/RunCall',
 ) {}
 
 /**

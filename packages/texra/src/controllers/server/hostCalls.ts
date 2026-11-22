@@ -16,7 +16,7 @@ import {
   LaunchNoticeSchema,
   RequestShowErrorPayloadSchema,
   type OpenFilePayload,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { RpcClientMessageSchema } from '@texra/shared/rpcOverMessages';
 import { ManualCriticismEntrySchema } from '@texra/tools/editorHost';
 import { GenericDiagnosticSchema } from '@texra/utils/diagnostics/diagnosticFormatting';

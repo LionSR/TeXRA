@@ -11,10 +11,10 @@ import * as path from 'node:path';
 import { Effect, Schema } from 'effect';
 
 // Local imports - export presentation
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 import type { writeTranscript } from './ChatExportController';
 
 export type TranscriptExportFormat = Parameters<typeof writeTranscript>[1];

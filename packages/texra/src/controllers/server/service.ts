@@ -21,13 +21,13 @@ import {
 } from 'effect';
 import type { RpcGroup } from 'effect/rpc';
 
-import { type LocalSession, type Run } from '@texra-ai/harness';
+import { type LocalSession, type Run } from '@texra-ai/worldline';
 import {
   type RunId,
   toErrorMessage,
   Rejected,
-} from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { appSignalStream } from '@texra-ai/worldline/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
 

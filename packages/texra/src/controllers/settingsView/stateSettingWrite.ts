@@ -20,14 +20,14 @@ import {
   type AppSignals,
   type Secrets,
   type SettingsStores,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   APPROVAL_POLICY_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   formatError,
   type SettingRow,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { providerDisplayName } from '@texra-ai/llm';
 import { Effect, Result, Schema } from 'effect';
 

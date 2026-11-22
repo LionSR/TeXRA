@@ -2,8 +2,8 @@
 import { Cause, Clock, Effect, Fiber, Queue, Result, Stream } from 'effect';
 import type { Scope } from 'effect';
 
-import { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@texra-ai/harness/node';
-import type { InputHistoryRecord } from '@texra-ai/harness/schemas';
+import { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@texra-ai/worldline/node';
+import type { InputHistoryRecord } from '@texra-ai/worldline/schemas';
 
 import { writeTextStderr } from '@cli/runtime/platform/logSinks';
 

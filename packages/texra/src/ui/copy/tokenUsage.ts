@@ -3,7 +3,7 @@
  * name: the progress view's usage strip and the VS Code task pill's tooltip
  * read the same list, so neither picks its own facts.
  */
-import type { TokenUsageStats } from '@texra-ai/harness/schemas';
+import type { TokenUsageStats } from '@texra-ai/worldline/schemas';
 
 /** The counters in order. Only the `always` ones show at zero; the rest
  *  stay hidden until the run reports them. `note` qualifies the name where

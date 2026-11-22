@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import { Effect, Result, Schema } from 'effect';
 
-import { AppState } from '@texra-ai/harness/plugins';
-import type { StateKey } from '@texra-ai/harness/schemas';
+import { AppState } from '@texra-ai/worldline/plugins';
+import type { StateKey } from '@texra-ai/worldline/schemas';
 
 /** The random anonymous telemetry install ID, a UUIDv4; deleting the key
  *  resets it. */

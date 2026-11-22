@@ -1,13 +1,13 @@
 # Packed-tarball examples
 
-Runs [`@texra-ai/llm`](../../llm/README.md) and [`@texra-ai/harness`](../README.md) the way a consumer off the registry gets them: both packages are packed into `.tgz` tarballs, installed into a fresh directory outside the repository with `npm install`, type-checked with `skipLibCheck: false`, and executed by `node`. Every import specifier is a published package subpath (`@texra-ai/llm`, `@texra-ai/llm/node`, `@texra-ai/harness`, `@texra-ai/harness/node`, `@texra-ai/harness/plugins`, `@texra-ai/harness/schemas`, `@texra-ai/harness/transcript`), never a workspace path alias.
+Runs [`@texra-ai/llm`](../../llm/README.md) and [`@texra-ai/worldline`](../README.md) the way a consumer off the registry gets them: both packages are packed into `.tgz` tarballs, installed into a fresh directory outside the repository with `npm install`, type-checked with `skipLibCheck: false`, and executed by `node`. Every import specifier is a published package subpath (`@texra-ai/llm`, `@texra-ai/llm/node`, `@texra-ai/worldline`, `@texra-ai/worldline/node`, `@texra-ai/worldline/plugins`, `@texra-ai/worldline/schemas`, `@texra-ai/worldline/transcript`), never a workspace path alias.
 
 None of the examples need a provider API key or network access: `01-llm-turn.ts` supplies in-process `fetch` handlers to `bindModel`, and `02`–`14` use `_support.ts`, which builds `nodePlatform` and provides the harness's `ModelFetch` beneath `Sessions.layer` with an in-memory Anthropic Messages SSE fetch that answers each request with the example's next scripted turn.
 
 Set `TEXRA_EXAMPLE_MODEL` to a `provider/model` string (for example `anthropic/claude-sonnet-5-5`) to run `02`–`14` against that real route instead: `_support.ts` then supplies no fetch, the harness's own transport carries the requests, and the provider's API key comes from its usual environment variable (`<PROVIDER>_API_KEY`, such as `ANTHROPIC_API_KEY`). The checks an example makes on its scripted turns (request counts, the exact replies) hold only on the in-memory model.
 
 ```bash
-corepack pnpm --filter @texra-ai/harness run example:packed
+corepack pnpm --filter @texra-ai/worldline run example:packed
 ```
 
 The harness's `typecheck` (part of the repository's `npm run typecheck`) also type-checks these files in the workspace, with this directory's `tsconfig.json` over the declarations the build writes to `dist/` (`../tsconfig.example.json` maps each published subpath to its declaration), so a change that breaks an example fails before a push. `@texra-ai/llm` resolves to its workspace source there; only `example:packed` checks llm's built declarations, installs the tarballs and runs the examples.
@@ -26,9 +26,9 @@ It packs and installs like the ladder, then runs `acceptance.ts` instead of `npm
 
 ```bash
 TEXRA_EXAMPLE_MODEL=deepseek/deepseek-flash \
-  corepack pnpm --filter @texra-ai/harness run example:acceptance
+  corepack pnpm --filter @texra-ai/worldline run example:acceptance
 TEXRA_EXAMPLE_MODEL=anthropic/claude-haiku-5-5 \
-  corepack pnpm --filter @texra-ai/harness run example:acceptance
+  corepack pnpm --filter @texra-ai/worldline run example:acceptance
 ```
 
 Each run writes its evidence (`_evidence.ts`) to a new directory, `.agents/docs/evidence/<date>-harness-real-model/<provider>-<model>-<HHMM>/` (`TEXRA_ACCEPTANCE_OUT` names another): `summary.md` and `run.json` (route, model, harness version and commit, each scenario's result, failed checks, tokens and the spend the runs report), and per scenario `config.json`, `scripts/` (every program the model wrote), `conversation.json`, `children.json`, `runs.json`, `calls.json` (each tool call with how it ended), `outputs/` (script returns, run end, reply, facts) and `result.json`. Each scenario's session database is copied to `store/`, which git ignores.
@@ -55,7 +55,7 @@ Each run writes its evidence (`_evidence.ts`) to a new directory, `.agents/docs/
 ## How `scripts/example-packed.mjs` runs
 
 1. Copies `package.json`, `tsconfig.json`, `_support.ts`, `acceptance.ts` with `_evidence.ts`, and `01-*.ts`..`14-*.ts` into a temporary directory outside the repository.
-2. Runs `pnpm --filter @texra-ai/llm pack` and `pnpm --filter @texra-ai/harness pack` into that directory as `llm.tgz` and `harness.tgz`, and `npm pack acme-notes/` as `acme-notes.tgz`.
+2. Runs `pnpm --filter @texra-ai/llm pack` and `pnpm --filter @texra-ai/worldline pack` into that directory as `llm.tgz` and `harness.tgz`, and `npm pack acme-notes/` as `acme-notes.tgz`.
 3. Runs `npm install --no-audit --no-fund` (plain `node_modules`, no workspace lockfile).
 4. Runs `tsc -p` with `strict: true`, `moduleResolution: "nodenext"`, and `skipLibCheck: false`.
 5. Runs `npm start` (executing `01` through `14` in order), or with `--acceptance` `node acceptance.ts`, and removes the temporary directory on success.

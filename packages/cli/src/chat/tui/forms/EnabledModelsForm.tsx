@@ -2,7 +2,7 @@
 // lead-model picker. Distinct from `/model`, which only chooses the active
 // model among those already enabled and runnable.
 
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import { Text } from 'ink';
 
 import {

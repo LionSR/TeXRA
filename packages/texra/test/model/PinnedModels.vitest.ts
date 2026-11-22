@@ -8,8 +8,8 @@ import {
   modelConfig,
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
-import { Settings } from '@texra-ai/harness/plugins';
-import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/worldline/plugins';
+import { HELPER_MODEL_SETTING } from '@texra-ai/worldline/schemas';
 import {
   CLI_CHEAP_START_MODEL,
   CURATED_MODELS,

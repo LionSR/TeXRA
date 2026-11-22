@@ -9,8 +9,8 @@ import { Effect } from 'effect';
 import {
   deleteStorageInventory,
   readStorageInventory,
-} from '@texra-ai/harness/host';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 import { formatBytes } from '@ui/copy/format';
 
 import { CliExitCode } from './platform/exitCodes';

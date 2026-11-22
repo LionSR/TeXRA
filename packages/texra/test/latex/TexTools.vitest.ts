@@ -5,7 +5,7 @@ import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
 import { expect } from 'vitest';
 
-import { pathToLocationIn } from '@texra-ai/harness/plugins';
+import { pathToLocationIn } from '@texra-ai/worldline/plugins';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { rootedFsLayer } from '@test/support/fsTestUtils';

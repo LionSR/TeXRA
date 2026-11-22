@@ -7,7 +7,7 @@ import {
   toErrorMessage,
   escapeAttr,
   escapeText,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { announce, reportingFailure } from '@frontend/ui/errorHandlingUtils';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';

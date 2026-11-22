@@ -4,9 +4,9 @@ import { TestClock } from 'effect/testing';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
-import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
-import { AppState } from '@texra-ai/harness/plugins';
-import { UsageLog } from '@texra-ai/harness/host';
+import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/worldline/node';
+import { AppState } from '@texra-ai/worldline/plugins';
+import { UsageLog } from '@texra-ai/worldline/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { usageAgentName } from '@shared/usageLog';

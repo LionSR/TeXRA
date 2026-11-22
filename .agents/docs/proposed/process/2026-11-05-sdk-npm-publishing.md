@@ -138,7 +138,7 @@ by hand is a smaller surface than a second release script.
 1. `npm login`, then
    `node packages/harness/scripts/publish-npm.mjs` from a clean
    checkout of `main` (publishes `0.1.0`, asks for the OTP).
-2. On npmjs.com, for each of `@texra-ai/llm` and `@texra-ai/harness`: add a
+2. On npmjs.com, for each of `@texra-ai/llm` and `@texra-ai/worldline`: add a
    Trusted Publisher (GitHub Actions, this repository, workflow `release.yml`),
    as configured for `@texra-ai/cli`.
 3. Update D11's parenthetical in the rulings ledger to say the pair publishes

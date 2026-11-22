@@ -6,8 +6,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports - run facts and filesystem access
-import { entryTypeIn } from '@texra-ai/harness/node';
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
+import { entryTypeIn } from '@texra-ai/worldline/node';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/worldline/plugins';
 import {
   toErrorMessage,
   Rejected,
@@ -17,7 +17,7 @@ import {
   type AgentConfigInput,
   type RunId,
   pluralize,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   latexdiffArtifactNote,
   latexdiffArtifactSource,

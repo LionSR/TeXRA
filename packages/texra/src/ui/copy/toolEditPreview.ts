@@ -1,4 +1,4 @@
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import type { DiffLabel } from '@texra/hosts/uiHosts';
 import { formatLineChanges } from '@ui/copy/format';
 

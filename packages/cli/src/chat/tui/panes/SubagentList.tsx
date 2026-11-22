@@ -32,7 +32,7 @@ import {
   type RequestKind,
   type RunId,
   type RunView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 

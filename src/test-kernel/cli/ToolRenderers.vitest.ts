@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI rendering
-import type { NormalizedToolUse } from '@texra-ai/harness/schemas';
+import type { NormalizedToolUse } from '@texra-ai/worldline/schemas';
 import {
   toolUseDisplayLines,
   toolUseStyledLines,
@@ -12,7 +12,7 @@ import { COLOR_BORDER } from '@cli/tui/ui/colors';
 // Local imports - shared schemas
 import { TOOL_CALL_STATUS } from '@shared/schemas';
 import { toolRowModel } from '@shared/transcript/toolRowModel';
-import type { ToolRow } from '@texra-ai/harness/transcript';
+import type { ToolRow } from '@texra-ai/worldline/transcript';
 
 function toolUse(
   toolName: string,

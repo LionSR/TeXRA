@@ -6,7 +6,7 @@ import { Schema } from 'effect';
 import {
   decodingDefault,
   extractErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 

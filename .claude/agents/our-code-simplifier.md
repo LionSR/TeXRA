@@ -38,7 +38,7 @@ missing export is a fact to record under `skipped`, not a reason to fork the
 type.
 
 **Internal interfaces have no downstream consumer except us.** The public
-surfaces of `@texra-ai/harness` and `@texra-ai/llm` are published at 0.x and
+surfaces of `@texra-ai/worldline` and `@texra-ai/llm` are published at 0.x and
 recorded in `config/api-reports/`; everything behind them CAN break — change
 the signature and fix the callers. Under 1.0, compat care
 is owed only to wire contracts, user-workspace artifacts, and external export

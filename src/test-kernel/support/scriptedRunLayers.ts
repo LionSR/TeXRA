@@ -18,7 +18,7 @@ import {
   Stream,
 } from 'effect';
 
-import { UsageLog } from '@texra-ai/harness/host';
+import { UsageLog } from '@texra-ai/worldline/host';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { modelInvokerLayer } from '@agent/runtime/ModelInvoker';
@@ -37,7 +37,7 @@ import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
-import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/worldline/schemas';
 import { generateRunId } from '@shared/schemas';
 import { noStep, testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';

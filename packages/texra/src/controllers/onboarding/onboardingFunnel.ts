@@ -26,17 +26,17 @@ import {
   decodingDefault,
   type SessionView,
   type StateKey,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   Settings,
   logFailure,
   type StateStore,
   type StateWriteFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { SETUP_AGENT_NAME } from '@texra/agent/entryAgent';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = decodingDefault(Schema.Boolean, false);

@@ -11,12 +11,15 @@ import { Deferred, Effect, Fiber, FileSystem, Layer, Context } from 'effect';
 
 // Local imports
 
-import { generateRunId, type RequestDecision } from '@texra-ai/harness/schemas';
+import {
+  generateRunId,
+  type RequestDecision,
+} from '@texra-ai/worldline/schemas';
 import {
   requestToolEditApproval,
   type PluginToolServices,
   WorkspaceFs,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { SessionRequests } from '@agent/runtime/requests';
 import { SessionLog } from '@shared/session/runHistory';
 import { seedEditedFiles } from '@test/support/runRecordSeeds';

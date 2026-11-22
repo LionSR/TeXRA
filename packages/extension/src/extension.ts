@@ -18,26 +18,26 @@ import {
 } from 'effect';
 
 // Local imports
-import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
+import { Sessions, WorkspaceRoots } from '@texra-ai/worldline';
 import {
   type ProcessRuntime,
   type ProcessServices,
   type ScopedFork,
   scopedFork,
   withProcessServices,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   withLogChannel,
   Settings,
   type GlobalValues,
-} from '@texra-ai/harness/plugins';
-import { withForkFailureReporting } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/plugins';
+import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
 import {
   canonicalizeWorkspaceRoot,
   effectDiagnosticsLayer,
   setLogSink,
-} from '@texra-ai/harness/node';
-import { decodingDefault, type StateKey } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/node';
+import { decodingDefault, type StateKey } from '@texra-ai/worldline/schemas';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { askNotice, vscodeUi } from '@frontend/hosts/VscodeUiHost';

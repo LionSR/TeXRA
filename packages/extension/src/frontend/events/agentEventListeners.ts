@@ -13,14 +13,14 @@
 import {
   withProcessServices,
   type ProcessRuntime,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { askNotice } from '@frontend/hosts/VscodeUiHost';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import { windowNotices } from '@texra/controllers/session/windowNotices';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 /**
  * The runtime's notices this extension presents its own way; the window's

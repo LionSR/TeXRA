@@ -4,7 +4,7 @@ import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 
 // Local imports
-import { Secrets } from '@texra-ai/harness/plugins';
+import { Secrets } from '@texra-ai/worldline/plugins';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';

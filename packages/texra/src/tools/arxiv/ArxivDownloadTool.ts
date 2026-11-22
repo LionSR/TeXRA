@@ -4,9 +4,9 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Path, Schema } from 'effect';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness/plugins';
-import { toPosixPath } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { ToolContext } from '@texra-ai/worldline/plugins';
+import { toPosixPath } from '@texra-ai/worldline/node';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   nullishWithDefault,
   executed,
@@ -15,7 +15,7 @@ import {
   formatToolOutput,
   defineTool,
   WorkspaceFs,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { downloadArxivSource, validateArxivId } from '@latex/arxivProcessor';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';

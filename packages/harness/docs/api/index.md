@@ -1,8 +1,8 @@
-# `@texra-ai/harness`
+# `@texra-ai/worldline`
 
 <!-- Generated from `packages/harness/src/index.ts` by `npm run docgen`; do not edit. -->
 
-`@texra-ai/harness`: run an agent from a Node program, stated in Effect.
+`@texra-ai/worldline`: run an agent from a Node program, stated in Effect.
 
 > **Guide:** Read [Philosophy & Architecture](/api/) and
 > [Durable Protocol & Recovery](/api/durable-protocol) for how the runtime
@@ -32,18 +32,18 @@ listed below.
 
 ### Companion subpaths
 
-- [`@texra-ai/harness/schemas`](./schemas): browser-safe Effect Schemas, view
+- [`@texra-ai/worldline/schemas`](./schemas): browser-safe Effect Schemas, view
   types (`SessionView`, `RunView`, `TranscriptView`), and pure view queries.
-- [`@texra-ai/harness/transcript`](./transcript): browser-safe transcript row
+- [`@texra-ai/worldline/transcript`](./transcript): browser-safe transcript row
   projections and `RemoteSessionView` for UI renderers.
-- [`@texra-ai/harness/builtins`](./builtins): the built-in plugins
+- [`@texra-ai/worldline/builtins`](./builtins): the built-in plugins
   (`harnessBuiltins`, or one by one).
-- [`@texra-ai/harness/plugins`](./plugins): what a tool or plugin is
+- [`@texra-ai/worldline/plugins`](./plugins): what a tool or plugin is
   written with (`defineTool`, `definePlugin`, `ToolContext`, `Settings`,
   `WorkspaceFs`).
-- [`@texra-ai/harness/node`](./node): `nodePlatform(options)` and Node.js
+- [`@texra-ai/worldline/node`](./node): `nodePlatform(options)` and Node.js
   filesystem, SQLite, and process building blocks.
-- [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's
+- [`@texra-ai/worldline/host`](./host): what a full application host (TeXRA's
   editor, desktop and terminal apps) composes beyond this entry:
   `processLayer`, the installed plugins, and the config and state stores.
 
@@ -360,7 +360,7 @@ run's project.
 
 ```ts
 class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
-  '@texra-ai/harness/ModelFetch',
+  '@texra-ai/worldline/ModelFetch',
 )
 ```
 
@@ -826,7 +826,7 @@ class Sessions extends Context.Service<
       DatabaseReadFailed
     >;
   }
->()('@texra-ai/harness/Sessions')
+>()('@texra-ai/worldline/Sessions')
 ```
 
 ## SkillSourceOptions

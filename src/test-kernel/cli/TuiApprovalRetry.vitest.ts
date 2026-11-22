@@ -10,13 +10,13 @@ import { Context, Effect, Fiber, Layer, Schema, SubscriptionRef } from 'effect';
 import { expect, vi } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 
-import { SubscriptionPreference } from '@texra-ai/harness/host';
+import { SubscriptionPreference } from '@texra-ai/worldline/host';
 import {
   RunIdSchema,
   type RequestPayload,
   type RetryRequest,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   attachInteractions,
   Interactions,

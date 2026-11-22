@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
 import type {
   CliLogoutTarget,

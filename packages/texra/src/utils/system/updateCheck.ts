@@ -9,11 +9,11 @@ import {
   withLogChannel,
   GlobalValues,
   type ValueFamily,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
-import { NonNegativeIntSchema } from '@texra-ai/harness/schemas';
+import { NonNegativeIntSchema } from '@texra-ai/worldline/schemas';
 
 /** The hosts that check for updates, each with its own record. */
 type UpdateCheckHost = 'cli' | 'desktop';
@@ -52,7 +52,7 @@ const DAILY_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Env var that disables both the CLI's and desktop's update checks. Read with
- * `envFlag` (`@texra-ai/harness/node`), so `=0` / `=false` leave the check on.
+ * `envFlag` (`@texra-ai/worldline/node`), so `=0` / `=false` leave the check on.
  */
 export const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 

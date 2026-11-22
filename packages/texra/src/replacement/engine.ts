@@ -9,8 +9,8 @@ import {
   Settings,
   withLogChannel,
   type ConfigProvider,
-} from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type {
   NonRegexReplacementCategory,
   RegexReplacementCategory,

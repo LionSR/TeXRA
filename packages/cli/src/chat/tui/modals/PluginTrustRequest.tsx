@@ -14,7 +14,7 @@ import {
 import type {
   ApprovalBypassKind,
   PluginTrustRequest as PluginTrustPayload,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 interface PluginTrustRequestProps {
   readonly availableRows?: number;

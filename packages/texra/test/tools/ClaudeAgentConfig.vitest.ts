@@ -4,7 +4,7 @@ import { ConfigProvider, Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { Secrets } from '@texra-ai/harness/plugins';
+import { Secrets } from '@texra-ai/worldline/plugins';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { buildClaudeAgentEnv } from '@texra/tools/agentCli/claudeAgentConfig';

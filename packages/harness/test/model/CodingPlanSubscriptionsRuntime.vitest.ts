@@ -14,9 +14,9 @@ import {
   type DeclinableUsageRoute,
   GLM_CODING_PLAN_SETTING,
   KIMI_CODE_PREFER_SETTING,
-} from '@texra-ai/harness/schemas';
-import { readModelOptions } from '@texra-ai/harness/host';
-import { Secrets } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { readModelOptions } from '@texra-ai/worldline/host';
+import { Secrets } from '@texra-ai/worldline/plugins';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { FakeHost } from '@test/support/testKernel';
 

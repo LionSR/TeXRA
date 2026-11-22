@@ -46,16 +46,19 @@ import {
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
-import { type LocalSession, Sessions } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
-import { canonicalizeWorkspaceRoot, IS_WINDOWS } from '@texra-ai/harness/node';
+import { type LocalSession, Sessions } from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
+import {
+  canonicalizeWorkspaceRoot,
+  IS_WINDOWS,
+} from '@texra-ai/worldline/node';
 import {
   withLogChannel,
   AppState,
   GlobalValues,
   StateStores,
-} from '@texra-ai/harness/plugins';
-import { ensureError } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import {
   openLocalSession,
   openProjectRoots,

@@ -19,7 +19,7 @@ import {
   PluginRequestError,
   type PluginEnv,
   type PluginReview,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 

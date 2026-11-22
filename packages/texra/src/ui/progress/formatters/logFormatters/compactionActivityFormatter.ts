@@ -2,7 +2,7 @@ import '@ui/progress/components/CompactionActivity';
 
 import { html } from 'lit';
 
-import type { CompactionActivityRow } from '@texra-ai/harness/transcript';
+import type { CompactionActivityRow } from '@texra-ai/worldline/transcript';
 
 import type { FormatResult } from '../baseLogFormatter';
 

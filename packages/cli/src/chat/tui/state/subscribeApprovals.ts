@@ -13,9 +13,12 @@
 
 import { Cause, Effect } from 'effect';
 
-import type { PresentationEventHandlers } from '@texra-ai/harness/host';
-import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import type { PresentationEventHandlers } from '@texra-ai/worldline/host';
+import {
+  withLogChannel,
+  type SettingsStores,
+} from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { setProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -52,7 +55,7 @@ import type {
   Session,
   HostInteractions,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 import type { ScopeRunner } from '../../scopeRunner';
 

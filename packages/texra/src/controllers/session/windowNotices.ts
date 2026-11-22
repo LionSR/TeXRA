@@ -11,17 +11,17 @@
 import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
-import { appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/worldline/host';
 import {
   Settings,
   withLogChannel,
   type StateStore,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   decodingDefault,
   type RequestShowErrorPayload,
   type StateKey,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
 import { settingsTabByCommand } from '@texra/shared/commands/catalog';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';

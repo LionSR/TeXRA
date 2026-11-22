@@ -3,7 +3,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { styleMap } from 'lit/directives/style-map.js';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';

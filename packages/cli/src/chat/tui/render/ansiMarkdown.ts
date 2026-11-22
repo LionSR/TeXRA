@@ -16,7 +16,7 @@ import { LRUCache } from 'lru-cache';
 import MarkdownIt, { type RendererRule, type Token } from 'markdown-it';
 import pico from 'picocolors';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';

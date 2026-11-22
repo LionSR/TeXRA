@@ -16,18 +16,18 @@ import path from 'node:path';
 
 import { Effect, Layer, Option, Predicate, Schema, Stream } from 'effect';
 
-import { GlobalValues } from '@texra-ai/harness/plugins';
+import { GlobalValues } from '@texra-ai/worldline/plugins';
 import {
   GlobalDatabase,
   nodePlatformServices,
   resolveGlobalStoragePath,
-} from '@texra-ai/harness/node';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/node';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 // No public entry opens the global store outside a process runtime, which
 // this window stands without (this file is an exemption in
 // oxlint.config.mts).
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
-import { AppNamespace } from '@texra-ai/harness/node';
+import { AppNamespace } from '@texra-ai/worldline/node';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   linkService,

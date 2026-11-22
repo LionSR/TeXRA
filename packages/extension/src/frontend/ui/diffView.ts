@@ -1,7 +1,7 @@
 import { Effect, Stream } from 'effect';
 import * as vscode from 'vscode';
 
-import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
+import { logFailure, withLogChannel } from '@texra-ai/worldline/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
 

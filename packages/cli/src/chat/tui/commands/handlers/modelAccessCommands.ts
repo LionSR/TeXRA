@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/models/apiStatus';

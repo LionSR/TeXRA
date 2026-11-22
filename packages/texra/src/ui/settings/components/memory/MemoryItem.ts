@@ -34,7 +34,7 @@ import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { memoryItemFacts } from '@ui/copy/memory';
-import type { MemoryViewItem } from '@texra-ai/harness/schemas';
+import type { MemoryViewItem } from '@texra-ai/worldline/schemas';
 
 /** The preview's markdown renderer (code highlighting, no math), built on
  *  the first preview and shared by every item. */

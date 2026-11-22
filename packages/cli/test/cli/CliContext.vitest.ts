@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   buildCliContext,
   type BuildCliContextInit,

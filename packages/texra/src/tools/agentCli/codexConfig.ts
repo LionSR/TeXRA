@@ -7,7 +7,7 @@ import {
   isCodexModel,
   ReasoningEffort,
 } from '@texra-ai/llm';
-import { executeCommand } from '@texra-ai/harness/node';
+import { executeCommand } from '@texra-ai/worldline/node';
 import { type AgentCliEffort } from '@texra/shared/agentCliSettings';
 import {
   agentCliReasoning,
@@ -23,7 +23,7 @@ import {
   type StateReadFailed,
   withPerKeyLane,
   type PerKeyLane,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports

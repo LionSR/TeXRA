@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel, type StateStore } from '@texra-ai/harness/plugins';
-import { withCommandDirs } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel, type StateStore } from '@texra-ai/worldline/plugins';
+import { withCommandDirs } from '@texra-ai/worldline/node';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { askNotice } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';

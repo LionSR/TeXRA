@@ -4,7 +4,7 @@ import { Effect, Fiber } from 'effect';
 import { assert, expect, vi } from 'vitest';
 
 // Local imports
-import { CommandDirs } from '@texra-ai/harness/node';
+import { CommandDirs } from '@texra-ai/worldline/node';
 import {
   nodeSpawnerLayer,
   scriptedSpawnerLayer,

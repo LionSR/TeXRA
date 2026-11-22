@@ -12,7 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import {
   getModelLabel,
   isModelOptionAvailable,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { modelRefOf } from '@texra-ai/llm';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -23,7 +23,7 @@ import {
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
-import { launchPolicy, type ApprovalPolicy } from '@texra-ai/harness/schemas';
+import { launchPolicy, type ApprovalPolicy } from '@texra-ai/worldline/schemas';
 
 export interface ChipMenu {
   readonly id: string;

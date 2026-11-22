@@ -15,7 +15,7 @@ import {
   CredentialSwitchSchema,
   RunIdSchema,
   StoredMediaSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,

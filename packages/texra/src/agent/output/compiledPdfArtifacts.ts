@@ -6,8 +6,8 @@ import {
   type RunId,
   type FileLocation,
   hasExtension,
-} from '@texra-ai/harness/schemas';
-import { meansAbsent } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/schemas';
+import { meansAbsent } from '@texra-ai/worldline/node';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';

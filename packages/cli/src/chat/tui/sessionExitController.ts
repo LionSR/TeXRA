@@ -13,8 +13,8 @@ import type { ScopeRunner } from '../scopeRunner';
 import {
   withProcessServices,
   type ProcessRuntime,
-} from '@texra-ai/harness/host';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import { ensureError, toErrorMessage } from '@texra-ai/worldline/schemas';
 import { readCliCwd } from '@cli/runtime/platform/cliContext';
 import { CliExitCode, SIGNAL_EXIT_CODE } from '@cli/runtime/platform/exitCodes';
 import { leaveAtOnce, runCliExit } from '@cli/runtime/platform/initPlatform';
@@ -45,7 +45,7 @@ import {
   type ChatExit,
   type TuiSession,
 } from './state/sessionRunState';
-import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
+import type { ApprovalPolicy, SessionView } from '@texra-ai/worldline/schemas';
 import type { Instance as InkInstance } from 'ink';
 
 const EXIT_CONFIRMATION_TTL_MS = 800;

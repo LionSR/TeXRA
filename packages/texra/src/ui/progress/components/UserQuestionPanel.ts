@@ -23,7 +23,7 @@ import type {
   UserQuestionAnswers,
   UserQuestionRequest,
   UserQuestionPrompt,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 @customElement('user-question-panel')
 export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {

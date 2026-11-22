@@ -1,4 +1,4 @@
-# `@texra-ai/harness/schemas` API report
+# `@texra-ai/worldline/schemas` API report
 
 Generated from `packages/harness/src/schemas.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 

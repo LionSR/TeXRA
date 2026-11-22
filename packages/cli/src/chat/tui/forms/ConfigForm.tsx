@@ -7,7 +7,7 @@
 // Reads/writes go through the host-aware `Settings` accessor so the same
 // catalog drives the extension settings view and this panel without drift.
 
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import { Result, Schema, SchemaAST } from 'effect';
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
@@ -34,7 +34,7 @@ import { FormFrame } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { Effect } from 'effect';
 import { useChatProcess } from '../chatProcess';
 

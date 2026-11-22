@@ -10,7 +10,7 @@ import {
   type RunId,
   Rejected,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   Cause,
   Deferred,
@@ -37,7 +37,7 @@ import {
   type RunRecords,
   type Session,
   type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
   type ITool,
   StateReadFailed,
@@ -45,8 +45,8 @@ import {
   type StateStore,
   logFailure,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
-import { activationView, replayTrace } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/plugins';
+import { activationView, replayTrace } from '@texra-ai/worldline/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import {
@@ -73,7 +73,7 @@ import {
   type TaskFailed,
   type TaskRecordsFailed,
 } from './protocol';
-import type { CommitOrdinal } from '@texra-ai/harness/transcript';
+import type { CommitOrdinal } from '@texra-ai/worldline/transcript';
 
 const CHANNEL = 'serviceSession';
 

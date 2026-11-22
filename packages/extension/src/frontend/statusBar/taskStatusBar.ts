@@ -3,8 +3,8 @@ import { Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - session view
-import { appSignalStream } from '@texra-ai/harness/host';
-import { Settings, type AppSignals } from '@texra-ai/harness/plugins';
+import { appSignalStream } from '@texra-ai/worldline/host';
+import { Settings, type AppSignals } from '@texra-ai/worldline/plugins';
 import {
   DETAIL_SEPARATOR,
   APPROVAL_POLICY_SETTING,
@@ -15,7 +15,7 @@ import {
   type SessionTitleState,
   type SessionView,
   type TokenUsageStats,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   approvalPolicyLabel,
   formatApprovalPolicy,
@@ -23,7 +23,7 @@ import {
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { visibleTokenStats } from '@ui/copy/tokenUsage';
 import { runStatusLabel, sectionCountLabel } from '@ui/copy/runStatus';
-import type { Session, WorkspaceRoots } from '@texra-ai/harness';
+import type { Session, WorkspaceRoots } from '@texra-ai/worldline';
 
 /** What the task pill paints from one session view. */
 interface TaskStatus {

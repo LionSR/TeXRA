@@ -15,7 +15,7 @@ import {
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import type { InitAnswers } from '../runtime/platform/initConfig';
-import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import { isModelOptionAvailable } from '@texra-ai/worldline/schemas';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { cliModelStatus } from '../runtime/models/modelAccess';
 import { CANCEL_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';

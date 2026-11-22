@@ -9,7 +9,7 @@ import { describe } from 'vitest';
 // Local imports
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { orchestratorKillDenial } from '@tools/executions/killPolicy';
-import { ALLOW_ORCHESTRATOR_KILL_SETTING } from '@texra-ai/harness/schemas';
+import { ALLOW_ORCHESTRATOR_KILL_SETTING } from '@texra-ai/worldline/schemas';
 
 describe('Settings', () => {
   // #11797: the kill gate's permissive default answers only for an absent

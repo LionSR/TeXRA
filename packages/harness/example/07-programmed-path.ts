@@ -16,9 +16,9 @@
  *    (`runs`, joined to the call that launched it), and a write refused.
  */
 import { Effect, Layer, Schema } from 'effect';
-import { HISTORY_TABLES, Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
+import { HISTORY_TABLES, Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { definePlugin, defineTool } from '@texra-ai/worldline/plugins';
 
 import {
   EXAMPLE_CLIENT,

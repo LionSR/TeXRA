@@ -20,19 +20,19 @@ import {
   UsageLog,
   UsageLogEntrySchema,
   type UsageLogEntry,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   withLogChannel,
   type AppState,
   type ConfigProvider,
-} from '@texra-ai/harness/plugins';
-import { envFlag } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/plugins';
+import { envFlag } from '@texra-ai/worldline/node';
 import {
   extractErrorMessage,
   formatResultCount,
   toErrorMessage,
   NonNegativeIntSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
 

@@ -18,15 +18,15 @@ const apiSidebar = [
     ],
   },
   {
-    text: '@texra-ai/harness Reference',
+    text: '@texra-ai/worldline Reference',
     items: [
-      { text: 'harness', link: '/api/harness/' },
-      { text: 'harness/schemas', link: '/api/harness/schemas' },
-      { text: 'harness/transcript', link: '/api/harness/transcript' },
-      { text: 'harness/plugins', link: '/api/harness/plugins' },
-      { text: 'harness/builtins', link: '/api/harness/builtins' },
-      { text: 'harness/node', link: '/api/harness/node' },
-      { text: 'harness/host', link: '/api/harness/host' },
+      { text: 'worldline', link: '/api/harness/' },
+      { text: 'worldline/schemas', link: '/api/harness/schemas' },
+      { text: 'worldline/transcript', link: '/api/harness/transcript' },
+      { text: 'worldline/plugins', link: '/api/harness/plugins' },
+      { text: 'worldline/builtins', link: '/api/harness/builtins' },
+      { text: 'worldline/node', link: '/api/harness/node' },
+      { text: 'worldline/host', link: '/api/harness/host' },
     ],
   },
   {

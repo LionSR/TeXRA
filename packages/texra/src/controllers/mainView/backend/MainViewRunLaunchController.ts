@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
-import { type StartInput } from '@texra-ai/harness';
-import { type AgentConfig, Rejected } from '@texra-ai/harness/schemas';
+import { type StartInput } from '@texra-ai/worldline';
+import { type AgentConfig, Rejected } from '@texra-ai/worldline/schemas';
 import { entryAgent } from '@texra/agent/entryAgent';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';

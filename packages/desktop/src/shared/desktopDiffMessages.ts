@@ -3,7 +3,7 @@ import {
   decodingDefault,
   decodingDefaultType,
   NonNegativeIntSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 // IPC plumbing for the in-app Review workbench: the renderer mounts
 // `<texra-diff-view>` (Monaco-backed) inside a persistent Review tab beside a

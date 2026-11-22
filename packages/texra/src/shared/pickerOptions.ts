@@ -7,7 +7,7 @@ import { Schema, Struct } from 'effect';
 import {
   DeclinableUsageRouteSchema,
   ModelAvailabilityKindSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** A picker option row: the opaque `value` sent back to the host and the
  *  `label` shown. */

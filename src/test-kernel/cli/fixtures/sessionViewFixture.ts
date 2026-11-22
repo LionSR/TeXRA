@@ -13,7 +13,7 @@ import {
   type PendingRequest,
   type RunId,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { emptySessionView } from '@shared/session/sessionView';

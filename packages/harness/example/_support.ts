@@ -18,9 +18,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Layer } from 'effect';
-import { ModelFetch, type AgentPlatform } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import type { ExportNode } from '@texra-ai/harness/schemas';
+import { ModelFetch, type AgentPlatform } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import type { ExportNode } from '@texra-ai/worldline/schemas';
 
 /** The app the examples sign in and send model requests as: the harness and
  *  llm name no client of their own. */

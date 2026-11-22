@@ -4,12 +4,12 @@ import {
   type AppSignals,
   type Secrets,
   type SettingsStores,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 import {
   toErrorMessage,
   SUBSCRIPTION_AUTH_PROVIDERS,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,

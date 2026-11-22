@@ -28,7 +28,7 @@ import { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { Settings } from '@shared/config/settings';
 import { KIMI_CODE_PREFER_SETTING } from '@shared/state/stateSettings';
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import {
   persistentTestSession,
   REAL_RUN_TIMEOUT,

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { envFlag } from '@texra-ai/harness/node';
+import { envFlag } from '@texra-ai/worldline/node';
 import {
   fetchJsonStringField,
   UPDATE_CHECK_SKIP_ENV,

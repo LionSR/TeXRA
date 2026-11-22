@@ -9,12 +9,12 @@
 
 import { Clock, Duration, Effect, Predicate, Schema } from 'effect';
 import { StatusCodes } from 'http-status-codes';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   isTransientHttpStatus,
   scopedClient,
   Secrets,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 import { getGitHubToken } from './githubAuth';
 import { isAuthFailureStatus, type SecretsFailed } from '@texra-ai/llm';

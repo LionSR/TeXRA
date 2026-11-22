@@ -34,7 +34,7 @@ import {
 } from './textInputBindings';
 import { NO_IMAGE_PASTES, type ImagePastes } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import { GLYPH_CARET, POINTER } from '@cli/tui/ui/glyphs';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;

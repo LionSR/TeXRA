@@ -2,7 +2,7 @@ import { Schema } from 'effect';
 import { RpcSerialization } from 'effect/rpc';
 import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
 
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { TraceEmitter, runEventDraft } from '@agent/trace/TraceEmitter';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { logUserMessage } from '@agent/trace/traceLogs';
@@ -11,7 +11,7 @@ import type { AgentEvent } from '@shared/session/agentEvent';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 import { EventsFrameSchema } from '@texra/shared/session/sessionFrames';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import type { AgentTrace } from '@texra-ai/harness/plugins';
+import type { AgentTrace } from '@texra-ai/worldline/plugins';
 
 // #7508: the userMessage row's attachment-kind/count payload — logUserMessage
 // stamps data.attachments when attachments are present and stays byte-for-byte

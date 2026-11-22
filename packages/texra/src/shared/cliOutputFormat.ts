@@ -1,5 +1,5 @@
 import { Schema } from 'effect';
-import { decodingDefault } from '@texra-ai/harness/schemas';
+import { decodingDefault } from '@texra-ai/worldline/schemas';
 
 /**
  * Output formats every `texra` command can emit: human text, one JSON result,

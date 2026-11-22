@@ -19,8 +19,8 @@ import {
   defineTool,
   Settings,
   type ConfigProvider,
-} from '@texra-ai/harness/plugins';
-import { type SettingRow } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { type SettingRow } from '@texra-ai/worldline/schemas';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
 
 /**

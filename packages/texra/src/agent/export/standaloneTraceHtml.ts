@@ -14,14 +14,14 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
 
 // Local imports
-import { meansAbsent } from '@texra-ai/harness/node';
-import type { Session } from '@texra-ai/harness';
+import { meansAbsent } from '@texra-ai/worldline/node';
+import type { Session } from '@texra-ai/worldline';
 import {
   TraceMissingSchema,
   type AssembleTraceResult,
   type RunId,
   type TraceDocument,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** The run has no trace to show (`TraceMissingSchema` says why). Each host
  *  words the status its own way. */

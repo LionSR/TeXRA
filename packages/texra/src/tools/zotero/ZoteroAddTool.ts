@@ -21,8 +21,8 @@ import { parseAuthorName } from 'bibtex';
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
-import { pluralize } from '@texra-ai/harness/schemas';
+import { executed, ToolError, defineTool } from '@texra-ai/worldline/plugins';
+import { pluralize } from '@texra-ai/worldline/schemas';
 
 // Local file imports
 import { callZoteroConnector, checkZoteroRunning } from './bbtClient';

@@ -5,8 +5,8 @@ import {
   type AgentTrace,
   type WorkspaceFs,
   pathToLocationIn,
-} from '@texra-ai/harness/plugins';
-import { meansAbsent } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/plugins';
+import { meansAbsent } from '@texra-ai/worldline/node';
 
 // Third-party imports
 import { Effect, FileSystem, Predicate } from 'effect';
@@ -16,7 +16,7 @@ import {
   toErrorMessage,
   type FileLocation,
   hasExtension,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 // Local file imports
@@ -25,7 +25,7 @@ import { extractFigurePathsFromLatex } from './extractFigure';
 import { resolveLatexDir } from './latexParsingUtils';
 import { compileTikzPictures, extractTikzPictures } from './tikzPictures';
 import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** LaTeX project siblings that should always ride alongside the main file. */

@@ -1,6 +1,6 @@
 import { Argument } from 'effect/cli';
 
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 import { CliUsageError } from '../runtime/platform/cliContext';
 import { parseCliHistoryId } from '../runtime/history';

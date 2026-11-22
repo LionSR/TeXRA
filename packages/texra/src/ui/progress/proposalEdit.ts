@@ -7,7 +7,7 @@ import {
   type RequestDecision,
   type RunView,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { Surface, SurfaceAction } from '@texra/shared/session/surface';
 
 type Launch = Surface['launch'];

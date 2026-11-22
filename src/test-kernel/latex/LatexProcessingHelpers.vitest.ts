@@ -6,7 +6,7 @@ import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
-import { sessionFsLayer } from '@texra-ai/harness/host';
+import { sessionFsLayer } from '@texra-ai/worldline/host';
 import { runDirUnder } from '@common/storage/storageLayout';
 import { processInputFiles } from '@latex/latexMedia';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
@@ -14,7 +14,7 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 const logger = spiedTrace();
 

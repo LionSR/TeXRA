@@ -18,7 +18,7 @@ import { dirname, join } from 'node:path';
 import { Effect, Record } from 'effect';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
-import { withCommandDirs } from '@texra-ai/harness/node';
+import { withCommandDirs } from '@texra-ai/worldline/node';
 
 /**
  * The subset of node-pty this host depends on: node-pty's own module type

@@ -12,7 +12,7 @@ import {
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   pluralize,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';

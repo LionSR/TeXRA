@@ -33,7 +33,7 @@ import {
 } from 'effect';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import type { Theme } from '@texra/shared/ipc';
 import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

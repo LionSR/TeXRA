@@ -2,8 +2,8 @@
 import { layer } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Schema, Stream, Context } from 'effect';
 import { expect } from 'vitest';
-import { type BashRequest, generateRunId } from '@texra-ai/harness/schemas';
-import { defineTool } from '@texra-ai/harness/plugins';
+import { type BashRequest, generateRunId } from '@texra-ai/worldline/schemas';
+import { defineTool } from '@texra-ai/worldline/plugins';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports

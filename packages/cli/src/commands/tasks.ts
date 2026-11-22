@@ -13,7 +13,7 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
   type RequestError,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
   findTask,
@@ -45,7 +45,7 @@ import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 import { cliCommand, modelFlag } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
-import type { RuntimeCommand } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */

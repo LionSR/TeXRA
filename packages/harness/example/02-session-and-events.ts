@@ -8,9 +8,9 @@
  * then reads the ended run's events again, replayed from the session.
  */
 import { Effect, Layer, Result, Schema, Stream } from 'effect';
-import { responseText, Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { StartRequestSchema } from '@texra-ai/harness/schemas';
+import { responseText, Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { StartRequestSchema } from '@texra-ai/worldline/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 

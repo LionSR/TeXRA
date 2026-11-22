@@ -7,7 +7,7 @@ import { Effect, Context } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { generateRunId } from '@texra-ai/harness/schemas';
+import { generateRunId } from '@texra-ai/worldline/schemas';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { SessionLog } from '@shared/session/runHistory';
 import { createFakeHost } from '@test/support/fakeHost';

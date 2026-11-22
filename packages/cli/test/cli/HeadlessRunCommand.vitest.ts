@@ -16,7 +16,7 @@ import { Effect, Schema } from 'effect';
 import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { setLogSink } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/worldline/node';
 import { runCli } from '@cli/commands/root';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';

@@ -9,8 +9,8 @@ import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
-import type { MemoryViewItem } from '@texra-ai/harness/schemas';
-import { MEMORY_ENABLED_SETTING } from '@texra-ai/harness/schemas';
+import type { MemoryViewItem } from '@texra-ai/worldline/schemas';
+import { MEMORY_ENABLED_SETTING } from '@texra-ai/worldline/schemas';
 
 // Side-effect: register child components.
 import '../components/memory/MemoryList';

@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Option } from 'effect';
 import { Flag } from 'effect/cli';
 
-import { pathExists } from '@texra-ai/harness/node';
+import { pathExists } from '@texra-ai/worldline/node';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
 import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
@@ -17,7 +17,7 @@ import {
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 import { CLI_SETUP_RECOVERY } from '../runtime/models/modelAccess';
-import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import { isModelOptionAvailable } from '@texra-ai/worldline/schemas';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 

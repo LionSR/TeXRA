@@ -1,4 +1,4 @@
-# `@texra-ai/harness`
+# Worldline (`@texra-ai/worldline`)
 
 An embeddable agent runtime in Effect, from [TeXRA](https://texra.ai): run an
 agent from a Node program and consume its trace as a stream.
@@ -14,7 +14,7 @@ Requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later. The
 package is ESM only.
 
 ```bash
-npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
+npm install @texra-ai/worldline @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
 ```
 
 [`@texra-ai/llm`](https://www.npmjs.com/package/@texra-ai/llm), the model
@@ -34,7 +34,7 @@ patch while `@effect/*` packages float.
   "dependencies": {
     "@effect/platform-node": "^4.1.0",
     "@effect/sql-sqlite-node": "^4.1.0",
-    "@texra-ai/harness": "^0.1.0",
+    "@texra-ai/worldline": "^0.1.0",
     "@texra-ai/llm": "^0.1.0",
     "effect": "^4.1.0",
   },
@@ -60,13 +60,13 @@ a program (`Plugin.programs`): one of its script modules, started by name
 with the `program` tool or a `script` of kind `program`, whose run is that
 module's default export called with the launch's arguments, instruction
 and files.
-`@texra-ai/harness` ships no built-in programs.
+`@texra-ai/worldline` ships no built-in programs.
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { responseText, Sessions } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { responseText, Sessions } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 
 const platform = nodePlatform({ storageDir: './.agent-storage' });
 
@@ -104,7 +104,7 @@ console.log(result.outcome);
 ### What a run is
 
 There are no agent files. A start names what the run is (`StartRequestSchema`
-from `@texra-ai/harness/schemas`): `system`, its own system text, before
+from `@texra-ai/worldline/schemas`): `system`, its own system text, before
 what the harness appends (the project's `AGENTS.md`, attached memories,
 tool-use instructions and the plugins' sections); `tools`, the tool names it
 declares (`mcp__<server>__*` for every tool of a configured MCP server; none,
@@ -412,7 +412,7 @@ workspace-relative files its tool calls edited, and the `structured` value of
 a `submit_output` tool when the run used one. A program's run (`script.kind:
 'program'`) ends with its script's return value as `structured`; how the run
 reads to whoever launched it is the program's registered result
-(`ProgramResult`, exported from `@texra-ai/harness/plugins`: the schema of
+(`ProgramResult`, exported from `@texra-ai/worldline/plugins`: the schema of
 the plugin's fact it reads, its delivery body, and the files it changed). There is no category to switch on.
 
 `run.result` is terminal-only. A run of this package runs one cycle and
@@ -430,15 +430,15 @@ files.
 
 ## Entry points
 
-| Entry                          | Contents                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                         |
-| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for run configurations and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                                      |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                       |
-| `@texra-ai/harness/builtins`   | The built-in plugins: `harnessBuiltins`, or one by one (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                                                                                                                                                                                                                              |
-| `@texra-ai/harness/plugins`    | What a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                      |
-| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise                              |
+| Entry                            | Contents                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@texra-ai/worldline`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                         |
+| `@texra-ai/worldline/schemas`    | Browser-safe: Effect schemas + derived types for run configurations and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                                      |
+| `@texra-ai/worldline/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                       |
+| `@texra-ai/worldline/builtins`   | The built-in plugins: `harnessBuiltins`, or one by one (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                                                                                                                                                                                                                              |
+| `@texra-ai/worldline/plugins`    | What a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
+| `@texra-ai/worldline/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                      |
+| `@texra-ai/worldline/host`       | What a full application host composes beyond the root: `processLayer`, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise                              |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
 exports, with their TSDoc and declarations, are listed in its API reference
@@ -463,7 +463,7 @@ package never falls back to a per-user directory), that directory's `mcp.json`
 and `AGENTS.md`, and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
 go to it as `nodePlatform({ settings })`, a catalog built with
-`settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which
+`settingsCatalog({ namespace, rows })` from `@texra-ai/worldline/schemas`, which
 resolves them after the harness's own; a platform with its own
 `ConfigProvider` carries that catalog as its `catalog`. Keys are relative to
 the namespace (`'memory.enabled'`), which the stores add to every key they
@@ -481,7 +481,7 @@ it, and it owns the proxy policy and timeouts too:
 
 ```ts
 import { Effect, Layer } from 'effect';
-import { ModelFetch, Sessions } from '@texra-ai/harness';
+import { ModelFetch, Sessions } from '@texra-ai/worldline';
 
 const scripted: typeof fetch = async () =>
   new Response(/* the provider's wire reply */);
@@ -510,7 +510,7 @@ run's warnings) go through the loggers, minimum level and tracer your program
 provides. Effect's default logger prints `Info` and above to the console;
 provide your own with `Logger.layer([...])`, or `Logger.layer([])` to drop
 them. To send them through the harness's sink instead, which redacts secrets,
-provide `effectDiagnosticsLayer(level)` from `@texra-ai/harness/node` around
+provide `effectDiagnosticsLayer(level)` from `@texra-ai/worldline/node` around
 the program and name a destination with `setLogSink({ write(entry) { … } })`:
 it receives each `LogEntry`, Effect's structured record (level, message,
 cause, annotations), and `entryChannel` / `entryMessage` read its channel and
@@ -538,7 +538,7 @@ interrupts tool work when the run stops. `defineTool` validates the input and
 normalizes ordinary failures into tool feedback; `execute` implements the work.
 
 ```ts
-import { defineTool } from '@texra-ai/harness/plugins';
+import { defineTool } from '@texra-ai/worldline/plugins';
 import { Effect, Schema } from 'effect';
 
 const EchoTool = defineTool({

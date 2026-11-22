@@ -9,7 +9,7 @@ import { ListForm } from './_shared/ListForm';
 import type {
   ApprovalPolicy,
   ApprovalBypassKind,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** A policy, or a grant of the focused task to revoke. */
 export type ApprovalFormValue = ApprovalPolicy | ApprovalBypassKind;

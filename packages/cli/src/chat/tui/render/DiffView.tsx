@@ -8,7 +8,7 @@ import { Box, Text } from 'ink';
 import {
   formatHunkLines,
   type ToolEditContent,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { clampModalWidth } from '@cli/tui/ui/theme';

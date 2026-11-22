@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { setLogSink } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/worldline/node';
 
 // Local imports - test support
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

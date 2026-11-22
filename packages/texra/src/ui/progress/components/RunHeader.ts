@@ -10,7 +10,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { resolveBypass, joinFacts } from '@texra-ai/harness/schemas';
+import { resolveBypass, joinFacts } from '@texra-ai/worldline/schemas';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
@@ -47,7 +47,7 @@ import type {
   RunView,
   ApprovalBypassKind,
   RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /**
  * `<run-header>`: the one header row of a selected run. The

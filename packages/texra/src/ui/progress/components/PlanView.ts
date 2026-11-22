@@ -11,7 +11,7 @@ import { customElement, property } from 'lit/decorators.js';
 import type { Surface } from '@texra/shared/session/surface';
 import { TexraElement } from '@ui/litBase';
 import { dispatchDisclosureToggle } from './disclosureToggle';
-import type { RunId, Plan } from '@texra-ai/harness/schemas';
+import type { RunId, Plan } from '@texra-ai/worldline/schemas';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';

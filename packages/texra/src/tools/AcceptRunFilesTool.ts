@@ -20,7 +20,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { ToolContext, pathToLocationIn } from '@texra-ai/harness/plugins';
+import { ToolContext, pathToLocationIn } from '@texra-ai/worldline/plugins';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
   ChildRuns,
@@ -33,19 +33,19 @@ import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   meansAbsent,
   entryTypeIn,
   readNormalizedFile,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   RunIdSchema,
   FileLocation,
   formatResultCount,
   pluralize,
   type ToolCard,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@latex/criticismParser';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
@@ -54,7 +54,7 @@ import {
   defineTool,
   type ToolResult,
   WorkspaceFs,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 /**
  * Whether `target` is a file, following links: a symlink to a file is a

@@ -98,7 +98,7 @@ keeps its meaning. The session database's format stamp and row versions:
 A pnpm workspace in three layers (design:
 `.agents/docs/implemented/architecture/2026-10-02-harness-package-split.md`):
 
-- `packages/harness/src` (`@texra-ai/harness`): the Effect-only harness and SDK
+- `packages/harness/src` (`@texra-ai/worldline`): the Effect-only harness and SDK
   surface, built and releasable at 0.x. There is no `@texra/core`.
 - `packages/texra/src` (`@texra-ai/texra`): the app: TeXRA's plugins, LaTeX,
   the UI kit (`@ui/*`) and the host-side controllers.
@@ -116,7 +116,7 @@ aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
 `packages/harness/src` (an ESM package) a relative import names its `.js` file.
 
 **The harness boundary is frozen, not open.** The app and hosts reach the
-harness only through `@texra-ai/harness` and its subpaths (`/builtins`,
+harness only through `@texra-ai/worldline` and its subpaths (`/builtins`,
 `/host`, `/node`, `/plugins`, `/schemas`, `/transcript`); a host holds the
 `LocalSession` that `Sessions.open` returns. The harness imports nothing from the app,
 and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
@@ -162,8 +162,8 @@ Where things go:
   `packages/desktop/src/main/desktopHostRequests.ts`).
 - `packages/harness/src/utils/` is host-agnostic, **not** browser-safe. The
   webview frontends import no `@utils/*` module at runtime; they get path,
-  error, text and escaping helpers from `@texra-ai/harness/schemas` and the
-  transcript helpers from `@texra-ai/harness/transcript`.
+  error, text and escaping helpers from `@texra-ai/worldline/schemas` and the
+  transcript helpers from `@texra-ai/worldline/transcript`.
 - `AppSignals` (`packages/harness/src/platform/appSignals.ts`) carries only
   app-lifecycle signals (auth, subscriptions, credentials, workspace-file
   writes), not run or session progress.

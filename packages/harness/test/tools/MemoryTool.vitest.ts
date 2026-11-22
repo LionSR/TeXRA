@@ -7,7 +7,7 @@ import { Effect, type FileSystem, Option } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { StorageFs, type RootedFileSystem } from '@texra-ai/harness/plugins';
+import { StorageFs, type RootedFileSystem } from '@texra-ai/worldline/plugins';
 import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryLayout';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { outputOf } from '@test/support/toolResultFields';

@@ -6,8 +6,8 @@ import {
   RunIdSchema,
   type TraceDocument,
   TraceDocumentSchema,
-} from '@texra-ai/harness/schemas';
-import { DisplayRowSchema } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { DisplayRowSchema } from '@texra-ai/worldline/transcript';
 import { LOG_LEVELS } from '@shared/schemas';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 

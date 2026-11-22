@@ -26,14 +26,14 @@ import {
   type SessionView,
   type RunView,
   type StoredMediaSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import { modelRefOf } from '@texra-ai/llm';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 
 import type { BridgeError } from './bridgeErrors';
 import { markShownRunSeen } from './unseenRuns';
-import type { CommitOrdinal } from '@texra-ai/harness/transcript';
+import type { CommitOrdinal } from '@texra-ai/worldline/transcript';
 import type { HostSnapshot } from './hostSnapshot';
 
 /** The launcher's file lists; an absent or null `editedFile` reads ''. */

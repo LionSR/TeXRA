@@ -5,19 +5,19 @@ import { Effect, FileSystem } from 'effect';
 import {
   type ProcessRuntime,
   withProcessServices,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   buildDiffHunks,
   countLineChanges,
   reportDiffTimeout,
-} from '@texra-ai/harness/plugins';
-import { readNormalizedFile } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/plugins';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
 import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
 
 import { DESKTOP_DIFF_COMMANDS } from '../shared/desktopDiffMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 interface DesktopDiffHostOptions {
   postToRenderer(message: DesktopPush): void;

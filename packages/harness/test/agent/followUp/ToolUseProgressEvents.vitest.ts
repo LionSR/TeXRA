@@ -5,7 +5,7 @@ import { assert, describe, expect } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
 // Local imports
-import { MESSAGE_TYPES, RUN_OUTCOME } from '@texra-ai/harness/schemas';
+import { MESSAGE_TYPES, RUN_OUTCOME } from '@texra-ai/worldline/schemas';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';

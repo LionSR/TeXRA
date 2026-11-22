@@ -3,9 +3,9 @@ import { layer } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
 
-import { sessionFsLayer } from '@texra-ai/harness/host';
-import { AppSignals } from '@texra-ai/harness/plugins';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { sessionFsLayer } from '@texra-ai/worldline/host';
+import { AppSignals } from '@texra-ai/worldline/plugins';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { ProgressDocumentTaskFileActionsController } from '@texra/controllers/progressView/ProgressDocumentTaskFileActionsController';
 import { SessionGraph } from '@test/support/testKernel';
 

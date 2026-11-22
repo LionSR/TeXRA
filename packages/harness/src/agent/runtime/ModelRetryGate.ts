@@ -37,12 +37,12 @@ export interface ModelRetryGate {
 export class RouteRetries extends Context.Service<
   RouteRetries,
   ModelRetryGate
->()('@texra-ai/harness/RouteRetries') {}
+>()('@texra-ai/worldline/RouteRetries') {}
 
 /** What an attempt runs once its route answered it (its response began).
  *  A recovery probe opens its route then; any other call's is nothing. */
 export const RouteAnswered = Context.Reference<Effect.Effect<void>>(
-  '@texra-ai/harness/RouteAnswered',
+  '@texra-ai/worldline/RouteAnswered',
   { defaultValue: () => Effect.void },
 );
 

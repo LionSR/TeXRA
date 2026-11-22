@@ -1,6 +1,6 @@
 // Per-project document metadata. Dockview owns group positions, sizes and tabs.
 import { Number as Num, Schema } from 'effect';
-import { decodingDefaultType, getBasename } from '@texra-ai/harness/schemas';
+import { decodingDefaultType, getBasename } from '@texra-ai/worldline/schemas';
 
 import type { IconName } from '@ui/wa/iconNames';
 import type { SerializedDockview } from 'dockview';

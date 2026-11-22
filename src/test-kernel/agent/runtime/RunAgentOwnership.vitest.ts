@@ -15,7 +15,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import {

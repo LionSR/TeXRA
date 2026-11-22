@@ -20,7 +20,7 @@ import * as path from 'node:path';
 
 import { Effect, type FileSystem } from 'effect';
 
-import { inheritedEnv, IS_WINDOWS } from '@texra-ai/harness/node';
+import { inheritedEnv, IS_WINDOWS } from '@texra-ai/worldline/node';
 import {
   binaryIfPresent,
   findCliBinary,

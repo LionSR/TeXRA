@@ -2,9 +2,9 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Effect, Exit, Stream, type Duration } from 'effect';
 import { useCallback, useEffect, useState } from 'react';
 
-import { readModelOptions } from '@texra-ai/harness/host';
-import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
-import { isWorking } from '@texra-ai/harness/schemas';
+import { readModelOptions } from '@texra-ai/worldline/host';
+import { isEmptyUsage, toErrorMessage } from '@texra-ai/worldline/schemas';
+import { isWorking } from '@texra-ai/worldline/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_BADGE_TEXT } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
@@ -37,7 +37,7 @@ import {
   statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { ScopeRunner } from '../../scopeRunner';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';

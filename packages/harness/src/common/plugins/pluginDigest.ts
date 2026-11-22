@@ -45,7 +45,7 @@ const RACY_MS = 2_000;
  * bound the least recently used go, so edits leave no unbounded trail.
  */
 const ContentHashes = Context.Reference(
-  '@texra-ai/harness/PluginContentHashes',
+  '@texra-ai/worldline/PluginContentHashes',
   {
     defaultValue: () => new LRUCache<string, string>({ max: 10_000 }),
   },

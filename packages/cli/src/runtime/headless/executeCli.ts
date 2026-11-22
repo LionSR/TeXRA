@@ -17,20 +17,20 @@ import {
   ensureError,
   programOf,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   LaunchRefused,
   RunFailure,
   type Run,
   type Session,
   type StartInput,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
   presentRunFailure,
   type ProcessServices,
   AgentError,
-} from '@texra-ai/harness/host';
-import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/host';
+import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/worldline/plugins';
 import type { CliRunResult } from '@cli/schemas/cliOutput';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 
@@ -55,7 +55,7 @@ import {
   type CliContext,
   type CliInvocation,
 } from '../platform/cliContext';
-import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
+import type { LocalSession, SessionOpenError } from '@texra-ai/worldline';
 
 /** What a headless run starts: a host's whole configuration (the
  *  `StartInput` case a host launches with), under the id the CLI minted. */

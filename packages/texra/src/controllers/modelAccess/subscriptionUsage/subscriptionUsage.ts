@@ -7,8 +7,8 @@
  * case to write.
  */
 import { Effect, Record as EffectRecord } from 'effect';
-import { PlanQuotas, type PlanQuota } from '@texra-ai/harness/host';
-import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
+import { PlanQuotas, type PlanQuota } from '@texra-ai/worldline/host';
+import type { Secrets, SettingsStores } from '@texra-ai/worldline/plugins';
 import type { HttpClient } from 'effect/http';
 
 import { providerDisplayName } from '@texra-ai/llm';

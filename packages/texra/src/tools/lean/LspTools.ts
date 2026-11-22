@@ -1,6 +1,9 @@
 import { Cause, Effect, Result, Schema, Scope, Struct } from 'effect';
 
-import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
+import {
+  ToolContext,
+  type ToolContextShape,
+} from '@texra-ai/worldline/plugins';
 import {
   resolveToolPath,
   errorResult,
@@ -9,8 +12,8 @@ import {
   ToolError,
   defineTool,
   type ToolResult,
-} from '@texra-ai/harness/plugins';
-import { toErrorMessage, formatResultCount } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { toErrorMessage, formatResultCount } from '@texra-ai/worldline/schemas';
 import {
   countBySeverity,
   formatCounts,

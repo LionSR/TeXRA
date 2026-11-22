@@ -7,7 +7,7 @@ import { describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import { makeRetryGate, RouteAnswered } from '@agent/runtime/ModelRetryGate';
-import type { ModelRetryGate, RoutePolicy } from '@texra-ai/harness/plugins';
+import type { ModelRetryGate, RoutePolicy } from '@texra-ai/worldline/plugins';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
 /** A failure llm scoped to the route, which cools it. */

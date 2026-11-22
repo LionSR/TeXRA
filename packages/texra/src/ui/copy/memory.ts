@@ -5,7 +5,7 @@
 import {
   formatResultCount,
   type MemoryViewItem,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { formatBytes } from '@ui/copy/format';
 import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 

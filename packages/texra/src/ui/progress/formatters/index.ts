@@ -3,7 +3,7 @@
  * kind.
  *
  * Membership (which rows exist at all) is decided once by the transcript
- * row builders (`@texra-ai/harness/transcript`). This map is exhaustive over
+ * row builders (`@texra-ai/worldline/transcript`). This map is exhaustive over
  * `TranscriptRowKind`, so a new row kind is a compile error here rather than a
  * row that silently never paints.
  */
@@ -12,7 +12,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared transcript model
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -32,7 +32,7 @@ import { formatWebSearchTemplate } from './logFormatters/toolFormatters/webForma
 import type {
   TranscriptRow,
   TranscriptRowKind,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import type { FormatResult } from './baseLogFormatter';
 
 /** Each row kind's row: indexing it by a kind parameter keeps the pairing. */

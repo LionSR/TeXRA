@@ -6,7 +6,7 @@
  * its Input/Context groups in the launcher's file section instead.
  */
 
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename } from '@texra-ai/worldline/schemas';
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';

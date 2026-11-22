@@ -10,7 +10,7 @@ import { expect } from 'vitest';
 import {
   RunIdSchema,
   fileLocationDisplayPath,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spiedTrace } from '@test/support/spiedTrace';

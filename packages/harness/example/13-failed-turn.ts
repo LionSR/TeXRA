@@ -15,8 +15,8 @@
  *    `error` (`kind: 'model'`, a `provider-rejection` with its status).
  */
 import { Effect, Layer, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 

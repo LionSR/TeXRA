@@ -111,7 +111,7 @@ type ProposalRequestError =
  *  (`ScriptScope.shared`): the `ask` {@link decideDelegation} takes. */
 export const AgentRequest = Context.Service<
   Deferred.Deferred<RequestDecision, ProposalRequestError>
->('@texra-ai/harness/agent/AgentRequest');
+>('@texra-ai/worldline/agent/AgentRequest');
 
 /** How a child records an approval the run's delegated-work grant gave. */
 const GRANTED_CHILD = {

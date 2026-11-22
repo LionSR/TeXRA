@@ -18,7 +18,7 @@ import {
   ToolContext,
   ToolError,
   type ToolResult,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   AgentConfigSchema,
   ensureError,
@@ -28,7 +28,7 @@ import {
   type RunId,
   type TokenUsageStats,
   type ToolUseLog,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import type { ClaimThread } from './agentCliSessionStores';
 

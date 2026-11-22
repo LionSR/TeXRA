@@ -51,7 +51,7 @@ import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 export class GlobalValues extends Context.Service<
   GlobalValues,
   CurrentValues
->()('@texra-ai/harness/GlobalValues') {}
+>()('@texra-ai/worldline/GlobalValues') {}
 
 /** The settings stores a host opens for each project it shows. */
 export class StateStores extends Context.Service<
@@ -69,7 +69,7 @@ export class StateStores extends Context.Service<
       workspaceRoot: string | undefined,
     ) => Effect.Effect<AppStateStore>;
   }
->()('@texra-ai/harness/StateStores') {}
+>()('@texra-ai/worldline/StateStores') {}
 
 /**
  * The platform- and shared-owned services every process serves, merged once

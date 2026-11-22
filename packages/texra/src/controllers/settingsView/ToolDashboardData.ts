@@ -15,8 +15,8 @@ import {
   type Plugin,
   ToolRegistry,
   ToolCatalog,
-} from '@texra-ai/harness/plugins';
-import type { ExternalToolCheckResult } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/plugins';
+import type { ExternalToolCheckResult } from '@texra-ai/worldline/host';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type {
   ToolCommandKind,

@@ -23,8 +23,8 @@ import {
   type ITool,
   type ConfigProvider,
   ToolCatalog,
-} from '@texra-ai/harness/plugins';
-import { ToolAvailability } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/plugins';
+import { ToolAvailability } from '@texra-ai/worldline/host';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';

@@ -30,16 +30,16 @@
  * read the goal's result.
  */
 import { Effect, Layer, Schema, Stream } from 'effect';
-import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
+import { Sessions, type LocalSession } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { definePlugin, defineTool } from '@texra-ai/worldline/plugins';
 import {
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,
   GoalResultSchema,
   type SessionView,
   type PendingRequest,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   EXAMPLE_CLIENT,

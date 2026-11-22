@@ -9,8 +9,8 @@ import {
   RunIdSchema,
   AgentConfigSchema,
   type RunId,
-} from '@texra-ai/harness/schemas';
-import { ToolRegistry } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { ToolRegistry } from '@texra-ai/worldline/plugins';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';

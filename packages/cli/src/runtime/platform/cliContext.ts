@@ -13,14 +13,17 @@ import {
   type LogLevel,
 } from 'effect';
 
-import { DatabaseOpenFailed, type SkillSourceOptions } from '@texra-ai/harness';
-import { Settings, type ConfigProvider } from '@texra-ai/harness/plugins';
+import {
+  DatabaseOpenFailed,
+  type SkillSourceOptions,
+} from '@texra-ai/worldline';
+import { Settings, type ConfigProvider } from '@texra-ai/worldline/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
   meansAbsent,
   approvalPolicyEnv,
   canonicalizeWorkspaceRoot,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   APPROVAL_POLICY_SETTING,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
@@ -29,7 +32,7 @@ import {
   type ApprovalPolicy,
   type LaunchApproval,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { checkResourcesPath } from '@texra/controllers/texraProcessLayer';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {

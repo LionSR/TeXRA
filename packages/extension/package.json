@@ -449,7 +449,7 @@
   "devDependencies": {
     "@awesome.me/webawesome": "^3.14.0",
     "@lit-labs/signals": "^0.3.0",
-    "@texra-ai/harness": "workspace:*",
+    "@texra-ai/worldline": "workspace:*",
     "@texra-ai/llm": "workspace:*",
     "@types/vscode": "^1.125.0",
     "@vscode/vsce": "^4.1.1",

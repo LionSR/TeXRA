@@ -1,7 +1,7 @@
 import {
   formatCompactTokenCount,
   type ContextStateData,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { RunTone } from '@ui/copy/runStatus';
 
 /**

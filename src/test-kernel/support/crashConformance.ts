@@ -87,7 +87,7 @@ import {
 } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import {
   rootRun,

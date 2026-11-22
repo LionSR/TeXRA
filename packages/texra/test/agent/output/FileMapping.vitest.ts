@@ -4,7 +4,7 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 import { replaceInputCommands } from '@texra/agent/output/fileMapping';
 import { noopTrace } from '@test/support/noopTrace';
 

@@ -4,8 +4,8 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
 // Local imports
-import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
-import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import { generateRunId, type RunId } from '@texra-ai/worldline/schemas';
+import { requestToolEditApproval } from '@texra-ai/worldline/plugins';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import {
   attachInteractions,

@@ -8,7 +8,7 @@
 // Local imports
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 
 // Local file imports
 import {

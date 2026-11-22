@@ -13,7 +13,7 @@ import { Effect, Exit, Ref, SubscriptionRef } from 'effect';
 import { RpcClientError } from 'effect/rpc';
 import { beforeEach, expect } from 'vitest';
 
-import { sessionFsLayer } from '@texra-ai/harness/host';
+import { sessionFsLayer } from '@texra-ai/worldline/host';
 import {
   linkOver,
   SERVICE_OFFLINE,

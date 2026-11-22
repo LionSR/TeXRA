@@ -11,12 +11,12 @@ import {
   serializeFilteredConfig,
   type AgentRunListingEntry,
   type RunResult,
-} from '@texra-ai/harness/schemas';
-import type { Session } from '@texra-ai/harness';
+} from '@texra-ai/worldline/schemas';
+import type { Session } from '@texra-ai/worldline';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
@@ -30,7 +30,7 @@ import {
   createConversationTranscript,
   formatConversation,
 } from './history/conversationFormat';
-import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunView, AgentConfig } from '@texra-ai/worldline/schemas';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */

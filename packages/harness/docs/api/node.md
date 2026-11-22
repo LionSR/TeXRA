@@ -1,9 +1,9 @@
-# `@texra-ai/harness/node`
+# `@texra-ai/worldline/node`
 
 <!-- Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. -->
 
 Node.js platform implementation and host building blocks for
-`@texra-ai/harness`.
+`@texra-ai/worldline`.
 
 > **Guide:** Read [Philosophy & Architecture](/api/) for a minimal Node.js
 > embedding example using `nodePlatform` and `Sessions.layer`.
@@ -34,7 +34,7 @@ The settings catalog's namespace, as the process serves it.
 
 ```ts
 class AppNamespace extends Context.Service<AppNamespace, string>()(
-  '@texra-ai/harness/AppNamespace',
+  '@texra-ai/worldline/AppNamespace',
 )
 ```
 
@@ -328,7 +328,7 @@ class GlobalDatabase extends Context.Service<
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
   }
->()('@texra-ai/harness/session/GlobalDatabase')
+>()('@texra-ai/worldline/session/GlobalDatabase')
 ```
 
 ## homeDirectory

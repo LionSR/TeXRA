@@ -1,7 +1,7 @@
 // Shared scaffolding for y/n approval modals — bordered frame, colored
 // title, padded body slot, key handling, and KeyHints footer.
 
-import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
+import { FACT_SEPARATOR } from '@texra-ai/worldline/schemas';
 import { createContext, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 

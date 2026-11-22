@@ -1,6 +1,6 @@
 import { Effect, FileSystem } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
 
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;

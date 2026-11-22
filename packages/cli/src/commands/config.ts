@@ -1,4 +1,4 @@
-import { Settings } from '@texra-ai/harness/plugins';
+import { Settings } from '@texra-ai/worldline/plugins';
 import { Effect } from 'effect';
 import { Command } from 'effect/cli';
 

@@ -1,7 +1,7 @@
 import { layer } from '@effect/vitest';
 import { Effect, Context, Schema } from 'effect';
 import { expect } from 'vitest';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';

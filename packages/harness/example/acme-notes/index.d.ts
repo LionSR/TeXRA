@@ -1,5 +1,5 @@
 import type { Schema } from 'effect';
-import type { Plugin } from '@texra-ai/harness/plugins';
+import type { Plugin } from '@texra-ai/worldline/plugins';
 
 export declare const PLUGIN_ID: 'acme-notes';
 /** The value of a `note` fact, at version 1. */

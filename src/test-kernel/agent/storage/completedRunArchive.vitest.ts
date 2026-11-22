@@ -10,7 +10,7 @@ import {
   AgentConfigSchema,
   MESSAGE_TYPES,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog } from '@shared/session/runHistory';

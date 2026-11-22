@@ -28,17 +28,17 @@ import type { WorkspaceRoots } from './workspaceRoots';
 export class SessionRoots extends Context.Service<
   SessionRoots,
   WorkspaceRoots
->()('@texra-ai/harness/session/SessionRoots') {}
+>()('@texra-ai/worldline/session/SessionRoots') {}
 
 /** The workspace folder the session works on. */
 export class WorkspaceFs extends Context.Service<
   WorkspaceFs,
   RootedFileSystem
->()('@texra-ai/harness/platform/WorkspaceFs') {}
+>()('@texra-ai/worldline/platform/WorkspaceFs') {}
 
 /** The session's own storage root (under the process's storage directory). */
 export class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
-  '@texra-ai/harness/platform/StorageFs',
+  '@texra-ai/worldline/platform/StorageFs',
 ) {}
 
 /**
@@ -50,7 +50,7 @@ export class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
 export class GlobalStorageFs extends Context.Service<
   GlobalStorageFs,
   RootedFileSystem
->()('@texra-ai/harness/platform/GlobalStorageFs') {}
+>()('@texra-ai/worldline/platform/GlobalStorageFs') {}
 
 /** A rooted view built from the `FileSystem` and `Path` the process provides. */
 function rootedLayer<I>(

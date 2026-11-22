@@ -6,7 +6,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';

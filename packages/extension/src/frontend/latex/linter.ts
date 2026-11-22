@@ -3,8 +3,8 @@ import { Effect, Fiber } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { hasExtension } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { hasExtension } from '@texra-ai/worldline/schemas';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';

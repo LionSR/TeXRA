@@ -4,7 +4,7 @@ import { FetchHttpClient } from 'effect/http';
 import { afterEach, expect, vi } from 'vitest';
 
 import { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
-import { Secrets } from '@texra-ai/harness/plugins';
+import { Secrets } from '@texra-ai/worldline/plugins';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type { HttpClient } from 'effect/http';

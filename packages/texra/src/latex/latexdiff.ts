@@ -14,17 +14,17 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
-import { redactSecrets } from '@texra-ai/harness/host';
-import { Settings } from '@texra-ai/harness/plugins';
-import { readNormalizedFile } from '@texra-ai/harness/node';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import { redactSecrets } from '@texra-ai/worldline/host';
+import { Settings } from '@texra-ai/worldline/plugins';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 import { DISPLAY_MATH_ENVIRONMENTS } from '@replacement/constants';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { repositoryRoot } from '@texra-ai/harness/node';
+import { repositoryRoot } from '@texra-ai/worldline/node';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports

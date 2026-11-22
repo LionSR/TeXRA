@@ -7,14 +7,14 @@
  * tool on turn 1 and summarizes the tool output on turn 2.
  */
 import { Effect, Layer, Schema } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import {
   definePlugin,
   executed,
   nullishWithDefault,
   defineTool,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 

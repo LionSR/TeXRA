@@ -1,7 +1,7 @@
 import { Effect, Option, absurd } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
 
-import { type RunId } from '@texra-ai/harness/schemas';
+import { type RunId } from '@texra-ai/worldline/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { traceHtml } from '@texra/agent/export/standaloneTraceHtml';
 

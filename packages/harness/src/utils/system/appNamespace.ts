@@ -8,7 +8,7 @@ import { Context } from 'effect';
 
 /** The settings catalog's namespace, as the process serves it. */
 export class AppNamespace extends Context.Service<AppNamespace, string>()(
-  '@texra-ai/harness/AppNamespace',
+  '@texra-ai/worldline/AppNamespace',
 ) {}
 
 /** The database file of a storage root: `<namespace>.db`. */
