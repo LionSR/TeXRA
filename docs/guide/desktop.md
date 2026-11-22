@@ -71,6 +71,10 @@ every host reads, so it carries over too. Provider API keys and sign-ins are
 shared: every TeXRA app keeps them in one folder, `~/.texra/secrets/`,
 readable by your user alone.
 
+### Dockable workspace and multi-project sidebar
+
+The desktop app arranges **Agent**, **Files**, editors, terminals, and **Browser** in movable, splittable tab groups whose layout persists across restarts and project switches. Each open project appears in the left sidebar with a status dot and its tasks underneath; a task awaiting your input in another project raises a notification. Use **Switch Project** from the command palette (`Cmd/Ctrl+K`) or **File → Open Recent** to move between projects.
+
 ### Tasks run in the background service
 
 On macOS and Linux the desktop app runs a project's tasks in the background

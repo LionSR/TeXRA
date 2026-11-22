@@ -25,7 +25,7 @@ Open the merge action from the "LaTeXDiffs" sheet in the main TeXRA interface (h
 
 1.  **Select the base file**: Choose the document to merge changes _into_ from the **Base** dropdown, the same one Diff, Compare, and Accept use. If either file is missing, TeXRA says "Choose a base file and an edited file first."
 2.  **Select the edited file**: Choose the document containing the suggested changes from the **Edited** dropdown.
-3.  **Select Merge**: Select the **Merge** button (<wa-icon library="texra" name="merge"></wa-icon>) under the **Edited** dropdown. The merge runs on TeXRA's **helper model**, set from **Helper model** on Settings → Models → Models. Models with strong reasoning (such as Claude Opus 5, GPT-6 / GPT-5.6, or Gemini 3.1 Pro) are recommended for complex merges.
+3.  **Select Merge**: Select the **Merge** button (<wa-icon library="texra" name="merge"></wa-icon>) under the **Edited** dropdown. The merge runs on TeXRA's **helper model**, set from **Helper model** on Settings → Models → Models. Models with strong reasoning (such as Claude Opus 5.5, GPT-6.1 Sol, or Gemini 4 Argon) are recommended for complex merges.
 
 There is a second entry point. In the [Tasks view](./progress-board.md), each generated output file has a **Merge edits** action ("Merge edits into the workspace file") that runs the same `merge` program against the corresponding workspace file, with no dropdowns to fill in.
 

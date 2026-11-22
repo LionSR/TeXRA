@@ -11,7 +11,7 @@ A non-exhaustive list of public projects and papers that used TeXRA. To add your
   quantum information and channels, including states, entanglement, channel
   representations, and entropy.
 - [**MIPStarRE**](https://github.com/LionSR/MIPStarRE): Lean formalization of
-  mathematics around $\mathrm{MIP}^* = \mathrm{RE}$.
+  mathematics around MIP<sup>*</sup> = RE.
 
 ## Papers
 

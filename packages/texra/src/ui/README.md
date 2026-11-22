@@ -52,7 +52,7 @@ two halves:
    with Copy and collapse controls at the trailing edge. User, assistant and
    error messages share this geometry; the full date remains in the time tooltip.
 6. **Canvas widgets:** xterm.js and Monaco draw on a canvas and cannot read a
-   CSS token. `wa/cssTokenColor.ts` is the one reading of a token as the colour
+   CSS token. `wa/cssTokenColor.ts` is the one reading of a token as the color
    the host paints; `wa/xtermTheme.ts` and the desktop's
    `packages/desktop/src/renderer/monacoTheme.ts` build their themes from it.
    The desktop's `monacoOptions.ts` and `monacoStyles.ts` beside it supply

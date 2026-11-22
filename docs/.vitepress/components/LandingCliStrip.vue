@@ -9,7 +9,7 @@
 const lines = [
   { cmd: 'npm install ', flag: '-g', rest: ' @texra-ai/cli' },
   { cmd: 'texra auth chatgpt login', flag: '', rest: '' },
-  { cmd: 'texra run polish ', flag: '--input', rest: ' paper.tex' },
+  { cmd: 'texra run edit ', flag: '--input', rest: ' paper.tex' },
 ];
 </script>
 

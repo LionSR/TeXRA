@@ -9,7 +9,7 @@ to it.
 Put the rules every conversation in a project should follow (notation,
 macros, journal style, how to build the paper, files never to touch) in an
 `AGENTS.md` file at the workspace root. TeXRA adds it to the assistant's
-instructions in every conversation. Read [Project instructions](./configuration.md#project-instructions-agents-md).
+instructions in every conversation. Read [Project instructions](./configuration.md#project-instructions-agentsmd).
 
 ## Memory
 
@@ -38,15 +38,18 @@ and `/skills` applies one to your next request. Read
 ## Install a plugin
 
 TeXRA installs plugins published for Claude Code and Codex. A plugin can
-bring skills, commands, MCP servers, and programs for TeXRA:
+bring skills, commands, MCP servers, programs (`programs/<name>.js`), and
+native TeXRA extensions (`harness.mjs`):
 
 ```bash
 texra plugin install github.com/<owner>/<repo>
 texra plugin enable <name>
 ```
 
-An installed plugin stays off until you enable it and trust what it carries.
-In the VS Code extension and the desktop app, manage installed plugins under
+An installed plugin stays off until you review and trust what it carries (a
+native `harness.mjs` entry loads from a snapshot of the trusted files, and any
+edit requires re-trusting). In the terminal chat you can also use `/plugins add`,
+and in the VS Code extension and desktop app manage installed plugins under
 **Settings → Plugins**. Read [Plugins in the CLI guide](./texra-cli.md#plugins).
 
 ## Write your own program

@@ -20,7 +20,7 @@ Email **contact@texra.ai** with `SECURITY` in the subject line, and include:
 - steps to reproduce, or a proof of concept
 - the impact you believe it has
 
-You will get an acknowledgement within 5 business days. TeXRA is a small team;
+You will get an acknowledgment within 5 business days. TeXRA is a small team;
 please allow time for a fix before disclosing publicly. We will tell you when a
 fix ships, and will credit you in the changelog unless you would rather stay
 anonymous.
@@ -47,7 +47,7 @@ anonymous.
 
 - Findings that require an already-compromised machine, or an attacker who
   already holds the user's provider API keys.
-- The behaviour of third-party model providers. Report those to the provider.
+- The behavior of third-party model providers. Report those to the provider.
 - An agent producing wrong, low-quality, or unexpected content. File that as a
   bug.
 - Missing hardening headers on the marketing site with no demonstrated impact.
@@ -67,9 +67,10 @@ subscription credentials. Where a key lives depends on how you supplied it:
   (`texra serve`) use a key saved in any of them. Anyone who can read files as
   your user can read them, so protect your account and backups accordingly.
 - **Supplied through the environment** — an exported variable, or a workspace
-  `.env` that the extension loads at activation. These are read straight from
-  the environment at request time and never enter any secret store. A `.env` is
-  plain text in your workspace, so keep it out of version control.
+  `.env` file that TeXRA reads when a task starts (in the extension, desktop
+  app, and CLI). These are read straight from the environment or `.env` file at
+  request time and never enter `~/.texra/secrets/`. A `.env` file is plain text
+  in your workspace, so keep it out of version control.
 
 Either way the key is sent only to the provider.
 
