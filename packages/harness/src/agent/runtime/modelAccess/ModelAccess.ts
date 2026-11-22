@@ -52,7 +52,7 @@ export interface BoundModel extends Binding {
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
-  /** Bound for a text-only persona, with the model's whole output budget; a
+  /** Bound for a text-only run, with the model's whole output budget; a
    *  rebinding keeps it. */
   readonly textOnly: boolean;
   /** The ChatGPT plan the subscription's token names; display-only. */

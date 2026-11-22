@@ -61,7 +61,7 @@ const lifecycleFixture = (agent = 'test-agent') =>
     const runId = generateRunId();
     const ctx = testLaunch(runId, {
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent,
+        label: agent,
         model: 'test-model',
       }),
     });

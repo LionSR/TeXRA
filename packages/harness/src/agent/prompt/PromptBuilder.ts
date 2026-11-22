@@ -119,15 +119,15 @@ export function contextUpdate(
 }
 
 /**
- * The system text a conversation opens with: its persona's prompt rendered,
- * then the project's `AGENTS.md` and the attached memories, and the suffix of
- * tool-use instructions and workspace facts, which a text-only persona (one
- * a program defines with no tools) goes without. What each step's plugins add is
+ * The system text a conversation opens with: its run's own system text
+ * rendered, then the project's `AGENTS.md` and the attached memories, and the
+ * suffix of tool-use instructions and workspace facts, which a text-only run
+ * (one that declares no tools) goes without. What each step's plugins add is
  * appended per request (`stepInstructions`).
  */
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
   function* (
-    personaPrompt: string,
+    system: string,
     { inputs, attachedMemories }: TemplateOpening,
     options: {
       /** The run's session roots: the workspace whose `AGENTS.md` and
@@ -135,7 +135,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
        *  stands in when the workspace has none, and the setting slots the
        *  `<workspace_info>` git reads take. */
       roots: WorkspaceRoots;
-      /** A persona that declares no tools: no tool-use suffix. */
+      /** A run that declares no tools: no tool-use suffix. */
       textOnly: boolean;
       /** The tools the run's first step offers, by name: the suffix names
        *  only those. */
@@ -146,7 +146,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const rendered = yield* renderPrompt(personaPrompt, inputs);
+    const rendered = yield* renderPrompt(system, inputs);
     const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(

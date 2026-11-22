@@ -12,13 +12,13 @@ TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moon
 
 <p class="hero-caption">The model picker: one entry per model, named by its model reference, with a <code>T</code> badge on models that think, and a hover popover showing context window and per-1M token pricing.</p>
 
-**Model references.** A model is named `provider/id`, where `id` is the provider's own API model ID: `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`. Wherever you type a model (an agent's `model`, `--model`, or `.texra/config.json`), you can add:
+**Model references.** A model is named `provider/id`, where `id` is the provider's own API model ID: `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`. Wherever you type a model (`--model` or `.texra/config.json`), you can add:
 
 - `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`); a few models, such as Muse Spark, also take `@minimal`
 - `@none` to turn thinking off, on models that allow it (for example `deepseek/deepseek-v4-pro@none`)
 - `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-6.1-sol+pro`)
 
-Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. The CLI's `--model` and `texra models show` also take a model's bare API ID or label when it names exactly one model (`claude-opus-5-5`, `Opus 5.5`, or `opus55`); agent files and `.texra/config.json` take the reference.
+Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. The CLI's `--model` and `texra models show` also take a model's bare API ID or label when it names exactly one model (`claude-opus-5-5`, `Opus 5.5`, or `opus55`); `.texra/config.json` takes the reference.
 
 ## Anthropic models
 
@@ -195,7 +195,7 @@ above what your plan allows fails and triggers compaction recovery.
 
 Choose which models appear in the model picker from **Settings → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in TeXRA's user-wide state, not in a settings file).
 
-In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
+In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`.
 
 For headless CLI runs, list what is available with `texra models list` (or `texra models show <model>` for details), then pick a default for your project by setting the `texra.model` key in `.texra/config.json`, or override per run with `--model <model>` (an `@effort` or `+pro` suffix works here too):
 
@@ -205,5 +205,5 @@ For headless CLI runs, list what is available with `texra models list` (or `texr
 
 ## Next steps
 
-- [Built-in agents](./built-in-agents.md): see which agents work with which models
+- [The assistant and programs](./programs.md): what the assistant and its programs do
 - [Configuration](./configuration.md): model-related settings

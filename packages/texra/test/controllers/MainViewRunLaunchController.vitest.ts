@@ -1,19 +1,9 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { AppState, AgentDirectories } from '@texra-ai/harness/plugins';
-import { AgentCatalog } from '@texra-ai/harness/host';
-import {
-  nodePlatformLayer,
-  unusedGlobalStorageFs,
-} from '@test/support/fsTestUtils';
-import { noHttpClientLayer } from '@test/support/fetchTestUtils';
-import { FakeStateStore } from '@test/support/FakePlatform';
-import { BUNDLED_AGENTS } from '@test/support/storeFaults';
-import { storePluginsLayer } from '@test/support/texraApp';
 import { FakeHost } from '@test/support/testKernel';
 import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -22,45 +12,8 @@ import {
   prepareSurfaceLaunch,
 } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 
-/**
- * A program over the process's global storage view and the bundled agents:
- * a launch's agent decides its mode, so the catalog is the one a real host
- * scans. The global storage view only satisfies the requirement the catalog
- * readers name; the block's fake host answers `custom()` itself.
- */
-function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, AgentCatalog>,
-): Effect.Effect<A, E, FakeHost> {
-  return Effect.provide(
-    program,
-    AgentCatalog.layer.pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          unusedGlobalStorageFs(),
-          storePluginsLayer,
-          nodePlatformLayer,
-          noHttpClientLayer,
-          Layer.unwrap(
-            FakeHost.useSync((host) =>
-              Layer.succeed(AgentDirectories)({
-                ...host.platform.agentDirectories,
-                builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-              }),
-            ),
-          ),
-          AppState.layer(new FakeStateStore()),
-        ),
-      ),
-    ),
-  );
-}
-
-/** The requesting session's slots and the storage root its pasted images
- *  live under. */
-const ROOTS = {
-  repoState: new FakeStateStore(),
-  storage: '/papers/first/.texra',
-};
+/** The storage root the requesting session's pasted images live under. */
+const ROOTS = { storage: '/papers/first/.texra' };
 
 function launchRequest(
   patch: Record<string, unknown> = {},
@@ -73,24 +26,19 @@ function launchRequest(
 }
 
 layer(FakeHost.layer())('main-view run launch controller', (it) => {
-  it.effect(
-    'fills Run again… with the agent key and model a form launch saved',
-    () =>
-      Effect.gen(function* () {
-        // Failure modes: a saved key is qualified twice (`builtIn:builtIn:`),
-        // or the model loses the effort the run ran at.
-        const selections = {
-          agent: 'builtIn:correct',
-          model: 'openai/gpt-5.6-terra@high',
-        };
-        const config = yield* onGlobalStorage(
-          prepareSurfaceLaunch(launchRequest(selections), ROOTS),
-        );
+  it.effect('fills Run again… with the model a form launch saved', () =>
+    Effect.gen(function* () {
+      // Failure mode: the model loses the effort the run ran at.
+      const selections = { model: 'openai/gpt-5.6-terra@high' };
+      const config = yield* prepareSurfaceLaunch(
+        launchRequest(selections),
+        ROOTS,
+      );
 
-        expect(yield* launchFormOf(config)).toMatchObject({
-          ...selections,
-          instruction: 'Improve the draft.',
-        });
-      }),
+      expect(launchFormOf(config)).toMatchObject({
+        ...selections,
+        instruction: 'Improve the draft.',
+      });
+    }),
   );
 });

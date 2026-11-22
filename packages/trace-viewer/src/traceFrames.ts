@@ -10,7 +10,7 @@ import {
   listingTypeOf,
   referencedAggregates,
   replayInputs,
-  runIdentityDisplayName,
+  runIdentityName,
   type DisplayRow,
   type TraceDocument,
 } from '@texra-ai/harness/schemas';
@@ -41,7 +41,7 @@ export function traceDisplayName(trace: TraceDocument): string {
     (event): event is Extract<DisplayRow, { type: 'run.start' }> =>
       event.type === 'run.start',
   );
-  return start ? runIdentityDisplayName(start.identity) : trace.runId;
+  return start ? runIdentityName(start.identity) : trace.runId;
 }
 
 /**

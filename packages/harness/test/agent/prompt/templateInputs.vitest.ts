@@ -36,7 +36,7 @@ layer(
       Effect.gen(function* () {
         const { attachedMemories, attachedMemoryMisses } = yield* buildVars(
           Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: 'generic',
+            label: 'generic',
             model: 'test-model',
             memories: ['/memories/present.md', '/memories/missing.md'],
           }),

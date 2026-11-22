@@ -10,8 +10,7 @@ import type { ToolCard } from './toolCard';
  * `defineTool()`, never present in YAML configs) but acknowledged here for
  * type safety.
  *
- * Keeps unknown keys so future runtime fields do not break validation when
- * tools flow through an agent persona's `tools` (`PersonaSchema` in `agent.ts`).
+ * Keeps unknown keys so future runtime fields do not break validation.
  */
 export const ToolDefinitionSchema = Schema.StructWithRest(
   Schema.Struct({

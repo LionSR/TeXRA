@@ -62,6 +62,7 @@ import {
   presentInTranscript,
 } from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
+import { chatOf } from '@texra/shared/session/surface';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
@@ -239,13 +240,9 @@ export function createChatSessionController(
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
-  const adoptRunConfig = (
-    config: Pick<AgentConfig, 'agent' | 'agentSource' | 'model'>,
-    modelSource?: 'history',
-  ): void =>
+  const adoptRunConfig = (config: AgentConfig, modelSource?: 'history'): void =>
     patchSessionMeta({
-      agent: config.agent,
-      agentSource: config.agentSource ?? undefined,
+      chat: chatOf(config),
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
     });
@@ -387,8 +384,8 @@ export function createChatSessionController(
           Effect.tapError(() =>
             Effect.sync(() => appendLocalUserTranscript(shownInstruction)),
           ),
-          Effect.tap((config) => Effect.sync(() => adoptRunConfig(config))),
           Effect.flatMap(decodeLaunchConfig),
+          Effect.tap((config) => Effect.sync(() => adoptRunConfig(config))),
           Effect.tapError(showFailure),
         );
         const launch = Effect.gen(function* () {
@@ -672,8 +669,7 @@ export function createChatSessionController(
           reason: meta.modelSource,
         });
         return {
-          agent: meta.agent,
-          agentSource: meta.agentSource,
+          ...meta.chat,
           model: selection.model,
           instruction,
           ...(skills.length > 0 && { skills: [...skills] }),

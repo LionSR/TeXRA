@@ -49,14 +49,14 @@ const guideSidebar = [
     ],
   },
   {
-    text: 'Agent System',
+    text: 'Assistant and programs',
     items: [
-      { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
+      { text: 'The assistant and programs', link: '/guide/programs' },
       {
-        text: 'Programs',
+        text: 'How programs work',
         link: '/guide/agent-architecture.md',
       },
-      { text: 'Custom Agents', link: '/guide/custom-agents' },
+      { text: 'Tailoring TeXRA', link: '/guide/customizing' },
       {
         text: 'Multi-agent workflows',
         link: '/guide/multi-agent-workflows',
@@ -114,7 +114,7 @@ const baseConfig = {
   title: 'TeXRA',
   base,
   description:
-    'An AI theorist for advancing theoretical science. A team of specialist agents derives results, checks derivations in Wolfram, formalizes proofs in Lean 4, and helps you do good work, in VS Code and the terminal.',
+    'An AI theorist for advancing theoretical science. One assistant derives results, checks derivations in Wolfram, formalizes proofs in Lean 4, splits large jobs across helper agents and programs, and helps you do good work, in VS Code and the terminal.',
   head: [
     ['link', { rel: 'icon', href: `${base}favicon.svg` }],
     [
@@ -202,12 +202,12 @@ const baseConfig = {
       {
         text: 'Docs',
         link: '/guide/',
-        activeMatch: '/guide/(?!built-in-agents)',
+        activeMatch: '/guide/(?!programs)',
       },
       {
-        text: 'Agents',
-        link: '/guide/built-in-agents',
-        activeMatch: '/guide/built-in-agents',
+        text: 'Programs',
+        link: '/guide/programs',
+        activeMatch: '/guide/programs',
       },
       { text: 'Launch', link: '/launch' },
       { text: 'Work', link: '/work-using-texra' },

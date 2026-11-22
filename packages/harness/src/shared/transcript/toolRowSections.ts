@@ -352,7 +352,9 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
 
   const program = ctx.toolName === PROGRAM_TOOL_NAME;
-  const agent = asString(program ? input.name : input.agentName);
+  const agent = asString(
+    program ? input.name : (input.label ?? input.agentName),
+  );
   const model = asString(input.model);
   if (agent || model) {
     sections.push({

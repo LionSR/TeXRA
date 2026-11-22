@@ -83,7 +83,6 @@ import { faRotateRight } from '@fortawesome/free-solid-svg-icons/faRotateRight';
 import { faScrewdriverWrench } from '@fortawesome/free-solid-svg-icons/faScrewdriverWrench';
 import { faServer } from '@fortawesome/free-solid-svg-icons/faServer';
 import { faShield } from '@fortawesome/free-solid-svg-icons/faShield';
-import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
 import { faTerminal } from '@fortawesome/free-solid-svg-icons/faTerminal';
 import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
 import { faThumbtackSlash } from '@fortawesome/free-solid-svg-icons/faThumbtackSlash';
@@ -210,7 +209,6 @@ const icons = {
   'screwdriver-wrench': faScrewdriverWrench,
   server: faServer,
   shield: faShield,
-  star: faStar,
   terminal: faTerminal,
   thumbtack: faThumbtack,
   'thumbtack-slash': faThumbtackSlash,

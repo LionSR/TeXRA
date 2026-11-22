@@ -17,7 +17,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
-  AGENT_SOURCE,
   backgroundScriptOf,
   factName,
   programOf,
@@ -198,8 +197,7 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
   const program = yield* registeredProgram(name, roots);
   const named = files.outputFiles.filter(Boolean);
   return {
-    agent: name,
-    agentSource: { kind: AGENT_SOURCE.INLINE, persona: {} },
+    label: name,
     outputFiles: named.some((file) => !files.inputFiles.includes(file))
       ? named
       : [...(program.outputs ?? [])],

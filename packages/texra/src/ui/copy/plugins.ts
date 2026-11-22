@@ -8,7 +8,6 @@
  */
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
-  formatClippedList,
   formatResultCount,
   joinFacts,
   shortPluginId,
@@ -185,12 +184,4 @@ export function pluginRowProblem(row: PluginRow): string | null {
     case 'mcp':
       return null;
   }
-}
-
-/** "Used by: assistant, referee, writer +3 more", or null when no agent's
- *  tool list reaches the row. */
-export function pluginRowUsedBy(row: PluginRow): string | null {
-  const { usedBy } = row;
-  if (usedBy.length === 0) return null;
-  return `Used by: ${formatClippedList(usedBy, 3)}`;
 }

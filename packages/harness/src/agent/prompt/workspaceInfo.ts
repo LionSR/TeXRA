@@ -7,7 +7,6 @@ import { DateTime, Effect } from 'effect';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
-import { listExternalRoots } from '@utils/files/externalRoots';
 import {
   currentBranch,
   isGitRepository,
@@ -16,15 +15,6 @@ import {
 import { envVar } from '@utils/system/envFlags';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { runsInWsl } from '@utils/system/wslDetect';
-
-/** The tools the external directories are listed for, as the list names them. */
-const EXTERNAL_ROOT_TOOLS = [
-  'read_file',
-  'write_file',
-  'grep',
-  'glob',
-  'edit_file',
-] as const;
 
 interface GitInfo {
   branch: string | null;
@@ -125,24 +115,6 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     lines.push(
       'Git: this workspace is not a git work tree, or git could not be checked; confirm a repository exists before running git history or status checks.',
     );
-  }
-
-  const externalRoots = EXTERNAL_ROOT_TOOLS.some((name) =>
-    offered.includes(name),
-  )
-    ? listExternalRoots()
-    : [];
-  if (externalRoots.length > 0) {
-    lines.push('');
-    lines.push(
-      `Accessible external directories (absolute paths; use ${EXTERNAL_ROOT_TOOLS.join(', ')}):`,
-    );
-    for (const root of externalRoots) {
-      const rw = root.writable ? 'writable' : 'read-only';
-      lines.push(
-        `  ${escapeTextStrict(root.absolutePath)}: ${escapeTextStrict(root.label)} (${rw})`,
-      );
-    }
   }
 
   return `\n<workspace_info>\n${lines.join('\n')}\n</workspace_info>`;

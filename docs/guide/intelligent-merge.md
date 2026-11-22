@@ -45,4 +45,4 @@ The `merge` program writes the combined document to run storage under the base f
 ## Next steps
 
 - [LaTeX Diff](./latex-diff.md): Learn how to use `latexdiff` to compare the merged file with your original.
-- [Built-in agents](./built-in-agents.md): Review the agents whose outputs you might want to merge.
+- [The assistant and programs](./programs.md): the programs whose outputs you might want to merge.

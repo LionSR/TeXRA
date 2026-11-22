@@ -119,31 +119,6 @@ test('approval menu shows the current policy and keeps selection marks inside it
     });
     await page.keyboard.press('Escape');
   }
-  // The same shared gutter applies to other checkbox menus at narrow widths.
-  await resizeWindow(launched, 760, 700);
-  await page.locator('#composer-agent').click();
-  const selectedAgent = page
-    .locator('session-composer')
-    .getByRole('menuitemcheckbox', { name: 'assistant', exact: true });
-  await expect(selectedAgent).toBeVisible();
-  await expect(selectedAgent).toHaveJSProperty('checked', true);
-  expect(
-    await selectedAgent.evaluate((item) => {
-      const check = item.shadowRoot?.querySelector('#check');
-      if (!check) throw new Error('The selection mark was not rendered.');
-      const row = item.getBoundingClientRect();
-      const mark = check.getBoundingClientRect();
-      return mark.left >= row.left && mark.right <= row.right;
-    }),
-  ).toBe(true);
-  await selectedAgent.click();
-  await page.locator('#composer-agent').click();
-  await expect(selectedAgent).toHaveJSProperty('checked', true);
-  await page.screenshot({
-    path: test.info().outputPath('agent-menu-narrow.png'),
-  });
-  await page.keyboard.press('Escape');
-  await resizeWindow(launched, 1280, 800);
 });
 
 /**
@@ -455,11 +430,7 @@ test('settings navigation works by keyboard and stays reachable in a small windo
   try {
     await expect(settings.getByRole('tabpanel')).toBeVisible();
     await settings.getByRole('tab', { name: 'Agents', exact: true }).click();
-    await expect(
-      settings
-        .locator('agent-selection-panel')
-        .getByRole('textbox', { name: 'Search agents', exact: true }),
-    ).toBeVisible();
+    await expect(settings.locator('skills-tab')).toBeVisible();
     await settings.getByRole('tab', { name: 'Plugins', exact: true }).click();
     await settings
       .getByRole('button', { name: 'Goal Mode', exact: true })

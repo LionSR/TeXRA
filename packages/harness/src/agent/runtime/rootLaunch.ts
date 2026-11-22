@@ -160,7 +160,7 @@ export const rootRun = Effect.fn('rootRun')(function* (
             entry: {
               kind: 'fresh',
               registration: {
-                identity: { kind: 'agent', agent: definition.config.agent },
+                identity: { kind: 'agent', agent: definition.config.label },
                 grants: limit === undefined ? grants : { ...grants, limit },
               },
             },

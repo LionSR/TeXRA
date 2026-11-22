@@ -77,7 +77,7 @@ export function viewWith(
     log.emit(run.id, 1, {
       type: 'run.config',
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'agent',
+        label: 'agent',
         model: 'test-model',
         instruction: 'go',
       }),

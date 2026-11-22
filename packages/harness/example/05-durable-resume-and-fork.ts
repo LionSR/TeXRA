@@ -28,12 +28,9 @@ const program = Effect.gen(function* () {
   const session = yield* sessions.open(platform.roots, { persistent: true });
 
   const run1 = yield* session.start({
-    agent: {
-      name: 'section_drafter',
-      description: 'Drafts paper sections.',
-      prompt: 'Draft the requested section concisely.',
-      tools: ['read_file'],
-    },
+    label: 'section_drafter',
+    system: 'Draft the requested section concisely.',
+    tools: ['read_file'],
     instruction: 'Draft section 1.',
     model: route.model,
     interactive: true,

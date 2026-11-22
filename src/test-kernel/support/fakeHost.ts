@@ -7,9 +7,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, Scope } from 'effect';
+import { Scope } from 'effect';
 
-import type { AgentDirectoriesPort } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -68,12 +67,6 @@ function seedRoot(
   }
 }
 
-const fakeAgentDirectories = (root: string): AgentDirectoriesPort => ({
-  custom: () => Effect.succeed(path.join(root, 'workspace/.texra/agents')),
-  customConfigured: () => Effect.succeed(false),
-  builtIn: () => Effect.succeed(path.join(root, 'workspace/resources/agents')),
-});
-
 /** A host's process ports over `root`, with `options.files` seeded into it. */
 function createFakePlatform(
   root: string,
@@ -83,7 +76,6 @@ function createFakePlatform(
   seedRoot(root, options.files ?? {});
   return {
     shutdownScope: Scope.makeUnsafe(),
-    agentDirectories: fakeAgentDirectories(root),
     ...overrides,
   };
 }

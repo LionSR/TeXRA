@@ -1,5 +1,5 @@
 <script setup>
-// Frameless search-results slice: what the `search` agent hands back after a
+// Frameless search-results slice: what a literature search hands back after a
 // literature query — the "table of relevant arXiv preprints with titles,
 // authors, and abstracts" the Find Papers user story describes but never shows.
 // Standalone (no MockupFrame) — just the focused results card, built on the

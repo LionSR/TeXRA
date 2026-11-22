@@ -33,11 +33,7 @@ const decisionAction = (decision: RequestDecision): RequestDecision => {
       return decision.edit?.kind === 'proposal'
         ? {
             action: 'approve',
-            edit: {
-              kind: 'proposal',
-              model: decision.edit.model,
-              agent: decision.edit.agent,
-            },
+            edit: { kind: 'proposal', model: decision.edit.model },
           }
         : { action: 'approve' };
     case 'submit':

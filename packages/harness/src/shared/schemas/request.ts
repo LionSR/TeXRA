@@ -41,7 +41,6 @@ import {
 const ProposalEditSchema = Schema.Struct({
   kind: Schema.Literal('proposal'),
   model: Schema.optional(Schema.String),
-  agent: Schema.optional(Schema.String),
   instruction: Schema.optional(Schema.String),
   inputFiles: Schema.optional(Schema.Array(Schema.String)),
   contextFiles: Schema.optional(Schema.Array(Schema.String)),

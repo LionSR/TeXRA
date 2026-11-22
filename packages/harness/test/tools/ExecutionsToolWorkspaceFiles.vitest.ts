@@ -87,7 +87,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 session,
                 runId,
                 Schema.decodeUnknownSync(AgentConfigSchema)({
-                  agent: 'chat',
+                  label: 'chat',
                   model: 'deepseek/deepseek-v4-flash',
                   workingDirectory: workspace,
                 }),

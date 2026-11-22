@@ -1,15 +1,15 @@
 /**
  * What the delegation tools can launch, and the text that tells the model.
  *
- * The agents a delegation tool can launch, the models a child can run and
- * whether worktrees are on all change while a run lives (agent visibility, a
- * new credential, the worktree setting). The step reads them
+ * The installed plugins' agents a delegation can name, the models a child
+ * can run and whether worktrees are on all change while a run lives (a
+ * plugin switched on, a new credential, the worktree setting). The step reads them
  * (`readDelegationTargets`) into the run's context; the system text renders
  * them once, at the step that freezes it (`delegationSection`), and a later
  * change reaches the model as lines of the context update
  * (`delegationUpdate`). The tool descriptions never change with them, so
  * neither does the cached prefix. A launch is checked against the live lists
- * when it is called (`requireAgent`,
+ * when it is called (`pluginAgent`,
  * `selectAvailableDelegationModel`), and a refusal names the current ones.
  */
 
@@ -18,11 +18,6 @@ import { Array as Arr, Effect } from 'effect';
 
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
-import {
-  AgentCatalog,
-  type WorkspaceAgentsStores,
-} from '@agent/index/agentCatalog';
-import { agentToolNames } from '@agent/index/agentEntry';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -30,11 +25,11 @@ import {
   type ModelVerdict,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
+import { scanPluginAgents } from './pluginAgents';
 import {
   AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
   ToolError,
-  type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
 
@@ -56,39 +51,26 @@ const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
  * Reading
  * ---------------------------------------------------------------------- */
 
-/** The agents a delegation may launch: the run's pinned delegation scope's,
- *  else the workspace's visible ones. */
-export const delegationAgents = Effect.fn('delegationAgents')(function* (
-  stores: WorkspaceAgentsStores,
-  scope: AgentDelegationScope | null | undefined,
-) {
-  const catalog = yield* AgentCatalog;
-  return scope
-    ? catalog.pinned(scope)
-    : yield* catalog.workspaceAgents(stores).visible();
-});
-
 /**
- * The targets the `agent` tool can launch, or `undefined` when the step's
- * tools hold none: the run's pinned delegation scope's agents, or the
- * workspace's visible ones.
+ * What the `agent` tool can launch, or `undefined` when the step's tools
+ * hold none: the agents the installed plugins that load now provide, the
+ * models a child can run, and whether worktrees are on.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
     { registry }: Pick<StepTools, 'registry'>,
     stores: SettingsStores,
-    scope: AgentDelegationScope | undefined,
   ) {
     if (registry.get(AGENT_TOOL_NAME) === undefined) return undefined;
-    const agents = (yield* delegationAgents(stores, scope)).map((entry) => ({
+    const agents = (yield* scanPluginAgents).entries.map((entry) => ({
       name: entry.name,
-      // One line per agent: a blank line in a (user-defined) description
-      // would otherwise read as the end of the list.
+      // One line per agent: a blank line in a description would otherwise
+      // read as the end of the list.
       description: (entry.description || 'No description').replaceAll(
         /\s*\n\s*/g,
         ' ',
       ),
-      tools: agentToolNames(entry),
+      tools: [...(entry.tools ?? [])],
     }));
     const models = yield* readModelOptions(stores).pipe(
       Effect.map(availableModelNames),
@@ -121,14 +103,13 @@ const worktreeLine = (enabled: boolean): string =>
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {
-  const head = 'Available agents:';
+  // An agent is written at the call (`system`, `tools`); the only ones
+  // started by name are those an installed plugin provides.
   const lines =
     targets.agents.length === 0
-      ? [
-          `${head} none are currently enabled in this workspace. Ask the user to enable the agents they want to delegate to before delegating.`,
-        ]
+      ? []
       : [
-          head,
+          'Agents of installed plugins (pass one as `agentName`):',
           ...targets.agents.map(
             ({ name, description, tools: agentTools }) =>
               `- ${name}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,

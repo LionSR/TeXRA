@@ -29,7 +29,6 @@ const SETUP_INVOKABLE_COMMANDS = [
   'texra.removeApiKey',
   'texra.showMemory',
   'texra.showModels',
-  'texra.showAgents',
   'texra.showTools',
   'texra.showGitSettings',
   'texra.showMainView',

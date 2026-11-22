@@ -37,8 +37,7 @@ function positionalSpecs(): Readonly<Record<string, string>> {
   for (const [commandPath, source] of Object.entries(
     POSITIONAL_COMPLETION_SOURCES,
   )) {
-    const tag = commandPath === 'models show' ? 'model' : 'agent';
-    specs[commandPath] = `1:${tag}:($(${source.shellFunction}))`;
+    specs[commandPath] = `1:model:($(${source.shellFunction}))`;
   }
   return specs;
 }

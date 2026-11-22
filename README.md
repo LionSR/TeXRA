@@ -11,8 +11,8 @@
 
 An open-source AI theorist for VS Code and the terminal. It attempts real
 theory work: deriving results, checking derivations, formalizing proofs in
-Lean 4. It takes on open problems in long autonomous runs, with a team of
-specialist agents. Apache 2.0, and you bring your own model keys or
+Lean 4. It takes on open problems in long autonomous runs, splitting large
+jobs across helper agents and programs. Apache 2.0, and you bring your own model keys or
 subscriptions.
 
 Development on `main` targets **TeXRA 1.0** (work in progress, not the
@@ -40,10 +40,7 @@ Set `<PROVIDER>_API_KEY` to use your own credentials, sign in with a
 ChatGPT or Grok subscription, or add the API key for a Kimi Code or
 GLM Coding Plan subscription.
 
-### Agents
-
-Every agent ships bundled. Each agent is a YAML file you can read, copy into a
-custom agent, and modify. There is no TeXRA account; model calls run directly
+Everything ships bundled. There is no TeXRA account; model calls run directly
 against your configured provider credentials.
 
 TeXRA is sustained by the community. If TeXRA helps your
@@ -54,37 +51,39 @@ for everyone.
 
 ## Run
 
-In VS Code: open a `.tex` file, click the TeXRA icon, pick
-**Orchestrator** or another agent, type a task. The Setup Wizard runs
-on first launch and checks your environment.
+In VS Code: open a `.tex` file, click the TeXRA icon, and say what you want.
+The Setup Wizard runs on first launch and checks your environment.
 
 In the terminal:
 
 ```sh
 texra chat                                  # interactive tool-use session
 texra run edit --input paper.tex            # one-shot document program
-texra run orchestrator --instruction "Check this derivation" --print  # a lead agent that delegates
+texra run review --input paper.tex --print  # audit the manuscript's mathematics
 ```
 
-Run history and agent settings are shared between both surfaces.
+Run history and settings are shared between both surfaces.
 
-## Agents
+## The assistant and programs
 
-**Lead agents** plan a task, delegate the pieces to specialists, and review
-what comes back: `orchestrator` for research projects, `leanOrchestrator` for
-Lean 4 formalization, and `engineer` for a project's code.
+**One assistant** takes every task: it reads and edits your project, runs
+commands, searches arXiv, the web and Zotero, computes in Wolfram, works on
+Lean 4 proofs, and splits a large job across helper agents it sets up for each
+piece.
 
-**Document programs** process selected files and produce reviewable LaTeX diffs:
-`edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`, and
-`poster`. The instruction says what to change and from which point of view;
-an agent starts one for you, or run `texra run <program> --input <file>`.
+**Programs** are packaged jobs started by name: ask the assistant, or run
+`texra run <program> --input <file>`.
 
-**Chat agents** work conversationally with file, shell, and search tools:
-`orchestrator`, `assistant`, `research`, `numerics`, `review`, `search`,
-`simplifier`, `prover`, `progressCheck`, `presenter`, `latexFixer`,
-`latexDiff`, `creator`, `setup`, the Lean 4 line (`lean`, `leanOrchestrator`,
-`leanBlueprint`, `leanSearch`, `leanSimplifier`), and the software-engineering
-line (`engineer`, `coder`, `codeReviewer`, `testEngineer`, `codeSimplifier`).
+- Document programs revise or create LaTeX and hand back reviewable diffs:
+  `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`,
+  `poster`.
+- Task programs hand one job to a helper agent with that job's checklist:
+  `review`, `search`, `derive`, `solve`, `experiment`, `code`,
+  `review-code`, `simplify`, `test`, `fix-latex`, `latexdiff`.
+- Lean programs check their work with Lean: `prove`, `blueprint`.
+
+Tailor it with a project `AGENTS.md`, skills, and plugins that carry skills,
+MCP servers and programs of your own.
 
 Every tool call is gated by per-stream approval. Optional YOLO mode
 skips approval for autonomous runs.
@@ -92,8 +91,8 @@ skips approval for autonomous runs.
 ## Models
 
 Bring your own keys for OpenAI, Anthropic, Google Gemini, DeepSeek,
-xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, or any OpenAI-compatible endpoint. Each agent a lead delegates to can run a
-different model — pair a flagship reasoner for orchestration with
+xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, or any OpenAI-compatible endpoint. Each helper agent or program the assistant
+starts can run a different model — pair a flagship reasoner for planning with
 cheaper, faster models for routine sub-tasks.
 
 In the extension, run **`TeXRA: Set API Key`** (stored in the owner-only
@@ -122,10 +121,10 @@ The Setup Wizard checks for and helps install most of the above.
 
 - [Installation](https://texra.ai/guide/installation)
 - [Quick Start](https://texra.ai/guide/quick-start)
-- [Built-in Agents](https://texra.ai/guide/built-in-agents)
+- [The assistant and programs](https://texra.ai/guide/programs)
 - [Polish a draft](https://texra.ai/guide/workflows/polish-a-draft) — workflow example
 - [Models](https://texra.ai/guide/models)
-- [Custom Agents](https://texra.ai/guide/custom-agents)
+- [Tailoring TeXRA](https://texra.ai/guide/customizing)
 - [Work produced with TeXRA](https://texra.ai/work-using-texra)
 
 Full docs at [texra.ai/guide](https://texra.ai/guide/).

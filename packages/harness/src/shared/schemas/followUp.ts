@@ -182,32 +182,10 @@ export const FollowUpDispositionSchema = Schema.Union([
 /** A `followup.consumed` row's `disposition`. */
 export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
 
-/** A run this process cannot continue until its agent, or its agent's
- *  plugin, is back: a fact about this build's catalog, never a row's. The
- *  agent is missing, its plugin is off, or its enabled plugin does not load
- *  (`reason`: unreadable, shipping code, or changed since it was trusted). */
-export const ResumeBlockedSchema = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal('blocked'),
-    blocker: Schema.Literals(['agentMissing', 'pluginOff']),
-    /** The agent or plugin it names. */
-    name: Schema.NonEmptyString,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('blocked'),
-    blocker: Schema.Literal('pluginWithheld'),
-    /** The plugin it names. */
-    name: Schema.NonEmptyString,
-    /** Why the plugin's load holds it back, as the load words it. */
-    reason: Schema.String,
-  }),
-]);
-
 /**
  * Why a persisted run is not continued here: the one answer a resume, a
  * message to a run with no loop here, a run's records and its view give.
- * `finished` (nothing left to continue from), `blocked`
- * ({@link ResumeBlockedSchema}), `unusableCheckpoint` (its saved state is
+ * `finished` (nothing left to continue from), `unusableCheckpoint` (its saved state is
  * there but cannot be continued: never `finished`, which would say it ended
  * normally), `earlierBuild` (an earlier build wrote its rows),
  * `pluginUnavailable` (it holds a fact of `plugin`, which this process does
@@ -216,7 +194,6 @@ export const ResumeBlockedSchema = Schema.Union([
  */
 export const ResumeRefusalSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('finished') }),
-  ResumeBlockedSchema,
   Schema.Struct({ kind: Schema.Literal('unusableCheckpoint') }),
   Schema.Struct({ kind: Schema.Literal('earlierBuild'), cause: Schema.String }),
   Schema.Struct({
@@ -251,14 +228,5 @@ export function describeRefusal(
       return "This run couldn't be read right now. Try again in a moment.";
     case 'notResumable':
       return 'This run cannot accept messages right now. Resume it, or start a new agent task.';
-    case 'blocked':
-      switch (reason.blocker) {
-        case 'agentMissing':
-          return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
-        case 'pluginOff':
-          return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
-        case 'pluginWithheld':
-          return `This task's agent comes from the ${reason.name} plugin. ${reason.reason} It can continue once the plugin loads.`;
-      }
   }
 }

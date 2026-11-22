@@ -1,53 +1,31 @@
 /**
- * The Agents page, one section at a time: the agent library, the skills
- * (slot `skills`) the settings app composes in, and Advanced, the session
- * and multi-agent coordination knobs.
+ * The Agents page, one section at a time: the skills (slot `skills`) the
+ * settings app composes in, and Advanced, the session and multi-agent
+ * coordination knobs.
  */
 
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/details/details.js';
-import { html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-
-// Local imports - shared styles
 
 // Local imports - shared schemas
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  type AgentScanIssue,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
-  pluralize,
 } from '@texra-ai/harness/schemas';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@ui/settings/messageDispatcher';
-import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
-import { settingsBannerStyles } from '@ui/styles';
 import { TexraSignalElement } from '@ui/litBase';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
-import {
-  renderIconActionButton,
-  renderLabeledActionButton,
-} from '@ui/wa/actionButtons';
-import { renderSettingsBanner } from '@ui/wa/settingsBanner';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   renderStateSettingNumberRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
 
-// Local imports - settings view components (side-effect: register)
-import '../components/profile/AgentSelectionPanel';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
 @customElement('agents-tab')
 export class AgentsTab extends TexraSignalElement {
   static override styles = [
     TexraSignalElement.styles,
-    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -55,103 +33,17 @@ export class AgentsTab extends TexraSignalElement {
 
       /* max-width and centering provided by .tab-content-container */
 
-      .agents-dir-path {
-        font-family: var(--wa-font-family-mono);
-        ${truncateDeclarations}
-        min-width: 0;
-      }
-
-      .custom-agent-issues-banner {
-        margin-top: var(--wa-space-m);
-      }
-
-      .custom-agent-issues {
-        margin: var(--wa-space-s) 0 0;
-        padding-left: 1.2em;
-      }
-
-      .custom-agent-issues li + li {
-        margin-top: var(--wa-space-2xs);
-      }
-
-      .agent-folder {
-        display: block;
-        margin-block-start: var(--wa-space-s);
-      }
-
       ::slotted([slot='skills']) {
         display: block;
       }
     `,
   ];
 
-  @property({ attribute: false }) agents: readonly AgentSelectionItem[] = [];
-  @property({ attribute: false }) customAgentDir = '';
-  @property({ attribute: false }) customAgentDirIsDefault = true;
-  @property({ attribute: false })
-  customAgentScanIssues: readonly AgentScanIssue[] = [];
   @property({ attribute: false }) section: SettingsSectionName<'agents'> =
-    'library';
-
-  private handleOpenFolder(): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER });
-  }
-
-  private handleCreateAgent(): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.CREATE_AGENT });
-  }
-
-  private handleChangeCustomDir(): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR });
-  }
-
-  private handleResetCustomDir(): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR });
-  }
-
-  private renderCustomAgentIssues(): TemplateResult | typeof nothing {
-    const issues = this.customAgentScanIssues;
-    if (issues.length === 0) return nothing;
-    return renderSettingsBanner({
-      id: 'custom-agent-scan-issues',
-      className: 'custom-agent-issues-banner',
-      variant: 'warning',
-      icon: 'triangle-exclamation',
-      title: `${issues.length} custom ${pluralize(issues.length, 'agent')} could not be loaded`,
-      description:
-        'TeXRA skipped these files in your custom agents folder. Each entry gives the reason.',
-      detail: html`
-        <ul class="custom-agent-issues">
-          ${issues.map(
-            (issue) =>
-              html`<li>
-                <bdi dir="auto"><code>${issue.path}</code></bdi> —
-                <bdi dir="auto">${issue.message}</bdi>
-              </li>`,
-          )}
-        </ul>
-      `,
-    });
-  }
-
-  private renderAgentList(): TemplateResult {
-    return html`
-      <agent-selection-panel .agents=${this.agents}>
-        ${renderLabeledActionButton({
-          icon: 'plus',
-          text: 'New agent',
-          kind: 'primary',
-          slot: 'actions',
-          onClick: () => this.handleCreateAgent(),
-        })}
-      </agent-selection-panel>
-    `;
-  }
+    'skills';
 
   private renderSection(): TemplateResult {
     switch (this.section) {
-      case 'library':
-        return this.renderLibrary();
       case 'skills':
         return html`<slot name="skills"></slot>`;
       case 'advanced':
@@ -164,61 +56,6 @@ export class AgentsTab extends TexraSignalElement {
       <div class="agents-container tab-content-container">
         ${this.renderSection()}
       </div>
-    `;
-  }
-
-  private renderLibrary(): TemplateResult {
-    return html`
-      ${this.renderAgentList()} ${this.renderCustomAgentIssues()}
-      <wa-details
-        class="collapsible-quiet agent-folder"
-        summary="Custom agent folder"
-      >
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                ${waIcon('folder')} Custom agents
-                ${
-                  this.customAgentDirIsDefault
-                    ? html`<wa-tag variant="neutral" size="s">Default</wa-tag>`
-                    : nothing
-                }
-              </span>
-              <span
-                class="settings-row-help agents-dir-path"
-                title=${this.customAgentDir}
-              >
-                <bdi dir="auto">${this.customAgentDir}</bdi>
-              </span>
-            </div>
-            <div class="settings-row-control action-button-group">
-              ${renderIconActionButton({
-                icon: 'folder-open',
-                label: 'Open custom agents folder',
-                onClick: () => this.handleOpenFolder(),
-              })}
-              ${renderLabeledActionButton({
-                text: 'Change folder',
-                label: 'Change custom agents folder',
-                kind: 'secondary',
-                onClick: () => this.handleChangeCustomDir(),
-              })}
-              ${
-                this.customAgentDirIsDefault
-                  ? nothing
-                  : renderLabeledActionButton({
-                      icon: 'arrow-rotate-left',
-                      text: 'Use default folder',
-                      label: 'Reset custom agents folder',
-                      kind: 'secondary',
-                      onClick: () => this.handleResetCustomDir(),
-                    })
-              }
-            </div>
-          </div>
-        </div>
-      </wa-details>
     `;
   }
 

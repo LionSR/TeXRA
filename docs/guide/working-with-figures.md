@@ -16,7 +16,7 @@ and `.bib` sources, not images.)
 
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick task: add a figure caption
 
-1. Keep the default agent, or pick `assistant`, from the agent dropdown (<wa-icon library="texra" name="robot"></wa-icon>).
+1. Open a new task in the TeXRA panel.
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-4-argon`.
 3. Select **Attach** (<wa-icon library="texra" name="file-media"></wa-icon>) in the instruction box and pick your figure, or paste it.
 4. Type the instruction: "Write a detailed caption for this figure."
@@ -111,7 +111,7 @@ When you provide media files, they are handed to the model according to its capa
 Common use cases:
 
 - <wa-icon library="texra" name="pencil"></wa-icon> Write captions for images (a chat agent, or the `edit` program)
-- <wa-icon library="texra" name="check"></wa-icon> Verify text matches figures (the `review` agent, or the `annotate` program)
+- <wa-icon library="texra" name="check"></wa-icon> Verify text matches figures (the `review` or `annotate` program)
 - <wa-icon library="texra" name="file-text"></wa-icon> Turn handwriting or scans into LaTeX (the `transcribe` program)
 - <wa-icon library="texra" name="unmute"></wa-icon> Transcribe audio (the `transcribe` program)
 

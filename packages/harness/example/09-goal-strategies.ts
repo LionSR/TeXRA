@@ -97,10 +97,9 @@ const ledgerPlugin = definePlugin({
   scriptModules: { 'goal-ledger': LEDGER_STRATEGY },
 });
 
-const PERSONA = {
-  name: 'goal_runner',
-  description: 'Proposes a plan and runs it as a goal.',
-  prompt: 'Propose a plan, then wait while it runs as a goal.',
+const RUN = {
+  label: 'goal_runner',
+  system: 'Propose a plan, then wait while it runs as a goal.',
   tools: ['hold_turn'],
 };
 
@@ -203,7 +202,7 @@ const sent = (index: number): string => JSON.stringify(requests[index]);
 const runGoal = (session: LocalSession, opening: string) =>
   Effect.gen(function* () {
     const conversation = yield* session.start({
-      agent: PERSONA,
+      ...RUN,
       instruction: opening,
       model: route.model,
       interactive: true,
@@ -346,7 +345,7 @@ const program = Effect.gen(function* () {
   // 5. A conversation's own script composes the judge differently: two
   // judges of one objective, in parallel, with no goal at all.
   const d = yield* session.start({
-    agent: PERSONA,
+    ...RUN,
     instruction: 'Judge goal D.',
     model: route.model,
   });

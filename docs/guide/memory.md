@@ -81,7 +81,7 @@ The same store is inspectable from a terminal:
 
 ## Memory is shared across the run
 
-Within a single run, the orchestrator and every subagent it spawns see the **same** `/memories` directory. A specialist agent can write a note that the orchestrator picks up on its next turn, and that note survives into the next conversation. This is why memory is most useful for **project-level** facts rather than turn-level scratch space: once it's written, it persists.
+Within a single run, the assistant and every helper agent it starts see the **same** `/memories` directory. A helper can write a note that the assistant picks up on its next turn, and that note survives into the next conversation. This is why memory is most useful for **project-level** facts rather than turn-level scratch space: once it's written, it persists.
 
 ## When _not_ to use memory
 
@@ -93,4 +93,4 @@ Within a single run, the orchestrator and every subagent it spawns see the **sam
 
 - [Tasks view](./progress-board.md): see what an agent is doing in real time, including which memories it has read or written
 - [Configuration](./configuration.md): the full list of Settings tabs
-- [Custom agents](./custom-agents.md): give your own agents access to the `memory` tool
+- [Tailoring TeXRA](./customizing.md): project instructions, skills, plugins and your own programs

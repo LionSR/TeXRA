@@ -51,8 +51,6 @@ export interface SettingsHostBindings {
   openPath(filePath: string): HostEffect;
   /** Show a file or folder in the system file manager. */
   revealPath(filePath: string): HostEffect;
-  /** Show YAML the user must not save back over where it came from. */
-  showReadOnlyYaml(filePath: string, text: string): HostEffect;
   pickFolder(title: string): HostEffect<string | undefined>;
   /** Run one subscription's sign-in (`SubscriptionProvider.signIn`) over
    *  this host's prompts and answer the account. The body tells the user how

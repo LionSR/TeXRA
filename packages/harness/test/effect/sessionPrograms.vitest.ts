@@ -33,7 +33,7 @@ import { assert, describe, expect } from 'vitest';
 
 import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import { GOLDEN_AGENTS } from '@cli/runtime/models/validationAgents';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
@@ -58,7 +58,6 @@ const packageSession = (session: Context.Context<SessionServices>) =>
     const owner = yield* SessionOwner;
     const sessions = yield* makeSessions(
       { ...owner, open: () => Effect.succeed(session) },
-      yield* AgentCatalog,
       () => Effect.succeed([]),
     );
     return yield* sessions.open((yield* FakeHost).roots);
@@ -124,7 +123,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
                 );
                 const faults = yield* sessionStoreFaults(roots.storage);
                 const run = yield* sdk.start({
-                  agent: 'golden_parent',
+                  ...GOLDEN_AGENTS.golden_parent,
                   instruction: 'Read the notes, plan, delegate.',
                   model: MODEL,
                   approval: 'autoApprove',
@@ -203,7 +202,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             const opening = yield* faults.holdNext('appendAll', 'run.start');
             const launch = yield* Effect.forkChild(
               sdk.start({
-                agent: 'golden_parent',
+                ...GOLDEN_AGENTS.golden_parent,
                 instruction: 'Read the notes, plan, delegate.',
                 model: MODEL,
               }),
@@ -251,7 +250,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             const opening = yield* faults.holdNext('appendAll', 'run.start');
             const launch = yield* Effect.forkChild(
               sdk.start({
-                agent: 'golden_parent',
+                ...GOLDEN_AGENTS.golden_parent,
                 instruction: 'Read the notes, plan, delegate.',
                 model: MODEL,
               }),
@@ -328,7 +327,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
           yield* sdk.request({ kind: 'run.stop', runId, reason: 'user' });
           const refused = yield* Effect.flip(
             sdk.start({
-              agent: 'golden_parent',
+              ...GOLDEN_AGENTS.golden_parent,
               instruction: 'Read the notes, plan, delegate.',
               model: MODEL,
               runId,
@@ -354,7 +353,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* faults.failNext('appendAll', 'run.end');
             // One run, so the refused end is its own.
             const run = yield* sdk.start({
-              agent: 'golden_child',
+              ...GOLDEN_AGENTS.golden_child,
               instruction: 'Answer once.',
               model: MODEL,
             });
@@ -374,7 +373,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
               yield* persistentTestSession(roots),
             );
             const run = yield* sdk.start({
-              agent: 'golden_parent',
+              ...GOLDEN_AGENTS.golden_parent,
               instruction: 'Read the notes, plan, delegate.',
               model: MODEL,
               approval: 'autoApprove',

@@ -84,6 +84,8 @@ import { OpenPdfTool } from './OpenPdfTool';
  * layer over what the host passes `texraPlugins`.
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
+import { SETUP_PROMPT } from './setup/setupPrompt';
+import { TASK_MODULES, TASK_PROGRAMS } from './tasks/programs';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
@@ -205,6 +207,8 @@ const core = (
   ...definePlugin<EditorHost>({
     id: 'core',
     tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
+    scriptModules: TASK_MODULES,
+    programs: TASK_PROGRAMS,
     // The section writes math for a rendered reply: a run that writes a
     // document, with no tool offered, gets none of it (`$$\\begin{align}`
     // inside a .tex file does not compile).
@@ -216,6 +220,11 @@ const core = (
       return [
         ...(offers('bash') ? [FIND_TEX_SOURCES] : []),
         MATH_IN_REPLIES,
+        ...(offers('open_pdf')
+          ? [
+              'After compiling a document the user asked to see, show it with `open_pdf`.',
+            ]
+          : []),
         ...(bibPath
           ? [
               `The default bibliography file is ${bibPath}.${offers('grep', 'read_file', 'bash') ? ' You can grep or read this file to search for citations and references.' : ''}`,
@@ -253,6 +262,8 @@ const setup = (
 ) =>
   definePlugin<SetupPlatform | SetupHost>({
     id: 'setup',
+    prompt: ({ offered }) =>
+      offered.includes('probe_environment') ? SETUP_PROMPT : '',
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(SetupPlatform)(platform),
@@ -397,10 +408,10 @@ export const texraPlugins = (host: {
       dashboard: {
         name: 'Multi-Agent Workflow',
         description:
-          'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent and program tools if its own configuration names them: this switch is an additional kill switch on top of that per-agent opt-in.',
+          'Let the assistant hand work to other agents and start programs as children of its run: one at a time, or fanned out and joined from a script, resuming safely after interruption.',
         setup: {
           configNotes:
-            'No local install required. Turning this off removes the agent and program tools from every agent tool list, even agents whose configuration names them explicitly, so no agent can delegate or start a program.',
+            "No local install required. Turning this off removes the agent and program tools from the assistant and from every agent it starts, from each run's next step, so nothing delegates or starts a program.",
         },
       },
     },

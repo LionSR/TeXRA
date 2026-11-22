@@ -75,12 +75,9 @@ const waitsAtTurn = (session: LocalSession, runId: RunId, turn: number) =>
 const runId = await inSession((session) =>
   Effect.gen(function* () {
     const run = yield* session.start({
-      agent: {
-        name: 'proof_writer',
-        description: 'Writes a proof step by step.',
-        prompt: 'Write what is asked, briefly.',
-        tools: [],
-      },
+      label: 'proof_writer',
+      system: 'Write what is asked, briefly.',
+      tools: [],
       instruction: 'Outline the proof.',
       model: route.model,
       interactive: true,
