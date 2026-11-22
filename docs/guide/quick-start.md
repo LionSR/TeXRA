@@ -21,9 +21,11 @@ Editing a document typically takes five steps:
 4. Approve the program run the assistant proposes
 5. Review the diff
 
-> 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
-> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in four steps (connect a
-> model, open your paper, run the setup assistant, your first task) and links directly to the relevant commands.
+::: tip Get started walkthrough
+Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
+(or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in four steps (connect a
+model, open your paper, run the setup assistant, your first task) and links directly to the relevant commands.
+:::
 
 ::: tip Prefer the terminal?
 This guide walks through the VS Code extension. If you installed the
@@ -50,7 +52,7 @@ The full per-provider key reference (the **API keys** list, its Set / Get / Remo
 
 ::: tip No TeXRA account
 There is no TeXRA sign-in. The assistant and every program ship
-bundled and runs on the credential you configured above.
+bundled and run on the credential you configured above.
 :::
 
 Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
@@ -177,13 +179,9 @@ texra run edit --input draft.tex \
 texra chat
 ```
 
-:::: tip
-A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
-Anthropic API key can spend once you link a Console organization to the plan.
-A ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
-that an OpenAI API key can spend once you claim them for an API organization
-you own.
-::::
+::: tip Included API credits on paid plans
+Claude Max/Team and ChatGPT Pro/Business subscriptions include monthly API credits that an ordinary provider API key can spend; see [Getting API keys](./installation.md#setting-up-api-keys).
+:::
 
 <CliRunHero
   command='texra run edit --input draft.tex --instruction "Improve clarity; preserve math and citations."'

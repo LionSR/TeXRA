@@ -52,38 +52,37 @@ const resumeInterruptedRuns = Effect.gen(function* () {
 Host commands go through [`session.request(runtimeCommand)`](./harness/#session) (validated by [`RuntimeCommandSchema`](./harness/schemas#runtimecommandschema)) so each decision commits to SQLite before taking effect:
 
 ```ts
-// Send a follow-up message to a waiting or stopped interactive run:
-yield *
-  session.request({
+const manageRun = Effect.gen(function* () {
+  // Send a follow-up message to a waiting or stopped interactive run:
+  yield* session.request({
     kind: 'followUp.send',
     runId: run.runId,
     text: 'Check Lemma 2 and update the appendix.',
   });
 
-// Answer a pending request by id:
-yield *
-  session.request({
+  // Answer a pending request by id:
+  yield* session.request({
     kind: 'request.decide',
     runId: run.runId,
     requestId: pendingRequest.requestId,
     decision: { action: 'approve' },
   });
 
-// Fork a conversation at a settled step `at` (or the latest settled step):
-const forked =
-  yield *
-  session.request({
+  // Fork a conversation at a settled step `at` (or the latest settled step):
+  const forked = yield* session.request({
     kind: 'run.fork',
     runId: run.runId,
   });
 
-// Stop a running or waiting turn:
-yield *
-  session.request({
+  // Stop a running or waiting turn:
+  yield* session.request({
     kind: 'run.stop',
     runId: run.runId,
     reason: 'user',
   });
+
+  return forked;
+});
 ```
 
 ## Storage model and the one process per store
@@ -111,15 +110,15 @@ seven write points of the [spec](https://github.com/LionSR/TeXRA/blob/main/packa
 (section 4), with what a resume does if the process stops right after each
 one (section 9):
 
-| Write point                         | Committed row(s)                                                   | What a resume does                                                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **W1 — Model attempt**              | `model.message` (`attempt`), before the request leaves the process | The attempt has no outcome, so it counts as not made and is sent again. An operation the provider accepted is observed, not resubmitted.                                                                                                                                                                                                                |
-| **W2 — Model response**             | `model.message` (`response`)                                       | Reuses the committed response; the model is not called again for it.                                                                                                                                                                                                                                                                                    |
-| **W3 — Tool intent**                | `tool.intent`, after pre-call hooks and the guard, before the body | A call that was waiting on a request nobody answered runs again from its start and asks again. Any other started call is re-run only if the tool's declaration when the call was committed and its current one both say `replay: 'safe'`, and its stored arguments still validate; else it settles as outcome unknown.                                  |
-| **W4 — Tool result**                | `tool.result`, before the delivery that continues the loop         | Reuses the result; the tool is not run again.                                                                                                                                                                                                                                                                                                           |
-| **W5 — Position**                   | `run.position` at every wait and every halt                        | Continues from the recorded position. A halt is the `run.end` itself: a recipe task stays finished (`resume` answers `finished`), and a conversation continues in a new lifecycle.                                                                                                                                                                      |
-| **W6 — Failed attempt**             | `model.message` (`failed`), naming the next action                 | Follows the recorded action: send the next attempt (`retry`, `unchain`, or an `ask` nobody answered before the run stopped: resuming is the person's word to go on), or end the call (`stop`).                                                                                                                                                          |
-| **W7 — Request opened and decided** | `request.opened`, then one `request.decided`                       | A request the process left open is cancelled when the run is next activated, and the call or turn that asked asks again under a new id; a retry request is not asked again, the request is sent. A person's answer to one while no process holds the run resumes the run: its decision commits after that activation, and the call that asked takes it. |
+| Write point                         | Committed row(s)                                                   | What a resume does                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **W1 — Model attempt**              | `model.message` (`attempt`), before the request leaves the process | The attempt has no outcome, so it counts as not made and is sent again. An operation the provider accepted is observed, not resubmitted.                                                                                                                                                                                                                    |
+| **W2 — Model response**             | `model.message` (`response`)                                       | Reuses the committed response; the model is not called again for it.                                                                                                                                                                                                                                                                                        |
+| **W3 — Tool intent**                | `tool.intent`, after pre-call hooks and the guard, before the body | A call that was waiting on a request nobody answered runs again from its start and asks again. Any other started call is re-run only if the tool's declaration when the call was committed and its current one both say `replay: 'safe'`, and its stored arguments still validate; else it settles as outcome unknown.                                      |
+| **W4 — Tool result**                | `tool.result`, before the delivery that continues the loop         | Reuses the result; the tool is not run again.                                                                                                                                                                                                                                                                                                               |
+| **W5 — Position**                   | `run.position` at every wait and every halt                        | Continues from the recorded position. A halt is `run.end` itself: a one-shot or program run stays finished (`resume` answers `finished`), while an interactive conversation continues in a new activation.                                                                                                                                                  |
+| **W6 — Failed attempt**             | `model.message` (`failed`), naming the next action                 | Follows the recorded action: send the next attempt (`retry`, `unchain`, or an unanswered `ask`, where resuming counts as the person's permission to continue), or end the call (`stop`).                                                                                                                                                                    |
+| **W7 — Request opened and decided** | `request.opened`, then one `request.decided`                       | On reactivation, any open request left behind by the previous process is cancelled, and the waiting call or turn asks again under a new ID (except a `retry` request, which proceeds directly). If a person answers an open request while no process holds the run, that answer resumes the run, commits the decision, and delivers it to the waiting call. |
 
 ### Model retries and durable permits
 
@@ -148,12 +147,13 @@ one (section 9):
 | **I8** | **Atomic stop**: a stopped run's halt and `run.end` commit together, so recovery never mistakes an acknowledged stop for an interrupted run. A process that exits writes neither: its runs read as interrupted, as after a crash. |
 | **I9** | **Durable policy revocation**: revoking an approval bypass is acknowledged only after the `approval.policy` row commits to SQLite.                                                                                                |
 
-## Storage failure outcomes (`S1`–`S5`)
+## Storage failure outcomes (`S1`–`S6`)
 
-| ID     | Failure class                                                                                      | Behavior                                                                                                                                                                                                                                |
-| ------ | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **S1** | [`DatabaseOpenFailed`](./harness/#databaseopenfailed)                                              | Session open fails with the underlying cause (a store an earlier or newer build wrote fails unchanged); a damaged one is moved aside to `texra.db.corrupt-<ms>` ([`SessionStoreMovedAside`](./harness/schemas#sessionstoremovedaside)). |
-| **S2** | `DatabaseStoreNewer`                                                                               | Store written by a newer schema version is rejected whole without partial reads or writes.                                                                                                                                              |
-| **S3** | [`DatabaseReadFailed`](./harness/#databasereadfailed) (`DatabaseRowCorrupt`, `DatabaseRowEarlier`) | A run with an undecodable or pre-1.0 row is marked unreadable in listings and refused on resume without blocking other runs in the store.                                                                                               |
-| **S4** | [`DatabaseWriteFailed`](./harness/host#databasewritefailed)                                        | Transaction rolls back completely and the active run terminates with a typed failure.                                                                                                                                                   |
-| **S5** | [`DatabaseAggregateClosed`](./harness/schemas#databaseaggregateclosed)                             | Nothing is written; a run whose aggregate closed under it stops, with no retry. A project store another process holds does not open at all.                                                                                             |
+| ID     | Failure class                                                                                      | Behavior                                                                                                                                                                                                                                  |
+| ------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **S1** | [`DatabaseOpenFailed`](./harness/#databaseopenfailed)                                              | Session open fails with the underlying cause (a store an earlier or newer build wrote fails unchanged); a damaged one is moved aside to `texra.db.corrupt-<ms>` ([`SessionStoreMovedAside`](./harness/schemas#sessionstoremovedaside)).   |
+| **S2** | `DatabaseStoreNewer`                                                                               | Store written by a newer schema version is rejected whole without partial reads or writes.                                                                                                                                                |
+| **S3** | [`DatabaseReadFailed`](./harness/#databasereadfailed) (`DatabaseRowCorrupt`, `DatabaseRowEarlier`) | A run with an undecodable or pre-1.0 row is marked unreadable in listings and refused on resume without blocking other runs in the store.                                                                                                 |
+| **S4** | [`DatabaseWriteFailed`](./harness/#databasewritefailed)                                            | Transaction rolls back completely and the active run terminates with a typed failure.                                                                                                                                                     |
+| **S5** | [`DatabaseAggregateClosed`](./harness/schemas#databaseaggregateclosed)                             | Nothing is written; a run whose aggregate closed under it stops, with no retry. A project store another process holds does not open at all.                                                                                               |
+| **S6** | `RunChanged`                                                                                       | A deletion requested against a run lifetime that has since restarted writes nothing and reports that the run changed. A row that breaks the store's own invariants (such as a duplicate `run.start`) fails the writing fiber as a defect. |

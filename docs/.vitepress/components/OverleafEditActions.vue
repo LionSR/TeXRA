@@ -10,19 +10,19 @@
 // (theme/webAwesomeIcons.js), matching the glyphs the prose references.
 const actions = [
   {
-    icon: 'files',
-    label: 'Select files, agent, model',
-    hint: 'Pick what to edit and which model runs',
+    icon: 'robot',
+    label: 'Pick a model',
+    hint: 'Choose the model for the task',
   },
   {
     icon: 'pencil',
     label: 'Write instructions',
-    hint: 'Describe the change in plain language',
+    hint: 'Name the file and describe the change in plain language',
   },
   {
     icon: 'arrow-up',
     label: 'Start task',
-    hint: 'Run the agent on your selection',
+    hint: 'Approve the program run the assistant proposes',
     accent: true,
   },
   {

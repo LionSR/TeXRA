@@ -40,25 +40,31 @@ function formatRow(row: TranscriptRow): string {
   }
 }
 
-// Inside an Effect program with `session`:
-const runId = generateRunId();
-yield * session.view.subscribe([{ id: runId, fromSeq: 0 }]);
-const run =
-  yield *
-  session.start({ runId, label: 'reader', system, tools, instruction, model });
-yield * run.result;
-yield * session.drained;
+const inspectRun = Effect.gen(function* () {
+  const runId = generateRunId();
+  yield* session.view.subscribe([{ id: runId, fromSeq: 0 }]);
+  const run = yield* session.start({
+    runId,
+    label: 'reader',
+    system,
+    tools,
+    instruction,
+    model,
+  });
+  yield* run.result;
+  yield* session.drained;
 
-const view = session.view.current();
-const runView = view.runs.get(run.runId)!;
-console.log(
-  sessionActivity(view),
-  attentionOf(view).requests.length,
-  acceptsFollowUp(runView),
-);
-for (const row of runView.transcript.rows) {
-  console.log(formatRow(row));
-}
+  const view = session.view.current();
+  const runView = view.runs.get(run.runId)!;
+  console.log(
+    sessionActivity(view),
+    attentionOf(view).requests.length,
+    acceptsFollowUp(runView),
+  );
+  for (const row of runView.transcript.rows) {
+    console.log(formatRow(row));
+  }
+});
 ```
 
 ## Two reducers over one history

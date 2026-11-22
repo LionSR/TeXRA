@@ -42,7 +42,7 @@ In the Extension Development Host:
 2. Run `TeXRA: New Task`.
 3. Run `TeXRA: Show Tasks`.
 4. Run `TeXRA: Open Settings`.
-5. Capture screenshots of the launcher, progress view, and settings view.
+5. Capture screenshots of the New task view, Tasks view, and Settings view.
 
 ## Packaged VSIX
 
@@ -65,6 +65,6 @@ code --new-window \
   "$SMOKE_ROOT/workspace"
 ```
 
-Repeat the same launcher, progress view, and settings view checks in the
+Repeat the same New task view, Tasks view, and Settings view checks in the
 isolated VSIX window. Include the command output and screenshots in the PR when
 the smoke test is part of the acceptance criteria.

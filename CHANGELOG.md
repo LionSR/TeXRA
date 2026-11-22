@@ -228,7 +228,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   the original recorded, and the assistant's proposal card has **Edit** to
   change what it would start before approving it.
 - **Scripts: the assistant writes code to call its tools.** It is sent the
-  `script` tool and call their other tools from JavaScript
+  `script` tool and calls its other tools from JavaScript
   (`await tools.read_file({ path })`, `Promise.all`, loops, `try`/`catch`),
   in a sandbox, each call under the usual approvals. In a script,
   `agent(prompt, options)` runs a helper agent defined on the spot,

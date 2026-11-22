@@ -5,7 +5,7 @@
 ## Scope and boundaries
 
 - **Zero repo dependencies and zero ambient state.** `@texra-ai/llm` imports nothing from `@texra-ai/worldline`, reads no settings stores, calls no `Effect.run*`, and creates no `AbortController`s outside Effect fiber interruption. Configuration arrives as values ([`RouteFacts`](./llm/#routefacts), [`BindSpec`](./llm/node#bindspec)), and credentials arrive through [`CredentialStore`](./llm/#credentialstore).
-- **One turn in, one stream out.** A `Model` prepares and streams a single turn (`prepareTurn` $\to$ `streamTurn`). Conversation state, tool execution, retry gates, durable permits, and persistence belong to [`@texra-ai/worldline`](./harness/).
+- **One turn in, one stream out.** A `Model` prepares and streams a single turn (`prepareTurn` → `streamTurn`). Conversation state, tool execution, retry gates, durable permits, and persistence belong to [`@texra-ai/worldline`](./harness/).
 - **No internal retries.** Vendor SDK retries are disabled. Every failure is classified into [`ModelError`](./llm/#modelerror) (`kind`, `retryable`, `scope`, `retryAfterMs`, `quota`, `status`) so the caller controls retry policy.
 - **Explicit failure on unsupported input.** Unsupported controls, media parts, or provider-hosted tool blocks fail in `prepareTurn` or stream decoding with `ModelError` rather than being silently dropped.
 
@@ -33,7 +33,7 @@ import {
 } from '@texra-ai/llm';
 import { bindModel } from '@texra-ai/llm/node';
 
-const selected = selectModel('anthropic/claude-sonnet-5');
+const selected = selectModel('anthropic/claude-sonnet-5-5');
 if (!selected) throw new Error('Unknown model.');
 
 const route = decideModelRoute(selected.config, OWN_KEY_ROUTE_FACTS);

@@ -8,16 +8,13 @@ import DelegatedStreamHero from '../.vitepress/components/DelegatedStreamHero.vu
 TeXRA's assistant can delegate programming tasks—such as running numerical checks or writing figure scripts—to a local coding agent. Two integrations are supported:
 
 - **OpenAI Codex**: a sandboxed coding agent on your ChatGPT Plus / Pro plan
-  (or an OpenAI API key). The assistant reaches it through the `codex` tool. A
-  Pro or Business plan also includes
-  [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
-  for an OpenAI API key, which TeXRA's own OpenAI models can use; Codex itself
-  does not draw on them.
+  (or an OpenAI API key). The assistant reaches it through the `codex` tool.
+  (ChatGPT Pro/Business plans also include monthly API credits for TeXRA's own
+  OpenAI models; see [Getting API keys](./installation.md#setting-up-api-keys).)
 - **Claude Code**: Anthropic's coding agent on your Claude Pro / Max plan
   (or an Anthropic API key). The assistant reaches it through the `claude_code`
-  tool. A Max or Team plan also includes
-  [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)
-  for an Anthropic API key, which TeXRA's own Anthropic models can use.
+  tool. (Claude Max/Team plans also include monthly API credits for TeXRA's own
+  Anthropic models; see [Getting API keys](./installation.md#setting-up-api-keys).)
 
 Each one is set up from its own row on **Settings → Plugins**. When the
 assistant uses the tool, the work runs in a side panel on the Tasks view

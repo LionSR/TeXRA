@@ -20,7 +20,7 @@ import {
 } from '@texra-ai/llm';
 import { bindModel } from '@texra-ai/llm/node';
 
-const selected = selectModel('anthropic/claude-sonnet-5');
+const selected = selectModel('anthropic/claude-sonnet-5-5');
 if (selected === undefined) throw new Error('The catalog lost the model.');
 const route = decideModelRoute(selected.config, OWN_KEY_ROUTE_FACTS);
 if (route.kind !== 'api-key') throw new Error(`Unexpected route ${route.kind}`);
@@ -36,7 +36,7 @@ const sseEvents = [
       type: 'message',
       role: 'assistant',
       content: [],
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       stop_reason: null,
       stop_sequence: null,
       usage: {

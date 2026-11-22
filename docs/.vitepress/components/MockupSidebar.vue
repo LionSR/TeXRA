@@ -11,7 +11,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
         ><wa-icon library="texra" name="pencil"></wa-icon> New task</span
       >
       <span class="bt bt-on"
-        ><wa-icon library="texra" name="robot"></wa-icon> Progress</span
+        ><wa-icon library="texra" name="robot"></wa-icon> Tasks</span
       >
     </div>
 
