@@ -596,7 +596,7 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 11 more',
+      '… 10 more',
     ],
     unexpect: [
       '/ap  Switch',
