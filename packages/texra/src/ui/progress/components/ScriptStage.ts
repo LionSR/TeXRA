@@ -322,7 +322,7 @@ export class ScriptStage extends LitElement {
       <div role="list">
         ${repeat(
           this.stage.sections,
-          (section) => section.title ?? '',
+          (section) => section.title,
           (section) =>
             html`${
               section.title === null

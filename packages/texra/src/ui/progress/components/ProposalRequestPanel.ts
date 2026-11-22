@@ -220,9 +220,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
                   ${SCRIPT_REQUEST_COPY.callsHeading}:
                 </div>
                 <ol class="script-proposal__calls">
-                  ${repeat(
-                    script.calls,
-                    (_call, index) => index,
+                  ${script.calls.map(
                     (call) => html`<li>${scriptRequestCallLine(call)}</li>`,
                   )}
                 </ol>`

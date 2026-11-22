@@ -22,8 +22,8 @@
   );
   --dv-activegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
   --dv-inactivegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
-  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-secondary);
   --dv-tab-divider-color: var(--color-border);
   --dv-separator-border: var(--color-border);
   --dv-active-sash-color: var(--wa-color-focus);
@@ -134,7 +134,7 @@
   place-content: center;
   height: 100%;
   padding: var(--wa-space-m);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   box-sizing: border-box;
   gap: var(--wa-space-s);
   min-width: 0;

@@ -6,7 +6,6 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import { finishedToolCalls } from '@cli/runtime/headless/runProgressRenderer';
 import { truncateSummaryToWidth } from '@cli/runtime/terminal/terminalText';
 import { nestedRollupLabel } from '@ui/copy/nestedRuns';
 import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
@@ -123,7 +122,7 @@ function SessionRow({
         elapsed,
         outputTokens:
           run.usage.outputTokens > 0 ? run.usage.outputTokens : undefined,
-        toolCallCount: finishedToolCalls(run),
+        toolCallCount: run.toolCalls,
       })
     : undefined;
   const summary = run.description;
