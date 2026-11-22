@@ -5,7 +5,7 @@ status: proposed
 
 # Publishing the SDK pair from a tagged release
 
-`@texra-ai/llm` and `@texra-ai/harness` have never been published. The
+The SDK packages are `@texra-ai/llm` and `@texra-ai/worldline`. The
 `releasing` skill had the owner publish them by hand, one at a time, with an
 OTP. This note proposes publishing them the way `@texra-ai/cli` already is:
 the owner cuts an `sdk-vX.Y.Z` GitHub release and CI publishes both packages
