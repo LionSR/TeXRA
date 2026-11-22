@@ -7,6 +7,7 @@ import { Predicate } from 'effect';
 
 import { truncatedHexId } from '@utils/core/idHash';
 import { meansAbsent } from '@utils/files/fsEntryExists';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -32,7 +33,7 @@ function sanitizeWorkspaceBasename(workspaceRoot: string): string {
  * resolve (missing, unreadable) keys by its canonical spelling.
  */
 function storageIdentity(workspaceRoot: string): string {
-  if (process.platform === 'win32') return workspaceRoot.toLowerCase();
+  if (IS_WINDOWS) return workspaceRoot.toLowerCase();
   try {
     return realpathSync.native(workspaceRoot);
   } catch (error) {

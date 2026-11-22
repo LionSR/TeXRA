@@ -19,6 +19,8 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
+import { IS_WINDOWS } from '@texra-ai/harness/node';
+
 import {
   binaryIfPresent,
   findCliBinary,
@@ -78,8 +80,7 @@ const PLATFORM_PACKAGES: Record<string, readonly string[]> = {
 };
 
 /** Native CLI binary filename for the current platform. */
-const CLAUDE_BINARY_NAME =
-  process.platform === 'win32' ? 'claude.exe' : 'claude';
+const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
 
 /**
  * Locate the native Claude Code CLI binary. A found path is kept for the

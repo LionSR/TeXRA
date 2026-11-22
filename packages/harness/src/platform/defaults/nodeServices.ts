@@ -93,6 +93,7 @@ import {
 } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { nodeFileServices } from '@utils/files/fsDurability';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -107,7 +108,7 @@ const UPSTREAM_GRACE_MILLIS = 1_000;
 /** Slack over upstream's bounded tail before a teardown counts as stuck.
  *  Wider on Windows, where upstream's teardown awaits a `taskkill` spawn
  *  that can take seconds on a loaded machine. */
-const TEARDOWN_SLACK_MILLIS = process.platform === 'win32' ? 3_000 : 1_000;
+const TEARDOWN_SLACK_MILLIS = IS_WINDOWS ? 3_000 : 1_000;
 
 const stages = (
   command: ChildProcess.Command,

@@ -34,7 +34,7 @@ import { operationOf } from '@agent/runtime/requests';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import { refusalCopy } from '@shared/session/approvalDecision';
 import { Approvals } from '@shared/session/runHistory';
-import { ToolError, type RequestPayload } from '@shared/schemas';
+import { shortPluginId, ToolError, type RequestPayload } from '@shared/schemas';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { nativeRevision } from '@tools/nativePlugins';
@@ -99,11 +99,11 @@ const nativeState = (plugin: PluginListing, table: ToolTable): string[] => {
   if (inUse === undefined)
     return trustedNow === null ? [] : ['  native module: not loaded'];
   return [
-    `  native module: revision ${inUse.slice(0, 12)} in use`,
+    `  native module: revision ${shortPluginId(inUse)} in use`,
     ...(trustedNow === null || trustedNow === inUse
       ? []
       : [
-          `  revision ${trustedNow.slice(0, 12)}, trusted now, did not load (your step's warnings say why); the one in use stays until the plugin is fixed or disabled, and only while this process runs`,
+          `  revision ${shortPluginId(trustedNow)}, trusted now, did not load (your step's warnings say why); the one in use stays until the plugin is fixed or disabled, and only while this process runs`,
         ]),
   ];
 };

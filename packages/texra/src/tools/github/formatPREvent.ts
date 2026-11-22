@@ -14,6 +14,7 @@ import {
   formatPreviousStateHint,
   MAX_BODY,
   sections,
+  shortSha,
   truncate,
   wrapWebhookEvent as wrap,
   type WebhookEvent,
@@ -165,7 +166,7 @@ export function formatCIPassed(
   runs: GhCheckRun[],
 ): WebhookEvent {
   return wrap(
-    `All ${runs.length} CI checks passed on ${targetPath(pr)} (head ${sha.slice(0, 7)}).`,
+    `All ${runs.length} CI checks passed on ${targetPath(pr)} (head ${shortSha(sha)}).`,
   );
 }
 
@@ -187,7 +188,7 @@ export function formatCIStarted(
 
   return wrap(
     sections(
-      `CI triggered on ${targetPath(pr)} (head ${sha.slice(0, 7)}): GitHub reports ${formatResultCount(totalCount, 'check')} registered; this poll observed ${formatResultCount(runs.length, 'check')} across ${formatResultCount(uniqueNames.length, 'distinct check name')}.`,
+      `CI triggered on ${targetPath(pr)} (head ${shortSha(sha)}): GitHub reports ${formatResultCount(totalCount, 'check')} registered; this poll observed ${formatResultCount(runs.length, 'check')} across ${formatResultCount(uniqueNames.length, 'distinct check name')}.`,
       body,
     ),
   );
@@ -201,7 +202,7 @@ export function formatCIComplete(
   const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
   const failed = runs.length - passed;
   return wrap(
-    `CI completed on ${targetPath(pr)} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
+    `CI completed on ${targetPath(pr)} (head ${shortSha(sha)}): ${passed} passed, ${failed} failed.`,
   );
 }
 

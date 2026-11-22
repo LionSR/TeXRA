@@ -20,6 +20,7 @@ import { isPathWithin } from '@utils/core/pathCore';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import {
   CommandDirs,
+  IS_WINDOWS,
   namesPath,
   whichOnExtendedPath,
   withExtendedPath,
@@ -67,9 +68,7 @@ export const pluginDataDir = (globalStorage: string, name: string) =>
  * cannot run.
  */
 export const hookShell = (appDirs: readonly string[]): string | null =>
-  process.platform === 'win32'
-    ? whichOnExtendedPath('bash', appDirs)
-    : '/bin/sh';
+  IS_WINDOWS ? whichOnExtendedPath('bash', appDirs) : '/bin/sh';
 
 export const NO_SHELL =
   'cannot run here: a shell-form hook needs bash (Git Bash) on PATH on Windows';
