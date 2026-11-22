@@ -38,6 +38,7 @@ import {
   type TextChunk,
   type TranscriptSubscription,
   factName,
+  TOOL_CALL_STATUS,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -365,6 +366,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     usage: emptyUsageStats(),
     treeUsage: emptyUsageStats(),
     maxCostUsd: event.maxCostUsd,
+    toolCalls: 0,
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,
@@ -528,6 +530,20 @@ function nonEmpty(text: string | undefined): string | undefined {
   return text !== undefined && text.trim().length > 0 ? text : undefined;
 }
 
+/** The tool cards that finished, completed or failed. */
+function finishedToolCalls(rows: TranscriptView['rows']): number {
+  let count = 0;
+  for (const row of rows) {
+    if (
+      row.kind === 'tool' &&
+      (row.model.status === TOOL_CALL_STATUS.COMPLETED ||
+        row.model.status === TOOL_CALL_STATUS.FAILED)
+    )
+      count += 1;
+  }
+  return count;
+}
+
 /** A run's newest operational summary, for one with no reply to show (a
  *  script's run, a program): what its tool, card, error, or
  *  plain log row last said. */
@@ -623,6 +639,7 @@ function withTranscriptFacts(u: Update, run: RunView): RunView {
     operationalLatestLine(transcript.rows) ??
     run.latestLine;
   const next = withDerived(run, {
+    toolCalls: finishedToolCalls(transcript.rows),
     thinkingActive,
     compactingActive,
     latestLine,
