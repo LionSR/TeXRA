@@ -36,6 +36,13 @@ What follows is left open, in the order worth taking.
 
 ## 1. A provider's API-key shapes live in the harness logger
 
+Landed 2026-11-22: llm states each key provider's shapes (`API_KEY_SHAPES`,
+`packages/llm/src/providers/providerPlugins.ts`, total over
+`ApiKeyProviderId`) and exports them as one source,
+`API_KEY_PATTERN_SOURCE`, which the log redactor, the TUI's
+concatenated-credential check and the live-cassette leak check read. The
+TUI now knows Google's `AQ.` keys and requires a full key shape.
+
 `PROVIDER_KEY_PATTERNS_BY_PROVIDER` (`packages/harness/src/logger/redaction.ts`)
 is a provider fact, pinned to llm's provider list by `satisfies`. The TUI
 restates a subset of the prefixes (`hasConcatenatedCredentialPrefix`,

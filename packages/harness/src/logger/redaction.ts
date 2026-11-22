@@ -3,7 +3,7 @@ import { RegExp as EffectRegExp } from 'effect';
 
 // Local imports
 import { flattenError } from '@logger/formatLogData';
-import type { ApiKeyProviderId } from '@texra-ai/llm';
+import { API_KEY_PATTERN_SOURCE } from '@texra-ai/llm';
 
 const REDACTED = '[redacted]';
 
@@ -13,37 +13,11 @@ const JSON_STRING_PROPERTY_PATTERN =
   /("((?:[^"\\]|\\.)*)"\s*:\s*)"(?:[^"\\]|\\.)*"/g;
 const SECRET_FIELD_NAME_PATTERN = /API[_-]?KEY|TOKEN|SECRET|PASSWORD/i;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=_-]+/g;
-const OPENAI_COMPATIBLE_API_KEY_PATTERN = /\bsk-[A-Za-z0-9_-]{12,}\b/g;
-const GOOGLE_STANDARD_API_KEY_PATTERN = /\bAIza[A-Za-z0-9_-]{20,}\b/g;
-const GOOGLE_AUTH_API_KEY_PATTERN = /\bAQ\.[A-Za-z0-9._-]{20,}\b/g;
-const XAI_API_KEY_PATTERN = /\bxai-[A-Za-z0-9_-]{12,}\b/g;
-
-const OPENAI_COMPATIBLE_PATTERNS = [OPENAI_COMPATIBLE_API_KEY_PATTERN];
-
-/**
- * The key shapes each configurable provider issues. The `satisfies` is the
- * point of the table: adding a provider to `API_KEY_PROVIDER_IDS` without
- * naming its key shape here is a compile error, so a new provider cannot ship
- * with its keys unredacted. Representative keys for each shape are the
- * redaction test's own fixture, not production data.
- */
-const PROVIDER_KEY_PATTERNS_BY_PROVIDER = {
-  openai: OPENAI_COMPATIBLE_PATTERNS,
-  anthropic: OPENAI_COMPATIBLE_PATTERNS,
-  google: [GOOGLE_STANDARD_API_KEY_PATTERN, GOOGLE_AUTH_API_KEY_PATTERN],
-  xai: [XAI_API_KEY_PATTERN],
-  deepseek: OPENAI_COMPATIBLE_PATTERNS,
-  moonshot: OPENAI_COMPATIBLE_PATTERNS,
-  dashscope: OPENAI_COMPATIBLE_PATTERNS,
-  minimax: OPENAI_COMPATIBLE_PATTERNS,
-  glm: OPENAI_COMPATIBLE_PATTERNS,
-  meta: OPENAI_COMPATIBLE_PATTERNS,
-  kimiCode: OPENAI_COMPATIBLE_PATTERNS,
-} as const satisfies Record<ApiKeyProviderId, readonly RegExp[]>;
-
-const PROVIDER_KEY_PATTERNS = [
-  ...new Set(Object.values(PROVIDER_KEY_PATTERNS_BY_PROVIDER).flat()),
-];
+/** Every provider's key shape (llm owns which shapes a provider issues). */
+const PROVIDER_KEY_PATTERN = new RegExp(
+  String.raw`\b(?:${API_KEY_PATTERN_SOURCE})\b`,
+  'g',
+);
 
 /**
  * Format an unowned failure for a fatal-error/startup dialog: full detail
@@ -58,7 +32,7 @@ export function formatFatalErrorDetail(error: unknown): string {
 }
 
 export function redactSecrets(text: string): string {
-  let redacted = text
+  return text
     .replaceAll(
       JSON_STRING_PROPERTY_PATTERN,
       (match, property: string, name: string) =>
@@ -70,13 +44,8 @@ export function redactSecrets(text: string): string {
       SECRET_ASSIGNMENT_PATTERN,
       (_match, name: string) => `${name}=${REDACTED}`,
     )
-    .replaceAll(BEARER_PATTERN, `Bearer ${REDACTED}`);
-
-  for (const pattern of PROVIDER_KEY_PATTERNS) {
-    redacted = redacted.replaceAll(pattern, REDACTED);
-  }
-
-  return redacted;
+    .replaceAll(BEARER_PATTERN, `Bearer ${REDACTED}`)
+    .replaceAll(PROVIDER_KEY_PATTERN, REDACTED);
 }
 
 const EMAIL_LIKE_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
