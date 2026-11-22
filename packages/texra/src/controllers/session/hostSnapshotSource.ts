@@ -31,6 +31,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import {
+  appSignalStream,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
@@ -47,7 +48,7 @@ import {
   APPROVAL_POLICY_SETTING,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { recentCommitLabels } from '@texra-ai/harness/node';
+import { isPathWithin, recentCommitLabels } from '@texra-ai/harness/node';
 import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import type {
@@ -149,12 +150,17 @@ export interface HostSnapshotSource {
     | Path.Path
     | ChildProcessSpawner
   >;
-  /** The project's files changed on disk, or the surface asked for a relist. */
+  /** The project's files changed on disk outside TeXRA, or the surface
+   *  asked for a relist. TeXRA's own writes (`workspaceFilesWritten`) are
+   *  followed by the source itself. */
   readonly refreshFiles: Effect.Effect<
     void,
     never,
     FileSystem.FileSystem | Path.Path
   >;
+  /** Each write TeXRA made inside the project, for a host view of the
+   *  project's files beside the launcher (the desktop's file tree). */
+  readonly filesWritten: Stream.Stream<void, never, AppSignals>;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** A tool may have been installed: the missing tools are checked again,
    *  with the credential. */
@@ -214,6 +220,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     | AgentCatalog
     | Secrets
     | SubscriptionAccounts
+    | FileSystem.FileSystem
+    | Path.Path
   > {
     const { stores } = options;
     const appState = yield* AppState;
@@ -393,6 +401,25 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
       Effect.andThen(loadCredential, catalogs),
     );
+    // A write TeXRA made inside the project (an accepted output or diff, a
+    // service task's file) can add a file the launcher lists, on every host
+    // alike; a host may also follow edits made outside TeXRA
+    // (`refreshFiles`).
+    const root = options.root;
+    const writtenInProject = ({
+      absolutePaths,
+    }: {
+      readonly absolutePaths: readonly string[];
+    }) =>
+      root !== undefined &&
+      absolutePaths.some((written) => isPathWithin(root, written));
+    yield* follow(
+      Stream.filter(
+        yield* subscribeAppSignal('workspaceFilesWritten'),
+        writtenInProject,
+      ),
+      loadFiles,
+    );
     // The approval policy is read live as each snapshot is mapped; a
     // settings view's write republishes the inputs so the change shows.
     yield* follow(
@@ -474,6 +501,10 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         { concurrency: 'unbounded', discard: true },
       ).pipe(Effect.andThen(write({ loaded: true }))),
       refreshFiles: loadFiles,
+      filesWritten: appSignalStream('workspaceFilesWritten').pipe(
+        Stream.filter(writtenInProject),
+        Stream.as(undefined),
+      ),
       refreshCommits: loadCommits,
       refreshHostBanners: hostBanners,
       refreshWorkspaceRoots: Effect.suspend(() =>
