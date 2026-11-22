@@ -57,7 +57,8 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { type ChatLaunch, setupAgent } from '@texra/agent/entryAgent';
+import { setupAgent } from '@texra/agent/entryAgent';
+import { type ChatLaunch, chatOf } from '@texra/shared/session/surface';
 import { cliEntryAgent } from '@cli/runtime/cliEntryAgent';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { builtinSlashCommands } from './commands/registerBuiltins';
@@ -189,12 +190,7 @@ export async function runChat(
           ? init.setup
             ? setupAgent()
             : yield* cliEntryAgent
-          : {
-              label: resumed.label,
-              system: resumed.system,
-              tools: resumed.tools,
-              temperature: resumed.temperature,
-            };
+          : chatOf(resumed);
       const modelSelectionExit = yield* Effect.exit(
         credential.ready
           ? selectCliRunnableModel(

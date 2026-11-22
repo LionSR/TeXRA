@@ -6,7 +6,7 @@ import { entryAgent } from '@texra/agent/entryAgent';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import type { LaunchPatchSchema } from '@texra/shared/session/surface';
+import { chatOf, type LaunchPatchSchema } from '@texra/shared/session/surface';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostCommand, { kind: 'launch' }>;
@@ -77,11 +77,6 @@ export function launchFormOf(
     skills: [...(config.skills ?? [])],
     workingDirectory: config.workingDirectory ?? '',
     mediaFiles: [...config.mediaFiles],
-    chat: {
-      label: config.label,
-      system: config.system,
-      tools: [...config.tools],
-      temperature: config.temperature,
-    },
+    chat: chatOf(config),
   };
 }

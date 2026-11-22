@@ -5,7 +5,7 @@
  * plugins are on; each plugin says what its own tools are for in its
  * `prompt` section, so a plugin that is off adds nothing here.
  */
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { ChatLaunch } from '@texra/shared/session/surface';
 
 /** The name its runs carry. */
 export const ENTRY_AGENT_NAME = 'assistant';
@@ -64,12 +64,6 @@ const ENTRY_TOOLS: readonly string[] = Object.freeze([
   'ask_user_question',
   'github_subscription',
 ]);
-
-/** The fields of a launch configuration that say what a chat run is. */
-export type ChatLaunch = Pick<
-  AgentConfig,
-  'label' | 'system' | 'tools' | 'temperature'
->;
 
 /**
  * The entry agent as a launch configuration names it: its system text and

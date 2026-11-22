@@ -2,7 +2,8 @@
 import { Effect, Schema } from 'effect';
 
 import { envVar } from '@texra-ai/harness/node';
-import { type ChatLaunch, entryAgent } from '@texra/agent/entryAgent';
+import { entryAgent } from '@texra/agent/entryAgent';
+import type { ChatLaunch } from '@texra/shared/session/surface';
 
 import { VALIDATION_AGENT, VALIDATION_SWITCH } from './models/validationSwitch';
 

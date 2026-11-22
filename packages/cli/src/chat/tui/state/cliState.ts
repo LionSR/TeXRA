@@ -13,7 +13,7 @@ import {
   FACT_SEPARATOR,
 } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
-import type { ChatLaunch } from '@texra/agent/entryAgent';
+import type { ChatLaunch } from '@texra/shared/session/surface';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import {
   applySurfaceAction,

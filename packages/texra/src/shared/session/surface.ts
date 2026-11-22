@@ -13,6 +13,8 @@
  */
 import { Option, Schema, SchemaGetter, Struct } from 'effect';
 import {
+  AgentConfigSchema,
+  type AgentConfig,
   decodingDefault,
   FileFieldsSchema,
   RunIdSchema,
@@ -49,6 +51,27 @@ const UIFileFieldsSchema = FileFieldsSchema.mapFields(
   }),
 );
 
+/** The fields of a run's config that say what chat it is. */
+const CHAT_FIELDS = [
+  'label',
+  'system',
+  'tools',
+  'temperature',
+  'toolScope',
+] as const;
+
+/** A chat as a launch names it: its name, system text, tools, temperature
+ *  and tool scope, as a run's config records them. */
+const ChatLaunchSchema = Schema.Struct(
+  Struct.pick(AgentConfigSchema.fields, CHAT_FIELDS),
+);
+export type ChatLaunch = typeof ChatLaunchSchema.Type;
+
+/** The chat a stored run's config describes: what Run again…, a resumed
+ *  terminal chat and the conversation the terminal adopts start again. */
+export const chatOf = (config: AgentConfig): ChatLaunch =>
+  Struct.pick(config, CHAT_FIELDS);
+
 /**
  * The new-task composer's selections, separate from host-derived state:
  * one instruction for the entry agent, which chats. The file lists are what a
@@ -64,19 +87,9 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
      *  launch activates again; a new task clears them. */
     skills: decodingDefault(Schema.Array(Schema.String), []),
     /** The run Run again… opened the form on, as its config records it
-     *  (its name, system text and tools), which its launch starts again;
-     *  null, the entry agent. A new task clears it. */
-    chat: decodingDefault(
-      Schema.NullOr(
-        Schema.Struct({
-          label: Schema.String,
-          system: Schema.String,
-          tools: Schema.Array(Schema.String),
-          temperature: Schema.Finite,
-        }),
-      ),
-      null,
-    ),
+     *  ({@link chatOf}), which its launch starts again; null, the entry
+     *  agent. A new task clears it. */
+    chat: decodingDefault(Schema.NullOr(ChatLaunchSchema), null),
     baseFile: decodingDefault(Schema.String, ''),
     /** Per-task approval, applied at launch by `launchApprovalOptions`. */
     approval: decodingDefault(

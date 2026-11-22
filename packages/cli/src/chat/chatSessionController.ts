@@ -62,6 +62,7 @@ import {
   presentInTranscript,
 } from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
+import { chatOf } from '@texra/shared/session/surface';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
@@ -239,20 +240,9 @@ export function createChatSessionController(
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
-  const adoptRunConfig = (
-    config: Pick<
-      AgentConfig,
-      'label' | 'system' | 'tools' | 'temperature' | 'model'
-    >,
-    modelSource?: 'history',
-  ): void =>
+  const adoptRunConfig = (config: AgentConfig, modelSource?: 'history'): void =>
     patchSessionMeta({
-      chat: {
-        label: config.label,
-        system: config.system,
-        tools: config.tools,
-        temperature: config.temperature,
-      },
+      chat: chatOf(config),
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
     });
