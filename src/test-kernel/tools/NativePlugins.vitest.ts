@@ -513,7 +513,7 @@ describe(
                   'native_die of plugin echoes failed: a defect',
                   'native_throw of plugin echoes failed: a synchronous throw',
                   'native_raw of plugin echoes failed: a throw outside any effect',
-                  'native_hang of plugin echoes did not finish within 60s.',
+                  'native_hang of plugin echoes did not finish within 1m.',
                 ]);
                 // The run went on, on the layer whose fiber died.
                 expect(toolOutputs(roots.storage, runId).at(-1)).toBe(
