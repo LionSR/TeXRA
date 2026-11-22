@@ -42,7 +42,7 @@ export const stageStyles = css`
 
   .stage-time {
     font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     margin-inline-start: var(--wa-space-2xs);
   }
 

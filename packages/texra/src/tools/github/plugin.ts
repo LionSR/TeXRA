@@ -25,6 +25,10 @@ export const githubActivity: TexraPlugin = texraPlugin({
     // cover repos and issues but the persistence key is stable.
     id: 'github-pr-subscription',
     tools: [GitHubSubscriptionTool],
+    prompt: ({ offered }) =>
+      offered.includes('github_subscription')
+        ? 'Use `github_subscription` when the user asks you to follow up on review comments or CI of a pull request.'
+        : '',
     toggle: 'off',
     processLayer: {
       layer: gitHubSubscriptionsLayer,

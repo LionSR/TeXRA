@@ -44,7 +44,7 @@ export const telemetryNoticeIfDue = Effect.fn('telemetryNoticeIfDue')(
     yield* state.update(NOTICE_SHOWN_KEY.key, true);
     // The config line as the file stores it: the row's key under the
     // catalog's namespace.
-    return `${USAGE_LOGGING_SENDS} Turn it off with "${config.catalog.namespace}.${TELEMETRY_ENABLED_SETTING.key}": false, ${USAGE_LOGGING_ENV_OPT_OUT}. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
+    return `${USAGE_LOGGING_SENDS} Turn it off with "${config.catalog.namespace}.${TELEMETRY_ENABLED_SETTING.key}": false, ${USAGE_LOGGING_ENV_OPT_OUT}. The agent field names only a program TeXRA ships; a chat sends none. The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
   },
   // A store failure must not stop a host starting; say so and show nothing.
   Effect.catch((error) =>

@@ -2,47 +2,76 @@
 import { Schema, Struct } from 'effect';
 import { decodingDefault } from './schemaDefaults.js';
 
-import {
-  AGENT_SOURCE,
-  CatalogAgentSourceSchema,
-  InlinePersonaSchema,
-} from './agent';
 import { ActivatedSkillsSchema } from './activeSkills';
-import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { FileFieldsSchema } from './fileFields';
 
+/** A run's sampling temperature; the model's own range is narrower. */
+export const TemperatureSchema = Schema.Number.check(
+  Schema.isGreaterThanOrEqualTo(0),
+).check(Schema.isLessThanOrEqualTo(1));
+
+/** What Windows rejects in a file name, besides control characters. */
+const UNSAFE_FILE_NAME_CHARACTERS = '<>:"/\\|?*';
+/** Windows' device names, which no file may take, with or without an
+ *  extension. */
+const RESERVED_FILE_NAME =
+  /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(?:\..*)?$/iu;
+/** The longest segment a label gives, in code points. */
+const LABEL_FILE_NAME_MAX = 80;
+
 /**
- * Where a run's agent comes from: the catalog source its entry lives in, or
- * the persona the launch carried instead of naming a file (`inline`),
- * recorded so a resume runs it with no file. The persona is the agent's, so
- * its name is `agent`.
+ * A run's display name as one file-name segment, safe on every platform.
+ * A label is free text (a model writes a child's), so a path separator,
+ * a character Windows rejects or a control character becomes `_`; leading
+ * dots and spaces go (no `..`, no hidden file), and trailing ones, which
+ * Windows drops; a device name gets a leading `_`; the result is at most
+ * {@link LABEL_FILE_NAME_MAX} code points, and `run` when nothing is left.
+ * Every file or folder named for a run takes its label through this alone.
  */
-const AgentOriginSchema = Schema.Union([
-  Schema.Struct({ kind: CatalogAgentSourceSchema }),
-  Schema.Struct({
-    kind: Schema.Literal(AGENT_SOURCE.INLINE),
-    persona: InlinePersonaSchema.mapFields(Struct.omit(['name'])),
-  }),
-]);
+export function labelFileName(label: string): string {
+  const replaced = [...label]
+    .map((char) =>
+      char.charCodeAt(0) < 0x20 ||
+      char === '\u007f' ||
+      UNSAFE_FILE_NAME_CHARACTERS.includes(char)
+        ? '_'
+        : char,
+    )
+    .join('')
+    .replace(/^[.\s]+/u, '');
+  const segment = [...replaced]
+    .slice(0, LABEL_FILE_NAME_MAX)
+    .join('')
+    .replace(/[.\s]+$/u, '');
+  if (segment === '') return 'run';
+  return RESERVED_FILE_NAME.test(segment) ? `_${segment}` : segment;
+}
 
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
   Struct.assign({
-    agent: Schema.String,
+    /** The run's display name: what its card, the listings and its run
+     *  directory show. The launch names it; nothing resolves it. */
+    label: Schema.String,
+    /** The run's own system text, before what the harness appends (project
+     *  instructions, memories, tool-use instructions, plugin sections). */
+    system: decodingDefault(Schema.String, ''),
+    /** The tools the run declares, by name; `mcp__<server>__*` is every
+     *  tool that server lists. A run that declares none writes text only. */
+    tools: decodingDefault(Schema.Array(Schema.NonEmptyString), []),
+    temperature: decodingDefault(TemperatureSchema, 1.0),
     /**
-     * Resolved source of `agent`. A boundary that validated the agent pins it;
-     * launch (`prepareAgentDefinition`) stamps the entry it resolved, so every
-     * run record carries it. Launch, resume, rerun and the remote checks read
-     * this instead of re-resolving the ambiguous bare name. Absent only on a
-     * payload not yet launched, which launch resolves by name.
+     * Which tools join the ones the run declares, decided by its launch.
+     * Absent: a top-level run is offered the plugins' injected tools and the
+     * installed plugins' tools, a child the injected tools only.
+     * `declared`: none join (an installed plugin's agent that names its
+     * tools gets exactly those). `topLevel`: both join wherever it runs (a
+     * `self()` child, which runs as its caller; an installed plugin's agent
+     * that names no tools, which inherits them as a Claude Code subagent
+     * does). A script's run and a run that declares no tools are offered no
+     * injected tool either way.
      */
-    agentSource: Schema.optional(AgentOriginSchema),
-    /**
-     * A `self()` child: it runs as its caller, so it is offered the installed
-     * plugins' tools as a top-level run is, still narrowed to what its
-     * caller's step offered.
-     */
-    asCaller: Schema.optional(Schema.Boolean),
+    toolScope: Schema.optional(Schema.Literals(['declared', 'topLevel'])),
     model: Schema.String,
     instruction: decodingDefault(Schema.String, ''),
     /** Original user instruction preserved across nested tool-use delegation.
@@ -67,9 +96,6 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      * own keys.
      */
     launch: Schema.optional(Schema.Record(Schema.String, Schema.Json)),
-    /** The agents this run and its children may delegate to, pinned at its
-     *  launch; absent, the workspace's visible agents. */
-    delegationAgentScope: Schema.optional(AgentDelegationScopeSchema),
     /**
      * JSON Schema (a plain object) describing a structured output the agent must
      * submit through the synthetic `submit_output` terminal tool. Serializable by
@@ -134,4 +160,4 @@ export type AgentConfig = typeof AgentConfigSchema.Type;
 
 /** Partial agent configuration accepted before launch-time normalization. */
 export type AgentConfigPayload = Partial<AgentConfig> &
-  Pick<AgentConfig, 'agent' | 'model'>;
+  Pick<AgentConfig, 'label' | 'model'>;

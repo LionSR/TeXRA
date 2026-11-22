@@ -31,6 +31,7 @@ import {
   meansAbsent,
   fileWatchRetrySchedule,
 } from '@utils/files/fsEntryExists';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type PerKeyLane,
@@ -74,7 +75,7 @@ function failure(
  * again; elsewhere the same error is a real denial.
  */
 const heldOpenOnWindows = (error: PlatformError.PlatformError): boolean =>
-  process.platform === 'win32' &&
+  IS_WINDOWS &&
   (error.reason._tag === 'PermissionDenied' || error.reason._tag === 'Busy');
 
 /** The keys stored under `directory`, staged writes left out. */

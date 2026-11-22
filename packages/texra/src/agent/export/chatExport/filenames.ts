@@ -7,7 +7,7 @@
  */
 interface ExportFilenameInput {
   readonly timestamp: string;
-  readonly config: { readonly agent?: string; readonly model?: string };
+  readonly config: { readonly label?: string; readonly model?: string };
 }
 
 /**
@@ -23,8 +23,8 @@ export function generateExportFilename(
     new Date(input.timestamp).toISOString().slice(0, 10),
   ];
 
-  if (input.config.agent) {
-    parts.push(sanitizeFilename(input.config.agent));
+  if (input.config.label) {
+    parts.push(sanitizeFilename(input.config.label));
   }
   if (input.config.model) {
     const shortModel = input.config.model

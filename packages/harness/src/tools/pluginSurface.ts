@@ -83,8 +83,7 @@ export {
   type DiffHunks,
   type Hunk,
 } from '@tools/unifiedDiff';
-// JSON-RPC 2.0 over a child process's stdio (a language server's framing,
-// or one message per line).
+// JSON-RPC 2.0 over a child process's stdio, in a language server's framing.
 export {
   connectJsonRpcProcess,
   makeJsonRpcConnection,
@@ -158,7 +157,7 @@ export {
 // resources root a plugin's bundled files ship under (the port is the root
 // entry's).
 export {
-  AgentDirectories,
+  HostResources,
   AppState,
   type AppStateStore,
 } from '@platform/interfaces';

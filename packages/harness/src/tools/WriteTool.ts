@@ -3,7 +3,6 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports - tools
-import type { AgentCatalog } from '@agent/index/agentCatalog';
 import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ConfigProvider } from '@shared/config/settings';
@@ -45,7 +44,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog | AppSignals
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AppSignals
 > {
   const call = yield* ToolContext;
   const prepared = yield* resolveWritableTarget(input.path, {

@@ -45,7 +45,7 @@ import {
   Rejected,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { envFlag, nodeFileServices } from '@texra-ai/harness/node';
+import { envFlag, IS_WINDOWS, nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,
@@ -848,7 +848,7 @@ export const linkService = Effect.fn('server.linkService')(function* (
       reason: `${NO_SERVICE} is set`,
       failure: { kind: 'none' },
     });
-  if (process.platform === 'win32')
+  if (IS_WINDOWS)
     return yield* new ServiceUnavailable({
       reason: WINDOWS_UNSUPPORTED,
       failure: { kind: 'none' },

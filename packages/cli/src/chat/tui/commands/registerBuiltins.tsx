@@ -11,7 +11,6 @@ import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { PLUGINS_TUI } from './pluginsCopy';
-import { AgentListForm } from '../forms/AgentListForm';
 import {
   ApprovalPolicyForm,
   type ApprovalFormValue,
@@ -27,10 +26,7 @@ import { SkillsListForm } from '../forms/SkillsListForm';
 import { selectedRunId, sessionMeta } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
-import {
-  applyCliModelSelection,
-  applyInitialCliAgentSelection,
-} from './handlers/agentModelCommands';
+import { applyCliModelSelection } from './handlers/modelCommands';
 import {
   applyCliApprovalPolicySelection,
   revokeCliRunGrant,
@@ -62,15 +58,12 @@ import {
   type SlashCommands,
   type SlashFormProps,
 } from './slashRegistry';
-import { openRegisteredCliSlashForm } from './slashForms';
 import { modelAccessContribution } from './modelAccessContribution';
 
-/** The built-in slash commands, with the two forms the chat opens itself:
- *  `/login` (the "Connect a model" panel) and `/agent` (a first run's
- *  pick). */
+/** The built-in slash commands, with the form the chat opens itself:
+ *  `/login` (the "Connect a model" panel). */
 export interface BuiltinSlashCommands extends SlashCommands {
   readonly login: SlashCommand;
-  readonly agent: SlashCommand;
 }
 
 /** Build the built-in slash commands. Each form reads the chat's slash
@@ -80,37 +73,6 @@ export function builtinSlashCommands(options: {
    *  where the chat holds none, and `/tasks` with it. */
   readonly connectService?: ConnectService;
 }): BuiltinSlashCommands {
-  function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const context = useSlashContext();
-    const meta = sessionMeta.get();
-    const selectable = context.session.canStartRootRun();
-    const onPick: FormAction<string> = (agent) =>
-      applyInitialCliAgentSelection(agent, context);
-    return (
-      <AgentListForm
-        currentAgent={meta.agent}
-        availableRows={props.availableRows}
-        selectable={selectable}
-        onSelect={bindSelection(context, props, onPick, {
-          // Picking the root agent and the root model is a single up-front
-          // choice before the first message, so chain straight into the model
-          // picker instead of closing — but only while still choosing the root
-          // and model selection is available. The agent form closes first:
-          // `takeActiveForm` requeues what it displaces, and a finished pick
-          // must not come back when the model picker closes.
-          onDone:
-            selectable && context.session.canSelectModel()
-              ? (value) => {
-                  props.onDone(value);
-                  openRegisteredCliSlashForm(model);
-                }
-              : props.onDone,
-        })}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
-  }
-
   function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const context = useSlashContext();
     const current = context.getApprovalPolicy();
@@ -277,15 +239,6 @@ export function builtinSlashCommands(options: {
     />
   );
 
-  const agent: SlashCommand = {
-    name: 'agent',
-    description: 'Choose the agent for this chat',
-    aliases: ['agents'],
-    category: 'configuration',
-    echo: 'ifPersists',
-    handler: applyInitialCliAgentSelection,
-    formComponent: AgentListFormAdapter,
-  };
   const model: SlashCommand = {
     name: 'model',
     description: 'Choose the model for this chat',
@@ -324,7 +277,6 @@ export function builtinSlashCommands(options: {
     {
       pluginId: 'agent-model',
       commands: [
-        agent,
         model,
         {
           name: 'models',
@@ -450,5 +402,5 @@ export function builtinSlashCommands(options: {
     },
     ...sessionContributions(),
   ]);
-  return { ...commands, login: modelAccess.login, agent };
+  return { ...commands, login: modelAccess.login };
 }

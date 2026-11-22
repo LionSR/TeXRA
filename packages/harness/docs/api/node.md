@@ -365,6 +365,14 @@ const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepsee
 const INPUT_HISTORY_LIMIT: 1000
 ```
 
+## IS_WINDOWS
+
+Whether the current platform is Windows (cached at module load).
+
+```ts
+const IS_WINDOWS: boolean
+```
+
 ## isGitRepository
 
 Whether `cwd` is inside a git work tree. A bare repository and the inside
@@ -551,8 +559,8 @@ const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path>
 Construct the Node services required by the agent package: the process
 platform plus the workspace roots of `workspaceDir`.
 
-Agent definitions are read from `agentsDir`; configuration and state are
-process-local, while run artifacts use the ordinary Node storage layout.
+Configuration and state are process-local, while run artifacts use the
+ordinary Node storage layout.
 
 ```ts
 function nodePlatform(options: NodePlatformOptions): AgentPlatform
@@ -564,7 +572,6 @@ Filesystem locations used by the default Node platform.
 
 ```ts
 interface NodePlatformOptions {
-  readonly agentsDir: string;
   readonly workspaceDir?: string;
   /**
    * The directory this platform stores run history, checkpoints and its

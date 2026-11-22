@@ -130,7 +130,7 @@ function sessionHeaderIdentityLine(
     ]);
   }
   const model = getModelLabel(meta.model || '-');
-  return joinFacts([`agent: ${meta.agent || 'chat'}`, `model: ${model}`]);
+  return joinFacts([`agent: ${meta.chat.label || 'chat'}`, `model: ${model}`]);
 }
 
 // Dedupe `<Static>` rows by the entry's own id (a random id from the
@@ -176,7 +176,7 @@ function staticTranscriptItemMetrics(
       bytes:
         Buffer.byteLength(item.identityLine, 'utf8') +
         Buffer.byteLength(item.meta.version, 'utf8') +
-        Buffer.byteLength(item.meta.agent, 'utf8') +
+        Buffer.byteLength(item.meta.chat.label, 'utf8') +
         Buffer.byteLength(item.meta.cwd, 'utf8') +
         64,
     };

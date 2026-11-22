@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { formatFatalErrorDetail } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
+import { effectDiagnosticsLayer, IS_WINDOWS } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 
 /** The extension entry's own channel. */
@@ -56,7 +56,7 @@ export const installUnhandledRejectionSurface = Effect.fn(
   // Windows paths differ in case between the install directory VS Code
   // reports and the frames Node prints.
   const comparable = (text: string): string =>
-    process.platform === 'win32' ? text.toLowerCase() : text;
+    IS_WINDOWS ? text.toLowerCase() : text;
   const ownDirectory = comparable(extensionPath);
   const report = (error: unknown) => {
     if (

@@ -79,7 +79,7 @@ export const logEntryStyles = css`
   .file-list-content .file-var,
   .file-list-content .file-source,
   .file-list-content .file-media {
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
   }
 
   .file-list-content .file-media {
@@ -228,7 +228,7 @@ export const logEntryStyles = css`
   }
 
   .details-summary > .icon {
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
   }
 
   .error-timestamp {

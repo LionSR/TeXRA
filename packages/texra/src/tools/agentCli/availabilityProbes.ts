@@ -8,7 +8,7 @@
 import { Effect, type FileSystem } from 'effect';
 
 // Local imports
-import { runsInWsl } from '@texra-ai/harness/node';
+import { IS_WINDOWS, runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage, causeChain } from '@texra-ai/harness/schemas';
 import { ToolProbeFailed } from '@texra-ai/harness/plugins';
 import { hasPackageManager } from '@texra/utils/system/toolChecks';
@@ -146,8 +146,7 @@ export const probeSdkBinaryStatus = Effect.fn('probeSdkBinaryStatus')(
  * command.
  */
 export function preferredInstallCommand(commands: InstallCommands): string {
-  if (commands.win32 != null && process.platform === 'win32')
-    return commands.win32;
+  if (commands.win32 != null && IS_WINDOWS) return commands.win32;
   // A getter holds no runtime to read `CommandDirs` from.
   const appDirs = commandDirs();
   for (const manager of SYSTEM_PACKAGE_MANAGERS) {

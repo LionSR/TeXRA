@@ -43,7 +43,9 @@ function formatRow(row: TranscriptRow): string {
 // Inside an Effect program with `session`:
 const runId = generateRunId();
 yield * session.view.subscribe([{ id: runId, fromSeq: 0 }]);
-const run = yield * session.start({ runId, agent: persona, instruction });
+const run =
+  yield *
+  session.start({ runId, label: 'reader', system, tools, instruction, model });
 yield * run.result;
 yield * session.drained;
 

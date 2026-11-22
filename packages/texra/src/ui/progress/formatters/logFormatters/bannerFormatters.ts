@@ -65,8 +65,8 @@ export function formatBannerContentTemplate(
   row: StreamingTextRow,
 ): FormatResult {
   const { timestamp, verbose, level, kind } = row;
+  // The projector leaves no streaming row whose text paints nothing.
   const trimmedContent = row.text.full.trim();
-  if (!trimmedContent) return null;
 
   const config = BANNER_CONFIG[kind];
   // Formatted only for the rows that actually paint one: this runs per

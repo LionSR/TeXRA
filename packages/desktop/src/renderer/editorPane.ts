@@ -15,7 +15,6 @@
 // request supersedes an older one by interrupting it, so no result needs
 // checking for staleness after it arrives.
 
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import {
@@ -46,7 +45,10 @@ import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
 import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
 
-import { createEditorFileNotice } from './editorFileNotice';
+import {
+  createEditorFileNotice,
+  renderNoticeCallout,
+} from './editorFileNotice';
 import {
   buildEditorDirectoryEntries,
   type EditorFileEntry,
@@ -137,9 +139,9 @@ interface EditorPaneCallbacks {
     contents: string,
     base: string | null,
   ): Effect.Effect<'saved' | 'changedOnDisk', EditorPaneError>;
-  isReadOnly?(path: string): boolean;
-  /** Reports dirty state so the tab strip can show its indicator. */
-  onDirtyChange(path: string, dirty: boolean): void;
+  /** A path's unsaved state changed; the tab strip redraws its mark, which
+   *  it reads back through `hasUnsavedChanges`. */
+  onDirtyChange(path: string): void;
   /**
    * A tree row was activated. The pane does NOT load the file itself: the shell
    * owns tabs, so it creates (or focuses) the editor tab and calls back into
@@ -285,7 +287,7 @@ export function createEditorPane(
       ...state,
       dirty: withMember(state.dirty, path, dirty),
     }));
-    callbacks.onDirtyChange(path, dirty);
+    callbacks.onDirtyChange(path);
   }
   const isDirty = (path: string): boolean =>
     SubscriptionRef.getUnsafe(tree).dirty.has(path);
@@ -315,13 +317,7 @@ export function createEditorPane(
   }
 
   function treeTemplate(state: TreeState): TemplateResult {
-    if (state.error) {
-      return html`
-        <wa-callout class="desktop-editor-tree-empty" variant="danger">
-          ${waIcon('triangle-exclamation', { slot: 'icon' })} ${state.error}
-        </wa-callout>
-      `;
-    }
+    if (state.error) return renderNoticeCallout(state.error);
     if (state.loading) {
       return renderLoadingState('Loading project files…');
     }
@@ -621,13 +617,6 @@ export function createEditorPane(
               ...state,
               openPath: path,
             }));
-            target.updateOptions({
-              readOnly: callbacks.isReadOnly?.(path) ?? false,
-              readOnlyMessage: {
-                value:
-                  'This definition is read-only. Use **Customize** in Settings to edit a copy.',
-              },
-            });
             notice.clear(path);
           }).pipe(
             Effect.catch((error) =>
@@ -712,8 +701,7 @@ export function createEditorPane(
   function save(path: string | undefined, overwrite = false): Promise<void> {
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
-    if (!path || !file || !model || callbacks.isReadOnly?.(path))
-      return Promise.resolve();
+    if (!path || !file || !model) return Promise.resolve();
     return run(
       file.lane
         .withPermit(

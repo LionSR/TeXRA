@@ -4,13 +4,11 @@ import { Context, Effect, Option, Predicate, Schema } from 'effect';
 import {
   codexBackendModelId,
   EFFORT_SCALE,
+  isCodexModel,
   ReasoningEffort,
 } from '@texra-ai/llm';
 import { executeCommand } from '@texra-ai/harness/node';
-import {
-  isCodexModel,
-  type AgentCliEffort,
-} from '@texra/shared/agentCliSettings';
+import { type AgentCliEffort } from '@texra/shared/agentCliSettings';
 import {
   agentCliReasoning,
   selectAgentCliModel,

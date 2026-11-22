@@ -61,29 +61,15 @@ const DEFAULT_TIKZ_TEMPLATE =
   '{{ tikzpicture }}\n' +
   '\\end{document}';
 
-// The terminal client's own `.texra/config.json` rows (`agent`, `model`,
-// `chat`, `run`, `outputFormat`): which agent and model a command starts with,
-// and how it prints. Only the CLI runtime reads them; the extension and desktop
-// resolve an agent and a model from their own surfaces.
-
-/** An agent key or name, as typed into `.texra/config.json`. */
-const CliAgentSchema = Schema.optional(
-  Schema.Trim.check(Schema.isMinLength(1)),
-);
+// The terminal client's own `.texra/config.json` rows (`model`, `chat`,
+// `run`, `outputFormat`): which model a command starts with, and how it
+// prints. Only the CLI runtime reads them; the extension and desktop resolve
+// a model from their own surfaces.
 
 /** A model id, validated against the model registry where it is used. */
 const CliModelSchema = Schema.optional(
   Schema.Trim.check(Schema.isMinLength(1)),
 );
-
-export const CLI_AGENT_SETTING = Object.freeze({
-  key: 'agent',
-  slot: 'config',
-  schema: CliAgentSchema,
-  title: 'Default agent',
-  description:
-    'Agent `texra chat` starts with when neither `--agent` nor `texra.chat.agent` names one.',
-} as const satisfies SettingRow<string | undefined>);
 
 export const CLI_MODEL_SETTING = Object.freeze({
   key: 'model',
@@ -94,21 +80,17 @@ export const CLI_MODEL_SETTING = Object.freeze({
     'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
 } as const satisfies SettingRow<string | undefined>);
 
-/** `texra chat`'s overrides of the top-level `agent`/`model` rows. */
+/** `texra chat`'s override of the top-level `model` row. */
 export const CLI_CHAT_SETTING = Object.freeze({
   key: 'chat',
   slot: 'config',
-  schema: Schema.optional(
-    Schema.Struct({ agent: CliAgentSchema, model: CliModelSchema }),
-  ),
+  schema: Schema.optional(Schema.Struct({ model: CliModelSchema })),
   title: 'Chat defaults',
   description:
-    'Agent and model `texra chat` starts with, overriding the top-level defaults.',
-} as const satisfies SettingRow<
-  { readonly agent?: string; readonly model?: string } | undefined
->);
+    'Model `texra chat` starts with, overriding the top-level `texra.model`.',
+} as const satisfies SettingRow<{ readonly model?: string } | undefined>);
 
-/** `texra run`'s override of the top-level `model` row; its agent is an argument. */
+/** `texra run`'s override of the top-level `model` row. */
 export const CLI_RUN_SETTING = Object.freeze({
   key: 'run',
   slot: 'config',
@@ -252,7 +234,7 @@ export const CUSTOM_REPLACEMENTS_SETTING = Object.freeze({
  * sentence.
  */
 const USAGE_RECORD_WORDING = {
-  agentName: 'agent',
+  agentName: 'program name',
   model: 'model',
   provider: 'provider API',
   usageRoute: 'billing route',
@@ -355,7 +337,6 @@ export const SOX_PATH_SETTING = Object.freeze({
 const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
   GIT_COMMITS_TO_SHOW_SETTING,
   SOX_PATH_SETTING,
-  CLI_AGENT_SETTING,
   CLI_MODEL_SETTING,
   CLI_CHAT_SETTING,
   CLI_RUN_SETTING,

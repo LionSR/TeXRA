@@ -163,7 +163,7 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
   html`<wa-button
     appearance="plain"
     size="s"
-    class="shell-header-button icon-button is-size-l"
+    class="shell-header-button action-icon-button is-size-l"
     aria-label=${label}
     title=${label}
     >${waIcon(name)}</wa-button
@@ -260,6 +260,7 @@ const workbench = (
           dockTab(id, {
             api: () => api!,
             tab: (id) => tabs.find((tab) => tab.id === id),
+            isDirty: () => false,
             open: noop,
             close: (id) => api?.getPanel(id)?.api.close(),
           }),

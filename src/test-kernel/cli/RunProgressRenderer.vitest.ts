@@ -60,7 +60,7 @@ const publishRun = (
       type: 'run.config',
       aggregateId,
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent,
+        label: agent,
         model: 'deepseek/deepseek-v4-flash',
         inputFiles: ['paper.tex'],
         contextFiles: [],

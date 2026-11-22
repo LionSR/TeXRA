@@ -104,19 +104,22 @@ export interface SessionHost extends Omit<HostInteractions, 'dispose'> {
 }
 
 /** What starting a run takes: the start as data (`StartRequestSchema`:
- *  an agent and its instruction, or a resolved `config`, with the optional
- *  `runId`, `continues`, `helperModel`, `approval` and `interactive`), and
- *  the run's own tools. */
+ *  a system text, the tools it declares and its instruction, or a resolved
+ *  `config`, with the optional `runId`, `continues`, `helperModel`,
+ *  `approval` and `interactive`), and the run's own tools. */
 export type StartInput = typeof StartRequestSchema.Type & {
-  /** Tools for this run only, made with `defineTool`. A resume needs the
-   *  same tools passed again. */
-  readonly tools?: readonly ITool[];
+  /** Tools for this run only, made with `defineTool`: offered whatever the
+   *  run declares. A resume needs the same tools passed again. */
+  readonly runTools?: readonly ITool[];
 };
 
 /** What a resume takes besides the run's id: the same custom tools the
  *  run was started with, whether it stays open for follow-ups, and the
  *  provider keys of the environment it resumes from. */
-export type ResumeInput = Pick<StartInput, 'tools' | 'interactive' | 'apiKeys'>;
+export type ResumeInput = Pick<
+  StartInput,
+  'runTools' | 'interactive' | 'apiKeys'
+>;
 
 /** One run of an agent, from the moment it exists in its session. */
 export interface Run {
@@ -201,7 +204,7 @@ export interface Session {
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
    * returned to you and shown to no host: an input the launch will not run
-   * is a `LaunchRefused`, which for an unknown agent or model carries
+   * is a `LaunchRefused`, which for an unknown model carries
    * the notice a host shows for it.
    */
   readonly start: (
@@ -209,7 +212,7 @@ export interface Session {
   ) => Effect.Effect<Run, LaunchError | RunFailure>;
   /**
    * Continue a stored run from where its history stops, with the same kind
-   * of handle {@link start} gives. Pass the custom `tools` it was started
+   * of handle {@link start} gives. Pass the custom `runTools` it was started
    * with. A run already running or resuming here is not started again: the
    * handle of its running activation is answered, and `input` is not read.
    * A child an open call of its parent owns resumes the parent, whose

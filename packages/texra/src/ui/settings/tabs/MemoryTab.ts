@@ -53,7 +53,6 @@ export class MemoryTab extends TexraSignalElement {
             icon: 'arrows-rotate',
             text: 'Refresh memories',
             kind: 'secondary',
-            appearance: 'outlined',
             onClick: () =>
               postToHost({ command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA }),
           })}
@@ -61,7 +60,6 @@ export class MemoryTab extends TexraSignalElement {
             icon: 'folder-open',
             text: 'Open memory folder',
             kind: 'secondary',
-            appearance: 'outlined',
             onClick: () =>
               postToHost({
                 command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,

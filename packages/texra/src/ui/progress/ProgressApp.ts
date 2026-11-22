@@ -67,7 +67,7 @@ import './components/FileSelectGroup';
 import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
-import { editedProposal, formHost } from './proposalEdit';
+import { editedProposal } from './proposalEdit';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
@@ -363,9 +363,9 @@ export class ProgressApp extends LitElement {
     const asking = run?.label ?? 'An agent';
     return html`<section class="hero" aria-labelledby="shell-hero-title">
       <div class="hero-mark" aria-hidden="true">${waIcon('pencil')}</div>
-      <h1 id="shell-hero-title">Check ${data.agent} before it runs</h1>
+      <h1 id="shell-hero-title">Check ${data.label} before it runs</h1>
       <p>
-        ${asking} asked to run ${data.agent}. Change what you need, then approve
+        ${asking} asked to run ${data.label}. Change what you need, then approve
         to start it with your changes.
       </p>
       <div class="hero-actions">
@@ -385,10 +385,8 @@ export class ProgressApp extends LitElement {
   private renderEmptyState(
     view: SessionView,
     surface: Surface,
-    shownHost: HostSnapshot,
+    host: HostSnapshot,
   ): TemplateResult {
-    // Open on a proposal, the form offers the agents that run may launch.
-    const host = formHost(surface, view, shownHost);
     if (host.onboarding === 'needs-credential') {
       // Without a credential the pickers and files are meaningless: the
       // welcome card replaces the whole New-task state.

@@ -129,7 +129,6 @@ const DESKTOP_PALETTE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER,
   // One row per settings page that has a command, in nav order.
   'texra.showModels',
-  'texra.showAgents',
   'texra.showTools',
   'texra.showMemory',
   'texra.showGitSettings',

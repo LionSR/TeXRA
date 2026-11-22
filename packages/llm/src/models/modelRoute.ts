@@ -153,6 +153,13 @@ export function isUnservedModel(
   );
 }
 
+/** Whether the Codex backend runs `config` for TeXRA: an OpenAI model it
+ *  serves on a ChatGPT subscription that TeXRA serves too. The Codex CLI's
+ *  model choices are these. */
+export function isCodexModel(config: ModelConfig): boolean {
+  return codexSubscriptionOf(config) !== undefined && !isUnservedModel(config);
+}
+
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
 

@@ -29,6 +29,7 @@ import {
   formatRoundLabel,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import { entryAgent } from '@texra/agent/entryAgent';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { decideLaunchModel } from '@texra/model/modelOptions';
 
@@ -44,7 +45,12 @@ interface CompileFixerTarget {
   missingLatexdiffArtifact?: string;
 }
 
-/** Resolve editable targets and a latexFixer request from one documents
+/** How a compile fix is done, said in the first instruction of every
+ *  conversation a host opens to fix one. */
+export const COMPILE_FIX_RULES =
+  'Keep edits minimal and in place: never rewrite or replace a workspace file wholesale, never change the mathematical content, never delete content to silence an error, and never invent a reference. Compile with `latexmk -pdf -interaction=nonstopmode <file>` to get a log (many undefined-reference and rerun messages need only a full rebuild), fix one issue at a time and recompile to confirm: errors first, then references, citations and hyperlinks, then warnings and bad boxes. If the failure comes from how the compile was invoked (working directory, `TEXINPUTS`, a file missing where it compiles) and not from the source, report that and stop. When done, summarize what changed.';
+
+/** Resolve editable targets and a compile-fix conversation from one documents
  * projection, or `Rejected` with why it cannot run.
  * Model options are read by the caller before it captures the run's current documents.
  * The project root is explicit; only filesystem access comes from Effect context. */
@@ -70,7 +76,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     if (!savedTaskConfig || rounds === undefined) {
       return yield* new Rejected({
         reason:
-          'No document task found for this stream. Cannot run latexFixer.',
+          'No document task found for this stream. Cannot fix its compile failures.',
       });
     }
     const compileFailures = rounds.flatMap(compileFailuresOf);
@@ -86,11 +92,11 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     ]);
     if (!decision || decision._tag === 'Unavailable') {
       return yield* new Rejected({
-        reason: 'No model is available to launch latexFixer.',
+        reason: 'No model is available to fix the compile failures.',
       });
     }
     if (decision._tag === 'Fallback')
-      yield* Effect.logWarning(`latexFixer: ${decision.notice}`).pipe(
+      yield* Effect.logWarning(`compile fix: ${decision.notice}`).pipe(
         withLogChannel('CompileFixer'),
       );
 
@@ -113,20 +119,15 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     if (targets.length === 0) {
       return yield* new Rejected({
         reason:
-          'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
+          'No editable workspace file matched the compile failure. Accept the output into the workspace first, then fix the compile failures.',
       });
     }
 
-    // The catalog's latexFixer, not the program's own empty persona, in a
-    // chat, not the task's program again.
-    const {
-      agentSource: _programSource,
-      script: _program,
-      ...taskConfig
-    } = savedTaskConfig;
+    // The entry agent in a chat, not the task's program again.
+    const { script: _program, ...taskConfig } = savedTaskConfig;
     return {
       ...taskConfig,
-      agent: 'latexFixer',
+      ...entryAgent(),
       model,
       instruction: buildCompileFixerQuestion(
         compileFailures,
@@ -175,6 +176,7 @@ function buildCompileFixerQuestion(
     latexdiffContext,
     ...failureLines,
     'Use read_file/edit_file on the editable workspace target files. Use /executions paths only to inspect the generated output and logs.',
+    COMPILE_FIX_RULES,
     'If the failure is caused by a missing external dependency rather than editable LaTeX, report that clearly instead of inventing the missing file.',
   ]
     .filter(Boolean)

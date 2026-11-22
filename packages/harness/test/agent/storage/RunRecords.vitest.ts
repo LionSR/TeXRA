@@ -58,7 +58,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             Effect.gen(function* () {
               const records = getRunRecords(runId);
               const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-                agent: 'worker',
+                label: 'worker',
                 model: 'openai/gpt-6.1-sol',
                 instruction: 'private instruction',
               });
@@ -92,7 +92,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               session,
               runId,
               Schema.decodeUnknownSync(AgentConfigSchema)({
-                agent: 'worker',
+                label: 'worker',
                 model: 'openai/gpt-6.1-sol',
               }),
             );

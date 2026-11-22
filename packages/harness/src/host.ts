@@ -4,8 +4,8 @@
  * read it; an embedder that runs agents from a program needs none of it.
  *
  * It holds the process layer a host builds once (`processLayer`), the
- * services a host serves its views from (agent catalog, skills, installed
- * plugins, model options, tool availability, storage maintenance), the
+ * services a host serves its views from (skills, installed plugins, model
+ * options, tool availability, storage maintenance), the
  * presenters of the root's `HostInteractions`, and the helpers the hosts
  * share for files, errors and logs.
  *
@@ -55,34 +55,6 @@ export type { PlatformServices } from '@platform/processRuntime';
 export { scopedFork, type ScopedFork } from '@platform/processRuntime';
 // What a run's program requires of the process, beneath `ProcessServices`.
 export type { RunServices } from '@agent/runtime/ToolServices';
-export type { AgentCatalogServices } from '@agent/index/agentEntry';
-// The agent catalog: reads, launch resolution, custom copies, the workspace's
-// selection, and the agent directories a host serves it.
-export {
-  AgentCatalog,
-  AgentCatalogLoadError,
-  AgentNotFound,
-  type AgentCatalogShape,
-  type WorkspaceAgents,
-  type WorkspaceAgentsStores,
-} from '@agent/index/agentCatalog';
-export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
-export type {
-  WorkspaceAgentsController,
-  WorkspaceAgentsControllerDeps,
-  WorkspaceAgentsEntry,
-} from '@agent/workspaceAgents/WorkspaceAgentsController';
-export type { AgentDelegationScope } from '@shared/schemas';
-export {
-  AgentCustomizeRefused,
-  AgentDirectoryService,
-  CUSTOM_AGENT_DIR_KEY,
-  readCustomAgentDir,
-  type AgentCustomization,
-  type AgentDirectoryServiceOptions,
-} from '@agent/index/AgentDirectoryService';
-export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
-export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 // Storage maintenance under a storage root (the process's stores, which
 // plugins read too, are on `./plugins`).
 export {

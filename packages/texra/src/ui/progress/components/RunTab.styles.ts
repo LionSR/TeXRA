@@ -123,7 +123,7 @@ export const runTabStyles = css`
     inline-size: 1em;
     min-inline-size: 1em;
     block-size: 1em;
-    color: var(--tone-color, var(--color-text-muted));
+    color: var(--tone-color, var(--color-text-secondary));
   }
 
   .tab-status-label {
@@ -140,7 +140,7 @@ export const runTabStyles = css`
     align-items: center;
     gap: var(--wa-space-3xs);
     font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -191,7 +191,7 @@ export const runTabStyles = css`
   .tab-rollup {
     flex-shrink: 0;
     margin-inline-end: var(--wa-space-2xs);
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     white-space: nowrap;
   }
@@ -219,7 +219,7 @@ export const runTabStyles = css`
     width: var(--control-size-s);
     height: var(--control-size-s);
     flex-shrink: 0;
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
   }
 
   .tab[hidden] {
@@ -235,7 +235,7 @@ export const runTabStyles = css`
 
   .nested-run-icon {
     font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     flex-shrink: 0;
     margin-inline-end: var(--wa-space-3xs);
   }
@@ -251,7 +251,7 @@ export const runTabStyles = css`
     width: var(--control-size-s);
     min-width: var(--control-size-s);
     height: 100%;
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
   }
 
   .tab-expand::part(base) {
@@ -279,7 +279,7 @@ export const runTabStyles = css`
     flex-shrink: 1;
   }
 
-  /* A custom agent name is unbounded length — truncate rather than crowd
+  /* A run's name is unbounded length (a model writes a child's) — truncate rather than crowd
      out the worktree chip/timestamp/model sharing this row. */
   .tab-meta .agent-name {
     flex-shrink: 1;

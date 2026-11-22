@@ -38,7 +38,7 @@ import type { UsageLog } from '@shared/usageLog';
 import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { AgentDirectories, AppState, AppStateStore } from './interfaces';
+import type { HostResources, AppState, AppStateStore } from './interfaces';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
@@ -98,7 +98,7 @@ export type PlatformServices =
   | Secrets
   | SubscriptionAccounts
   | AppState
-  | AgentDirectories
+  | HostResources
   | GlobalValues
   | StateStores
   | UsageLog

@@ -4,15 +4,16 @@ import { AgentConfigSchema } from './agentConfig';
 import { FileFieldsSchema } from './fileFields';
 
 export const BaseProposalFieldsSchema = Schema.Struct({
-  // The agent's resolved source (an inline agent's persona), its memories
-  // and its working directory, as the run they propose will record them.
+  // What the proposed run will record: its name, system text and tools,
+  // its memories and its working directory. Named in full by every
+  // proposal: no launch default applies.
   ...Struct.pick(AgentConfigSchema.fields, [
-    'agentSource',
+    'label',
+    'system',
+    'tools',
     'memories',
     'workingDirectory',
   ]),
-  // Named in full by every proposal: no launch default applies.
-  agent: Schema.String,
   model: Schema.String,
   instruction: Schema.String,
   /**

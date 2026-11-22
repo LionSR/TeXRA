@@ -66,6 +66,7 @@ import {
   NonNegativeIntSchema,
   ExportNodeSchema,
 } from '@texra-ai/harness/schemas';
+import { RpcServerMessageSchema } from '@texra/shared/rpcOverMessages';
 import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
 import { CommitOrdinalSchema } from '@texra-ai/harness/transcript';
 
@@ -361,9 +362,8 @@ export const TexraRpcs = RpcGroup.make(
    *  service is not a containment boundary: it runs as the user whose
    *  windows connect over a socket only that user can open, and a window can
    *  write any file the user can. Which path a surface may name is decided
-   *  in the window before the call (`resolveWritable`, an agent definition
-   *  by catalog name), and an accept may name a file outside the workspace,
-   *  as a task's tools may. */
+   *  in the window before the call, and an accept may name a file outside
+   *  the workspace, as a task's tools may. */
   Rpc.make('file.write', {
     payload: {
       path: Schema.String,
@@ -377,7 +377,7 @@ export const TexraRpcs = RpcGroup.make(
   /** A window's reply to one of the service's calls on it (`WindowRpcs`),
    *  as `rpc`'s own message. */
   Rpc.make('host.answer', {
-    payload: { attachment: Schema.String, message: Schema.Json },
+    payload: { attachment: Schema.String, message: RpcServerMessageSchema },
   }),
 );
 

@@ -38,7 +38,7 @@ export const toolUseStyles = css`
 
   .tool-use-sublabel {
     font-weight: var(--font-weight-medium);
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
   }
 
@@ -49,7 +49,7 @@ export const toolUseStyles = css`
   }
 
   .tool-no-output {
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
   }
 

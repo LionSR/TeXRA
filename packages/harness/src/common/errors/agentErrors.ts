@@ -3,7 +3,6 @@ import { Predicate, Schema } from 'effect';
 import {
   LaunchNoticeSchema,
   ModelFailureSchema,
-  ResumeBlockedSchema,
   RouteFailureFieldsSchema,
   type SubscriptionSessionFailureSchema,
 } from '@shared/schemas';
@@ -28,9 +27,8 @@ export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
 
 /**
  * A launch refused before its run exists, for an input its caller supplied:
- * an unknown agent or model (each with the `notice` a host shows in place of
- * the message), a persona or configuration its schema rejects, or a run id
- * already in use.
+ * an unknown model (with the `notice` a host shows in place of the
+ * message), a configuration its schema rejects, or a run id already in use.
  */
 export class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
   'LaunchRefused',
@@ -38,18 +36,6 @@ export class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
     message: Schema.String,
     notice: Schema.optional(LaunchNoticeSchema),
   },
-) {}
-
-/**
- * An agent this process cannot run now: missing from the catalog, or from
- * a plugin that is off or not trusted as it is now (`blocked`, which names
- * the agent or the plugin), with the launch's reason as its message. A
- * launch reports it as its refusal; a resume refuses with `blocked`, and
- * the run stays interrupted until a later resume finds it back.
- */
-export class AgentUnavailable extends Schema.TaggedError<AgentUnavailable>()(
-  'AgentUnavailable',
-  { blocked: ResumeBlockedSchema, message: Schema.String },
 ) {}
 
 /**

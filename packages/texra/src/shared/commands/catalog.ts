@@ -92,11 +92,6 @@ export const COMMAND_CATALOG = Object.freeze([
     settingsTab: 'models/models',
   }),
   Object.freeze({
-    id: 'texra.showAgents',
-    title: 'Agent Settings',
-    settingsTab: 'agents/library',
-  }),
-  Object.freeze({
     id: 'texra.showTools',
     title: 'Plugin Settings',
     settingsTab: 'plugins',

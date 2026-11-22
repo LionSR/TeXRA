@@ -516,11 +516,9 @@ describe('Sessions owner', () => {
         Effect.sync(() => rmSync(directory, { recursive: true, force: true })),
       );
       const platform = nodePlatform({
-        agentsDir: join(directory, 'agents'),
         storageDir: join(directory, 'storage'),
         workspaceDir: directory,
       });
-      mkdirSync(join(directory, 'agents'));
       const up = yield* Deferred.make<void>();
       let drains = 0;
       const counted = definePlugin({

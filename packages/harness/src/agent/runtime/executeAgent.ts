@@ -8,7 +8,7 @@
  * through `resumeRun`, and a child's launch through `startChildRun`
  * (`delegation/childLaunch.ts`).
  */
-import { Clock, ConfigProvider, Effect, Layer } from 'effect';
+import { Clock, ConfigProvider, Effect, Layer, Record } from 'effect';
 
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@tools/core/ToolTypes';
@@ -172,7 +172,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   runId: RunId,
   options: ExecuteAgentOptions,
 ) {
-  const { config, persona } = definition;
+  const { config } = definition;
   // The run's working directory is decided here, once: absolute or absent.
   // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
   // and trusts it rather than re-validating.
@@ -207,7 +207,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     startedAt: yield* Clock.currentTimeMillis,
     workingDirectory,
     config,
-    persona,
     toolPolicy: { stopAfterCycle },
     logger: agentLogger,
     opening,
@@ -228,7 +227,7 @@ const withLaunchKeys = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> =>
   Effect.flatMap(Effect.service(LaunchKeys), (apiKeys) => {
-    if (Object.keys(apiKeys).length === 0) return effect;
+    if (Record.isEmptyRecord(apiKeys)) return effect;
     return Effect.flatMap(ProjectEnvironment, (project) => {
       const variables = { ...apiKeys, ...project };
       return effect.pipe(
@@ -273,7 +272,7 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
     yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
       Effect.annotateLogs({
         data: {
-          agent: launch.config.agent,
+          agent: launch.config.label,
           model: launch.config.model,
           input: launch.config.inputFiles[0] ?? '(none)',
           outputs: launch.config.outputFiles.length,
@@ -295,7 +294,6 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
   const opening = yield* openToolUse().pipe(Effect.provide(services));
   return {
     activation: opening.activation,
-    description: definition.description,
     launch,
     services,
     opening,
@@ -324,7 +322,6 @@ const runAgent = Effect.fn('executeAgent.run')(function* ({
   launch,
   services,
   opening,
-  description,
 }: OpenedAgent) {
   const { runId, config } = launch;
   const { parent, awaited } = launch.entry;
@@ -337,12 +334,7 @@ const runAgent = Effect.fn('executeAgent.run')(function* ({
   // A labelled run is a root, so its flow takes no budget permit.
   return yield* labelled
     ? budgeted.pipe(
-        withSessionDescription(
-          runId,
-          config,
-          description,
-          launch.entry.fresh === null,
-        ),
+        withSessionDescription(runId, config, launch.entry.fresh === null),
       )
     : budgeted;
 });

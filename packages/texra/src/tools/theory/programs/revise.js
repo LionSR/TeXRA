@@ -103,7 +103,7 @@ export const addsOnly =
   };
 
 export const revise = async ({
-  name,
+  name: _name,
   system = 'You revise LaTeX documents as instructed.\n\n' + LATEX,
   requests,
   review = CRITIC,
@@ -122,8 +122,7 @@ export const revise = async ({
       critique,
     });
     const reply = await agent(context.prompt, {
-      agentName: name,
-      persona: { prompt: system },
+      system,
       mediaFiles: context.mediaFiles,
       memories: context.memories,
       label,
@@ -139,8 +138,7 @@ export const revise = async ({
     if (problem) notes.push(problem);
     if (reflect) {
       const critic = await agent(evidence.prompt, {
-        agentName: 'critic',
-        persona: { prompt: review },
+        system: review,
         label: 'Critique ' + (revision + 1),
       });
       notes.push(critic.response);

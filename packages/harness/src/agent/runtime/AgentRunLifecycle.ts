@@ -70,8 +70,16 @@ export const endVerdict = Effect.fnUntraced(function* (
     Cause.hasInterrupts(exit.cause) &&
     (yield* RunRegistry).closing &&
     (yield* log.facts(runId))?.stop == null
-  )
+  ) {
+    // Nobody reads this fiber's exit, so a failure beside the interruption
+    // (a finalizer that failed as the close unwound it) is said here.
+    if (!Cause.hasInterruptsOnly(exit.cause))
+      yield* logFailure(
+        RUN_LIFECYCLE_CHANNEL,
+        `Run ${runId} also failed as the session closed`,
+      )({ runId, error: Cause.squash(exit.cause) });
     return yield* Effect.failCause(exit.cause);
+  }
   const lost = yield* log.lost(runId);
   const returned = Exit.isSuccess(exit)
     ? exit.value
@@ -148,7 +156,7 @@ export const endRun = Effect.fn('endRun')(function* (
   exit: Exit.Exit<RunReport, Error>,
 ): Effect.fn.Return<void, Error, AgentRunServices> {
   const { runId } = ctx;
-  const agentIdentifier = ctx.config.agent;
+  const agentIdentifier = ctx.config.label;
   const carried = Exit.isSuccess(exit) ? exit.value : undefined;
   const verdict = yield* endVerdict(
     runId,

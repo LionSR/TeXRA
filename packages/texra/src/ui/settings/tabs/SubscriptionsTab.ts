@@ -61,7 +61,6 @@ export class SubscriptionsTab extends TexraElement {
             icon: 'arrows-rotate',
             text: 'Refresh usage',
             kind: 'secondary',
-            appearance: 'outlined',
             onClick: () =>
               postToHost({
                 command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,

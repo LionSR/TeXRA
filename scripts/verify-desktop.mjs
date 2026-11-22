@@ -419,12 +419,7 @@ function verifySigningEnv(args) {
 // ---------------------------------------------------------------------------
 
 const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
-const bundledRuntimeResourceDirs = [
-  'agents',
-  'skills',
-  'plugins',
-  'plugins/lean4/agents',
-];
+const bundledRuntimeResourceDirs = ['plugins'];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
 // at runtime (packages/texra/src/tools/agentCli/codexImport.ts, packages/texra/src/tools/agentCli/claudeAgentImport.ts), so
@@ -1078,7 +1073,7 @@ const packageOnlyChecks = [
     },
   },
   {
-    name: 'resources/agents, skills, plugins, traceViewer and serve/texra-serve.mjs',
+    name: 'resources/plugins, traceViewer and serve/texra-serve.mjs',
     run: checkBundledResources,
   },
   { name: 'macOS app icon', applies: isMacApp, run: checkMacIcon },

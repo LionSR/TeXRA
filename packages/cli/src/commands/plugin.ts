@@ -9,6 +9,7 @@ import {
   type PluginReview,
   type PluginUpdate,
 } from '@texra-ai/harness/host';
+import { shortPluginId } from '@texra-ai/harness/schemas';
 
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
@@ -60,7 +61,8 @@ const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
   return yield* operation((yield* cliPlatform).roots);
 });
 
-const shortCommit = (commit: string | undefined) => commit?.slice(0, 12);
+const shortCommit = (commit: string | undefined) =>
+  commit === undefined ? undefined : shortPluginId(commit);
 
 function formatPluginList(plugins: readonly PluginListing[]): string {
   if (plugins.length === 0) {
@@ -69,7 +71,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
   return plugins
     .map((plugin) => {
       // The words for a plugin's state are the Plugins page's and /plugins'.
-      const row: PluginRow = { kind: 'installed', plugin, usedBy: [] };
+      const row: PluginRow = { kind: 'installed', plugin };
       const trust = pluginRowTrust(row);
       const header = [
         `${plugin.name} (${pluginRowState(row)}${trust === null ? '' : `, ${trust}`})`,

@@ -51,7 +51,7 @@ const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
       visibleEntries,
       visibleEntries.length
         ? formatCliHistoryText(visibleEntries)
-        : 'No history yet. Runs appear here after you start an agent.',
+        : 'No history yet. Runs appear here after you start a task.',
     ),
   );
 });

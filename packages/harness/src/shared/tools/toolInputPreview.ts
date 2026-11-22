@@ -24,7 +24,7 @@ function executionsInputPreview(input: Record<string, unknown>): string {
  *  lives under one specific input key. */
 const TOOL_PREVIEW_INPUT_KEY: Readonly<Record<string, string>> = {
   bash: 'command',
-  agent: 'agentName',
+  agent: 'label',
   program: 'name',
 };
 

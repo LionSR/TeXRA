@@ -1,6 +1,6 @@
+import { isTypingKeystroke } from '@ui/wa/keyActivation';
 import { toElectronAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
-import { isTypingIn } from '@ui/textEntryFocus';
 import {
   DESKTOP_COMMAND_PALETTE_ID,
   desktopCommandEntry,
@@ -59,7 +59,10 @@ export function createDesktopShortcutRegistry(
         candidate.accelerator?.toLowerCase() === accelerator.toLowerCase(),
     );
     if (!entry) return;
-    if (isTypingIn(options.document, event) && !hasPrimaryModifier(event)) {
+    if (
+      isTypingKeystroke(event, options.document) &&
+      !hasPrimaryModifier(event)
+    ) {
       return;
     }
 

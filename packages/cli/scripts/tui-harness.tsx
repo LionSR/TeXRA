@@ -30,7 +30,7 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, MODEL_SELECTION_KEY } from '@texra-ai/harness/host';
+import { MODEL_SELECTION_KEY } from '@texra-ai/harness/host';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   Secrets,
@@ -95,7 +95,6 @@ import {
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
@@ -409,7 +408,6 @@ function parseList(value: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
-const HARNESS_VISIBLE_AGENTS = parseList(process.env.HARNESS_VISIBLE_AGENTS);
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
 const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
 
@@ -470,14 +468,6 @@ const harnessRuntimeSession = await harnessRuntime.runPromise(
     }),
   ),
 );
-if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
-  await harnessRuntime.runPromise(
-    harnessRoots.repoState.update(WORKSPACE_AGENTS_KEY.key, {
-      kind: 'custom',
-      agentKeys: HARNESS_VISIBLE_AGENTS,
-    }),
-  );
-}
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.globalState.update(MODEL_SELECTION_KEY.key, {
@@ -488,7 +478,6 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await harnessRuntime.runPromise(AgentCatalog.use((catalog) => catalog.refresh));
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact
@@ -712,7 +701,7 @@ function seedRun(
       type: 'run.config',
       aggregateId: runId,
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: identity.agent,
+        label: identity.agent,
         model: HARNESS_MODEL,
       }),
     });
@@ -1216,7 +1205,7 @@ function makeAgentProposalPayload(): AgentProposalRequest {
     requestId: 'harness-agent-proposal',
     runId: HARNESS_RUN_ID,
     task: false,
-    agent: 'review',
+    label: 'review',
     model: 'deepseek/deepseek-flash',
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
@@ -1229,7 +1218,7 @@ function makeAgentProposalPayload(): AgentProposalRequest {
               "section('Review')",
               'const reviews = await Promise.all(',
               "  ['A', 'B'].map((name) =>",
-              "    agent(`Review chapter 2 as referee ${name}.`, { agentName: 'review' }),",
+              "    agent(`Review chapter 2 as referee ${name}.`, { label: 'review', system: 'Review the chapter as a referee would.' }),",
               '  ),',
               ')',
             ].join('\n'),
@@ -1458,7 +1447,7 @@ function harnessInitialEntries(): HarnessLogRow[] {
 }
 
 sessionMeta.set({
-  agent: 'chat',
+  chat: { label: 'chat', system: '', tools: [], temperature: 1 },
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
@@ -1867,7 +1856,7 @@ function appendHarnessStatus(): void {
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
-      agent: meta.agent,
+      agent: meta.chat.label,
       model: meta.model,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
@@ -1992,7 +1981,6 @@ const harnessSlashContext: SlashCommandContext = {
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  onAccountChanged: () => Effect.void,
 };
 // An interruptible harness run is a root launch on its way to the session,
 // ended when the harness is interrupted, so the status bar derives the

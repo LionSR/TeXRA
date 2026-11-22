@@ -1,0 +1,55 @@
+# UI kit bypasses: what the 2026-11-22 audit left open
+
+Date: 2026-11-22
+Status: proposed
+
+Origin: the scheduled audit for UI code written beside the kit
+(`packages/texra/src/ui/wa/`, `packages/cli/src/tui/ui/`). The PR that adds
+this note lets a button's `kind` decide its Web Awesome appearance, drops the
+`.icon-button` alias, gives errors and list removal one icon each, moves the
+process command strip onto the shared inset focus ring, gives the desktop
+and the request cards one rule for "is this key typing", and moves the TUI's
+pointer prompt row and render-error line onto the kit.
+
+## Open
+
+1. **Raw `<wa-button class="btn-…">` the helpers cannot express yet.**
+   Each needs one more option on `renderLabeledActionButton`, so each is
+   a decision about that option, not a mechanical swap:
+   - `OnboardingWelcomeCard.ts` (two buttons at `size="m"`; the helper
+     always renders `size="s"`) and its local `wa-button::part(base)` height;
+   - `desktopShell.ts` project rows (`@dblclick`, `@keydown`) and
+     `reviewPane.ts` file rows (`aria-current`, `style`);
+   - `SessionComposer.ts` chip trigger (the `.chip-label` span);
+   - `LatexdiffResults.ts` file link: the helper fits, but `LogList`'s
+     composed-path `.file-link` delegation must be checked against it first.
+2. **`RunTab.ts` expand toggle** hand-builds `renderIconActionButtonParts`
+   (button plus `wa-tooltip`) because the helper takes no `data-*` attribute
+   and no class on its icon.
+3. **Hard-coded row heights** beside `--row-height` and `--height-control*`:
+   `ScriptStage.ts` (32px), `logEntryStyles.ts` (26px), `NewTaskHero.ts`
+   (24px), `progressAppStyles.ts` (44px), and the desktop's `styles.css` and
+   `desktopShell.css` (28 to 36px). Each wants a check in both themes and
+   both hosts before it takes a token.
+4. **The desktop's no-project panel** (`packages/desktop/src/renderer/main.ts`)
+   builds the icon surface, heading and paragraph that `renderEmptyState`
+   renders, as `workbenchController.ts` already does.
+5. **`TerminalOutput.ts`'s focus ring** restates the inset ring under a
+   `:has(.xterm-helper-textarea:focus-visible)` selector; the rule belongs in
+   `focusRingStyles` if a second canvas widget needs it.
+6. **`SlashPalette.tsx` is the TUI's one cursor list outside `Select`.** It
+   needs arrows that pass through to input history, Tab to complete and Esc
+   left to the text input; `Select` has none of the three.
+7. **`UserQuestion.tsx`'s answer row** is the pointer prompt with a
+   one-row clipping wrapper; `PromptInput` could own that wrapper for
+   `maxDisplayRows={1}` once an Ink render check confirms the other three
+   rows do not change.
+
+## Checked and declined
+
+- **A `useEscape` hook for the TUI.** Three standalone copies of a
+  two-line `useInput` call; the hook would save a line each.
+- **`renderBannerFrame` for the danger callouts** in `ProgressApp.ts`,
+  `editorFileNotice.ts` and `editorPane.ts`. They are pane notices, not
+  banners: the frame adds a `.banner-frame` wrapper whose styles those
+  surfaces do not adopt. Only their icon disagreed, and that is fixed.

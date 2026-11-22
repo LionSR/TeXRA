@@ -1,15 +1,10 @@
 import { Effect, FileSystem, Option } from 'effect';
 import { Flag } from 'effect/cli';
 
-import { AgentCatalog } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
-import {
-  implicitDefaultToolUseAgents,
-  pickDefaultToolUseAgent,
-} from '@texra/shared/constants/agents';
-import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
+import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 import {
   buildInitConfig,
@@ -29,16 +24,8 @@ import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 
-interface InitAgentOption {
-  readonly name: string;
-}
-
-function defaultInitAnswers(
-  agents: readonly InitAgentOption[],
-  models: readonly ModelOptionData[],
-): InitAnswers {
+function defaultInitAnswers(models: readonly ModelOptionData[]): InitAnswers {
   return {
-    agent: pickDefaultToolUseAgent(agents),
     model: models.find(isModelOptionAvailable)?.value ?? CLI_CHEAP_START_MODEL,
     outputFormat: 'text',
   };
@@ -46,7 +33,6 @@ function defaultInitAnswers(
 
 interface InitSummary {
   readonly path: string;
-  readonly agent: string;
   readonly model: string;
   readonly outputFormat: InitAnswers['outputFormat'];
   readonly config: InitConfigShape;
@@ -93,7 +79,6 @@ function initTextSummary(summary: InitSummary): string {
   const lines = [
     ...initGitignoreText(summary.gitignore),
     `Wrote ${summary.path}`,
-    `  agent: ${summary.agent}`,
     `  model: ${summary.model}`,
     `  output: ${summary.outputFormat}`,
   ];
@@ -114,7 +99,6 @@ function emitInitSummary(
   const warning = initWarning(answers, models);
   const summary: InitSummary = {
     path: filePath,
-    agent: answers.agent,
     model: answers.model,
     outputFormat: answers.outputFormat,
     config,
@@ -149,9 +133,6 @@ const runInit = Effect.fn('runInit')(function* (
     );
   }
 
-  const agents = implicitDefaultToolUseAgents(
-    yield* (yield* AgentCatalog).workspaceAgents(services).visible(),
-  );
   const models = yield* loadModelOptions(services);
 
   const interactive =
@@ -168,7 +149,6 @@ const runInit = Effect.fn('runInit')(function* (
       () => import('../init/runInitWizard'),
     );
     const result = yield* runInitWizard({
-      agents,
       models,
       colorEnabled: context.stdoutColorEnabled,
     });
@@ -179,7 +159,7 @@ const runInit = Effect.fn('runInit')(function* (
     answers = result.answers;
     gitignore = result.gitignore;
   } else {
-    answers = defaultInitAnswers(agents, models);
+    answers = defaultInitAnswers(models);
     gitignore = opts.gitignore ?? false;
   }
 

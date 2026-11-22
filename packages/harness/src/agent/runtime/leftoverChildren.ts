@@ -76,9 +76,8 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   const continuation = continuationOf(facts);
   if (continuation.kind !== 'checkpoint')
     return yield* report(continuation.kind);
-  // A resume refused once it decides is reported; one blocked on a missing
-  // agent or plugin, or one that failed, is left for the next resume, said
-  // once. Forked: the caller goes on while the child's opening commits.
+  // A resume refused once it decides is reported; one that failed is left
+  // for the next resume, said once. Forked: the caller goes on while the child's opening commits.
   const told = (what: string) => (error: unknown) =>
     logFailure(
       CHANNEL,
@@ -87,7 +86,7 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   yield* Effect.forkScoped(
     Effect.matchEffect(resumeRun(run.id, {}), {
       onSuccess: (answer) =>
-        'failed' in answer && answer.failed.kind !== 'blocked'
+        'failed' in answer
           ? report(describeRefusal(answer.failed))
           : Effect.void,
       onFailure: told('was not resumed'),

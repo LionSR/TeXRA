@@ -77,7 +77,7 @@ async function checks() {
   // The commands that open the extension's own surfaces run without throwing.
   for (const command of [
     'texra.showProgressView',
-    'texra.showAgents',
+    'texra.showModels',
     'texra.openProgressViewInTab',
   ])
     await step(command, () => vscode.commands.executeCommand(command), 30_000);
@@ -132,10 +132,12 @@ async function checks() {
   // No provider key in this home: the task ends at once, but in the service.
   // The command settles when the task ends; the suite waits only for the
   // service to start it.
-  // The command's argument is the launch configuration itself.
+  // The command's argument is the launch configuration itself: a run names
+  // its own label, and a configuration without one is rejected before it
+  // reaches the service.
   void vscode.commands
     .executeCommand('texra.execute', {
-      agent: 'setup',
+      label: 'assistant',
       model: 'openai/gpt-5.6-sol',
       instruction: 'Service E2E task',
     })

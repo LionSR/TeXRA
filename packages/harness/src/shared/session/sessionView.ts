@@ -88,9 +88,6 @@ const RunViewSchema = Schema.Struct({
   command: Schema.NullOr(Schema.String),
   /** The run's input files, from `run.config`. */
   inputFiles: Schema.Array(Schema.String),
-  /** Its `delegationAgentScope` (the agents its launch pinned); null: any
-   *  visible one. */
-  agentScope: Schema.NullOr(Schema.Array(Schema.String)),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
   facts: Schema.Record(FactNameSchema, Schema.Json),
@@ -188,6 +185,10 @@ const RunViewSchema = Schema.Struct({
   /** The spend cap the run was started with (`run.start.maxCostUsd`),
    *  which `treeUsage.cost` is held to; null for none. */
   maxCostUsd: Schema.NullOr(Schema.Finite),
+  /** The tool calls the run has finished (completed or failed), counted
+   *  from its transcript's tool cards while the view builds its transcript,
+   *  so no host counts rows. */
+  toolCalls: Count,
   /** The newest thinking row is still streaming. */
   thinkingActive: Schema.Boolean,
   /** A context compaction is in progress. */

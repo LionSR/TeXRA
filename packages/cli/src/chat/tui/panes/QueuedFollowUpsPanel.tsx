@@ -6,12 +6,16 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
-import { pluralize } from '@texra-ai/harness/schemas';
+import { pluralize, type RunView } from '@texra-ai/harness/schemas';
 import { queuedMessagesTitle } from '@ui/copy/queuedMessages';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
 
+type QueuedFollowUps = RunView['queuedFollowUps'];
+
 interface QueuedFollowUpPanelRow {
+  /** The follow-up's own id; the overflow row's is `overflow`. */
+  readonly key: string;
   readonly kind: 'message' | 'overflow';
   readonly text: string;
 }
@@ -22,28 +26,28 @@ interface QueuedFollowUpPanelDisplay {
 }
 
 export function queuedFollowUpPanelRowCount(
-  messages: readonly string[],
+  followUps: QueuedFollowUps,
 ): number {
-  if (messages.length === 0) return 0;
-  return Math.min(QUEUED_FOLLOW_UP_PANEL_MAX_ROWS, messages.length + 1);
+  if (followUps.length === 0) return 0;
+  return Math.min(QUEUED_FOLLOW_UP_PANEL_MAX_ROWS, followUps.length + 1);
 }
 
 function queuedFollowUpPanelDisplay({
   maxRows,
-  messages,
+  followUps,
   width,
 }: {
   readonly maxRows: number;
-  readonly messages: readonly string[];
+  readonly followUps: QueuedFollowUps;
   readonly width: number;
 }): QueuedFollowUpPanelDisplay {
-  if (messages.length === 0 || maxRows <= 0) {
+  if (followUps.length === 0 || maxRows <= 0) {
     return { title: undefined, rows: [] };
   }
 
   const contentWidth = Math.max(0, width - 2);
   const title = truncateSummaryToWidth(
-    queuedMessagesTitle(messages.length),
+    queuedMessagesTitle(followUps.length),
     contentWidth,
   );
   const messageSlots = Math.max(0, maxRows - 1);
@@ -51,23 +55,25 @@ function queuedFollowUpPanelDisplay({
     return { title, rows: [] };
   }
 
-  const hasOverflow = messages.length > messageSlots;
+  const hasOverflow = followUps.length > messageSlots;
   // On overflow, reserve the last slot for the hidden-count row.
-  const visibleMessageCount = hasOverflow ? messageSlots - 1 : messages.length;
-  const rows: QueuedFollowUpPanelRow[] = messages
+  const visibleMessageCount = hasOverflow ? messageSlots - 1 : followUps.length;
+  const rows: QueuedFollowUpPanelRow[] = followUps
     .slice(0, visibleMessageCount)
-    .map((message, index) => {
+    .map(({ followUpId, text }, index) => {
       const prefix = `${index + 1}. `;
       const bodyColumns = Math.max(0, contentWidth - textDisplayWidth(prefix));
       return {
+        key: followUpId,
         kind: 'message',
-        text: `${prefix}${truncateSummaryToWidth(message, bodyColumns)}`,
+        text: `${prefix}${truncateSummaryToWidth(text, bodyColumns)}`,
       };
     });
 
-  const hiddenCount = messages.length - visibleMessageCount;
+  const hiddenCount = followUps.length - visibleMessageCount;
   if (hiddenCount > 0) {
     rows.push({
+      key: 'overflow',
       kind: 'overflow',
       text: truncateSummaryToWidth(
         hiddenRowsText(hiddenCount, pluralize(hiddenCount, 'queued message')),
@@ -81,14 +87,14 @@ function queuedFollowUpPanelDisplay({
 
 export function QueuedFollowUpsPanel({
   maxRows,
-  messages,
+  followUps,
   width,
 }: {
   readonly maxRows: number;
-  readonly messages: readonly string[];
+  readonly followUps: QueuedFollowUps;
   readonly width: number;
 }): React.JSX.Element | null {
-  const display = queuedFollowUpPanelDisplay({ maxRows, messages, width });
+  const display = queuedFollowUpPanelDisplay({ maxRows, followUps, width });
   if (!display.title) return null;
 
   return (
@@ -96,9 +102,9 @@ export function QueuedFollowUpsPanel({
       <Text color={COLOR_WARNING} wrap="truncate-end">
         {display.title}
       </Text>
-      {display.rows.map((row, index) => (
+      {display.rows.map((row) => (
         <Text
-          key={`${row.kind}-${index}`}
+          key={row.key}
           dimColor={row.kind === 'overflow'}
           wrap="truncate-end"
         >

@@ -4,7 +4,7 @@ import { stripControlCharacters } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
 import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
-import { subscribeToPolling } from '@cli/tui/polling';
+import { subscribeToClock } from '@cli/tui/useLiveNowMs';
 import {
   formatSessionTitle,
   TERMINAL_TAB_TITLE,
@@ -83,15 +83,16 @@ export function installTerminalTitleUpdates(
     lastTitle = title;
     return true;
   };
-  // Frame is derived from wall time via `loadingFrameAt`, the same 1 Hz
-  // rotation `LoadingIndicator` and the status bar use, so the tab title
-  // joins the shared clock instead of running its own interval.
-  const runningTitle = (): string =>
-    terminalTitleText(cwd, 'running', loadingFrameAt(Date.now(), TITLE_FRAMES));
+  // Frame is derived from the shared clock's time via `loadingFrameAt`, the
+  // same 1 Hz rotation `LoadingIndicator` and the status bar use, so the tab
+  // title joins the shared clock instead of running its own interval.
+  const runningTitle = (nowMs: number): string =>
+    terminalTitleText(cwd, 'running', loadingFrameAt(nowMs, TITLE_FRAMES));
   const startRunningAnimation = (): void => {
-    if (stopSharedTick !== undefined || !updateTitle(runningTitle())) return;
-    stopSharedTick = subscribeToPolling(1000, () =>
-      updateTitle(runningTitle()),
+    if (stopSharedTick !== undefined || !updateTitle(runningTitle(Date.now())))
+      return;
+    stopSharedTick = subscribeToClock((nowMs) =>
+      updateTitle(runningTitle(nowMs)),
     );
   };
   const synchronize = (): void => {

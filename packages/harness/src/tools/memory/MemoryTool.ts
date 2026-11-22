@@ -90,7 +90,7 @@ const executeMemoryTool = Effect.fn('executeMemoryTool')(function* (
   const caller = (yield* ToolContext).env.run;
   const invocation = {
     runId: caller.runId,
-    agentName: caller.config.agent,
+    agentName: caller.config.label,
   } satisfies MemoryInvocation;
   return yield* run(input, invocation).pipe(onMemoryTreeLane);
 });

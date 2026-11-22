@@ -13,7 +13,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import { hiddenRowsText } from '@cli/tui/overflowText';
-import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
+import { CHILD_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import {
   pluginTrustFacts,
@@ -129,16 +129,17 @@ export function formatAgentProposalFileGroup(
   return `${label}: ${formatClippedList(files, maxFiles)}`;
 }
 
-/** An agent the call defines: its name and tools, then its prompt. */
+/** A chat child: its name and tools, the first sentence of its system
+ *  text, then the whole text. A program's child has none. */
 function definedAgentLines(
   proposal: AgentProposalRequest,
   promptLines: readonly string[],
 ): readonly string[] {
-  const source = proposal.agentSource;
-  if (source?.kind !== 'inline') return [];
+  if (proposal.system === '') return [];
   return [
-    DEFINED_AGENT_COPY.heading(proposal.agent, source.persona),
-    `${DEFINED_AGENT_COPY.promptLabel}:`,
+    CHILD_AGENT_COPY.heading(proposal.label, proposal.tools),
+    CHILD_AGENT_COPY.summary(proposal.system),
+    `${CHILD_AGENT_COPY.promptLabel}:`,
     ...promptLines.map((line) => `  ${line}`),
   ];
 }
@@ -164,7 +165,7 @@ function agentProposalApprovalSummary(
       SCRIPT_REQUEST_COPY.grant,
       ...definedAgentLines(proposal, promptLines),
       scriptRequestFirstAgentLine(
-        proposal.agent,
+        proposal.label,
         getModelLabel(proposal.model),
         proposal.instruction,
       ),
@@ -178,7 +179,7 @@ function agentProposalApprovalSummary(
       ...instructionLines.map((line) => `  ${line}`),
     ].join('\n');
   return [
-    `${REQUEST_ASK.proposal(proposal.task)} ${proposal.agent} (${agentProposalLabel(proposal)})`,
+    `${REQUEST_ASK.proposal(proposal.task)} ${proposal.label} (${agentProposalLabel(proposal)})`,
     `Model: ${getModelLabel(proposal.model)}`,
     ...definedAgentLines(proposal, promptLines),
     ...(workingDirectory
@@ -199,12 +200,8 @@ export function buildAgentProposalApprovalContent(
   );
   const boundedInstructionLines =
     boundedAgentProposalInstructionLines(instructionLines);
-  // A defined agent's prompt is bounded as the instruction is.
-  const promptLines = agentProposalInstructionLines(
-    proposal.agentSource?.kind === 'inline'
-      ? (proposal.agentSource.persona.prompt ?? '')
-      : '',
-  );
+  // A chat child's system text is bounded as the instruction is.
+  const promptLines = agentProposalInstructionLines(proposal.system);
   const boundedPromptLines = boundedAgentProposalInstructionLines(promptLines);
   const fileGroups = getProposalFileGroups(proposal);
   const hasHiddenContent =

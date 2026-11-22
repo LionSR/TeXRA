@@ -77,12 +77,9 @@ const program = Effect.gen(function* () {
   });
 
   const run = yield* session.start({
-    agent: {
-      name: 'release_manager',
-      description: 'Stages preprints after approval.',
-      prompt: 'Stage the preprint when asked.',
-      tools: ['publish_preprint'],
-    },
+    label: 'release_manager',
+    system: 'Stage the preprint when asked.',
+    tools: ['publish_preprint'],
     instruction: 'Stage the manuscript for arXiv.',
     model: route.model,
     interactive: true,

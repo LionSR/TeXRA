@@ -203,7 +203,6 @@ export class PluginsTab extends TexraSignalElement {
             icon: 'file-code',
             text: PLUGINS_PAGE.openMcpConfig,
             kind: 'secondary',
-            appearance: 'outlined',
             onClick: () =>
               postToHost({
                 command: SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION,
@@ -214,7 +213,6 @@ export class PluginsTab extends TexraSignalElement {
             icon: 'arrows-rotate',
             text: PLUGINS_PAGE.recheck,
             kind: 'secondary',
-            appearance: 'outlined',
             onClick: () =>
               postToHost({
                 command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,

@@ -11,6 +11,7 @@ import {
 } from '@texra/shared/session/surfaceDecision';
 import {
   getModelLabel,
+  shortPluginId,
   type PluginTrustRequest,
   type RequestPayload,
 } from '@texra-ai/harness/schemas';
@@ -49,7 +50,7 @@ export const pluginTrustFacts = (
   plugin: request.version
     ? `${request.plugin} ${request.version}`
     : request.plugin,
-  location: `${request.path} (digest ${request.digest.slice(0, 12)})`,
+  location: `${request.path} (digest ${shortPluginId(request.digest)})`,
 });
 
 /** The noun each request kind goes by where a row names what waits on the

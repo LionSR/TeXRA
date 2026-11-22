@@ -8,9 +8,9 @@
  */
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
-  formatClippedList,
   formatResultCount,
   joinFacts,
+  shortPluginId,
   type ToolDependencyStatus,
 } from '@texra-ai/harness/schemas';
 
@@ -155,7 +155,8 @@ export function pluginRowTrust(row: PluginRow): string | null {
   // One that cannot be switched on has no trust question to answer.
   if (row.kind !== 'installed' || !pluginRowSwitchable(row)) return null;
   const { plugin } = row;
-  const revision = plugin.commit?.slice(0, 12) ?? plugin.version;
+  const revision =
+    plugin.commit === undefined ? plugin.version : shortPluginId(plugin.commit);
   if (plugin.trusted) return revision ? `trusted at ${revision}` : 'trusted';
   return plugin.enabled
     ? 'not trusted as it is now: review it to load it'
@@ -183,12 +184,4 @@ export function pluginRowProblem(row: PluginRow): string | null {
     case 'mcp':
       return null;
   }
-}
-
-/** "Used by: assistant, referee, writer +3 more", or null when no agent's
- *  tool list reaches the row. */
-export function pluginRowUsedBy(row: PluginRow): string | null {
-  const { usedBy } = row;
-  if (usedBy.length === 0) return null;
-  return `Used by: ${formatClippedList(usedBy, 3)}`;
 }

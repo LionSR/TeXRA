@@ -35,7 +35,7 @@ export interface WorkspacePathResolution {
    */
   readonly fsPath: string;
   /**
-   * When the resolved path falls inside a registered external root, this
+   * When the resolved path falls inside a step root, this
    * describes that root (label, writable flag). Undefined for workspace paths
    * and for any external path outside the allowlist.
    */
@@ -100,11 +100,10 @@ export const assertNoParentTraversal = (
  * Resolve a tool path, relative or absolute, against the call's working
  * directory when the run has one and its workspace folder otherwise.
  *
- * A path that escapes that root is accepted only inside a registered external
- * root or with path protection switched off; otherwise it fails with a
- * `ToolError` the tool runner reports to the model. With no folder open and
- * no working directory, only an absolute path can resolve (the agent
- * directories are registered external roots).
+ * A path that escapes that root is accepted only inside a root the call's
+ * step accepts (`stepRoots`) or with path protection switched off; otherwise
+ * it fails with a `ToolError` the tool runner reports to the model. With no
+ * folder open and no working directory, only an absolute path can resolve.
  *
  * `fsPath` is workspace-relative for a workspace path, so the confined
  * `WorkspaceFs` view answers it, and absolute for a working-directory or
@@ -123,8 +122,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
       const input = !trimmed || trimmed === '.' ? '' : trimmed;
 
       if (!root) {
-        // No workspace: only the allowlist accepts a path, so agent-dir
-        // calls still work.
+        // No workspace: only a step root accepts a path.
         if (input && path.isAbsolute(input)) {
           return {
             kind: 'outside-root',
@@ -181,7 +179,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
   }
   // This setting deliberately uses the same workspaceState slot in every
   // host. Do not add a CLI-specific store without also making host identity
-  // explicit at this enforcement boundary. Registered external roots need no
+  // explicit at this enforcement boundary. Step roots need no
   // containment override, so keep their resolution independent of the store.
   if (
     !resolution.match &&
@@ -202,7 +200,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
   };
 });
 
-/** Permission metadata carried for a path inside a registered external root. */
+/** Permission metadata carried for a path inside an external root. */
 function externalInfo(
   match: MatchedExternalRoot,
 ): NonNullable<WorkspacePathResolution['external']> {
@@ -216,16 +214,13 @@ function externalInfo(
 /**
  * Attach external-root permission metadata when a resolution that stayed
  * inside its containing root (the `working_directory` branch or the
- * workspace branch) happens to land inside a registered root.
+ * workspace branch) happens to land inside a step root.
  *
- * Containment inside a root does not imply writability: a registered
- * read-only root may itself sit inside the workspace or the working
- * directory — the packaged agent definitions do exactly that when the
- * extension is run from its own source checkout, where `resourcesPath`
- * is `${workspaceFolder}/packages/extension/resources`. Without this the
- * in-root branches return without touching the allowlist, and
- * `assertWritable` would let `write_file`/`edit_file` overwrite files the
- * host registered `writable: false`.
+ * Containment inside a root does not imply writability: a read-only step
+ * root (a skill directory) may itself sit inside the workspace or the
+ * working directory. Without this the in-root branches return without
+ * touching the step roots, and `assertWritable` would let
+ * `write_file`/`edit_file` overwrite them.
  *
  * Preserves `relative`/`absolute`/`fsPath` as the caller already built
  * them so display and I/O remain unchanged; only `external` is added.

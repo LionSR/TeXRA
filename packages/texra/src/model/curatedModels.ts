@@ -1,6 +1,6 @@
 /**
- * TeXRA's model choices over the llm catalog: the launcher's default model
- * and the curated picker list, which TeXRA's settings catalog hands the
+ * TeXRA's model choices over the llm catalog: the launcher's and the
+ * terminal's default models and the curated picker list, which TeXRA's settings catalog hands the
  * harness (`curatedModels`). They are not catalog facts, so they do not live
  * in `@texra-ai/llm`, and not the harness's, which curates none.
  */
@@ -10,6 +10,18 @@
  * `CURATED_MODELS` leads with it, so it must not be a Gemini id.
  */
 export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
+
+/**
+ * The model a `texra` command starts on when nothing else names one.
+ *
+ * A deliberate cheap-start choice, not a recommendation: the terminal client
+ * is the surface someone tries first, often with one freshly pasted provider
+ * key, so the built-in default is the cheapest capable model rather than the
+ * strongest. `--model`, `TEXRA_MODEL`, and the `texra.model` /
+ * `texra.chat.model` / `texra.run.model` rows all outrank it, and a model this
+ * machine cannot run falls back to an available one with a notice.
+ */
+export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
 
 /**
  * Curated models every user starts with enabled; the persisted selection is a

@@ -36,7 +36,6 @@ import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import type { AgentCatalogServices } from '@texra-ai/harness/host';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 
@@ -117,11 +116,7 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
 ): Effect.fn.Return<
   readonly string[],
   never,
-  | Secrets
-  | SubscriptionAccounts
-  | AgentCatalogServices
-  | HttpClient.HttpClient
-  | AppSignals
+  Secrets | SubscriptionAccounts | HttpClient.HttpClient | AppSignals
 > {
   const lines: string[] = [];
 

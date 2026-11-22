@@ -12,8 +12,6 @@ adds this note:
 - `Number.sumAll` in place of seven hand-written sums
 - `Duration.format` for every configured timeout a message names, and four
   timeout constants as `Duration` values
-- one text-entry focus reader (`packages/texra/src/ui/textEntryFocus.ts`),
-  item 3 of `2026-11-21-consolidation-and-natives-left-open.md`
 - the Codex effort ceiling reads its own list instead of a copy of llm's
   `rank`
 

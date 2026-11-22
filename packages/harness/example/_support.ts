@@ -184,7 +184,6 @@ export async function makeExampleWorkspace(
   existing?: string,
 ): Promise<{
   readonly workspace: string;
-  readonly agentsDir: string;
   readonly platform: AgentPlatform;
   /** The scripted model's requests, in order; empty on a real route. */
   readonly requests: Readonly<Record<string, unknown>>[];
@@ -205,16 +204,12 @@ export async function makeExampleWorkspace(
 
   const workspace =
     existing ?? (await mkdtemp(join(tmpdir(), 'texra-harness-example-')));
-  const agentsDir = join(workspace, 'agents');
-  await mkdir(agentsDir, { recursive: true });
   const platform = nodePlatform({
-    agentsDir,
     storageDir: join(workspace, 'storage'),
     workspaceDir: workspace,
   });
   return {
     workspace,
-    agentsDir,
     requests,
     platform,
     route: {

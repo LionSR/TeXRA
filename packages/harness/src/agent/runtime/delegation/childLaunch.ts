@@ -213,7 +213,7 @@ export const executeSubagentInBand = (
         launch.runId,
         definition,
         {
-          identity: { kind: 'agent', agent: definition.config.agent },
+          identity: { kind: 'agent', agent: definition.config.label },
           parent: {
             id: launch.parentId,
             call: { ...launch.parentCall, awaited: true },

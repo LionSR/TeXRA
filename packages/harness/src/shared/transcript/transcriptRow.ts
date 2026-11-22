@@ -185,7 +185,7 @@ export interface FileListRow extends TranscriptRowBase {
 /** One labeled number from a context-management row. */
 export interface StatItem {
   /** Stable key hosts use to pick an icon; never shown as-is. */
-  readonly key: string;
+  readonly key: 'maxTokens' | 'utilization' | 'contextWindow' | 'details';
   readonly label: string;
   readonly value: string;
 }

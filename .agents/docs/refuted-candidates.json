@@ -60,15 +60,15 @@
     },
     {
       "id": "EFF-ADOPT-mcp-client",
-      "candidate": "The stdio MCP client (mcpServer.ts over jsonRpc.ts newline framing) onto effect/ai McpClient.stdio",
-      "why": "effect 4.1.4's McpClient (@stability experimental) speaks one protocol revision per client and fails any other answer: its ProtocolVersion is 2025-11-25 | 2026-07-28 (node_modules/effect/src/ai/McpClient.ts:70, :839, :860), it sends initialize once (:381-387), and a server answering another revision fails with UnsupportedError (:402-407). McpProtocol ships adapters for 2024-11-05, 2025-03-26 and 2025-06-18 (McpProtocol.ts:229-254), but the client takes only an adapter of its own two revisions. A server that does not speak the requested revision answers with its own latest (@modelcontextprotocol/sdk 1.30.0 dist/esm/server/index.js:259-263), so every stdio server still on 2025-06-18, 2025-03-26 or 2024-11-05 would start with no tools; ours asks for 2025-06-18 and accepts whatever the server answers (packages/harness/src/tools/mcp/mcpServer.ts:49, :327-335). Its decoding also rejects shapes ours accepts: a null optional field or a tool without inputSchema.type fails the whole tools/list (ai/internal/mcpSchema/v2024_11_05.ts:21-29, v2025_06_18.ts:215-235), and an unknown content block fails the call (v2025_06_18.ts:155-161, :241-245). Adoption would delete about 135 lines and bring notifications/cancelled on interrupt (McpClient.ts:976, :1396-1400); mcpConfig.ts has no counterpart. Revisit when McpClient accepts an older revision in the server's answer.",
-      "ruling": "packages/harness/src/tools/mcp/mcpServer.ts#PROTOCOL_VERSION",
-      "reopenWhen": "When effect's McpClient accepts a server answering an older protocol revision (2025-06-18 or earlier) than the one it asked for.",
+      "candidate": "A hand-written stdio MCP client again (newline JSON-RPC framing in jsonRpc.ts, our own initialize, paging and cancel), or a second protocol adapter beside effect/ai McpClient, so that servers answering a revision older than 2025-11-25 still start",
+      "why": "Adopted on 2026-11-22 by the owner's decision: the stdio client is effect/ai McpClient.stdio over McpProtocol.v2025_11_25 (packages/harness/src/tools/mcp/mcpServer.ts), and the hand-written client, its PROTOCOL_VERSION and jsonRpc.ts's newline framing are deleted. The earlier refusal rested on one fact that still stands: effect 4.1.4's McpClient takes only an adapter of its own revisions (2025-11-25 | 2026-07-28, node_modules/effect/src/ai/McpClient.ts:70) and fails a server answering another one with an UnsupportedError (:402-407), so servers on 2025-06-18, 2025-03-26 or 2024-11-05 would no longer start. What changed is the weight of that cost, not the fact: the owner accepted dropping those servers, the official TypeScript SDK has answered 2025-11-25 since 1.25 (December 2025), and the refusal's fear of a server that starts with no tools and says nothing does not happen: such a server fails its start with an error naming the revision it answered and the one required, shown in the run's transcript and the process log. The stricter decoding the refusal cited (a null optional field, a tool without inputSchema.type, an unknown content block) is the 2025-11-25 schema, which those servers' SDKs meet; a listing it rejects fails the start with the field named. Keeping our own client to serve older servers would restate initialize, paging, call correlation, cancel on interrupt and the stdin-then-signal stop that McpClient owns.",
+      "ruling": "packages/harness/src/tools/mcp/mcpServer.ts#PROTOCOL",
+      "reopenWhen": "When effect's McpClient accepts a server answering an older protocol revision than the one it asked for, so older servers can be served without a client of our own.",
       "symbols": [
         {
           "file": "packages/harness/src/tools/mcp/mcpServer.ts",
-          "symbol": "PROTOCOL_VERSION",
-          "signature": "const PROTOCOL_VERSION = '2025-06-18';"
+          "symbol": "PROTOCOL",
+          "signature": "const PROTOCOL = McpProtocol.v2025_11_25;"
         }
       ]
     },

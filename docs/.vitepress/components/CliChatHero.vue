@@ -37,9 +37,7 @@ const calls = [
     <!-- Shell prompt that launched the session -->
     <div class="mk-term-prompt">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd"
-        >texra chat <span class="mk-term-flag">--agent</span> research</span
-      >
+      <span class="mk-term-cmd">texra chat</span>
     </div>
 
     <!-- Session header: printed once at the top of every chat session -->
@@ -49,7 +47,7 @@ const calls = [
         <span class="cc-meta">v0.41.0</span>
       </div>
       <div class="cc-identity">
-        agent: research · model: DeepSeek V4.1 Flash
+        agent: assistant · model: DeepSeek V4.1 Flash
       </div>
       <div class="cc-meta">~/projects/spectral-gaps</div>
     </div>

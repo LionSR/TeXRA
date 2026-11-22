@@ -2,8 +2,7 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Effect, Exit, Stream, type Duration } from 'effect';
 import { useCallback, useEffect, useState } from 'react';
 
-import { apiKeyEntry } from '@texra-ai/llm';
-import { appSignalStream, readModelOptions } from '@texra-ai/harness/host';
+import { readModelOptions } from '@texra-ai/harness/host';
 import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
@@ -27,7 +26,10 @@ import {
 } from '../state/sessionView';
 import { canStopRootRun as canStopRootRunSignal } from '../state/sessionRunState';
 import { attentionRequests as attentionRequestsSignal } from '../state/approvalQueue';
-import { modelConnectionNeeded as modelConnectionNeededSignal } from '../modelConnection';
+import {
+  modelAccessChanges,
+  modelConnectionNeeded as modelConnectionNeededSignal,
+} from '../modelConnection';
 import { useSignal } from '../state/useSignal';
 import {
   approvalQueueStatusKind,
@@ -45,19 +47,6 @@ import { useMountScope } from '../state/useMountScope';
 const ROUTE_REFRESH = '10 seconds';
 const QUOTA_REFRESH = '30 seconds';
 
-/** A change in this process to what routes a model: a provider key, or an
- *  access preference. */
-const modelAccessChanges: Stream.Stream<void, never, ProcessServices> =
-  Stream.merge(
-    appSignalStream('credentialChanged').pipe(
-      Stream.filter(({ key }) => {
-        // An unknown provider's key routes no model.
-        const provider = apiKeyEntry(key);
-        return provider !== undefined && provider !== 'unknown';
-      }),
-    ),
-    appSignalStream('modelAccessChanged'),
-  ).pipe(Stream.as(undefined));
 interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;

@@ -107,21 +107,6 @@ export interface AppSignalPayloads {
   githubSubscriptionsChanged: undefined;
 
   /**
-   * The workspace agents changed. Keyless on purpose: every listener
-   * re-reads the agent list, so which agent moved carries no information.
-   *
-   * Emitted, in every process sharing the global store, when the agent
-   * catalog is reloaded after a tool switch, a plugin install or an agent
-   * file's edit (`agentCatalogFollower`, in this process or another). The
-   * settings views' agent writes emit it themselves.
-   *
-   * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list, and their launchers. Not the CLI: it reads the agent list
-   * per command and has no persistent panel that could go stale.
-   */
-  workspaceAgentsChanged: undefined;
-
-  /**
    * The approval policy was written from a settings view or the terminal's
    * `/config` (the shared write path, `applyStateSettingUpdate`).
    *
@@ -141,10 +126,12 @@ export interface AppSignalPayloads {
    * in every process that folds the run (the arm's `writes`); a host's own
    * write (an accepted diff, the progress view's Accept) emits here directly.
    *
-   * Consumed by: extension (VS Code's `FileDecorationProvider` badges the
-   * written Explorer entries) and desktop (its file tree caches a directory
-   * listing and has no filesystem watcher, so this is the only notice it gets
-   * that a write landed behind its back). Not the CLI: it has no file tree or
+   * Consumed by: each GUI window's host snapshot (a write inside its project
+   * re-lists the launcher's files, and the desktop's file tree follows the
+   * same filtered stream, since it caches a directory listing with no
+   * filesystem watcher), the extension's `FileDecorationProvider` (it
+   * badges the written Explorer entries), and the service, which forwards
+   * its tasks' writes to their windows. Not the CLI: it has no file tree or
    * decoration surface — accepted paths are printed into the transcript by the
    * tool row, which is built from the tool result and cannot go stale.
    */

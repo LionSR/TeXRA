@@ -104,14 +104,9 @@ export function blobRows(
 
 /** The recorded context of a request that sends `resolved`, and the
  *  resolved agent definition it names. */
-function recorded(
-  run: Pick<AgentRunShape, 'config' | 'persona'>,
-  resolved: ResolvedTurn,
-) {
-  const agent = {
-    agent: run.config.agent,
-    persona: run.persona,
-  };
+function recorded(run: Pick<AgentRunShape, 'config'>, resolved: ResolvedTurn) {
+  const { label, system, tools, temperature } = run.config;
+  const agent = { label, system, tools, temperature };
   const request = {
     mode: resolved.mode,
     system: resolved.system === undefined ? null : sha256(resolved.system),
@@ -128,7 +123,7 @@ function recorded(
  * names the request's recorded context and the binding's origin.
  */
 export function attemptRows(
-  run: Pick<AgentRunShape, 'runId' | 'config' | 'persona'>,
+  run: Pick<AgentRunShape, 'runId' | 'config'>,
   state: RunState,
   invocation: InvocationRef,
   origin: ModelOrigin,
@@ -250,7 +245,7 @@ type ReadBlobs = (
 /** What an invocation sends besides the history. */
 export interface InvokeRequest {
   readonly system: string | undefined;
-  /** The tools this turn advertises; a text-only persona advertises none. */
+  /** The tools this turn advertises; a text-only run advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
 }

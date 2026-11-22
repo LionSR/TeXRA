@@ -4,6 +4,11 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
 
+import {
+  RpcClientMessageSchema,
+  RpcServerMessageSchema,
+} from '@texra/shared/rpcOverMessages';
+
 export const DESKTOP_PROMPT_COMMANDS = Object.freeze({
   /** Main to renderer: a message of main's client. */
   SHOW: 'desktop:showPrompt',
@@ -24,15 +29,12 @@ export const DesktopPromptRpcs = RpcGroup.make(
   }),
 );
 
-/** An `rpc` message, which `rpc` itself decodes. */
-const RpcMessageSchema = Schema.Record(Schema.String, Schema.Unknown);
-
 export const DesktopShowPromptMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.SHOW),
-  message: RpcMessageSchema,
+  message: RpcClientMessageSchema,
 });
 
 export const DesktopAnswerPromptMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.ANSWER),
-  message: RpcMessageSchema,
+  message: RpcServerMessageSchema,
 });

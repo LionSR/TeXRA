@@ -60,3 +60,11 @@ export const InstalledPluginSchema = Schema.Struct({
   trust: Schema.optional(PluginTrustSchema),
 });
 export type InstalledPlugin = typeof InstalledPluginSchema.Type;
+
+/**
+ * A plugin's content identity in the short form shown to people: its first
+ * twelve characters, as git abbreviates a commit. The same length is used
+ * for a managed plugin's git `commit`, a native module's revision, and a
+ * trust digest, so each reads the same width wherever it is displayed.
+ */
+export const shortPluginId = (id: string): string => id.slice(0, 12);

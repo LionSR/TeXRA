@@ -372,7 +372,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
         // The first step renders the prompt over the tools it offers, and
         // stores its base text.
         const step = yield* stepFor(run, opening, false, (offered) =>
-          buildOpeningSystemPrompt(run.persona.prompt, inputs, {
+          buildOpeningSystemPrompt(run.config.system, inputs, {
             roots,
             textOnly: bound.textOnly,
             offered,

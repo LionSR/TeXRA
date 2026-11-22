@@ -344,7 +344,7 @@ export function createSessionSurfaces(options: {
         if (launch.instruction === request.launch.instruction) {
           act(entry, {
             kind: 'launch',
-            patch: { instruction: '', skills: [] },
+            patch: { instruction: '', skills: [], chat: null },
           });
         }
         return;

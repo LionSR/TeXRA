@@ -26,7 +26,7 @@ import {
   programOf,
   listingKeyOf,
   isTranscriptEvent,
-  runIdentityDisplayName,
+  runIdentityName,
   emptyUsageStats,
   sumUsageStats,
   type RunId,
@@ -38,6 +38,7 @@ import {
   type TextChunk,
   type TranscriptSubscription,
   factName,
+  TOOL_CALL_STATUS,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -318,7 +319,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turnOver: false,
     turnStartedAt: null,
   });
-  const label = runIdentityDisplayName(event.identity);
+  const label = runIdentityName(event.identity);
   const common = {
     id,
     identity: event.identity,
@@ -329,7 +330,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     modelLabel: null,
     command: null,
     inputFiles: [],
-    agentScope: null,
     facts: {},
     worktree: event.worktree,
     position: 'ready' as const,
@@ -365,6 +365,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     usage: emptyUsageStats(),
     treeUsage: emptyUsageStats(),
     maxCostUsd: event.maxCostUsd,
+    toolCalls: 0,
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,
@@ -528,6 +529,20 @@ function nonEmpty(text: string | undefined): string | undefined {
   return text !== undefined && text.trim().length > 0 ? text : undefined;
 }
 
+/** The tool cards that finished, completed or failed. */
+function finishedToolCalls(rows: TranscriptView['rows']): number {
+  let count = 0;
+  for (const row of rows) {
+    if (
+      row.kind === 'tool' &&
+      (row.model.status === TOOL_CALL_STATUS.COMPLETED ||
+        row.model.status === TOOL_CALL_STATUS.FAILED)
+    )
+      count += 1;
+  }
+  return count;
+}
+
 /** A run's newest operational summary, for one with no reply to show (a
  *  script's run, a program): what its tool, card, error, or
  *  plain log row last said. */
@@ -605,8 +620,9 @@ function advanceFinalRows(
 }
 
 /** The transcript-derived fields of a run, after its rows moved or its turn
- *  started or ended: `finalRows`, `thinkingActive`, `compactingActive`,
- *  and `latestLine`. Once the turn is over nothing streams or compacts. */
+ *  started or ended: `finalRows`, `toolCalls`, `thinkingActive`,
+ *  `compactingActive` and `latestLine`. Once the turn is over nothing streams
+ *  or compacts. */
 function withTranscriptFacts(u: Update, run: RunView): RunView {
   const { transcript } = run;
   const { turnOver } = runWork(u, run.id);
@@ -623,6 +639,7 @@ function withTranscriptFacts(u: Update, run: RunView): RunView {
     operationalLatestLine(transcript.rows) ??
     run.latestLine;
   const next = withDerived(run, {
+    toolCalls: finishedToolCalls(transcript.rows),
     thinkingActive,
     compactingActive,
     latestLine,
@@ -704,10 +721,6 @@ function applyRunEvent(
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
-        agentScope:
-          ('delegationAgentScope' in config
-            ? config.delegationAgentScope
-            : undefined) ?? null,
         program: programOf(config)?.name ?? null,
       };
     }

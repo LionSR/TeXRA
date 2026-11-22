@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, FiberHandle } from 'effect';
+import { Effect, FiberHandle } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -7,7 +7,6 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { refreshDiffOnLayoutChange } from '@frontend/ui/diffView';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
 const CHANNEL = 'CompareCommands';
 
@@ -54,10 +53,5 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
       `Opened diff comparison between ${baseLocation.absolutePath} and ${editedLocation.absolutePath}`,
     );
   },
-  Effect.catchCause((cause) =>
-    showLoggedErrorMessage('Error comparing files', Cause.squash(cause)).pipe(
-      Effect.asVoid,
-    ),
-  ),
   withLogChannel(CHANNEL),
 );

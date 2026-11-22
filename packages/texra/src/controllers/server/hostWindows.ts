@@ -73,7 +73,6 @@ const NOTICE_OF: PresentationEventHandlers<
     event: 'requestShowInstruction',
     payload,
   }),
-  agentNotFound: (payload) => ({ event: 'agentNotFound', payload }),
   requestShowError: (payload) => ({ event: 'requestShowError', payload }),
 };
 
@@ -273,15 +272,10 @@ export const makeWindowTable = () => {
     },
   });
   /** A window's reply to a call of its client here. */
-  const answer = (attachment: string, message: unknown) =>
+  const answer = (attachment: string, message: RpcMessage.FromServerEncoded) =>
     Effect.suspend(() => {
       for (const window of windows)
-        if (window.id === attachment)
-          // cast: `rpc` reads its own message, and a reply it cannot read
-          // fails the call it answers.
-          return window.reply(
-            message as unknown as RpcMessage.FromServerEncoded,
-          );
+        if (window.id === attachment) return window.reply(message);
       return Effect.logWarning(
         `A TeXRA window answered a host call after its attachment ${attachment} ended`,
       );
@@ -339,11 +333,7 @@ const make = Effect.fn('make')(function* (table: WindowTable) {
       Effect.gen(function* () {
         const frames = yield* Queue.bounded<HostAttachFrame>(CALLS_AHEAD);
         const { protocol, receive } = yield* callOverMessages((message) =>
-          // cast: `rpc`'s messages are JSON.
-          Queue.offer(frames, {
-            kind: 'call',
-            message: message as unknown as typeof Schema.Json.Type,
-          }).pipe(Effect.asVoid),
+          Queue.offer(frames, { kind: 'call', message }).pipe(Effect.asVoid),
         );
         // Closed after the window is unlisted (finalizers run last-in
         // first-out): a call still waiting then ends as detached.

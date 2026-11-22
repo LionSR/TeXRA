@@ -19,6 +19,7 @@ import {
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
+  ASSISTANT,
   waitingAfter,
   persistentTestSession,
   sessionStoreFaults,
@@ -31,7 +32,7 @@ import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
 const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
-  agent: 'assistant',
+  ...ASSISTANT,
   model: 'openai/gpt-5.6-sol',
   instruction: 'One answer.',
 });

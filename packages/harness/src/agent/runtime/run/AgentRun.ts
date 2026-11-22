@@ -20,25 +20,19 @@ import {
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import {
-  declaredToolNames,
-  type StepToolInputs,
-} from '@agent/runtime/agentToolResolution';
+import type { StepToolInputs } from '@agent/runtime/agentToolResolution';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import {
   ModelAccess,
   modelAccessLayer,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
-import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { AppState } from '@platform/interfaces';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import {
-  type Persona,
-  AGENT_SOURCE,
   type DeclinableUsageRoute,
   type RunId,
   type SubagentProgressUpdate,
@@ -119,8 +113,6 @@ export interface RunLaunch {
   /** When this launch or resume of the run started (its opening). */
   readonly startedAt: number;
   readonly config: AgentConfig;
-  /** The persona the run is, with the tools it declares. */
-  readonly persona: Persona;
   readonly logger: AgentTrace;
   readonly toolPolicy: ToolPolicy;
   /** Absolute or absent, parsed once at launch. */
@@ -224,7 +216,7 @@ export const agentRunLayer = (
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const { runId, logger, config, persona } = launch;
+      const { runId, logger, config } = launch;
       const runHistory = yield* RunHistory;
       const roots = yield* SessionRoots;
       const layerScope = yield* Effect.scope;
@@ -245,17 +237,9 @@ export const agentRunLayer = (
       // A script's run offers its script and exactly the tools its call
       // names (a background script's parent's, a program's registered ones).
       const script = yield* scriptCallOf(config, roots);
-      // A plugin agent that names no tools inherits them, as a Claude Code
-      // subagent does: the standard file, shell and web tools and the
-      // installed plugins' tools, whoever launched it.
-      const inherits =
-        config.agentSource?.kind === AGENT_SOURCE.PLUGIN &&
-        script === null &&
-        persona.tools.length === 0;
-      // A persona that declares no tools writes text only: the injected
-      // tools stay out, and its turns get the model's whole output budget.
-      const textOnly =
-        script === null && !inherits && persona.tools.length === 0;
+      // A run that declares no tools writes text only: the injected tools
+      // stay out, and its turns get the model's whole output budget.
+      const textOnly = script === null && config.tools.length === 0;
       const root = launch.entry.parent === null;
       // A resumed run rebinds what its rows fold to (its model is its
       // newest config's); a fresh run binds the launch model under today's
@@ -263,42 +247,31 @@ export const agentRunLayer = (
       const loaded = yield* runHistory.load(runId);
       // A run is offered what its own definition and launch declare, under
       // the session's gates; its launcher's tools do not bound it. A script
-      // run offers its script; an inheriting plugin agent, beside the
-      // installed plugins' tools, the file, shell and web tools; anyone else
-      // its persona's.
-      let tools = persona.tools;
-      if (script !== null)
-        tools = [SCRIPT_TOOL_NAME, ...script.tools].map((name) => ({ name }));
-      else if (inherits)
-        tools = CLAUDE_COUNTERPART_TOOLS.map((name) => ({ name }));
+      // run offers its script and the tools its call names; any other run
+      // what its config declares.
+      const tools =
+        script === null ? config.tools : [SCRIPT_TOOL_NAME, ...script.tools];
       // The loaded plugins (MCP servers) the declared tools name, held in
       // the project's catalog for the run's life and started with its
       // variables; the read's problems reach its transcript.
-      const declared = declaredToolNames(tools);
       const held = yield* (yield* ProjectTools)
-        .hold(declared, root)
+        .hold(tools, root)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
+      const injects =
+        script === null && !textOnly && config.toolScope !== 'declared';
       const toolInputs: AgentRunShape['toolInputs'] = {
         tools,
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : (input.tools ?? []),
-        // A script's run and a text-only persona inject none. A plugin
-        // agent that names its tools gets only those.
-        injectTools:
-          script === null &&
-          !textOnly &&
-          (config.agentSource?.kind !== AGENT_SOURCE.PLUGIN || inherits),
-        // The installed plugins' tools reach a top-level run (unless it is a
-        // plugin agent that names its tools), a `self()` child, which runs as
-        // its caller, and an inheriting plugin agent wherever it runs; any
-        // other child gets what it declares.
-        injectInstalled:
-          script === null &&
-          !textOnly &&
-          (root || config.asCaller === true || inherits) &&
-          (config.agentSource?.kind !== AGENT_SOURCE.PLUGIN || inherits),
+        // A script's run, a text-only run and one whose launch named exactly
+        // its tools inject none.
+        injectTools: injects,
+        // The installed plugins' tools reach a top-level run and a run its
+        // launch scoped as one (`toolScope`); any other child gets what it
+        // declares and the injected tools.
+        injectInstalled: injects && (root || config.toolScope === 'topLevel'),
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).
@@ -322,7 +295,7 @@ export const agentRunLayer = (
             backend,
             declinedRoutes,
             textOnly,
-            temperature: persona.temperature,
+            temperature: config.temperature,
           })
           .pipe(Effect.interruptible),
       ).pipe(Scope.provide(scope));

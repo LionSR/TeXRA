@@ -1,7 +1,6 @@
 import { type Effect, Schema } from 'effect';
 
 import type {
-  AgentNotFoundPayload,
   OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
@@ -18,7 +17,6 @@ import type {
 export interface RuntimePresentationEventPayloads {
   openFile: OpenFilePayload;
   requestShowInstruction: RequestShowInstructionPayload;
-  agentNotFound: AgentNotFoundPayload;
   requestShowError: RequestShowErrorPayload;
 }
 
@@ -28,7 +26,6 @@ export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 const RuntimePresentationEventSchema = Schema.Literals([
   'openFile',
   'requestShowInstruction',
-  'agentNotFound',
   'requestShowError',
 ] as const satisfies readonly RuntimePresentationEvent[]);
 

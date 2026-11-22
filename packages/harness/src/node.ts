@@ -73,6 +73,7 @@ export {
   CommandDirs,
   existsAtAbsolute,
   homeDirectory,
+  IS_WINDOWS,
   whichOnExtendedPath,
   withCommandDirs,
   withExtendedPath,

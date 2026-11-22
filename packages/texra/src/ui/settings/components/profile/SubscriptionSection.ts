@@ -174,7 +174,6 @@ export class SubscriptionSection extends TexraSignalElement {
                       text: 'Sign out',
                       label: `Sign out of ${provider.title}`,
                       kind: 'secondary',
-                      appearance: 'outlined',
                       onClick: () =>
                         postToHost({
                           command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION,
@@ -185,7 +184,6 @@ export class SubscriptionSection extends TexraSignalElement {
                       icon: 'right-to-bracket',
                       text: provider.signInText,
                       kind: 'primary',
-                      appearance: 'filled',
                       onClick: () =>
                         postToHost({
                           command: SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION,

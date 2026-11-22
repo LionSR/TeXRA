@@ -124,11 +124,7 @@ export function settingsToolCommands(ports: {
     toggleTool: ({ toolId, enabled }) =>
       Effect.flatMap(ToolCatalog, (catalog) =>
         catalog.setEnabled(toolId, enabled),
-      ).pipe(
-        // A plugin's bundled agents follow its switch, and every launcher
-        // follows the agent catalog (`agentCatalogFollower`).
-        Effect.andThen(changed('plugins')),
-      ),
+      ).pipe(Effect.andThen(changed('plugins'))),
     // The command is looked up from the plugin's card, never taken from
     // the webview.
     runToolCommand: ({ toolId, kind }) =>

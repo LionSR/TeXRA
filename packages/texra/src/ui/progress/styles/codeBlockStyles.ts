@@ -78,7 +78,7 @@ export const codeBlockStyles = css`
 
   .hljs-comment,
   .hljs-quote {
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-style: italic;
   }
 

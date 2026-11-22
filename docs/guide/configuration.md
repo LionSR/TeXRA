@@ -19,13 +19,12 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **Models**: **API keys** (including Kimi Code and the GLM Coding Plan),
   **Subscriptions** (ChatGPT and Grok sign-in), and
   **Models** (which models appear, and the helper model).
-- **Agents**: the agent **Library**, **Skills**, and **Advanced**
-  (compaction, retries, and multi-agent coordination).
+- **Agents**: **Skills**, and **Advanced** (compaction, retries, and
+  multi-agent coordination).
 - **Memory**: the notes TeXRA keeps across tasks.
-- **Plugins**: everything that adds tools or agents: TeXRA's plugins (such as
-  Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
-  plugins, and your MCP servers. Each plugin can be made available to agents
-  or not.
+- **Plugins**: everything that adds tools or programs: TeXRA's plugins (such
+  as Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
+  plugins, and your MCP servers. Each plugin can be switched on or off.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
 - **General**: **Appearance** (desktop app only), **Approval** (the approval
@@ -96,8 +95,8 @@ is honoured and a `true` is ignored with the same warning.
 The **Models** page is the single home for model access: provider API keys,
 provider behavior, subscription sign-in (ChatGPT and Grok), and model
 visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
-their provider rows with their usage meters. There is no TeXRA account; every
-agent ships bundled.
+their provider rows with their usage meters. There is no TeXRA account; everything ships
+bundled.
 
 Saved provider keys and subscription tokens live in `~/.texra/secrets/` (an
 owner-only folder shared across the extension, desktop app, and CLI), never in
@@ -108,7 +107,7 @@ TeXRA host launched with that environment.
 
 Put standing instructions for a project, such as spelling conventions,
 notation, or how to build the paper, in an `AGENTS.md` file at the workspace
-root. Every agent adds it to its system prompt. When the workspace has no
+root. The assistant adds it to its instructions in every conversation. When the workspace has no
 `AGENTS.md`, TeXRA uses `~/.texra/AGENTS.md` instead. It is the same file
 Codex and other coding agents read, so one file serves all of them. TeXRA
 reads no other instructions file name; an old `.texrarules` file is ignored,
@@ -118,22 +117,25 @@ The whole file goes into every prompt, so keep it short.
 
 ## Skills, tools, and privacy
 
-The **Plugins** page controls which plugins, and so which tools, agents can
-use; approval controls are under **General → Approval**; the skills switch is
+The **Plugins** page controls which plugins, and so which tools, the
+assistant can use; approval controls are under **General → Approval**; the skills switch is
 on the **Agents** page. The CLI exposes the same skills switch from `/config` during a chat.
-Tools that are disabled globally are removed from an agent's available
-tool list even when its definition names them.
+A plugin switched off adds no tools, programs or instructions to any
+conversation.
 
 The **General** page contains the telemetry switch. The environment
 variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records the agent name, the model name, the
-provider API it was called through, the billing route (API key or
-subscription), token counts, the cost at list prices, response time, the time
-of the call, the task identifier, version, and host. Only a bundled agent's id is sent; a custom or plugin
-agent is reported as `custom`. No account is
+When telemetry is enabled, TeXRA records the model name, the provider API it
+was called through, the billing route (API key or subscription), token
+counts, the cost at list prices, response time, the time of the call, the
+task identifier, version, and host. A call made by a program TeXRA ships also
+carries that program's name, and a draft polish in the composer carries
+`polish`. A chat sends no name, and neither does a program from an installed
+plugin or one the assistant wrote, so a name you or a plugin wrote is never
+sent. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
 not send prompt text, document content, file paths, or error text. The first
@@ -220,11 +222,11 @@ Some rows recommend settings owned by VS Code or another extension, such as an
 Explorer exclusion. Those rows are explicitly labeled and are separate from
 TeXRA's native configuration.
 
-## Agent execution settings (webview interface)
+## Per-task settings (webview interface)
 
 Per-run controls in the task composer affect only the task being launched: the
-agent, the model, the approval policy and attached media.
-Persistent agent visibility belongs in Settings instead.
+model, the approval policy and attached media. Persistent choices belong in
+Settings instead.
 
 ## Debugging
 

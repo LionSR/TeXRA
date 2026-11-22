@@ -1,6 +1,5 @@
 import { Context, Effect, Schema, type Scope } from 'effect';
 import { ToolContext } from '@tools/core/ToolTypes';
-import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import { getRunRecords } from '@agent/storage/runOwnership';
@@ -32,14 +31,13 @@ import type { SessionServices } from './rootLaunch';
 
 /**
  * What a run's program requires of the process: the platform services every
- * process serves, the agent catalog, the plugin table its offered tools are
+ * process serves, the plugin table its offered tools are
  * rebuilt from, each workspace's last dependency probe, the model routes'
  * retry gate and what is known of each plan's quota. The composition's tool catalog (`ToolCatalog`) is not among
  * them: no run names it.
  */
 export type RunServices =
   | PlatformServices
-  | AgentCatalog
   | RouteRetries
   | PlanQuotas
   | ToolRegistry

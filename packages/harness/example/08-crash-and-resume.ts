@@ -119,11 +119,9 @@ const crashProgram = Effect.gen(function* () {
   });
   const from = session.view.head();
   const run = yield* session.start({
-    agent: {
-      name: 'reviewer',
-      prompt: 'Review the draft with a script.',
-      tools: ['script', 'hold'],
-    },
+    label: 'reviewer',
+    system: 'Review the draft with a script.',
+    tools: ['script', 'hold'],
     instruction: 'Review in two rounds.',
     model: route.model,
   });

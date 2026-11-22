@@ -19,10 +19,10 @@ import {
   type PendingRequest,
   type RequestPayload,
 } from '@texra-ai/harness/schemas';
-import { focusIsOnTextEntry, isTypingIn } from '@ui/textEntryFocus';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { RunView } from '@texra-ai/harness/schemas';
+import { isTypingKeystroke, textEntryHasFocus } from '@ui/wa/keyActivation';
 
 // Local imports - progress view component types
 import type { BaseRequestPanel } from './BaseRequestPanel';
@@ -54,10 +54,6 @@ const CARD_MARKER = 'data-request-panel';
 
 /** A pending request's identity: its id, a retry's as any other's. */
 const requestKey = (request: PendingRequest): string => request.requestId;
-
-/** A select and its listbox options: their keys (typeahead, arrows)
- *  pick an option, never a card shortcut. */
-const CHOOSER = /^wa-(select|option)$/;
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
@@ -111,14 +107,13 @@ export class RequestPanels extends LitElement {
    *  keep their keys. */
   private handleKeydown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (isTypingIn(document, event)) return;
-    const path = event.composedPath();
-    if (path.some((t) => t instanceof Element && CHOOSER.test(t.localName)))
-      return;
-    const card = path.find(
-      (target): target is BaseRequestPanel =>
-        target instanceof Element && target.hasAttribute(CARD_MARKER),
-    );
+    if (isTypingKeystroke(event, document)) return;
+    const card = event
+      .composedPath()
+      .find(
+        (target): target is BaseRequestPanel =>
+          target instanceof Element && target.hasAttribute(CARD_MARKER),
+      );
     if (card?.handleKeyboardShortcut(event.key.toLowerCase())) {
       event.preventDefault();
     }
@@ -144,7 +139,7 @@ export class RequestPanels extends LitElement {
     // The card was just connected in this render pass; its first Lit update
     // is a microtask that cannot run until this `updated()` returns.
     void card.updateComplete.then(() => {
-      if (focusIsOnTextEntry(document)) return;
+      if (textEntryHasFocus(document)) return;
       if (this.matches(':focus-within')) return;
       const target =
         card.shadowRoot?.querySelector<HTMLElement>(

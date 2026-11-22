@@ -302,14 +302,9 @@ const start = Effect.fn('start')(function* (
     runId,
     interactive: true,
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'golden_native',
-      agentSource: {
-        kind: 'inline',
-        persona: {
-          prompt: 'GOLDEN-NATIVE: equip yourself with a plugin.',
-          tools: ['read_file'],
-        },
-      },
+      label: 'golden_native',
+      system: 'GOLDEN-NATIVE: equip yourself with a plugin.',
+      tools: ['read_file'],
       model: 'openai/gpt-5.6-sol',
       instruction: `Install the plugin at ${dir}. ${task}`,
     }),
@@ -572,8 +567,8 @@ describe(
                   runId: program,
                   interactive: true,
                   config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                    agent: 'echo_program',
-                    agentSource: { kind: 'inline', persona: {} },
+                    label: 'echo_program',
+
                     model: 'openai/gpt-5.6-sol',
                     script: { kind: 'program', name: 'echo_program', args: {} },
                   }),

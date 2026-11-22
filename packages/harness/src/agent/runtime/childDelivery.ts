@@ -96,7 +96,7 @@ export const childEndReport = Effect.fn('childEndReport')(
       wallTimeMs,
       lines: contextLines(ctx.workingDirectory, report.memoryMisses ?? []),
     };
-    const agent = { name: 'agent', value: config.agent };
+    const agent = { name: 'agent', value: config.label };
     switch (report.outcome) {
       case RUN_OUTCOME.CANCELLED: {
         // Stopped at its own cap: its parent, which may not be waiting for

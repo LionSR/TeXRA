@@ -35,7 +35,6 @@ import {
   pluginRowSummary,
   pluginRowSwitchable,
   pluginRowTrust,
-  pluginRowUsedBy,
   toolDependencyStatusLabel,
 } from '@ui/copy/plugins';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -292,7 +291,6 @@ export class PluginCard extends TexraElement {
                 icon: 'shield',
                 text: PLUGINS_PAGE.review,
                 kind: 'secondary',
-                appearance: 'outlined',
                 onClick: () => this.pluginAction('enable'),
               })
             : nothing
@@ -301,14 +299,12 @@ export class PluginCard extends TexraElement {
           icon: 'rotate-right',
           text: PLUGINS_PAGE.update,
           kind: 'secondary',
-          appearance: 'outlined',
           onClick: () => this.pluginAction('update'),
         })}
         ${renderLabeledActionButton({
           icon: 'trash',
           text: PLUGINS_PAGE.remove,
           kind: 'secondary',
-          appearance: 'outlined',
           onClick: () => this.pluginAction('remove'),
         })}
       </div>
@@ -402,7 +398,6 @@ export class PluginCard extends TexraElement {
     const { row } = this;
     const problem = pluginRowProblem(row);
     const trust = pluginRowTrust(row);
-    const usedBy = pluginRowUsedBy(row);
     const authNote =
       row.kind === 'texra' ? row.item.setup?.authNote : undefined;
 
@@ -443,7 +438,6 @@ export class PluginCard extends TexraElement {
               </p>`
             : nothing
         }
-        ${usedBy ? html`<p class="plugin-line">${usedBy}</p>` : nothing}
         <slot name="details"></slot>
         ${row.kind === 'texra' ? this.renderSetup(row.item) : nothing}
         ${row.kind === 'installed' ? this.renderInstalledActions(row) : nothing}

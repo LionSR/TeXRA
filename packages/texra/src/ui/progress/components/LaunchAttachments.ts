@@ -100,7 +100,7 @@ export class LaunchAttachments extends LitElement {
                       id: `launch-attachment-remove-${index}`,
                       icon: 'xmark',
                       label: `Remove ${getBasename(file)}`,
-                      className: 'icon-button is-size-s',
+                      size: 's',
                       onClick: () => this.detach(file),
                     })}</span
                   >`,

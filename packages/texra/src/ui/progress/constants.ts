@@ -75,12 +75,6 @@ const COPY_DIAGNOSTICS_ACTION: RunMenuAction = Object.freeze<RunMenuAction>({
 });
 
 const TASK_RUN_ACTIONS: readonly RunMenuAction[] = [
-  {
-    action: 'runAgain',
-    icon: 'play',
-    label: 'Run again…',
-    activate: hostAction('runAgain'),
-  },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
   COPY_DIAGNOSTICS_ACTION,
@@ -113,6 +107,12 @@ const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
       target.dispatchEvent(
         SessionUiEvents.runtime({ kind: 'run.compact', runId: run.id }),
       ),
+  },
+  {
+    action: 'runAgain',
+    icon: 'play',
+    label: 'Run again…',
+    activate: hostAction('runAgain'),
   },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
