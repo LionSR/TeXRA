@@ -2,7 +2,7 @@
 import { lookup } from 'node:dns';
 
 // Third-party imports
-import { Effect, Result, Schema, Stream } from 'effect';
+import { Duration, Effect, Result, Schema, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
 
@@ -268,7 +268,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         ? error
         : toFetchToolError(error, {
             timeout:
-              `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
+              `Request to ${url} timed out after ${Duration.format(Duration.millis(WEB_FETCH_TIMEOUT_MS))}. ` +
               `The remote server did not respond in time. Retry the request, or try a different URL.`,
             http: (status) => `HTTP ${status}: Failed to fetch ${url}`,
             network: (message) => `Network error fetching ${url}: ${message}`,

@@ -330,7 +330,7 @@ export const acquireMcpServer = Effect.fn('acquireMcpServer')(function* (
       orElse: () =>
         Effect.fail(
           new McpStartError({
-            message: `No answer within ${Duration.toSeconds(START_TIMEOUT)}s`,
+            message: `No answer within ${Duration.format(START_TIMEOUT)}`,
           }),
         ),
     }),

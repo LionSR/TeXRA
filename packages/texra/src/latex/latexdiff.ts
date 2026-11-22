@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Schema } from 'effect';
+import { Duration, Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
 import { redactSecrets } from '@texra-ai/harness/host';
@@ -54,7 +54,7 @@ class LatexdiffFailed extends Schema.TaggedError<LatexdiffFailed>()(
   override get message(): string {
     const variant = this.flatten ? '' : ' (without --flatten)';
     if (this.timedOut) {
-      return `${this.commandType} operation timed out after ${this.timeoutMs}ms${variant}`;
+      return `${this.commandType} operation timed out after ${Duration.format(Duration.millis(this.timeoutMs))}${variant}`;
     }
     return this.stderr
       ? `Failed to run ${this.commandType}${variant}: ${this.stderr}`

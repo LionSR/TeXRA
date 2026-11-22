@@ -391,7 +391,7 @@ const make = ({
             duration: SHUTDOWN_TIMEOUT,
             orElse: () =>
               Effect.logDebug(
-                `[${root}] shutdown request timed out after ${Duration.toMillis(SHUTDOWN_TIMEOUT)}ms`,
+                `[${root}] shutdown request timed out after ${Duration.format(SHUTDOWN_TIMEOUT)}`,
               ).pipe(withLogChannel(LOG_CHANNEL)),
           }),
           Effect.catch((error) =>

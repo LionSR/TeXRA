@@ -97,7 +97,7 @@ const MAX_QUEUE_SIZE = 1000;
 const BATCH_SIZE = 10;
 /** The periodic flush, and the first wait between retries. */
 export const FLUSH_INTERVAL = Duration.seconds(30);
-const REQUEST_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT = Duration.seconds(10);
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
 /** The longest wait between retries of an undelivered batch. */
 const MAX_RETRY_DELAY = Duration.minutes(30);
@@ -276,11 +276,11 @@ const sendBatch = Effect.fn('UsageLogService.sendBatch')(function* (
       );
     }),
     Effect.timeoutOrElse({
-      duration: Duration.millis(REQUEST_TIMEOUT_MS),
+      duration: REQUEST_TIMEOUT,
       orElse: () =>
         Effect.fail(
           undelivered(
-            `Usage endpoint did not answer within ${REQUEST_TIMEOUT_MS}ms`,
+            `Usage endpoint did not answer within ${Duration.format(REQUEST_TIMEOUT)}`,
           ),
         ),
     }),
