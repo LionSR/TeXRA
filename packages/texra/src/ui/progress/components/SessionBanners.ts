@@ -1,11 +1,10 @@
 /**
  * `<session-banners>`: the one warning slot above the launch composer. The
- * host raises up to five warnings (the background service offline, a
- * credential that stopped working, a missing agent file, missing tools, a
- * folder's tasks running in this window only); the slot shows the first
- * that is visible, in that order, because each blocks the next: with the
- * service away no task starts, without a key nothing runs, and a missing
- * agent file fails the launch before a tool is ever needed. Tasks running
+ * host raises up to four warnings (the background service offline, a
+ * credential that stopped working, missing tools, a folder's tasks running
+ * in this window only); the slot shows the first that is visible, in that
+ * order, because each blocks the next: with the service away no task
+ * starts, and without a key nothing runs. Tasks running
  * in this window still run, so that notice yields to every other. Each
  * warning dispatches its own `host.request` command. The onboarding and
  * "no LaTeX files yet" cards are not warnings: they take the hero's place.

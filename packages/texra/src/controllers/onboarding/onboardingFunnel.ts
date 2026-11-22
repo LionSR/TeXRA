@@ -24,7 +24,6 @@
 import { Effect, Schema, type Scope, Stream } from 'effect';
 import {
   decodingDefault,
-  agentName,
   type SessionView,
   type StateKey,
 } from '@texra-ai/harness/schemas';
@@ -84,7 +83,7 @@ function hasCompletedRun(view: SessionView): boolean {
     if (
       run.outcome === 'completed' &&
       run.identity.kind === 'agent' &&
-      agentName(run.identity.agent) !== SETUP_AGENT_NAME
+      run.identity.agent !== SETUP_AGENT_NAME
     )
       return true;
   }

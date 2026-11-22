@@ -42,7 +42,7 @@ Exports: 63
 - `meansAbsent` — `const meansAbsent: (error: unknown) => boolean`
 - `nodeFileServices` — `const nodeFileServices: Layer<FileSystem | Path, never, never>`
 - `nodePlatform` — `function nodePlatform: (options: NodePlatformOptions) => AgentPlatform`
-- `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir: string; readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: SettingsCatalog; }`
+- `NodePlatformOptions` — `interface NodePlatformOptions { readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: SettingsCatalog; }`
 - `nodePlatformServices` — `const nodePlatformServices: Layer<ChildProcessSpawner | FileSystem | Path, never, never>`
 - `NodeWorkspaceRootsInit` — `interface NodeWorkspaceRootsInit { readonly workspaceRoot: string | undefined; readonly storageRoot: string; readonly config: JsonConfigProviderOptions | ConfigProvider; readonly stateStores: Context.Service.Shape<typeof StateStores>; readonly globalState: StateStore; readonly workspaceState?: StateStore; }`
 - `openNodeWorkspaceRoots` — `const openNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => Effect<WorkspaceRoots, DatabaseOpenFailed, Scope>`

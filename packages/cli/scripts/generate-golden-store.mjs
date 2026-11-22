@@ -11,8 +11,8 @@
  * bundle `validate-run.mjs` builds), against a temporary HOME and project
  * from `mkdtemp`, set only in each child's environment: no live model, no API
  * key, and never the developer's `~/.texra`. The scripted conversation is
- * `goldenTurn` in `packages/cli/src/runtime/models/validationModel.ts`, over the agents
- * in `src/test-kernel/fixtures/storage/agents/`; this script orders the runs,
+ * `goldenTurn` in `packages/cli/src/runtime/models/validationModel.ts`, over the runs
+ * in `GOLDEN_AGENTS` (`validationAgents.ts`); this script orders the runs,
  * each in its own process and every one finishes cleanly: interrupted states
  * are the crash suite's (`crashConformance.ts`), which truncates a clean
  * store at each commit.
@@ -112,6 +112,7 @@ import stableStringify from 'safe-stable-stringify';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 import { splitValidationAgent } from './validationAgent.mjs';
+import { GOLDEN_AGENTS } from '../src/runtime/models/validationAgents.ts';
 import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
@@ -209,19 +210,13 @@ function build() {
 // The runs
 // ---------------------------------------------------------------------------
 
-/** The agents the scripted conversation names, beside the fixture: the
- *  conformance suite resumes the parked run under the same definition. */
-const agentsDir = path.join(path.dirname(fixturePath), 'agents');
-
 function scenario(root) {
   const home = path.join(root, 'home');
   const project = path.join(root, 'project');
   const flag = path.join(root, 'flag');
-  const agents = path.join(home, '.texra/v1/global-storage/custom_agents');
-  mkdirSync(agents, { recursive: true });
+  mkdirSync(home, { recursive: true });
   mkdirSync(project, { recursive: true });
   writeFileSync(flag, VALIDATION_FLAG_CONTENT);
-  cpSync(agentsDir, agents, { recursive: true });
   writeFileSync(
     path.join(project, 'notes.tex'),
     '\\section{Notes}\nThe golden store reads this file.\n',
@@ -338,7 +333,7 @@ process.stdin.on('end', function answer() {
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const argv = (command) => [binaryPath, ...command, '--cwd', project];
-  // A command's `--agent <name>` is the script's, not the CLI's: it becomes
+  // A command's `--agent <run>` is the script's, not the CLI's: it becomes
   // the validation build's variable.
   const launch = (written, base) => {
     const { command, env: agent } = splitValidationAgent(written);
@@ -555,7 +550,7 @@ async function generate(root) {
     'run',
     'chat',
     '--agent',
-    'golden_parent',
+    GOLDEN_AGENTS.golden_parent,
     '--model',
     'openai/gpt-5.6-sol',
     '--instruction',
@@ -611,7 +606,7 @@ async function generate(root) {
   const tty = await cli.chat([
     'chat',
     '--agent',
-    'golden_chat',
+    GOLDEN_AGENTS.golden_chat,
     '--model',
     'openai/gpt-5.6-sol',
   ]);
@@ -791,7 +786,7 @@ async function generate(root) {
     'run',
     'chat',
     '--agent',
-    'golden_script',
+    GOLDEN_AGENTS.golden_script,
     '--model',
     'openai/gpt-5.6-sol',
     '--instruction',
@@ -811,7 +806,7 @@ async function generate(root) {
     'run',
     'chat',
     '--agent',
-    'golden_fork',
+    GOLDEN_AGENTS.golden_fork,
     '--model',
     'openai/gpt-5.6-sol',
     '--instruction',
@@ -901,7 +896,7 @@ async function generate(root) {
     'run',
     'chat',
     '--agent',
-    'golden_effect',
+    GOLDEN_AGENTS.golden_effect,
     '--model',
     'openai/gpt-5.6-sol',
     '--instruction',
@@ -928,7 +923,7 @@ async function generate(root) {
     'run',
     'chat',
     '--agent',
-    'golden_child',
+    GOLDEN_AGENTS.golden_child,
     '--model',
     'openai/gpt-5.6-sol',
     '--instruction',
@@ -969,7 +964,7 @@ async function generate(root) {
         'tasks',
         'start',
         '--agent',
-        'golden_script',
+        GOLDEN_AGENTS.golden_script,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',

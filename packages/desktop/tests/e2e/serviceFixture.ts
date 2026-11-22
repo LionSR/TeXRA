@@ -12,6 +12,7 @@ import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
+  VALIDATION_AGENT,
   VALIDATION_SWITCH,
 } from '../../../cli/src/runtime/models/validationSwitch';
 import { testLaunchEnv } from '../../../../scripts/isolated-home.mjs';
@@ -99,6 +100,17 @@ export const serviceStatus = (binary: string, home: string): ServiceStatus =>
 /** What runs a newer build's tasks on its scripted model: the switches,
  *  and the flag file the model checks, written into `dir`. A held call's
  *  release file goes beside it. */
+/** The variable that starts `run` in place of the entry agent, beside
+ *  {@link scriptedModel}'s: the validation model keys its turn on the
+ *  marker in `system`. */
+export const validationRun = (run: {
+  readonly label: string;
+  readonly system: string;
+  readonly tools?: readonly string[];
+}): Record<string, string> => ({
+  [VALIDATION_AGENT]: JSON.stringify({ tools: [], ...run }),
+});
+
 export function scriptedModel(dir: string): Record<string, string> {
   const flag = join(dir, 'texra-validation.flag');
   writeFileSync(flag, VALIDATION_FLAG_CONTENT);

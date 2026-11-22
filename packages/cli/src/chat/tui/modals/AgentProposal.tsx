@@ -16,7 +16,7 @@ import {
 } from '@cli/runtime/approval/approvalSummaries';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {
-  DEFINED_AGENT_COPY,
+  CHILD_AGENT_COPY,
   DELEGATION_APPROVAL_COPY,
 } from '@ui/copy/delegationApproval';
 import {
@@ -106,19 +106,19 @@ function agentProposalMetadataLines({
   // A script's request for its `agent` calls: what approving allows, the
   // first agent, and the calls it issued first; its code is the scrolling
   // text below, under its line count.
-  const source = payload.agentSource;
+  // A chat child: its name and tools, and the first sentence of its system
+  // text; a program's child has none.
   const defined: MetadataLine[] =
-    source?.kind === 'inline'
-      ? [
+    payload.system === ''
+      ? []
+      : [
           {
             segments: [
-              {
-                text: DEFINED_AGENT_COPY.heading(payload.agent, source.persona),
-              },
+              { text: CHILD_AGENT_COPY.heading(payload.label, payload.tools) },
             ],
           },
-        ]
-      : [];
+          { segments: [{ text: CHILD_AGENT_COPY.summary(payload.system) }] },
+        ];
   if (payload.script) {
     const { calls } = payload.script;
     return [
@@ -128,7 +128,7 @@ function agentProposalMetadataLines({
         segments: [
           {
             text: scriptRequestFirstAgentLine(
-              payload.agent,
+              payload.label,
               getModelLabel(payload.model),
               payload.instruction,
             ),
@@ -224,22 +224,21 @@ function MetadataLineRow(props: {
 }
 
 /** The text a proposal scrolls: a script's code or the agent's task, after
- *  a defined agent's system prompt. */
+ *  a chat child's system text. */
 function proposalText(payload: AgentProposalRequest): string {
-  const { script, agentSource } = payload;
+  const { script, system } = payload;
   const body = script ? script.source : payload.instruction;
-  if (agentSource?.kind !== 'inline') return body;
-  const { persona } = agentSource;
+  if (system === '') return body;
   const label = script
     ? SCRIPT_REQUEST_COPY.code(script)
-    : DEFINED_AGENT_COPY.instructionLabel;
-  return `${DEFINED_AGENT_COPY.promptLabel}:\n${persona.prompt ?? ''}\n\n${label}:\n${body}`;
+    : CHILD_AGENT_COPY.instructionLabel;
+  return `${CHILD_AGENT_COPY.promptLabel}:\n${system}\n\n${label}:\n${body}`;
 }
 
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const fileGroups = getProposalFileGroups(props.payload);
-  const { script, task, agent } = props.payload;
+  const { script, task, label: agent } = props.payload;
   const title = script
     ? SCRIPT_REQUEST_COPY.title(script)
     : `${REQUEST_ASK.proposal(task)} ${agent}`;

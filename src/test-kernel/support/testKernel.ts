@@ -40,7 +40,6 @@ import {
   type HostInteractions,
 } from '@texra-ai/harness';
 import {
-  AgentCatalog,
   processLayer,
   ToolAvailability,
   UsageLog,
@@ -58,7 +57,7 @@ import {
   StateStores,
   ToolCatalog,
   type StateStore,
-  AgentDirectories,
+  HostResources,
 } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
@@ -69,7 +68,6 @@ import { RouteRetries } from '@agent/runtime/ModelRetryGate';
 import { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { withForkFailureReporting } from '@platform/processRuntime';
-import type { AgentDirectoriesPort } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SessionRoots } from '@platform/rootedFs';
@@ -176,12 +174,7 @@ const followedPorts = (current: Ref.Ref<HostRecord>) => {
     modify: (keys, change) =>
       Effect.suspend(() => host().roots.globalState.modify(keys, change)),
   };
-  const agentDirectories: AgentDirectoriesPort = {
-    custom: () => host().platform.agentDirectories.custom(),
-    customConfigured: () => host().platform.agentDirectories.customConfigured(),
-    builtIn: () => host().platform.agentDirectories.builtIn(),
-  };
-  return { secrets, appState, agentDirectories };
+  return { secrets, appState };
 };
 
 /**
@@ -191,9 +184,9 @@ const followedPorts = (current: Ref.Ref<HostRecord>) => {
  * platform services (`PlatformServices`): the Node
  * `FileSystem`, `Path` and `ChildProcessSpawner`, `GlobalStorageFs`, the
  * `GlobalDatabase` handle, the `HttpClient`,
- * `Secrets` with its `SubscriptionAccounts`, `AppState`, `AgentDirectories`,
- * `GlobalValues`, `StateStores`, `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`) the
- * `AgentCatalog`, the model routes' `RouteRetries` gate, the plans'
+ * `Secrets` with its `SubscriptionAccounts`, `AppState`, `HostResources`,
+ * `GlobalValues`, `StateStores`, `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`)
+ * the model routes' `RouteRetries` gate, the plans'
  * `PlanQuotas`, the `ToolRegistry`
  * and `ToolAvailability`; the composition adds its `ToolCatalog`; and a
  * composition root opens its sessions through `Sessions`, with the internal
@@ -211,13 +204,12 @@ const PROCESS_SERVICES = [
   Secrets,
   SubscriptionAccounts,
   AppState,
-  AgentDirectories,
+  HostResources,
   GlobalValues,
   StateStores,
   UsageLog,
   AppSignals,
   AppNamespace,
-  AgentCatalog,
   RouteRetries,
   PlanQuotas,
   ToolRegistry,
@@ -272,9 +264,8 @@ const composedProcess = ({
         plugins: [...host.app.plugins(), ...extra],
         secrets: Secrets.layer(ports.secrets, host.app.client),
         appState: AppState.layer(ports.appState),
-        agentDirectories: Layer.succeed(AgentDirectories)(
-          ports.agentDirectories,
-        ),
+        // No packaged resources: a suite that needs them names its own.
+        hostResources: Layer.succeed(HostResources)({}),
         toolAvailability: unprobedToolAvailability,
         // The process reports no usage; the telemetry suite starts its own.
         usageLog: UsageLog.disabled,
@@ -289,8 +280,7 @@ const composedProcess = ({
  * The process a host composes, as a layer over the block's fake host:
  * `processLayer` over the host's app (`HARNESS_APP` unless the host names
  * another) and the fake host's ports. The process reads the host as
- * it builds and after (its tool switches, whether a custom agents directory
- * is set), and its ports read the host the block points at when they are
+ * it builds and after (its tool switches), and its ports read the host the block points at when they are
  * called, so a block's graph follows its per-test hosts. Built once per block and
  * released with it, which closes the sessions still open on it. The CLI's
  * validation model stands in for a real one, as the suites open runs the

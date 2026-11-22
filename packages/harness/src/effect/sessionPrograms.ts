@@ -18,11 +18,6 @@
 import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
-import {
-  agentMissMessage,
-  missingAgentRefusal,
-  type AgentCatalog,
-} from '@agent/index/agentCatalog';
 import type { ProjectView } from '@controllers/session/readSessionView';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Interactions } from '@agent/runtime/HostInteractions';
@@ -38,7 +33,7 @@ import {
   RunStopped,
 } from '@agent/runtime/runRegistry';
 import type { ITool } from '@tools/core/ToolTypes';
-import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
+import { LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
 
 // The composition root supplies its existing scoped services privately;
@@ -46,10 +41,8 @@ import { asksApproval } from '@agent/runtime/agentToolResolution';
 import { SessionRoots } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
-  AGENT_SOURCE,
   AgentConfigSchema,
   describeRefusal,
-  InlinePersonaSchema,
   type RunId,
   generateRunId,
 } from '@shared/schemas';
@@ -76,24 +69,17 @@ import type {
   StartInput,
 } from './sessions.js';
 
-/** The agent catalog a start looks a named agent up in. */
-type Catalog = Context.Service.Shape<typeof AgentCatalog>;
 /** A failure of the launch path, as the run's own. */
 const runFailure = (cause: unknown): RunFailure =>
   new RunFailure({ cause, message: toErrorMessage(cause) });
 
 /** A failure of the launch path: a refused launch as itself, one a stop
- *  cut before it started as a refusal, an agent this process cannot run as
- *  its refusal (a missing one with the notice that offers the agent
- *  setting), anything else as the run's own. */
+ *  cut before it started as a refusal, anything else as the run's own. */
 const launchFailure = (cause: Error): LaunchRefused | RunFailure => {
   if (cause instanceof LaunchRefused) return cause;
   if (cause instanceof RunStopped)
     return new LaunchRefused({ message: cause.message });
-  if (!(cause instanceof AgentUnavailable)) return runFailure(cause);
-  return cause.blocked.blocker === 'agentMissing'
-    ? missingAgentRefusal({ agent: cause.blocked.name, message: cause.message })
-    : new LaunchRefused({ message: cause.message });
+  return runFailure(cause);
 };
 
 /** An input its schema rejects, refused as the caller's. */
@@ -125,42 +111,22 @@ function acceptTools(
 }
 
 /** The run's configuration, or the refusal that stops it before any model
- *  work: the three the package states. A host's whole configuration is the
- *  config; a named agent is looked up; an inline persona is the agent,
- *  recorded on the config and validated by its schema there. */
+ *  work. A host's whole configuration is the config; otherwise the system
+ *  text, tools and instruction the start names are recorded on a config
+ *  its schema validates. */
 const acceptInput = Effect.fn('acceptInput')(function* (
   input: StartInput,
   session: Context.Context<SessionServices>,
-  catalog: Catalog,
 ): Effect.fn.Return<typeof AgentConfigSchema.Type, LaunchError> {
-  yield* acceptTools(input.tools ?? [], session);
-  // A host's whole configuration: its launch resolves the agent itself.
+  yield* acceptTools(input.runTools ?? [], session);
   if ('config' in input) return input.config;
-  const { agent } = input;
-  const resolved = typeof agent === 'string' ? catalog.get(agent) : null;
-  if (typeof agent === 'string' && !resolved) {
-    // The same wording as the catalog's miss, so every host says one thing.
-    return yield* missingAgentRefusal({
-      agent,
-      message: agentMissMessage(agent),
-    });
-  }
   // The schema is the launch's last refusal, and it is a refusal rather
-  // than a defect: an input this surface will not accept is the caller's,
-  // as an unknown agent above is.
-  // The run is named as its persona's schema spells the name.
-  const named =
-    resolved != null
-      ? { agent: resolved.name, agentSource: { kind: resolved.source } }
-      : yield* Schema.decodeUnknownEffect(InlinePersonaSchema)(agent).pipe(
-          Effect.map(({ name, ...persona }) => ({
-            agent: name,
-            agentSource: { kind: AGENT_SOURCE.INLINE, persona },
-          })),
-          Effect.mapError(inputRefused),
-        );
+  // than a defect: an input this surface will not accept is the caller's.
   return yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
-    ...named,
+    label: input.label ?? 'agent',
+    system: input.system,
+    tools: input.tools ?? [],
+    temperature: input.temperature,
     instruction: input.instruction,
     model: input.model,
   }).pipe(Effect.mapError(inputRefused));
@@ -170,10 +136,9 @@ const acceptInput = Effect.fn('acceptInput')(function* (
  *  when the input names none. */
 const start = Effect.fn('start')(function* (
   session: Context.Context<SessionServices>,
-  catalog: Catalog,
   input: StartInput,
 ): Effect.fn.Return<Run, LaunchError | RunFailure> {
-  const config = yield* acceptInput(input, session, catalog);
+  const config = yield* acceptInput(input, session);
   const runId = input.runId ?? generateRunId();
   // A supplied id already in the session is refused here; one a launch
   // still opens, its activation refuses (`RunLive`).
@@ -189,7 +154,12 @@ const start = Effect.fn('start')(function* (
     });
   // A caller interrupted before the handle comes back gives up only the
   // wait: the run is its own fiber's, and a stop is how it ends.
-  return yield* rootRun({ ...input, config, runId }).pipe(
+  return yield* rootRun({
+    ...input,
+    tools: input.runTools,
+    config,
+    runId,
+  }).pipe(
     Effect.provide(session),
     Effect.provideService(LaunchKeys, input.apiKeys ?? {}),
     Effect.mapError(launchFailure),
@@ -216,12 +186,12 @@ function resume(
   input: ResumeInput = {},
   redirectedFrom?: RunId,
 ): Effect.Effect<Run, ResumeError> {
-  const { tools, interactive, apiKeys } = input;
+  const { runTools, interactive, apiKeys } = input;
   return Effect.gen(function* () {
-    yield* acceptTools(tools ?? [], session);
+    yield* acceptTools(runTools ?? [], session);
     const resumed = yield* resumeRun(runId, {
       stopAfterCycle: interactive !== true,
-      tools,
+      tools: runTools,
     }).pipe(
       Effect.provide(session),
       Effect.provideService(LaunchKeys, apiKeys ?? {}),
@@ -247,15 +217,12 @@ function resume(
 /** The session as this package works on it: a pure function of the
  *  session's services the owner opened, holding nothing the owner already
  *  holds. */
-function sessionOf(
-  session: Context.Context<SessionServices>,
-  catalog: Catalog,
-): LocalSession {
+function sessionOf(session: Context.Context<SessionServices>): LocalSession {
   const requests = Context.get(session, SessionRequests);
   return {
     roots: Context.get(session, SessionRoots),
     ...sessionReads(session),
-    start: (input) => start(session, catalog, input),
+    start: (input) => start(session, input),
     resume: (runId, input) => resume(session, runId, input),
     run: (runId, activation) => runView(session, runId, activation),
     request: (req) => requests.request(req).pipe(Effect.provide(session)),
@@ -263,11 +230,9 @@ function sessionOf(
   };
 }
 
-/** The package's sessions over the process's owner; `catalog` names the
- *  agents a start looks up. */
+/** The package's sessions over the process's owner. */
 export function makeSessions(
   owner: Context.Service.Shape<typeof SessionOwner>,
-  catalog: Catalog,
   projects: (
     held: (storage: string) => SessionView | undefined,
   ) => Effect.Effect<readonly ProjectView[], DatabaseReadFailed>,
@@ -275,7 +240,7 @@ export function makeSessions(
   return Effect.sync(() => {
     const sessionFor = (
       session: Context.Context<SessionServices>,
-    ): LocalSession => sessionOf(session, catalog);
+    ): LocalSession => sessionOf(session);
     return {
       // An open asking for the other store than the session's is the
       // owner's refusal. Until a host that can prompt attaches, nobody here

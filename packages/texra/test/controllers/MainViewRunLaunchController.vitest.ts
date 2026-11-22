@@ -35,7 +35,7 @@ layer(FakeHost.layer())('main-view run launch controller', (it) => {
         ROOTS,
       );
 
-      expect(yield* launchFormOf(config)).toMatchObject({
+      expect(launchFormOf(config)).toMatchObject({
         ...selections,
         instruction: 'Improve the draft.',
       });

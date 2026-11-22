@@ -104,12 +104,9 @@ const heldIds = (session: LocalSession) =>
 const runId = await inSession((session) =>
   Effect.gen(function* () {
     const run = yield* session.start({
-      agent: {
-        name: 'abstract_writer',
-        description: 'Writes and revises an abstract.',
-        prompt: 'Write what is asked, briefly.',
-        tools: [],
-      },
+      label: 'abstract_writer',
+      system: 'Write what is asked, briefly.',
+      tools: [],
       instruction: 'Draft the abstract.',
       model: route.model,
       interactive: true,

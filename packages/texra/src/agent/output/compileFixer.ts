@@ -124,11 +124,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     }
 
     // The entry agent in a chat, not the task's program again.
-    const {
-      agentSource: _programSource,
-      script: _program,
-      ...taskConfig
-    } = savedTaskConfig;
+    const { script: _program, ...taskConfig } = savedTaskConfig;
     return {
       ...taskConfig,
       ...entryAgent(),

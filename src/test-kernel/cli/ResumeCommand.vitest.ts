@@ -193,7 +193,7 @@ describe('texra resume', { timeout: REAL_RUN_TIMEOUT }, () => {
                 chat: {
                   initialResume: {
                     id: runId,
-                    config: { agent: 'assistant', model: MODEL },
+                    config: { label: 'assistant', model: MODEL },
                   },
                 },
               });

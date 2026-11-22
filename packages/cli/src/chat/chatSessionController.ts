@@ -240,12 +240,19 @@ export function createChatSessionController(
 
   /** Publish the configuration of the conversation the TUI adopts. */
   const adoptRunConfig = (
-    config: Pick<AgentConfig, 'agent' | 'agentSource' | 'model'>,
+    config: Pick<
+      AgentConfig,
+      'label' | 'system' | 'tools' | 'temperature' | 'model'
+    >,
     modelSource?: 'history',
   ): void =>
     patchSessionMeta({
-      agent: config.agent,
-      agentSource: config.agentSource ?? undefined,
+      chat: {
+        label: config.label,
+        system: config.system,
+        tools: config.tools,
+        temperature: config.temperature,
+      },
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
     });
@@ -387,8 +394,8 @@ export function createChatSessionController(
           Effect.tapError(() =>
             Effect.sync(() => appendLocalUserTranscript(shownInstruction)),
           ),
-          Effect.tap((config) => Effect.sync(() => adoptRunConfig(config))),
           Effect.flatMap(decodeLaunchConfig),
+          Effect.tap((config) => Effect.sync(() => adoptRunConfig(config))),
           Effect.tapError(showFailure),
         );
         const launch = Effect.gen(function* () {
@@ -672,8 +679,7 @@ export function createChatSessionController(
           reason: meta.modelSource,
         });
         return {
-          agent: meta.agent,
-          agentSource: meta.agentSource,
+          ...meta.chat,
           model: selection.model,
           instruction,
           ...(skills.length > 0 && { skills: [...skills] }),

@@ -73,7 +73,6 @@ const NOTICE_OF: PresentationEventHandlers<
     event: 'requestShowInstruction',
     payload,
   }),
-  agentNotFound: (payload) => ({ event: 'agentNotFound', payload }),
   requestShowError: (payload) => ({ event: 'requestShowError', payload }),
 };
 

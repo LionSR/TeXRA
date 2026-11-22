@@ -23,7 +23,7 @@ import {
   ToolError,
   sourceLocationUnder,
   pathToLocationIn,
-  AgentDirectories,
+  HostResources,
 } from '@texra-ai/harness/plugins';
 import {
   programOf,
@@ -194,7 +194,7 @@ export interface RevisionRequest extends InputMediaOptions {
 /** Where the plugin's template files ship, under the host's packaged
  *  resources; undefined for a host that ships none. */
 export const templateDirectory = Effect.map(
-  AgentDirectories,
+  HostResources,
   ({ resourcesRoot }) =>
     resourcesRoot === undefined
       ? undefined

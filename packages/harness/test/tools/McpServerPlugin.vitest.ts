@@ -26,7 +26,6 @@ import {
 import { assert, describe, expect } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import { declaredToolNames } from '@agent/runtime/agentToolResolution';
 import { ProjectTools, stepFor } from '@agent/runtime/loop/step';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -137,8 +136,8 @@ const mcpToolTableLayer = (dir: string) =>
 const openFixtureStep = (session: Context.Context<SessionServices>) =>
   Effect.gen(function* () {
     const tools = yield* (yield* ToolCatalogOwner).session;
-    const declared = [{ name: 'mcp__fixture__*' }];
-    const held = yield* tools.hold(declaredToolNames(declared), true);
+    const declared = ['mcp__fixture__*'];
+    const held = yield* tools.hold(declared, true);
     const warnings = [...held.warnings];
     const run = testAgentRun(
       {

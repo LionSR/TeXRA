@@ -5,7 +5,7 @@
  * part is the settings catalog, the command directories, its plugins over
  * the window table whose attached windows their editor tools read
  * (`HostWindows`), the one credential store under the storage root, the
- * project folder its skills are read from, the agent directories, and the
+ * project folder its skills are read from, its resources root, and the
  * usage log.
  */
 
@@ -15,16 +15,11 @@ import { join } from 'node:path';
 import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 
 // Local imports
-import {
-  AgentDirectoryService,
-  processLayer,
-  type ProcessServices,
-} from '@texra-ai/harness/host';
+import { processLayer, type ProcessServices } from '@texra-ai/harness/host';
 import {
   emitAppSignal,
   Secrets,
-  AppState,
-  AgentDirectories,
+  HostResources,
 } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
@@ -106,12 +101,6 @@ interface TexraProcessHost extends Omit<
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
-  /** Where a custom agent directory's problem is shown (on the agent
-   *  directories' log channel); absent, the problem is logged there. */
-  readonly agentIssues?: (
-    message: string,
-    docsId: 'custom-agents',
-  ) => Effect.Effect<void>;
 }
 
 /** The process services, sessions and windows of one TeXRA host process. */
@@ -122,7 +111,6 @@ export const texraProcessLayer = ({
   usageLog,
   minimumLogLevel,
   workspace,
-  agentIssues,
   ...pluginHost
 }: TexraProcessHost): Layer.Layer<ProcessServices | Sessions | HostWindows> => {
   const windows = makeWindowTable();
@@ -142,20 +130,10 @@ export const texraProcessLayer = ({
       (announce) => new FileSecrets(secretsDirectory(storageRoot), announce),
       TEXRA_CLIENT,
     ),
-    // Built-in agents are read straight out of the host's own bundle; the
-    // custom directory is the one the shared application state names.
-    agentDirectories: Layer.effect(
-      AgentDirectories,
-      Effect.map(
-        AppState,
-        (state) =>
-          new AgentDirectoryService({
-            resourcesPath,
-            state,
-            ...(agentIssues && { issueReporter: { report: agentIssues } }),
-          }),
-      ),
-    ),
+    // The templates and bundled plugin files ship in the host's bundle.
+    hostResources: Layer.succeed(HostResources)({
+      resourcesRoot: resourcesPath,
+    }),
     usageLog: usageLogLayer(usageLog),
     minimumLogLevel,
     workspace,

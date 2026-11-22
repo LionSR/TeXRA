@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { type StartInput } from '@texra-ai/harness';
 import { type AgentConfig, Rejected } from '@texra-ai/harness/schemas';
-import { ENTRY_AGENT_NAME, entryAgent } from '@texra/agent/entryAgent';
+import { entryAgent } from '@texra/agent/entryAgent';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -29,7 +29,8 @@ export function launchApprovalOptions({
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface:
- *  a conversation with the entry agent. */
+ *  a conversation with the entry agent, or with the run Run again… opened
+ *  the form on. */
 export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
   function* (
     { launch, instruction }: LaunchRequest,
@@ -43,7 +44,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     if (!launch.model)
       return yield* new Rejected({ reason: 'Choose a model first.' });
     return yield* decodeLaunchConfig({
-      ...entryAgent(),
+      ...(launch.chat ?? entryAgent()),
       model: launch.model,
       instruction,
       ...(launch.skills.length > 0 && { skills: launch.skills }),
@@ -62,25 +63,25 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
 
 /**
  * The launcher's selections that would launch `config` again, the reverse
- * of {@link prepareSurfaceLaunch}: Run again… opens the form on them. The
- * form starts the entry agent only, so a run of anything else (an agent its
- * caller wrote, the setup conversation) is refused.
+ * of {@link prepareSurfaceLaunch}: Run again… opens the form on them. A
+ * run records its own system text and tools, so the form starts the same
+ * conversation whoever wrote it.
  */
 export function launchFormOf(
   config: AgentConfig,
-): Effect.Effect<typeof LaunchPatchSchema.Type, Rejected> {
-  if (config.agent !== ENTRY_AGENT_NAME)
-    return Effect.fail(
-      new Rejected({
-        reason: `'${config.agent}' was defined by the run that started it, so the form cannot run it again.`,
-      }),
-    );
-  return Effect.succeed({
+): typeof LaunchPatchSchema.Type {
+  return {
     // Effort and mode included: the model menu offers it as itself.
     model: config.model,
     instruction: config.instruction,
     skills: [...(config.skills ?? [])],
     workingDirectory: config.workingDirectory ?? '',
     mediaFiles: [...config.mediaFiles],
-  });
+    chat: {
+      label: config.label,
+      system: config.system,
+      tools: [...config.tools],
+      temperature: config.temperature,
+    },
+  };
 }

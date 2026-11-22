@@ -115,7 +115,6 @@ export interface ApprovalMeta {
    *  person's approval, any other an approval bypass. */
   readonly childApproval: DelegatedChildApproval;
   readonly model?: ApprovalOverride;
-  readonly agent?: ApprovalOverride;
 }
 
 /**
@@ -140,14 +139,14 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   ) {
     const { runId, grants } = launch;
     const { runId: parentId } = parent.run;
-    const agentName = childConfig.agent;
+    const agentName = childConfig.label;
     // Like every child, it ends with its reply, and a follow-up to it is
     // a resume with a message.
     const definition = yield* prepareAgentDefinition({ config: childConfig });
     const { config } = definition;
     // The child registers with its opening, which commits here.
     yield* startChildRun(runId, definition, {
-      identity: { kind: 'agent', agent: config.agent },
+      identity: { kind: 'agent', agent: config.label },
       parent: {
         id: parentId,
         call: { callId: parent.callId, card: parent.logId, awaited: false },
@@ -162,12 +161,9 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       const modelInfo = meta.model
         ? `Model: ${meta.model.chosen} (overridden from ${meta.model.proposed})`
         : `Model: ${childConfig.model}`;
-      const agentInfo = meta.agent
-        ? ` Agent: ${meta.agent.chosen} (overridden from ${meta.agent.proposed}).`
-        : '';
       const approval =
         meta.childApproval === 'inherit' ? 'user-approved' : 'auto-approved';
-      metaLines.push(`Approval: ${approval}. ${modelInfo}.${agentInfo}`);
+      metaLines.push(`Approval: ${approval}. ${modelInfo}.`);
     }
     const receipt = executed(
       [

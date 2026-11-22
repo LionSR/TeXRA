@@ -156,7 +156,7 @@ export const endRun = Effect.fn('endRun')(function* (
   exit: Exit.Exit<RunReport, Error>,
 ): Effect.fn.Return<void, Error, AgentRunServices> {
   const { runId } = ctx;
-  const agentIdentifier = ctx.config.agent;
+  const agentIdentifier = ctx.config.label;
   const carried = Exit.isSuccess(exit) ? exit.value : undefined;
   const verdict = yield* endVerdict(
     runId,

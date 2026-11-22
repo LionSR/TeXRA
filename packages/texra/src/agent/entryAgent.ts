@@ -5,7 +5,7 @@
  * plugins are on; each plugin says what its own tools are for in its
  * `prompt` section, so a plugin that is off adds nothing here.
  */
-import { AGENT_SOURCE, type AgentConfig } from '@texra-ai/harness/schemas';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** The name its runs carry. */
 export const ENTRY_AGENT_NAME = 'assistant';
@@ -65,24 +65,26 @@ const ENTRY_TOOLS: readonly string[] = Object.freeze([
   'github_subscription',
 ]);
 
+/** The fields of a launch configuration that say what a chat run is. */
+export type ChatLaunch = Pick<
+  AgentConfig,
+  'label' | 'system' | 'tools' | 'temperature'
+>;
+
 /**
- * The entry agent as a launch configuration names it: a persona the
- * configuration carries, so a resume needs no file. `also` adds tools one
- * host action needs (setup's), and `name` is what that action's runs are
- * called.
+ * The entry agent as a launch configuration names it: its system text and
+ * tools, which the run records, so a resume reads nothing else. `also` adds
+ * tools one host action needs (setup's), and `label` is what that action's
+ * runs are called.
  */
 export const entryAgent = (
   also: readonly string[] = [],
-  name: string = ENTRY_AGENT_NAME,
-): Required<Pick<AgentConfig, 'agent' | 'agentSource'>> => ({
-  agent: name,
-  agentSource: {
-    kind: AGENT_SOURCE.INLINE,
-    persona: {
-      prompt: ENTRY_PROMPT,
-      tools: [...new Set([...ENTRY_TOOLS, ...also])],
-    },
-  },
+  label: string = ENTRY_AGENT_NAME,
+): ChatLaunch => ({
+  label,
+  system: ENTRY_PROMPT,
+  tools: [...new Set([...ENTRY_TOOLS, ...also])],
+  temperature: 1,
 });
 
 /** What the setup conversation's runs are called: the setup entry points

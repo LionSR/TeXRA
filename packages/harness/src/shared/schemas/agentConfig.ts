@@ -2,41 +2,37 @@
 import { Schema, Struct } from 'effect';
 import { decodingDefault } from './schemaDefaults.js';
 
-import {
-  AGENT_SOURCE,
-  CatalogAgentSourceSchema,
-  InlinePersonaSchema,
-} from './agent';
 import { ActivatedSkillsSchema } from './activeSkills';
-import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { FileFieldsSchema } from './fileFields';
 
+/** A run's sampling temperature; the model's own range is narrower. */
+const TemperatureSchema = Schema.Number.check(
+  Schema.isGreaterThanOrEqualTo(0),
+).check(Schema.isLessThanOrEqualTo(1));
+
 /**
- * Where a run's agent comes from: the catalog source its entry lives in, or
- * the persona the launch carried instead of naming a file (`inline`),
- * recorded so a resume runs it with no file. The persona is the agent's, so
- * its name is `agent`.
+ * A run's display name as one file-name segment: an installed plugin's
+ * agent is labelled `<plugin>:<name>`, and `:` is not a file-name character
+ * on every platform. Run packs, run directories and copy stems derive their
+ * names through this alone.
  */
-const AgentOriginSchema = Schema.Union([
-  Schema.Struct({ kind: CatalogAgentSourceSchema }),
-  Schema.Struct({
-    kind: Schema.Literal(AGENT_SOURCE.INLINE),
-    persona: InlinePersonaSchema.mapFields(Struct.omit(['name'])),
-  }),
-]);
+export function labelFileName(label: string): string {
+  return label.replaceAll(':', '__');
+}
 
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
   Struct.assign({
-    agent: Schema.String,
-    /**
-     * Resolved source of `agent`. A boundary that validated the agent pins it;
-     * launch (`prepareAgentDefinition`) stamps the entry it resolved, so every
-     * run record carries it. Launch, resume, rerun and the remote checks read
-     * this instead of re-resolving the ambiguous bare name. Absent only on a
-     * payload not yet launched, which launch resolves by name.
-     */
-    agentSource: Schema.optional(AgentOriginSchema),
+    /** The run's display name: what its card, the listings and its run
+     *  directory show. The launch names it; nothing resolves it. */
+    label: Schema.String,
+    /** The run's own system text, before what the harness appends (project
+     *  instructions, memories, tool-use instructions, plugin sections). */
+    system: decodingDefault(Schema.String, ''),
+    /** The tools the run declares, by name; `mcp__<server>__*` is every
+     *  tool that server lists. A run that declares none writes text only. */
+    tools: decodingDefault(Schema.Array(Schema.NonEmptyString), []),
+    temperature: decodingDefault(TemperatureSchema, 1.0),
     /**
      * A `self()` child: it runs as its caller, so it is offered the installed
      * plugins' tools as a top-level run is, still narrowed to what its
@@ -67,9 +63,6 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      * own keys.
      */
     launch: Schema.optional(Schema.Record(Schema.String, Schema.Json)),
-    /** The agents this run and its children may delegate to, pinned at its
-     *  launch; absent, the workspace's visible agents. */
-    delegationAgentScope: Schema.optional(AgentDelegationScopeSchema),
     /**
      * JSON Schema (a plain object) describing a structured output the agent must
      * submit through the synthetic `submit_output` terminal tool. Serializable by
@@ -134,4 +127,4 @@ export type AgentConfig = typeof AgentConfigSchema.Type;
 
 /** Partial agent configuration accepted before launch-time normalization. */
 export type AgentConfigPayload = Partial<AgentConfig> &
-  Pick<AgentConfig, 'agent' | 'model'>;
+  Pick<AgentConfig, 'label' | 'model'>;

@@ -5,7 +5,7 @@
 // and Back returns to the asking task with the proposal still waiting. An
 // edit that adds a context file and rewrites the instruction approves the
 // child with both; the finished child's run offers no Run again.
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -17,6 +17,7 @@ import {
   buildCli,
   cli,
   scriptedModel,
+  validationRun,
   serviceStatus,
 } from './serviceFixture.js';
 import { withStoreCopy } from './workspaceStorageFixture.js';
@@ -85,8 +86,6 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
 }) => {
   test.setTimeout(300_000);
   const { home, dataRoot, workspaceRoot: work } = profile;
-  const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
-  mkdirSync(agents, { recursive: true });
   // The asking task: its scripted model calls `program` with this
   // input, on a model the form lists, with an effort.
   const proposal = {
@@ -95,10 +94,11 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
     inputFiles: ['draft.tex'],
     prompt: PROPOSED,
   };
-  writeFileSync(
-    join(agents, 'propose-validation.yaml'),
-    `name: propose_validation\ndescription: Propose a document program over the draft.\ntools: [program]\n\nprompt: |\n  GOLDEN-APPROVAL program ${JSON.stringify(proposal)}\n`,
-  );
+  const asker = validationRun({
+    label: 'propose_validation',
+    system: `GOLDEN-APPROVAL program ${JSON.stringify(proposal)}`,
+    tools: ['program'],
+  });
   writeFileSync(join(work, 'draft.tex'), '\\section{Draft}\nOriginal text.\n');
   writeFileSync(join(work, 'macros.tex'), '\\newcommand{\\R}{\\mathbb{R}}\n');
   // A delegation starts only on a model with a key, and the service reads
@@ -191,7 +191,6 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
       [
         'tasks',
         'start',
-        'propose_validation',
         '--model',
         'openai/gpt-6.1-sol',
         '--instruction',
@@ -201,7 +200,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
         '--cwd',
         work,
       ],
-      scripted,
+      { ...scripted, ...asker },
     ),
   ) as { readonly runId: string };
 
@@ -219,7 +218,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   expect(opened.payload).toMatchObject({
     kind: 'proposal',
     data: {
-      agent: 'edit',
+      label: 'edit',
       model: 'openai/gpt-6.1-sol@high',
       instruction: PROPOSED,
       inputFiles: ['draft.tex'],
@@ -320,8 +319,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
     .toEqual(['completed']);
   const childConfig = runConfig(child);
   expect(childConfig.config).toMatchObject({
-    agent: 'edit',
-    agentSource: { kind: 'inline', persona: {} },
+    label: 'edit',
     model: 'openai/gpt-6.1-sol@high',
     instruction: EDITED,
     inputFiles: ['draft.tex'],

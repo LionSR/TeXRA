@@ -86,7 +86,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({
-        agent: meta.agent,
+        agent: meta.chat.label,
         model,
         // A completed request's route cannot change, so it outranks the
         // prospective one.

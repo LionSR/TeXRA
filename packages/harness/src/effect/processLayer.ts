@@ -15,7 +15,6 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { AgentCatalog } from '@agent/index/agentCatalog';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { LabelsRootRuns } from '@agent/runtime/sessionDescription';
@@ -32,7 +31,7 @@ import {
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import { AgentDirectories, AppState } from '@platform/interfaces';
+import { HostResources, AppState } from '@platform/interfaces';
 import { GlobalValues } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -169,9 +168,11 @@ export class Sessions extends Context.Service<
       skills,
       secrets: Secrets.layer(platform.secrets, client),
       appState: seeded(AppState.layer(platform.roots.globalState), plugins),
-      agentDirectories: Layer.succeed(AgentDirectories)(
-        platform.agentDirectories,
-      ),
+      hostResources: Layer.succeed(HostResources)({
+        ...(platform.resourcesRoot !== undefined && {
+          resourcesRoot: platform.resourcesRoot,
+        }),
+      }),
       // No logger of the harness's own: the embedder's logger layer,
       // level and tracer decide where the harness's lines go.
     }).pipe(Layer.provide(nodePlatformServices));
@@ -265,13 +266,10 @@ function sessionsLayer(
           ToolRegistry,
           AppNamespace,
         )(yield* Effect.context<ProcessServices | ProjectDatabases>());
-        return yield* makeSessions(
-          yield* SessionOwner,
-          yield* AgentCatalog,
-          (held) =>
-            projectViews(options.storageRoot, held).pipe(
-              Effect.provideContext(stores),
-            ),
+        return yield* makeSessions(yield* SessionOwner, (held) =>
+          projectViews(options.storageRoot, held).pipe(
+            Effect.provideContext(stores),
+          ),
         );
       }),
     ).pipe(

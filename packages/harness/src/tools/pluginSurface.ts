@@ -158,7 +158,7 @@ export {
 // resources root a plugin's bundled files ship under (the port is the root
 // entry's).
 export {
-  AgentDirectories,
+  HostResources,
   AppState,
   type AppStateStore,
 } from '@platform/interfaces';

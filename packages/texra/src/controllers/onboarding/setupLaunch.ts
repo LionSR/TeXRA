@@ -1,7 +1,6 @@
 import { Effect, Semaphore } from 'effect';
 
 import {
-  agentName,
   Cancelled,
   type AgentConfig,
   type RunId,
@@ -63,7 +62,7 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
       (run) =>
         run.holder === 'here' &&
         run.identity.kind === 'agent' &&
-        agentName(run.identity.agent) === SETUP_AGENT_NAME,
+        run.identity.agent === SETUP_AGENT_NAME,
     );
     if (live !== undefined) {
       yield* ports.notify('info', 'The setup assistant is already running.');

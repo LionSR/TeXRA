@@ -234,7 +234,7 @@ export const CUSTOM_REPLACEMENTS_SETTING = Object.freeze({
  * sentence.
  */
 const USAGE_RECORD_WORDING = {
-  agentName: 'agent',
+  agentName: 'program name',
   model: 'model',
   provider: 'provider API',
   usageRoute: 'billing route',

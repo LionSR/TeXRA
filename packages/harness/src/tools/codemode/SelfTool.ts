@@ -142,7 +142,7 @@ const runSelf = Effect.fn('self.call')(function* (
     return yield* new ToolError(
       "A program's script has no conversation to fork: call self() with `fork: false`.",
     );
-  const name = config.agent;
+  const name = config.label;
   const outputSchema = yield* childOutputSchema(input.schema);
   const notify = printSubagentProgress(name, call.emit);
   // An earlier attempt's child answers the call, or continues under its id.

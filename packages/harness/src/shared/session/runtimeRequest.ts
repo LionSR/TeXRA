@@ -23,7 +23,6 @@ import {
 import {
   ActivatedSkillsSchema,
   AgentConfigSchema,
-  InlinePersonaSchema,
   RequestDecisionSchema,
   RunIdSchema,
   StoredMediaSchema,
@@ -282,7 +281,7 @@ export const RequestErrorSchema = Schema.Union([
 /** How a runtime request fails: one of the tagged errors above. */
 export type RequestError = typeof RequestErrorSchema.Type;
 
-/** What a start takes besides its agent, whichever way the agent is given.
+/** What a start takes besides its run, whichever way the run is given.
  *  Each is read once, as the run opens: its effect lands in the opening's
  *  rows, or the loop reads it and a resume passes it again (`interactive`).
  *  An option a resumed run must keep goes on `AgentConfigSchema` instead. */
@@ -310,20 +309,24 @@ export const StartOptionsSchema = Schema.Struct({
 });
 
 /**
- * A start as data: all of `StartInput` but the run's own tools. Either an
- * agent (a name from the agent directories, or a persona written inline,
- * which the run stores so a resume needs no file) and the instruction to
- * give it, or `config`, a complete configuration an application host has
- * already resolved. A host sends it to a service as it is.
+ * A start as data: all of `StartInput` but the run's own tools. Either the
+ * run's system text, the tools it declares and the instruction to give it
+ * (the run stores them, so a resume reads nothing else), or `config`, a
+ * complete configuration an application host has already resolved. A host
+ * sends it to a service as it is.
  */
 export const StartRequestSchema = Schema.Union([
   StartOptionsSchema.mapFields(
     Struct.assign({
-      // The persona as an embedder writes it; the start decodes it.
-      agent: Schema.Union([
-        Schema.String,
-        Schema.toEncoded(InlinePersonaSchema),
-      ]),
+      /** The run's system text: who it is and how it works. */
+      system: Schema.String,
+      /** The tools it declares, by name (`mcp__<server>__*` for every tool a
+       *  server lists). Absent, none: it answers in text only. */
+      tools: Schema.optional(Schema.Array(Schema.NonEmptyString)),
+      /** The run's display name. Absent, `agent`. */
+      label: Schema.optional(Schema.String),
+      /** Its sampling temperature, 0 to 1. Absent, 1. */
+      temperature: Schema.optional(Schema.Finite),
       instruction: Schema.String,
       /** The model the run starts on; the harness names no default. */
       model: Schema.String,

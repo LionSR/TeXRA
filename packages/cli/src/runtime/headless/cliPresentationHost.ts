@@ -20,11 +20,6 @@ import type { PresentationEventHandlers } from '@texra-ai/harness/host';
 import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
 import type { CliContext } from '../platform/cliContext';
 
-/** What a run says when it names an agent no installed plugin has. */
-export function missingAgentMessage(name: string): string {
-  return `Agent not found: ${name}.`;
-}
-
 interface CliRuntimeHost {
   emit<K extends RuntimePresentationEvent>(
     event: K,
@@ -68,10 +63,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
   /**
    * The one runtime-presentation handler map, both modes. Every event returns
-   * `true` when it rendered a user-visible record. `agentNotFound` is
-   * rendered as a visible, actionable
-   * "agent not found" error so CLI launch failures surface once through the
-   * targeted path. Reproduced per-key rather than as a catch-all, so a future
+   * `true` when it rendered a user-visible record. Reproduced per-key rather
+   * than as a catch-all, so a future
    * `RuntimePresentationEventPayloads` addition is a compile error to decide
    * on rather than a silent fall-through.
    *
@@ -102,11 +95,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         return true;
       },
       openFile: () => false,
-      agentNotFound: ({ agentName }) => {
-        runProgress?.preserve();
-        present('error', missingAgentMessage(agentName));
-        return true;
-      },
     };
 
   return {

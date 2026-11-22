@@ -19,7 +19,6 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { outputOf } from '@test/support/toolResultFields';
-import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import {
   publishTestRunStart,
   publishTestRows,
@@ -39,11 +38,11 @@ import { readCompletedRunConversation as readCompletedRunConversationEffect } fr
 const tempDirs = useTempDirs();
 
 function runConfig(
-  agent: string,
+  label: string,
   model = 'deepseek/deepseek-v4-pro',
 ): AgentConfig {
   return Schema.decodeUnknownSync(AgentConfigSchema)({
-    agent,
+    label,
     model,
   });
 }
@@ -52,26 +51,10 @@ function runConfig(
 layer(texraHosted, { excludeTestServices: true })(
   'completedRunArchive facade',
   (it) => {
-    // The built-in agents are the kernel suites' stand-in, so a resume resolves the
-    // run's `assistant` the way a real host does.
     it.layer(
-      FakeHost.layer(async () => {
-        const host = await createTempDirPlatform(
-          'texra-archive-',
-          tempDirs,
-          TEXRA_APP,
-        );
-        return {
-          ...host,
-          platform: {
-            ...host.platform,
-            agentDirectories: {
-              ...host.platform.agentDirectories,
-              builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-            },
-          },
-        };
-      }),
+      FakeHost.layer(() =>
+        createTempDirPlatform('texra-archive-', tempDirs, TEXRA_APP),
+      ),
       { buildPerTest: true },
     )((it) => {
       beforeEach(() => {

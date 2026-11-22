@@ -216,10 +216,9 @@ export interface GuiWindowHost {
   readonly notify: Dialogs['notify'];
   readonly bindings: SharedHostCommandBindings;
   readonly own: OwnHostHandlers;
-  /** The runtime's notices this host presents its own way. A missing agent
-   *  is one of the window's own notices. */
+  /** The runtime's notices this host presents its own way. */
   readonly notices: PresentationEventHandlers<
-    Omit<RuntimePresentationEventPayloads, 'agentNotFound'>,
+    RuntimePresentationEventPayloads,
     HostPresentation
   >;
   /** What the window's editor does for its project's runs, here or in the
@@ -331,14 +330,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // itself.
   const workspace = roots.workspace ?? roots.storage;
   const signals = yield* AppSignals;
-  const notices: PresentationEventHandlers<
-    RuntimePresentationEventPayloads,
-    HostPresentation
-  > = {
-    ...host.notices,
-    agentNotFound: ({ agentName }) =>
-      host.notify('error', `Agent "${agentName}" was not found.`),
-  };
+  const { notices } = host;
   const window: WindowHost = {
     ...host.window,
     emit: (event, payload) => notices[event](payload),
@@ -633,9 +625,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'runAgain': {
           // The form opens on the run's setup; the person changes it and
           // starts it, so nothing launches here.
-          const form = yield* launchFormOf(
-            yield* runActions.runAgain(request.runId),
-          );
+          const form = launchFormOf(yield* runActions.runAgain(request.runId));
           bridge.surfaceAction({ kind: 'selectNew' });
           bridge.surfaceAction({ kind: 'launch', patch: form });
           return done;

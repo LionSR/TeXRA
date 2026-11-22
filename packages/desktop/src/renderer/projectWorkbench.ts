@@ -4,7 +4,6 @@
 import { Effect, Result, Schema, Struct } from 'effect';
 import { html, render } from 'lit';
 
-import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { postToMain } from './messageRoutes';
@@ -35,7 +34,6 @@ import {
   createWorkbenchController,
   type PaneKind,
 } from './workbenchController';
-import { agentDocumentIdentity } from '@texra/shared/agentDocumentTarget';
 
 const FILE_REQUEST_TIMEOUT_MS = 60_000;
 
@@ -111,10 +109,6 @@ export function createProjectWorkbench(options: {
         ),
       );
   const editorCallbacks = {
-    isReadOnly: (path: string) => {
-      const identity = agentDocumentIdentity(path);
-      return identity ? isPackagedAgentSource(identity.source) : false;
-    },
     listFiles: (directory) =>
       Effect.flatMap(workspaceFile({ kind: 'list', directory }), (outcome) =>
         outcome.kind === 'entries'
@@ -330,7 +324,6 @@ export function createProjectWorkbench(options: {
     updateState,
     conversationView: options.conversationView,
     fileTree,
-    openDocument,
     async refreshFiles() {
       await Promise.all([
         fileTree.refresh(),

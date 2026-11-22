@@ -730,12 +730,6 @@ const routeMessage = createMessageRoutes({
   'desktop:workspace:filesChanged': (message) => {
     void projectWorkbenches.get(message.session)?.refreshFiles();
   },
-  'desktop:workspace:openDocument': (message) => {
-    const project = projectWorkbenches.get(message.session);
-    if (!project) return;
-    if (message.session === shell.active) settingsDialog.close();
-    project.openDocument(message.target);
-  },
   'desktop:openSettings': (message) => settingsDialog.open(message.tab),
   'desktop:setLog': (message) => logsController.applySnapshot(message),
   'desktop:showDiff': (message) => {

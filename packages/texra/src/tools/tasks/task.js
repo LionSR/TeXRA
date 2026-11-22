@@ -27,11 +27,6 @@ export const task = async (
         ]
       : []),
   ].join('\n\n');
-  const reply = await agent(prompt, {
-    agentName: name,
-    persona: { prompt: system, tools },
-    label: name,
-    id: name,
-  });
+  const reply = await agent(prompt, { system, tools, label: name, id: name });
   return reply.response;
 };

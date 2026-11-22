@@ -368,7 +368,7 @@ export function formatCliHistoryDetailsText(
     `Run: ${details.id}`,
     `Status: ${status}`,
     `Timestamp: ${run ? new Date(run.launchedAt).toISOString() : 'unknown'}`,
-    `Agent: ${config?.agent ?? 'unknown'}`,
+    `Agent: ${config?.label ?? 'unknown'}`,
     `Model: ${model ?? 'unknown'}`,
   ];
 
@@ -418,7 +418,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
   return {
     id: entry.id,
     timestamp: entry.timestamp,
-    agent: config.agent,
+    agent: config.label,
     // The model the run is on, as the listing derives it from the run's
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,

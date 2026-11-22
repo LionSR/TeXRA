@@ -41,6 +41,69 @@ import {
   stopServices,
 } from '../../../scripts/texra-services.mjs';
 
+/** The runs the scenarios start in place of the entry agent (`--agent`),
+ *  each written inline: the validation model keys its scripted turns on the
+ *  marker in the system text. */
+const VALIDATION_RUNS = Object.freeze({
+  history_query_validation: {
+    label: 'history_query_validation',
+    system: 'Query the run history once, then report what it returned.',
+    tools: ['executions'],
+  },
+  echo_validation: {
+    label: 'echo_validation',
+    system: 'Say what you were shown.',
+    tools: [],
+  },
+  program_list_validation: {
+    label: 'program_list_validation',
+    system: 'Say what you were shown.',
+    tools: ['script', 'program'],
+  },
+  native_validation: {
+    label: 'native_validation',
+    system: 'GOLDEN-NATIVE: equip yourself with a plugin.',
+    tools: ['read_file'],
+  },
+  midturn_validation: {
+    label: 'midturn_validation',
+    system:
+      'GOLDEN-APPROVAL bash touch midturn.running; until [ -e midturn.release ]; do sleep 0.05; done; echo released',
+    tools: ['bash'],
+  },
+  park_validation: {
+    label: 'park_validation',
+    system: 'GOLDEN-PARK',
+    tools: [],
+  },
+  diag_validation: {
+    label: 'diag_validation',
+    system: 'GOLDEN-DIAGNOSTICS',
+    tools: ['diagnostics'],
+  },
+  env_validation: {
+    label: 'env_validation',
+    system:
+      'GOLDEN-APPROVAL bash printf "%s|%s" "$TEXRA_PROJECT_CHECK" "${OPENAI_API_KEY:-withheld}" > env.txt',
+    tools: ['bash'],
+  },
+  mcp_validation: {
+    label: 'mcp_validation',
+    system: 'GOLDEN-APPROVAL mcp__fixture__echo report',
+    tools: ['mcp__fixture__echo'],
+  },
+  approval_validation: {
+    label: 'approval_validation',
+    system: 'GOLDEN-APPROVAL',
+    tools: ['bash'],
+  },
+  script_fanout_validation: {
+    label: 'script_fanout_validation',
+    system: 'Run the requested script exactly once, then finish.',
+    tools: ['script', 'agent'],
+  },
+});
+
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.
 isolateProcessHome();
 
@@ -102,7 +165,7 @@ function isolatedCliHomeEnv(home, overrides = {}) {
 }
 
 function run(command, written, options = {}) {
-  // A command's `--agent <name>` is this script's notation, not the CLI's.
+  // A command's `--agent <run>` is this script's notation, not the CLI's.
   const { command: args, env: agentEnv } = splitValidationAgent(written);
   const env = {
     ...process.env,
@@ -720,26 +783,8 @@ function validateHistoryQueryRunCommand() {
   const cwd = makeScratch('texra-cli-history-query-');
   try {
     const home = path.join(cwd, 'home');
-    const customAgents = path.join(
-      home,
-      '.texra',
-      'v1',
-      'global-storage',
-      'custom_agents',
-    );
     const validationFlagPath = path.join(cwd, validationFlagName);
-    mkdirSync(customAgents, { recursive: true });
-    writeFileSync(
-      path.join(customAgents, 'history-query-validation.yaml'),
-      `name: history_query_validation
-description: Ask the run history one SQL question from the headless CLI.
-
-tools:
-  - executions
-prompt: |
-  Query the run history once, then report what it returned.
-`,
-    );
+    mkdirSync(path.join(home, '.texra'), { recursive: true });
     writeFileSync(validationFlagPath, validationFlagContent);
 
     const result = run(
@@ -749,7 +794,7 @@ prompt: |
         'run',
         'chat',
         '--agent',
-        'history_query_validation',
+        VALIDATION_RUNS.history_query_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -874,25 +919,9 @@ function watchTask(project, runId, env = project.ptyEnv) {
 function echoProject(cwd, config = null) {
   const home = path.join(cwd, 'home');
   const work = path.join(cwd, 'work');
-  const customAgents = path.join(
-    home,
-    '.texra',
-    'v1',
-    'global-storage',
-    'custom_agents',
-  );
   const validationFlagPath = path.join(work, validationFlagName);
-  mkdirSync(customAgents, { recursive: true });
+  mkdirSync(path.join(home, '.texra'), { recursive: true });
   mkdirSync(path.join(work, '.texra'), { recursive: true });
-  writeFileSync(
-    path.join(customAgents, 'echo-validation.yaml'),
-    `name: echo_validation
-description: Say what the model was shown.
-
-prompt: |
-  Say what you were shown.
-`,
-  );
   writeFileSync(validationFlagPath, validationFlagContent);
   if (config !== null)
     writeFileSync(
@@ -921,7 +950,7 @@ prompt: |
           'run',
           'chat',
           '--agent',
-          'echo_validation',
+          VALIDATION_RUNS.echo_validation,
           '--model',
           'openai/gpt-5.6-sol',
           '--instruction',
@@ -1159,7 +1188,7 @@ if (!input.stop_hook_active)
         'run',
         'chat',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -1257,26 +1286,6 @@ export default async () => 'never runs';
       'plugin-program-marker-7391\nsecond line\n',
     );
     // A chat offered `program`: its script tool lists what it may start.
-    writeFileSync(
-      path.join(
-        path.dirname(project.work),
-        'home',
-        '.texra',
-        'v1',
-        'global-storage',
-        'custom_agents',
-        'program-list-validation.yaml',
-      ),
-      `name: program_list_validation
-description: Say what the model was shown.
-
-tools:
-  - script
-  - program
-prompt: |
-  Say what you were shown.
-`,
-    );
     const cli = (args, input) =>
       run(process.execPath, [binaryPath, ...args], {
         cwd: project.work,
@@ -1305,7 +1314,7 @@ prompt: |
     const chat = cli([
       ...runArgs('chat', 'yolo'),
       '--agent',
-      'program_list_validation',
+      VALIDATION_RUNS.program_list_validation,
       '--instruction',
       'Which programs can you start?',
     ]);
@@ -1453,25 +1462,6 @@ export default ({ plugins, effect }) => {
 };
 `,
     );
-    writeFileSync(
-      path.join(
-        path.dirname(project.work),
-        'home',
-        '.texra',
-        'v1',
-        'global-storage',
-        'custom_agents',
-        'native-validation.yaml',
-      ),
-      `name: native_validation
-description: Use a native plugin.
-
-tools:
-  - read_file
-prompt: |
-  GOLDEN-NATIVE: equip yourself with a plugin.
-`,
-    );
     // The golden conversation, not the echo the project's runs get.
     const env = {
       ...project.ptyEnv,
@@ -1502,7 +1492,7 @@ prompt: |
         'run',
         'chat',
         '--agent',
-        'native_validation',
+        VALIDATION_RUNS.native_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--cwd',
@@ -1906,24 +1896,6 @@ async function validateMidTurnDelivery() {
   const cwd = makeScratch('texra-cli-mid-turn-');
   try {
     const project = echoProject(cwd);
-    writeFileSync(
-      path.join(
-        cwd,
-        'home',
-        '.texra',
-        'v1',
-        'global-storage',
-        'custom_agents',
-        'mid-turn-validation.yaml',
-      ),
-      `name: midturn_validation
-description: Run one command, held until released, once it is approved.
-tools: [bash]
-
-prompt: |
-  GOLDEN-APPROVAL bash touch midturn.running; until [ -e midturn.release ]; do sleep 0.05; done; echo released
-`,
-    );
     const message = 'Typed while the command ran.';
     const release = path.join(project.work, 'midturn.release');
     const rowsOf = (sql) => project.readStore(sql);
@@ -1955,7 +1927,7 @@ prompt: |
       [
         'chat',
         '--agent',
-        'midturn_validation',
+        VALIDATION_RUNS.midturn_validation,
         '--model',
         'openai/gpt-5.6-sol',
       ],
@@ -2080,7 +2052,7 @@ async function validateThresholdCompaction() {
         'tasks',
         'start',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2148,7 +2120,7 @@ async function validateServiceChatsSeeEachOther() {
   const chatArgs = [
     'chat',
     '--agent',
-    'echo_validation',
+    VALIDATION_RUNS.echo_validation,
     '--model',
     'openai/gpt-5.6-sol',
   ];
@@ -2253,23 +2225,6 @@ async function validateServiceChatsSeeEachOther() {
 async function validateServiceBuildIdentity() {
   const cwd = makeScratch('texra-cli-service-builds-');
   const project = echoProject(cwd);
-  writeFileSync(
-    path.join(
-      cwd,
-      'home',
-      '.texra',
-      'v1',
-      'global-storage',
-      'custom_agents',
-      'park-validation.yaml',
-    ),
-    `name: park_validation
-description: Hold its model call until released.
-
-prompt: |
-  GOLDEN-PARK
-`,
-  );
   const env = {
     ...project.ptyEnv,
     [VALIDATION_SCENARIOS.golden]: '1',
@@ -2309,7 +2264,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'park_validation',
+        VALIDATION_RUNS.park_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2410,22 +2365,6 @@ async function validateServiceHostCalls() {
   const project = echoProject(cwd);
   const storageRoot = path.join(cwd, 'home', '.texra');
   writeFileSync(
-    path.join(
-      storageRoot,
-      'v1',
-      'global-storage',
-      'custom_agents',
-      'diag.yaml',
-    ),
-    `name: diag_validation
-description: Read one file's diagnostics.
-tools: [diagnostics]
-
-prompt: |
-  GOLDEN-DIAGNOSTICS
-`,
-  );
-  writeFileSync(
     path.join(project.work, 'main.tex'),
     '\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}\n',
   );
@@ -2480,7 +2419,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'diag_validation',
+        VALIDATION_RUNS.diag_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2603,7 +2542,7 @@ async function validateServiceSessionIdle() {
         'tasks',
         'start',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2644,7 +2583,7 @@ async function validateServiceSessionIdle() {
         'tasks',
         'start',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2685,16 +2624,6 @@ async function validateServiceProjectEnv() {
   const project = echoProject(cwd);
   const storageRoot = path.join(cwd, 'home', '.texra');
   writeFileSync(
-    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'env.yaml'),
-    `name: env_validation
-description: Report the environment a command runs with.
-tools: [bash]
-
-prompt: |
-  GOLDEN-APPROVAL bash printf "%s|%s" "$TEXRA_PROJECT_CHECK" "\${OPENAI_API_KEY:-withheld}" > env.txt
-`,
-  );
-  writeFileSync(
     path.join(project.work, '.env'),
     'TEXRA_PROJECT_CHECK=from-project-dotenv\nOPENAI_API_KEY=sk-project-dotenv\n',
   );
@@ -2722,7 +2651,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2752,7 +2681,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'env_validation',
+        VALIDATION_RUNS.env_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2786,7 +2715,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'env_validation',
+        VALIDATION_RUNS.env_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -2860,16 +2789,6 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     path.join(storageRoot, 'mcp.json'),
     `${JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [server] } } })}\n`,
   );
-  writeFileSync(
-    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'mcp.yaml'),
-    `name: mcp_validation
-description: Ask the configured MCP server which project it runs for.
-tools: [mcp__fixture__echo]
-
-prompt: |
-  GOLDEN-APPROVAL mcp__fixture__echo report
-`,
-  );
   const projects = { alpha: alpha.work, beta };
   for (const [name, dir] of Object.entries(projects))
     writeFileSync(
@@ -2899,7 +2818,7 @@ prompt: |
         ],
         { cwd: dir, env },
       ),
-      `texra tasks start ${agent} in ${path.basename(dir)}`,
+      `texra tasks start ${agent.label} in ${path.basename(dir)}`,
     );
   const waitFor = async (what, found) => {
     const deadline = Date.now() + 120_000;
@@ -2916,7 +2835,7 @@ prompt: |
     // store; its local setting is then Auto-approve, so the MCP call runs
     // unasked.
     for (const [name, dir] of Object.entries(projects)) {
-      start(dir, 'echo_validation', `Open ${name}`);
+      start(dir, VALIDATION_RUNS.echo_validation, `Open ${name}`);
       const prefix = `${path.basename(dir)}-`;
       const store = await waitFor(`${name}'s project store`, () =>
         existsSync(storage)
@@ -2929,7 +2848,7 @@ prompt: |
       );
     }
     for (const [name, dir] of Object.entries(projects))
-      start(dir, 'mcp_validation', `Report ${name}`);
+      start(dir, VALIDATION_RUNS.mcp_validation, `Report ${name}`);
     const call = async (name, dir) => {
       const out = path.join(dir, 'mcp.txt');
       const line = await waitFor(`${name}'s MCP call`, () =>
@@ -2943,7 +2862,7 @@ prompt: |
     for (const [name, dir] of Object.entries(projects))
       seen[name] = await call(name, dir);
     // The project's next task, as a chat's next message.
-    start(alpha.work, 'mcp_validation', 'Report alpha again');
+    start(alpha.work, VALIDATION_RUNS.mcp_validation, 'Report alpha again');
     const again = await call('alpha (again)', alpha.work);
     const artifactPath = writeArtifact('service-project-mcp.json', {
       alpha: seen.alpha.project,
@@ -2993,16 +2912,6 @@ async function validateServicePolicyOwner() {
   const cwd = makeScratch('texra-cli-service-policy-');
   const project = echoProject(cwd);
   const storageRoot = path.join(cwd, 'home', '.texra');
-  writeFileSync(
-    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'cmd.yaml'),
-    `name: approval_validation
-description: Run one command once it is approved.
-tools: [bash]
-
-prompt: |
-  GOLDEN-APPROVAL
-`,
-  );
   const env = {
     ...project.ptyEnv,
     [VALIDATION_SCENARIOS.golden]: '1',
@@ -3050,7 +2959,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -3087,7 +2996,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'approval_validation',
+        VALIDATION_RUNS.approval_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -3119,7 +3028,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'approval_validation',
+        VALIDATION_RUNS.approval_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--approval-policy',
@@ -3210,24 +3119,6 @@ prompt: |
 async function validateServiceTasksInTui() {
   const cwd = makeScratch('texra-cli-service-tui-');
   const project = echoProject(cwd);
-  writeFileSync(
-    path.join(
-      cwd,
-      'home',
-      '.texra',
-      'v1',
-      'global-storage',
-      'custom_agents',
-      'approval-validation.yaml',
-    ),
-    `name: approval_validation
-description: Run one command once it is approved.
-tools: [bash]
-
-prompt: |
-  GOLDEN-APPROVAL
-`,
-  );
   const env = {
     ...project.ptyEnv,
     [VALIDATION_SCENARIOS.golden]: '1',
@@ -3264,7 +3155,7 @@ prompt: |
         'tasks',
         'start',
         '--agent',
-        'approval_validation',
+        VALIDATION_RUNS.approval_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--approval-policy',
@@ -3398,7 +3289,7 @@ async function validateServiceSharedTask() {
         'tasks',
         'start',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -3471,7 +3362,7 @@ async function validateServiceSharedTask() {
         'tasks',
         'start',
         '--agent',
-        'echo_validation',
+        VALIDATION_RUNS.echo_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
@@ -3523,23 +3414,6 @@ async function validateOpenTimePrompt() {
   const cwd = makeScratch('texra-cli-open-prompt-');
   try {
     const project = echoProject(cwd);
-    writeFileSync(
-      path.join(
-        cwd,
-        'home',
-        '.texra',
-        'v1',
-        'global-storage',
-        'custom_agents',
-        'park-validation.yaml',
-      ),
-      `name: park_validation
-description: Hold its model call until released.
-
-prompt: |
-  GOLDEN-PARK
-`,
-    );
     // The chat is its task's writer here, so killing it is the crash this
     // recovers from: a service would keep the task running past the kill.
     project.ptyEnv = {
@@ -3549,7 +3423,13 @@ prompt: |
     };
     let asked = false;
     const opening = await runTexraPty(
-      ['chat', '--agent', 'park_validation', '--model', 'openai/gpt-5.6-sol'],
+      [
+        'chat',
+        '--agent',
+        VALIDATION_RUNS.park_validation,
+        '--model',
+        'openai/gpt-5.6-sol',
+      ],
       {
         label: 'texra chat, then SIGKILL in the middle of its turn',
         cwd: project.work,
@@ -3712,22 +3592,8 @@ function validateScriptFanoutRunCommand() {
   const cwd = makeScratch('texra-cli-script-fanout-run-');
   try {
     const home = path.join(cwd, 'home');
-    const globalStorage = path.join(home, '.texra', 'v1', 'global-storage');
-    const customAgents = path.join(globalStorage, 'custom_agents');
     const validationFlagPath = path.join(cwd, validationFlagName);
-    mkdirSync(customAgents, { recursive: true });
-    writeFileSync(
-      path.join(customAgents, 'script-fanout-validation.yaml'),
-      `name: script_fanout_validation
-description: Exercise a script's agent fan-out from the headless CLI.
-
-tools:
-  - script
-  - agent
-prompt: |
-  Run the requested script exactly once, then finish.
-`,
-    );
+    mkdirSync(path.join(home, '.texra'), { recursive: true });
     writeFileSync(validationFlagPath, validationFlagContent);
 
     const result = run(
@@ -3737,7 +3603,7 @@ prompt: |
         'run',
         'chat',
         '--agent',
-        'script_fanout_validation',
+        VALIDATION_RUNS.script_fanout_validation,
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',

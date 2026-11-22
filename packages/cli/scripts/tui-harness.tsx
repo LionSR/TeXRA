@@ -30,7 +30,7 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, MODEL_SELECTION_KEY } from '@texra-ai/harness/host';
+import { MODEL_SELECTION_KEY } from '@texra-ai/harness/host';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   Secrets,
@@ -478,7 +478,6 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await harnessRuntime.runPromise(AgentCatalog.use((catalog) => catalog.refresh));
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact
@@ -702,7 +701,7 @@ function seedRun(
       type: 'run.config',
       aggregateId: runId,
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: identity.agent,
+        label: identity.agent,
         model: HARNESS_MODEL,
       }),
     });
@@ -1206,7 +1205,7 @@ function makeAgentProposalPayload(): AgentProposalRequest {
     requestId: 'harness-agent-proposal',
     runId: HARNESS_RUN_ID,
     task: false,
-    agent: 'review',
+    label: 'review',
     model: 'deepseek/deepseek-flash',
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
@@ -1219,7 +1218,7 @@ function makeAgentProposalPayload(): AgentProposalRequest {
               "section('Review')",
               'const reviews = await Promise.all(',
               "  ['A', 'B'].map((name) =>",
-              "    agent(`Review chapter 2 as referee ${name}.`, { agentName: 'review' }),",
+              "    agent(`Review chapter 2 as referee ${name}.`, { label: 'review', system: 'Review the chapter as a referee would.' }),",
               '  ),',
               ')',
             ].join('\n'),
@@ -1448,7 +1447,7 @@ function harnessInitialEntries(): HarnessLogRow[] {
 }
 
 sessionMeta.set({
-  agent: 'chat',
+  chat: { label: 'chat', system: '', tools: [], temperature: 1 },
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
@@ -1857,7 +1856,7 @@ function appendHarnessStatus(): void {
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
-      agent: meta.agent,
+      agent: meta.chat.label,
       model: meta.model,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),

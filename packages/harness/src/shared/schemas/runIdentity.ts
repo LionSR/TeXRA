@@ -1,8 +1,5 @@
 import { Schema } from 'effect';
 
-// Local imports
-import { agentName } from './agent';
-
 /**
  * What kind of thing a run is, declared once at the launch site and carried
  * on `run.start`. The struct itself travels: on `run.start`, on `RunView`,
@@ -12,8 +9,7 @@ import { agentName } from './agent';
 export const RunIdentitySchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('agent'),
-    /** The run config's agent identifier, possibly source-qualified
-     * ("custom:name") — the same value `AgentConfig.agent` carries. */
+    /** The run's display name: the same value `AgentConfig.label` carries. */
     agent: Schema.NonEmptyString,
     /** External CLI driving this agent ("codex", "claude_code"); absent for native. */
     tool: Schema.optional(Schema.NonEmptyString),
@@ -76,8 +72,3 @@ export const runNoun = (
   run == null || run.parentId === null
     ? 'task'
     : NESTED_NOUNS[run.identity.kind];
-
-/** UI label for a run identity — strips a known source prefix from agent ids. */
-export function runIdentityDisplayName(id: RunIdentity): string {
-  return agentName(runIdentityName(id));
-}

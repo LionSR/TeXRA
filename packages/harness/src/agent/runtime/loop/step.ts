@@ -79,7 +79,6 @@ import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import {
-  declaredToolNames,
   heldToRecord,
   resolveStepTools,
   type ResolvedTools,
@@ -167,9 +166,7 @@ function describedAtFreeze<T extends ResolvedTools>(
     tools.registry.get(name)?.describe !== undefined;
   if (!tools.definitions.some(({ name }) => describes(name))) return tools;
   const names = new Set(
-    declaredToolNames(declaration).filter(
-      (name) => mcpServerOfToolName(name) === undefined,
-    ),
+    declaration.filter((name) => mcpServerOfToolName(name) === undefined),
   );
   const declared = tools.definitions
     .filter(({ name }) => names.has(name) && !describes(name))
@@ -549,11 +546,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const { tools, skills } = step;
   const roots = yield* SessionRoots;
-  const delegation = yield* readDelegationTargets(
-    tools,
-    roots,
-    run.config.delegationAgentScope ?? undefined,
-  );
+  const delegation = yield* readDelegationTargets(tools, roots);
   const offered = tools.definitions.map(({ name }) => name);
   const context = {
     ...stepInstructions(step.contributing, step.listed, {

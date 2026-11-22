@@ -65,12 +65,9 @@ const program = Effect.gen(function* () {
 
   const run = yield* session.start({
     runId,
-    agent: {
-      name: 'reader',
-      description: 'Reads LaTeX files.',
-      prompt: 'Read paper.tex and report its title.',
-      tools: ['read_file'],
-    },
+    label: 'reader',
+    system: 'Read paper.tex and report its title.',
+    tools: ['read_file'],
     instruction: 'What is the title in paper.tex?',
     model: route.model,
   });

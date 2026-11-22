@@ -2,14 +2,10 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { formatError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { formatError } from '@texra-ai/harness/schemas';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { ToolMissing } from '@texra/utils/system/toolChecks';
-import { READ_GUIDE_BUTTON_LABEL } from '@ui/copy/instructionActions';
-
-/** Valid documentation identifiers for error messages. */
-type DocId = 'custom-agents' | 'latex-diff';
 
 /**
  * Present a notice and keep these helpers' own failure channel empty.
@@ -105,23 +101,5 @@ export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
     yield* Effect.logInfo(message);
     yield* vscodeUi.notify('info', message);
     return message;
-  },
-);
-
-/** Log an error message, display it with a docs action, and open the docs if selected. */
-export const showLoggedMessageWithDocs = Effect.fn('showLoggedMessageWithDocs')(
-  function* (message: string, docId: DocId): Effect.fn.Return<void> {
-    yield* Effect.logError(message);
-    const selection = yield* announce(
-      vscodeUi.ask('error', message, { items: [READ_GUIDE_BUTTON_LABEL] }),
-      undefined,
-    );
-    if (selection !== READ_GUIDE_BUTTON_LABEL) return;
-
-    yield* openGuidePage(docId).pipe(
-      Effect.catch((err) =>
-        Effect.logError(`Failed to open documentation: ${toErrorMessage(err)}`),
-      ),
-    );
   },
 );

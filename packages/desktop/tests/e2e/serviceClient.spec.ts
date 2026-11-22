@@ -32,6 +32,7 @@ import {
   buildCli,
   cli,
   scriptedModel,
+  validationRun,
   serviceStatus,
 } from './serviceFixture.js';
 import { cleanupDirectory, withStoreCopy } from './workspaceStorageFixture.js';
@@ -47,17 +48,16 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
   // service serves, so the app, the service and the CLIs share it.
   const { home, dataRoot, workspaceRoot: work } = profile;
   // A task held at its model call, by the newer build's scripted model.
-  const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
-  mkdirSync(agents, { recursive: true });
-  writeFileSync(
-    join(agents, 'park-validation.yaml'),
-    'name: park_validation\ndescription: Hold its model call until released.\n\nprompt: |\n  GOLDEN-PARK\n',
-  );
+  const park = validationRun({
+    label: 'park_validation',
+    system: 'GOLDEN-PARK',
+  });
   // A task that accepts `draft.tex` into the project as `accepted.tex`.
-  writeFileSync(
-    join(agents, 'accept-validation.yaml'),
-    'name: accept_validation\ndescription: Accept one file into the workspace.\ntools: [accept_run_files]\n\nprompt: |\n  GOLDEN-ACCEPT\n',
-  );
+  const acceptRun = validationRun({
+    label: 'accept_validation',
+    system: 'GOLDEN-ACCEPT',
+    tools: ['accept_run_files'],
+  });
   const draft = 'Accepted by a task in the service.\n';
   writeFileSync(join(work, 'draft.tex'), draft);
   const scripted = scriptedModel(work);
@@ -92,7 +92,6 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
           [
             'tasks',
             'start',
-            'park_validation',
             '--model',
             'openai/gpt-5.6-sol',
             '--instruction',
@@ -102,7 +101,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
             '--cwd',
             work,
           ],
-          scripted,
+          { ...scripted, ...park },
         ),
       ) as { readonly runId: string };
       const next = serviceStatus(nextBuild, home);
@@ -151,7 +150,6 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
           [
             'tasks',
             'start',
-            'accept_validation',
             '--model',
             'openai/gpt-5.6-sol',
             '--instruction',
@@ -161,7 +159,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
             '--cwd',
             work,
           ],
-          scripted,
+          { ...scripted, ...acceptRun },
         ),
       ) as { readonly runId: string };
       await expect(treeRow('accepted.tex')).toBeVisible({ timeout: 60_000 });
@@ -273,12 +271,12 @@ test('a tool edit the app changed keeps its changes when another window answers 
   test.setTimeout(300_000);
   const { home, dataRoot, workspaceRoot: work } = profile;
   // A task that asks to write a file the project does not have yet.
-  const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
-  mkdirSync(agents, { recursive: true });
-  writeFileSync(
-    join(agents, 'edit-validation.yaml'),
-    'name: edit_validation\ndescription: Ask to write one file.\ntools: [write_file]\n\nprompt: |\n  GOLDEN-APPROVAL write_file {"path":"notes.txt","content":"beta\\n"}\n',
-  );
+  const edit = validationRun({
+    label: 'edit_validation',
+    system:
+      'GOLDEN-APPROVAL write_file {"path":"notes.txt","content":"beta\\n"}',
+    tools: ['write_file'],
+  });
   const scripted = scriptedModel(work);
   const nextBuild = join(home, 'bin', 'texra-next.js');
   const otherWindow = join(home, 'bin', 'service-host-harness.js');
@@ -346,7 +344,6 @@ test('a tool edit the app changed keeps its changes when another window answers 
           [
             'tasks',
             'start',
-            'edit_validation',
             '--model',
             'openai/gpt-5.6-sol',
             '--instruction',
@@ -356,7 +353,7 @@ test('a tool edit the app changed keeps its changes when another window answers 
             '--cwd',
             work,
           ],
-          scripted,
+          { ...scripted, ...edit },
         ),
       ) as { readonly runId: string };
       await expect

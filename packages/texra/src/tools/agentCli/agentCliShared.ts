@@ -210,7 +210,7 @@ function launchTurn<I extends { readonly prompt: string }, S, R>(
         // so the model's reference is stated here rather than inherited
         // from the generic AgentConfig defaults.
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: provider.name,
+          label: provider.name,
           model: launch.modelRef,
           instruction: input.prompt,
         }),

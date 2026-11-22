@@ -18,7 +18,6 @@ import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { setProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
-import { missingAgentMessage } from '@cli/runtime/headless/cliPresentationHost';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { followToolEditPreviews } from '@texra/controllers/approval/ToolEditApprovalController';
 import {
@@ -99,8 +98,6 @@ export const presentInTranscript: PresentationEventHandlers<RuntimePresentationE
         `${message}${formatInstructionActionHint(instructionActions(key))}`,
       ),
     openFile: () => undefined,
-    agentNotFound: ({ agentName }) =>
-      appendLocalErrorTranscript(missingAgentMessage(agentName)),
   });
 
 /** Create the TUI's presentation host. */

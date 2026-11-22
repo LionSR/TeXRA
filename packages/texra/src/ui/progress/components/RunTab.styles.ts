@@ -279,7 +279,7 @@ export const runTabStyles = css`
     flex-shrink: 1;
   }
 
-  /* A custom agent name is unbounded length — truncate rather than crowd
+  /* A run's name is unbounded length (a model writes a child's) — truncate rather than crowd
      out the worktree chip/timestamp/model sharing this row. */
   .tab-meta .agent-name {
     flex-shrink: 1;

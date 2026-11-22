@@ -1,6 +1,7 @@
 /**
- * The `agent` tool: run a named agent as a child of the calling run, with
- * its prompt and its own tools. `launchChildAgent` is the launch it shares
+ * The `agent` tool: run a child of the calling run on a prompt, with the
+ * system text and tools the call gives it (or an installed plugin's agent,
+ * by name). `launchChildAgent` is the launch it shares
  * with the `program` tool (`./ProgramTool`), which opens the same child on
  * a registered program. A script's `agent` calls share one approval request
  * showing its source; a direct call proposes itself. A completed awaited
@@ -24,7 +25,6 @@ import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   runEndErrorMessage,
-  AGENT_SOURCE,
   AgentConfigSchema,
   AgentProposalSchema,
   type AgentProposal,
@@ -64,12 +64,12 @@ import { executeSubagentInBand } from './childLaunch';
 import {
   CALL_FIELDS,
   fileList,
-  personaField,
   rejectUnusableWorkingDirectory,
   resolveInvocationFileList,
   withToolUseSubagentHandoffInstruction,
 } from './inputFields';
-import { AgentRequest, decideDelegation, requireAgent } from './proposalFlow';
+import { pluginAgent } from './pluginAgents';
+import { AgentRequest, decideDelegation } from './proposalFlow';
 import {
   delegatedChildGrants,
   childOutputSchema,
@@ -83,10 +83,18 @@ const LAUNCH_FIELDS = {
     description:
       'The task, in plain prose. Name the files it concerns and copy every constraint the agent must follow: it does not see your conversation.',
   }),
-  agentName: Schema.NonEmptyString.annotate({
-    description: 'The agent to run. It works with its own tools.',
-  }),
-  persona: personaField,
+  system: optionalInput(
+    Schema.NonEmptyString,
+    'The child’s system text: who it is and how it works, written for this job. Required unless `agentName` is given.',
+  ),
+  tools: optionalInput(
+    Schema.Array(Schema.NonEmptyString),
+    'The tools the child gets, by name (`mcp__<server>__*` for every tool of a server). Omitted, none: it answers in text only.',
+  ),
+  agentName: optionalInput(
+    Schema.NonEmptyString,
+    'An installed plugin’s agent, `<plugin>:<name>` as the delegation targets list it: it runs with its own system text and tools, so give no `system` or `tools`.',
+  ),
   schema: optionalInput(
     Schema.Record(Schema.String, Schema.Unknown),
     'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
@@ -99,16 +107,11 @@ const LAUNCH_FIELDS = {
 const AgentInputSchema = Schema.Struct({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
 type AgentInput = typeof AgentInputSchema.Type;
 
-/** An agent a launch carries instead of naming a catalog entry. */
-type InlineAgent = Extract<
-  NonNullable<AgentProposal['agentSource']>,
-  { kind: 'inline' }
->;
-
 /**
  * One child launch as the shared core runs it: its prompt and what the
- * child is. A chat (`program: null`) runs the agent `agentName`, may ask
- * for a value of `schema` and attaches `mediaFiles` to its prompt. A
+ * child is. A chat (`program: null`) is told `system` and given `tools`,
+ * or is the installed plugin's agent `agentName`; it may ask for a value of
+ * `schema` and attaches `mediaFiles` to its prompt. A
  * program's child is a run named for the registered program `name`, works
  * over `files` and is called with `args`, which its proposal shows as its
  * options.
@@ -127,9 +130,10 @@ type ChildLaunch = {
 } & (
   | {
       readonly program: null;
-      readonly agentName: string;
-      /** An agent the call defines, named `agentName`: no catalog entry. */
-      readonly persona?: InlineAgent['persona'] | null;
+      readonly system: string | null | undefined;
+      readonly tools: readonly string[] | null | undefined;
+      readonly agentName: string | null | undefined;
+      readonly label: string | null | undefined;
       readonly schema: Record<string, unknown> | null | undefined;
       readonly mediaFiles: readonly string[];
     }
@@ -331,25 +335,32 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         }
       : launch.files;
   // A program's child is the program's own run, named for it; a chat's is
-  // the agent the call defines, or the catalog's.
-  const agent: {
-    name: string;
-    source: NonNullable<AgentProposal['agentSource']>;
-  } =
-    launch.program !== null
-      ? {
-          name: launch.program.name,
-          source: { kind: AGENT_SOURCE.INLINE, persona: {} },
-        }
-      : launch.persona == null
-        ? yield* Effect.map(
-            requireAgent(call.env.roots, launch.agentName, run),
-            (entry) => ({ name: entry.name, source: { kind: entry.source } }),
-          )
-        : {
-            name: launch.agentName,
-            source: { kind: AGENT_SOURCE.INLINE, persona: launch.persona },
-          };
+  // what the call wrote, or an installed plugin's agent read now, so the
+  // child's config holds its system text and tools and a resume reads no
+  // file.
+  let agent: { name: string; system: string; tools: readonly string[] };
+  if (launch.program !== null)
+    agent = { name: launch.program.name, system: '', tools: [] };
+  else if (launch.agentName != null) {
+    if (launch.system != null || launch.tools != null)
+      return errorResult(
+        '`agentName` runs an installed plugin’s agent with its own system text and tools: drop `system` and `tools`, or drop `agentName`.',
+      );
+    const named = yield* Effect.result(
+      pluginAgent(launch.agentName, call.env.roots),
+    );
+    if (Result.isFailure(named)) return errorResult(named.failure.message);
+    agent = named.success;
+  } else if (launch.system == null)
+    return errorResult(
+      'Give the child a `system` text (and the `tools` it needs), or name an installed plugin’s agent with `agentName`.',
+    );
+  else
+    agent = {
+      name: launch.label?.trim() || 'agent',
+      system: launch.system,
+      tools: launch.tools ?? [],
+    };
   const unusable = yield* rejectUnusableWorkingDirectory(
     call.env.roots,
     launch.workingDirectory ?? undefined,
@@ -428,9 +439,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           prompt: launch.prompt,
           ...(handsOff && { handoff: call.instruction ?? null }),
           agent: agent.name,
-          ...(agent.source.kind === AGENT_SOURCE.INLINE && {
-            persona: agent.source.persona,
-          }),
+          system: agent.system,
+          tools: agent.tools,
           model: launch.model ?? null,
           schema: outputSchema ?? null,
           ...files,
@@ -481,8 +491,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const workingDirectory = launch.workingDirectory ?? call.env.workingDirectory;
   const proposal: AgentProposal = Schema.decodeUnknownSync(AgentProposalSchema)(
     {
-      agent: agent.name,
-      agentSource: agent.source,
+      label: agent.name,
+      system: agent.system,
+      tools: agent.tools,
       model,
       memories: launch.memories,
       ...(workingDirectory !== undefined && { workingDirectory }),
@@ -532,7 +543,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
-    delegationAgentScope: run.config.delegationAgentScope,
     ...programConfig,
   });
   const runId = agentChildRunId(call);
@@ -561,8 +571,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     ),
   );
   return Result.isFailure(launched)
-    ? failedResult(approved.agent, launched.failure)
-    : yield* childResult(call, approved.agent, launched.success, key);
+    ? failedResult(approved.label, launched.failure)
+    : yield* childResult(call, approved.label, launched.success, key);
 });
 
 export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
@@ -578,21 +588,20 @@ export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
     // A script awaits the child's envelope, or `{ runId }` in the background.
     scriptReturns:
       "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
-    description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
+    description: `Run a child agent on a prompt. You write the child: \`system\` says who it is and how it works for this job, \`tools\` names the tools it gets (none: it answers in text only), \`label\` names it, and the prompt is its task. It sees none of your conversation.
 
 From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\` (past \`timeoutMs\`), \`BudgetExceeded\` (the child and the runs it started spent \`maxCostUsd\` before it finished; the cap is read after each reply, so the spend can pass it by the replies then in flight), \`Skipped\` (the user stopped the child), \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up; a background child stopped at its \`maxCostUsd\` says so in that follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
 
-Its result is the agent's final reply, or a \`schema\` value. Pick the agent whose description fits the task.`,
+Its result is the child's final reply, or a \`schema\` value. \`agentName\` instead runs an agent an installed plugin provides, with its own system text and tools, when the delegation targets list one.`,
     schema: AgentInputSchema,
     execute: (input: AgentInput) =>
       launchChildAgent({
+        system: input.system,
+        tools: input.tools,
         agentName: input.agentName,
-        persona: input.persona && {
-          prompt: input.persona.prompt,
-          tools: input.persona.tools ?? [],
-        },
+        label: input.label,
         prompt: input.prompt,
         model: input.model,
         schema: input.schema,

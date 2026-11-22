@@ -4,7 +4,6 @@ import { TestClock } from 'effect/testing';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
-import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
 import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
 import { AppState } from '@texra-ai/harness/plugins';
 import { UsageLog } from '@texra-ai/harness/host';
@@ -234,14 +233,13 @@ describe('UsageLogService', () => {
     );
   });
 
-  it('sends only a bundled agent id; any other agent name is "custom"', () => {
-    expect(usageAgentName('orchestrator', AGENT_SOURCE.BUILT_IN)).toBe(
-      'orchestrator',
-    );
-    expect(usageAgentName('my-thesis-notes', AGENT_SOURCE.CUSTOM)).toBe(
-      'custom',
-    );
-    expect(usageAgentName('acme:secret', AGENT_SOURCE.PLUGIN)).toBe('custom');
-    expect(usageAgentName('unsourced', undefined)).toBe('custom');
+  it("sends only a listed program's name; any other run sends none", () => {
+    const program = (name: string) => ({
+      script: { kind: 'program' as const, name, args: {} },
+    });
+    expect(usageAgentName(program('review'))).toBe('review');
+    expect(usageAgentName(program('acme:secret'))).toBeUndefined();
+    expect(usageAgentName(program('own:notes'))).toBeUndefined();
+    expect(usageAgentName({})).toBeUndefined();
   });
 });

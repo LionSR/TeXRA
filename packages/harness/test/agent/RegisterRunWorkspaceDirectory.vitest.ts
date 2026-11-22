@@ -17,7 +17,7 @@ import {
 } from '@test/support/testKernel';
 
 const baseConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
-  agent: 'chat',
+  label: 'chat',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
 });

@@ -242,7 +242,7 @@ const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
       : ('default' as const),
     ...(parent === null
       ? {}
-      : { agent_id: run.runId, agent_type: run.config.agent }),
+      : { agent_id: run.runId, agent_type: run.config.label }),
   };
 });
 
@@ -371,9 +371,9 @@ export function stepHooks(
               ...common,
               hook_event_name: 'SubagentStop',
               agent_id: run.runId,
-              agent_type: run.config.agent,
+              agent_type: run.config.label,
             },
-        run.entry.parent === null ? undefined : [run.config.agent],
+        run.entry.parent === null ? undefined : [run.config.label],
       );
       const block: FollowUpBatch | null =
         text === null ? null : { kind: 'synthetic', text };

@@ -224,14 +224,7 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
     edge !== undefined && (yield* getRunRecords(edge).exists())
       ? edge
       : undefined;
-  const definition = yield* prepareAgentDefinition({ config }).pipe(
-    // An agent or plugin this process cannot run now refuses the resume
-    // with the reason; the run stays interrupted, never failed, and
-    // nothing is launched.
-    Effect.catchTag('AgentUnavailable', ({ blocked }) =>
-      refuse({ failed: blocked }),
-    ),
-  );
+  const definition = yield* prepareAgentDefinition({ config });
   return {
     definition,
     options: {

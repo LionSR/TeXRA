@@ -551,8 +551,8 @@ const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path>
 Construct the Node services required by the agent package: the process
 platform plus the workspace roots of `workspaceDir`.
 
-Agent definitions are read from `agentsDir`; configuration and state are
-process-local, while run artifacts use the ordinary Node storage layout.
+Configuration and state are process-local, while run artifacts use the
+ordinary Node storage layout.
 
 ```ts
 function nodePlatform(options: NodePlatformOptions): AgentPlatform
@@ -564,7 +564,6 @@ Filesystem locations used by the default Node platform.
 
 ```ts
 interface NodePlatformOptions {
-  readonly agentsDir: string;
   readonly workspaceDir?: string;
   /**
    * The directory this platform stores run history, checkpoints and its

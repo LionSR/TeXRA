@@ -13,7 +13,7 @@
  *    and counts its finished children with SQL over `runs`.
  * 2. `plugin`: the `acme-notes` package's tool and script module (example
  *    `10`), used by a script the model writes under the embedder's own
- *    inline persona.
+ *    run, written inline.
  * 3. `crash-resume`: a second process runs a model-written script that
  *    waits on a sign-off tool after its first `self()` round; once that
  *    child's result is committed the process is killed, and this one
@@ -166,21 +166,11 @@ Return an object with the section titles, both verdicts, and that count as compl
 
 const codemode = (dir: string) =>
   Effect.gen(function* () {
-    const { platform, agentsDir, workspace, route } = yield* Effect.promise(
-      () => makeExampleWorkspace(),
+    const { platform, workspace, route } = yield* Effect.promise(() =>
+      makeExampleWorkspace(),
     );
     yield* Effect.promise(async () => {
       await writeFile(join(workspace, 'draft.tex'), DRAFT);
-      await writeFile(
-        join(agentsDir, 'draft-reviewer.yaml'),
-        [
-          'name: draft_reviewer',
-          'description: Reviews LaTeX drafts with programs.',
-          'prompt: You review LaTeX drafts. Do the work with the script tool, writing programs over the tools and modules its description lists.',
-          'tools: [script, executions, outline_sections]',
-          '',
-        ].join('\n'),
-      );
     });
     const plugin = definePlugin({
       id: 'latex-outline',
@@ -195,7 +185,10 @@ const codemode = (dir: string) =>
         persistent: true,
       });
       const run = yield* session.start({
-        agent: 'draft_reviewer',
+        label: 'draft_reviewer',
+        system:
+          'You review LaTeX drafts. Do the work with the script tool, writing programs over the tools and modules its description lists.',
+        tools: ['script', 'executions', 'outline_sections'],
         instruction: CODEMODE_INSTRUCTION,
         model: route.model,
       });
@@ -290,12 +283,11 @@ const codemode = (dir: string) =>
 const NOTES = ['Lemma 2 needs a citation.', 'Section 3 is done.'];
 const PLUGIN_INSTRUCTION = `Keep two notes on the draft, in one script program you write yourself, through the notes script module: ${JSON.stringify(NOTES[0])} and ${JSON.stringify(NOTES[1])}. Return what the module returned for each note.`;
 
-/** The embedder's persona over the package: it ships tools, a module and a
+/** The embedder's run over the package: it ships tools, a module and a
  *  program, no agent. */
 const NOTE_TAKER = {
-  name: 'note_taker',
-  description: 'Keeps notes on a draft.',
-  prompt: 'Keep notes on the draft with a script over the notes module.',
+  label: 'note_taker',
+  system: 'Keep notes on the draft with a script over the notes module.',
   tools: ['script', 'note_add'],
 };
 
@@ -309,7 +301,7 @@ const plugin = (dir: string) =>
         persistent: true,
       });
       const run = yield* session.start({
-        agent: NOTE_TAKER,
+        ...NOTE_TAKER,
         instruction: PLUGIN_INSTRUCTION,
         model: route.model,
       });
@@ -403,9 +395,8 @@ const crashPlugins: readonly Plugin[] = [
   definePlugin({ id: 'signoff', tools: [signoffTool] }),
 ];
 const CRASH_AGENT = {
-  name: 'two_round_reviewer',
-  description: 'Reviews a draft in two signed-off rounds.',
-  prompt:
+  label: 'two_round_reviewer',
+  system:
     'You review drafts. Do the work with the script tool, writing programs over what its description lists.',
   tools: ['script', 'await_signoff'],
 };
@@ -425,7 +416,7 @@ const crashProgram = (workspace: string) =>
         persistent: true,
       });
       const run = yield* session.start({
-        agent: CRASH_AGENT,
+        ...CRASH_AGENT,
         instruction: CRASH_INSTRUCTION,
         model: route.model,
       });

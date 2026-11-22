@@ -139,7 +139,6 @@ interface EditorPaneCallbacks {
     contents: string,
     base: string | null,
   ): Effect.Effect<'saved' | 'changedOnDisk', EditorPaneError>;
-  isReadOnly?(path: string): boolean;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
   /**
@@ -617,13 +616,6 @@ export function createEditorPane(
               ...state,
               openPath: path,
             }));
-            target.updateOptions({
-              readOnly: callbacks.isReadOnly?.(path) ?? false,
-              readOnlyMessage: {
-                value:
-                  'This definition is read-only. Use **Customize** in Settings to edit a copy.',
-              },
-            });
             notice.clear(path);
           }).pipe(
             Effect.catch((error) =>
@@ -708,8 +700,7 @@ export function createEditorPane(
   function save(path: string | undefined, overwrite = false): Promise<void> {
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
-    if (!path || !file || !model || callbacks.isReadOnly?.(path))
-      return Promise.resolve();
+    if (!path || !file || !model) return Promise.resolve();
     return run(
       file.lane
         .withPermit(

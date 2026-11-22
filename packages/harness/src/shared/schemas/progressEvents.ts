@@ -39,11 +39,6 @@ export interface RequestShowInstructionPayload {
   message: string;
 }
 
-/** The agent a launch named is not in the catalog. */
-export interface AgentNotFoundPayload {
-  agentName: string;
-}
-
 /**
  * The notice a refused launch carries for its caller to show
  * (`LaunchRefused.notice`), as the presentation event and payload a host's
@@ -58,12 +53,6 @@ export const LaunchNoticeSchema = Schema.Union([
       key: Schema.String,
       message: Schema.String,
     }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
-  }),
-  Schema.Struct({
-    event: Schema.Literal('agentNotFound'),
-    payload: Schema.Struct({
-      agentName: Schema.String,
-    }) satisfies Schema.Codec<AgentNotFoundPayload, unknown>,
   }),
 ]);
 

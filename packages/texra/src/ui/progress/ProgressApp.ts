@@ -363,9 +363,9 @@ export class ProgressApp extends LitElement {
     const asking = run?.label ?? 'An agent';
     return html`<section class="hero" aria-labelledby="shell-hero-title">
       <div class="hero-mark" aria-hidden="true">${waIcon('pencil')}</div>
-      <h1 id="shell-hero-title">Check ${data.agent} before it runs</h1>
+      <h1 id="shell-hero-title">Check ${data.label} before it runs</h1>
       <p>
-        ${asking} asked to run ${data.agent}. Change what you need, then approve
+        ${asking} asked to run ${data.label}. Change what you need, then approve
         to start it with your changes.
       </p>
       <div class="hero-actions">

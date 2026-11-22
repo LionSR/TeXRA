@@ -147,15 +147,9 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
                 const session = yield* persistentTestSession(roots);
                 yield* rootRun({
                   config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                    agent: 'command_runner',
-                    agentSource: {
-                      kind: 'inline',
-                      persona: {
-                        description: 'Runs one command.',
-                        prompt: `GOLDEN-APPROVAL bash ${original}`,
-                        tools: ['bash'],
-                      },
-                    },
+                    label: 'command_runner',
+                    system: `GOLDEN-APPROVAL bash ${original}`,
+                    tools: ['bash'],
                     model: 'openai/gpt-5.6-sol',
                     instruction: 'Run the command.',
                   }),

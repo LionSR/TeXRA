@@ -6,11 +6,10 @@
  * Failure modes:
  * - a launch whose opening is refused leaves a partial run (a `run.start`
  *   with no activation) for the listing to show;
- * - R6 of the harness 1.0 release acceptance: an agent file and the
- *   equivalent inline persona are offered different tools, or a tool that
- *   asks for approval under one runs unasked under the other, whether the
- *   launch grants its work no bypass, grants it every bypass, or runs where
- *   nobody can answer;
+ * - R6 of the harness 1.0 release acceptance: a tool the run declares that
+ *   asks for approval runs unasked, or is not offered, whether the launch
+ *   grants its work no bypass, grants it every bypass, or runs where nobody
+ *   can answer;
  * - a run that fails while its description is still being generated ends
  *   without it, or records it after its `run.end`.
  */
@@ -20,11 +19,13 @@ import { Context, Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
+import { GOLDEN_AGENTS } from '@cli/runtime/models/validationAgents';
 import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { startChildRun } from '@agent/runtime/delegation/childLaunch';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
+  ASSISTANT,
   waitingAfter,
   persistentTestSession,
   sessionStoreFaults,
@@ -67,25 +68,13 @@ const permissionsOf = (storage: string, runId: string) => {
   };
 };
 
-/** `golden_effect`'s agent file and the inline persona it is equivalent to:
- *  one command, which `bash` asks about unless a bypass covers it. */
-const FILE_AGENT = { agent: 'golden_effect' } as const;
-const INLINE_AGENT = {
-  agent: 'golden_effect',
-  agentSource: {
-    kind: 'inline',
-    persona: {
-      description:
-        "The golden store's run killed after its command's effect and before its result committed.",
-      prompt: 'GOLDEN-APPROVAL: run one command.',
-      tools: ['bash'],
-    },
-  },
-} as const;
+/** `golden_effect`: one command, which `bash` asks about unless a bypass
+ *  covers it. */
+const ONE_COMMAND = GOLDEN_AGENTS.golden_effect;
 
 const config = (instruction: string) =>
   Schema.decodeUnknownSync(AgentConfigSchema)({
-    agent: 'assistant',
+    ...ASSISTANT,
     model: 'openai/gpt-5.6-sol',
     instruction,
   });
@@ -142,15 +131,14 @@ describe(
         );
 
         it.effect(
-          'R6: an agent file and its equivalent inline persona are offered the same tools and asked the same approvals',
+          'R6: a declared tool that asks is asked about, runs under a granted bypass, and is withheld where nobody answers',
           () =>
             Effect.gen(function* () {
               const { roots } = yield* FakeHost;
-              /** Launch `agent` on `session` with the launch's `approval`, and
+              /** Launch the run on `session` with the launch's `approval`, and
                *  read what it was offered and asked once `ready` holds. */
               const launch = (
                 session: Context.Context<SessionServices>,
-                agent: typeof FILE_AGENT | typeof INLINE_AGENT,
                 approval: 'autoApprove' | undefined,
                 ready: (
                   permissions: ReturnType<typeof permissionsOf>,
@@ -160,7 +148,7 @@ describe(
                   const runId = generateRunId();
                   yield* rootRun({
                     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                      ...agent,
+                      ...ONE_COMMAND,
                       model: 'openai/gpt-5.6-sol',
                       instruction: 'Run the command.',
                     }),
@@ -174,67 +162,34 @@ describe(
                 });
 
               // A host that answers: with no bypass `bash` asks; a launch that
-              // starts its work approved grants it the bypass, and it runs. The
-              // file and the persona are offered the same tools (the plugins
-              // inject theirs into both) and asked the same.
+              // starts its work approved grants it the bypass, and it runs.
               const answered = yield* persistentTestSession(roots);
-              const [fileAsks, inlineAsks, fileGranted, inlineGranted] = [
-                yield* launch(
-                  answered,
-                  FILE_AGENT,
-                  undefined,
-                  (p) => p.asked.length > 0,
-                ),
-                yield* launch(
-                  answered,
-                  INLINE_AGENT,
-                  undefined,
-                  (p) => p.asked.length > 0,
-                ),
-                yield* launch(
-                  answered,
-                  FILE_AGENT,
-                  'autoApprove',
-                  (p) => p.ran.length > 0,
-                ),
-                yield* launch(
-                  answered,
-                  INLINE_AGENT,
-                  'autoApprove',
-                  (p) => p.ran.length > 0,
-                ),
-              ];
-              expect(fileAsks).toMatchObject({ asked: ['bash'], ran: [] });
-              expect(fileAsks.offered[0]).toContain('bash');
-              expect(inlineAsks).toEqual(fileAsks);
-              expect(fileGranted).toMatchObject({
-                asked: [],
-                ran: ['executed'],
-              });
-              expect(inlineGranted).toEqual(fileGranted);
+              const asks = yield* launch(
+                answered,
+                undefined,
+                (p) => p.asked.length > 0,
+              );
+              const granted = yield* launch(
+                answered,
+                'autoApprove',
+                (p) => p.ran.length > 0,
+              );
+              expect(asks).toMatchObject({ asked: ['bash'], ran: [] });
+              expect(asks.offered[0]).toContain('bash');
+              expect(granted).toMatchObject({ asked: [], ran: ['executed'] });
               yield* Sessions.use((sessions) => sessions.close(roots));
 
-              // Nobody can answer: neither is offered `bash`.
+              // Nobody can answer: it is not offered `bash`.
               const unanswered = yield* Effect.flatMap(
                 TestSession.open(roots, { persistent: true }),
                 sessionHandleOf,
               );
-              const [fileWithheld, inlineWithheld] = [
-                yield* launch(
-                  unanswered,
-                  FILE_AGENT,
-                  undefined,
-                  (p) => p.offered.length > 0,
-                ),
-                yield* launch(
-                  unanswered,
-                  INLINE_AGENT,
-                  undefined,
-                  (p) => p.offered.length > 0,
-                ),
-              ];
-              expect(fileWithheld.offered[0]).not.toContain('bash');
-              expect(inlineWithheld).toEqual(fileWithheld);
+              const withheld = yield* launch(
+                unanswered,
+                undefined,
+                (p) => p.offered.length > 0,
+              );
+              expect(withheld.offered[0]).not.toContain('bash');
             }),
         );
       });

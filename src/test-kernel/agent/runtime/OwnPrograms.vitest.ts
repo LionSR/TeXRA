@@ -46,7 +46,7 @@ const decodeRow = Schema.decodeUnknownSync(
         Schema.Struct({
           kind: Schema.optional(Schema.String),
           data: Schema.optional(
-            Schema.Struct({ agent: Schema.optional(Schema.String) }),
+            Schema.Struct({ label: Schema.optional(Schema.String) }),
           ),
           tools: Schema.optional(
             Schema.Array(Schema.Struct({ name: Schema.String })),
@@ -100,14 +100,9 @@ describe(
                 yield* rootRun({
                   runId: root,
                   config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                    agent: 'golden_own',
-                    agentSource: {
-                      kind: 'inline',
-                      persona: {
-                        prompt: 'GOLDEN-OWN: write a program, then start it.',
-                        tools: ['memory', 'script', 'program'],
-                      },
-                    },
+                    label: 'golden_own',
+                    system: 'GOLDEN-OWN: write a program, then start it.',
+                    tools: ['memory', 'script', 'program'],
                     model: 'openai/gpt-5.6-sol',
                     instruction: 'Write yourself a program and start it.',
                   }),
@@ -153,7 +148,7 @@ describe(
                 const launch = yield* requestOf(root);
                 expect(launch.payload).toMatchObject({
                   kind: 'proposal',
-                  data: { agent: 'own:greet' },
+                  data: { label: 'own:greet' },
                 });
                 expect(yield* approve(root, launch.requestId)).toBe(true);
 
@@ -168,7 +163,7 @@ describe(
                 const delegation = yield* requestOf(program);
                 expect(delegation.payload).toMatchObject({
                   kind: 'proposal',
-                  data: { agent: 'golden_child' },
+                  data: { label: 'Own child' },
                 });
                 expect(
                   storedRows(storage).filter((row) => row.parent === program),

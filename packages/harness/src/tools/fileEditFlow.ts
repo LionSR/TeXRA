@@ -1,5 +1,3 @@
-import * as nodePath from 'node:path';
-
 // Third-party imports
 import { Effect, FileSystem, Result } from 'effect';
 
@@ -8,24 +6,20 @@ import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports - shared schemas
 import { requireFileReadForEdit } from '@agent/runtime/RunCall';
-import type { AgentCatalog } from '@agent/index/agentCatalog';
 import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
 
 // Local imports - tools
-import { reloadAgentCatalog } from '@tools/agentCatalogFollower';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,
   requestToolEditApproval,
 } from '@tools/approval/toolEditApproval';
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
-import { findExternalRoot } from '@utils/files/externalRoots';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Count non-overlapping occurrences of `needle` in `haystack`.
@@ -214,11 +208,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   }: ApprovedFileEditRequest): Effect.fn.Return<
     ToolResult,
     Error,
-    | ToolContext
-    | FileSystem.FileSystem
-    | WorkspaceFs
-    | AgentCatalog
-    | AppSignals
+    ToolContext | FileSystem.FileSystem | WorkspaceFs | AppSignals
   > {
     const approval = yield* requestToolEditApproval({
       path,
@@ -235,23 +225,6 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       approval.originalContent,
       approval.appliedContent,
     );
-    // An agent written into the custom agents directory (the `creator`
-    // agent's) is listed before the tool answers, so the agent's next call
-    // can run it. The write stands whether or not the rescan does.
-    const absolutePath = nodePath.isAbsolute(path)
-      ? path
-      : yield* Effect.flatMap(WorkspaceFs, (workspace) =>
-          workspace.resolve(path),
-        );
-    if (findExternalRoot(absolutePath)?.kind === 'custom') {
-      yield* reloadAgentCatalog.pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
-            `Wrote ${displayPath}, but the agent catalog was not reloaded; the agent is listed after the next reload: ${toErrorMessage(cause)}`,
-          ),
-        ),
-      );
-    }
     const presentation = present(written);
     const output = yield* appendApprovalDiffNote(
       presentation.output,
