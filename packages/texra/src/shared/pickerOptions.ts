@@ -1,20 +1,13 @@
 /**
- * Picker option rows (models) as the hosts send them to their
- * views. Kept free of any IPC message wrappers so the message modules can
- * compose these without circular dependencies.
+ * Model picker rows as the hosts send them to their views. Kept free of
+ * any IPC message wrappers so the message modules can compose these
+ * without circular dependencies.
  */
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 import {
   DeclinableUsageRouteSchema,
   ModelAvailabilityKindSchema,
 } from '@texra-ai/harness/schemas';
-
-/** A picker option row: the opaque `value` sent back to the host and the
- *  `label` shown. */
-const PickerOptionBaseSchema = Schema.Struct({
-  value: Schema.String,
-  label: Schema.String,
-});
 
 /**
  * Resolved per-model access. Computed once by `readModelOptions` and
@@ -32,15 +25,17 @@ export const ModelAvailabilityFieldsSchema = Schema.Struct({
   /** Effective request route for a model that can use multiple backends. */
   routeLabel: Schema.optional(Schema.String),
 });
-export const ModelOptionDataSchema = PickerOptionBaseSchema.mapFields(
-  Struct.assign({
-    provider: Schema.optional(Schema.String),
-    context: Schema.optional(Schema.String),
-    cost: Schema.optional(Schema.String),
-    hint: Schema.optional(Schema.String),
-    /** Current reasoning setting, including default or fixed-mode context. */
-    reasoning: Schema.optional(Schema.String),
-    ...ModelAvailabilityFieldsSchema.fields,
-  }),
-);
+/** A model picker row: the opaque `value` sent back to the host, the
+ *  `label` shown, and what the row says about the model. */
+export const ModelOptionDataSchema = Schema.Struct({
+  value: Schema.String,
+  label: Schema.String,
+  provider: Schema.optional(Schema.String),
+  context: Schema.optional(Schema.String),
+  cost: Schema.optional(Schema.String),
+  hint: Schema.optional(Schema.String),
+  /** Current reasoning setting, including default or fixed-mode context. */
+  reasoning: Schema.optional(Schema.String),
+  ...ModelAvailabilityFieldsSchema.fields,
+});
 export type ModelOptionData = typeof ModelOptionDataSchema.Type;
