@@ -457,10 +457,11 @@ Every run needs an `AgentPlatform`: the process services the package composes
 workspace state, and process-wide global state).
 
 - **MCP servers and project rules:** The tool registry reads stdio MCP servers
-  from `mcp.json` under the global storage root (requiring MCP revision
-  `2025-11-25`; servers answering an older revision do not start). Each run's
-  system prompt loads the workspace's `AGENTS.md`, falling back to `AGENTS.md`
-  under the storage root when the workspace has none.
+  from `mcp.json` at the storage root (`roots.storageRoot` / `storageDir`, not
+  `roots.globalStorage`; servers must speak MCP revision `2025-11-25`, and those
+  answering an older revision do not start). Each run's system prompt loads the
+  workspace's `AGENTS.md`, falling back to `AGENTS.md` at `roots.storageRoot`
+  when the workspace has none.
 - **`nodePlatform(options)`:** Supplies ready-made defaults—process-local config
   and state, the standard layout under the required `storageDir` (the package
   never falls back to a per-user directory), that directory's `mcp.json` and

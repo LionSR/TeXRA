@@ -56,7 +56,7 @@ TeXRA recognizes these media types by default:
     {
       icon: 'file-pdf',
       title: 'Documents',
-      desc: 'Native PDF input on models that support it (Claude, Gemini, OpenAI, Muse Spark), otherwise rasterized pages.',
+      desc: 'Native PDF input on models that support it (Claude, Gemini, Muse, GPT-5.x, GLM-5V-Turbo), otherwise rasterized pages.',
       chips: [{ text: '.pdf', variant: 'info' }],
     },
     {
