@@ -271,6 +271,9 @@ const APPROVAL_POLICIES: readonly ["never", "ask", "yolo"]
 
 ## APPROVAL_POLICY_DEFAULT
 
+What a project that set no policy runs under: its agents' commands and
+edits run without asking. A person narrows it to `ask` or `never`.
+
 ```ts
 const APPROVAL_POLICY_DEFAULT: ApprovalPolicy
 ```

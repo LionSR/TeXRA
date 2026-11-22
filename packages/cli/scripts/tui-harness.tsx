@@ -36,7 +36,7 @@ import {
 import {
   acceptsFollowUp,
   AgentConfigSchema,
-  APPROVAL_POLICY_DEFAULT,
+  APPROVAL_POLICY_SETTING,
   descendantRuns,
   MESSAGE_TYPES,
   parseApprovalPolicy,
@@ -260,14 +260,21 @@ const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
 const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
+// The harness project asks: its scenarios are of the approval cards a policy
+// that asks raises, which the default (Auto-approve) does not.
+const HARNESS_POLICY: ApprovalPolicy = 'ask';
+const HARNESS_CONFIG = new MemoryConfigProvider(TEXRA_SETTINGS.catalog);
+await Effect.runPromise(
+  HARNESS_CONFIG.update(APPROVAL_POLICY_SETTING.key, HARNESS_POLICY, 'local'),
+);
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = await Effect.runPromise(
   resolveCliResourcesPath().pipe(Effect.provide(nodeFileServices)),
 );
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
-  approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
+  approvalPolicy: HARNESS_POLICY,
+  config: HARNESS_CONFIG,
   commandName: 'texra',
   configWarnings: [],
   configDegradations: [],
@@ -1437,7 +1444,7 @@ sessionMeta.set({
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
-  approvalPolicy: APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: HARNESS_POLICY,
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1783,7 +1790,7 @@ function appendHarnessTranscript(
 
 /** The harness chat's launch policy, which `/approval` sets, as the chat's
  *  does; it never writes the project's. */
-let harnessPolicy: ApprovalPolicy = APPROVAL_POLICY_DEFAULT;
+let harnessPolicy: ApprovalPolicy = HARNESS_POLICY;
 const harnessApprovalPolicy = (): ApprovalPolicy => harnessPolicy;
 
 function setHarnessApprovalPolicy(policy: ApprovalPolicy): void {

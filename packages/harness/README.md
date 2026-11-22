@@ -188,15 +188,20 @@ const program = Effect.gen(function* () {
 
 ### Approvals
 
-A session with no attached approval handler denies every request a run raises,
-and offers no tool that requires approval. That withholds the tools that ask
-(`bash`, the file writes, a custom tool with `requiresApproval`), not the
-ones that never ask: with `harnessBuiltins` a run can still read any file in
-the workspace, fetch a URL and search the web (`web_fetch`, `web_search`),
-and write its memory files under the storage directory. Leave the `web`
-plugin out of `plugins` for a run that must not reach the network. A start
-with `approval: 'autoApprove'` approves that run's requests without asking
-anyone, so its gated tools run with no handler attached.
+By default a run's commands and file edits run without asking anyone: the
+approval policy (`APPROVAL_POLICY_SETTING` from `./schemas`, set with
+`Settings.set(platform.roots, …)`) defaults to `yolo`. With `harnessBuiltins`
+that means a run can run shell commands in the workspace, write its files,
+fetch a URL and search the web, with or without a handler attached. Narrow it
+for a workspace by setting the policy to `ask` or `never`, or for one run by
+starting it with `approval: 'ask'` or `'never'`; leave a plugin out of
+`plugins` for a run that must not have its tools at all.
+
+Under `ask`, a run asks before a command, an edit or a custom tool with
+`requiresApproval`, and a session with no attached approval handler has
+nobody to ask: it denies every such request and offers no tool that would
+raise one. A question to the person and a retry after the automatic attempts
+are never answered on a person's behalf, whatever the policy.
 `session.attach({ approve })`
 attaches a host with a handler for the caller's scope, an Effect function from
 a `PendingRequest` (which run asks, the request's id, and its `payload`, whose
@@ -609,9 +614,11 @@ only at the embedding application's host boundary.
 These are enforced, not undocumented — each fails or degrades loudly rather
 than failing quietly:
 
-- **Without a handler, requests are denied.** A session no attached host
-  answers denies every request its runs raise, retries included, and fails
-  a launch whose custom tools need approval with `ToolsRefused`.
+- **Under `ask` without a handler, requests are denied.** A session whose
+  policy asks and that no attached host answers denies every request its
+  runs raise, and fails a launch whose custom tools need approval with
+  `ToolsRefused`. A question or a retry is denied under any policy when
+  nobody can answer it.
 - **Runs are one cycle long** unless `interactive`: `start` and `resume`
   end the run after its cycle rather than waiting for a follow-up message.
 - **A persistent store may not carry across 0.x releases.** No row schema

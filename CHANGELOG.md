@@ -8,6 +8,12 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 
 ### Breaking Changes
 
+- **Agents no longer ask before running commands or editing files.** The
+  approval policy now defaults to Auto-approve. Set it to **Ask** in
+  Settings → General → Approval (or `/approval` in the terminal) to review
+  each command and edit as before, or to **Block** to refuse them. A policy
+  you already chose is kept.
+
 - **The `texra memory` commands and the chat's `/memory` are removed.**
   The notes an agent saves are ordinary Markdown files: open them from the
   Memory tab's **Open memory folder**, or in the project's storage directory

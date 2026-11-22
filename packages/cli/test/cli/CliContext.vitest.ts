@@ -115,13 +115,13 @@ describe('CLI context config defaults', () => {
 });
 
 describe('CLI config values a row rejects', () => {
-  it('reads a malformed value as its row does in the other hosts, never as a looser tier', async () => {
+  it("reads a malformed value as its row does in the other hosts, never as another tier's", async () => {
     const storageRoot = await makeTempDir('texra-cli-user-config-', tempDirs);
     const globalStorage = resolveGlobalStoragePath(storageRoot);
     await mkdir(globalStorage, { recursive: true });
     await writeFile(
       join(globalStorage, 'config.json'),
-      JSON.stringify({ 'texra.approvalPolicy': 'yolo' }),
+      JSON.stringify({ 'texra.approvalPolicy': 'never' }),
     );
     // A hand-typed string opt-out in the project file.
     const workspace = await workspaceWithConfig(
@@ -148,8 +148,8 @@ describe('CLI config values a row rejects', () => {
     // The telemetry reader sees the string and stays off; it must not see
     // the row's default `true` in its place.
     expect(context.config.get('telemetry.enabled')).toBe('false');
-    // The policy reads as its default, not the user-wide Auto-approve.
-    expect(context.approvalPolicy).toBe('ask');
+    // The policy reads as its default, not the user-wide Block.
+    expect(context.approvalPolicy).toBe('yolo');
   });
 });
 

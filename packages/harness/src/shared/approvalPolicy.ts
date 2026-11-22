@@ -26,7 +26,9 @@ const ApprovalPolicyInputSchema = Schema.String.pipe(
   }),
   Schema.decodeTo(ApprovalPolicySchema),
 );
-export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
+/** What a project that set no policy runs under: its agents' commands and
+ *  edits run without asking. A person narrows it to `ask` or `never`. */
+export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'yolo';
 /**
  * The policy a `--no-input` run falls back to. Deliberately divergent from
  * {@link APPROVAL_POLICY_DEFAULT}: a run that cannot present a prompt

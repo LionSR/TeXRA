@@ -88,6 +88,12 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   const { home, dataRoot, workspaceRoot: work } = profile;
   const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
   mkdirSync(agents, { recursive: true });
+  // This journey is the proposal's review, so the user's own policy is Ask:
+  // under the default, Auto-approve, the program would start unasked.
+  writeFileSync(
+    join(dataRoot, 'v1', 'global-storage', 'config.json'),
+    `${JSON.stringify({ 'texra.approvalPolicy': 'ask' })}\n`,
+  );
   // The asking task: its scripted model calls `program` with this
   // input, on a model the form lists, with an effort.
   const proposal = {
