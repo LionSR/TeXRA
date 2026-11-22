@@ -10,6 +10,7 @@ import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
+import { Duration } from 'effect';
 
 import { highlightSpans } from '@ui/highlighting/highlightCode';
 import type { IconName } from '@ui/wa/iconNames';
@@ -296,7 +297,7 @@ function generateInlineDiff(oldText: string, newText: string): TemplateResult {
 
   if (!parts) {
     console.warn(
-      `[progressView] Inline diff exceeded ${INLINE_DIFF_TIMEOUT_MS}ms ` +
+      `[progressView] Inline diff exceeded ${Duration.format(Duration.millis(INLINE_DIFF_TIMEOUT_MS))} ` +
         `(${oldText.length} → ${newText.length} chars); ` +
         `painting it as a whole replacement.`,
     );

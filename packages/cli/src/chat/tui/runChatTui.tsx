@@ -7,6 +7,7 @@
 
 import {
   Cause,
+  Duration,
   Effect,
   Exit,
   FiberHandle,
@@ -617,7 +618,7 @@ export async function runChat(
         orElse: () =>
           Effect.fail(
             new Cause.TimeoutError(
-              `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+              `the session's rows were not all written within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
             ),
           ),
       }),

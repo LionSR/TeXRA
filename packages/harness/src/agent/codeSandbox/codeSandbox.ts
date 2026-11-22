@@ -159,7 +159,7 @@ const endToResult = (
     case 'CpuExhausted':
       return Effect.fail(
         new ScriptLimitExceeded({
-          message: `The script used its ${cpuBudgetMs}ms CPU budget; look for a loop that never awaits.`,
+          message: `The script used its ${Duration.format(Duration.millis(cpuBudgetMs))} CPU budget; look for a loop that never awaits.`,
         }),
       );
     case 'MemoryExhausted':

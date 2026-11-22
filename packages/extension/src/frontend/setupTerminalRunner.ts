@@ -19,7 +19,7 @@
 import { stripVTControlCharacters } from 'node:util';
 
 // Third-party imports
-import { Cause, Effect, Fiber, Option, Ref, Stream } from 'effect';
+import { Cause, Duration, Effect, Fiber, Option, Ref, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
@@ -35,7 +35,7 @@ import {
 import { firstEventOrTimeout } from './vscode/vscodeEvents';
 
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
-const READER_DRAIN_MS = 250;
+const READER_DRAIN = Duration.millis(250);
 
 export const runTerminalCommand = Effect.fn('setupTerminalRunner.runCommand')(
   function* (
@@ -194,7 +194,7 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // Drain any final chunks; bound the wait so a hung reader can't
   // block the agent forever.
   const outputLost = yield* Fiber.join(reader).pipe(
-    Effect.timeout(READER_DRAIN_MS),
+    Effect.timeout(READER_DRAIN),
     Effect.as(undefined),
     Effect.catch((failure) => Effect.succeed(describeOutputLoss(failure))),
   );
@@ -218,7 +218,7 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
 /** Why the drain stopped short: it outran its bound, or the stream failed. */
 function describeOutputLoss(failure: Error | Cause.TimeoutError): string {
   return Cause.isTimeoutError(failure)
-    ? `the output did not finish draining within ${READER_DRAIN_MS}ms`
+    ? `the output did not finish draining within ${Duration.format(READER_DRAIN)}`
     : `the output stream failed: ${failure.message}`;
 }
 

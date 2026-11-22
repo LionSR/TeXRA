@@ -62,15 +62,14 @@ interface CodexRun {
   readonly note: string | undefined;
 }
 
-const rank = (effort: ReasoningEffort) => EFFORT_SCALE.indexOf(effort);
-
 /**
  * The route ceiling when the installed CLI's own levels are unknown: every
  * level up to `high`, which every Codex runtime accepts. Older runtimes
  * reject `xhigh` although the SDK type lists it.
  */
-const UNPROBED_ROUTE_EFFORTS: readonly ReasoningEffort[] = EFFORT_SCALE.filter(
-  (effort) => rank(effort) <= rank(ReasoningEffort.HIGH),
+const UNPROBED_ROUTE_EFFORTS: readonly ReasoningEffort[] = EFFORT_SCALE.slice(
+  0,
+  EFFORT_SCALE.indexOf(ReasoningEffort.HIGH) + 1,
 );
 
 /**
@@ -99,7 +98,7 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
   });
   const { effort } = uncapped.choice;
   const resolved =
-    effort === null || rank(effort) <= rank(ReasoningEffort.HIGH)
+    effort === null || UNPROBED_ROUTE_EFFORTS.includes(effort)
       ? uncapped
       : yield* codexRouteEfforts(binaryPath, slug).pipe(
           Effect.flatMap((routeEfforts) =>
