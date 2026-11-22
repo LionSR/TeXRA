@@ -348,6 +348,8 @@ test('a tool edit the app changed keeps its changes when another window answers 
             'openai/gpt-5.6-sol',
             '--instruction',
             'Write the notes',
+            '--approval-policy',
+            'ask',
             '--output-format',
             'json',
             '--cwd',
