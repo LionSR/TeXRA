@@ -26,8 +26,9 @@ import {
 /**
  * Lean 4 over the `lake env lean --server` pool, in every host; its probe
  * reports the tools runnable exactly when `lake` is found, the one thing the
- * pool needs. Its programs, `prove` and `blueprint`, check each round of
- * their child's work with its tools.
+ * pool needs. Its programs (`./programs`) check each round of their
+ * child's work with its tools, or, `lean-search`, answer with what a child
+ * found.
  */
 export const lean4: TexraPlugin = texraPlugin({
   ...definePlugin<LeanLanguageServices>({
