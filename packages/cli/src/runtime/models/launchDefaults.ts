@@ -7,9 +7,9 @@ import {
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
+import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
 import {
-  CLI_CHEAP_START_MODEL,
   cliCommandDefaults,
   resolveKnownCliModelId,
   usableDefaultAgent,

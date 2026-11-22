@@ -25,7 +25,6 @@ import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
-const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 
 /** How VS Code shows a subscription sign-in prompt. */
 function vscodePresenter(
@@ -45,13 +44,12 @@ function vscodePresenter(
             ).pipe(Effect.as(false)),
           ),
         );
-        const openLabel = `Open ${displayName}`;
         const choice = yield* vscodeUi.ask(
           'info',
           SIGN_IN_PROMPT.deviceCodeSteps(displayName, prompt, copied),
-          { items: [openLabel] },
+          { items: [SIGN_IN_PROMPT.openVerificationLabel] },
         );
-        if (choice === openLabel) {
+        if (choice === SIGN_IN_PROMPT.openVerificationLabel) {
           yield* vscodeOpener.openExternal(
             prompt.verificationUrlComplete ?? prompt.verificationUrl,
           );
@@ -76,15 +74,16 @@ function vscodePresenter(
         const choice = yield* vscodeUi.ask(
           'info',
           `Sign in with ${displayName}. ${SIGN_IN_PROMPT.otherBrowser(sessionName)}`,
-          { modal: true, items: [OPEN_DEFAULT_BROWSER, COPY_SIGN_IN_LINK] },
+          {
+            modal: true,
+            items: [OPEN_DEFAULT_BROWSER, SIGN_IN_PROMPT.copyLinkLabel],
+          },
         );
-        if (choice === COPY_SIGN_IN_LINK) {
+        if (choice === SIGN_IN_PROMPT.copyLinkLabel) {
           yield* fromHost('clipboard.writeText', () =>
             vscode.env.clipboard.writeText(url),
           );
-          yield* showLoggedInfoMessage(
-            `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
-          );
+          yield* showLoggedInfoMessage(SIGN_IN_PROMPT.linkCopied(copyTarget));
           return;
         }
         // Dismissing the browser-choice dialog cancels the sign-in, as this

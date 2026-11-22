@@ -183,6 +183,39 @@ export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
   MANIFEST.flatMap((plugin) => (plugin.kind === 'unserved' ? [] : [plugin.id])),
 );
 
+const SK_KEY = String.raw`sk-[A-Za-z0-9_-]{12,}`;
+
+/**
+ * The key shapes each API-key provider issues, as regular expression
+ * sources. Keyed by every key provider, so a provider cannot be added
+ * without naming its key shape, and so cannot ship with its keys unredacted.
+ */
+const API_KEY_SHAPES = {
+  openai: [SK_KEY],
+  anthropic: [SK_KEY],
+  google: [
+    String.raw`AIza[A-Za-z0-9_-]{20,}`,
+    String.raw`AQ\.[A-Za-z0-9._-]{20,}`,
+  ],
+  xai: [String.raw`xai-[A-Za-z0-9_-]{12,}`],
+  deepseek: [SK_KEY],
+  moonshot: [SK_KEY],
+  dashscope: [SK_KEY],
+  minimax: [SK_KEY],
+  glm: [SK_KEY],
+  meta: [SK_KEY],
+  kimiCode: [SK_KEY],
+} as const satisfies Record<ApiKeyProviderId, readonly string[]>;
+
+/**
+ * Any provider's API key, as one regular expression source with no anchors
+ * and no flags: a log redactor wraps it in word boundaries and makes it
+ * global, an input check anchors it.
+ */
+export const API_KEY_PATTERN_SOURCE = [
+  ...new Set(Object.values(API_KEY_SHAPES).flat()),
+].join('|');
+
 /** Providers with a China and an international platform. */
 export type RegionalProviderId = Extract<
   (typeof MANIFEST)[number],
