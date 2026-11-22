@@ -2,13 +2,16 @@ import { NodeFileSystem } from '@effect/platform-node';
 import * as NodeSocketServer from '@effect/platform-node/NodeSocketServer';
 import { it } from '@effect/vitest';
 import { Effect, Exit, FileSystem, Layer, Scope, Stream } from 'effect';
-import { RpcSerialization, RpcServer } from 'effect/rpc';
+import { RpcGroup, RpcSerialization, RpcServer } from 'effect/rpc';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import { globalDatabaseLayer } from '@controllers/session/globalDatabaseLayer';
 import { globalValuesOver, nodePlatformLayer } from '@test/support/fsTestUtils';
-import { linkService } from '@texra/controllers/server/client';
+import {
+  linkService,
+  probeRecordedService,
+} from '@texra/controllers/server/client';
 import {
   claimServiceRecord,
   servicePaths,
@@ -19,6 +22,12 @@ import {
   TexraRpcs,
 } from '@texra/controllers/server/protocol';
 
+const serviceRpcs = RpcGroup.make(
+  ...[...TexraRpcs.requests.values()].filter(
+    (rpc) => rpc._tag === 'service.hello' || rpc._tag === 'service.stop',
+  ),
+);
+
 /**
  * A service that answers the hello on its own socket under `storageRoot`
  * and holds the record, started at `startedAt` on the test clock. Closing
@@ -28,13 +37,15 @@ const fakeService = Effect.fn('fakeService')(function* (
   storageRoot: string,
   startedAt: number,
   scope: Scope.Scope,
+  protocol = PROTOCOL.digest,
+  onStop: Effect.Effect<void> = Effect.void,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const paths = servicePaths(storageRoot);
   yield* fs.makeDirectory(paths.socketDirectory, { recursive: true });
-  const socket = paths.socketFor(process.pid);
+  const socket = paths.socketFor(startedAt);
   const info = {
-    protocol: PROTOCOL.digest,
+    protocol,
     version: BUILD_VERSION,
     pid: process.pid,
     socket,
@@ -43,12 +54,14 @@ const fakeService = Effect.fn('fakeService')(function* (
     running: 0,
     draining: false,
   };
-  yield* RpcServer.make(TexraRpcs).pipe(
+  yield* RpcServer.make(serviceRpcs).pipe(
     Effect.provide(
       Layer.merge(
-        TexraRpcs.toLayerHandler(
-          'service.hello',
-          Effect.succeed(() => Effect.succeed(info)),
+        serviceRpcs.toLayer(
+          Effect.succeed({
+            'service.hello': () => Effect.succeed(info),
+            'service.stop': () => onStop,
+          }),
         ),
         RpcServer.layerProtocolSocketServer.pipe(
           Layer.provide(RpcSerialization.layerNdjson),
@@ -56,9 +69,6 @@ const fakeService = Effect.fn('fakeService')(function* (
         ),
       ),
     ),
-    // cast: the link asks this service only for its hello; the other
-    // procedures have no handler here.
-    (served) => served as Effect.Effect<never, never, never>,
     Effect.forkIn(scope),
   );
   yield* claimServiceRecord({ pid: process.pid, socket, startedAt }, () =>
@@ -67,6 +77,68 @@ const fakeService = Effect.fn('fakeService')(function* (
 });
 
 describe('linkService', () => {
+  it.effect.skipIf(process.platform === 'win32')(
+    'keeps the replacement service when a window reconnects across protocols',
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const storageRoot = yield* fs.makeTempDirectoryScoped({
+          prefix: 'texra-link-',
+        });
+        yield* Effect.gen(function* () {
+          const first = yield* Scope.fork(yield* Effect.scope);
+          yield* fakeService(storageRoot, 1, first);
+          const link = yield* linkService(
+            { storageRoot, start: Effect.die('unexpected service start') },
+            { startsService: true, waiting: () => Effect.void },
+          );
+          yield* TestClock.adjust('2 minutes');
+          let stops = 0;
+          // Publish the successor before the old socket closes so the first
+          // reconnect probe sees a healthy, incompatible service.
+          yield* fakeService(
+            storageRoot,
+            2,
+            yield* Effect.scope,
+            'other-protocol',
+            Effect.sync(() => {
+              stops += 1;
+            }),
+          );
+          yield* Scope.close(first, Exit.void);
+          yield* TestClock.adjust('1 second').pipe(
+            Effect.andThen(TestClock.withLive(Effect.sleep('5 millis'))),
+            Effect.repeat({ times: 99 }),
+            Effect.raceFirst(
+              link.state.changes.pipe(
+                Stream.filter((state) => 'away' in state && state.lasting),
+                Stream.runHead,
+              ),
+            ),
+          );
+          const state = yield* link.state.get;
+          expect(state).toMatchObject({
+            client: null,
+            lasting: true,
+            away: expect.stringMatching(/reopen/i),
+          });
+          expect(stops).toBe(0);
+          expect((yield* probeRecordedService)?.protocol).toBe(
+            'other-protocol',
+          );
+        }).pipe(
+          Effect.provide(
+            globalValuesOver(
+              globalDatabaseLayer(storageRoot).pipe(
+                Layer.provide(nodePlatformLayer),
+                Layer.orDie,
+              ),
+            ),
+          ),
+        );
+      }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+
   // The service does not run on Windows yet: `linkService` refuses there
   // before it starts anything (`WINDOWS_UNSUPPORTED`), so there is no
   // restart to bound.
