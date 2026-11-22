@@ -530,8 +530,7 @@ wa-input.desktop-command-palette-input {
 .desktop-log-viewer-actions wa-icon,
 .desktop-log-entry-summary wa-icon,
 .desktop-editor-tree-icon,
-.desktop-editor-tree-refresh wa-icon,
-.desktop-editor-tree-empty wa-icon {
+.desktop-editor-tree-refresh wa-icon {
   display: block;
   flex: 0 0 auto;
   width: 1em;

@@ -231,11 +231,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   min-height: 28px;
   padding: 0 var(--wa-space-2xs);
 }
-.desktop-editor-tree-empty {
-  padding: var(--wa-space-xs);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
 .shell-editor-toolbar {
   display: flex;
   align-items: center;
