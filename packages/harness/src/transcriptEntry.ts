@@ -32,7 +32,8 @@
  *   `ToolFileListSection`, `ToolFileGroupsSection`) structure tool inputs and
  *   outputs without custom per-tool UI parsing.
  * - **Text budgets & headlines**: [`rowHeadline`](#rowheadline),
- *   [`transcriptText`](#transcripttext), [`elideText`](#elidetext), and
+ *   [`transcriptText`](#transcripttext), [`elideText`](#elidetext),
+ *   [`paintsNothing`](#paintsnothing), and
  *   [`TextBudget`](#textbudget) format and truncate row text for terminal and
  *   compact UIs.
  */
@@ -88,6 +89,7 @@ export type {
 } from '@shared/transcript/transcriptRow';
 export {
   elideText,
+  paintsNothing,
   transcriptText,
   type ElidedText,
   type PayloadLanguage,

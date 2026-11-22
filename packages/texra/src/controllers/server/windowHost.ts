@@ -210,53 +210,56 @@ function attachTo(
   attached: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
-    /** The attachment's server of `host`'s calls, from its first frame. */
-    let receive: (
-      message: RpcMessage.FromClientEncoded,
-    ) => Effect.Effect<void> = () => Effect.void;
+    /** The id the service names this attachment by, in its first frame:
+     *  an answer waits for it. */
+    const attachment = yield* Deferred.make<string>();
+    const served = yield* serveOverMessages((_service, message) =>
+      Deferred.await(attachment).pipe(
+        Effect.flatMap((id) =>
+          client['host.answer']({
+            attachment: id,
+            // cast: `rpc`'s messages are JSON.
+            message: message as unknown as typeof Schema.Json.Type,
+          }),
+        ),
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `A host call's answer did not reach the service: ${error.message}`,
+          ),
+        ),
+      ),
+    );
+    // Each call on its own fiber: a slow build never holds the next.
+    yield* RpcServer.make(WindowRpcs).pipe(
+      Effect.provide(windowHandlers(host)),
+      Effect.provideService(RpcServer.Protocol, served.protocol),
+      Effect.forkScoped,
+    );
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),
     }).pipe(
-      Stream.runForEach((frame) => {
-        if (frame.kind === 'call')
-          // cast: `rpc` reads its own message.
-          return receive(
-            frame.message as unknown as RpcMessage.FromClientEncoded,
-          );
-        return Effect.gen(function* () {
-          const served = yield* serveOverMessages((_service, message) =>
-            client['host.answer']({
-              attachment: frame.attachment,
-              // cast: `rpc`'s messages are JSON.
-              message: message as unknown as typeof Schema.Json.Type,
-            }).pipe(
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `A host call's answer did not reach the service: ${error.message}`,
+      Stream.runForEach((frame) =>
+        frame.kind === 'call'
+          ? served.receive(
+              'service',
+              // cast: `rpc` reads its own message.
+              frame.message as unknown as RpcMessage.FromClientEncoded,
+            )
+          : Effect.gen(function* () {
+              yield* Deferred.succeed(attachment, frame.attachment);
+              yield* Deferred.succeed(attached, undefined);
+              yield* Effect.forkScoped(
+                Stream.runForEach(focused, () =>
+                  client['host.focus']({
+                    attachment: frame.attachment,
+                  }).pipe(
+                    Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
+                  ),
                 ),
-              ),
-            ),
-          );
-          // Each call on its own fiber: a slow build never holds the next.
-          yield* RpcServer.make(WindowRpcs).pipe(
-            Effect.provide(windowHandlers(host)),
-            Effect.provideService(RpcServer.Protocol, served.protocol),
-            Effect.forkScoped,
-          );
-          receive = (message) => served.receive('service', message);
-          yield* Deferred.succeed(attached, undefined);
-          yield* Effect.forkScoped(
-            Stream.runForEach(focused, () =>
-              client['host.focus']({
-                attachment: frame.attachment,
-              }).pipe(
-                Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
-              ),
-            ),
-          );
-        });
-      }),
+              );
+            }),
+      ),
     );
   }).pipe(
     Effect.matchCauseEffect({

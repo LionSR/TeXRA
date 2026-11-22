@@ -12,8 +12,22 @@
  * token as a paintable colour that Monaco's theme uses too.
  */
 
+// Third-party imports
+import xtermCss from '@xterm/xterm/css/xterm.css?inline';
+
 // Local imports - toolkit
 import { cssTokenColors } from '@ui/wa/cssTokenColor';
+
+/**
+ * xterm's stylesheet, with its viewport painted the terminal background.
+ * xterm paints the viewport from that stylesheet's `#000` whatever the theme,
+ * and the viewport shows wherever the terminal's box is taller than its rows
+ * (before the first fit, below the last row): a black band in a light theme.
+ */
+export const xtermStyles = `${xtermCss}
+.xterm .xterm-viewport {
+  background-color: var(--wa-color-terminal-background);
+}`;
 
 /** The generic family when the host names no monospace font. */
 const FALLBACK_FONT_FAMILY = 'monospace';

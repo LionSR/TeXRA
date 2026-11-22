@@ -175,7 +175,7 @@ export class RunHeader extends TexraElement {
       .ancestor-separator {
         flex: 0 0 auto;
         font-size: var(--font-size-xs);
-        color: var(--color-text-muted);
+        color: var(--color-text-secondary);
       }
       :dir(rtl) .ancestor-separator {
         transform: scaleX(-1);

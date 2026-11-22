@@ -90,7 +90,7 @@ export const monacoStyles = css`
     border-block-start: var(--border-thin) solid var(--color-border);
     font: inherit;
     line-height: var(--line-height-normal);
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
     overflow-wrap: anywhere;
     max-height: 5lh;
     overflow: auto;

@@ -15,7 +15,10 @@ import '@ui/progress/components/ContextManagement';
 // Local imports - shared schemas and components
 import type { ActionConfig } from '@ui/progress/components/ContextManagement';
 import type { IconName } from '@ui/wa/iconNames';
-import type { ContextManagementRow } from '@texra-ai/harness/transcript';
+import type {
+  ContextManagementRow,
+  StatItem,
+} from '@texra-ai/harness/transcript';
 
 // Local imports - formatter helpers
 import type { FormatResult } from '../baseLogFormatter';
@@ -28,7 +31,7 @@ const PRESENTATION: { icon: IconName; color: string } = {
 };
 
 /** Icon per context-management item key. */
-const ITEM_ICONS: Record<string, IconName> = {
+const ITEM_ICONS: Readonly<Record<StatItem['key'], IconName>> = {
   maxTokens: 'arrow-down',
   utilization: 'chart-pie',
   contextWindow: 'window-maximize',
@@ -44,7 +47,7 @@ export function formatContextManagementTemplate(
 ): FormatResult {
   const config: ActionConfig = { ...PRESENTATION, label: row.label };
   const items = row.items.map((item) => ({
-    icon: ITEM_ICONS[item.key] ?? 'circle-info',
+    icon: ITEM_ICONS[item.key],
     label: item.label,
     value: item.value,
   }));

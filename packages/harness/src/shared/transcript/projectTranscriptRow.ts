@@ -23,7 +23,11 @@ import { normalizeToolUse, resultFields } from '@shared/toolUse';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
-import { transcriptText } from './transcriptText';
+import {
+  paintsNothing,
+  transcriptText,
+  type TranscriptText,
+} from './transcriptText';
 import {
   ERROR_DETAIL_KEYS,
   type ErrorDetailKey,
@@ -41,17 +45,29 @@ import {
 // Text rows
 // ---------------------------------------------------------------------------
 
-/** A plain log row, or no row when the text is blank. */
+/** The zero-width characters and blank lines a text leads with. */
+const BLANK_LEAD = /^(?:\u200B|\u200C|\u200D|\uFEFF|[ \t]*\r?\n)+/;
+
+/** A model or log text as a row shows it: without the zero-width
+ *  characters and blank lines it leads with, or none when nothing in it
+ *  paints. */
+function shownText(text: string): TranscriptText | undefined {
+  const shown = text.slice(BLANK_LEAD.exec(text)?.[0].length ?? 0);
+  return paintsNothing(shown) ? undefined : transcriptText(shown);
+}
+
+/** A plain log row, or no row when the text paints nothing. */
 export function plainLogRow(
   base: TranscriptRowBase,
   text: string,
 ): LogRow | undefined {
-  const measured = transcriptText(text);
-  if (!measured.oneLine.trim()) return undefined;
-  return { ...base, kind: 'log', text: measured };
+  const shown = shownText(text);
+  return shown === undefined
+    ? undefined
+    : { ...base, kind: 'log', text: shown };
 }
 
-/** Model text or thinking; no row while the text is blank. */
+/** Model text or thinking; no row while the text paints nothing. */
 export function streamingTextRow(
   base: TranscriptRowBase,
   kind: StreamingTextRow['kind'],
@@ -59,12 +75,12 @@ export function streamingTextRow(
   streaming: boolean,
   cut?: StreamingTextRow['cut'],
 ): StreamingTextRow | undefined {
-  const measured = transcriptText(text);
-  if (!measured.oneLine.trim()) return undefined;
+  const shown = shownText(text);
+  if (shown === undefined) return undefined;
   return {
     ...base,
     kind,
-    text: measured,
+    text: shown,
     streaming,
     ...(cut === undefined ? {} : { cut }),
   };

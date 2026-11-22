@@ -92,9 +92,10 @@ the copies have drifted (unserved, unreadable key, unknown model).
 
 ## 6. Smaller single-owner moves
 
-- `finishedToolCalls` (`packages/cli/src/runtime/headless/runProgressRenderer.ts`)
-  is imported by the TUI's child list; the count is a transcript read, and the
-  headless line and the TUI word it two ways ("tools: 5", "5 tool calls").
+- Landed: `finishedToolCalls` in the CLI's headless renderer counted a run's
+  finished tool cards for the status line and the TUI's child list; the
+  session view now carries the count (`RunView.toolCalls`). The two wordings
+  ("tools: 5", "5 tool calls") stay.
 - Landed: the usage-logging notice (`telemetryNoticeIfDue`) did not read the
   host telemetry switch the send gate reads, so the extension checked it at
   the call site (`extension.ts`). The switch is now one `Context.Reference`

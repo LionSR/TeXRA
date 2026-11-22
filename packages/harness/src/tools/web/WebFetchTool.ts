@@ -212,47 +212,34 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       const supported =
         !charset ||
         Result.isSuccess(Result.try(() => new TextDecoder(charset)));
-      const decoder = new TextDecoder(supported ? charset || 'utf-8' : 'utf-8');
-      // What the classification below words any other failure as.
-      const undecoded = (cause: unknown) =>
-        new ToolError(`Failed to fetch ${url}: ${toErrorMessage(cause)}`, {
-          cause,
-        });
       let total = 0;
-      const parts = yield* response.stream.pipe(
+      // Decoded as it streams, its incomplete trailing code units flushed as
+      // replacement characters at the end.
+      const rawBody = yield* response.stream.pipe(
         // A response without a body reads as empty text.
         Stream.catchReason(
           'HttpClientError',
           'EmptyBodyError',
           () => Stream.empty,
         ),
-        Stream.mapEffect((chunk) => {
-          // Count received bytes even when Content-Length is absent or wrong.
+        // Count received bytes even when Content-Length is absent or wrong.
+        Stream.tap((chunk) => {
           total += chunk.byteLength;
-          if (total > MAX_CONTENT_BYTES) {
-            return Effect.fail(
-              new ToolError(
-                `Failed to fetch ${url}: Response too large (exceeds ${formatCount(MAX_CONTENT_BYTES)} bytes maximum).`,
-              ),
-            );
-          }
-          return Effect.try({
-            try: () => decoder.decode(chunk, { stream: true }),
-            catch: undecoded,
-          });
+          return total > MAX_CONTENT_BYTES
+            ? Effect.fail(
+                new ToolError(
+                  `Failed to fetch ${url}: Response too large (exceeds ${formatCount(MAX_CONTENT_BYTES)} bytes maximum).`,
+                ),
+              )
+            : Effect.void;
         }),
-        Stream.runCollect,
-      );
-      // Flush incomplete trailing code units too; streaming decode alone
-      // would silently omit their replacement characters.
-      parts.push(
-        yield* Effect.try({
-          try: () => decoder.decode(),
-          catch: undecoded,
+        Stream.decodeText({
+          encoding: supported ? charset || 'utf-8' : 'utf-8',
         }),
+        Stream.mkString,
       );
       return {
-        rawBody: parts.join(''),
+        rawBody,
         contentType,
         unsupportedCharset: supported ? null : (charset ?? null),
       };

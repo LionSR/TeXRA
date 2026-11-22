@@ -9,7 +9,9 @@ import { css, type CSSResult } from 'lit';
 export const designTokens: CSSResult = css`
   :root,
   :host {
-    /* Text colors */
+    /* Text colors. Metadata is still text: secondary is the host's readable
+       secondary foreground, never primary text faded below normal-text
+       contrast. */
     --color-text-secondary: var(--wa-color-text-quiet);
     --color-text-link: var(--wa-color-text-link);
     --color-text-link-active: var(--wa-color-text-link-active);
@@ -119,10 +121,6 @@ export const designTokens: CSSResult = css`
       --wa-surface-selected,
       light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 12%))
     );
-
-    /* Metadata is still text: use the host's readable secondary foreground,
-       rather than fading primary text below normal-text contrast. */
-    --color-text-muted: var(--wa-color-text-quiet);
 
     /* Seams. Alpha hairlines for the places a border is load-bearing (settings
        rows, code blocks, inputs); large regions separate by a background step
