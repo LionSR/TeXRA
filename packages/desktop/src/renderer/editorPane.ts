@@ -318,7 +318,7 @@ export function createEditorPane(
     if (state.error) {
       return html`
         <wa-callout class="desktop-editor-tree-empty" variant="danger">
-          ${waIcon('triangle-exclamation', { slot: 'icon' })} ${state.error}
+          ${waIcon('circle-exclamation', { slot: 'icon' })} ${state.error}
         </wa-callout>
       `;
     }
