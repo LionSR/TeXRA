@@ -19,9 +19,7 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "request.decided"
-        ]
+        "enum": ["request.decided"]
       },
       "requestId": {
         "type": "string",
@@ -34,9 +32,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "approve"
-                ]
+                "enum": ["approve"]
               },
               "edit": {
                 "anyOf": [
@@ -45,9 +41,7 @@
                     "properties": {
                       "kind": {
                         "type": "string",
-                        "enum": [
-                          "proposal"
-                        ]
+                        "enum": ["proposal"]
                       },
                       "model": {
                         "anyOf": [
@@ -109,9 +103,7 @@
                         ]
                       }
                     },
-                    "required": [
-                      "kind"
-                    ],
+                    "required": ["kind"],
                     "additionalProperties": true
                   },
                   {
@@ -119,18 +111,13 @@
                     "properties": {
                       "kind": {
                         "type": "string",
-                        "enum": [
-                          "toolEdit"
-                        ]
+                        "enum": ["toolEdit"]
                       },
                       "content": {
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "kind",
-                      "content"
-                    ],
+                    "required": ["kind", "content"],
                     "additionalProperties": true
                   },
                   {
@@ -139,9 +126,7 @@
                 ]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": true
           },
           {
@@ -149,17 +134,13 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "approve_and_goal"
-                ]
+                "enum": ["approve_and_goal"]
               },
               "autoApproveAll": {
                 "anyOf": [
                   {
                     "type": "boolean",
-                    "enum": [
-                      true
-                    ]
+                    "enum": [true]
                   },
                   {
                     "type": "null"
@@ -167,9 +148,7 @@
                 ]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": true
           },
           {
@@ -177,9 +156,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "submit"
-                ]
+                "enum": ["submit"]
               },
               "answers": {
                 "type": "object",
@@ -198,10 +175,7 @@
                 }
               }
             },
-            "required": [
-              "action",
-              "answers"
-            ],
+            "required": ["action", "answers"],
             "additionalProperties": true
           },
           {
@@ -209,9 +183,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "skip"
-                ]
+                "enum": ["skip"]
               },
               "feedback": {
                 "anyOf": [
@@ -224,9 +196,7 @@
                 ]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": true
           },
           {
@@ -234,9 +204,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "retry"
-                ]
+                "enum": ["retry"]
               },
               "feedback": {
                 "anyOf": [
@@ -252,10 +220,7 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": [
-                      "configured",
-                      "personal"
-                    ]
+                    "enum": ["configured", "personal"]
                   },
                   {
                     "type": "null"
@@ -263,9 +228,7 @@
                 ]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": true
           },
           {
@@ -273,9 +236,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "reject"
-                ]
+                "enum": ["reject"]
               },
               "feedback": {
                 "anyOf": [
@@ -288,9 +249,7 @@
                 ]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": true
           },
           {
@@ -298,18 +257,13 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "deny"
-                ]
+                "enum": ["deny"]
               },
               "reason": {
                 "type": "string"
               }
             },
-            "required": [
-              "action",
-              "reason"
-            ],
+            "required": ["action", "reason"],
             "additionalProperties": true
           },
           {
@@ -317,9 +271,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "cancel"
-                ]
+                "enum": ["cancel"]
               },
               "cause": {
                 "anyOf": [
@@ -332,20 +284,13 @@
                 ]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": true
           }
         ]
       }
     },
-    "required": [
-      "aggregateId",
-      "type",
-      "requestId",
-      "decision"
-    ],
+    "required": ["aggregateId", "type", "requestId", "decision"],
     "additionalProperties": true
   },
   "definitions": {}

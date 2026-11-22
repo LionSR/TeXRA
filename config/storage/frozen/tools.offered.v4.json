@@ -19,9 +19,7 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "tools.offered"
-        ]
+        "enum": ["tools.offered"]
       },
       "payload": {
         "type": "object",
@@ -109,11 +107,7 @@
         "additionalProperties": true
       }
     },
-    "required": [
-      "aggregateId",
-      "type",
-      "payload"
-    ],
+    "required": ["aggregateId", "type", "payload"],
     "additionalProperties": true
   },
   "definitions": {}

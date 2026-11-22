@@ -19,9 +19,7 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "hook.outcome"
-        ]
+        "enum": ["hook.outcome"]
       },
       "payload": {
         "type": "object",
@@ -81,11 +79,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": [
-                  "allow",
-                  "deny",
-                  "ask"
-                ]
+                "enum": ["allow", "deny", "ask"]
               },
               {
                 "type": "null"
@@ -157,11 +151,7 @@
         "additionalProperties": true
       }
     },
-    "required": [
-      "aggregateId",
-      "type",
-      "payload"
-    ],
+    "required": ["aggregateId", "type", "payload"],
     "additionalProperties": true
   },
   "definitions": {}

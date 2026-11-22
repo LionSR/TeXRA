@@ -18,11 +18,7 @@
         "minLength": 1
       }
     },
-    "required": [
-      "pid",
-      "startedAt",
-      "socket"
-    ],
+    "required": ["pid", "startedAt", "socket"],
     "additionalProperties": true
   },
   "definitions": {}

@@ -19,31 +19,23 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "run.end"
-        ]
+        "enum": ["run.end"]
       },
       "outcome": {
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "completed"
-            ],
+            "enum": ["completed"],
             "title": "COMPLETED"
           },
           {
             "type": "string",
-            "enum": [
-              "cancelled"
-            ],
+            "enum": ["cancelled"],
             "title": "CANCELLED"
           },
           {
             "type": "string",
-            "enum": [
-              "failed"
-            ],
+            "enum": ["failed"],
             "title": "FAILED"
           }
         ]
@@ -55,20 +47,13 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "disk-full",
-                  "result-lost",
-                  "unexpected"
-                ]
+                "enum": ["disk-full", "result-lost", "unexpected"]
               },
               "message": {
                 "type": "string"
               }
             },
-            "required": [
-              "kind",
-              "message"
-            ],
+            "required": ["kind", "message"],
             "additionalProperties": true
           },
           {
@@ -76,9 +61,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "model"
-                ]
+                "enum": ["model"]
               },
               "failure": {
                 "anyOf": [
@@ -165,9 +148,7 @@
                                 ]
                               }
                             },
-                            "required": [
-                              "plan"
-                            ],
+                            "required": ["plan"],
                             "additionalProperties": true
                           },
                           {
@@ -177,9 +158,7 @@
                       },
                       "source": {
                         "type": "string",
-                        "enum": [
-                          "model"
-                        ]
+                        "enum": ["model"]
                       },
                       "provider": {
                         "anyOf": [
@@ -202,11 +181,7 @@
                         ]
                       }
                     },
-                    "required": [
-                      "kind",
-                      "message",
-                      "source"
-                    ],
+                    "required": ["kind", "message", "source"],
                     "additionalProperties": true
                   },
                   {
@@ -214,9 +189,7 @@
                     "properties": {
                       "source": {
                         "type": "string",
-                        "enum": [
-                          "route"
-                        ]
+                        "enum": ["route"]
                       },
                       "provider": {
                         "anyOf": [
@@ -235,9 +208,7 @@
                         "anyOf": [
                           {
                             "type": "boolean",
-                            "enum": [
-                              true
-                            ]
+                            "enum": [true]
                           },
                           {
                             "type": "null"
@@ -260,10 +231,7 @@
                                 "type": "boolean"
                               }
                             },
-                            "required": [
-                              "route",
-                              "needsReauth"
-                            ],
+                            "required": ["route", "needsReauth"],
                             "additionalProperties": true
                           },
                           {
@@ -272,19 +240,13 @@
                         ]
                       }
                     },
-                    "required": [
-                      "source",
-                      "message"
-                    ],
+                    "required": ["source", "message"],
                     "additionalProperties": true
                   }
                 ]
               }
             },
-            "required": [
-              "kind",
-              "failure"
-            ],
+            "required": ["kind", "failure"],
             "additionalProperties": true
           },
           {
@@ -313,19 +275,11 @@
             ]
           }
         },
-        "required": [
-          "response",
-          "files"
-        ],
+        "required": ["response", "files"],
         "additionalProperties": true
       }
     },
-    "required": [
-      "aggregateId",
-      "type",
-      "outcome",
-      "output"
-    ],
+    "required": ["aggregateId", "type", "outcome", "output"],
     "additionalProperties": true
   },
   "definitions": {}

@@ -19,15 +19,10 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "run.removed"
-        ]
+        "enum": ["run.removed"]
       }
     },
-    "required": [
-      "aggregateId",
-      "type"
-    ],
+    "required": ["aggregateId", "type"],
     "additionalProperties": true
   },
   "definitions": {}

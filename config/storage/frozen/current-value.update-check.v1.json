@@ -27,10 +27,7 @@
         ]
       }
     },
-    "required": [
-      "lastCheckedAt",
-      "lastNotifiedVersion"
-    ],
+    "required": ["lastCheckedAt", "lastNotifiedVersion"],
     "additionalProperties": true
   },
   "definitions": {}

@@ -19,9 +19,7 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "request.opened"
-        ]
+        "enum": ["request.opened"]
       },
       "requestId": {
         "type": "string",
@@ -34,9 +32,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "toolEdit"
-                ]
+                "enum": ["toolEdit"]
               },
               "data": {
                 "type": "object",
@@ -84,10 +80,7 @@
                 "additionalProperties": true
               }
             },
-            "required": [
-              "kind",
-              "data"
-            ],
+            "required": ["kind", "data"],
             "additionalProperties": true
           },
           {
@@ -95,9 +88,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "bash"
-                ]
+                "enum": ["bash"]
               },
               "data": {
                 "type": "object",
@@ -123,18 +114,11 @@
                     ]
                   }
                 },
-                "required": [
-                  "requestId",
-                  "runId",
-                  "command"
-                ],
+                "required": ["requestId", "runId", "command"],
                 "additionalProperties": true
               }
             },
-            "required": [
-              "kind",
-              "data"
-            ],
+            "required": ["kind", "data"],
             "additionalProperties": true
           },
           {
@@ -142,9 +126,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "pluginTrust"
-                ]
+                "enum": ["pluginTrust"]
               },
               "data": {
                 "type": "object",
@@ -197,10 +179,7 @@
                 "additionalProperties": true
               }
             },
-            "required": [
-              "kind",
-              "data"
-            ],
+            "required": ["kind", "data"],
             "additionalProperties": true
           },
           {
@@ -208,9 +187,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "retry"
-                ]
+                "enum": ["retry"]
               },
               "data": {
                 "type": "object",
@@ -320,9 +297,7 @@
                                     ]
                                   }
                                 },
-                                "required": [
-                                  "plan"
-                                ],
+                                "required": ["plan"],
                                 "additionalProperties": true
                               },
                               {
@@ -332,9 +307,7 @@
                           },
                           "source": {
                             "type": "string",
-                            "enum": [
-                              "model"
-                            ]
+                            "enum": ["model"]
                           },
                           "provider": {
                             "anyOf": [
@@ -357,11 +330,7 @@
                             ]
                           }
                         },
-                        "required": [
-                          "kind",
-                          "message",
-                          "source"
-                        ],
+                        "required": ["kind", "message", "source"],
                         "additionalProperties": true
                       },
                       {
@@ -369,9 +338,7 @@
                         "properties": {
                           "source": {
                             "type": "string",
-                            "enum": [
-                              "route"
-                            ]
+                            "enum": ["route"]
                           },
                           "provider": {
                             "anyOf": [
@@ -390,9 +357,7 @@
                             "anyOf": [
                               {
                                 "type": "boolean",
-                                "enum": [
-                                  true
-                                ]
+                                "enum": [true]
                               },
                               {
                                 "type": "null"
@@ -415,10 +380,7 @@
                                     "type": "boolean"
                                   }
                                 },
-                                "required": [
-                                  "route",
-                                  "needsReauth"
-                                ],
+                                "required": ["route", "needsReauth"],
                                 "additionalProperties": true
                               },
                               {
@@ -427,10 +389,7 @@
                             ]
                           }
                         },
-                        "required": [
-                          "source",
-                          "message"
-                        ],
+                        "required": ["source", "message"],
                         "additionalProperties": true
                       }
                     ]
@@ -442,9 +401,7 @@
                         "properties": {
                           "kind": {
                             "type": "string",
-                            "enum": [
-                              "decline-route"
-                            ]
+                            "enum": ["decline-route"]
                           },
                           "route": {
                             "type": "string",
@@ -472,11 +429,7 @@
                             ]
                           }
                         },
-                        "required": [
-                          "kind",
-                          "route",
-                          "provider"
-                        ],
+                        "required": ["kind", "route", "provider"],
                         "additionalProperties": true
                       },
                       {
@@ -484,9 +437,7 @@
                         "properties": {
                           "kind": {
                             "type": "string",
-                            "enum": [
-                              "new-key"
-                            ]
+                            "enum": ["new-key"]
                           },
                           "provider": {
                             "type": "string",
@@ -505,10 +456,7 @@
                             ]
                           }
                         },
-                        "required": [
-                          "kind",
-                          "provider"
-                        ],
+                        "required": ["kind", "provider"],
                         "additionalProperties": true
                       },
                       {
@@ -527,10 +475,7 @@
                 "additionalProperties": true
               }
             },
-            "required": [
-              "kind",
-              "data"
-            ],
+            "required": ["kind", "data"],
             "additionalProperties": true
           },
           {
@@ -538,9 +483,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "proposal"
-                ]
+                "enum": ["proposal"]
               },
               "data": {
                 "type": "object",
@@ -631,19 +574,12 @@
                                   "type": "string"
                                 }
                               },
-                              "required": [
-                                "toolName",
-                                "preview"
-                              ],
+                              "required": ["toolName", "preview"],
                               "additionalProperties": true
                             }
                           }
                         },
-                        "required": [
-                          "title",
-                          "source",
-                          "calls"
-                        ],
+                        "required": ["title", "source", "calls"],
                         "additionalProperties": true
                       },
                       {
@@ -751,10 +687,7 @@
                 "additionalProperties": true
               }
             },
-            "required": [
-              "kind",
-              "data"
-            ],
+            "required": ["kind", "data"],
             "additionalProperties": true
           },
           {
@@ -762,9 +695,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "planApproval"
-                ]
+                "enum": ["planApproval"]
               },
               "data": {
                 "type": "object",
@@ -785,24 +716,15 @@
                         "description": "The plan document: what to achieve, the approach, and a verifiable stopping condition"
                       }
                     },
-                    "required": [
-                      "objective"
-                    ],
+                    "required": ["objective"],
                     "additionalProperties": true
                   }
                 },
-                "required": [
-                  "requestId",
-                  "runId",
-                  "plan"
-                ],
+                "required": ["requestId", "runId", "plan"],
                 "additionalProperties": true
               }
             },
-            "required": [
-              "kind",
-              "data"
-            ],
+            "required": ["kind", "data"],
             "additionalProperties": true
           },
           {
@@ -810,9 +732,7 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "userQuestion"
-                ]
+                "enum": ["userQuestion"]
               },
               "data": {
                 "type": "object",
@@ -870,9 +790,7 @@
                                 ]
                               }
                             },
-                            "required": [
-                              "label"
-                            ],
+                            "required": ["label"],
                             "additionalProperties": true
                           },
                           "minItems": 2,
@@ -905,10 +823,7 @@
                           ]
                         }
                       },
-                      "required": [
-                        "question",
-                        "options"
-                      ],
+                      "required": ["question", "options"],
                       "additionalProperties": true
                     },
                     "minItems": 1,
@@ -928,39 +843,21 @@
                     ]
                   }
                 },
-                "required": [
-                  "requestId",
-                  "runId",
-                  "questions"
-                ],
+                "required": ["requestId", "runId", "questions"],
                 "additionalProperties": true
               }
             },
-            "required": [
-              "kind",
-              "data"
-            ],
+            "required": ["kind", "data"],
             "additionalProperties": true
           }
         ]
       },
       "answeredBy": {
         "type": "string",
-        "enum": [
-          "person",
-          "bash",
-          "toolEdit",
-          "superYolo"
-        ]
+        "enum": ["person", "bash", "toolEdit", "superYolo"]
       }
     },
-    "required": [
-      "aggregateId",
-      "type",
-      "requestId",
-      "payload",
-      "answeredBy"
-    ],
+    "required": ["aggregateId", "type", "requestId", "payload", "answeredBy"],
     "additionalProperties": true
   },
   "definitions": {}

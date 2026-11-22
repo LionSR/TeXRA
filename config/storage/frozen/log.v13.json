@@ -5,9 +5,7 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": [
-          "log"
-        ]
+        "enum": ["log"]
       },
       "stageId": {
         "anyOf": [
@@ -23,30 +21,22 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "error"
-            ],
+            "enum": ["error"],
             "title": "ERROR"
           },
           {
             "type": "string",
-            "enum": [
-              "warn"
-            ],
+            "enum": ["warn"],
             "title": "WARN"
           },
           {
             "type": "string",
-            "enum": [
-              "info"
-            ],
+            "enum": ["info"],
             "title": "INFO"
           },
           {
             "type": "string",
-            "enum": [
-              "debug"
-            ],
+            "enum": ["debug"],
             "title": "DEBUG"
           }
         ]
@@ -66,79 +56,57 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "thinking"
-            ],
+            "enum": ["thinking"],
             "title": "THINKING"
           },
           {
             "type": "string",
-            "enum": [
-              "fileList"
-            ],
+            "enum": ["fileList"],
             "title": "FILE_LIST"
           },
           {
             "type": "string",
-            "enum": [
-              "toolUse"
-            ],
+            "enum": ["toolUse"],
             "title": "TOOL_USE"
           },
           {
             "type": "string",
-            "enum": [
-              "webSearch"
-            ],
+            "enum": ["webSearch"],
             "title": "WEB_SEARCH"
           },
           {
             "type": "string",
-            "enum": [
-              "modelResponse"
-            ],
+            "enum": ["modelResponse"],
             "title": "MODEL_RESPONSE"
           },
           {
             "type": "string",
-            "enum": [
-              "userMessage"
-            ],
+            "enum": ["userMessage"],
             "title": "USER_MESSAGE"
           },
           {
             "type": "string",
-            "enum": [
-              "progressStatus"
-            ],
+            "enum": ["progressStatus"],
             "title": "PROGRESS_STATUS"
           },
           {
             "type": "string",
-            "enum": [
-              "contextCompactionActivity"
-            ],
+            "enum": ["contextCompactionActivity"],
             "title": "CONTEXT_COMPACTION_ACTIVITY"
           },
           {
             "type": "string",
-            "enum": [
-              "error"
-            ],
+            "enum": ["error"],
             "title": "ERROR"
           },
           {
             "type": "string",
-            "enum": [
-              "contextManagement"
-            ],
+            "enum": ["contextManagement"],
             "title": "CONTEXT_MANAGEMENT"
           },
           {
             "type": "string",
-            "enum": [
-              "default"
-            ],
+            "enum": ["default"],
             "title": "DEFAULT"
           },
           {
@@ -151,12 +119,7 @@
         "minLength": 3
       }
     },
-    "required": [
-      "type",
-      "level",
-      "message",
-      "aggregateId"
-    ],
+    "required": ["type", "level", "message", "aggregateId"],
     "additionalProperties": true
   },
   "definitions": {}

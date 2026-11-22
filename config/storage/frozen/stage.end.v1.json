@@ -5,9 +5,7 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": [
-          "stage.end"
-        ]
+        "enum": ["stage.end"]
       },
       "stageId": {
         "anyOf": [
@@ -26,23 +24,17 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "completed"
-            ],
+            "enum": ["completed"],
             "title": "COMPLETED"
           },
           {
             "type": "string",
-            "enum": [
-              "cancelled"
-            ],
+            "enum": ["cancelled"],
             "title": "CANCELLED"
           },
           {
             "type": "string",
-            "enum": [
-              "failed"
-            ],
+            "enum": ["failed"],
             "title": "FAILED"
           }
         ]
@@ -52,12 +44,7 @@
         "minLength": 3
       }
     },
-    "required": [
-      "type",
-      "id",
-      "status",
-      "aggregateId"
-    ],
+    "required": ["type", "id", "status", "aggregateId"],
     "additionalProperties": true
   },
   "definitions": {}

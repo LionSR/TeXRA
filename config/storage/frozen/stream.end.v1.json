@@ -5,9 +5,7 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": [
-          "stream.end"
-        ]
+        "enum": ["stream.end"]
       },
       "stageId": {
         "anyOf": [
@@ -37,11 +35,7 @@
         "minLength": 3
       }
     },
-    "required": [
-      "type",
-      "id",
-      "aggregateId"
-    ],
+    "required": ["type", "id", "aggregateId"],
     "additionalProperties": true
   },
   "definitions": {}

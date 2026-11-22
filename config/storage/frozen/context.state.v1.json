@@ -5,9 +5,7 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": [
-          "context.state"
-        ]
+        "enum": ["context.state"]
       },
       "stageId": {
         "anyOf": [
@@ -34,12 +32,7 @@
         "minLength": 3
       }
     },
-    "required": [
-      "type",
-      "inputTokens",
-      "contextWindow",
-      "aggregateId"
-    ],
+    "required": ["type", "inputTokens", "contextWindow", "aggregateId"],
     "additionalProperties": true
   },
   "definitions": {}

@@ -5,9 +5,7 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": [
-          "tool.start"
-        ]
+        "enum": ["tool.start"]
       },
       "stageId": {
         "anyOf": [
@@ -65,9 +63,7 @@
                       "properties": {
                         "kind": {
                           "type": "string",
-                          "enum": [
-                            "text"
-                          ]
+                          "enum": ["text"]
                         },
                         "label": {
                           "type": "string"
@@ -76,11 +72,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "kind",
-                        "label",
-                        "text"
-                      ],
+                      "required": ["kind", "label", "text"],
                       "additionalProperties": true
                     },
                     {
@@ -88,9 +80,7 @@
                       "properties": {
                         "kind": {
                           "type": "string",
-                          "enum": [
-                            "status"
-                          ]
+                          "enum": ["status"]
                         },
                         "label": {
                           "type": "string"
@@ -99,33 +89,23 @@
                           "anyOf": [
                             {
                               "type": "string",
-                              "enum": [
-                                "in_progress"
-                              ],
+                              "enum": ["in_progress"],
                               "title": "IN_PROGRESS"
                             },
                             {
                               "type": "string",
-                              "enum": [
-                                "completed"
-                              ],
+                              "enum": ["completed"],
                               "title": "COMPLETED"
                             },
                             {
                               "type": "string",
-                              "enum": [
-                                "failed"
-                              ],
+                              "enum": ["failed"],
                               "title": "FAILED"
                             }
                           ]
                         }
                       },
-                      "required": [
-                        "kind",
-                        "label",
-                        "status"
-                      ],
+                      "required": ["kind", "label", "status"],
                       "additionalProperties": true
                     },
                     {
@@ -133,9 +113,7 @@
                       "properties": {
                         "kind": {
                           "type": "string",
-                          "enum": [
-                            "identifier"
-                          ]
+                          "enum": ["identifier"]
                         },
                         "label": {
                           "type": "string"
@@ -144,11 +122,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "kind",
-                        "label",
-                        "value"
-                      ],
+                      "required": ["kind", "label", "value"],
                       "additionalProperties": true
                     },
                     {
@@ -156,9 +130,7 @@
                       "properties": {
                         "kind": {
                           "type": "string",
-                          "enum": [
-                            "badges"
-                          ]
+                          "enum": ["badges"]
                         },
                         "label": {
                           "type": "string"
@@ -170,11 +142,7 @@
                           }
                         }
                       },
-                      "required": [
-                        "kind",
-                        "label",
-                        "badges"
-                      ],
+                      "required": ["kind", "label", "badges"],
                       "additionalProperties": true
                     },
                     {
@@ -182,9 +150,7 @@
                       "properties": {
                         "kind": {
                           "type": "string",
-                          "enum": [
-                            "fileList"
-                          ]
+                          "enum": ["fileList"]
                         },
                         "label": {
                           "type": "string"
@@ -208,28 +174,19 @@
                                 ]
                               }
                             },
-                            "required": [
-                              "path"
-                            ],
+                            "required": ["path"],
                             "additionalProperties": true
                           }
                         }
                       },
-                      "required": [
-                        "kind",
-                        "label",
-                        "files"
-                      ],
+                      "required": ["kind", "label", "files"],
                       "additionalProperties": true
                     }
                   ]
                 }
               }
             },
-            "required": [
-              "title",
-              "sections"
-            ],
+            "required": ["title", "sections"],
             "additionalProperties": true
           },
           {
@@ -242,13 +199,7 @@
         "minLength": 3
       }
     },
-    "required": [
-      "type",
-      "logId",
-      "toolName",
-      "input",
-      "aggregateId"
-    ],
+    "required": ["type", "logId", "toolName", "input", "aggregateId"],
     "additionalProperties": true
   },
   "definitions": {}

@@ -26,12 +26,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "intro",
-          "requests",
-          "templates",
-          "creates"
-        ],
+        "required": ["intro", "requests", "templates", "creates"],
         "additionalProperties": true
       },
       "rounds": {
@@ -59,9 +54,7 @@
                         "properties": {
                           "kind": {
                             "type": "string",
-                            "enum": [
-                              "workspace"
-                            ]
+                            "enum": ["workspace"]
                           },
                           "absolutePath": {
                             "type": "string"
@@ -70,11 +63,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "kind",
-                          "absolutePath",
-                          "relativePath"
-                        ],
+                        "required": ["kind", "absolutePath", "relativePath"],
                         "additionalProperties": true
                       },
                       {
@@ -82,9 +71,7 @@
                         "properties": {
                           "kind": {
                             "type": "string",
-                            "enum": [
-                              "runStorage"
-                            ]
+                            "enum": ["runStorage"]
                           },
                           "absolutePath": {
                             "type": "string"
@@ -110,18 +97,13 @@
                         "properties": {
                           "kind": {
                             "type": "string",
-                            "enum": [
-                              "external"
-                            ]
+                            "enum": ["external"]
                           },
                           "absolutePath": {
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "kind",
-                          "absolutePath"
-                        ],
+                        "required": ["kind", "absolutePath"],
                         "additionalProperties": true
                       }
                     ]
@@ -143,9 +125,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "workspace"
-                                    ]
+                                    "enum": ["workspace"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -166,9 +146,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "runStorage"
-                                    ]
+                                    "enum": ["runStorage"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -194,18 +172,13 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "external"
-                                    ]
+                                    "enum": ["external"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "kind",
-                                  "absolutePath"
-                                ],
+                                "required": ["kind", "absolutePath"],
                                 "additionalProperties": true
                               }
                             ]
@@ -217,9 +190,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "workspace"
-                                    ]
+                                    "enum": ["workspace"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -240,9 +211,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "runStorage"
-                                    ]
+                                    "enum": ["runStorage"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -268,18 +237,13 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "external"
-                                    ]
+                                    "enum": ["external"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "kind",
-                                  "absolutePath"
-                                ],
+                                "required": ["kind", "absolutePath"],
                                 "additionalProperties": true
                               },
                               {
@@ -288,10 +252,7 @@
                             ]
                           }
                         },
-                        "required": [
-                          "base",
-                          "document"
-                        ],
+                        "required": ["base", "document"],
                         "additionalProperties": true
                       },
                       {
@@ -337,13 +298,7 @@
                     ]
                   }
                 },
-                "required": [
-                  "source",
-                  "location",
-                  "round",
-                  "lineage",
-                  "diff"
-                ],
+                "required": ["source", "location", "round", "lineage", "diff"],
                 "additionalProperties": true
               }
             },
@@ -354,18 +309,13 @@
                   "properties": {
                     "_tag": {
                       "type": "string",
-                      "enum": [
-                        "skipped"
-                      ]
+                      "enum": ["skipped"]
                     },
                     "reason": {
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "_tag",
-                    "reason"
-                  ],
+                  "required": ["_tag", "reason"],
                   "additionalProperties": true
                 },
                 {
@@ -373,9 +323,7 @@
                   "properties": {
                     "_tag": {
                       "type": "string",
-                      "enum": [
-                        "checked"
-                      ]
+                      "enum": ["checked"]
                     },
                     "failures": {
                       "type": "array",
@@ -397,9 +345,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "workspace"
-                                    ]
+                                    "enum": ["workspace"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -420,9 +366,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "runStorage"
-                                    ]
+                                    "enum": ["runStorage"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -448,18 +392,13 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "external"
-                                    ]
+                                    "enum": ["external"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "kind",
-                                  "absolutePath"
-                                ],
+                                "required": ["kind", "absolutePath"],
                                 "additionalProperties": true
                               }
                             ]
@@ -471,9 +410,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "workspace"
-                                    ]
+                                    "enum": ["workspace"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -494,9 +431,7 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "runStorage"
-                                    ]
+                                    "enum": ["runStorage"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
@@ -522,18 +457,13 @@
                                 "properties": {
                                   "kind": {
                                     "type": "string",
-                                    "enum": [
-                                      "external"
-                                    ]
+                                    "enum": ["external"]
                                   },
                                   "absolutePath": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "kind",
-                                  "absolutePath"
-                                ],
+                                "required": ["kind", "absolutePath"],
                                 "additionalProperties": true
                               }
                             ]
@@ -556,11 +486,7 @@
                       "type": "boolean"
                     }
                   },
-                  "required": [
-                    "_tag",
-                    "failures",
-                    "rejected"
-                  ],
+                  "required": ["_tag", "failures", "rejected"],
                   "additionalProperties": true
                 },
                 {
@@ -588,9 +514,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "workspace"
-                                ]
+                                "enum": ["workspace"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -611,9 +535,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "runStorage"
-                                ]
+                                "enum": ["runStorage"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -639,18 +561,13 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "external"
-                                ]
+                                "enum": ["external"]
                               },
                               "absolutePath": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "kind",
-                              "absolutePath"
-                            ],
+                            "required": ["kind", "absolutePath"],
                             "additionalProperties": true
                           }
                         ]
@@ -662,9 +579,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "workspace"
-                                ]
+                                "enum": ["workspace"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -685,9 +600,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "runStorage"
-                                ]
+                                "enum": ["runStorage"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -713,18 +626,13 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "external"
-                                ]
+                                "enum": ["external"]
                               },
                               "absolutePath": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "kind",
-                              "absolutePath"
-                            ],
+                            "required": ["kind", "absolutePath"],
                             "additionalProperties": true
                           },
                           {
@@ -739,9 +647,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "workspace"
-                                ]
+                                "enum": ["workspace"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -762,9 +668,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "runStorage"
-                                ]
+                                "enum": ["runStorage"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -790,18 +694,13 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "external"
-                                ]
+                                "enum": ["external"]
                               },
                               "absolutePath": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "kind",
-                              "absolutePath"
-                            ],
+                            "required": ["kind", "absolutePath"],
                             "additionalProperties": true
                           }
                         ]
@@ -820,18 +719,11 @@
                       },
                       "mathMarkup": {
                         "type": "string",
-                        "enum": [
-                          "off",
-                          "whole",
-                          "coarse",
-                          "fine"
-                        ]
+                        "enum": ["off", "whole", "coarse", "fine"]
                       },
                       "status": {
                         "type": "string",
-                        "enum": [
-                          "ok"
-                        ]
+                        "enum": ["ok"]
                       },
                       "diff": {
                         "anyOf": [
@@ -840,9 +732,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "workspace"
-                                ]
+                                "enum": ["workspace"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -863,9 +753,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "runStorage"
-                                ]
+                                "enum": ["runStorage"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -891,18 +779,13 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "external"
-                                ]
+                                "enum": ["external"]
                               },
                               "absolutePath": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "kind",
-                              "absolutePath"
-                            ],
+                            "required": ["kind", "absolutePath"],
                             "additionalProperties": true
                           }
                         ]
@@ -929,9 +812,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "workspace"
-                                ]
+                                "enum": ["workspace"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -952,9 +833,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "runStorage"
-                                ]
+                                "enum": ["runStorage"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -980,18 +859,13 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "external"
-                                ]
+                                "enum": ["external"]
                               },
                               "absolutePath": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "kind",
-                              "absolutePath"
-                            ],
+                            "required": ["kind", "absolutePath"],
                             "additionalProperties": true
                           }
                         ]
@@ -1003,9 +877,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "workspace"
-                                ]
+                                "enum": ["workspace"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -1026,9 +898,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "runStorage"
-                                ]
+                                "enum": ["runStorage"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -1054,18 +924,13 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "external"
-                                ]
+                                "enum": ["external"]
                               },
                               "absolutePath": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "kind",
-                              "absolutePath"
-                            ],
+                            "required": ["kind", "absolutePath"],
                             "additionalProperties": true
                           },
                           {
@@ -1080,9 +945,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "workspace"
-                                ]
+                                "enum": ["workspace"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -1103,9 +966,7 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "runStorage"
-                                ]
+                                "enum": ["runStorage"]
                               },
                               "absolutePath": {
                                 "type": "string"
@@ -1131,18 +992,13 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "external"
-                                ]
+                                "enum": ["external"]
                               },
                               "absolutePath": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "kind",
-                              "absolutePath"
-                            ],
+                            "required": ["kind", "absolutePath"],
                             "additionalProperties": true
                           }
                         ]
@@ -1161,18 +1017,11 @@
                       },
                       "mathMarkup": {
                         "type": "string",
-                        "enum": [
-                          "off",
-                          "whole",
-                          "coarse",
-                          "fine"
-                        ]
+                        "enum": ["off", "whole", "coarse", "fine"]
                       },
                       "status": {
                         "type": "string",
-                        "enum": [
-                          "failed"
-                        ]
+                        "enum": ["failed"]
                       },
                       "error": {
                         "type": "string"
@@ -1199,9 +1048,7 @@
                   "properties": {
                     "kind": {
                       "type": "string",
-                      "enum": [
-                        "workspace"
-                      ]
+                      "enum": ["workspace"]
                     },
                     "absolutePath": {
                       "type": "string"
@@ -1210,11 +1057,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "absolutePath",
-                    "relativePath"
-                  ],
+                  "required": ["kind", "absolutePath", "relativePath"],
                   "additionalProperties": true
                 },
                 {
@@ -1222,9 +1065,7 @@
                   "properties": {
                     "kind": {
                       "type": "string",
-                      "enum": [
-                        "runStorage"
-                      ]
+                      "enum": ["runStorage"]
                     },
                     "absolutePath": {
                       "type": "string"
@@ -1237,12 +1078,7 @@
                       "minLength": 3
                     }
                   },
-                  "required": [
-                    "kind",
-                    "absolutePath",
-                    "relativePath",
-                    "runId"
-                  ],
+                  "required": ["kind", "absolutePath", "relativePath", "runId"],
                   "additionalProperties": true
                 },
                 {
@@ -1250,18 +1086,13 @@
                   "properties": {
                     "kind": {
                       "type": "string",
-                      "enum": [
-                        "external"
-                      ]
+                      "enum": ["external"]
                     },
                     "absolutePath": {
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "absolutePath"
-                  ],
+                  "required": ["kind", "absolutePath"],
                   "additionalProperties": true
                 },
                 {
@@ -1298,11 +1129,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "path",
-                "diffRelPath",
-                "largeChange"
-              ],
+              "required": ["path", "diffRelPath", "largeChange"],
               "additionalProperties": true
             }
           },
@@ -1322,10 +1149,7 @@
         ]
       }
     },
-    "required": [
-      "task",
-      "rounds"
-    ],
+    "required": ["task", "rounds"],
     "additionalProperties": true
   },
   "definitions": {}

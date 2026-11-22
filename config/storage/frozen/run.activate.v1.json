@@ -19,15 +19,10 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "run.activate"
-        ]
+        "enum": ["run.activate"]
       }
     },
-    "required": [
-      "aggregateId",
-      "type"
-    ],
+    "required": ["aggregateId", "type"],
     "additionalProperties": true
   },
   "definitions": {}
