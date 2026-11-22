@@ -7,8 +7,8 @@
 import { Schema } from 'effect';
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
-/** The hook events the harness runs in v1; the protocol module parses the
- *  rest of the reference's events and ignores them. */
+/** The hook events the harness runs; a plugin's hook on any other event of
+ *  the reference is reported as unsupported and never run. */
 export const SUPPORTED_HOOK_EVENTS = Object.freeze([
   'SessionStart',
   'UserPromptSubmit',
