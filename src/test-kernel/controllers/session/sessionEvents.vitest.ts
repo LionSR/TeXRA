@@ -583,7 +583,7 @@ describe('the session event table and its one publisher', () => {
   /** A connection of the kind another host process would open, on the file
    *  name a session root gives its database. */
   const reader = (storage: string): DatabaseSync => {
-    const db = new DatabaseSync(join(storage, 'texra.db'));
+    const db = new DatabaseSync(join(storage, 'texra.project-v1.db'));
     db.exec('PRAGMA busy_timeout = 5000');
     db.exec('PRAGMA foreign_keys = ON');
     return db;
@@ -606,6 +606,36 @@ describe('the session event table and its one publisher', () => {
       ),
     );
 
+  it.effect('starts a fresh project history beside a development store', () =>
+    Effect.gen(function* () {
+      const storage = workspace();
+      const previous = join(storage, 'texra.db');
+      const old = new DatabaseSync(previous);
+      try {
+        old.exec(
+          'CREATE TABLE marker (id INTEGER); INSERT INTO marker VALUES (1); PRAGMA user_version = 106',
+        );
+      } finally {
+        old.close();
+      }
+      const bytes = readFileSync(previous);
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        expect(yield* db.currentCommit).toBe(0);
+        yield* db.appendAll([runStartRow]);
+      }).pipe(Effect.provide(substrate(storage)));
+      expect(readFileSync(previous)).toEqual(bytes);
+      const fresh = reader(storage);
+      try {
+        expect(fresh.prepare('SELECT count(*) AS n FROM event').get()?.n).toBe(
+          1,
+        );
+      } finally {
+        fresh.close();
+      }
+    }),
+  );
+
   it.effect('moves a truncated store aside and opens a fresh one', () =>
     // A store cut short (a copy that stopped part way) is kept beside the
     // fresh store, unchanged: cut inside its header SQLite reports it not a
@@ -614,7 +644,7 @@ describe('the session event table and its one publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         yield* storeOfFormat(storage, 101);
-        const file = join(storage, 'texra.db');
+        const file = join(storage, 'texra.project-v1.db');
         const truncated = readFileSync(file).subarray(0, length);
         rmSync(`${file}-wal`, { force: true });
         rmSync(`${file}-shm`, { force: true });
@@ -629,7 +659,7 @@ describe('the session event table and its one publisher', () => {
         expect(opened, `cut at ${length} bytes`).toEqual({
           movedAside: {
             path: file,
-            aside: expect.stringMatching(/texra\.db\.corrupt-\d+$/),
+            aside: expect.stringMatching(/texra\.project-v1\.db\.corrupt-\d+$/),
           },
           commit: 0,
         });

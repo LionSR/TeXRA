@@ -150,7 +150,7 @@ export const writeEvidence = (
       const storage = join(workspace, 'storage');
       await mkdir(join(dir, 'store'), { recursive: true });
       for (const entry of await readdir(storage, { recursive: true }))
-        if (/texra\.db(-wal|-shm)?$/.test(entry))
+        if (/\.project-v1\.db(-wal|-shm)?$/.test(entry))
           await copyFile(
             join(storage, entry),
             join(dir, 'store', entry.replaceAll('/', '__')),

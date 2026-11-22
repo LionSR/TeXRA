@@ -38,7 +38,7 @@ export const nodePlatformLayer = Layer.mergeAll(
   NodePath.layer,
   nodeSpawnerLayer,
   // TeXRA's namespace, as its hosts' catalog gives it: the stores a suite
-  // opens by hand are `texra.db`, the file the fixtures hold.
+  // opens by hand are `texra.project-v1.db`, the file the fixtures hold.
   Layer.succeed(AppNamespace)('texra'),
 );
 

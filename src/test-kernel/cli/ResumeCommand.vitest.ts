@@ -135,7 +135,7 @@ describe('texra resume', { timeout: REAL_RUN_TIMEOUT }, () => {
               // The project's store appears once the run's session opens,
               // and the model call is in flight once its attempt commits.
               yield* Effect.sync(() =>
-                existsSync(path.join(storage, 'texra.db')),
+                existsSync(path.join(storage, 'texra.project-v1.db')),
               ).pipe(
                 Effect.repeat({
                   until: Boolean,
@@ -173,7 +173,7 @@ describe('texra resume', { timeout: REAL_RUN_TIMEOUT }, () => {
               yield* Fiber.join(ran);
               yield* Effect.promise(() => first.dispose());
               crashAt(
-                path.join(crashedCopy(storage), 'texra.db'),
+                path.join(crashedCopy(storage), 'texra.project-v1.db'),
                 storage,
                 killedAt,
               );

@@ -82,7 +82,7 @@ export const projectStores = Effect.fn('projectStores')(function* (
 export const readStorageInventory = Effect.fn('readStorageInventory')(
   function* (storageRoot: string) {
     const fs = yield* FileSystem.FileSystem;
-    const storeName = storeFileName(yield* AppNamespace);
+    const namespace = yield* AppNamespace;
     const records = new Map(
       (yield* projectStores(storageRoot)).map(
         ({ workspace, storage }) =>
@@ -108,7 +108,10 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
           directory === global || id === path.basename(none)
             ? undefined
             : records.get(id);
-        const database = path.join(directory, storeName);
+        const database = path.join(
+          directory,
+          storeFileName(namespace, directory === global ? 'global' : 'project'),
+        );
         if (record === undefined || (yield* fs.exists(record.root))) {
           asides.push(...(yield* asideCopies(database)));
           return;
@@ -159,7 +162,7 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
     inventory: Pick<StorageInventory, 'orphans' | 'asides'>,
   ) {
     const fs = yield* FileSystem.FileSystem;
-    const storeName = storeFileName(yield* AppNamespace);
+    const namespace = yield* AppNamespace;
     const fresh = yield* readStorageInventory(storageRoot);
     const listed = new Set([
       ...fresh.orphans.map(({ directory }) => directory),
@@ -173,13 +176,21 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
             outcome: 'failed' as const,
             message: `no longer listed in the inventory of ${storageRoot}; left in place`,
           };
-        const database = path.join(target, storeName);
-        if (
-          store &&
-          (yield* fs.exists(database)) &&
-          (yield* storeOpenElsewhere(database)) === 'open'
-        )
-          return { path: target, outcome: 'kept' as const };
+        if (store) {
+          // Removing an orphan removes its entire directory. An older host may
+          // still hold the project database it created there.
+          for (const file of [
+            storeFileName(namespace, 'project'),
+            `${namespace}.db`,
+          ]) {
+            const database = path.join(target, file);
+            if (
+              (yield* fs.exists(database)) &&
+              (yield* storeOpenElsewhere(database)) === 'open'
+            )
+              return { path: target, outcome: 'kept' as const };
+          }
+        }
         yield* fs.remove(target, { recursive: store, force: !store });
         return { path: target, outcome: 'deleted' as const };
       }).pipe(

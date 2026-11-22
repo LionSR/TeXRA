@@ -402,7 +402,9 @@ process.stdin.on('end', function answer() {
     const key = existsSync(dir)
       ? readdirSync(dir).find((name) => name.startsWith('project-'))
       : undefined;
-    return key === undefined ? null : path.join(dir, key, 'texra.db');
+    return key === undefined
+      ? null
+      : path.join(dir, key, 'texra.project-v1.db');
   };
   // `texra serve` in the foreground, as a window's service, for `use`,
   // which runs its client commands (`texra tasks`) and calls procedures

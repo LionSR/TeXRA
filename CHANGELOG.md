@@ -334,8 +334,9 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   surface is `@texra-ai/worldline/plugins` and the built-in plugins are
   `@texra-ai/worldline/builtins`. The store file and the environment
   variables it reads are named after the embedding app's settings namespace
-  (`<namespace>.db`, `<NAMESPACE>_APPROVAL_POLICY`). `@texra-ai/llm` is its
-  model access. Both need Node.js 22.22.2 or 24.15 and Effect 4.1.
+  (`<namespace>.project-v1.db`, `<NAMESPACE>_APPROVAL_POLICY`). Project
+  history starts fresh with v1 data rows. Earlier development builds'
+  histories stay in their original files. `@texra-ai/llm` is its model access. Both need Node.js 22.22.2 or 24.15 and Effect 4.1.
 - **Smaller additions.** Filters match every word in any order. More Unicode
   math converts to LaTeX, in `gather`, `multline`, `alignat`, `flalign` and
   `eqnarray` too. The VS Code LaTeX commands accept `.ltx` and `.latex`

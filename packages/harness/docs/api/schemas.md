@@ -1690,6 +1690,14 @@ Where a program comes from ({@link programOrigin}).
 type ProgramOrigin = 'listed' | 'installed' | 'own';
 ```
 
+## PROJECT_STORE_FORMAT
+
+The project history format, shared by its filename and hosts that attach to a running service.
+
+```ts
+const PROJECT_STORE_FORMAT: "project-v1"
+```
+
 ## ProposalEdit
 
 A proposal approval's changes ({@link ProposalEditSchema}).

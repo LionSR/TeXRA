@@ -247,7 +247,9 @@ function openedToolEdit(dataRoot: string, runId: string): string | undefined {
   if (project === undefined) return undefined;
   // The service holds the store: its rows are read from a copy.
   return withStoreCopy(join(storage, project), (copy) => {
-    const db = new DatabaseSync(join(copy, 'texra.db'), { readOnly: true });
+    const db = new DatabaseSync(join(copy, 'texra.project-v1.db'), {
+      readOnly: true,
+    });
     try {
       const row = db
         .prepare(
