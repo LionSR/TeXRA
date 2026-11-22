@@ -15,6 +15,7 @@ import {
 } from 'effect';
 
 import type { ToolDefinition } from '@shared/schemas';
+import { formatWordList } from '@utils/text/stringUtils';
 
 /** A JSON Schema node as a provider's function-calling API reads it. */
 export interface JSONSchemaObject {
@@ -80,9 +81,6 @@ function splitField(schema: JSONSchemaObject): {
     nullable: acceptsNull,
   };
 }
-
-/** "a", "a or b", "a, b, or c": the discriminator values a field is used with. */
-const DISJUNCTION = new Intl.ListFormat('en', { type: 'disjunction' });
 
 /** `schema` that also accepts `null`. */
 const nullable = (schema: JSONSchemaObject): JSONSchemaObject => ({
@@ -174,8 +172,9 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     if (discriminator === undefined) return texts.join(' | ') || undefined;
     return [...byText]
       .map(([text, group]) => {
-        const values = DISJUNCTION.format(
+        const values = formatWordList(
           group.map(({ index }) => valueOf(index)),
+          'or',
         );
         return `With ${discriminator.name} ${values}${text === '' ? '.' : `: ${text}`}`;
       })

@@ -1,7 +1,7 @@
 import { Text } from 'ink';
 import { useState } from 'react';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { formatWordList, toErrorMessage } from '@texra-ai/harness/schemas';
 import { tryOpenBrowser } from '@cli/runtime/models/browser';
 import { BACK_HINT } from '@cli/tui/ui/KeyHints';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
@@ -69,7 +69,7 @@ function buildGitHubTokenActionItems(
 
 function statusHint(status: CredentialOrigin | undefined): string {
   if (status === 'env') {
-    return `A token is already available from ${GITHUB_TOKEN_ENV_VARS.join(' or ')}. Setting one here overrides it.`;
+    return `A token is already available from ${formatWordList(GITHUB_TOKEN_ENV_VARS, 'or')}. Setting one here overrides it.`;
   }
   return `Needs repo for private repos, public_repo for public. Or export ${GITHUB_TOKEN_ENV_VARS.join(' / ')}.`;
 }

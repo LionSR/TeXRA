@@ -30,6 +30,7 @@ import { envFlag } from '@texra-ai/harness/node';
 import {
   extractErrorMessage,
   formatResultCount,
+  formatWordList,
   toErrorMessage,
   NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
@@ -116,9 +117,10 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
 
 /** The opt-out variables as a person sets them, for the surfaces that say
  *  how to turn usage logging off. */
-export const USAGE_LOGGING_ENV_OPT_OUT = TELEMETRY_OPT_OUT_ENV_VARS.map(
-  (name) => `${name}=1`,
-).join(' or ');
+export const USAGE_LOGGING_ENV_OPT_OUT = formatWordList(
+  TELEMETRY_OPT_OUT_ENV_VARS.map((name) => `${name}=1`),
+  'or',
+);
 
 /** The variable that opts usage logging out, in the process's environment
  *  or in the recording run's (its project's `.env` over the process's):
