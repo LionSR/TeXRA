@@ -4,13 +4,7 @@
 // interaction port), so the TUI under test renders the same `SessionView` a
 // live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -96,7 +90,6 @@ import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
@@ -411,7 +404,6 @@ function parseList(value: string | undefined): string[] {
 
 const HARNESS_VISIBLE_AGENTS = parseList(process.env.HARNESS_VISIBLE_AGENTS);
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
-const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -439,23 +431,6 @@ if (!harnessRoots) {
   throw new Error(
     'The TUI harness platform init installed no workspace roots.',
   );
-}
-// Seed workspace-storage memory files so `/memory` has rows to list. Files
-// get descending mtimes in list order, so the first name is the newest row
-// and the listing order is deterministic.
-if (HARNESS_MEMORY_FILES.length > 0) {
-  const memoryRoot = path.join(
-    harnessRoots.storage,
-    WORKSPACE_STORAGE_LAYOUT.memory,
-  );
-  const newestEpochSeconds = Date.now() / 1000;
-  HARNESS_MEMORY_FILES.forEach((name, index) => {
-    const filePath = path.join(memoryRoot, name);
-    mkdirSync(path.dirname(filePath), { recursive: true });
-    writeFileSync(filePath, `Harness memory ${name}.\n`);
-    const mtime = newestEpochSeconds - index * 60;
-    utimesSync(filePath, mtime, mtime);
-  });
 }
 // The persistent session the platform opened over the harness roots,
 // and its internal owners, which the fixtures seed rows through: the same

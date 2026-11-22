@@ -272,7 +272,7 @@ Slash commands inside the session:
 - `/skills`: list available skills and apply one to your next request.
 - `/resume`: restore a stored execution (`/resume all` continues every interrupted task).
 - `/rename <title>`: rename the focused task.
-- `/help`: list every slash command, including `/agent`, `/models`, `/key`, `/status`, `/plan`, `/memory`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
+- `/help`: list every slash command, including `/agent`, `/models`, `/key`, `/status`, `/plan`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
 - `/tasks`: list tasks running in the [background service](#background-service) across every project. Picking one attaches to it live: Enter sends a follow-up, approval requests appear inline, and Esc detaches while the task keeps running.
 
 `texra chat` requires an interactive terminal. For scripts and CI, use `texra run <program | agent>` with `--print` or `--output-format json|ndjson`:
@@ -408,7 +408,7 @@ texra run my-programs:todo-list --input paper.tex
 
 An agent can also write a program for itself. A file it creates with the `memory` tool at `/memories/programs/<name>.js` is the program `own:<name>` from its next step, with no restart and nothing to install, and it stays for later conversations in the same project. The file has the form of a plugin's program: the two declarations, then the default export. `texra run own:<name> --input paper.tex` starts it too.
 
-- **Where it lives**: in the project's [memory](./memory.md), beside the notes agents save, not in the repository, so a cloned project brings none. `texra memory list` and the Memory tab show the files; delete one to remove its program. Programs load whether or not memory is enabled for chat agents: that setting decides only whether a chat is handed the `memory` tool.
+- **Where it lives**: in the project's [memory](./memory.md), beside the notes agents save, not in the repository, so a cloned project brings none. The Memory tab's **Open memory folder** shows the files; delete one to remove its program. Programs load whether or not memory is enabled for chat agents: that setting decides only whether a chat is handed the `memory` tool.
 - **Trust**: nobody reviews such a program, because it can do nothing the agent could not do itself. It runs in the script sandbox, is offered only the tools it lists, and those tools follow your plugin switches and approval policy. Unlike a plugin's program, each agent or program it starts is asked about, as one a model's script starts is; where no approval prompt can show (`--approval-policy never`), the tools that ask are withheld from it. No plugin can be named `own`.
 - **Listing**: an agent that can start programs is told of the first 20 of them by name; the others still start by name. A file that does not begin with the two declarations is refused by name, and the others load.
 
@@ -605,14 +605,6 @@ texra models show deepseek/deepseek-v4-pro
 texra models enabled
 texra models enable xai/grok-4.7
 texra models disable xai/grok-4.7
-```
-
-Inspect the notes agents have stored for this workspace (see
-[Memory](./memory.md)):
-
-```bash
-texra memory list
-texra memory show memories/<file>
 ```
 
 ## Workspace defaults

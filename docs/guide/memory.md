@@ -1,6 +1,5 @@
 <script setup>
 import MemoryItemAnatomy from '../.vitepress/components/MemoryItemAnatomy.vue';
-import CliMemoryHero from '../.vitepress/components/CliMemoryHero.vue';
 </script>
 
 # Memory
@@ -72,12 +71,6 @@ updated. For each note you get:
 The toolbar above the list has **Refresh memories** and **Open memory folder**. Open memory folder reveals the on-disk `memories/` directory in your file explorer, useful if you want to edit notes by hand or check them into a side repo.
 
 <MemoryItemAnatomy />
-
-The same store is inspectable from a terminal:
-
-<CliMemoryHero />
-
-<p class="hero-caption"><code>memory list</code> prints each note with its pinned state, size, and last writer; <code>memory show</code> previews one note. In chat, <code>/memory</code> does the same.</p>
 
 ## Memory is shared across the run
 

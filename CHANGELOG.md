@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The `texra memory` commands and the chat's `/memory` are removed.**
+  The notes an agent saves are ordinary Markdown files: open them from the
+  Memory tab's **Open memory folder**, or in the project's storage directory
+  under `memories/`.
+
 - **Two SDK shapes lose a field nothing read.** `ownKeyCredential` on
   `@texra-ai/harness/host` resolves to `{ bearer, endpoint }`: the credential
   no longer carries its provider or route, since a binding keys its retry
