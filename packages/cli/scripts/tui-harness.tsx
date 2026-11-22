@@ -42,7 +42,7 @@ import {
 import {
   acceptsFollowUp,
   AgentConfigSchema,
-  APPROVAL_POLICY_DEFAULT,
+  APPROVAL_POLICY_SETTING,
   descendantRuns,
   MESSAGE_TYPES,
   parseApprovalPolicy,
@@ -178,6 +178,7 @@ const SHOW_SCRIPT_RUNNING = process.env.HARNESS_SCRIPT_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_MULTI_AGENT_DISABLED =
   process.env.HARNESS_MULTI_AGENT_DISABLED === '1';
+const HARNESS_APPROVAL_POLICY = 'ask';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
@@ -272,7 +273,7 @@ const HARNESS_RESOURCES_PATH = await Effect.runPromise(
 );
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
-  approvalPolicy: APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: HARNESS_APPROVAL_POLICY,
   config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
   commandName: 'texra',
   configWarnings: [],
@@ -438,6 +439,14 @@ if (!harnessRoots) {
     'The TUI harness platform init installed no workspace roots.',
   );
 }
+// These interactive scenarios exercise the approval and rejection controls.
+await harnessRuntime.runPromise(
+  harnessRoots.config.update(
+    APPROVAL_POLICY_SETTING.key,
+    HARNESS_APPROVAL_POLICY,
+    'local',
+  ),
+);
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
 // get descending mtimes in list order, so the first name is the newest row
 // and the listing order is deterministic.
@@ -1451,7 +1460,7 @@ sessionMeta.set({
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
-  approvalPolicy: APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: HARNESS_APPROVAL_POLICY,
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1797,7 +1806,7 @@ function appendHarnessTranscript(
 
 /** The harness chat's launch policy, which `/approval` sets, as the chat's
  *  does; it never writes the project's. */
-let harnessPolicy: ApprovalPolicy = APPROVAL_POLICY_DEFAULT;
+let harnessPolicy: ApprovalPolicy = HARNESS_APPROVAL_POLICY;
 const harnessApprovalPolicy = (): ApprovalPolicy => harnessPolicy;
 
 function setHarnessApprovalPolicy(policy: ApprovalPolicy): void {
