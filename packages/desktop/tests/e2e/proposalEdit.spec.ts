@@ -203,6 +203,8 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
         'openai/gpt-6.1-sol',
         '--instruction',
         'Propose the revision',
+        '--approval-policy',
+        'ask',
         '--output-format',
         'json',
         '--cwd',

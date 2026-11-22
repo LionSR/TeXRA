@@ -119,7 +119,7 @@ const OutputFormat = GlobalFlag.Setting('output-format')({
 const ApprovalPolicy = GlobalFlag.Setting('approval-policy')({
   flag: Flag.Literals('approval-policy', APPROVAL_POLICIES).pipe(
     Flag.withDescription(
-      'Privileged tool actions: never (deny all), ask (prompt; default), or yolo (auto-approve)',
+      'Privileged tool actions: never (deny all), ask (prompt), or yolo (auto-approve by default)',
     ),
     Flag.optional,
   ),

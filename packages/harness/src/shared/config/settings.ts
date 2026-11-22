@@ -212,16 +212,21 @@ function invalidStoredMessage(key: string, cause: string): string {
   return `Ignoring invalid persisted value for setting "${key}": ${cause}`;
 }
 
+function valueAfterInvalid<A>(
+  row: Pick<SettingRow<A>, 'schema' | 'invalidValue'>,
+): A {
+  return row.invalidValue ?? Schema.decodeUnknownSync(row.schema)(undefined);
+}
+
 const valueOrDefault = (
-  key: string,
-  schema: Schema.Codec<unknown, unknown>,
+  row: Pick<SettingRow, 'key' | 'schema' | 'invalidValue'>,
   stored: StoredSetting,
 ): Effect.Effect<unknown> =>
   stored.kind === 'value'
     ? Effect.succeed(stored.value)
-    : Effect.logWarning(invalidStoredMessage(key, stored.cause)).pipe(
+    : Effect.logWarning(invalidStoredMessage(row.key, stored.cause)).pipe(
         withLogChannel(CHANNEL),
-        Effect.map(() => Schema.decodeUnknownSync(schema)(undefined)),
+        Effect.map(() => valueAfterInvalid(row)),
       );
 
 function inspectEntry(
@@ -275,7 +280,7 @@ function get<A>(
   const entry = entryOf(stores.config.catalog, row);
   // cast: the catalog's row under this key has `row`'s schema, which parsed it.
   return Effect.flatMap(inspectEntry(entry, stores), (stored) =>
-    valueOrDefault(entry.key, entry.schema, stored),
+    valueOrDefault(entry, stored),
   ) as Effect.Effect<A, StateReadFailed>;
 }
 
@@ -315,7 +320,7 @@ function getConfig<A>(config: ConfigProvider, row: SettingRow<A>): A {
   // Direct sink write: config reads are synchronous, and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
   writeLogLine(CHANNEL, invalidStoredMessage(entry.key, stored.cause));
-  return defaultOf(config.catalog, row);
+  return valueAfterInvalid(entry) as A;
 }
 
 /** What a row reads as while its key is absent: the default its catalog
@@ -392,7 +397,7 @@ function state<A>(
 ): Effect.Effect<A, StateReadFailed> {
   // cast: `valueOrDefault` returns the value the key's schema parsed.
   return Effect.flatMap(store.get(key.key), (raw) =>
-    valueOrDefault(key.key, key.schema, classifyStored(key.schema, raw)),
+    valueOrDefault(key, classifyStored(key.schema, raw)),
   ) as Effect.Effect<A, StateReadFailed>;
 }
 

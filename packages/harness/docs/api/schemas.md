@@ -178,7 +178,7 @@ dropdown from a literal-list row, and the tolerant spelling belongs to
 reaches this row.
 
 ```ts
-const APPROVAL_POLICY_SETTING: { readonly key: "approvalPolicy"; readonly slot: "config"; readonly schema: withDecodingDefault<Literals<readonly ["never", "ask", "yolo"]>, never>; readonly title: "Approval policy"; readonly description: "Whether agents ask before running shell commands and editing files."; readonly configTarget: "local"; readonly choices: { readonly never: { readonly label: "Block"; }; readonly ask: { readonly label: "Ask"; }; readonly yolo: { readonly label: "Auto-approve"; }; }; }
+const APPROVAL_POLICY_SETTING: { readonly key: "approvalPolicy"; readonly slot: "config"; readonly schema: withDecodingDefault<Literals<readonly ["never", "ask", "yolo"]>, never>; readonly invalidValue: "ask"; readonly title: "Approval policy"; readonly description: "Whether agents ask before running shell commands and editing files."; readonly configTarget: "local"; readonly choices: { readonly never: { readonly label: "Block"; }; readonly ask: { readonly label: "Ask"; }; readonly yolo: { readonly label: "Auto-approve"; }; }; }
 ```
 
 ## ApprovalBypasser
@@ -2338,6 +2338,8 @@ One setting, whose schema decodes its stored value to an `A`.
 
 ```ts
 interface SettingRow<A = unknown> extends StateKey<A> {
+  /** Value to use after warning about an invalid stored setting, when an absent default could grant more access. */
+  readonly invalidValue?: A;
   /** Short sentence-case label every settings UI shows for the row. */
   readonly title: string;
   /** Human-readable description, shared across every host that renders it. */

@@ -6,10 +6,11 @@
  * `TEXRA_NO_SERVICE` is set or on Windows, which the link answers as it
  * answers none running for a caller that starts none. One service serves a storage root at a time: a
  * service of an older build, or of another protocol and no newer build, is
- * retired (it drains its running tasks and exits), and the caller waits
+ * retired on initial connection (it drains its running tasks and exits), and the caller waits
  * for its socket to close before starting its own; one already draining
  * is waited for the same way. One of a newer build speaking another
- * protocol is left running and refused, and the caller stays in process.
+ * protocol is left running and refused. A reconnecting client leaves any
+ * live service running and reattaches when a compatible one is ready.
  */
 import { spawn } from 'node:child_process';
 import { closeSync, existsSync, openSync } from 'node:fs';
@@ -149,9 +150,9 @@ const ServiceFailureSchema = Schema.Union([
    *  here (`TEXRA_NO_SERVICE`, Windows), or none runs and the caller starts
    *  none. A caller that works in process has nothing more to say. */
   Schema.Struct({ kind: Schema.Literal('none') }),
-  /** The running service is a newer build speaking another protocol: it
-   *  stays until it exits, so waiting does not bring this client back. */
-  Schema.Struct({ kind: Schema.Literal('newer') }),
+  /** The running service speaks another protocol and this client must leave it
+   *  running. */
+  Schema.Struct({ kind: Schema.Literal('incompatible') }),
   /** The running service answered the hello with something this build
    *  cannot read, or refused the hello itself: a build from before the
    *  digest. Its socket, for the one procedure every build keeps,
@@ -536,7 +537,7 @@ export const stopRunningService: Effect.Effect<
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
     reason: `The running TeXRA service (${info.version}, pid ${info.pid}) is newer than this TeXRA (${BUILD_VERSION}) and speaks another protocol. Update TeXRA, or stop the service with \`texra service stop\`.`,
-    failure: { kind: 'newer' },
+    failure: { kind: 'incompatible' },
   });
 
 /** How a caller links: whether it starts a service when none runs (a
@@ -561,9 +562,11 @@ interface LinkPolicy {
  */
 const ensureService = Effect.fn('server.ensureService')(function* (
   { storageRoot, start }: ServiceStart,
-  { startsService, waiting }: LinkPolicy,
+  startsService: boolean,
   /** Runs whenever the connection ends (see {@link connectService}). */
   onDisconnect: Effect.Effect<void>,
+  // Only a newly opened host may retire the running service.
+  announceRetirement?: LinkPolicy['waiting'],
 ): Effect.fn.Return<
   ServiceConnection,
   ServiceUnavailable,
@@ -571,13 +574,27 @@ const ensureService = Effect.fn('server.ensureService')(function* (
 > {
   // A service from before the digest cannot read this hello: it is older
   // by construction, and `service.stop` is the one procedure it shares.
-  const probed = yield* probeRecordedService.pipe(
+  const probe = probeRecordedService.pipe(
+    Effect.tap((info) => {
+      if (info === null || compatible(info)) return Effect.void;
+      if (isNewer(info)) return Effect.fail(newerService(info));
+      return announceRetirement
+        ? Effect.void
+        : Effect.fail(
+            new ServiceUnavailable({
+              reason: WINDOW_OUTDATED,
+              failure: { kind: 'incompatible' },
+            }),
+          );
+    }),
+  );
+  const probed = yield* probe.pipe(
     Effect.map((found) => ({ found, replaced: false })),
     Effect.catch((error) => {
       const { failure } = error;
-      return failure.kind !== 'unreadable'
+      return !announceRetirement || failure.kind !== 'unreadable'
         ? Effect.fail(error)
-        : waiting(
+        : announceRetirement(
             "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
           ).pipe(
             Effect.andThen(
@@ -597,13 +614,14 @@ const ensureService = Effect.fn('server.ensureService')(function* (
   let info: ServiceInfo | null = probed.found;
   // Whether this client retired an older service, and so starts its own.
   let { replaced } = probed;
-  if (info !== null && isNewer(info)) return yield* newerService(info);
-  if (info !== null && (isOlder(info) || info.draining)) {
+  if (!announceRetirement && info?.draining)
+    return yield* new ServiceUnavailable({ reason: SERVICE_OFFLINE });
+  if (announceRetirement && info !== null && (isOlder(info) || info.draining)) {
     const leaving = info;
     replaced = isOlder(leaving);
     const tasks = formatResultCount(leaving.running, 'running task');
     // With no task running it exits at once: nothing to wait for.
-    yield* (leaving.running > 0 ? waiting : Effect.logInfo)(
+    yield* (leaving.running > 0 ? announceRetirement : Effect.logInfo)(
       leaving.draining
         ? `The TeXRA service ${leaving.version} (pid ${leaving.pid}) is finishing its ${tasks} before it exits; waiting for it.`
         : `Retiring the TeXRA service ${leaving.version} (protocol ${leaving.protocol}): it finishes its ${tasks} and exits, then this build's starts.`,
@@ -646,18 +664,19 @@ const ensureService = Effect.fn('server.ensureService')(function* (
       failure: { kind: 'startFailed' },
     });
     const lastRefusal = yield* Ref.make(notYetUp);
-    const probed = probeRecordedService.pipe(
+    const probed = probe.pipe(
       Effect.retry({ while: (error) => error.failure.kind === 'unanswered' }),
-      Effect.flatMap((answer) => {
-        if (answer !== null && isNewer(answer))
-          return Effect.fail(newerService(answer));
-        return answer !== null && compatible(answer) && !answer.draining
+      Effect.flatMap((answer) =>
+        answer !== null && compatible(answer) && !answer.draining
           ? Effect.succeed(answer)
-          : Effect.fail(notYetUp);
-      }),
+          : Effect.fail(notYetUp),
+      ),
       Effect.tapError((refusal) => Ref.set(lastRefusal, refusal)),
       Effect.catchIf(
-        (error) => error.failure.kind !== 'newer',
+        (error) =>
+          error.failure.kind !== 'incompatible' &&
+          (announceRetirement !== undefined ||
+            error.failure.kind !== 'unreadable'),
         () => Effect.succeed(null),
       ),
     );
@@ -707,7 +726,7 @@ export const SERVICE_OFFLINE =
 /** What a window is told when a newer TeXRA's service replaced the one it
  *  spoke to: it cannot reconnect until it is reloaded or updated. */
 const WINDOW_OUTDATED =
-  'This window is older than the running TeXRA service; reload or update TeXRA.';
+  'The running TeXRA service uses a different protocol. Reopen this terminal session or reload the window using the updated build.';
 
 /** A value as its readers follow it: what it is now, and each value from
  *  the current one on. */
@@ -834,10 +853,8 @@ const RESTARTS = RECONNECT.pipe(Schedule.upTo({ times: FAILED_STARTS - 1 }));
  * gone again within that window) is not started again: the link stays
  * away for good, saying what failed, where the service's log is and what
  * to do. One that ran longer than its start window and then went away is
- * restarted as ever. A first reach that must
- * wait for an older service to finish its tasks says so through `waiting`,
- * the host's way to tell its user; a later one says it as the link's
- * `away`.
+ * restarted as ever. On startup, `waiting` reports a drain. On reconnect,
+ * an incompatible service stays running and the link tells the user to reopen.
  */
 export const linkService = Effect.fn('server.linkService')(function* (
   start: ServiceStart,
@@ -859,21 +876,23 @@ export const linkService = Effect.fn('server.linkService')(function* (
     });
   const connect = Effect.fn('connect')(function* (
     begin: ServiceStart,
-    beginPolicy: LinkPolicy,
+    startsService: boolean,
+    announceRetirement?: LinkPolicy['waiting'],
   ) {
     const scope = yield* Scope.make();
     const lost = yield* Deferred.make<void>();
     const connection = yield* ensureService(
       begin,
-      beginPolicy,
+      startsService,
       Effect.asVoid(Deferred.succeed(lost, undefined)),
+      announceRetirement,
     ).pipe(
       Scope.provide(scope),
       Effect.onError(() => Scope.close(scope, Exit.void)),
     );
     return { connection, lost, scope };
   });
-  let current = yield* connect(start, policy);
+  let current = yield* connect(start, policy.startsService, policy.waiting);
   // The connection the link has reached and not yet held: the first one.
   let reached: typeof current | null = current;
   const state = yield* SubscriptionRef.make<Linked<ServiceClient>>({
@@ -881,10 +900,6 @@ export const linkService = Effect.fn('server.linkService')(function* (
   });
   const awayFor = (away: string, lasting = false) =>
     SubscriptionRef.set(state, { client: null, away, lasting });
-  // While the link is down, a wait on an older service is what the
-  // window's banner says.
-  const awayWaiting = (message: string) =>
-    awayFor(message).pipe(Effect.andThen(Effect.logWarning(message)));
   const refusalTold = yield* Ref.make(false);
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => Scope.close(current.scope, Exit.void)),
@@ -897,9 +912,12 @@ export const linkService = Effect.fn('server.linkService')(function* (
     let told = '';
     return connect(
       { storageRoot: start.storageRoot, start: Effect.succeed(Effect.never) },
-      { startsService: true, waiting: awayWaiting },
+      true,
     ).pipe(
-      Effect.catch(() => connect(start, { ...policy, waiting: awayWaiting })),
+      Effect.catchIf(
+        (error) => error.failure.kind === 'startFailed',
+        () => connect(start, policy.startsService),
+      ),
       // Said once per reason: a newer protocol's service stays until it
       // exits, and the link keeps trying meanwhile.
       Effect.tapError((error) =>
@@ -907,7 +925,8 @@ export const linkService = Effect.fn('server.linkService')(function* (
           if (error.message === told) return Effect.void;
           told = error.message;
           return (
-            error.failure.kind === 'newer'
+            error.failure.kind === 'incompatible' ||
+            error.failure.kind === 'unreadable'
               ? awayFor(WINDOW_OUTDATED, true)
               : awayFor(SERVICE_OFFLINE)
           ).pipe(

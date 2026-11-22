@@ -7,6 +7,23 @@ import type { ChatLaunch } from '@texra/shared/session/surface';
 
 import { VALIDATION_AGENT, VALIDATION_SWITCH } from './models/validationSwitch';
 
+const EDITOR_TOOLS = new Set([
+  'diagnostics',
+  'inline_comment',
+  'open_pdf',
+  'invoke_command',
+  'install_vscode_extension',
+  'send_to_terminal',
+]);
+
+/** The tool declaration for a new conversation started in the terminal. */
+export function withoutEditorTools(launch: ChatLaunch): ChatLaunch {
+  return {
+    ...launch,
+    tools: launch.tools.filter((name) => !EDITOR_TOOLS.has(name)),
+  };
+}
+
 /** What {@link VALIDATION_AGENT} holds: the run, written inline. */
 const ValidationAgentJson = Schema.fromJsonString(
   Schema.Struct({
@@ -27,7 +44,7 @@ export const cliEntryAgent: Effect.Effect<ChatLaunch> = Effect.gen(
       (yield* envVar(VALIDATION_SWITCH)) === '1'
         ? yield* envVar(VALIDATION_AGENT)
         : undefined;
-    if (!written) return entryAgent();
+    if (!written) return withoutEditorTools(entryAgent());
     return Schema.decodeUnknownSync(ValidationAgentJson)(written);
   },
 );

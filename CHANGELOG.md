@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+TeXRA Desktop, CLI chat and the VS Code extension now auto-approve shell commands, file edits and agent work in projects without a saved approval policy. Projects with a saved Ask or Block policy keep that choice. The CLI still defaults to Block with `--no-input`.
+
 TeXRA 1.0. Everything below is relative to 0.40.10.
 
 ### Breaking Changes

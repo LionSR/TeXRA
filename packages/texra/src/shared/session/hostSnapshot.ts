@@ -7,11 +7,8 @@
  * harness passes literals. A schema because it crosses the bridge.
  */
 import { Schema } from 'effect';
-import {
-  getBasename,
-  ApprovalPolicySchema,
-  APPROVAL_POLICY_DEFAULT,
-} from '@texra-ai/worldline/schemas';
+import { getBasename, ApprovalPolicySchema } from '@texra-ai/worldline/schemas';
+import { TEXRA_APPROVAL_DEFAULT } from '@texra/shared/approvalPolicy';
 import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
@@ -130,7 +127,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     modelOptions: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
-    approvalPolicy: APPROVAL_POLICY_DEFAULT,
+    approvalPolicy: TEXRA_APPROVAL_DEFAULT,
     fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
     isGitRepo: false,
     recording: null,
