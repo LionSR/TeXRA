@@ -130,7 +130,7 @@ function tableColWidths(
   });
 
   // Content fits — keep the table compact (no full-width dead gaps).
-  if (natural.reduce((sum, w) => sum + w, 0) <= usable) return natural;
+  if (Num.sumAll(natural) <= usable) return natural;
 
   // Content overflows — distribute the usable width evenly and cap at `width`.
   const base = Math.floor(usable / numCols);

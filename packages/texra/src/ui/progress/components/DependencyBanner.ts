@@ -1,6 +1,7 @@
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import { formatWordList } from '@texra-ai/harness/schemas';
 import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { bannerStyles } from '@ui/styles';
@@ -11,9 +12,6 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
-
-/** Joins what TeXRA can't do: "a", "a or b", "a, b or c". */
-const EITHER_OF = new Intl.ListFormat('en-GB', { type: 'disjunction' });
 
 /**
  * The missing-tools warning: one sentence naming what is missing and what
@@ -48,17 +46,24 @@ export class DependencyBanner extends TexraElement {
         .filter((tool) => !tool.interchangeable)
         .map((tool) => tool.label),
       ...(either.length > 0
-        ? [either.map((tool) => tool.label).join(' or ')]
+        ? [
+            formatWordList(
+              either.map((tool) => tool.label),
+              'or',
+            ),
+          ]
         : []),
     ];
     const uses = [...new Set(tools.map((tool) => tool.usedFor))];
     const single = groups.length === 1 ? groups[0] : undefined;
     // One tool: its name is plain text and Install guide opens the guide.
-    // Several: each name is its own install-guide link, joined "a, b and c".
+    // Several: each name is its own install-guide link, joined as
+    // `formatWordList` joins words ("a and b", "a, b, and c").
     const last = groups.length - 1;
     const joiner = (index: number): string => {
       if (index === 0) return '';
-      return index === last ? ' and ' : ', ';
+      if (index < last) return ', ';
+      return last === 1 ? ' and ' : ', and ';
     };
     const names = single
       ? html`<bdi dir="auto">${single}</bdi>`
@@ -79,7 +84,7 @@ export class DependencyBanner extends TexraElement {
       body: html`
         <span class="message"
           >${names} ${single ? "isn't" : "aren't"} installed, so TeXRA can't
-          ${EITHER_OF.format(uses)}.</span
+          ${formatWordList(uses, 'or')}.</span
         >
         <div class="actions">
           ${

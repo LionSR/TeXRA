@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Duration, Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -78,7 +78,7 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
 
   const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
   const summary = timedOut
-    ? `"${name}" timed out after ${Math.round(input.timeout / 1000)}s`
+    ? `"${name}" timed out after ${Duration.format(Duration.millis(input.timeout))}`
     : `"${name}" exited ${exitLabel}`;
   const outputText = output.trim() ? `\n\n${output}` : '';
   // A lost capture must not read as a command that printed nothing.

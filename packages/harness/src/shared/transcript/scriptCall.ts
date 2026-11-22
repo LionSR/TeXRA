@@ -1,4 +1,4 @@
-import { Record as EffectRecord } from 'effect';
+import { Number as Num, Record as EffectRecord } from 'effect';
 import { type ScriptTally } from '@shared/schemas';
 import { formatClippedList, joinFacts } from '@utils/text/stringUtils';
 
@@ -34,7 +34,7 @@ const TALLY_OUTCOMES = EffectRecord.keys({
 
 /** How many calls a tally counts: every call ended under one outcome. */
 export const tallyTotal = (tally: ScriptTally): number =>
-  TALLY_OUTCOMES.reduce((sum, key) => sum + tally[key], 0);
+  Num.sumAll(TALLY_OUTCOMES.map((key) => tally[key]));
 
 /** `6 ok · 1 failed · 1 cancelled` — the one spelling of a tally, by outcome,
  *  so no count can read as "done" beside a failure it includes. */

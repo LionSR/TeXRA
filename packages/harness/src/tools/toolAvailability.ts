@@ -71,7 +71,7 @@ const CHANNEL = 'toolAvailability';
  * waiting on one, until the root's last holder closed. A group that misses it
  * reports `unknown`, like any other probe failure.
  */
-const GROUP_PROBE_TIMEOUT_MS = 20_000;
+const GROUP_PROBE_TIMEOUT = Duration.seconds(20);
 
 // ============================================================
 // Switches
@@ -305,11 +305,11 @@ const probeToolGroup = (
       statusDetail,
     })),
     Effect.timeoutOrElse({
-      duration: Duration.millis(GROUP_PROBE_TIMEOUT_MS),
+      duration: GROUP_PROBE_TIMEOUT,
       orElse: () =>
         Effect.fail(
           new Cause.TimeoutError(
-            `timed out after ${GROUP_PROBE_TIMEOUT_MS / 1000}s`,
+            `timed out after ${Duration.format(GROUP_PROBE_TIMEOUT)}`,
           ),
         ),
     }),

@@ -1,6 +1,6 @@
 // Third-party imports
 import { diffLines, structuredPatch, type StructuredPatchHunk } from 'diff';
-import { Effect, Number as Num } from 'effect';
+import { Duration, Effect, Number as Num } from 'effect';
 
 // Local imports - common
 import { withLogChannel } from '@logger/effectLog';
@@ -180,7 +180,7 @@ export function buildDiffHunks(oldText: string, newText: string): DiffHunks {
   return {
     hunks: [hunk],
     timeout:
-      `Diff exceeded ${DIFF_TIMEOUT_MS}ms ` +
+      `Diff exceeded ${Duration.format(Duration.millis(DIFF_TIMEOUT_MS))} ` +
       `(${oldLines.length} → ${newLines.length} lines); ` +
       `reporting it as a whole-file replacement.`,
   };

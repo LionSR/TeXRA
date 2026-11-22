@@ -886,6 +886,18 @@ delivery and summary and a shell command's result read it.
 function formatWallTime(durationMs: number): string
 ```
 
+## formatWordList
+
+Items as an English list joined by `and` or `or` (`a`, `a or b`,
+`a, b, or c`), so every sentence that names several things reads the same.
+
+```ts
+function formatWordList(
+  items: Iterable<string>,
+  conjunction: keyof typeof WORD_LISTS,
+): string
+```
+
 ## generateRunId
 
 Mint a run id: 12 lowercase hex chars (48 bits of entropy), the first

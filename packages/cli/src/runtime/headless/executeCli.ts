@@ -1,6 +1,7 @@
 import {
   Cause,
   Deferred,
+  Duration,
   Effect,
   Exit,
   Fiber,
@@ -297,7 +298,7 @@ export const executeCliConfig: (
           duration: SESSION_CLOSE_DEADLINE_MS,
           orElse: () =>
             sayShutdownFailure(
-              `The run did not finish stopping within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+              `The run did not finish stopping within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
               `run ${launchRunId} is left as its rows stand; \`${runContext.commandName} history show ${launchRunId}\` says whether it can be resumed`,
             ),
         }),
