@@ -105,7 +105,7 @@ const CLEAR_SCROLLBACK = `${ESC}[3J`;
 const PLUGINS_FORM_KEYS = ['/plugins', { input: '\r', until: 'switch on/off' }];
 const CONFIG_FORM_KEYS = [
   '/config',
-  { input: '\r', until: 'Agents — workspace agents' },
+  { input: '\r', until: 'Tasks and agents' },
 ];
 // `/login`: its rows show at once, saying "Loading current preference"
 // until the account state loads; a loaded row says the state. The harness
@@ -815,15 +815,14 @@ const SCENARIOS = [
   {
     name: 'config-form',
     env: { HARNESS_ENTRIES: '4' },
-    keys: [...CONFIG_FORM_KEYS, '\r'],
+    keys: [...CONFIG_FORM_KEYS, DOWN, DOWN, '\r'],
     frame: 'viewport',
     expect: [
-      '/config · Agents',
-      'All agents',
-      'Default chat agent',
-      'Custom selection',
+      '/config · Tasks and agents',
+      'Agents at once',
+      'Let a task stop its agents',
       '↑/↓ navigate',
-      'Enter select',
+      'Enter toggle / edit / open',
       'Esc back',
     ],
     unexpect: [
@@ -838,17 +837,16 @@ const SCENARIOS = [
   {
     name: 'config-category-back-responsive',
     env: { HARNESS_ENTRIES: '4' },
-    // Reuses the shared Select instance across category -> list -> category.
-    // `/config` leads with three action rows ("Agents", "API keys", "GitHub
+    // Reuses the shared Select instance across linked form -> list ->
+    // category. `/config` leads with two action rows ("API keys", "GitHub
     // token") before the setting categories, and "Git and worktrees" is the
-    // fourth category, so it is the seventh row (index 6). The keystrokes walk
+    // fourth category, so it is the sixth row (index 5). The keystrokes walk
     // the list with ↑/↓ so the scenario does not depend on which hotkey a row
     // happens to get.
     keys: [
       ...CONFIG_FORM_KEYS,
-      { input: '\r', until: 'All agents' },
+      { input: '\r', until: 'Add provider API key' },
       ESC,
-      DOWN,
       DOWN,
       DOWN,
       DOWN,
@@ -868,7 +866,7 @@ const SCENARIOS = [
       'Esc back',
     ],
     unexpect: [
-      '/config · Agents',
+      'Add provider API key',
       'No configurable settings are available here yet.',
       'Platform not initialized',
       '/config · error',
@@ -1003,10 +1001,11 @@ const SCENARIOS = [
   {
     name: 'skills-form-buffered-hotkey',
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
-    // As `model-form-buffered-hotkey`: the hotkey lands while the list loads.
-    keys: ['/skills', { input: '\r', untilRead: true }, '21'],
+    // As `model-form-buffered-hotkey`: the hotkey lands while the list loads,
+    // as one chunk whose first key picks the harness's one seeded skill.
+    keys: ['/skills', { input: '\r', untilRead: true }, '12'],
     frame: 'viewport',
-    expect: ['Harness skill selected:'],
+    expect: ['Harness skill selected: proof-audit.'],
     unexpect: [
       'No skills found',
       '/skills · error',
@@ -1189,9 +1188,9 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '… 5 previous rows',
-      '› /status    Show task details and cost',
+      "› /plan      Read the focused agent's work plan",
       '/memory',
-      '… 7 more rows',
+      '… 6 more rows',
       'Esc close',
     ],
   },
