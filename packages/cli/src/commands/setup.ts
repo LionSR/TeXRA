@@ -33,7 +33,7 @@ function runSetup(context: CliContext) {
 
 export const setupCommand = cliCommand('setup', {
   description:
-    'Guided setup with the setup agent: environment, agents, and your first task (a ChatGPT or Grok subscription, or an API key, first)',
+    'Guided setup in a chat: environment checks and your first task (a ChatGPT or Grok subscription, or an API key, first)',
   config: {},
   // The same chat platform as `texra chat`.
   platform: { startsService: true, presentsStoreMovedAside: true },
@@ -42,7 +42,7 @@ export const setupCommand = cliCommand('setup', {
   Command.withExamples([
     {
       command: 'texra setup',
-      description: 'agent-led setup: environment, agents, first task',
+      description: 'guided setup: environment checks, first task',
     },
     {
       command: 'texra auth chatgpt login',

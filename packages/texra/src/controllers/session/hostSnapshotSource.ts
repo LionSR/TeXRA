@@ -4,7 +4,7 @@
  * follows a change and on every subscribe, so a surface never asks for a
  * catalog and never holds a stale one. Every producer is a read the host
  * already owns; nothing here is a fact about a run (`SessionView`) or a
- * choice of the user's (`Surface`). The loadModels, the file lists, the recent
+ * choice of the user's (`Surface`). The model options, the file lists, the recent
  * commits and the onboarding funnel are host-neutral; the host injects its
  * workspace-root picker and which notices it shows (a VS Code window shows
  * the lost-credential banner and offers to start a project; the desktop
@@ -14,7 +14,7 @@
  * and then writes its own fields, so the last write of a field wins and no
  * producer waits on another; the snapshot is the inputs mapped, so a field
  * derived from several inputs (the funnel, a banner's visibility) is never
- * stored. The catalogs and the credential follow the app signals that
+ * stored. The model options and the credential follow the app signals that
  * announce their changes, written by any writer in the process, so no host
  * or settings page pushes a reload; the approval policy is read live as
  * each snapshot is mapped.
@@ -110,9 +110,9 @@ interface HostSnapshotSourceOptions {
 /** What the producers write; the snapshot is {@link snapshotOf} of it. */
 interface Inputs {
   /** False until the first {@link HostSnapshotSource.refresh} has finished,
-   *  so the shell never paints the empty catalogs. */
+   *  so the shell never paints an empty model list. */
   readonly loaded: boolean;
-  readonly catalogs: Pick<HostSnapshot, 'modelOptions'>;
+  readonly modelOptions: HostSnapshot['modelOptions'];
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
   readonly fileOptions: FileOptions;
   readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
@@ -190,9 +190,9 @@ const keepOnFailure =
     );
 
 /**
- * The project's display record and the loadModels, assembled per session for
- * the caller's scope: the scope holds the followers of the onboarding flags,
- * the loadModels, the credential and the approval policy.
+ * The project's display record and the model options, assembled per session
+ * for the caller's scope: the scope holds the followers of the onboarding
+ * flags, the model options, the credential and the approval policy.
  */
 export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
   function* (
@@ -212,7 +212,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const appState = yield* AppState;
     const inputs = yield* SubscriptionRef.make<Inputs>({
       loaded: false,
-      catalogs: { modelOptions: [] },
+      modelOptions: [],
       workspaceRoots: options.workspaceRoots(),
       fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
       commits: { commits: [], isGitRepo: false },
@@ -263,13 +263,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       );
     const loadModels = yield* producer(
       'the models',
-      Effect.gen(function* () {
-        const modelOptions = yield* loadModelOptions(stores);
-        yield* SubscriptionRef.update(inputs, (s) => ({
-          ...s,
-          catalogs: { ...s.catalogs, modelOptions },
-        }));
-      }).pipe(underProjectEnv),
+      Effect.flatMap(loadModelOptions(stores), (modelOptions) =>
+        SubscriptionRef.update(inputs, (s) => ({ ...s, modelOptions })),
+      ).pipe(underProjectEnv),
     );
     const loadFiles = yield* producer(
       'the project files',
@@ -413,7 +409,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         stores.config,
         APPROVAL_POLICY_SETTING,
       ),
-      ...s.catalogs,
+      modelOptions: s.modelOptions,
       workspaceRoots: s.workspaceRoots,
       fileOptions: {
         ...s.fileOptions,

@@ -27,10 +27,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
 /** An installed plugin's agent, as its file gives it. */
-export interface PluginAgent {
+interface PluginAgent {
   /** `<plugin>:<name>`. */
   readonly name: string;
-  readonly path: string;
   readonly description?: string;
   readonly system: string;
   /** The tools it names; absent when it names none and takes the
@@ -102,7 +101,6 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     });
   const entry: PluginAgent = {
     name: `${plugin}:${parsed.success.name ?? path.basename(file, '.md')}`,
-    path: file,
     description: parsed.success.description,
     system: systemPrompt,
     ...(declared === undefined || declared.length === 0
@@ -122,7 +120,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
  * why it does not load: an enabled plugin the load holds back carries the
  * load's reason; any other is off or gone.
  */
-export const requirePluginLoads = Effect.fn('requirePluginLoads')(function* (
+const requirePluginLoads = Effect.fn('requirePluginLoads')(function* (
   agent: string,
   stores: Pick<SettingsStores, 'globalState'>,
 ) {
@@ -169,7 +167,7 @@ export const scanPluginAgents = Effect.gen(function* () {
     if (Result.isFailure(read)) {
       yield* Effect.logWarning(
         `Plugin agent ${file} is not loaded: ${read.failure.message}`,
-      ).pipe(withLogChannel('agentRegistry'));
+      ).pipe(withLogChannel('pluginAgents'));
       issues.push({ path: file, message: read.failure.message });
       continue;
     }
@@ -177,7 +175,7 @@ export const scanPluginAgents = Effect.gen(function* () {
     if (dropped.length > 0)
       yield* Effect.logWarning(
         `Agent ${entry.name} names tools this build does not have, which it is not offered: ${dropped.join(', ')}.`,
-      ).pipe(withLogChannel('agentRegistry'));
+      ).pipe(withLogChannel('pluginAgents'));
     entries.push(entry);
   }
   return { entries, issues };

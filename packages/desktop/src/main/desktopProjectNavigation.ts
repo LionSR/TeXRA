@@ -79,7 +79,6 @@ export function createProjectNavigation(options: {
       const selectedPath = yield* host.pickFolder(
         'Open Workspace Folder',
         projects.active().roots.workspace ?? app.getPath('home'),
-        ['openDirectory'],
       );
       if (!selectedPath) return;
       yield* open(selectedPath);

@@ -40,7 +40,7 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
 }
 
 // ---------------------------------------------------------------------------
-// Agent directories
+// Host resources
 // ---------------------------------------------------------------------------
 
 /**

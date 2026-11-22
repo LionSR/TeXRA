@@ -9,7 +9,6 @@ import {
   executeVscodeCommand,
   safeExecuteCommand,
 } from '@frontend/system/commandUtils';
-import { selectFolder } from '@frontend/ui/dialogs';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
@@ -114,11 +113,6 @@ export class SettingsViewProvider {
               : showDocument(() => vscode.workspace.openTextDocument(filePath)),
           revealPath: (filePath) =>
             executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
-          pickFolder: (title) =>
-            Effect.map(
-              selectFolder({ title, openLabel: 'Select Folder' }),
-              (selected) => selected ?? undefined,
-            ),
           ...progressView.window.settingsRuns,
           signInSubscription: (providerId) =>
             signInWithSubscription(roots, providerId),

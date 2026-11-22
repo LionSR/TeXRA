@@ -5,7 +5,7 @@
 // the model's gate can open. Without it a run binds the provider's route.
 //
 //   node sdk-harness.js <workspace> <storageDir> inline <instruction>
-//     Runs one inline persona (no agent file anywhere) on an in-memory
+//     Starts one run that names its own system text on an in-memory
 //     session and prints the run's id, its result and the identity its
 //     session view gives it.
 //   node sdk-harness.js <workspace> <storageDir> ask <instruction>

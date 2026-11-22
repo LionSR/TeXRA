@@ -38,8 +38,8 @@ and `/skills` applies one to your next request. Read
 ## Install a plugin
 
 TeXRA installs plugins published for Claude Code and Codex. A plugin can
-bring skills, commands, MCP servers, programs (`programs/<name>.js`), and
-native TeXRA extensions (`harness.mjs`):
+bring skills, commands, agents, MCP servers, programs (`programs/<name>.js`),
+and native TeXRA extensions (`harness.mjs`):
 
 ```bash
 texra plugin install github.com/<owner>/<repo>
@@ -51,6 +51,15 @@ native `harness.mjs` entry loads from a snapshot of the trusted files, and any
 edit requires re-trusting). In the terminal chat you can also use `/plugins add`,
 and in the VS Code extension and desktop app manage installed plugins under
 **Settings → Plugins**. Read [Plugins in the CLI guide](./texra-cli.md#plugins).
+
+A plugin's agents are Claude Code subagent files (`agents/<name>.md`: a
+name, a description and an optional tool list, with the agent's instructions
+as the body). While the plugin is enabled, the assistant is told of each one
+as `<plugin>:<name>` and can hand it a piece of work by that name, so ask for
+it: "have `my-plugin:referee` read section 3". An agent that lists no tools
+gets the file, shell and web tools, the tools every agent gets injected
+(`plan`, `script`, `context`, and the rest), and the tools of the plugins
+you have on.
 
 ## Write your own program
 

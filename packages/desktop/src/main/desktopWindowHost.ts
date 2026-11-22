@@ -137,16 +137,12 @@ export function createDesktopWindowHost(options: {
         );
     }),
     /** The folder the user picked, or undefined when they cancelled. */
-    pickFolder: (
-      title: string,
-      defaultPath: string,
-      properties: Array<'openDirectory' | 'createDirectory'>,
-    ) =>
+    pickFolder: (title: string, defaultPath: string) =>
       fromHost('pickFolder', async () => {
         const result = await dialog.showOpenDialog(window, {
           title,
           defaultPath,
-          properties,
+          properties: ['openDirectory'],
         });
         return result.canceled ? undefined : result.filePaths[0];
       }),
