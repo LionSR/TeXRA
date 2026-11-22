@@ -86,7 +86,7 @@ function launchNotice(config: AgentConfig): string {
   } else if (outputFiles[0]) {
     outputPart = ` (to ${path.basename(outputFiles[0])})`;
   }
-  return `"${config.agent}" is processing ${inputName} with ${config.model}${outputPart}.`;
+  return `"${config.label}" is processing ${inputName} with ${config.model}${outputPart}.`;
 }
 
 /** Focus the sidebar view. */

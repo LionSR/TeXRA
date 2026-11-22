@@ -1,5 +1,4 @@
 import { Effect, Option } from 'effect';
-import { Flag } from 'effect/cli';
 
 import { CliUsageError } from '../runtime/platform/cliContext';
 import { assertExplicitModelKnown } from '../runtime/models/launchDefaults';
@@ -18,10 +17,6 @@ import {
 
 const chatConfig = {
   ...SKILL_SOURCES_CONFIG,
-  agent: Flag.String('agent').pipe(
-    Flag.withDescription('Agent for the session'),
-    Flag.optional,
-  ),
   model: modelFlag('Model for the session'),
 };
 
@@ -61,10 +56,7 @@ export const chatOptions: CliCommandOptions<typeof chatConfig, Error> = {
       Effect.map(
         (code) =>
           code ?? {
-            chat: {
-              agentOverride: Option.getOrUndefined(input.agent),
-              modelOverride,
-            },
+            chat: { modelOverride },
           },
       ),
     );

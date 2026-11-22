@@ -251,7 +251,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const root = this.root();
     if (!root) return { line: '', state: '' };
     // The session view's turn; a run whose loop has not moved yet carries none.
-    // The agent as the cards name it (`runIdentityDisplayName`): a program
+    // The agent as the cards name it (`runIdentityName`): a program
     // launch's `source:name` key reads as its name.
     const agentName = root.identity.kind === 'agent' ? root.label : undefined;
     const parts: string[] = [];

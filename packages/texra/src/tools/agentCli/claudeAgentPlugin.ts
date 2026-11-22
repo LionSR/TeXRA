@@ -48,6 +48,10 @@ export const claudeAgent: TexraPlugin = texraPlugin({
     // stable.
     id: 'claude-agent',
     tools: [ClaudeAgentTool],
+    prompt: ({ offered }) =>
+      offered.includes('claude_code')
+        ? 'Use `claude_code` for substantial, self-contained coding work (a feature, a large refactor, an independent second opinion on code) while you keep the research thread.'
+        : '',
     toggle: 'off',
     sessionLayer: claudeAgentSessionsLayer,
     availability: {

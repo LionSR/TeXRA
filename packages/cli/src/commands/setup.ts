@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import { Command } from 'effect/cli';
 
-import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -24,12 +23,12 @@ function runSetup(context: CliContext) {
     });
   }
 
-  // The setup agent owns the session: environment checks, workspace agents,
-  // first task. Same chat startup path as `texra chat`, with the agent
-  // pinned. A credential is the one step no agent can do for the user
+  // The setup conversation owns the session: environment checks and the
+  // first task. Same chat startup path as `texra chat`, started with the
+  // setup tools. A credential is the one step no agent can do for the user
   // without one the chat opens on its "Connect a model" panel, and the first
   // message waits for the connection.
-  return Effect.succeed({ chat: { agentOverride: SETUP_AGENT_NAME } });
+  return Effect.succeed({ chat: { setup: true } });
 }
 
 export const setupCommand = cliCommand('setup', {

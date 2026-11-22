@@ -14,7 +14,6 @@
  */
 import { Predicate } from 'effect';
 import {
-  agentName,
   PROGRAM_TOOL_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
@@ -36,14 +35,9 @@ import { childAnswer } from './toolRowSections';
 import type { ToolRow as AppliedToolRow, TranscriptRow } from './transcriptRow';
 import { transcriptTimeline } from './transcriptTimeline';
 
-/** A child call's agent or program as the card shows it: an agent may be
- *  named by its `source:name` key, and the card shows the name. */
-const nameOf = (
-  input: Readonly<Record<string, unknown>>,
-): string | undefined => {
-  const key = stringOf(input.agentName ?? input.name);
-  return key === undefined ? undefined : agentName(key);
-};
+/** A child call's plugin agent or program as the card shows it. */
+const nameOf = (input: Readonly<Record<string, unknown>>): string | undefined =>
+  stringOf(input.agentName ?? input.name);
 
 /** The calls that run a child: `agent()`, `program()`, and `self()`, this
  *  agent again. */

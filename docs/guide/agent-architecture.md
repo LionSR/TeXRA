@@ -5,25 +5,36 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 
 # Programs: how they work
 
-A program takes your input files, context references, and instruction, has a model write each revision, and writes versioned diffs to run storage. This page covers how agents and programs differ, the stages of a program run, and reflection passes.
+A document program (`edit`, `annotate`, `enhance`, `apply`, `merge`,
+`transcribe`, `slides`, `poster`) takes your input files, read-only context
+files and instruction, has a model write each revision, and writes versioned
+diffs to run storage. This page covers the stages of a program run and the
+optional critic. For the list of programs, read
+[The assistant and programs](./programs.md).
 
 ::: tip When to run a program
-Programs are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. Each revision produces a full XML-wrapped output, and most programs review it in a second revision, so runs with frontier reasoning models can take **10–30 minutes** to finish.
+Programs are built for **deep, single-shot work**: rewriting a whole section,
+converting a paper to slides, or merging edits. Each revision produces the
+full documents, and most programs review the first revision in a second one,
+so runs with frontier reasoning models can take **10–30 minutes**.
 
-If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model**: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one run, a lead agent can start several programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
+For a faster turnaround, pick a **smaller or faster model**: quality drops
+somewhat, but wall-clock time drops a lot. For short edits or questions, just
+ask the assistant in the chat: it answers in seconds and skips the document
+pipeline. For a problem too big for one run, the assistant can start several
+programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
-## Agents and programs
+A program is started in one of three ways:
 
-An **agent** is a chat persona defined in a flat `.yaml` file: `name`, `description`, `prompt` (the system prompt), `tools` and `temperature`. It converses and calls its tools turn by turn. Browse these files from the **Agents** tab in the TeXRA Settings, or create your own (see [Custom agents](./custom-agents.md)).
-
-A **program** is a fixed procedure that ships with TeXRA: `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides` and `poster` (see the [program reference](./built-in-agents.md#programs)). The Lean plugin adds `prove` and `blueprint`, which work on Lean files in rounds and are described in [Lean 4 proofs](./lean.md#lean-programs); the rest of this page is about the eight document programs. A program is not in the agent picker. It is started in one of three ways:
-
-- an agent you chat with calls the `program` tool, and you approve the proposed run;
+- you ask the assistant, which proposes the run for you to approve;
 - `texra run <program> --input …` in the terminal;
 - the **Merge** action, which starts `merge`.
 
-A chat agent is sent one tool, `script`, and calls its other tools from the JavaScript it writes there, so a `program` call often appears inside a script.
+The Lean programs (`prove`, `lean-simplify`, `blueprint`, `lean-search`) are
+described in [Lean 4 proofs](./lean.md#lean-programs); the task programs
+(`review`, `derive`, `fix-latex`, …) hand the job to one helper agent and
+return its report. The rest of this page is about the document programs.
 
 ## Basic execution flow
 
@@ -32,14 +43,14 @@ A program's run asks no model itself. For each revision it builds a prompt, hand
 ```mermaid
 sequenceDiagram
     participant User
-    participant Agent
+    participant Assistant
     participant Program
     participant Child agent
 
-    User->>Agent: "Polish section 2 of main.tex"
-    Agent->>User: Proposes a program run (edit, files, instruction)
-    User->>Agent: Approves
-    Agent->>Program: program('edit', { prompt, inputFiles })
+    User->>Assistant: "Polish section 2 of main.tex"
+    Assistant->>User: Proposes a program run (edit, files, instruction)
+    User->>Assistant: Approves
+    Assistant->>Program: program('edit', { prompt, inputFiles })
     loop each revision
         Program->>Program: Build the prompt (documents, earlier requests and replies, this request)
         Program->>Child agent: Prompt
@@ -49,7 +60,7 @@ sequenceDiagram
             Program->>Child agent: Critic reviews the diff
         end
     end
-    Program-->>Agent: Proposes the last revision
+    Program-->>Assistant: Proposes the last revision
 ```
 
 **Key stages of a revision:**

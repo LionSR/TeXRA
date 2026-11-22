@@ -1319,6 +1319,93 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
 `extractBibliography.ts`，九个 bundled agent 的工具表和提示词里对它们的
 引用。存法没有变：存过这些调用的 run 照旧能读，卡片用通用图标。
 
+### 第 5 期的实施切片（2026-11-22，负责人：现在整期做）
+
+三片，每片合入时树是绿的：
+
+1. **应用和 host 改成单一入口**（harness 的机制先不动）。入口 agent 是
+   app 的一个常量（`packages/texra/src/agent/entryAgent.ts`：基础文本和声
+   明的工具表），每个 host 用 inline persona 启动它；`setup` 和编译失败
+   后的修复是同一个入口加 host 写的第一条指令（setup 的启动点名 setup
+   插件的工具）。删：`packages/extension/resources/agents/` 的 19 个文件、
+   lean4 的 agents、TeXRA 自己的 skills 和 multi-agent 的 skill 目录、
+   `docs/agent-creation`；launch form 的 agent 选择、设置页 Agents 的
+   library 分区和选择面板、customize 和 newer-built-in 提示、
+   `texra agents`、`--agent`、`/agent`、`config agents`、
+   `tasks start <agent>`、`texra.showAgents`、默认 agent 的常量。各能力的
+   那几句从 `assistant.yaml` 搬到各自插件的 `prompt` 段。
+2. **harness 删 agent 目录，`run.config` 变存法。** `agent`、
+   `agentSource`、`delegationAgentScope` 去掉，换成直接放在 config 上的
+   `system`、`tools`、`temperature` 和 `label`（卡片和目录名用的显示名）；
+   `StartRequest` 是 `{ system, tools, instruction, model }` 或
+   `{ config }`；`agent` 工具的输入去掉 `persona`，直接取 `system` 和
+   `tools`，`agentName` 只认安装式插件带的 agent（问题 1），启动时解析成
+   system 和 tools 存进 config，恢复不再查任何目录。删
+   `agent/index/` 的 catalog、目录服务和 YAML 扫描、`agent/workspaceAgents/`、
+   `agentCatalogFollower`、`AgentDirectoriesPort`、两个设置行和它们在
+   `./host`、`./schemas`、根入口上的导出。`run.config` 升行版本，重生成
+   golden store。
+3. **文档**：`built-in-agents`、`custom-agents`、`multi-agent-workflows`、
+   `agent-architecture`、`texra-cli` 重写，其余改措辞；changelog；
+   `AGENTS.md`。
+
+**第 1 片已落地（2026-11-22）。** 负责人在实施中补了一条：大多数 persona
+不是消失，而是变成程序。`core` 插件登记了十一个任务程序
+（`packages/texra/src/tools/tasks/programs.ts`）：`review`、`search`、
+`derive`（原 `research`）、`code`（`coder` 和 `engineer` 合并）、
+`review-code`、`simplify`（`simplifier` 和 `codeSimplifier` 合并）、
+`test`、`experiment`（原 `numerics`）、`solve`（原 `prover`）、
+`fix-latex`、`latexdiff`。每个是一个子运行，system 是那件事的 rubric，
+共用 `builtIn:task`。没有变成程序的：`orchestrator` 和 `assistant` 合成入
+口；`presenter` 由 `slides` 和 `poster` 覆盖；`progressCheck` 审的是
+orchestrator 的一轮，goal 的 judge 已是它的替代；`creator` 随 custom
+agent 删；lean4 的五个 agent 由 `prove` 和 `blueprint` 覆盖。它们都登记
+在 `core` 上而不是各自工具的插件上：`builtIn:task` 是一个模块名，放在一
+个总是开着的插件上才能被每个程序 import。校验脚本仍用 custom agent 目
+录，经 `TEXRA_INTERNAL_VALIDATE_AGENT` 点名（第 2 片改成 inline persona）。
+
+**第 2 片已落地（2026-11-22）。** harness 不再知道 agent 文件：`agent/index/`
+的 catalog、目录服务、YAML 扫描、`agent/workspaceAgents/`、
+`agentCatalogFollower`、`AgentDirectoriesPort`（换成只带 `resourcesRoot`
+的 `HostResources`）、两个设置行、外部根目录的全局登记和它在提示变量、
+`workspace_info` 里的那几行都删了。`run.config` 升到 v13：chat run 直接带
+`system`、`tools`、`temperature` 和 `label`，没有 `agent`、`agentSource`、
+`delegationAgentScope`；`request.opened` 升到 v19、`request.decided` 升到
+v6（提案和它的修改不再带 agent）。`StartRequest` 是
+`{ system, tools?, temperature?, label?, instruction, model }` 或
+`{ config }`，run 自己的工具改名 `runTools`。`agent()` 的输入去掉
+`persona`，取 `system`、`tools`；`agentName` 只认安装式插件的 agent，在调
+用时读成 system 和 tools 存进子运行的 config，没列工具的拿 Claude Code
+对应的那组。恢复不再查任何目录，所以"agent 不在了"这种恢复拒绝
+（`blocked`、`AgentUnavailable`、`agentNotFound` 通知）也删了。"Run
+again…" 对任何 chat run 都能用：表单带上那个 run 记的 system 和 tools。
+十一个任务程序和 theory 的一样写成 `programs/*.js` 文件；lean4 加了
+`lean-search` 和 `lean-simplify` 两个程序（原 `leanSearch`、
+`leanSimplifier`，`prove`、`blueprint` 不覆盖它们）。校验脚本把要启动的
+run 直接写在命令里（`--agent { label, system, tools }`，经
+`TEXRA_INTERNAL_VALIDATE_AGENT` 交给 CLI），golden 的那几个放在
+`packages/cli/src/runtime/models/validationAgents.ts`。
+
+还剩：第 3 片的文档（`docs/guide/**` 的几页、changelog）；只声明小核心和
+"开着就能调"、MCP 配了就能调（下面"不做"两条）；`delegation_targets` 一
+节仍列安装式插件的 agent、可用模型和 worktree 开关，没有并进 `agent` 工
+具的描述（描述要进缓存前缀，不能随插件开关变）。
+
+这一期**不做**的两处，都不是存法：
+
+- **只声明小核心。** 入口 agent 的工具表仍是今天 `assistant.yaml` 列的那
+  些，全部声明。"声明一张短表，其余靠搜索"要先有本文"入口只有一个
+  agent"末尾说的那个整套聊天 journey 作证据。
+- **"开着就能调"和 MCP 配了就能调。** 工具仍按表点名才进 run。MCP 这一
+  期没有动：入口的表里不点名任何 `mcp__<server>__*`，配置了的 server 仍要
+  run 的 `tools` 点名才进 run（嵌入方或 `agent()` 写的子运行可以点名），
+  所以入口 agent 用不到它们。在 app 里给入口的表补上
+  `mcp__<server>__*` 不便宜：入口是 `entryAgent()` 这个纯常量，七个启动点
+  （CLI 的 run、tasks、TUI，两个 GUI 的表单，编译修复，setup）各在不同的
+  Effect 环境里，要读 `<storage>/mcp.json` 就得每处都拿到存储根和文件系统，
+  或者再加一个所有启动都经过的 app 层。按步跟着插件开关走、配了就能调，
+  要改 `resolveStepTools` 的注入规则，另作一片，那时 MCP 一起解决。
+
 ## 负责人问题
 
 决定页上的十一处都选了。剩下两处（第 1 处已于 2026-11-21 定）：

@@ -36,7 +36,7 @@ import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
-import { AgentDirectories, AppState } from '@platform/interfaces';
+import { HostResources, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
@@ -59,7 +59,6 @@ import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import type { ToolTable } from '@tools/toolTable';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
-import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { AppNamespace } from '@utils/system/appNamespace';
 import { databaseLayer } from './databaseLayer';
@@ -286,9 +285,8 @@ export interface ProcessServicesOptions {
     never,
     AppSignals
   >;
-  /** The host's agent-directory layer: it may capture AppState as it is
-   *  built, which its readers never see. */
-  readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
+  /** What the host ships beside its code (its resources root). */
+  readonly hostResources: Layer.Layer<HostResources>;
   /** The global application-state layer, acquired in this runtime's scope
    *  (`processLayer` picks the host's and seeds it). */
   readonly appState: Layer.Layer<AppState, DatabaseOpenFailed, GlobalDatabase>;
@@ -335,7 +333,7 @@ export function ownerProcessLayer(
     settings,
     secrets,
     appState,
-    agentDirectories,
+    hostResources,
     toolAvailability = toolAvailabilityLayer,
     usageLog = UsageLog.disabled,
     minimumLogLevel,
@@ -357,11 +355,7 @@ export function ownerProcessLayer(
   const globalDatabase = globalDatabaseLayer(globalStorage).pipe(Layer.orDie);
   const services = Layer.mergeAll(
     secrets,
-    // The follower registers each plugin's agent directory off the catalog.
-    Layer.provideMerge(
-      agentCatalogFollower,
-      Layer.merge(agentDirectories, catalog),
-    ),
+    hostResources,
     catalog,
     // One retry gate per process: a 429 cools a credential for every project.
     Layer.sync(RouteRetries, makeRetryGate),

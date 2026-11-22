@@ -194,14 +194,9 @@ describe(
                   runId: root,
                   interactive: false,
                   config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                    agent: 'golden_resources',
-                    agentSource: {
-                      kind: 'inline',
-                      persona: {
-                        prompt: 'GOLDEN-RESOURCES: read your resources.',
-                        tools: ['script', 'resources'],
-                      },
-                    },
+                    label: 'golden_resources',
+                    system: 'GOLDEN-RESOURCES: read your resources.',
+                    tools: ['script', 'resources'],
                     model: 'openai/gpt-5.6-sol',
                     instruction: 'Read your resources.',
                   }),

@@ -36,13 +36,11 @@ import {
   DesktopTerminalExitMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
   DesktopWorkspaceFilesChangedMessageSchema,
-  DesktopOpenDocumentMessageSchema,
 } from './desktopWorkspaceMessages.js';
 
 export const DesktopOutboundMessageSchema = Schema.Union([
   // Editor tree
   DesktopWorkspaceFilesChangedMessageSchema,
-  DesktopOpenDocumentMessageSchema,
   // Terminal
   DesktopTerminalDataMessageSchema,
   DesktopTerminalExitMessageSchema,

@@ -109,7 +109,7 @@ const persistCompletedChild = (
         type: 'run.config',
         aggregateId: childRunId,
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: 'draft',
+          label: 'draft',
           model: 'openai/gpt-6.1-sol',
           script: { kind: 'program', name: 'edit', args: {} },
         }),

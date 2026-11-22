@@ -2,7 +2,7 @@
 
 /**
  * Live journey checks: the fitness function for the theorist bundle. The
- * compile-graded journeys (edit, latexFixer, latexdiff, citations, and prove
+ * compile-graded journeys (edit, a compile fix, latexdiff, citations, and prove
  * over a Lake project) run end to end through the real
  * `texra run ... --output-format ndjson` against each cheap model in
  * `MODEL_KEYS`, over the fixtures in `src/test-kernel/cli/fixtures/journeys/`.
@@ -132,7 +132,7 @@ const JOURNEYS = {
   // last round, and the result keeps the first's edits.
   imports: {
     fixture: 'polish',
-    args: ['assistant'],
+    args: ['chat'],
     instruction: [
       'Make exactly one `script` call with this code, unchanged, and then report what it returned:',
       '```js',
@@ -174,7 +174,7 @@ const JOURNEYS = {
     },
   },
   latexFixer: {
-    args: ['latexFixer'],
+    args: ['chat'],
     instruction:
       'broken.tex fails to compile. Fix it in place so that latexmk -pdf builds it without errors. Do not change the mathematics.',
     approval: 'yolo',
@@ -196,7 +196,7 @@ const JOURNEYS = {
     },
   },
   latexdiff: {
-    args: ['latexDiff'],
+    args: ['chat'],
     instruction:
       'old.tex and new.tex are two versions of one paper. Use latexdiff to write the marked-up difference from old.tex to new.tex into diff.tex, then compile diff.tex to a PDF with latexmk. Do not modify old.tex or new.tex.',
     approval: 'yolo',
@@ -242,7 +242,7 @@ const JOURNEYS = {
     },
   },
   citations: {
-    args: ['latexFixer'],
+    args: ['chat'],
     instruction:
       'paper.tex cites a key that refs.bib does not define. Build it with latexmk -pdf and fix the citation so every \\cite resolves. Do not add, remove or edit any entry in refs.bib.',
     approval: 'yolo',

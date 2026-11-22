@@ -61,6 +61,10 @@ export const zotero: TexraPlugin = texraPlugin({
     ZoteroAddTool,
     ZoteroExportTool,
   ],
+  prompt: ({ offered }) =>
+    offered.includes('zotero_search')
+      ? "When citing, prefer an entry already in the user's Zotero library over newly written BibTeX, and add a paper you found to the library. Check its metadata against the source."
+      : '',
   icons: {
     zotero_collections: 'book',
     zotero_search: 'book',

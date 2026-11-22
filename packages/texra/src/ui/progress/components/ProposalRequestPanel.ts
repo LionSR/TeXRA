@@ -24,7 +24,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
+import { CHILD_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 
 // Local imports - shared utils
@@ -94,7 +94,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     if (data.script) {
       return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
     }
-    const agent = html` <strong>${data.agent}</strong>`;
+    const agent = html` <strong>${data.label}</strong>`;
     const model = html` on ${this.renderModel()}`;
     return html`${REQUEST_ASK.proposal(data.task)}${agent}${model}`;
   }
@@ -151,7 +151,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         kind: 'editProposal',
         proposal: { runId: data.runId, requestId: data.requestId },
         patch: {
-          ...proposalLaunchPatch(data, this.run ?? undefined, host),
+          ...proposalLaunchPatch(data),
           model: this.model,
         },
       }),
@@ -202,7 +202,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       ${this.renderDefinedAgent(data)}
       <div class="workflow-proposal__plan-note">
         ${scriptRequestFirstAgentLine(
-          data.agent,
+          data.label,
           getModelLabel(data.model),
           data.instruction,
         )}
@@ -230,24 +230,24 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     `;
   }
 
-  /** An agent the call defines, while it stays the pick: its name and
-   *  tools, and, open, its prompt. */
+  /** A chat child: its name and tools, the first sentence of its system
+   *  text, and, opened, the whole text. A program's child has none. */
   private renderDefinedAgent(
     data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
-    const { agentSource } = data;
-    if (agentSource?.kind !== 'inline') return nothing;
-    const { persona } = agentSource;
+    if (data.system === '') return nothing;
     return html`<div class="workflow-proposal__plan-note">
-        ${DEFINED_AGENT_COPY.heading(data.agent, persona)}
+        ${CHILD_AGENT_COPY.heading(data.label, data.tools)}
+      </div>
+      <div class="workflow-proposal__plan-note">
+        ${CHILD_AGENT_COPY.summary(data.system)}
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"
-        summary=${DEFINED_AGENT_COPY.promptLabel}
-        open
+        summary=${CHILD_AGENT_COPY.promptLabel}
       >
         <div class="workflow-proposal__instruction script-proposal__source">
-          <pre><code>${persona.prompt ?? ''}</code></pre>
+          <pre><code>${data.system}</code></pre>
         </div>
       </wa-details>`;
   }

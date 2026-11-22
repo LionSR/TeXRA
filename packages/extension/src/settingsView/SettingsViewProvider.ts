@@ -114,15 +114,6 @@ export class SettingsViewProvider {
               : showDocument(() => vscode.workspace.openTextDocument(filePath)),
           revealPath: (filePath) =>
             executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
-          // An untitled buffer holds the text, so Ctrl+S prompts for a new
-          // location instead of writing back over the source.
-          showReadOnlyYaml: (_fileName, text) =>
-            showDocument(() =>
-              vscode.workspace.openTextDocument({
-                content: text.replaceAll('\r\n', '\n'),
-                language: 'yaml',
-              }),
-            ),
           pickFolder: (title) =>
             Effect.map(
               selectFolder({ title, openLabel: 'Select Folder' }),

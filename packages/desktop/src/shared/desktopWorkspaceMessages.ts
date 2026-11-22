@@ -13,7 +13,6 @@ const DesktopWorkspaceMessageSchema = Schema.Struct({ session: Schema.String });
 export const DESKTOP_WORKSPACE_COMMANDS = Object.freeze({
   // Editor
   FILES_CHANGED: 'desktop:workspace:filesChanged',
-  OPEN_DOCUMENT: 'desktop:workspace:openDocument',
   // Terminal
   TERMINAL_START: 'desktop:terminal:start',
   TERMINAL_INPUT: 'desktop:terminal:input',
@@ -47,14 +46,6 @@ export const DesktopWorkspaceFilesChangedMessageSchema =
   DesktopWorkspaceMessageSchema.mapFields(
     Struct.assign({
       command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED),
-    }),
-  );
-
-export const DesktopOpenDocumentMessageSchema =
-  DesktopWorkspaceMessageSchema.mapFields(
-    Struct.assign({
-      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT),
-      target: Schema.String,
     }),
   );
 

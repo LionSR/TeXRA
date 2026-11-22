@@ -47,7 +47,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           session,
           runId,
           Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: 'review',
+            label: 'review',
             model: 'anthropic/claude-sonnet-5-5',
             instruction: 'Solve the problem.',
             workingDirectory: '/workspace',
@@ -86,7 +86,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
 
         expect(trace.runId).toBe(runId);
         expect(record).toMatchObject({
-          agent: 'review',
+          label: 'review',
           model: 'anthropic/claude-sonnet-5-5',
         });
         // The creation row is authored, not copied: an exported file has no

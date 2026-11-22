@@ -24,7 +24,7 @@ import {
 
 function config(agent: string): AgentConfig {
   return Schema.decodeUnknownSync(AgentConfigSchema)({
-    agent,
+    label: agent,
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Test run listing.',
     workingDirectory: '/workspace',

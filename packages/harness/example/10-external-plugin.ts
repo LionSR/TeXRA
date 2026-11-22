@@ -5,9 +5,9 @@
  * `acme-notes` is its own npm package (`acme-notes/`, packed and installed
  * beside the harness): a tool, a script module, a program over that module
  * and a versioned fact kind, all over the public entries. It ships no agent:
- * the persona that uses it is the embedder's own, written inline.
+ * the run that uses it is the embedder's own, written inline.
  *
- * 1. With the plugin: the persona's script imports `builtIn:notes`, which
+ * 1. With the plugin: the run's script imports `builtIn:notes`, which
  *    calls the plugin's tool, whose result states a `note` fact on the run.
  * 2. Reopens the store without the plugin. The exported trace
  *    still holds the fact, as written: its plugin, kind, version, run and
@@ -41,11 +41,10 @@ const SECOND = { text: 'Section 3 is done.' };
 const PROGRAM_CODE = `
 const { runId, structured } = await program('notes', { args: { notes: [${JSON.stringify(SECOND.text)}] } });
 return { runId, kept: structured };`;
-/** The embedder's persona: the package ships tools and a program, no agent. */
+/** The embedder's run: the package ships tools and a program, no agent. */
 const NOTE_TAKER = {
-  name: 'note_taker',
-  description: 'Keeps notes on a draft.',
-  prompt: 'Keep notes on the draft with a script.',
+  label: 'note_taker',
+  system: 'Keep notes on the draft with a script.',
   tools: ['script', 'program', 'note_add'],
 };
 
@@ -98,7 +97,7 @@ const runId = await Effect.runPromise(
       persistent: true,
     });
     const run = yield* session.start({
-      agent: NOTE_TAKER,
+      ...NOTE_TAKER,
       instruction: 'Note the draft.',
       model: route.model,
       // Starting a program asks a person first; nobody is attached here to

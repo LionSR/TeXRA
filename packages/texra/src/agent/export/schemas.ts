@@ -11,7 +11,7 @@ import type { AgentConfig, ExportNode } from '@texra-ai/harness/schemas';
 /** The fields of the run's config an export's header shows. */
 export type ExportConfig = Pick<
   AgentConfig,
-  | 'agent'
+  | 'label'
   | 'model'
   | 'instruction'
   | 'inputFiles'

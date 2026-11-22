@@ -156,7 +156,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // instruction would carry the blocks and its rerun would activate none).
     // v12: an optional field is absent when unset, never `null` (an earlier
     // build's `null` would fail as damaged).
-    'run.config': Object.freeze({ version: 12, listing: 'own' }),
+    // v13: a chat run carries its own `system`, `tools`, `temperature` and
+    // display `label`; no `agent` name, `agentSource` or
+    // `delegationAgentScope` (an earlier build's row names an agent this
+    // build cannot look up, so it would fail as damaged).
+    'run.config': Object.freeze({ version: 13, listing: 'own' }),
     // v2: no `shutdown` reason: a process that exits writes nothing for its
     // runs (an earlier build's shutdown stop would fail as damaged).
     'run.stop': Object.freeze({ version: 3, listing: 'own' }),
@@ -269,7 +273,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // would fail as damaged).
     // v18: a `pluginTrust` kind: trusting an installed plugin is asked as
     // itself, not as a command (an earlier build would read it as damaged).
-    'request.opened': Object.freeze({ version: 18, listing: 'request' }),
+    // v19: a proposal names its run's `label`, `system` and `tools` as
+    // `run.config` v13 does; no `agent` or `agentSource`.
+    'request.opened': Object.freeze({ version: 19, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
     // v3: a decision's optional fields are absent when unset, never `null`
@@ -279,7 +285,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v5: an approval's changes are one `edit` named by its request kind,
     // not a proposal's and a tool edit's fields side by side (an earlier
     // build's edited approval would read as a plain one).
-    'request.decided': Object.freeze({ version: 5, listing: 'request' }),
+    // v6: a proposal's edit names no `agent` (an earlier build's agent
+    // override would be silently dropped).
+    'request.decided': Object.freeze({ version: 6, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a `turn.end` carries the turn's `outcome` (a v1 `turn.end` would fail
     // its check).

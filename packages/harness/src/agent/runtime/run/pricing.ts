@@ -54,11 +54,12 @@ export function priceTurnUsage(
 }
 
 /**
- * Who a call's usage is billed to, as the usage log's wire names them. Every
- * field is stated: a call that serves no run (a draft polish) says so.
+ * Who a call's usage is billed to, as the usage log's wire names them: the
+ * program it serves (`usageAgentName`; absent for a chat run) and its run,
+ * null for a call that serves no run (a draft polish).
  */
 export interface UsageAttribution {
-  readonly agentName: string;
+  readonly agentName: string | undefined;
   readonly runId: RunId | null;
 }
 
@@ -85,7 +86,9 @@ export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
     {
       model: bound.catalogEntry.id,
       provider: bound.origin.protocol,
-      agentName: attribution.agentName,
+      ...(attribution.agentName !== undefined && {
+        agentName: attribution.agentName,
+      }),
       // The cache-miss input: the reported input less its cache reads.
       inputTokens: Math.max(0, (usage.inputTokens ?? 0) - cachedInputTokens),
       outputTokens: usage.outputTokens ?? 0,

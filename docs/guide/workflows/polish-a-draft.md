@@ -32,9 +32,9 @@ Polish when technical content and mathematical arguments are settled, but the pr
 - Sharpen precision and flow between sentences and sections.
 - Enforce consistent terminology across sections.
 
-To add content or change the mathematics, say so in the instruction, or work
-with the [Orchestrator](../built-in-agents.md) or the `research` agent, which
-can compute and check as they go.
+To add content or change the mathematics, say so in the instruction, or ask
+the assistant in a chat (or start the [`derive` program](../programs.md#task-programs)),
+which can compute and check as it goes.
 
 ## Run it from the CLI
 
@@ -71,9 +71,9 @@ texra run edit --input intro.tex --instruction "Tighten prose." --output intro.p
 
 1. Open the folder that holds `intro.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
-3. Keep the default agent (`assistant`) and pick a model.
+3. Pick a model.
 4. Type what you want in plain words, for example "Polish intro.tex: tighten the prose, preserve all math and citations." Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>; Enter also sends it).
-5. The agent proposes an `edit` run. The proposal card shows the instruction and the files; edit them if needed, then approve.
+5. The assistant proposes an `edit` run. The proposal card shows the instruction and the files; edit them if needed, then approve.
 6. When the run completes, open the diff from the **Tasks view**.
 
 Same program, same output files, whichever surface you used.
@@ -115,7 +115,7 @@ iteration. Use **the second** (`r1/`) when the draft is close to final.
 ## Limits
 
 - Writes one revised file per input file. For multi-file projects,
-  list each file with `--input` or use the Orchestrator.
+  list each file with `--input`, or ask the assistant to polish them all.
 - No tool access: `edit` cannot search citations or run code. TeXRA
   compiles each revision to check it.
 - A polish only rewrites what is already there; new sections, equations or
@@ -123,8 +123,8 @@ iteration. Use **the second** (`r1/`) when the draft is close to final.
 
 ## See also
 
-- [Built-in agents](../built-in-agents.md): the full catalog of agents and programs
+- [The assistant and programs](../programs.md): every program you can start
 - [LaTeX Diff](../latex-diff.md): compiled PDF comparison of revisions
 - [Models](../models.md): picking a model for a polish
 - [Configuration](../configuration.md): workspace defaults
-- [Agent architecture](../agent-architecture.md): revisions and the optional critic review
+- [Programs: how they work](../agent-architecture.md): revisions and the optional critic review

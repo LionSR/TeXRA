@@ -390,7 +390,9 @@ also read by `applyRunRows`.
   provenance, launch approval policy.
 - `run.activate` (folded: yes): One activation: the first launch or a resume.
 - `run.config` (folded: yes): What the run runs on: configuration, model,
-  binding.
+  binding. A chat run's configuration holds its own system text, declared
+  tools, temperature and display label, so a resume consults no agent
+  directory (there is none).
 - `run.stop` (folded: yes): A stop asked of the run, and why: `user`, or
   `released` by the call that awaited it.
 - `run.end` (folded: yes): The terminal fact: outcome, classified error,

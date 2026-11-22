@@ -26,7 +26,7 @@ import {
 import { Effect, Scope } from 'effect';
 
 import {
-  agentFileName,
+  labelFileName,
   toErrorMessage,
   runActionRefusal,
   type RunAction,
@@ -413,7 +413,7 @@ export const createHostRunActions = Effect.fn(
                   // don't collide.
                   to: path.posix.join(
                     PACKED_RUNS_DIRECTORY,
-                    `${yield* fileNameTimestamp}_${path.parse(inputFile).name}_${agentFileName(config.agent)}_${modelFileName(config.model)}_${runId.replaceAll('-', '').slice(0, 8)}`,
+                    `${yield* fileNameTimestamp}_${path.parse(inputFile).name}_${labelFileName(config.label)}_${modelFileName(config.model)}_${runId.replaceAll('-', '').slice(0, 8)}`,
                   ),
                 }
               : { op: 'remove' },

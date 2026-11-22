@@ -70,7 +70,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           backend: current.backend,
           declinedRoutes: state.declinedRoutes,
           textOnly: current.textOnly,
-          temperature: run.persona.temperature,
+          temperature: run.config.temperature,
         });
         switched = yield* cell.append([
           ...consumed,

@@ -33,14 +33,13 @@ export const RunRecordFieldsSchema = Schema.Union([
  */
 export type RunRecord = typeof RunRecordFieldsSchema.Type;
 
-/** The key only an agent config carries (`agent` has a decoding default, so
- *  every parsed agent config has it; the strict non-agent arm cannot). Typed
+/** The key only an agent config carries (the strict non-agent arm cannot). Typed
  *  so a rename on either arm fails to compile instead of silently matching
  *  none. */
 const AGENT_RECORD_KEY: Exclude<
   keyof AgentConfig,
   keyof typeof NonAgentRunRecordSchema.Type
-> = 'agent';
+> = 'label';
 
 /** Whether `record` is an agent run's config. */
 export function isAgentRunRecord(record: RunRecord): record is AgentConfig {

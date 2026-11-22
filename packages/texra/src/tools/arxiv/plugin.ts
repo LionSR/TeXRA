@@ -16,6 +16,10 @@ export const arxiv: TexraPlugin = texraPlugin({
   ...definePlugin<RateLimiter.RateLimiter>({
     id: 'arxiv',
     tools: [ArxivSearchTool, ArxivDownloadTool],
+    prompt: ({ offered }) =>
+      offered.includes('download_arxiv_source')
+        ? "Use `download_arxiv_source` to work with a paper's own equations and source instead of a summary of it."
+        : '',
     // The API's rate limit is shared by every search in the process.
     processLayer: {
       layer: RateLimiter.layer.pipe(

@@ -52,12 +52,9 @@ const program = Effect.gen(function* () {
   });
   const from = session.view.head();
   const run = yield* session.start({
-    agent: {
-      name: 'section_reviser',
-      description: 'Revises paper sections.',
-      prompt: 'Revise what is asked, briefly.',
-      tools: [],
-    },
+    label: 'section_reviser',
+    system: 'Revise what is asked, briefly.',
+    tools: [],
     instruction: 'Revise section 1.',
     model: route.model,
     interactive: true,
@@ -140,12 +137,9 @@ const program = Effect.gen(function* () {
   // 4. A run launched to run once ends on the refusal, and its result is
   //    that end.
   const once = yield* session.start({
-    agent: {
-      name: 'reference_checker',
-      description: 'Checks references.',
-      prompt: 'Check what is asked.',
-      tools: [],
-    },
+    label: 'reference_checker',
+    system: 'Check what is asked.',
+    tools: [],
     instruction: 'Check the references.',
     model: route.model,
   });

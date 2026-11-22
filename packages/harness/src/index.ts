@@ -12,7 +12,8 @@
  *    `harnessBuiltins` from `./builtins`, plus any plugin of your own;
  *    `client` names your app to the model providers (`{ name, id }`).
  * 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
- * 3. `session.start({ agent, instruction })` gives a {@link Run}: read
+ * 3. `session.start({ system, tools, instruction, model })` gives a
+ *    {@link Run}: read
  *    `run.events` for its progress (`run.events.pipe(responseText)` for
  *    just the answer's text) and `run.result` for how it ended.
  * 4. `session.resume(runId)` continues a run a persistent session stored.
@@ -41,18 +42,13 @@
  *   filesystem, SQLite, and process building blocks.
  * - [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's
  *   editor, desktop and terminal apps) composes beyond this entry:
- *   `processLayer`, the agent catalog, and the config and state stores.
+ *   `processLayer`, the installed plugins, and the config and state stores.
  */
 
 // Building the process and opening sessions.
 export { Sessions } from './effect/processLayer.js';
 export type { ProjectView } from './controllers/session/readSessionView.js';
 export type { AgentPlatform } from '@platform/agentPlatform';
-// The agent directories a platform serves, and why one could not be read.
-export {
-  AgentDirectoriesFailed,
-  type AgentDirectoriesPort,
-} from '@platform/interfaces';
 export type { Composition } from './effect/sessions.js';
 // Where a composition's skills come from.
 export type {

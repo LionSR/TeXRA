@@ -49,22 +49,6 @@ plugin is written with. The built-in plugins are
   [`FactKind`](#factkind), and [`Program`](#program) (how its run
   reads: [`ProgramResult`](#programresult)).
 
-## AgentDirectories
-
-The process's agent directories as an Effect service, provided once by the
-composition root through `processLayer`. The shape is the port itself: a
-program that resolves one of the three local agent directories yields the
-port's own readers instead of reaching for the process platform's copy.
-A root holds its port before it installs the runtime that serves it, so the
-layer is `Layer.succeed(AgentDirectories)(port)`.
-
-```ts
-class AgentDirectories extends Context.Service<
-  AgentDirectories,
-  AgentDirectoriesPort
->()('@texra-ai/harness/platform/AgentDirectories')
-```
-
 ## AgentTrace
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
@@ -268,21 +252,6 @@ interface AppSignalPayloads {
   githubSubscriptionsChanged: undefined;
 
   /**
-   * The workspace agents changed. Keyless on purpose: every listener
-   * re-reads the agent list, so which agent moved carries no information.
-   *
-   * Emitted, in every process sharing the global store, when the agent
-   * catalog is reloaded after a tool switch, a plugin install or an agent
-   * file's edit (`agentCatalogFollower`, in this process or another). The
-   * settings views' agent writes emit it themselves.
-   *
-   * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list, and their launchers. Not the CLI: it reads the agent list
-   * per command and has no persistent panel that could go stale.
-   */
-  workspaceAgentsChanged: undefined;
-
-  /**
    * The approval policy was written from a settings view or the terminal's
    * `/config` (the shared write path, `applyStateSettingUpdate`).
    *
@@ -411,7 +380,7 @@ interface BoundModel extends Binding {
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
-  /** Bound for a text-only persona, with the model's whole output budget; a
+  /** Bound for a text-only run, with the model's whole output budget; a
    *  rebinding keeps it. */
   readonly textOnly: boolean;
   /** The ChatGPT plan the subscription's token names; display-only. */
@@ -451,7 +420,7 @@ function buildDiffHunks(oldText: string, newText: string): DiffHunks
 Build a tool attachment by reading a workspace file and packaging metadata.
 
 ```ts
-const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ readonly [x: string]: unknown; readonly path: string; readonly mimeType: string; readonly description?: string | undefined; readonly digest?: string | undefined; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<ArrayBuffer> | undefined; }, ToolError, FileSystem | ToolContext>
+const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ readonly [x: string]: unknown; readonly mimeType: string; readonly path: string; readonly description?: string | undefined; readonly digest?: string | undefined; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<ArrayBuffer> | undefined; }, ToolError, FileSystem | ToolContext>
 ```
 
 ## BuildFileAttachmentOptions
@@ -1028,6 +997,22 @@ class HostCapabilities extends Context.Service<
   HostCapabilities,
   { readonly of: (storage: string) => ReadonlySet<string> }
 >()('@texra-ai/harness/agent/HostCapabilities')
+```
+
+## HostResources
+
+What the host ships beside its code, as an Effect service the composition
+root provides once through `processLayer`.
+
+```ts
+class HostResources extends Context.Service<
+  HostResources,
+  {
+    /** The packaged resources root (templates, bundled plugin files).
+     *  Absent where none ships: an embedder with no resources. */
+    readonly resourcesRoot?: string;
+  }
+>()('@texra-ai/harness/platform/HostResources')
 ```
 
 ## Hunk
@@ -1635,7 +1620,7 @@ interface Plugin {
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
-   *  run (a program) and a text-only persona get none. */
+   *  run (a program) and a text-only run get none. */
   readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
@@ -1995,11 +1980,10 @@ const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApp
 Resolve a tool path, relative or absolute, against the call's working
 directory when the run has one and its workspace folder otherwise.
 
-A path that escapes that root is accepted only inside a registered external
-root or with path protection switched off; otherwise it fails with a
-`ToolError` the tool runner reports to the model. With no folder open and
-no working directory, only an absolute path can resolve (the agent
-directories are registered external roots).
+A path that escapes that root is accepted only inside a root the call's
+step accepts (`stepRoots`) or with path protection switched off; otherwise
+it fails with a `ToolError` the tool runner reports to the model. With no
+folder open and no working directory, only an absolute path can resolve.
 
 `fsPath` is workspace-relative for a workspace path, so the confined
 `WorkspaceFs` view answers it, and absolute for a working-directory or
@@ -2407,9 +2391,9 @@ class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
 
 ## StepRoot
 
-A read-only directory one step accepts for its own calls, beside the
-registered roots: a skill it lists or its user activated, canonical as
-its catalog entry records it (`canonicalizePath`).
+A read-only directory one step accepts for its own calls: a skill it
+lists or its user activated, canonical as its catalog entry records it
+(`canonicalizePath`).
 
 ```ts
 interface StepRoot {
@@ -3009,7 +2993,7 @@ interface WorkspacePathResolution {
    */
   readonly fsPath: string;
   /**
-   * When the resolved path falls inside a registered external root, this
+   * When the resolved path falls inside a step root, this
    * describes that root (label, writable flag). Undefined for workspace paths
    * and for any external path outside the allowlist.
    */

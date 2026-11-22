@@ -103,7 +103,7 @@ export interface Plugin {
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
-   *  run (a program) and a text-only persona get none. */
+   *  run (a program) and a text-only run get none. */
   readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;

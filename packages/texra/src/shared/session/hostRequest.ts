@@ -205,12 +205,6 @@ export const HostCommandSchema = Schema.Union([
     kind: Schema.Literal('apiKeyBanner'),
     action: Schema.Literals(['set', 'guide']),
   }),
-  Schema.Struct({
-    kind: Schema.Literal('agentConfigBanner'),
-    action: Schema.Literals(['edit', 'dir', 'docs']),
-    /** The banner offered the custom directory, not the agent settings. */
-    customDirSet: Schema.Boolean,
-  }),
   Schema.Struct({ kind: Schema.Literal('recheckDependencies') }),
   Schema.Struct({ kind: Schema.Literal('openInstallGuide') }),
   Schema.Struct({

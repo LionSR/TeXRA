@@ -288,8 +288,8 @@
 
 /* ============================================
    FRAMELESS CARD (shared shell + inline mono header)
-   The focused figure components (DoctorReportCard, AgentYamlHero,
-   ToolCategoriesHero, the tool-call logs, …) all paint the same lightweight
+   The focused figure components (DoctorReportCard, the tool-call logs, …)
+   all paint the same lightweight
    bordered card with an inline mono header (icon + title + optional sub-line,
    under a hairline). Consolidated here so each stops re-rolling it. This is the
    inline-header variant; MockupPanel is the header-strip variant.

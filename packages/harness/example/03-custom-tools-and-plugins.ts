@@ -78,12 +78,9 @@ const program = Effect.gen(function* () {
   const session = yield* sessions.open(platform.roots);
 
   const run = yield* session.start({
-    agent: {
-      name: 'equation_auditor',
-      description: 'Counts equations in LaTeX drafts.',
-      prompt: 'Use count_equations to inspect the snippet.',
-      tools: ['count_equations'],
-    },
+    label: 'equation_auditor',
+    system: 'Use count_equations to inspect the snippet.',
+    tools: ['count_equations'],
     instruction: 'Count the equations in section 1.',
     model: route.model,
   });

@@ -1,9 +1,13 @@
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
+import { labelFileName } from '@texra-ai/harness/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import {
@@ -48,5 +52,18 @@ layer(
       'r0/main.tex',
     );
     expect(getSafeDocumentRelativePath('/tmp/main.tex')).toBe('main.tex');
+  });
+
+  // A run's label is text a model writes; packing names a folder under
+  // History/ with it, which must stay one segment inside that folder.
+  it('names a run by one path segment whatever its label says', () => {
+    for (const label of ['x/../../archive', '..\\..\\archive', '..']) {
+      const segment = labelFileName(label);
+      expect(path.posix.join('History', segment).split('/')).toStrictEqual([
+        'History',
+        segment,
+      ]);
+      expect(segment).not.toMatch(/^\.|[\\/]/);
+    }
   });
 });

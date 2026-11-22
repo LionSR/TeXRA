@@ -18,13 +18,11 @@
   >
     <div class="mk-term-prompt">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd"
-        >texra chat <span class="mk-term-flag">--agent</span> search</span
-      >
+      <span class="mk-term-cmd">texra chat</span>
     </div>
 
     <div class="csr-identity">
-      agent: search · model: deepseek/deepseek-flash
+      agent: assistant · model: deepseek/deepseek-flash
     </div>
 
     <div class="csr-user">

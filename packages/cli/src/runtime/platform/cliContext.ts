@@ -91,7 +91,6 @@ export interface CliContext {
   readonly configWarnings: readonly string[];
   /** The config problems `--quiet` does not hide; see `CliStartupConfig`. */
   readonly configDegradations: readonly string[];
-  readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
 }
@@ -255,7 +254,7 @@ export function readCliVersion(): string {
  * `dist/resources/`, the service's `serve/` beside the extension's and the
  * desktop app's `resources/`), and the build stamps that location; a source
  * run reads the extension package's own tree, four directories above this
- * module. Fails by its path when it holds no bundled agents
+ * module. Fails by its path when it holds no bundled plugin resources
  * ({@link checkResourcesPath}).
  */
 export const resolveCliResourcesPath = Effect.fn(
@@ -497,7 +496,6 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       config,
       configWarnings,
       configDegradations: degradations,
-      envAgent: yield* envTier('TEXRA_AGENT'),
       envModel,
       skillSourceOptions: {
         additionalPaths: init.globalArgs.skillSourcePaths ?? [],

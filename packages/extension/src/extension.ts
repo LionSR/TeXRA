@@ -54,7 +54,6 @@ import {
   reportingFailure,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
-  showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -154,7 +153,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
-        agentIssues: showLoggedMessageWithDocs,
         usageLog: {
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,

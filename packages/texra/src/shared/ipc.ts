@@ -42,19 +42,6 @@ export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   // Model selection commands
   SET_MODEL_ENABLED: 'setModelEnabled',
   SET_MODEL_REASONING_LEVEL: 'setModelReasoningLevel',
-  // Agent selection commands
-  OPEN_AGENT_YAML: 'openAgentYaml',
-  SET_AGENT_ENABLED: 'setAgentEnabled',
-  SET_ALL_AGENTS_ENABLED: 'setAllAgentsEnabled',
-  OPEN_AGENT_FOLDER: 'openAgentFolder',
-  CREATE_AGENT: 'createAgent',
-  CUSTOMIZE_AGENT: 'customizeAgent',
-  DELETE_CUSTOM_AGENT: 'deleteCustomAgent',
-  KEEP_CUSTOM_AGENT: 'keepCustomAgent',
-  REVEAL_AGENT_FILE: 'revealAgentFile',
-  // Custom agent directory commands
-  SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
-  RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
   // Generic settings-view scalar write. The backend looks up {key, value} in the
   // unified catalog, validates and persists it using the row's metadata, then
   // refreshes the row's owning snapshot.

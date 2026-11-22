@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
-import { bundledPluginDir } from '@common/storage/storageLayout';
+import { bundledPluginSkillsDir } from '@common/storage/storageLayout';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
 
@@ -157,7 +157,7 @@ export function skillTiers(call: SkillSourceCall): SkillSourceTier[] {
         },
         ...call.pluginIds.map((pluginId): SkillSource => ({
           scope: 'bundled',
-          path: bundledPluginDir(resourcesPath, pluginId, 'skills'),
+          path: bundledPluginSkillsDir(resourcesPath, pluginId),
           label: 'bundled',
           plugin: { kind: 'tool', id: pluginId },
         })),

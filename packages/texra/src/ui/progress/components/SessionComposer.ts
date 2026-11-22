@@ -1,9 +1,9 @@
 /**
  * The composer, one component in two states. Expanded, it is the
- * new-task launcher: the instruction, chips for agent and model (and the
+ * new-task launcher: the instruction, a chip for the model (and the
  * working directory, only with two or more roots), and the polish,
- * dictation, attach, and send controls. The agent menu lists each agent
- * once. Open on an agent's proposal (a proposal card's Edit), its send
+ * dictation, attach, and send controls. Open on an agent's proposal (a
+ * proposal card's Edit), its send
  * approves that proposal with the form's changes. The follow-up keeps a two-line writing area and a separate action
  * row, under a line that offers the parent instead when there is one.
  *
@@ -225,7 +225,7 @@ export class SessionComposer extends TexraElement {
         margin-bottom: var(--wa-space-2xs);
       }
 
-      /* A narrow chat pane gives model/agent choices their own full row.
+      /* A narrow chat pane gives the model choice its own full row.
          Keeping tools beside a wrapping chip column squeezes every label. */
       @container (max-width: 440px) {
         .composer:not(.is-compact) .row {

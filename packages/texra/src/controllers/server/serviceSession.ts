@@ -565,13 +565,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         client['session.deleteRuns']({ workspace, target }),
       ),
     request,
-    start: ({ tools, ...start }) => {
+    start: ({ runTools, ...start }) => {
       if (!('config' in start))
         // The service takes a host's whole configuration.
         return Effect.fail(
           new LaunchRefused({ message: 'A service task needs its config.' }),
         );
-      const refused = windowTools(tools);
+      const refused = windowTools(runTools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
         client['task.start']({
@@ -586,7 +586,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ).pipe(Effect.flatMap(runOf));
     },
     resume: (runId, input) => {
-      const refused = windowTools(input?.tools);
+      const refused = windowTools(input?.runTools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
         client['task.resume']({

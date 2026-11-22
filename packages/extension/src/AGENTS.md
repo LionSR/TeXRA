@@ -19,6 +19,6 @@ Generate HTML through `BundledViewContentProvider` and include every common modu
 
 ## Errors and commands
 
-- Surface errors with `showLoggedErrorMessage` / `showLoggedMessageWithDocs` (`packages/extension/src/frontend/ui/errorHandlingUtils.ts`) for consistent telemetry and doc links.
+- Surface errors with `showLoggedErrorMessage` (`packages/extension/src/frontend/ui/errorHandlingUtils.ts`) for consistent telemetry.
 - Run VS Code commands with `safeExecuteCommand` (`packages/extension/src/frontend/system/commandUtils.ts`) and shell commands with `executeCommand` (`packages/harness/src/utils/system/execUtils.ts`).
 - Notices are `vscodeUi` (`packages/extension/src/frontend/hosts/VscodeUiHost.ts`) and the logged helpers above; `packages/extension/src/frontend/ui/dialogs.ts` holds the pickers.

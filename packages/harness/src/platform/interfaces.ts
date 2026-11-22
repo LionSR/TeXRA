@@ -2,11 +2,8 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `processLayer()`.
  */
-import { Context, Effect, FileSystem, Layer, Schema, Stream } from 'effect';
-import { AgentSourceSchema } from '@shared/schemas';
+import { Context, Layer, Stream } from 'effect';
 import type { StateStore } from '@shared/config/settings';
-
-import type { GlobalStorageFs } from './rootedFs';
 
 // ---------------------------------------------------------------------------
 // Application state
@@ -47,69 +44,14 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
 // ---------------------------------------------------------------------------
 
 /**
- * A host could not resolve one of its agent directories: the configured
- * custom directory is not an absolute path, its parent is gone, it cannot be
- * created, or the platform refused the filesystem call behind either.
- *
- * {@link AgentDirectoriesPort}'s readers raise it as the failure of the
- * read itself, for the same reason `StateWriteFailed` exists: the reads
- * travel with the agent-catalog load beside them, so a caller inside a program
- * composes the read rather than adopting a rejection it cannot type.
+ * What the host ships beside its code, as an Effect service the composition
+ * root provides once through `processLayer`.
  */
-export class AgentDirectoriesFailed extends Schema.TaggedError<AgentDirectoriesFailed>()(
-  'AgentDirectoriesFailed',
+export class HostResources extends Context.Service<
+  HostResources,
   {
-    /** Which of the port's readers failed. */
-    source: AgentSourceSchema,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/**
- * Host-provided agent directory paths. All are `Effect`s (not Promises)
- * so the readers that can fault — `custom`, which creates the directory it
- * resolves, and `customConfigured`, which validates the setting — carry their
- * failure into the program that asked instead of rejecting an await that
- * cannot name it.
- *
- * `custom` takes the process's {@link GlobalStorageFs} and the process
- * `FileSystem` from context: the default custom-agents directory lives under
- * the cross-workspace storage root, and a configured one is an absolute path
- * outside every root, so the view that names each is the one the process
- * runtime provides.
- */
-export interface AgentDirectoriesPort {
-  custom(): Effect.Effect<
-    string,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  >;
-  /** Whether `custom` resolves to a directory the user configured, rather
-   *  than falling back to the default one under global storage. */
-  customConfigured(): Effect.Effect<
-    boolean,
-    AgentDirectoriesFailed,
-    FileSystem.FileSystem
-  >;
-  builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
-  /**
-   * The packaged resources root a host ships its bundled agents under,
-   * the tool plugins' agent directories among them. Absent where none ships:
-   * an embedder's own directories.
-   */
-  readonly resourcesRoot?: string;
-}
-
-/**
- * The process's agent directories as an Effect service, provided once by the
- * composition root through `processLayer`. The shape is the port itself: a
- * program that resolves one of the three local agent directories yields the
- * port's own readers instead of reaching for the process platform's copy.
- * A root holds its port before it installs the runtime that serves it, so the
- * layer is `Layer.succeed(AgentDirectories)(port)`.
- */
-export class AgentDirectories extends Context.Service<
-  AgentDirectories,
-  AgentDirectoriesPort
->()('@texra-ai/harness/platform/AgentDirectories') {}
+    /** The packaged resources root (templates, bundled plugin files).
+     *  Absent where none ships: an embedder with no resources. */
+    readonly resourcesRoot?: string;
+  }
+>()('@texra-ai/harness/platform/HostResources') {}

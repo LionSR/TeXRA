@@ -181,8 +181,8 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 - **Rate limits and quota**: Check your provider dashboard if requests fail with quota or billing errors.
 - **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs.
-- **Slow turnaround**: Programs run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or use an interactive chat agent instead.
-- **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). An agent can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
+- **Slow turnaround**: Programs run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or ask the assistant in a chat instead.
+- **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). The assistant can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
 
 ### Missing or truncated output files
 
@@ -250,4 +250,4 @@ If you've resolved your issue or want to learn more about TeXRA:
 
 - [Best practices](/guide/best-practices): learn how to use TeXRA effectively
 - [Configuration](/guide/configuration): customize TeXRA for your needs
-- [Agent reference](/guide/built-in-agents): explore the available agents
+- [The assistant and programs](/guide/programs): what TeXRA can do

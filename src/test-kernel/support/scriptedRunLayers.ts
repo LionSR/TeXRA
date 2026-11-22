@@ -36,7 +36,7 @@ import {
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
-import { AgentConfigSchema, PersonaSchema, type RunId } from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { generateRunId } from '@shared/schemas';
 import { noStep, testRunTools } from '@test/support/nativeToolTestLayer';
@@ -257,7 +257,7 @@ export const scriptedInvokerLayer = modelInvokerLayer().pipe(
 const TEST_INSTRUCTION = 'Do the thing.';
 const testConfig = () =>
   Schema.decodeUnknownSync(AgentConfigSchema)({
-    agent: 'chat',
+    label: 'chat',
     model: 'test-model',
     instruction: TEST_INSTRUCTION,
   });
@@ -282,7 +282,7 @@ const testEntry = (
             type: 'run.start',
             maxCostUsd: null,
             aggregateId: runId,
-            identity: { kind: 'agent', agent: config.agent },
+            identity: { kind: 'agent', agent: config.label },
             takesFollowUps: false,
             worktree: null,
             parent: null,
@@ -310,15 +310,11 @@ export function testLaunch(
     runId,
     startedAt: 0,
     config,
-    persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     logger,
     toolPolicy: {},
     opening: {
       inputs: {
         CWD: '.',
-        BUILTIN_AGENTS_DIR: '',
-        CUSTOM_AGENTS_DIR: '',
-        AGENT_DOCS_DIR: '',
       },
       activated: [],
       attachedMemories: null,
@@ -390,14 +386,12 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
         ...testConfig(),
         ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
         ...(init.scriptCall ? { script: init.scriptCall } : {}),
+        tools: Object.keys(init.tools ?? {}),
       });
       return testAgentRun(
         { runId: init.runId, logger, model, steps: yield* noStep(), scope },
         {
           config,
-          persona: Schema.decodeUnknownSync(PersonaSchema)({
-            tools: Object.keys(tools).map((name) => ({ name })),
-          }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,

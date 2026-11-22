@@ -57,10 +57,11 @@ async function copyCli() {
       do good work.
     </h1>
     <p class="lh-tagline">
-      You direct an orchestrator. It delegates to specialist agents that search
-      real databases, compute in Wolfram, prove in Lean&nbsp;4, and hand back
-      every change as a diff you approve. Open source under Apache&nbsp;2.0, in
-      VS&nbsp;Code, its forks, and the terminal.
+      You tell one assistant what you need. It searches real databases, computes
+      in Wolfram, proves in Lean&nbsp;4, splits large jobs across helper agents
+      and programs, and hands back every change as a diff you approve. Open
+      source under Apache&nbsp;2.0, in VS&nbsp;Code, its forks, and the
+      terminal.
     </p>
 
     <div class="lh-actions">
@@ -115,7 +116,7 @@ async function copyCli() {
     <!-- Product slice: a real TeXRA run, not a marketing illustration -->
     <MockupFrame
       title="spectral-gap — texra-paper"
-      aria-label="TeXRA running an orchestrated research task in VS Code"
+      aria-label="TeXRA running a delegated research task in VS Code"
     >
       <!-- Left: TeXRA sidebar (Progress tab). Right: the resulting files. -->
       <MockupSidebar v-model:view="view" />

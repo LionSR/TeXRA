@@ -16,7 +16,7 @@ import {
   StorageFs,
   WorkspaceFs,
   pathToLocationIn,
-  AgentDirectories,
+  HostResources,
 } from '@texra-ai/harness/plugins';
 import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -67,7 +67,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 ) {
   // The packaged resources hold the trace-viewer bundle and the LaTeX
   // export's preamble.
-  const { resourcesRoot } = yield* AgentDirectories;
+  const { resourcesRoot } = yield* HostResources;
   if (resourcesRoot === undefined) {
     const cause = new Error(
       'This host ships no packaged resources, so it cannot export a transcript.',

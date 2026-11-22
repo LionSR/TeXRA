@@ -71,7 +71,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
   return plugins
     .map((plugin) => {
       // The words for a plugin's state are the Plugins page's and /plugins'.
-      const row: PluginRow = { kind: 'installed', plugin, usedBy: [] };
+      const row: PluginRow = { kind: 'installed', plugin };
       const trust = pluginRowTrust(row);
       const header = [
         `${plugin.name} (${pluginRowState(row)}${trust === null ? '' : `, ${trust}`})`,
