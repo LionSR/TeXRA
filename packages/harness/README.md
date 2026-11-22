@@ -135,12 +135,13 @@ session is closed.
 A later process can open the same root and call `session.resume(runId)` to
 continue a run from its committed history, returning the same `Run` handle that
 `start` returns. A run that cannot continue fails with `ResumeRefused`, whose
-`reason` is a `ResumeRefusal`: its `kind` is `finished`, `blocked` (the agent or plugin
-named by `name` is missing, off or not trusted), `unusableCheckpoint`,
-`earlierBuild` (with its `cause`), or `notResumable` (it was deleted). If
+`reason` is a `ResumeRefusal`: its `kind` is `finished`, `unusableCheckpoint`,
+`earlierBuild` (with its `cause`), `pluginUnavailable` (it holds a fact of the
+plugin named by `plugin`, which this process does not load), or
+`notResumable` (it was deleted). If
 `runId` belongs to a child run owned by an active parent call,
 `session.resume` resumes the parent and sets `run.redirectedFrom` to the
-requested child `runId`. Pass the same custom `tools` to `resume` that were
+requested child `runId`. Pass the same `runTools` to `resume` that were
 passed to `start`. Calling `resume` on a run already running or resuming in
 this process starts nothing: it returns the `Run` of the activation running,
 and reads no input. `run.activation` is that activation's commit;
@@ -152,7 +153,7 @@ const program = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots, {
     persistent: true,
   });
-  const run = yield* session.resume(runId, { tools });
+  const run = yield* session.resume(runId, { runTools });
   return yield* run.result;
 });
 ```
@@ -205,7 +206,7 @@ const program = Effect.gen(function* () {
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins, client })` composes that process for the layer's lifetime. Build it once per process.                                  |
 | `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
-| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`, the user's `run.stop`. `start` returns once the run exists, before its first model call.                                 |
+| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts. Stop it with the `run.stop` request. `start` returns once the run exists, before its first model call.                                |
 
 `run.events` is the run's trace as a `Stream`, and any number of readers
 can read it at any time. Each read is the run's events read back from the
@@ -448,8 +449,8 @@ version of the usage program against a packed tarball is in
 ## The platform
 
 Every run needs an `AgentPlatform`: the process services the package
-composes (its resources root, secrets and the resume
-port) plus the `WorkspaceRoots` of the folder the runs
+composes (its secret store and, optionally, a resources root plugins read)
+plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
 `mcp.json` at the storage root that global storage lies under, and a run's
@@ -554,7 +555,7 @@ const tools = [EchoTool];
 also reports a summary, attachments or facts. Failing with an `Error` gives
 the model its message as the tool's error.
 
-Pass `tools` to `session.start`. A custom tool that requires
+Pass `tools` to `session.start` as `runTools`. A custom tool that requires
 approval runs only on a session opened with an approval handler; on any
 other session it fails the launch with `ToolsRefused`. A directly implemented `ITool` also returns an Effect from
 `call`; asynchronous operations compose inside that program. Execute programs
