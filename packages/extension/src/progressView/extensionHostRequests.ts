@@ -14,7 +14,6 @@ import { Effect, FiberHandle } from 'effect';
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { type ProcessServices } from '@texra-ai/harness/host';
 import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/plugins';
-import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
@@ -87,25 +86,32 @@ export interface ExtensionHostRequestsOptions {
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
-/** The editor's current file, project-relative: the active text editor's
- *  document, else the active tab's file (an image or a PDF opens in a
- *  custom editor). */
-function getCurrentFile(roots: WorkspaceRoots): Effect.Effect<string | null> {
-  return Effect.sync(() => {
-    const doc = vscode.window.activeTextEditor?.document;
-    if (doc?.uri.scheme === 'file') {
-      return workspaceRelativePath(roots.workspace, doc.uri.fsPath);
-    }
-    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
-    const isFileInput =
-      (input instanceof vscode.TabInputText ||
-        input instanceof vscode.TabInputCustom) &&
-      input.uri.scheme === 'file';
-    return isFileInput
-      ? workspaceRelativePath(roots.workspace, input.uri.fsPath)
-      : null;
-  });
+/** The file a tab shows, by its absolute path: a text editor's, or a
+ *  custom editor's (an image or a PDF); undefined for any other tab. */
+function tabFile(input: unknown): string | undefined {
+  return (input instanceof vscode.TabInputText ||
+    input instanceof vscode.TabInputCustom) &&
+    input.uri.scheme === 'file'
+    ? input.uri.fsPath
+    : undefined;
 }
+
+/** The editor's current file: the active text editor's document, else the
+ *  active tab's file. */
+const currentFile = Effect.sync(() => {
+  const doc = vscode.window.activeTextEditor?.document;
+  if (doc?.uri.scheme === 'file') return doc.uri.fsPath;
+  return (
+    tabFile(vscode.window.tabGroups.activeTabGroup.activeTab?.input) ?? null
+  );
+});
+
+/** Every file the editor has a tab open on. */
+const openedFiles = Effect.sync(() =>
+  vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .flatMap((tab) => tabFile(tab.input) ?? []),
+);
 
 /** One of this extension's own command handlers, or a VS Code command, run
  *  in the handler's fiber: a typed failure or a defect is named and logged. */
@@ -169,31 +175,6 @@ export const createExtensionHostRequests = Effect.fn(
   const diffRefresh = yield* FiberHandle.make();
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
 
-  function getOpenedFiles(): Effect.Effect<readonly string[]> {
-    const workspaceRoot = roots.workspace;
-    if (!workspaceRoot) {
-      return Effect.logWarning('No workspace path found for opened files').pipe(
-        withLogChannel(CHANNEL),
-        Effect.as([]),
-      );
-    }
-    const fileUris = vscode.window.tabGroups.all
-      .flatMap((group) => group.tabs)
-      .map((tab) => tab.input)
-      .filter(
-        (input): input is vscode.TabInputText | vscode.TabInputCustom =>
-          input instanceof vscode.TabInputText ||
-          input instanceof vscode.TabInputCustom,
-      )
-      .map((input) => input.uri)
-      .filter((uri) => uri.scheme === 'file');
-    return Effect.succeed([
-      ...new Set(
-        fileUris.map((uri) => workspaceRelativePath(workspaceRoot, uri.fsPath)),
-      ),
-    ]);
-  }
-
   /** What each getting-started action runs. */
   const gettingStarted = (action: GettingStartedAction) => {
     switch (action) {
@@ -251,8 +232,8 @@ export const createExtensionHostRequests = Effect.fn(
       ),
     },
     editor: {
-      currentFile: getCurrentFile(roots),
-      openedFiles: Effect.suspend(getOpenedFiles),
+      currentFile,
+      openedFiles,
     },
   };
 
