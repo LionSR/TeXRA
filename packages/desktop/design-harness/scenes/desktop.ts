@@ -260,6 +260,7 @@ const workbench = (
           dockTab(id, {
             api: () => api!,
             tab: (id) => tabs.find((tab) => tab.id === id),
+            isDirty: () => false,
             open: noop,
             close: (id) => api?.getPanel(id)?.api.close(),
           }),

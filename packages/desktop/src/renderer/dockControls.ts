@@ -31,6 +31,7 @@ const TAB_MOVE_POSITIONS = ['left', 'right', 'top', 'bottom'] as const;
 interface DockActions {
   api(): DockviewApi;
   tab(id: string): WorkbenchTab | undefined;
+  isDirty(id: string): boolean;
   open(kind: WorkbenchKind, group?: DockviewGroupPanel): void;
   close(id: string): void;
 }
@@ -130,7 +131,7 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
         <span class="shell-dock-tab-label" title=${tab.target ?? tab.title}
           >${tab.title}</span
         >
-        ${tab.dirty ? html`<span class="status-dot shell-dock-dirty" role="img" aria-label="Unsaved changes"></span>` : nothing}
+        ${actions.isDirty(id) ? html`<span class="status-dot shell-dock-dirty" role="img" aria-label="Unsaved changes"></span>` : nothing}
         <span
           class="shell-dock-tab-close"
           @pointerdown=${(event: Event) => event.stopPropagation()}
