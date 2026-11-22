@@ -1319,6 +1319,19 @@ agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
 `extractBibliography.ts`，九个 bundled agent 的工具表和提示词里对它们的
 引用。存法没有变：存过这些调用的 run 照旧能读，卡片用通用图标。
 
+**workspace 的 agent 选择已从第 5 期提前删除（2026-11-22）。** 它不依赖
+入口 agent 的基础文本和短表：删掉之后每个 workspace 显示全部 agent。删
+掉的是 `agent/workspaceAgents/` 两个文件、`WorkspaceAgentsSelectionSchema`
+和 hidden custom agents、catalog 上按 workspace 取 agent 的访问器
+（`forLaunch` 和 `removeCustom` 成为 catalog 自己的方法，不再收 store）、
+设置页每行的开关和 Visibility 菜单、CLI 的选择表单、
+`texra config agents --agents` 和 `texra agents list --all`。存法没有变：
+`workspaceAgents` 和 `hiddenCustomAgents` 两个状态键不再读取，已存的值不
+删。留给第 5 期的：`AgentConfig.delegationAgentScope`（仍随第二次存法变更
+一起删）、customize 副本和 newer-built-in 提示、agent 设置页的其余部分、
+`texra agents` 命令、默认聊天 agent（`texra config agents --default-agent`）。
+设置页的 agent 列表右侧还留着一列空的控件位，随设置页一起处理。
+
 ## 负责人问题
 
 决定页上的十一处都选了。剩下两处（第 1 处已于 2026-11-21 定）：
