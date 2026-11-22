@@ -44,8 +44,6 @@ export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   SET_MODEL_REASONING_LEVEL: 'setModelReasoningLevel',
   // Agent selection commands
   OPEN_AGENT_YAML: 'openAgentYaml',
-  SET_AGENT_ENABLED: 'setAgentEnabled',
-  SET_ALL_AGENTS_ENABLED: 'setAllAgentsEnabled',
   OPEN_AGENT_FOLDER: 'openAgentFolder',
   CREATE_AGENT: 'createAgent',
   CUSTOMIZE_AGENT: 'customizeAgent',

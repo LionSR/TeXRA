@@ -46,7 +46,7 @@ On first launch, point the app at your project and verify your setup:
 <FlowSteps :steps="[
   { n: 1, icon: 'folder-open', title: 'Open your project', desc: 'Point the desktop app at the same folder or Git repository you already use for your project.', chips: [{ text: 'folder or repo', variant: 'info', icon: 'folder-tree' }] },
   { n: 2, icon: 'key', title: 'Add API keys', desc: 'Add model provider keys in the Models tab, or set workspace-local .env variables.', chips: [{ text: 'Models tab', variant: 'accent' }, { text: '.env', variant: 'info', icon: 'file-code' }] },
-  { n: 3, icon: 'gear', title: 'Review settings', desc: 'Check agent visibility, plugins, LaTeX tool paths, and approval and Git under General.', chips: [{ text: 'Agents', variant: 'accent' }, { text: 'Plugins', variant: 'accent' }, { text: 'LaTeX', variant: 'accent' }, { text: 'General', variant: 'accent' }] },
+  { n: 3, icon: 'gear', title: 'Review settings', desc: 'Check agents, plugins, LaTeX tool paths, and approval and Git under General.', chips: [{ text: 'Agents', variant: 'accent' }, { text: 'Plugins', variant: 'accent' }, { text: 'LaTeX', variant: 'accent' }, { text: 'General', variant: 'accent' }] },
   { n: 4, icon: 'play', title: 'Run a small task', desc: 'Run a small task, such as tightening a paragraph, and confirm it appears in the task list.', chips: [{ text: 'Tasks', variant: 'success', icon: 'list-check' }] }
 ]" />
 

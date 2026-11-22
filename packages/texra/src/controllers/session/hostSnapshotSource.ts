@@ -263,7 +263,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const loadAgents = yield* producer(
       'the agents',
       Effect.gen(function* () {
-        const agentOptions = yield* agentOptionsData(stores);
+        const agentOptions = yield* agentOptionsData;
         yield* SubscriptionRef.update(inputs, (s) => ({
           ...s,
           catalogs: { ...s.catalogs, agentOptions },

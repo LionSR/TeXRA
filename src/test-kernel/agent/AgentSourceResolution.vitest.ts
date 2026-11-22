@@ -30,11 +30,7 @@ import { FakeHost } from '@test/support/testKernel';
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(catalog: AgentCatalogShape, entry: AgentEntry | undefined) {
-  return entry
-    ? Effect.flatMap(FakeHost, ({ roots }) =>
-        catalog.workspaceAgents(roots).forLaunch(entry.name, entry.source),
-      )
-    : Effect.undefined;
+  return entry ? catalog.forLaunch(entry.name, entry.source) : Effect.undefined;
 }
 
 const tempDirs: string[] = [];
@@ -121,12 +117,10 @@ layer(
         );
         expect(builtIn?.source).toBe('builtIn');
 
-        // The entry validation accepts: the name within the visible agents.
-        const { roots } = yield* FakeHost;
-        const visible = yield* catalog.workspaceAgents(roots).visible();
+        // The entry validation accepts: the name within the agents.
         const custom = yield* launchAs(
           catalog,
-          findAgentByIdentifier(visible, 'assistant'),
+          findAgentByIdentifier(catalog.list(), 'assistant'),
         );
         expect(custom?.source).toBe('custom');
       }),

@@ -158,7 +158,6 @@ const AgentSelectionItemSchema = Schema.Struct({
    * an update changed that agent since the copy was taken.
    */
   newerBuiltIn: Schema.optional(AgentSourceSchema),
-  enabled: Schema.Boolean,
 });
 export type AgentSelectionItem = typeof AgentSelectionItemSchema.Type;
 
@@ -527,15 +526,6 @@ const SetModelReasoningLevelMessageSchema = modelCommand(
 const OpenAgentYamlMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
 );
-const SetAgentEnabledMessageSchema = agentCommand(
-  SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-).mapFields(Struct.assign({ enabled: Schema.Boolean }));
-
-const SetAllAgentsEnabledMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
-  source: AgentSourceSchema,
-  enabled: Schema.Boolean,
-});
 const OpenAgentFolderMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER),
 });
@@ -701,8 +691,6 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   SetModelReasoningLevelMessageSchema,
   // Agent selection messages
   OpenAgentYamlMessageSchema,
-  SetAgentEnabledMessageSchema,
-  SetAllAgentsEnabledMessageSchema,
   OpenAgentFolderMessageSchema,
   CreateAgentMessageSchema,
   CustomizeAgentMessageSchema,

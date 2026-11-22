@@ -125,9 +125,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // An installed plugin names its agents and its programs `<plugin>:<name>`
   // alike: a name that is both is refused rather than one picked unsaid.
   if (program !== undefined && programOrigin(init.agent) === 'installed') {
-    const agent = yield* Effect.result(
-      resolveCliRunAgent(services, init.agent),
-    );
+    const agent = yield* Effect.result(resolveCliRunAgent(init.agent));
     if (Result.isSuccess(agent))
       return yield* failUsage(
         `${init.agent} names both a program and an agent of its plugin; rename one of them in the plugin.`,
@@ -137,7 +135,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     // Resolve once, before stdin is read or the runtime host starts; the
     // run pins the resolved source.
     const { source } = yield* resolveCliRunAgent(
-      services,
       init.agent,
       // A program read from a file may be one that does not load now.
       [

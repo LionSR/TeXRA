@@ -429,7 +429,6 @@ export {
   type UserQuestionRequest,
   type UserQuestionPrompt,
   UserQuestionPromptSchema,
-  type WorkspaceAgentsSelection,
   type WorktreeInfo,
   ToolDependencyStatusSchema,
   type ToolDependencyStatus,

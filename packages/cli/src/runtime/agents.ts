@@ -4,29 +4,17 @@ import {
   AgentCatalog,
   agentToolNames,
   type AgentEntry,
-  type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import { agentKeyOf, formatResultCount } from '@texra-ai/harness/schemas';
+import { agentKeyOf } from '@texra-ai/harness/schemas';
 
 import { CliUsageError } from './platform/cliContext';
 
-export interface CliAgentListOptions {
-  readonly includeHidden?: boolean;
-}
+const AGENT_LOOKUP_HINT = 'Use `texra agents list` for the agents.';
 
-interface CliAgentListResult {
-  readonly agents: readonly AgentEntry[];
-  readonly hiddenCount: number;
-}
-
-const AGENT_LOOKUP_HINT =
-  'Use `texra agents list` for the agents this workspace shows, or `texra agents list --all` for every agent.';
-
-export const AGENT_NAME_DESCRIPTION =
-  'Agent name from `texra agents list` or `texra agents list --all`';
+export const AGENT_NAME_DESCRIPTION = 'Agent name from `texra agents list`';
 
 export const RUN_TARGET_NAME_DESCRIPTION =
-  'Program name (an unknown name prints the programs) or agent name from `texra agents list --all`';
+  'Program name (an unknown name prints the programs) or agent name from `texra agents list`';
 
 export function missingAgentMessage(name: string): string {
   return `Agent not found: ${name}. ${AGENT_LOOKUP_HINT}`;
@@ -46,13 +34,11 @@ export function missingRunTargetMessage(
  * a usage error saying `notFoundMessage`.
  */
 export function resolveCliRunAgent(
-  stores: WorkspaceAgentsStores,
   name: string,
   notFoundMessage = missingAgentMessage(name),
 ) {
   return Effect.flatMap(AgentCatalog, (catalog) =>
     catalog
-      .workspaceAgents(stores)
       .forLaunch(name)
       .pipe(
         Effect.catchTag('AgentNotFound', () =>
@@ -62,30 +48,13 @@ export function resolveCliRunAgent(
   );
 }
 
-export function loadCliAgentList(
-  stores: WorkspaceAgentsStores,
-  options: CliAgentListOptions = {},
-) {
-  const includeHidden = options.includeHidden === true;
-  return Effect.gen(function* () {
-    const catalog = yield* AgentCatalog;
-    const all = catalog.list();
-    const agents = includeHidden
-      ? all
-      : yield* catalog.workspaceAgents(stores).visible();
-    const hiddenCount = all.length - agents.length;
-
-    return { agents, hiddenCount } satisfies CliAgentListResult;
-  });
-}
-
 export function formatCliAgentList(
   agents: readonly AgentEntry[],
   options: { readonly showEmptyState?: boolean } = {},
 ): string {
   if (agents.length === 0) {
     if (options.showEmptyState !== true) return '';
-    return 'No visible agents are enabled for this workspace. Use `texra agents list --all` to show all agents.';
+    return 'No agents are installed.';
   }
 
   // Shell completion reads the name column straight back into `texra run`,
@@ -125,11 +94,4 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
 
 export function formatCliNewerBuiltInNotice(name: string): string {
   return `A newer built-in version of ${name} is available; your custom copy still overrides it. Run \`texra agents reset ${name}\` to use the new version, or \`texra agents keep ${name}\` to keep yours.`;
-}
-
-export function formatCliHiddenAgentsNotice(
-  hiddenCount: number,
-): string | undefined {
-  if (hiddenCount <= 0) return undefined;
-  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list --all\` to show all agents.`;
 }

@@ -7,8 +7,6 @@ import {
   isPackagedAgentSource,
 } from '@texra-ai/harness/schemas';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
-import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -21,7 +19,6 @@ import type { IconName } from '@ui/wa/iconNames';
 import { settingsBannerStyles } from '@ui/styles';
 import { TexraElement } from '@ui/litBase';
 import {
-  renderIconActionButton,
   renderLabeledActionButton,
   type LabeledActionButtonOptions,
 } from '@ui/wa/actionButtons';
@@ -84,25 +81,6 @@ export class AgentSelectionPanel extends TexraElement {
       description: agent.description || 'Chat agent',
       searchText: agent.tools?.join(' '),
       badges: html`${agent.newerBuiltIn ? waIcon('arrow-up', { label: 'Newer built-in version available' }) : nothing}`,
-      control: renderIconActionButton({
-        id: `agent-visible-${encodeURIComponent(key)}`,
-        className: 'catalog-row-toggle',
-        icon: agent.enabled ? 'eye' : 'eye-slash',
-        label: `Show ${agent.name} in agent selector`,
-        tooltip: agent.enabled
-          ? 'Shown in agent selector'
-          : 'Hidden from agent selector',
-        pressed: agent.enabled,
-        onClick: (event) => {
-          event.stopPropagation();
-          postToHost({
-            command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-            agentName: agent.name,
-            agentSource: agent.source,
-            enabled: !agent.enabled,
-          });
-        },
-      }),
     };
   }
 
@@ -275,7 +253,6 @@ export class AgentSelectionPanel extends TexraElement {
     return html`
       <settings-catalog
         label="Agents"
-        actionLabel="Visible"
         placeholder="Search name, purpose, or tool"
         .items=${items}
         .selectedKey=${this.selectedKey}
@@ -284,30 +261,6 @@ export class AgentSelectionPanel extends TexraElement {
         }}
       >
         <div slot="actions" class="catalog-toolbar-actions">
-          <wa-dropdown>
-            ${renderLabeledActionButton({
-              text: 'Visibility',
-              slot: 'trigger',
-            })}
-            ${sources
-              .filter((source) =>
-                this.agents.some((entry) => entry.source === source),
-              )
-              .map((source) =>
-                [true, false].map(
-                  (enabled) => html`
-                    <wa-dropdown-item
-                      @click=${() => postToHost({ command: SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, source, enabled })}
-                    >
-                      ${waIcon(enabled ? 'eye' : 'eye-slash', { slot: 'icon' })}
-                      ${enabled ? 'Show' : 'Hide'} all
-                      ${sourceMeta(source).displayName.toLocaleLowerCase()}
-                      agents
-                    </wa-dropdown-item>
-                  `,
-                ),
-              )}
-          </wa-dropdown>
           <slot name="actions"></slot>
         </div>
         <div slot="detail">${agent ? this.renderDetail(agent) : nothing}</div>

@@ -14,7 +14,6 @@ import {
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 
 import { AsyncListForm } from './_shared/ListForm';
-import { useChatProcess } from '../chatProcess';
 
 interface AgentListFormProps {
   readonly currentAgent: string;
@@ -60,19 +59,20 @@ function currentVisibleAgent(
   return agents.find((agent) => isAgentOption(agent.value, current));
 }
 
-function hiddenCurrentAgentHint(
+/** Names a current agent the list does not hold: one the catalog no longer
+ *  has, or one a launch defined inline. */
+function unlistedCurrentAgentHint(
   agents: readonly AgentIdentity[],
   currentAgent: string,
 ): string | undefined {
   const current = currentAgent.trim();
   if (!current || currentVisibleAgent(agents, current)) return undefined;
-  return `Current: ${agentName(current)} (hidden from picker)`;
+  return `Current: ${agentName(current)} (not in the agent list)`;
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
-  const { roots } = useChatProcess();
   const hintRow = (agents: readonly AgentRow[]): React.JSX.Element | null => {
-    const hint = hiddenCurrentAgentHint(agents, props.currentAgent);
+    const hint = unlistedCurrentAgentHint(agents, props.currentAgent);
     return hint ? (
       <Text dimColor wrap="truncate-end">
         {hint}
@@ -85,7 +85,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
       loadingLabel="Loading agents…"
       load={Effect.fn('load')(function* () {
         const catalog = yield* AgentCatalog;
-        return (yield* agentOptionsData(roots)).map((agent) => ({
+        return (yield* agentOptionsData).map((agent) => ({
           ...agent,
           description: catalog.get(agent.value)?.description,
         }));

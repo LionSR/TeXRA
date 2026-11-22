@@ -193,7 +193,7 @@ const startCommand = cliCommand('start', {
       projectApprovalPolicy(services.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
-    const agent = yield* resolveCliRunAgent(services, input.agent);
+    const agent = yield* resolveCliRunAgent(input.agent);
     const model = yield* selectCliRunModel(
       context,
       Option.getOrUndefined(input.model),

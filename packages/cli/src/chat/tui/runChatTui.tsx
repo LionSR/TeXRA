@@ -183,14 +183,9 @@ export async function runChat(
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
-        visibleToolUseAgents: yield* (yield* AgentCatalog)
-          .workspaceAgents(services)
-          .visible(),
+        visibleToolUseAgents: (yield* AgentCatalog).list(),
       });
-      const agentEntry = yield* resolveChatToolUseAgent(
-        services,
-        defaults.agent,
-      );
+      const agentEntry = yield* resolveChatToolUseAgent(defaults.agent);
       if (agentEntry instanceof CliUsageError) {
         writeTextStderr(agentEntry.message);
         return { exitCode: CliExitCode.Usage };

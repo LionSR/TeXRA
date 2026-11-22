@@ -3033,13 +3033,6 @@ The OpenAI WebSocket transport (experimental).
 const WEBSOCKET_OPENAI_SETTING: { readonly key: "websocket.openai"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "OpenAI WebSocket"; readonly description: "EXPERIMENTAL: send OpenAI Responses requests over a persistent WebSocket (lower latency for tool-use loops). Applies only to an OpenAI API key on the default endpoint; the ChatGPT subscription and background responses keep HTTP. Off by default."; }
 ```
 
-## WorkspaceAgentsSelection
-
-```ts
-type WorkspaceAgentsSelection =
-  (typeof WorkspaceAgentsSelectionSchema)['Type'];
-```
-
 ## WorkspaceFileLocation
 
 ```ts
