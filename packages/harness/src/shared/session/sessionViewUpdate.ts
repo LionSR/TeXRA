@@ -621,8 +621,9 @@ function advanceFinalRows(
 }
 
 /** The transcript-derived fields of a run, after its rows moved or its turn
- *  started or ended: `finalRows`, `thinkingActive`, `compactingActive`,
- *  and `latestLine`. Once the turn is over nothing streams or compacts. */
+ *  started or ended: `finalRows`, `toolCalls`, `thinkingActive`,
+ *  `compactingActive` and `latestLine`. Once the turn is over nothing streams
+ *  or compacts. */
 function withTranscriptFacts(u: Update, run: RunView): RunView {
   const { transcript } = run;
   const { turnOver } = runWork(u, run.id);
