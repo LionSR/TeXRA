@@ -88,7 +88,6 @@ export type SettingsInput =
   | 'credentials'
   | 'subscriptions'
   | 'usage'
-  | 'agents'
   | 'github'
   | 'memory'
   | 'plugins'
