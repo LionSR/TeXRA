@@ -45,7 +45,7 @@ Landed 2026-11-22: `RpcClientMessageSchema` and `RpcServerMessageSchema`
 `rpc`'s encoded types, which `Schema.toCodecJson` passes through, so the
 socket carriers need no declared codec. The session envelope is
 `ClientEnvelopeSchema` and `ServerEnvelopeSchema`, `SessionWire` their union,
-and the ten casts are gone.
+and the eleven casts are gone.
 
 ## 4. The desktop `WorkbenchTab` is a union written as optionals
 
