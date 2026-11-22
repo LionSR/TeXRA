@@ -26,6 +26,7 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   runEndErrorMessage,
   AgentConfigSchema,
+  type AgentConfig,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
@@ -338,7 +339,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // what the call wrote, or an installed plugin's agent read now, so the
   // child's config holds its system text and tools and a resume reads no
   // file.
-  let agent: { name: string; system: string; tools: readonly string[] };
+  let agent: {
+    name: string;
+    system: string;
+    tools: readonly string[];
+    toolScope?: AgentConfig['toolScope'];
+  };
   if (launch.program !== null)
     agent = { name: launch.program.name, system: '', tools: [] };
   else if (launch.agentName != null) {
@@ -543,6 +549,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
+    // What an installed plugin's agent's tool list means, read with it.
+    ...(agent.toolScope !== undefined && { toolScope: agent.toolScope }),
     ...programConfig,
   });
   const runId = agentChildRunId(call);

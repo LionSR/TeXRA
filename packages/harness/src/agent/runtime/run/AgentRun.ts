@@ -258,18 +258,20 @@ export const agentRunLayer = (
         .hold(tools, root)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
+      const injects =
+        script === null && !textOnly && config.toolScope !== 'declared';
       const toolInputs: AgentRunShape['toolInputs'] = {
         tools,
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : (input.tools ?? []),
-        // A script's run and a text-only run inject none.
-        injectTools: script === null && !textOnly,
-        // The installed plugins' tools reach a top-level run and a `self()`
-        // child, which runs as its caller; any other child gets what it
-        // declares.
-        injectInstalled:
-          script === null && !textOnly && (root || config.asCaller === true),
+        // A script's run, a text-only run and one whose launch named exactly
+        // its tools inject none.
+        injectTools: injects,
+        // The installed plugins' tools reach a top-level run and a run its
+        // launch scoped as one (`toolScope`); any other child gets what it
+        // declares and the injected tools.
+        injectInstalled: injects && (root || config.toolScope === 'topLevel'),
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).

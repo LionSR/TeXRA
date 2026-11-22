@@ -352,7 +352,7 @@ An installed plugin stays off until you enable it:
 Once enabled and trusted, a plugin's components load under its namespace:
 
 - **Names**: Skills, commands, agents and programs become `<plugin>:<name>`, and MCP tools are offered to top-level chat runs as `mcp__plugin_<plugin>_<server>__<tool>`.
-- **Tool inheritance**: A plugin agent that lists `tools` receives only those. One that omits `tools` inherits its parent's offered tools (for a subagent) or the file, shell, web, and enabled plugin tools (for a top-level run). A subagent never receives more tools than its parent.
+- **Tool inheritance**: The assistant starts a plugin agent by name with the `agent` tool. One that lists `tools` receives exactly those. One that omits `tools` receives the file, shell and web tools and, as a top-level run does, the tools the enabled plugins add, including installed plugins' MCP tools.
 - **Runtime changes**: Each MCP server runs as its own process in the plugin folder, with tool calls approved like shell commands. Enabling, disabling, or modifying a plugin takes effect at the next model request in a running conversation; calls to removed tools are refused, while earlier history is preserved.
 
 Fetched plugins are stored in `~/.texra/v1/global-storage/plugins/<name>/`, pinned to the resolved commit. `texra plugin update` re-fetches the branch or tag and pins the new commit. Local folders are used in place without copying, so edits take effect immediately and `texra plugin remove` only unregisters them (if removing a fetched plugin fails to delete its folder, run `texra plugin remove` again).

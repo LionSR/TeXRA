@@ -195,7 +195,10 @@ const runSelf = Effect.fn('self.call')(function* (
             // model that conversation's format cannot run on.
             ...(model !== undefined && { model }),
             outputSchema,
-            asCaller: true,
+            // It runs as its caller, offered the installed plugins' tools as
+            // a top-level run is, unless its caller's launch named exactly
+            // its tools.
+            toolScope: record.toolScope ?? 'topLevel',
           }),
           ...(forked !== null && { seed: forked.seed }),
           parentCall: { callId: call.callId, card: call.logId },

@@ -186,8 +186,11 @@ export const scanPluginAgents = Effect.gen(function* () {
 /**
  * The installed plugin's agent `name` (`<plugin>:<name>`) as a launch runs
  * it: its plugin loads now, and its system text and tools are read from its
- * file. One that names no tools gets the counterparts of the tools a Claude
- * Code subagent inherits: the standard file, shell and web tools.
+ * file, with the scope the child's config records (`toolScope`). One that
+ * names its tools gets exactly those. One that names none inherits, as a
+ * Claude Code subagent does: the counterparts of the standard file, shell
+ * and web tools, and the injected and installed plugins' tools at each of
+ * its steps, wherever it runs.
  */
 export const pluginAgent = Effect.fn('pluginAgent')(function* (
   name: string,
@@ -212,5 +215,7 @@ export const pluginAgent = Effect.fn('pluginAgent')(function* (
     name: entry.name,
     system: entry.system,
     tools: entry.tools ?? CLAUDE_COUNTERPART_TOOLS,
+    toolScope:
+      entry.tools === undefined ? ('topLevel' as const) : ('declared' as const),
   };
 });

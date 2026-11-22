@@ -34,11 +34,17 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
     tools: decodingDefault(Schema.Array(Schema.NonEmptyString), []),
     temperature: decodingDefault(TemperatureSchema, 1.0),
     /**
-     * A `self()` child: it runs as its caller, so it is offered the installed
-     * plugins' tools as a top-level run is, still narrowed to what its
-     * caller's step offered.
+     * Which tools join the ones the run declares, decided by its launch.
+     * Absent: a top-level run is offered the plugins' injected tools and the
+     * installed plugins' tools, a child the injected tools only.
+     * `declared`: none join (an installed plugin's agent that names its
+     * tools gets exactly those). `topLevel`: both join wherever it runs (a
+     * `self()` child, which runs as its caller; an installed plugin's agent
+     * that names no tools, which inherits them as a Claude Code subagent
+     * does). A script's run and a run that declares no tools are offered no
+     * injected tool either way.
      */
-    asCaller: Schema.optional(Schema.Boolean),
+    toolScope: Schema.optional(Schema.Literals(['declared', 'topLevel'])),
     model: Schema.String,
     instruction: decodingDefault(Schema.String, ''),
     /** Original user instruction preserved across nested tool-use delegation.
