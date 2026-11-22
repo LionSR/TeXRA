@@ -1447,7 +1447,7 @@ function harnessInitialEntries(): HarnessLogRow[] {
 }
 
 sessionMeta.set({
-  chat: { label: 'chat', system: '', tools: [], temperature: 1 },
+  chat: { label: 'chat', system: '', tools: [] },
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,

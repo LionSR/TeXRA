@@ -78,7 +78,6 @@ export const entryAgent = (
   label,
   system: ENTRY_PROMPT,
   tools: [...new Set([...ENTRY_TOOLS, ...also])],
-  temperature: 1,
 });
 
 /** What the setup conversation's runs are called: the setup entry points

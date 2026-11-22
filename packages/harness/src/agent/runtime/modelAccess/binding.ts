@@ -183,7 +183,9 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
             1,
             Math.floor(requested.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
           ),
-      temperature: request.temperature,
+      ...(request.temperature !== undefined && {
+        temperature: request.temperature,
+      }),
       reasoning,
       ...settings.wire,
       // A text-only binding gives up the persistent WebSocket where its

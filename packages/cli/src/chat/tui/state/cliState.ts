@@ -54,7 +54,7 @@ export interface SessionMeta {
 }
 
 const EMPTY_SESSION_META: SessionMeta = {
-  chat: { label: '', system: '', tools: [], temperature: 1 },
+  chat: { label: '', system: '', tools: [] },
   model: '',
   modelSource: 'builtin-default',
   cwd: '',

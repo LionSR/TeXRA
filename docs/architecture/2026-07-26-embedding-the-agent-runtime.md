@@ -20,8 +20,8 @@ runs.
 ## 1. What an embedder supplies
 
 There are no agent files, no agent directory and no agent catalog. A run
-carries what it is: its system text, the tools it declares, its temperature
-and a display label, recorded on its `run.config` row, so neither a start nor
+carries what it is: its system text, the tools it declares and a display
+label, recorded on its `run.config` row, so neither a start nor
 a resume reads anything from disk to find out what the run is. An embedder
 supplies four things, all to `Sessions.layer({ platform, plugins, client,
 skills })` (`packages/harness/src/effect/processLayer.ts`; the shape is
@@ -63,14 +63,14 @@ release closes every session it opened, then the process under them.
 `packages/harness/src/shared/session/runtimeRequest.ts`, exported from
 `@texra-ai/harness/schemas`), in one of two forms:
 
-- `{ system, tools?, temperature?, label?, instruction, model }`: the run's
+- `{ system, tools?, label?, instruction, model }`: the run's
   own system text (before what the harness appends: the project's
   `AGENTS.md`, attached memories, tool-use instructions, the plugins'
   sections), the tool names it declares (`mcp__<server>__*` for every tool of
-  a configured MCP server; none, and it answers in text only), a temperature
-  from 0 to 1 (default 1), the name its card and run directory show
-  (default `agent`), the instruction, and the model as `provider/id`. The
-  harness names no default model.
+  a configured MCP server; none, and it answers in text only), the name its
+  card and run directory show (default `agent`), the instruction, and the
+  model as `provider/id`. The harness names no default model, and a run
+  names no temperature: its model samples at its own.
 - `{ config }`: a whole `AgentConfig`
   (`packages/harness/src/shared/schemas/agentConfig.ts`), for a host that
   builds the configuration itself.
@@ -132,8 +132,7 @@ console.log(end.outcome, end.output.response);
 `packages/harness/src/effect/sessionPrograms.ts`). It fails with
 `ToolsRefused` when `runTools` holds a tool that requires approval on a
 session no host can answer, and with `LaunchRefused` for an input
-`AgentConfigSchema` rejects (a `temperature: 2`, more output files than
-inputs), an unknown model (the error carries the `notice` a host shows for
+`AgentConfigSchema` rejects (more output files than inputs), an unknown model (the error carries the `notice` a host shows for
 it) or a `runId` already in the session. A launch that fails for any other
 reason before the run exists fails with `RunFailure`. Once `start` returns a
 `Run`, a failure is the run's own: the handle's `result` succeeds with the

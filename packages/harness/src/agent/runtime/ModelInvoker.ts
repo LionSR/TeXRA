@@ -527,7 +527,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 backend: failed.backend,
                 declinedRoutes,
                 textOnly: failed.textOnly,
-                temperature: run.config.temperature,
               })
               // The ref masks its acquisition; a stop must still cut a
               // bind in progress.

@@ -28,7 +28,6 @@ export const cliEntryAgent: Effect.Effect<ChatLaunch> = Effect.gen(
         ? yield* envVar(VALIDATION_AGENT)
         : undefined;
     if (!written) return entryAgent();
-    const run = Schema.decodeUnknownSync(ValidationAgentJson)(written);
-    return { ...run, temperature: 1 };
+    return Schema.decodeUnknownSync(ValidationAgentJson)(written);
   },
 );

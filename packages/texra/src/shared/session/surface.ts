@@ -52,16 +52,10 @@ const UIFileFieldsSchema = FileFieldsSchema.mapFields(
 );
 
 /** The fields of a run's config that say what chat it is. */
-const CHAT_FIELDS = [
-  'label',
-  'system',
-  'tools',
-  'temperature',
-  'toolScope',
-] as const;
+const CHAT_FIELDS = ['label', 'system', 'tools', 'toolScope'] as const;
 
-/** A chat as a launch names it: its name, system text, tools, temperature
- *  and tool scope, as a run's config records them. */
+/** A chat as a launch names it: its name, system text, tools and tool
+ *  scope, as a run's config records them. */
 const ChatLaunchSchema = Schema.Struct(
   Struct.pick(AgentConfigSchema.fields, CHAT_FIELDS),
 );

@@ -108,7 +108,7 @@ from `@texra-ai/harness/schemas`): `system`, its own system text, before
 what the harness appends (the project's `AGENTS.md`, attached memories,
 tool-use instructions and the plugins' sections); `tools`, the tool names it
 declares (`mcp__<server>__*` for every tool of a configured MCP server; none,
-and it answers in text only); `temperature`; and `label`, the name its card,
+and it answers in text only); and `label`, the name its card,
 listings and run directory show. The run records them on its configuration,
 so a resume reads nothing else. A tool it names that no plugin offers fails
 the run before any model call. Custom tools for this run alone, made with

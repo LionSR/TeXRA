@@ -295,7 +295,6 @@ export const agentRunLayer = (
             backend,
             declinedRoutes,
             textOnly,
-            temperature: config.temperature,
           })
           .pipe(Effect.interruptible),
       ).pipe(Scope.provide(scope));
