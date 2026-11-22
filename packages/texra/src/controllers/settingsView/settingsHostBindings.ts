@@ -51,7 +51,6 @@ export interface SettingsHostBindings {
   openPath(filePath: string): HostEffect;
   /** Show a file or folder in the system file manager. */
   revealPath(filePath: string): HostEffect;
-  pickFolder(title: string): HostEffect<string | undefined>;
   /** Run one subscription's sign-in (`SubscriptionProvider.signIn`) over
    *  this host's prompts and answer the account. The body tells the user how
    *  it ended; a user who backs out of a prompt fails with `Cancelled`,

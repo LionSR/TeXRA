@@ -4,7 +4,7 @@
 // lives in a child of the window's scope, closed and replaced, awaited, when
 // the window switches projects.
 
-import { app, shell } from 'electron';
+import { shell } from 'electron';
 import { Effect, Exit, Scope } from 'effect';
 
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
@@ -103,12 +103,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         openPath: (filePath) => host.presented(previewHost.openPath(filePath)),
         revealPath: (filePath) =>
           Effect.sync(() => shell.showItemInFolder(filePath)),
-        pickFolder: (title) =>
-          host.pickFolder(
-            title,
-            projects.active().roots.workspace ?? app.getPath('home'),
-            ['openDirectory', 'createDirectory'],
-          ),
         // The run verbs of the project these settings belong to, even while
         // the window is switching to another; a released binding's bridge
         // has no port left, so a late verb reaches no surface.
