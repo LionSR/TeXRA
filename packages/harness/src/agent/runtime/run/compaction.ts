@@ -194,7 +194,11 @@ const summarize = Effect.fn('compaction.summarize')(function* (
 ): Effect.fn.Return<Summary | null> {
   const { logger, bound } = input;
   const { from, to } = rangeOf(state, trigger, tail);
-  if (to - from <= 2) {
+  // A threshold summary's range leaves the tail out, and the threshold is
+  // three tails, so a range that holds anything holds most of the view:
+  // one long message (a file read whole) is worth its summary. A `/compact`
+  // or an overflow of a prompt and its reply has nothing to summarize.
+  if (trigger === 'context-limit' ? to === from : to - from <= 2) {
     if (trigger !== 'context-limit') {
       logger.debug('Conversation too short for compaction, skipping');
     }
