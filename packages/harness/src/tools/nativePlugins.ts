@@ -78,7 +78,9 @@ import {
 
 // Local imports
 import {
+  NAMED_KINDS,
   NATIVE_ENTRY_FILE,
+  SINGLE_KINDS,
   type NativeEntry,
 } from '@common/plugins/nativeEntry';
 import { copyPlugin } from '@common/plugins/pluginDigest';
@@ -237,14 +239,23 @@ const REFUSED_FIELDS = {
     'it declares injected tools; its tools reach every run that takes the installed plugins’ tools',
 } as const;
 
+/** The names a plugin has of each named kind. */
+const NAMED = {
+  tool: (plugin) =>
+    (plugin.tools ?? []).map(({ definition }) => definition.name),
+  program: (plugin) => Object.keys(plugin.programs ?? {}),
+  module: (plugin) => Object.keys(plugin.scriptModules ?? {}),
+} satisfies Record<
+  keyof typeof NAMED_KINDS,
+  (plugin: Plugin) => readonly string[]
+>;
+
 /** What a plugin contributes, in `provides` words. */
 const contributions = (plugin: Plugin): readonly string[] => [
-  ...(plugin.tools ?? []).map(({ definition }) => `tool:${definition.name}`),
-  ...Object.keys(plugin.programs ?? {}).map((name) => `program:${name}`),
-  ...Object.keys(plugin.scriptModules ?? {}).map((name) => `module:${name}`),
-  ...(plugin.processLayer === undefined ? [] : ['processLayer']),
-  ...(plugin.sessionLayer === undefined ? [] : ['sessionLayer']),
-  ...(plugin.prompt === undefined ? [] : ['prompt']),
+  ...Object.entries(NAMED).flatMap(([word, names]) =>
+    names(plugin).map((name) => `${word}:${name}`),
+  ),
+  ...Struct.keys(SINGLE_KINDS).filter((word) => plugin[word] !== undefined),
 ];
 
 /**
