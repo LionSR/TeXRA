@@ -11,20 +11,18 @@ There are two supported paths. Pick based on whether you want the local build to
 
 ### Side-by-side as `texra-local` (recommended)
 
-Use the maintained workspace scripts. `texra-local:link` symlinks
-`~/.local/bin/texra-local` to `packages/cli/dist/texra.js` once;
-`texra-local:build` overwrites that target in place, so the symlink always
-points at your latest build without relinking:
+`texra-local:build` builds the CLI and points `~/.local/bin/texra-local` at
+the launcher in this checkout. Keep `~/.local/bin` on your `PATH` to run it.
 
 ```bash
 corepack pnpm install
-npm run texra-local:build   # bundle CLI + copy resources/docs into packages/cli/dist
-npm run texra-local:link    # one-time; override the install dir with TEXRA_LOCAL_BIN_DIR=/some/dir
+npm run texra-local:build
+texra-local
 ```
 
-Run with `texra-local` instead of `texra`. Re-run `texra-local:build` to refresh.
-The two scripts are defined in the repo-root `package.json`; the link step is
-`scripts/link-texra-local.mjs`.
+Re-run `texra-local:build` to refresh. To switch to an already built checkout,
+run `npm run texra-local:link` there. Set `TEXRA_LOCAL_BIN_DIR` to put the link
+in a different directory on `PATH`.
 
 ### Override the published `texra`
 

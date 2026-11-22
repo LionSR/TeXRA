@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 
-// Create (or refresh) a `texra-local` command that always runs this repo's
-// locally-built CLI, so it can coexist with a globally-installed published
-// `texra`. It's a symlink to the CLI's `dist/texra.js` launcher (the bundle
-// with Node's compile cache on), which each CLI build overwrites in place — so rebuilding the CLI updates `texra-local`
-// automatically, no relinking needed.
-//
-//   node scripts/link-texra-local.mjs           # link into ~/.local/bin
-//   TEXRA_LOCAL_BIN_DIR=/some/dir node scripts/link-texra-local.mjs
-//
-// Refresh the build it points at with: npm run texra-local:build
+// Bind `texra-local` to this checkout's built launcher. The published
+// command remains available as `texra`.
 
-import { existsSync, lstatSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readlinkSync,
+  symlinkSync,
+  unlinkSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -23,28 +22,22 @@ const binDir = process.env.TEXRA_LOCAL_BIN_DIR
   : path.join(homedir(), '.local/bin');
 const linkPath = path.join(binDir, 'texra-local');
 
-// `lstatSync` (unlike `existsSync`) doesn't follow symlinks, so it sees a
-// dangling link too — clear whatever is there before relinking.
-function pathPresent(p) {
-  try {
-    lstatSync(p);
-    return true;
-  } catch {
-    return false;
-  }
+if (!existsSync(target)) {
+  console.error('Run `npm run texra-local:build` to build and link the CLI.');
+  process.exit(1);
 }
 
 mkdirSync(binDir, { recursive: true });
-if (pathPresent(linkPath)) rmSync(linkPath);
-symlinkSync(target, linkPath);
-
-console.log(`Linked texra-local -> ${target}`);
-
-if (!existsSync(target)) {
-  console.warn(
-    '\nThe target build does not exist yet — run `npm run texra-local:build` ' +
-      'before invoking texra-local.',
-  );
+// `lstatSync` sees a dangling link, which can still be relinked.
+const existing = lstatSync(linkPath, { throwIfNoEntry: false });
+if (existing && !existing.isSymbolicLink()) {
+  console.error(`Move ${linkPath} aside before linking texra-local.`);
+  process.exit(1);
+}
+if (!existing || readlinkSync(linkPath) !== target) {
+  if (existing) unlinkSync(linkPath);
+  symlinkSync(target, linkPath);
+  console.log(`Linked texra-local -> ${target}`);
 }
 
 const pathDirs = (process.env.PATH ?? '').split(path.delimiter);

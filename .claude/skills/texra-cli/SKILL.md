@@ -161,9 +161,8 @@ edge. Completion is `texra completion <shell>`, TeXRA's own generators over
 
 ## Running a local build
 
-`npm run texra-local:build` bundles the CLI and copies resources/docs into
-`packages/cli/dist`; `npm run texra-local:link` symlinks `texra-local` into
-`~/.local/bin` (one-time). The symlink points at
-`packages/cli/dist/texra.js`, which each build overwrites in place, so it
-always runs the latest local build — re-run `texra-local:build` to refresh.
-Override the install dir with `TEXRA_LOCAL_BIN_DIR=/some/dir`.
+`npm run texra-local:build` builds the CLI and links `texra-local` in
+`~/.local/bin` to this checkout's `packages/cli/dist/texra.js`. Re-run
+`texra-local:build` to refresh, or run `npm run texra-local:link` to switch to
+an already built checkout. Set `TEXRA_LOCAL_BIN_DIR` to put the link in a
+different directory on `PATH`.

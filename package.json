@@ -35,7 +35,7 @@
     "report:fix-churn": "node scripts/report-fix-churn.mjs",
     "docgen": "node scripts/check-api-report.mjs --write",
     "prepare": "node scripts/git-merge-drivers.mjs",
-    "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
+    "texra-local:build": "corepack pnpm --filter @texra-ai/cli run build && npm run texra-local:link",
     "texra-local:link": "node scripts/link-texra-local.mjs",
     "sync:notice": "node scripts/sync-notice-files.mjs",
     "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
