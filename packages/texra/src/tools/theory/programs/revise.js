@@ -124,7 +124,6 @@ export const revise = async ({
     const reply = await agent(context.prompt, {
       system,
       mediaFiles: context.mediaFiles,
-      memories: context.memories,
       label,
     });
     await tools.document_extract({ revision, run: reply.runId });

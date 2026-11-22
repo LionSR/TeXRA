@@ -71,7 +71,7 @@ Exports are split by runtime environment so browser and webview bundles never pu
 
 ## Install and minimal example
 
-Requires Node.js `>=22.22.2` (in 22.x) or `>=24.15.0`, ESM only. `effect`, `@effect/platform-node` and `@effect/sql-sqlite-node` (all `^4.1.2`), and `@texra-ai/llm`, are peer dependencies, so the process shares one copy of `effect` and `@texra-ai/llm`:
+Requires Node.js `>=22.22.2` (in 22.x) or `>=24.15.0`, ESM only. `effect`, `@effect/platform-node` and `@effect/sql-sqlite-node` (all `^4.1.3`), and `@texra-ai/llm`, are peer dependencies, so the process shares one copy of `effect` and `@texra-ai/llm`:
 
 ```bash
 npm install @texra-ai/worldline @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node

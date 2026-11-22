@@ -1,4 +1,5 @@
 /** The default Node platform of an SDK embedder: process-local, no secrets. */
+import * as path from 'node:path';
 import process from 'node:process';
 
 import { Effect } from 'effect';
@@ -28,8 +29,9 @@ export interface NodePlatformOptions {
   /**
    * The directory this platform stores run history, checkpoints and its
    * global state under, and reads the user's own files from: its
-   * `mcp.json`, the `AGENTS.md` a workspace without one falls back to, and,
-   * given skill sources, the skills under its `skills/`. Required: the
+   * `mcp.json`, the `AGENTS.md` every workspace's runs follow beside the
+   * workspace's own, and, given skill sources, the skills under its
+   * `skills/`. Required: the
    * package never falls back to a per-user default directory.
    */
   readonly storageDir: string;
@@ -71,13 +73,16 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceRoot = canonicalizeWorkspaceRoot(
     options.workspaceDir ?? process.cwd(),
   );
+  // Absolute once, here: a relative directory read again after the process
+  // changes its working directory would name a second store.
+  const storageDir = path.resolve(options.storageDir);
   return {
     secrets: unpersistedSecrets,
     roots: {
       workspace: workspaceRoot,
-      storageRoot: options.storageDir,
-      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceRoot),
-      globalStorage: resolveGlobalStoragePath(options.storageDir),
+      storageRoot: storageDir,
+      storage: resolveWorkspaceStoragePath(storageDir, workspaceRoot),
+      globalStorage: resolveGlobalStoragePath(storageDir),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(

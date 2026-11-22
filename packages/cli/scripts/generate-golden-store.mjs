@@ -605,12 +605,16 @@ async function generate(root) {
   cli.run(['plugin', 'enable', 'golden-hooks', '--print'], 'y\n');
 
   // The interactive chat: each keystroke waits for the step before it.
+  // The chat exercises both plan approval (`r`) and Codex approval (`a`), so
+  // it runs under `ask` rather than the `yolo` default.
   const tty = await cli.chat([
     'chat',
     '--agent',
     GOLDEN_AGENTS.golden_chat,
     '--model',
     'openai/gpt-5.6-sol',
+    '--approval-policy',
+    'ask',
   ]);
   const shows = (label, text) =>
     until(label, () => tty.screen().includes(text), tty);

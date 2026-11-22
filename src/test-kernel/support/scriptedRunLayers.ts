@@ -317,8 +317,6 @@ export function testLaunch(
         CWD: '.',
       },
       activated: [],
-      attachedMemories: null,
-      attachedMemoryMisses: [],
     },
     entry: testEntry(runId, config),
     ...over,

@@ -1342,38 +1342,35 @@ type LogOptions =
 const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<{ connection: JsonRpcConnection; inputEnded: Effect<void, never, never>; }, never, Scope>
 ```
 
-## MemoryPinResult
+## MEMORY_INDEX
 
-What a pin did: `cap-reached` names the cap it hit.
+The file of a memory folder a step shows its model.
 
 ```ts
-type MemoryPinResult =
-  | { readonly status: 'pinned'; readonly pinnedCount: number }
-  | { readonly status: 'already' }
-  | { readonly status: 'cap-reached'; readonly max: number };
+const MEMORY_INDEX: "MEMORY.md"
 ```
 
-## MemoryPreview
+## MemoryFolder
 
-One memory's bounded preview, with the path the memory tool shows.
+One memory folder: where it is, and what belongs in it.
 
 ```ts
-interface MemoryPreview {
-  readonly storagePath: string;
-  readonly displayPath: string;
-  readonly preview: string;
-  /** Absent when the file did not fit the scan window. */
-  readonly lineCount: number | undefined;
+interface MemoryFolder {
+  readonly path: string;
+  readonly label: string;
+  readonly holds: string;
 }
 ```
 
-## MemoryStore
+## memoryFolders
 
-The memory tree's host-facing reads and edits, over the caller's
-`StorageFs`.
+The memory folders of the project stored at `roots`: the person's, under
+the storage root beside their `AGENTS.md` and skills, and the project's,
+beside its runs. Neither is in the repository, so a cloned project brings
+none.
 
 ```ts
-const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, ToolError, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, ToolError | PlatformError, StorageFs>; delete: (input: string) => Effect<void, ToolError | PlatformError, StorageFs>; pin: (input: string) => Effect<MemoryPinResult, ToolError | PlatformError, StorageFs>; unpin: (input: string) => Effect<void, ToolError | PlatformError, StorageFs>; }
+const memoryFolders: (roots: Pick<WorkspaceRoots, "storage" | "storageRoot">) => readonly MemoryFolder[]
 ```
 
 ## ModelRetryGate
@@ -1940,7 +1937,9 @@ type RefusalDecision = Extract<
 
 ## renderPrompt
 
-Render a prompt string using nunjucks templating.
+Render a prompt string using nunjucks templating. A template is code: its
+expressions run in this process, so render only text the agent's author
+wrote, never text taken from a project's files or an end user.
 
 - `@param` prompt The prompt template string
 - `@param` variables Variables to use in template rendering
@@ -2391,14 +2390,15 @@ class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
 
 ## StepRoot
 
-A read-only directory one step accepts for its own calls: a skill it
-lists or its user activated, canonical as its catalog entry records it
-(`canonicalizePath`).
+A directory one step accepts for its own calls, canonical
+(`canonicalizePath`): a skill it lists or its user activated, read-only,
+or a memory folder, which its calls also write.
 
 ```ts
 interface StepRoot {
   readonly absolutePath: string;
   readonly label: string;
+  readonly writable?: boolean;
 }
 ```
 

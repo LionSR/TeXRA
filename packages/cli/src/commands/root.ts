@@ -39,7 +39,6 @@ import { doctorCommand } from './doctor';
 import { historyCommand } from './history';
 import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
-import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { pluginCommand } from './plugin';
 import { resumeCommand } from './resume';
@@ -137,7 +136,6 @@ const rootCommand = Command.make(
     configCommand,
     installGithubActionCommand,
     historyCommand,
-    memoryCommand,
     skillsCommand,
     pluginCommand,
     modelsCommand,

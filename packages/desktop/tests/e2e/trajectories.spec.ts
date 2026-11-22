@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -9,7 +9,6 @@ import {
   createProfile,
   dismissOnboarding,
   expect,
-  findWorkspaceStoragePath,
   launchTexraApp,
   openDesktopAppearance,
   openWorkbench,
@@ -29,18 +28,11 @@ import {
  * `screenshots.spec.ts` captures the same surfaces for visual review.
  */
 
-const MEMORY_FILE_NAME = 'trajectory-memory.md';
-const MEMORY_TEXT = 'A memory the Memory tab lists for this project.';
-
 let profile: Profile;
 let launched: LaunchedApp;
 
 test.beforeAll(async () => {
   profile = createProfile();
-  // A memory file in the project's storage, for the Memory tab to list.
-  const memories = join(await findWorkspaceStoragePath(profile), 'memories');
-  mkdirSync(memories, { recursive: true });
-  writeFileSync(join(memories, MEMORY_FILE_NAME), `${MEMORY_TEXT}\n`);
   launched = await launchTexraApp(profile);
   // Dismiss the first-run walkthrough so it doesn't intercept clicks.
   await dismissOnboarding(launched.page);
@@ -122,17 +114,16 @@ test('approval menu shows the current policy and keeps selection marks inside it
 });
 
 /**
- * Trajectory 3 — the Memory tab lists the project's memory files, and a
- * file's contents open under it.
+ * Trajectory 3 — the Memory tab offers the two memory folders, whose notes
+ * are ordinary files a person opens from there.
  */
-test('the Memory tab lists a memory file of the project', async () => {
+test('the Memory tab offers both memory folders', async () => {
   await setSettingsTab(launched, 'memory');
-  const item = launched.page
-    .locator('memory-item')
-    .filter({ hasText: `/memories/${MEMORY_FILE_NAME}` });
-  await expect(item).toHaveCount(1);
-  await item.getByText('Contents', { exact: true }).click();
-  await expect(item).toContainText(MEMORY_TEXT);
+  const tab = launched.page.locator('memory-tab');
+  await expect(tab.getByText('Open your memory folder')).toBeVisible();
+  await expect(
+    tab.getByText("Open this project's memory folder"),
+  ).toBeVisible();
 });
 
 /**

@@ -93,7 +93,6 @@ export const CLI_RESULT_FIELD = Object.freeze({
   'model-catalog': 'model',
   'models-enabled': 'models',
   'model-enabled': 'model',
-  memory: 'memory',
   'init-config': 'init',
   'history-entry': 'entry',
   'history-detail': 'detail',
@@ -108,7 +107,6 @@ export type CliResultKind = keyof typeof CLI_RESULT_FIELD;
 
 /** The kinds whose payload is spread at the top level of the line. */
 type CliSpreadKind =
-  | 'memory-detail'
   | 'chatgpt-auth'
   | 'chatgpt-auth-status'
   | 'grok-auth'

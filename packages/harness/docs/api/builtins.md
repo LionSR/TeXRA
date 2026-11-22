@@ -77,13 +77,14 @@ const harnessBuiltins: readonly Plugin[]
 
 ## memoryWorkflow
 
-Memory, past runs and later ones, and the run's own equipment: the
-`memory` tool, offered while memory is on; `executions`; `wake`, with
-which a run arranges to be continued at a later time;
+Past runs and later ones, and the run's own equipment: `executions`;
+`wake`, with which a run arranges to be continued at a later time;
 `plugin_manager`, with which it installs and enables the plugins it
 loads, each change approved by the person; and `resources`, which reads
 the time, the models, the plans' quotas and the run's spend. The last
-three are offered to every agent with tools.
+three are offered to every agent with tools. An agent's memory is no
+tool: its notes are files its file tools read and write
+(`agent/memory/memoryLayout.ts`).
 
 ```ts
 const memoryWorkflow: Plugin

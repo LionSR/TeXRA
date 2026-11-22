@@ -32,11 +32,11 @@ patch while `@effect/*` packages float.
 ```jsonc
 {
   "dependencies": {
-    "@effect/platform-node": "^4.1.0",
-    "@effect/sql-sqlite-node": "^4.1.0",
+    "@effect/platform-node": "^4.1.3",
+    "@effect/sql-sqlite-node": "^4.1.3",
     "@texra-ai/worldline": "^0.1.0",
     "@texra-ai/llm": "^0.1.0",
-    "effect": "^4.1.0",
+    "effect": "^4.1.3",
   },
 }
 ```
@@ -107,8 +107,14 @@ There are no agent files. Each `session.start` call describes the run directly
 (`StartRequestSchema` from `@texra-ai/worldline/schemas`):
 
 - `system`: the run's own system text, placed before what the harness appends
-  (the project's `AGENTS.md`, attached memories, tool-use instructions, and
-  active plugin sections).
+  (the user's and project's `AGENTS.md`, tool-use instructions, memory indexes,
+  and active plugin sections). `system` is a
+  [Nunjucks](https://mozilla.github.io/nunjucks/) template rendered once at
+  launch with `CWD` (the run's working directory) among its variables. Because
+  its expressions are evaluated in your process, treat `system` as author-owned
+  code: pass end-user text as `instruction`, never inside `system`. Nothing else
+  the system prompt carries (workspace paths and git branch, `AGENTS.md`, memory
+  indexes) is rendered as a template.
 - `tools`: the tool names the run declares (`mcp__<server>__*` expands to every
   tool of a configured MCP server; omit or leave empty for text-only replies).
   Naming a tool that no plugin provides fails the run before any model call.
@@ -162,11 +168,26 @@ const program = Effect.gen(function* () {
 
 ### Approvals
 
-A session with no attached approval handler denies every request a run raises,
-and offers no tool that requires approval. `session.attach({ approve })`
+By default a run's commands and file edits run without asking anyone: the
+approval policy (`APPROVAL_POLICY_SETTING` from `./schemas`, set with
+`Settings.set(platform.roots, …)`) defaults to `yolo`. With `harnessBuiltins`
+that means a run can run shell commands in the workspace, write its files,
+fetch a URL and search the web, with or without a handler attached. Narrow it
+for a workspace by setting the policy to `ask` or `never`, or for one run by
+starting it with `approval: 'ask'` or `'never'`; leave a plugin out of
+`plugins` for a run that must not have its tools at all.
+
+Under `ask`, a run asks before a command, an edit or a custom tool with
+`requiresApproval`, and a session with no attached approval handler has
+nobody to ask: it denies every such request and offers no tool that would
+raise one. A question to the person and a retry after the automatic attempts
+are never answered on a person's behalf, whatever the policy.
+`session.attach({ approve })`
 attaches a host with a handler for the caller's scope, an Effect function from
 a `PendingRequest` (which run asks, the request's id, and its `payload`, whose
-`kind` is a command, an edit, a plan, a retry, or a question) to the
+`kind` is a command (`bash`), an edit (`toolEdit`), a plan (`planApproval`),
+a proposal, a plugin's trust (`pluginTrust`), a retry, or a question
+(`userQuestion`)) to the
 `RequestDecision` it records. The handler is called once for each request a run
 waits on (also listed in `SessionView.requests`), or an embedder can answer a
 listed request directly with `session.request({ kind: 'request.decide', ... })`;
@@ -204,11 +225,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                        |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins, client })` composes that process for the layer's lifetime. Build it once per process.                                  |
-| `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
-| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts. Stop it with the `run.stop` request. `start` returns once the run exists, before its first model call.                                |
+| Service    | What it is                                                                                                                                                                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins, client })` composes that process for the layer's lifetime. Build it once per process.                                                    |
+| `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace.                   |
+| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts. A run is stopped with `session.request({ kind: 'run.stop', runId, reason: 'user' })`. `start` returns once the run exists, before its first model call. |
 
 `run.events` is the run's trace as a `Stream`, and any number of readers
 can read it at any time. Each read is the run's events read back from the
@@ -260,9 +281,9 @@ resolves the session already open there, while a second root gets its own. A
 session ends through `sessions.close(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to finish within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,
-returning `{ settled, abandoned }`. `settled` is true when every run ended in
-time; otherwise `abandoned` names the runs still live, and the session stays
-open, refusing new runs, until they end. Releasing the `Sessions.layer`
+returning `{ abandoned }`: empty when every run ended in time, and otherwise
+the ids of the runs still live, in which case the session stays open,
+refusing new runs, until they end. Releasing the `Sessions.layer`
 closes every session the owner holds this way and then releases the process
 under them, so an embedder that drains its scope on shutdown needs no
 separate close call.
@@ -410,7 +431,9 @@ and goes only when a person deletes it (`deleteStorageInventory`, which
 
 There is exactly one result shape: `RunEnd`, the end the run stored for
 its activation. It carries an `outcome`, an optional `usage`, an `output`,
-and, on a failed run, its classified `error` (`kind`, `message`): a failed
+and, on a failed run, its classified `error`: `kind: 'model'` with the
+provider's `failure`, or a local `kind` with its `message`
+(`runEndErrorMessage` from `./schemas` words either). A failed
 run's `result` succeeds with that end, and fails with `RunFailure` only when
 no end was stored. Every run's
 output is one shape, `{ response, files, structured? }`: the reply text, the
@@ -462,14 +485,26 @@ workspace state, and process-wide global state).
 - **MCP servers and project rules:** The tool registry reads stdio MCP servers
   from `mcp.json` at the storage root (`roots.storageRoot` / `storageDir`, not
   `roots.globalStorage`; servers must speak MCP revision `2025-11-25`, and those
-  answering an older revision do not start). Each run's system prompt loads the
-  workspace's `AGENTS.md`, falling back to `AGENTS.md` at `roots.storageRoot`
-  when the workspace has none.
+  answering an older revision do not start). Each run's system prompt carries
+  the storage root's `AGENTS.md` (the person's own, for every workspace) and
+  then the workspace's.
+- **Memory:** While the `memory.enabled` setting is on (the default), a run with
+  file tools has two folders of Markdown notes it reads and writes with those
+  tools: `<storageDir>/memories`, for what holds across workspaces, and
+  `memories/` under the workspace's own storage directory. The run's system text
+  names both folders and carries each folder's `MEMORY.md` index as it reads at
+  every request (the first 16,000 characters). There is no memory tool and
+  nothing else is loaded automatically: a note is read when the model opens it.
+  `memoryFolders(platform.roots)` from `./plugins` names the two folders. Turn
+  memory off with `Settings.set(platform.roots, MEMORY_ENABLED_SETTING, false)`.
 - **`nodePlatform(options)`:** Supplies ready-made defaults—process-local config
   and state, the standard layout under the required `storageDir` (the package
   never falls back to a per-user directory), that directory's `mcp.json` and
-  `AGENTS.md`, and environment-variable secrets (`process.env`, nothing
-  persisted).
+  `AGENTS.md`, and environment-variable secrets (nothing persisted). The harness
+  reads provider keys and proxy variables from the workspace's `.env` file over
+  `process.env` at each launch, while commands a run starts inherit `.env` over
+  `process.env` with provider keys withheld. Point `workspaceDir` only at a
+  folder whose `.env` you would load yourself.
 - **Custom settings:** Pass plugin settings via `nodePlatform({ settings })`,
   using `settingsCatalog({ namespace, rows })` from `@texra-ai/worldline/schemas`
   (or attach the catalog to your own `ConfigProvider` as `catalog`). Keys are
@@ -519,8 +554,8 @@ them. To send them through the harness's sink instead, which redacts secrets,
 provide `effectDiagnosticsLayer(level)` from `@texra-ai/worldline/node` around
 the program and name a destination with `setLogSink({ write(entry) { … } })`:
 it receives each `LogEntry`, Effect's structured record (level, message,
-cause, annotations), and `entryChannel` / `entryMessage` read its channel and
-text. Setting a sink disposes the one it replaces (its optional `dispose`),
+cause, annotations), and `entryLine` / `entryDetail` from `./schemas` word
+it as text. Setting a sink disposes the one it replaces (its optional `dispose`),
 and `setLogSink(null)` restores the console. Entries reach the sink with
 secrets redacted, unless you pass `{ trusted: true }`. The few lines written
 outside any fiber (a trace sink that threw, a stored setting that does not
@@ -563,8 +598,9 @@ also reports a summary, attachments or facts. Failing with an `Error` gives
 the model its message as the tool's error.
 
 Pass `tools` to `session.start` as `runTools`. A custom tool that requires
-approval runs only on a session opened with an approval handler; on any
-other session it fails the launch with `ToolsRefused`. A directly implemented `ITool` also returns an Effect from
+approval runs only on a session with an approval handler attached
+(`session.attach`); on any other session it fails the launch with
+`ToolsRefused`. A directly implemented `ITool` also returns an Effect from
 `call`; asynchronous operations compose inside that program. Execute programs
 only at the embedding application's host boundary.
 
@@ -573,9 +609,11 @@ only at the embedding application's host boundary.
 These are enforced, not undocumented — each fails or degrades loudly rather
 than failing quietly:
 
-- **Without a handler, requests are denied.** A session no attached host
-  answers denies every request its runs raise, retries included, and fails
-  a launch whose custom tools need approval with `ToolsRefused`.
+- **Under `ask` without a handler, requests are denied.** A session whose
+  policy asks and that no attached host answers denies every request its
+  runs raise, and fails a launch whose custom tools need approval with
+  `ToolsRefused`. A question or a retry is denied under any policy when
+  nobody can answer it.
 - **Runs are one cycle long** unless `interactive`: `start` and `resume`
   end the run after its cycle rather than waiting for a follow-up message.
 - **A persistent store may not carry across 0.x releases.** No row schema

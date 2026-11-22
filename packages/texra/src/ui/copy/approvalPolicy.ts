@@ -7,13 +7,17 @@
 import { Record as EffectRecord } from 'effect';
 
 import type { ApprovalPolicy } from '@texra-ai/worldline/schemas';
-import { RUN_GRANT_TONE, type RunTone } from '@ui/copy/runStatus';
+import type { RunTone } from '@ui/copy/runStatus';
 
 /** Each policy's copy, declared in the order selectors list them, and the
- *  tone a surface showing the policy paints it with: a policy that stops
- *  asking is a caution, as a run's own auto-approval is; `ask`, the
- *  default, has nothing to say. */
+ *  tone a surface showing the policy paints it with: a policy that blocks
+ *  is a caution; the default, Auto-approve, and Ask have nothing to say. */
 const APPROVAL_POLICY_COPY = {
+  yolo: {
+    label: 'Auto-approve',
+    description: 'Allow shell commands and file edits without asking.',
+    tone: undefined,
+  },
   ask: {
     label: 'Ask',
     description: 'Ask before shell commands and file edits.',
@@ -23,11 +27,6 @@ const APPROVAL_POLICY_COPY = {
     label: 'Block',
     description: 'Block shell commands and file edits.',
     tone: 'warning',
-  },
-  yolo: {
-    label: 'Auto-approve',
-    description: 'Allow shell commands and file edits without asking.',
-    tone: RUN_GRANT_TONE,
   },
 } as const satisfies Record<
   ApprovalPolicy,
@@ -48,7 +47,7 @@ export const APPROVAL_POLICY_OPTIONS = Object.freeze(
   ),
 );
 
-/** The tone a policy paints with where it is shown; none for `ask`. */
+/** The tone a policy paints with where it is shown; only Block has one. */
 export function approvalPolicyTone(
   policy: ApprovalPolicy,
 ): RunTone | undefined {

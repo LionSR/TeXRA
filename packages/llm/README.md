@@ -14,7 +14,7 @@ credentials through `CredentialStore`.
 ## Install
 
 Requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later. The
-package is ESM only. `effect` (^4.1.0) is a peer dependency, so your install
+package is ESM only. `effect` (^4.1.3) is a peer dependency, so your install
 supplies the one copy of it:
 
 ```bash
@@ -24,7 +24,7 @@ npm install @texra-ai/llm effect
 `llm-zoo` (the catalog, pinned to one exact version) and the Anthropic and
 Google SDKs come in as dependencies. The `.` entry re-exports the catalog
 types and values a caller needs (`ModelConfig`, `MODEL_CONFIGS`,
-`ReasoningEffort`, `parseModelRef`, …), so import them from `@texra-ai/llm`,
+`ReasoningEffort`, `MODELS`, …), so import them from `@texra-ai/llm`,
 not from `llm-zoo`. A binding loads only its own protocol's SDK, on demand.
 OpenAI's runtime is bundled, so `openai` is not installed.
 
@@ -145,7 +145,7 @@ vendor SDK.
 
 Inside the workspace the entries are the TypeScript sources. `npm run build`
 writes what a pack publishes (`publishConfig.exports`): one ESM bundle per
-entry under `dist/`, each protocol a chunk, OpenAI's patched runtime carried
+entry under `dist/`, each protocol a chunk, OpenAI's runtime carried
 inside, and the entries' declarations with their TSDoc. The harness's
 artifact validator checks the result, including that no published signature
 names a type the entries do not export

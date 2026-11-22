@@ -528,7 +528,7 @@ function approvalPolicySegment(
   policy: ApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
   if (policy === undefined) return undefined;
-  // A policy that stops asking earns a segment, in its tone.
+  // A policy that blocks earns a segment, in its tone.
   const tone = approvalPolicyTone(policy);
   if (tone === undefined) return undefined;
   // The label the /approval picker and every other surface uses for this

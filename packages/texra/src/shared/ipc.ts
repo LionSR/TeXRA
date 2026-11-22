@@ -27,13 +27,7 @@ export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   // Navigation commands
   SET_TAB: 'setTab',
   // Memory commands
-  GET_MEMORY_DATA: 'getMemoryData',
-  GET_MEMORY_PREVIEW: 'getMemoryPreview',
-  OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
-  DELETE_MEMORY: 'deleteMemory',
-  PIN_MEMORY: 'pinMemory',
-  UNPIN_MEMORY: 'unpinMemory',
   // Profile commands
   SET_PROVIDER_KEY: 'setProviderKey',
   REMOVE_PROVIDER_KEY: 'removeProviderKey',
@@ -72,7 +66,6 @@ export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   // Outbound (host → webview), each a member of the validated outbound union.
   // What the host knows for the view, as one record patched field by field.
   UPDATE_HOST_STATE: 'updateHostState',
-  UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
   // Every catalog-derived snapshot in `settingsViewMessages.ts`'s
   // derived-snapshot list, keyed by its `snapshot` field.
   UPDATE_SETTINGS_SNAPSHOT: 'updateSettingsSnapshot',

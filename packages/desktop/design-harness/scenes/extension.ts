@@ -543,7 +543,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           tools: [],
           model: 'gemini-3.8-flash',
           instruction: 'Fix the typos and notation slips in Section 2.',
-          memories: [],
           inputFiles: ['/paper/section2.tex'],
           contextFiles: [],
           mediaFiles: [],

@@ -18,7 +18,6 @@ import { Schema } from 'effect';
 import type { UsageLogEntry } from '@texra-ai/worldline/host';
 import {
   decodingDefault,
-  APPROVAL_POLICY_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   HELPER_MODEL_SETTING,
@@ -28,7 +27,6 @@ import {
 } from '@texra-ai/worldline/schemas';
 
 // Local imports
-import { TEXRA_APPROVAL_DEFAULT } from '@texra/shared/approvalPolicy';
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
 import { LATEX_FORMATTER_VALUES } from '@texra/shared/constants/latexConfig';
@@ -378,7 +376,6 @@ const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
   rows: [...TEXRA_UNSHOWN_ROWS, ...TEXRA_PLACED_ROWS],
   defaults: {
-    [APPROVAL_POLICY_SETTING.key]: TEXRA_APPROVAL_DEFAULT,
     [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL,
     [GIT_AUTHOR_NAME_SETTING.key]: 'texra-ai',
     [GIT_AUTHOR_EMAIL_SETTING.key]: 'texra-ai@users.noreply.github.com',

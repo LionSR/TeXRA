@@ -8,12 +8,13 @@ import { isPathWithin } from '@utils/core/pathCore';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /**
- * The external filesystem roots a tool call may read: the read-only
- * directories its run's step accepts for its own calls (`StepRoot`, a skill
- * the step lists or its user activated). Tools like read_file, glob and grep
- * normally refuse any path outside the workspace; a path inside one of these
- * roots is accepted, read-only. Nothing is registered process-wide: a root
- * is gone once no step holds it.
+ * The external filesystem roots a tool call may reach: the directories its
+ * run's step accepts for its own calls (`StepRoot`: a skill the step lists or
+ * its user activated, read-only, or a memory folder, which its calls also
+ * write). Tools like read_file, write_file, edit_file, glob and grep normally
+ * refuse any path outside the workspace; a path inside one of these roots is
+ * accepted according to its `writable` flag. Nothing is registered
+ * process-wide: a root is gone once no step holds it.
  *
  * Security notes
  * --------------
@@ -30,12 +31,13 @@ import { meansAbsent } from '@utils/files/fsEntryExists';
  *   path, the most specific (longest) wins.
  */
 
-/** A read-only directory one step accepts for its own calls: a skill it
- *  lists or its user activated, canonical as its catalog entry records it
- *  (`canonicalizePath`). */
+/** A directory one step accepts for its own calls, canonical
+ *  (`canonicalizePath`): a skill it lists or its user activated, read-only,
+ *  or a memory folder, which its calls also write. */
 export interface StepRoot {
   readonly absolutePath: string;
   readonly label: string;
+  readonly writable?: boolean;
 }
 
 /** The root a path falls in, as a tool's permission check reads it. */
@@ -132,5 +134,5 @@ export function findExternalRoot(
     if (best === null || root.absolutePath.length > best.absolutePath.length)
       best = root;
   }
-  return best === null ? null : { ...best, writable: false };
+  return best === null ? null : { ...best, writable: best.writable ?? false };
 }

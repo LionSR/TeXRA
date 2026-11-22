@@ -4,13 +4,7 @@
 // interaction port), so the TUI under test renders the same `SessionView` a
 // live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -95,7 +89,6 @@ import {
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
@@ -178,7 +171,6 @@ const SHOW_SCRIPT_RUNNING = process.env.HARNESS_SCRIPT_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_MULTI_AGENT_DISABLED =
   process.env.HARNESS_MULTI_AGENT_DISABLED === '1';
-const HARNESS_APPROVAL_POLICY = 'ask';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
@@ -267,14 +259,21 @@ const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
 const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
+// The harness project asks: its scenarios are of the approval cards a policy
+// that asks raises, which the default (Auto-approve) does not.
+const HARNESS_POLICY: ApprovalPolicy = 'ask';
+const HARNESS_CONFIG = new MemoryConfigProvider(TEXRA_SETTINGS.catalog);
+await Effect.runPromise(
+  HARNESS_CONFIG.update(APPROVAL_POLICY_SETTING.key, HARNESS_POLICY, 'local'),
+);
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = await Effect.runPromise(
   resolveCliResourcesPath().pipe(Effect.provide(nodeFileServices)),
 );
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
-  approvalPolicy: HARNESS_APPROVAL_POLICY,
-  config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
+  approvalPolicy: HARNESS_POLICY,
+  config: HARNESS_CONFIG,
   commandName: 'texra',
   configWarnings: [],
   configDegradations: [],
@@ -410,7 +409,6 @@ function parseList(value: string | undefined): string[] {
 }
 
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
-const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -438,31 +436,6 @@ if (!harnessRoots) {
   throw new Error(
     'The TUI harness platform init installed no workspace roots.',
   );
-}
-// These interactive scenarios exercise the approval and rejection controls.
-await harnessRuntime.runPromise(
-  harnessRoots.config.update(
-    APPROVAL_POLICY_SETTING.key,
-    HARNESS_APPROVAL_POLICY,
-    'local',
-  ),
-);
-// Seed workspace-storage memory files so `/memory` has rows to list. Files
-// get descending mtimes in list order, so the first name is the newest row
-// and the listing order is deterministic.
-if (HARNESS_MEMORY_FILES.length > 0) {
-  const memoryRoot = path.join(
-    harnessRoots.storage,
-    WORKSPACE_STORAGE_LAYOUT.memory,
-  );
-  const newestEpochSeconds = Date.now() / 1000;
-  HARNESS_MEMORY_FILES.forEach((name, index) => {
-    const filePath = path.join(memoryRoot, name);
-    mkdirSync(path.dirname(filePath), { recursive: true });
-    writeFileSync(filePath, `Harness memory ${name}.\n`);
-    const mtime = newestEpochSeconds - index * 60;
-    utimesSync(filePath, mtime, mtime);
-  });
 }
 // The persistent session the platform opened over the harness roots,
 // and its internal owners, which the fixtures seed rows through: the same
@@ -1460,7 +1433,7 @@ sessionMeta.set({
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
-  approvalPolicy: HARNESS_APPROVAL_POLICY,
+  approvalPolicy: HARNESS_POLICY,
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1806,7 +1779,7 @@ function appendHarnessTranscript(
 
 /** The harness chat's launch policy, which `/approval` sets, as the chat's
  *  does; it never writes the project's. */
-let harnessPolicy: ApprovalPolicy = HARNESS_APPROVAL_POLICY;
+let harnessPolicy: ApprovalPolicy = HARNESS_POLICY;
 const harnessApprovalPolicy = (): ApprovalPolicy => harnessPolicy;
 
 function setHarnessApprovalPolicy(policy: ApprovalPolicy): void {

@@ -203,7 +203,7 @@ if (unusedPackages.length > 0) {
 }
 if (externalPackages.has('openai')) {
   throw new Error(
-    'The bundle must carry the repository-patched OpenAI runtime.',
+    'The bundle must carry the OpenAI runtime: it is not a dependency.',
   );
 }
 

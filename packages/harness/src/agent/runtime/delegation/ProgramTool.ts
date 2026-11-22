@@ -9,7 +9,7 @@
  */
 import { Schema } from 'effect';
 
-import { OWN_PROGRAMS_PATH } from '@agent/memory/ownPrograms';
+import { OWN_PROGRAMS_DIRECTORY } from '@agent/memory/ownPrograms';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { OWN_PROGRAM_PREFIX, PROGRAM_TOOL_NAME } from '@shared/schemas';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
@@ -54,7 +54,7 @@ export const programTool = (): DefinedTool<ProgramInput, PluginToolServices> =>
       "{ response: string; files: string[]; changes?: { path: string; absolutePath: string; base: string | null; added: number | null; removed: number | null }[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
     description: `Start a program by name, as a child of this run: a fixed procedure a plugin ships or you wrote, run over the files you pass.
 
-A file you write at \`${OWN_PROGRAMS_PATH}/<name>.js\` is the program \`${OWN_PROGRAM_PREFIX}:<name>\` from your next step, and in later conversations in this project. It begins with \`export const description = '...';\` and \`export const uses = ['...'];\` (the tools it is offered), each a quoted literal, and its \`export default async (args, { instruction, inputFiles, contextFiles, mediaFiles }) => { ... }\` calls those tools as a script does and returns the program's result.
+A file you write at \`${OWN_PROGRAMS_DIRECTORY}/<name>.js\` in the project memory folder your instructions name is the program \`${OWN_PROGRAM_PREFIX}:<name>\` from your next step, and in later conversations in this project. It begins with \`export const description = '...';\` and \`export const uses = ['...'];\` (the tools it is offered), each a quoted literal, and its \`export default async (args, { instruction, inputFiles, contextFiles, mediaFiles }) => { ... }\` calls those tools as a script does and returns the program's result.
 
 From a script, \`program(name, opts)\` waits for the program and resolves to its result: \`{ response, files, changes?, structured?, runId, outcome, cost, spent }\`, where \`changes\` lists the files a program reports writing, in order (\`path\` the workspace file, \`absolutePath\` the copy it wrote), \`cost\` is what the program spent and \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\` (past \`timeoutMs\`), \`BudgetExceeded\` (the program and the runs it started spent \`maxCostUsd\` before it finished), \`Skipped\`, \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the program runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,
     schema: ProgramInputSchema,
@@ -62,7 +62,6 @@ From a script, \`program(name, opts)\` waits for the program and resolves to its
       launchChildAgent({
         prompt: input.prompt ?? '',
         model: input.model,
-        memories: input.memories,
         workingDirectory: input.working_directory,
         id: input.id,
         timeoutMs: input.timeoutMs,

@@ -27,8 +27,9 @@ yourself (a scripted model in a test), merge {@link ModelFetch} beneath
 `Sessions.layer` with `Layer.provideMerge`.
 
 The surface is Effect: nothing here calls `Effect.runPromise`; your
-program runs it at its own entry point. Every failure is a tagged error
-listed below.
+program runs it at its own entry point. A start, a resume and an open
+fail with the tagged errors listed below; a `session.request` is refused
+with the ones on `./schemas` (`RequestError`).
 
 ### Companion subpaths
 
@@ -869,7 +870,7 @@ interface StreamChunkEvent {
 ## ToolsRefused
 
 The tools the caller passed cannot run here: a tool that requires
-approval, on a session opened without an approval handler.
+approval, on a session with no approval handler attached.
 
 ```ts
 class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(

@@ -87,6 +87,9 @@ const program = Effect.gen(function* () {
     instruction: 'Stage the manuscript for arXiv.',
     model: route.model,
     interactive: true,
+    // This run asks before its gated tool: the default policy would let
+    // the call through with no request for the handler to answer.
+    approval: 'ask',
   });
 
   // Wait for the first interactive cycle to pause for user input. The run's

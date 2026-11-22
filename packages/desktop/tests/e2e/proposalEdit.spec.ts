@@ -5,7 +5,7 @@
 // and Back returns to the asking task with the proposal still waiting. An
 // edit that adds a context file and rewrites the instruction approves the
 // child with both; the finished child's run offers no Run again.
-import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -89,6 +89,14 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
 }) => {
   test.setTimeout(300_000);
   const { home, dataRoot, workspaceRoot: work } = profile;
+  const globalStorage = join(dataRoot, 'v1', 'global-storage');
+  mkdirSync(globalStorage, { recursive: true });
+  // This journey is the proposal's review, so the user's own policy is Ask:
+  // under the default, Auto-approve, the program would start unasked.
+  writeFileSync(
+    join(globalStorage, 'config.json'),
+    `${JSON.stringify({ 'texra.approvalPolicy': 'ask' })}\n`,
+  );
   // The asking task: its scripted model calls `program` with this
   // input, on a model the form lists, with an effort.
   const proposal = {

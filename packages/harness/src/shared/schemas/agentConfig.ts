@@ -73,8 +73,6 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
     rootUserInstruction: Schema.optional(Schema.String),
     /** Optional user-facing text for logs when instruction contains hidden context. */
     displayInstruction: Schema.optional(Schema.String),
-    /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
-    memories: decodingDefault(Schema.Array(Schema.String), []),
     /**
      * The skills the user activated for `instruction`, which stays as typed:
      * the run's first message leads with their activation blocks, and its

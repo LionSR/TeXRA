@@ -105,14 +105,10 @@ function renderDetailList(label: string, items: unknown): TemplateResult {
 
 /**
  * The path of a file section. A workspace file is a link to the file (and
- * its line range); a memory or run path is virtual, so it is shown, not
- * linked.
+ * its line range); a run path is virtual, so it is shown, not linked.
  */
 function renderFilePath(section: ToolFileSection): TemplateResult {
   switch (section.namespace) {
-    case 'memory':
-      // prettier-ignore
-      return html`<span class="memory-path">${waIcon('database')} <bdi dir="auto">${getBasename(section.path) || section.path}</bdi> <span class="file-source">(<bdi dir="auto">${section.path}</bdi>)</span></span>`;
     case 'run':
       // prettier-ignore
       return html`<span class="memory-path">${waIcon('clock-rotate-left')} <bdi dir="auto">${section.path}</bdi></span>`;

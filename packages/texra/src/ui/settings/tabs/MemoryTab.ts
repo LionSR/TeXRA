@@ -1,19 +1,29 @@
-/** Memory management content for the settings view. */
+/** The Memory page of the settings view: the switch, and the two folders. */
 
 import { html, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
+import type { MemoryFolderScope } from '@texra/shared/settingsView/memoryViewMessages';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
-import type { MemoryViewItem } from '@texra-ai/worldline/schemas';
 import { MEMORY_ENABLED_SETTING } from '@texra-ai/worldline/schemas';
 
-// Side-effect: register child components.
-import '../components/memory/MemoryList';
+/** A button that opens one memory folder in the system's file manager. */
+const openFolderButton = (folder: MemoryFolderScope, text: string) =>
+  renderLabeledActionButton({
+    icon: 'folder-open',
+    text,
+    kind: 'secondary',
+    onClick: () =>
+      postToHost({
+        command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
+        folder,
+      }),
+  });
 
 @customElement('memory-tab')
 export class MemoryTab extends TexraSignalElement {
@@ -33,42 +43,30 @@ export class MemoryTab extends TexraSignalElement {
       .memory-actions {
         display: flex;
         flex-wrap: wrap;
-        justify-content: flex-end;
         gap: var(--wa-space-2xs);
+      }
+
+      .memory-note {
+        margin: 0;
+        color: var(--wa-color-text-quiet);
       }
     `,
   ];
 
-  @property({ attribute: false }) items: readonly MemoryViewItem[] = [];
-
   override render(): TemplateResult {
     return html`
       <div class="memory-view-container tab-content-container">
-        <div
-          class="memory-actions"
-          role="group"
-          aria-label="Saved memory actions"
-        >
-          ${renderLabeledActionButton({
-            icon: 'arrows-rotate',
-            text: 'Refresh memories',
-            kind: 'secondary',
-            onClick: () =>
-              postToHost({ command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA }),
-          })}
-          ${renderLabeledActionButton({
-            icon: 'folder-open',
-            text: 'Open memory folder',
-            kind: 'secondary',
-            onClick: () =>
-              postToHost({
-                command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
-              }),
-          })}
-        </div>
         ${renderStateSettingToggleRow(MEMORY_ENABLED_SETTING)}
-
-        <memory-list .items=${this.items}></memory-list>
+        <p class="memory-note">
+          Agents keep Markdown notes in two folders: one for you, in every
+          project, and one for this project. Each folder's MEMORY.md is the
+          index an agent sees at the start of every request. Open a folder to
+          read, edit or delete notes.
+        </p>
+        <div class="memory-actions" role="group" aria-label="Memory folders">
+          ${openFolderButton('user', 'Open your memory folder')}
+          ${openFolderButton('project', "Open this project's memory folder")}
+        </div>
       </div>
     `;
   }

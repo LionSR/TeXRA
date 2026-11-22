@@ -88,7 +88,6 @@ export type { QueuedFollowUp } from '@shared/session/runRows';
 export type {
   AgentConfigInput,
   AgentProposal,
-  AttachedMemoryMiss,
   CompactionActivityData,
   CompactionActivityOutcome,
   ContextManagementData,
@@ -149,7 +148,6 @@ export { decodingDefault, decodingDefaultType } from '@shared/schemas';
 export {
   APPROVAL_POLICIES,
   APPROVAL_POLICY_DEFAULT,
-  APPROVAL_POLICY_NO_INPUT_DEFAULT,
   ApprovalPolicySchema,
   parseApprovalPolicy,
   type ApprovalPolicy,
@@ -181,11 +179,6 @@ export {
   type RequestError,
   type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
-// A memory as a memory list shows it.
-export {
-  MemoryViewItemSchema,
-  type MemoryViewItem,
-} from '@shared/tools/memoryView';
 // A model's display name.
 export { getModelLabel } from '@shared/model/modelLabel';
 // Error messages.

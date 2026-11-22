@@ -11,16 +11,6 @@ import { ActivatedSkillsSchema } from './activeSkills';
 import { Sha256Schema } from './identifiers';
 import { DeclinableUsageRouteSchema } from './usage';
 
-// ------------------------------------------------------------ launch facts
-
-/** An attached memory the opening could not read, and why. */
-const AttachedMemoryMissSchema = Schema.Struct({
-  path: Schema.String,
-  reason: Schema.String,
-});
-/** An attached memory the opening could not read ({@link AttachedMemoryMissSchema}). */
-export type AttachedMemoryMiss = typeof AttachedMemoryMissSchema.Type;
-
 // ---------------------------------------------------------- model backend
 
 /**
@@ -73,8 +63,6 @@ export const RunInputSchema = Schema.Struct({
    *  them against its own catalog, and grants one while its plugin, if any,
    *  still contributes. */
   activated: Schema.optional(ActivatedSkillsSchema),
-  /** The attached memories the opening could not read. */
-  memoryMisses: Schema.optional(Schema.Array(AttachedMemoryMissSchema)),
 });
 /** What a run's turns answer besides their messages ({@link RunInputSchema}). */
 export type RunInput = typeof RunInputSchema.Type;

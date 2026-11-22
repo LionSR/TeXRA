@@ -532,7 +532,6 @@ export const ASSISTANT = Object.freeze({
   system: 'Help with the task you are given, using your tools.',
   tools: Object.freeze([
     'plan',
-    'memory',
     'bash',
     'read_file',
     'write_file',

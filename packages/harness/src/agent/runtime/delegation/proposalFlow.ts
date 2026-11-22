@@ -47,9 +47,6 @@ function summarizeProposal(proposal: AgentProposal): string {
   if (proposal.inputFiles[0]) {
     parts.push(`File: ${proposal.inputFiles[0]}`);
   }
-  if (proposal.memories.length > 0) {
-    parts.push(`Memories: ${proposal.memories.join(', ')}`);
-  }
   parts.push(
     `Instruction: "${truncateWithEllipsis(proposal.instruction, 120)}"`,
   );

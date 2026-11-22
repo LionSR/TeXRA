@@ -31,7 +31,6 @@ Writing to files: a file outlives this conversation. Write it for a reader who n
  *  plugin is off is withheld at the step. */
 const ENTRY_TOOLS: readonly string[] = Object.freeze([
   'plan',
-  'memory',
   'bash',
   'read_file',
   'write_file',

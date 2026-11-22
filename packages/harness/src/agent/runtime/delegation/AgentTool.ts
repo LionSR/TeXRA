@@ -120,7 +120,6 @@ type AgentInput = typeof AgentInputSchema.Type;
 type ChildLaunch = {
   readonly prompt: string;
   readonly model: string | null | undefined;
-  readonly memories: readonly string[];
   readonly workingDirectory: string | null | undefined;
   readonly id: string | null | undefined;
   readonly background: boolean | null | undefined;
@@ -451,7 +450,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           schema: outputSchema ?? null,
           ...files,
           program,
-          memories: launch.memories,
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
           files: yield* fingerprint(
@@ -501,7 +499,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       system: agent.system,
       tools: agent.tools,
       model,
-      memories: launch.memories,
       ...(workingDirectory !== undefined && { workingDirectory }),
       task: program !== null,
       instruction: handsOff
@@ -613,7 +610,6 @@ Its result is the child's final reply, or a \`schema\` value. \`agentName\` inst
         prompt: input.prompt,
         model: input.model,
         schema: input.schema,
-        memories: input.memories,
         workingDirectory: input.working_directory,
         id: input.id,
         timeoutMs: input.timeoutMs,

@@ -5,34 +5,61 @@
  *
  * A read never fails: a failed or timed-out `git` answers `false` or `null`,
  * and the caller says what that means for its own task. Interrupting the
- * calling fiber kills the `git` process (`executeCommand` owns that
- * teardown). Nothing here reads ambient state: `cwd` is the folder to read,
- * carried as data by whoever holds it.
+ * calling fiber kills the `git` process (its scope owns that teardown).
+ * Nothing here reads ambient state: `cwd` is the folder to read, carried as
+ * data by whoever holds it.
+ *
+ * Every command, a read included, runs under the machine git environment and
+ * never the project's `.env`: a run reads its workspace's repository before
+ * anyone has approved anything, and a `PATH` or `GIT_CONFIG_*` a cloned
+ * project carries must not choose the program that read runs.
  */
 
 // Third-party imports
-import { Effect, Record as EffectRecord, Stream } from 'effect';
+import { Effect, Option, Record as EffectRecord, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { executeCommand } from './execUtils';
 import { withCommandDirs } from './platformPaths';
 
 const GIT_READ_TIMEOUT_MS = 10_000;
+
+/**
+ * One `git` read of the repository at `cwd`: how it ended, or null when git
+ * could not run or did not answer in time. A read changes nothing and runs
+ * nothing the repository names: `--no-optional-locks` keeps `status` from
+ * rewriting the index (and so from its `post-index-change` hook), and the
+ * repository's `core.fsmonitor` command is not started.
+ */
+const gitRead = (
+  cwd: string,
+  args: readonly string[],
+): Effect.Effect<MachineGitResult | null, never, ChildProcessSpawner> =>
+  machineGit(
+    [
+      '--no-optional-locks',
+      '-c',
+      'core.fsmonitor=false',
+      '--no-pager',
+      ...args,
+    ],
+    { cwd },
+  ).pipe(
+    Effect.timeoutOption(GIT_READ_TIMEOUT_MS),
+    Effect.map(Option.getOrNull),
+    // Git is not installed, or the folder is gone: no answer, as documented.
+    Effect.catch(() => Effect.succeed(null)),
+  );
 
 /** The trimmed stdout of a successful `git` read, `''` included, or null. */
 function gitOutput(
   cwd: string,
   ...args: readonly string[]
 ): Effect.Effect<string | null, never, ChildProcessSpawner> {
-  return executeCommand(['git', ...args], {
-    cwd,
-    timeout: GIT_READ_TIMEOUT_MS,
-    quiet: true,
-  }).pipe(
-    Effect.map((result) => (result.success ? result.stdout.trim() : null)),
+  return Effect.map(gitRead(cwd, args), (result) =>
+    result?.code === 0 ? result.stdout.trim() : null,
   );
 }
 
@@ -74,25 +101,22 @@ export const gitDirAndTopLevel = Effect.fn('git.gitDirAndTopLevel')(function* (
   never,
   ChildProcessSpawner
 > {
-  const result = yield* executeCommand(
-    [
-      'git',
-      'rev-parse',
-      '--path-format=absolute',
-      '--git-dir',
-      '--show-toplevel',
-    ],
-    { cwd, timeout: GIT_READ_TIMEOUT_MS, quiet: true },
-  );
-  const [gitDir = '', topLevel = ''] = result.stdout
+  const result = yield* gitRead(cwd, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-dir',
+    '--show-toplevel',
+  ]);
+  const [gitDir = '', topLevel = ''] = (result?.stdout ?? '')
     .trim()
     .split(/\r?\n/)
     .map((line) => line.trim());
-  if (result.success && gitDir !== '' && topLevel !== '')
+  if (result?.code === 0 && gitDir !== '' && topLevel !== '')
     return { gitDir, topLevel };
-  if (!/not a git repository|must be run in a work tree/i.test(result.stderr))
+  const stderr = result?.stderr ?? '';
+  if (!/not a git repository|must be run in a work tree/i.test(stderr))
     yield* Effect.logWarning(
-      `Cannot resolve the git repository of ${cwd}: ${result.stderr || 'git gave no answer'}`,
+      `Cannot resolve the git repository of ${cwd}: ${stderr || 'git gave no answer'}`,
     ).pipe(withLogChannel('platform'));
   return null;
 });
@@ -183,21 +207,15 @@ export const recentCommitLabels = Effect.fn('git.recentCommitLabels')(
       null
     )
       return [];
-    // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
-    const log = yield* executeCommand(
-      [
-        'git',
-        '--no-pager',
-        'log',
-        '-n',
-        String(limit),
-        '--pretty=format:%h: %s (%cr)',
-      ],
-      { cwd, timeout: GIT_READ_TIMEOUT_MS, quiet: true },
-    );
-    if (!log.success) {
+    const log = yield* gitRead(cwd, [
+      'log',
+      '-n',
+      String(limit),
+      '--pretty=format:%h: %s (%cr)',
+    ]);
+    if (log?.code !== 0) {
       yield* Effect.logWarning(
-        `Cannot read the recent commits of ${cwd}: ${log.stderr || 'git gave no answer'}`,
+        `Cannot read the recent commits of ${cwd}: ${log?.stderr || 'git gave no answer'}`,
       ).pipe(withLogChannel('platform'));
       return [];
     }

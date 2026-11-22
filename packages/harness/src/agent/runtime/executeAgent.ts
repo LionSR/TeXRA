@@ -193,13 +193,12 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   const opening =
     entry.fresh === null
       ? null
-      : yield* buildTemplateInputs(config, {
+      : buildTemplateInputs(config, {
           // The session's own roots, handed to prompt assembly as data, so
-          // the working directory and memories resolve in this project, not
-          // the calling fiber's.
+          // the working directory resolves in this project, not the
+          // calling fiber's.
           workspaceRoot: roots.workspace,
           workingDirectory,
-          storageRoot: roots.storage,
         });
 
   const launch: RunLaunch = {

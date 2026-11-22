@@ -351,7 +351,6 @@ describe('the golden 1.0 store', () => {
           [
             'read_file',
             'executions',
-            'memory',
             'wake',
             'plugin_manager',
             'resources',

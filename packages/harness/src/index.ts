@@ -24,8 +24,9 @@
  * `Sessions.layer` with `Layer.provideMerge`.
  *
  * The surface is Effect: nothing here calls `Effect.runPromise`; your
- * program runs it at its own entry point. Every failure is a tagged error
- * listed below.
+ * program runs it at its own entry point. A start, a resume and an open
+ * fail with the tagged errors listed below; a `session.request` is refused
+ * with the ones on `./schemas` (`RequestError`).
  *
  * ### Companion subpaths
  *
@@ -72,10 +73,11 @@ export type {
   StartInput,
 } from './effect/sessions.js';
 // What a session's methods take and hand out is on `./schemas`: a run's id
-// (`session.resume`), a commit position and a display event (`view`), a
-// stored conversation's nodes (`records(runId).readConversation`), a
-// request (`session.request`), and the request an `ApprovalHandler` is
-// asked with and the decision it answers.
+// (`session.resume`), a display event (`view`), a stored conversation's
+// nodes (`records(runId).readConversation`), a request (`session.request`)
+// with the errors it is refused with, and the request an `ApprovalHandler`
+// is asked with and the decision it answers. A commit position and what
+// `view.watch` takes and yields are on `./transcript`.
 
 // The presentation surface a `SessionHost` serves and a `LocalSession`'s
 // `emit` shows through: the notices a session's runs ask a host to present,

@@ -18,8 +18,6 @@ import { EditFileTool } from '@tools/EditTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { GlobTool } from '@tools/glob';
 import { GrepTool } from '@tools/grep';
-import { MemoryTool } from '@tools/memory/MemoryTool';
-import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { PluginManagerTool } from '@tools/PluginManagerTool';
 import { definePlugin, type Plugin } from '@tools/plugins';
@@ -29,7 +27,6 @@ import { WakeTool } from '@tools/WakeTool';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
 import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
-import { MEMORY_ENABLED_SETTING } from '@shared/state/stateSettings';
 
 import GOAL_MODULE from './plan/goal.js?raw';
 
@@ -75,29 +72,22 @@ export const web: Plugin = definePlugin({
   tools: [WebSearchTool, WebFetchTool],
 });
 
-/** Memory, past runs and later ones, and the run's own equipment: the
- *  `memory` tool, offered while memory is on; `executions`; `wake`, with
- *  which a run arranges to be continued at a later time;
+/** Past runs and later ones, and the run's own equipment: `executions`;
+ *  `wake`, with which a run arranges to be continued at a later time;
  *  `plugin_manager`, with which it installs and enables the plugins it
  *  loads, each change approved by the person; and `resources`, which reads
  *  the time, the models, the plans' quotas and the run's spend. The last
- *  three are offered to every agent with tools. */
+ *  three are offered to every agent with tools. An agent's memory is no
+ *  tool: its notes are files its file tools read and write
+ *  (`agent/memory/memoryLayout.ts`). */
 export const memoryWorkflow: Plugin = definePlugin({
   id: 'memory-workflow',
-  tools: [
-    MemoryTool,
-    ExecutionsTool,
-    WakeTool,
-    PluginManagerTool,
-    ResourcesTool,
-  ],
+  tools: [ExecutionsTool, WakeTool, PluginManagerTool, ResourcesTool],
   injectedWhen: {
-    memory: MEMORY_ENABLED_SETTING,
     wake: true,
     plugin_manager: true,
     resources: true,
   },
-  prompt: memoryPromptSection,
 });
 
 /**

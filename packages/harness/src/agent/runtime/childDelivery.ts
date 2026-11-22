@@ -19,10 +19,9 @@ import {
   backgroundScriptOf,
   RUN_OUTCOME,
   runEndErrorMessage,
-  type AttachedMemoryMiss,
   type ChildRunDelivery,
 } from '@shared/schemas';
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+import { escapeText } from '@shared/utils/xmlEscape';
 import type { ToolRegistry } from '@tools/toolTable';
 import { SessionViewAccess, type SessionLog } from '@shared/session/runHistory';
 import type { RunRows } from '@shared/session/runRowsShape';
@@ -33,30 +32,11 @@ import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
 import { scriptEndDelivery } from './scriptRun';
 
-/** A subagent's context lines, after its wall time: its working directory,
- *  then the memories its launch named and could not attach. */
-function contextLines(
-  workingDirectory: string | undefined,
-  misses: readonly AttachedMemoryMiss[],
-): string[] {
-  const lines: string[] = [];
-  if (workingDirectory) {
-    lines.push(
-      `<working-directory>${escapeText(workingDirectory)}</working-directory>`,
-    );
-  }
-  if (misses.length > 0) {
-    lines.push(
-      '<memory-misses>',
-      ...misses.map(
-        (miss) =>
-          `<memory-miss path="${escapeAttr(miss.path)}" reason="${escapeAttr(miss.reason)}" />`,
-      ),
-      '</memory-misses>',
-    );
-  }
-  return lines;
-}
+/** A subagent's context lines, after its wall time: its working directory. */
+const contextLines = (workingDirectory: string | undefined): string[] =>
+  workingDirectory
+    ? [`<working-directory>${escapeText(workingDirectory)}</working-directory>`]
+    : [];
 
 /**
  * The delivery a run's end makes, or null when it delivers nothing
@@ -94,7 +74,7 @@ export const childEndReport = Effect.fn('childEndReport')(
       family: DELIVERY_FAMILY.subagent,
       runId,
       wallTimeMs,
-      lines: contextLines(ctx.workingDirectory, report.memoryMisses ?? []),
+      lines: contextLines(ctx.workingDirectory),
     };
     const agent = { name: 'agent', value: config.label };
     switch (report.outcome) {

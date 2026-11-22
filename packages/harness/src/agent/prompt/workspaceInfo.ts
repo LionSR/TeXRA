@@ -7,6 +7,7 @@ import { DateTime, Effect } from 'effect';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
+import type { MemoryFolder } from '@agent/memory/memoryLayout';
 import {
   currentBranch,
   isGitRepository,
@@ -16,6 +17,18 @@ import { envVar } from '@utils/system/envFlags';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { runsInWsl } from '@utils/system/wslDetect';
 
+/** Heading introducing external directories (such as memory folders) in `<workspace_info>`. */
+export const ACCESSIBLE_EXTERNAL_DIRS_HEADING =
+  'Accessible external directories';
+
+/** The tools the external directories are listed for, as the list names them. */
+export const EXTERNAL_ROOT_TOOLS = Object.freeze([
+  'read_file',
+  'write_file',
+  'grep',
+  'glob',
+  'edit_file',
+] as const);
 interface GitInfo {
   branch: string | null;
   dirty: boolean;
@@ -81,10 +94,12 @@ const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
  * @param offered - The tools the run offers, by name: the external
  *   directories are listed only for a run offered a tool that reads them,
  *   and the advice before a git command only for one offered `bash`.
+ * @param memory - The run's memory folders, listed with those directories.
  */
 export const buildWorkspaceInfoBlock = Effect.fn(function* (
   wsPath: string | undefined,
   offered: readonly string[],
+  memory: readonly MemoryFolder[],
 ) {
   const platform = getPlatformLabel();
   const shell = yield* detectShell;
@@ -117,5 +132,26 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     );
   }
 
+  const externalRoots = EXTERNAL_ROOT_TOOLS.some((name) =>
+    offered.includes(name),
+  )
+    ? memory.map((folder) => ({
+        absolutePath: folder.path,
+        label: `${folder.label}: notes on ${folder.holds}`,
+        writable: true,
+      }))
+    : [];
+  if (externalRoots.length > 0) {
+    lines.push('');
+    lines.push(
+      `${ACCESSIBLE_EXTERNAL_DIRS_HEADING} (absolute paths; use ${EXTERNAL_ROOT_TOOLS.join(', ')}):`,
+    );
+    for (const root of externalRoots) {
+      const rw = root.writable ? 'writable' : 'read-only';
+      lines.push(
+        `  ${escapeTextStrict(root.absolutePath)}: ${escapeTextStrict(root.label)} (${rw})`,
+      );
+    }
+  }
   return `\n<workspace_info>\n${lines.join('\n')}\n</workspace_info>`;
 });

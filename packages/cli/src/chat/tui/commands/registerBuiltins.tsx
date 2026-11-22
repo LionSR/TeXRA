@@ -16,7 +16,6 @@ import {
   type ApprovalFormValue,
 } from '../forms/ApprovalPolicyForm';
 import { CliConfigForm } from '../forms/CliConfigForm';
-import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { PluginsListForm } from '../forms/PluginsListForm';
@@ -35,10 +34,6 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './handlers/slashContext';
-import {
-  showCliMemoryList,
-  showCliMemoryPreview,
-} from './handlers/memoryCommands';
 import {
   resumeInterruptedTasks,
   sessionContributions,
@@ -155,11 +150,6 @@ export function builtinSlashCommands(options: {
     };
   }
 
-  const MemoryListFormAdapter = makeSelectFormAdapter<string>(
-    ({ context, ...formProps }) => <MemoryListForm {...formProps} />,
-    (storagePath, context) =>
-      showCliMemoryPreview(context.runSession.roots, storagePath),
-  );
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
     ({ context, ...formProps }) => (
       <ResumeListForm session={context.runSession} {...formProps} />
@@ -352,20 +342,6 @@ export function builtinSlashCommands(options: {
     {
       pluginId: 'workspace',
       commands: [
-        {
-          name: 'memory',
-          description: 'List stored memories',
-          category: 'configuration',
-          echo: 'ifPersists',
-          handler: (remainder, context) =>
-            Effect.suspend(() => {
-              const roots = context.runSession.roots;
-              return remainder.toLowerCase() === 'list'
-                ? showCliMemoryList(roots)
-                : showCliMemoryPreview(roots, remainder);
-            }),
-          formComponent: MemoryListFormAdapter,
-        },
         {
           name: 'plugins',
           description: 'Switch plugins on or off, or add one',

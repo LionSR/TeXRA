@@ -35,7 +35,9 @@ const promptEnvironment: Effect.Effect<Environment, PromptRenderFailed> =
   );
 
 /**
- * Render a prompt string using nunjucks templating.
+ * Render a prompt string using nunjucks templating. A template is code: its
+ * expressions run in this process, so render only text the agent's author
+ * wrote, never text taken from a project's files or an end user.
  *
  * @param prompt The prompt template string
  * @param variables Variables to use in template rendering

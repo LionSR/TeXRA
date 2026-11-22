@@ -4,11 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-TeXRA Desktop, CLI chat and the VS Code extension now auto-approve shell commands, file edits and agent work in projects without a saved approval policy. Projects with a saved Ask or Block policy keep that choice. The CLI still defaults to Block with `--no-input`.
-
 TeXRA 1.0. Everything below is relative to 0.40.10.
 
 ### Breaking Changes
+
+- **`--no-input` no longer blocks commands and edits.** It still makes a
+  command run without prompting, as `--print` does, but it used to set the
+  approval policy to Block as well. The policy now comes from
+  `--approval-policy`, `TEXRA_APPROVAL_POLICY` or your settings, as for any
+  other command; pass `--approval-policy never` to block.
+
+- **Agents no longer ask before running commands or editing files.** The
+  approval policy now defaults to Auto-approve. Set it to **Ask** in
+  Settings → General → Approval (or `/approval` in the terminal) to review
+  each command and edit as before, or to **Block** to refuse them. A policy
+  you already chose is kept.
+
+- **Memory is two folders of Markdown files, with no memory tool.** An
+  agent reads and writes its notes with its ordinary file tools, and is
+  shown each folder's index, `MEMORY.md`, at every request, so nothing has
+  to be loaded by hand at the start of a conversation. There is a folder
+  for you in every project (`~/.texra/memories/`) beside the project's own.
+  Pinning is gone: what an agent should always see goes in `MEMORY.md`.
+  The Memory tab is the switch and two **Open folder** buttons; its list,
+  the `texra memory` commands and the chat's `/memory` are removed, and so
+  is the `memories` option of the `agent` and `program` tools. Notes
+  already saved stay where they are, with no `MEMORY.md` until an agent or
+  you write one. A custom agent that lists the `memory` tool needs that
+  line removed.
 
 - **TeXRA 1.0 starts fresh.** Conversations, saved runs, settings kept by the
   app, remembered desktop projects and the CLI's input history from 0.40 are
@@ -348,6 +371,18 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   type and suggests a mistyped flag or subcommand.
 
 ### Bug Fixes
+
+- **Your own `AGENTS.md` applies in every project.** `~/.texra/AGENTS.md`
+  was read only when the project had no `AGENTS.md` of its own. Agents now
+  read both, yours first and the project's after it.
+
+- **A project's files can no longer run code when an agent starts in it.**
+  A branch or folder name written as a template expression was evaluated
+  while the system prompt was built, and the `PATH` or git settings in a
+  project's `.env`, or a file-watcher command in its git configuration,
+  chose a program the start-up `git` reads ran, all before anything was
+  approved. Names are now plain text, and those reads use the machine's own
+  `git` and environment.
 
 - **Security: file tools no longer follow a symlink out of the workspace.**
   A path is checked where it physically lands, and the approval prompt names

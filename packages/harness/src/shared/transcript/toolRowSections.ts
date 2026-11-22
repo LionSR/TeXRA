@@ -240,58 +240,6 @@ function buildWriteSections(ctx: SectionContext): ToolSection[] {
   return sections;
 }
 
-/**
- * `MemoryToolInput` is a host-only discriminated union this browser-safe
- * module cannot import, so each displayed field is read with its own guard
- * rather than mirrored as a second schema.
- */
-function buildMemorySections(ctx: SectionContext): ToolSection[] {
-  const { input } = ctx;
-  if (!Predicate.isObject(input) || typeof input.command !== 'string')
-    return [];
-  const command = input.command;
-  const path = asString(input.path);
-  const memPath = command === 'rename' ? '' : (path ?? '');
-  const sections: ToolSection[] = [];
-  if (memPath) {
-    sections.push({
-      kind: 'file',
-      label: 'File:',
-      path: memPath,
-      namespace: 'memory',
-    });
-  }
-
-  const oldStr = asString(input.old_str);
-  const newStr = asString(input.new_str);
-  const fileText = asString(input.file_text);
-  const insertText = asString(input.insert_text) ?? newStr;
-  const insertLine =
-    typeof input.insert_line === 'number' ? input.insert_line : undefined;
-
-  if (command === 'str_replace' && oldStr != null && newStr != null) {
-    sections.push({
-      kind: 'diff',
-      label: '',
-      oldText: oldStr,
-      newText: newStr,
-    });
-  } else if (command === 'create' && fileText != null) {
-    sections.push(codeSection('', fileText, 'file'));
-  } else if (command === 'insert' && insertText != null) {
-    const label =
-      insertLine != null ? `Insert at line ${insertLine}:` : 'Insert:';
-    sections.push(codeSection(label, insertText, 'file'));
-  } else if (command === 'rename') {
-    const oldPath = asString(input.old_path);
-    const newPath = asString(input.new_path);
-    if (oldPath != null && newPath != null) {
-      sections.push(textSection('Rename:', `${oldPath} → ${newPath}`));
-    }
-  }
-  return sections;
-}
-
 function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (!Predicate.isObject(input)) return [];
@@ -374,7 +322,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
       contextFiles: toStringArray(input.contextFiles),
       mediaFiles: toStringArray(input.mediaFiles),
       outputFiles: toStringArray(input.outputFiles),
-      memories: toStringArray(input.memories),
     }),
   );
   if (files) sections.push(files);
@@ -549,10 +496,6 @@ const SECTION_BUILDERS: readonly {
   {
     match: (ctx) => toolDisplayKind(ctx.toolName) === 'script',
     build: buildScriptSections,
-  },
-  {
-    match: (ctx) => normalizeToolName(ctx.toolName) === 'memory',
-    build: buildMemorySections,
   },
   {
     match: (ctx) => normalizeToolName(ctx.toolName) === 'executions',

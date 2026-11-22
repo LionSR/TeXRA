@@ -132,7 +132,7 @@ const Color = GlobalFlag.Setting('color')({
 const NoInput = GlobalFlag.Setting('no-input')({
   flag: boolFlag(
     'no-input',
-    'For headless commands, disable prompts and default approvals to never',
+    'For headless commands, never prompt (as --print does)',
   ),
 });
 /**

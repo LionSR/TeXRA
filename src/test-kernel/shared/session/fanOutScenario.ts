@@ -386,7 +386,6 @@ export function buildScenario({ proposal = false } = {}) {
           tools: [],
           model: 'claude-sonnet-5-5',
           instruction: 'Review the draft.',
-          memories: [],
           inputFiles: ['draft.tex'],
           contextFiles: ['refs.bib'],
           mediaFiles: [],

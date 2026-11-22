@@ -279,9 +279,7 @@ export class SettingsApp extends TexraSignalElement {
           ></latex-tab>
         `;
       case 'memory':
-        return html`<memory-tab
-          .items=${host.memory?.items ?? []}
-        ></memory-tab>`;
+        return html`<memory-tab></memory-tab>`;
       case 'general':
         if (desktopHost && section === 'appearance')
           return html`<slot name="appearance"></slot>`;

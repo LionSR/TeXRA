@@ -80,14 +80,13 @@ const USES: HeaderList = {
 /**
  * The regular file `file` of a plugin, read as text and never run, and the
  * two declarations its header begins with (`list` beside the
- * `description`), read from `sourceOf` its text: the source, or why not
+ * `description`): the source, or why not
  * (an unreadable file, a link, which is not followed, a header that does
  * not declare them); `null` when nothing is there.
  */
 export const readDeclaredFile = Effect.fn('readDeclaredFile')(function* (
   file: string,
   list: HeaderList,
-  sourceOf: (text: string) => string = (text) => text,
 ): Effect.fn.Return<
   Result.Result<
     {
@@ -111,7 +110,7 @@ export const readDeclaredFile = Effect.fn('readDeclaredFile')(function* (
     return meansAbsent(text.failure) ? null : Result.fail(text.failure.message);
   if (text.success === null)
     return Result.fail('it is not a regular file (a link is not followed)');
-  const source = sourceOf(text.success);
+  const source = text.success;
   return Result.map(readDeclarations(source, list), (declared) => ({
     source,
     ...declared,
@@ -257,9 +256,6 @@ interface ProgramFiles {
   readonly prefix: string;
   /** How a message names its file `entry`, or the directory itself (`''`). */
   readonly named: (entry: string) => string;
-  /** The module a file holds, where its writer puts more in the file than
-   *  the module. */
-  readonly moduleOf?: (text: string) => string;
 }
 
 /**
@@ -274,7 +270,6 @@ export const readPrograms = Effect.fn('readPrograms')(function* ({
   root,
   prefix,
   named,
-  moduleOf,
 }: ProgramFiles): Effect.fn.Return<
   PluginPrograms,
   never,
@@ -314,11 +309,7 @@ export const readPrograms = Effect.fn('readPrograms')(function* ({
           return refused(
             'its name must be lowercase letters, digits and hyphens',
           );
-        const declared = yield* readDeclaredFile(
-          path.join(root, entry),
-          USES,
-          moduleOf,
-        );
+        const declared = yield* readDeclaredFile(path.join(root, entry), USES);
         if (declared === null) return refused('it is no longer there');
         if (Result.isFailure(declared)) return refused(declared.failure);
         const { description, names, source } = declared.success;

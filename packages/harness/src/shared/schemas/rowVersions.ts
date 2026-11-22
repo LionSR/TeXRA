@@ -120,7 +120,8 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
   Object.freeze({
     'run.start': Object.freeze({ ...V1, listing: 'lifecycle' }),
     'run.activate': Object.freeze({ ...V1, listing: 'own' }),
-    'run.config': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: run config no longer carries attached memory paths.
+    'run.config': Object.freeze({ version: 2, listing: 'own' }),
     'run.stop': Object.freeze({ ...V1, listing: 'own' }),
     'run.end': Object.freeze({ ...V1, listing: 'own' }),
     'run.removed': Object.freeze({ ...V1, listing: 'lifecycle' }),
@@ -128,7 +129,8 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'plugin.fact': Object.freeze({ ...V1, listing: 'own' }),
     'followup.queued': Object.freeze({ ...V1, listing: 'followup' }),
     'followup.consumed': Object.freeze({ ...V1, listing: 'followup' }),
-    'request.opened': Object.freeze({ ...V1, listing: 'request' }),
+    // v2: proposals no longer carry attached memory paths.
+    'request.opened': Object.freeze({ version: 2, listing: 'request' }),
     'request.decided': Object.freeze({ ...V1, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     'run.position': Object.freeze({ ...V1, listing: 'own' }),

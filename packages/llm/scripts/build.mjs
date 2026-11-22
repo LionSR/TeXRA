@@ -38,10 +38,10 @@ await build({
   platform: 'neutral',
   plugins: [
     {
-      // The repository patches OpenAI's response accumulator for provider
-      // metadata events. Consumers do not inherit pnpm patches, so the
-      // package carries the tested realization instead of vanilla OpenAI.
-      name: 'bundle-patched-openai',
+      // The package carries the OpenAI runtime it was built and tested
+      // with, so a consumer installs no `openai` of its own (NOTICE.txt
+      // lists it).
+      name: 'bundle-openai',
       setup(buildContext) {
         buildContext.onResolve({ filter: /^openai(?:\/|$)/ }, ({ path }) => ({
           path: fileURLToPath(import.meta.resolve(path)),

@@ -17,6 +17,7 @@ import {
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  APPROVAL_POLICY_SETTING,
   settingsCatalog,
   type SettingsCatalog,
 } from '@shared/state/stateSettings';
@@ -125,14 +126,17 @@ export const HARNESS_APP: TestApp = Object.freeze({
  * The config every fake host reads: production's in-memory provider over
  * the app's catalog, holding each seeded value where a person's setting of
  * it would sit (the scope its row is written to, else the workspace), so it
- * resolves exactly as it does on a real host.
+ * resolves exactly as it does on a real host. A fake host's policy is
+ * `ask` unless a suite seeds another: the suites of approval requests need a
+ * policy that raises them, which the default (Auto-approve) does not.
  */
 export function fakeConfig(
   values: Record<string, unknown> = {},
   settings: SettingsCatalog = HARNESS_APP.settings,
 ): MemoryConfigProvider {
   const config = new MemoryConfigProvider(settings);
-  for (const [key, value] of Object.entries(values)) {
+  const seeded = { [APPROVAL_POLICY_SETTING.key]: 'ask', ...values };
+  for (const [key, value] of Object.entries(seeded)) {
     const row = settings.byKey(key);
     Effect.runSync(config.update(key, value, row?.configTarget ?? 'workspace'));
   }

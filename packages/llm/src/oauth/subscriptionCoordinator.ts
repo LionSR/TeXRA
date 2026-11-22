@@ -28,8 +28,8 @@ export type SubscriptionTokenResponse =
  *  reports. Providers may add fields via intersection types. */
 export type SubscriptionSession =
   (typeof SubscriptionSessionBaseSchema)['Type'] & {
-    email?: string;
-    accountId?: string;
+    email?: string | undefined;
+    accountId?: string | undefined;
   };
 
 /** The authorize URL a loopback login opens, and what its callback checks. */

@@ -5,7 +5,7 @@
 // Standalone (no MockupFrame) — just the focused results card, built on the
 // shared <MockCard> shell so it flips cleanly between docs light / dark themes.
 //
-// Each row mirrors MemoryHero's .mem-item / .mem-meta vocabulary: a title, a
+// Each row is a card with a meta strip: a title, a
 // dimmed authors line, then a dot-separated metadata strip carrying the id and
 // a per-row arXiv source badge.
 import MockCard from './MockCard.vue';
@@ -94,7 +94,7 @@ const results = [
   font-style: italic;
 }
 
-/* Result rows — borrow MemoryHero's .mem-item card look. */
+/* Result rows: cards. */
 .sr-list {
   list-style: none;
   margin: 0;

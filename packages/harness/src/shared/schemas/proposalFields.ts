@@ -5,13 +5,12 @@ import { FileFieldsSchema } from './fileFields';
 
 export const BaseProposalFieldsSchema = Schema.Struct({
   // What the proposed run will record: its name, system text and tools,
-  // its memories and its working directory. Named in full by every
-  // proposal: no launch default applies.
+  // and its working directory. Named in full by every proposal: no launch
+  // default applies.
   ...Struct.pick(AgentConfigSchema.fields, [
     'label',
     'system',
     'tools',
-    'memories',
     'workingDirectory',
   ]),
   model: Schema.String,
@@ -53,7 +52,6 @@ export interface ProposalFileFields {
   readonly contextFiles?: readonly string[];
   readonly mediaFiles?: readonly string[];
   readonly outputFiles?: readonly string[];
-  readonly memories?: readonly string[];
 }
 
 export interface ProposalFileGroup {
@@ -83,6 +81,5 @@ export function getProposalFileGroups(
       clickable: true,
     },
     { label: 'Output', files: data.outputFiles ?? [], clickable: true },
-    { label: 'Memories', files: data.memories ?? [], clickable: false },
   ].filter((g) => g.files.length > 0);
 }

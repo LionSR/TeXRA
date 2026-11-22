@@ -275,7 +275,7 @@ Slash commands inside the session:
 - `/skills`: list available skills and apply one to your next request.
 - `/resume`: restore a stored execution (`/resume all` continues every interrupted task).
 - `/rename <title>`: rename the focused task.
-- `/help`: list every slash command, including `/models`, `/key`, `/status`, `/plan`, `/memory`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
+- `/help`: list every slash command, including `/models`, `/key`, `/status`, `/plan`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
 - `/tasks`: list tasks running in the [background service](#background-service) across every project. Picking one attaches to it live: Enter sends a follow-up, approval requests appear inline, and Esc detaches while the task keeps running.
 
 `texra chat` requires an interactive terminal. For scripts and CI, use `texra run <program | chat>` with `--print` or `--output-format json|ndjson`:
@@ -400,9 +400,9 @@ texra run my-programs:todo-list --input paper.tex
 
 #### Programs an agent writes for itself
 
-The assistant can also author reusable project programs. Any file it creates with the `memory` tool at `/memories/programs/<name>.js` becomes available as `own:<name>` on the next step—no restart or installation needed—and persists across conversations in the same project. It uses the same header declarations and default export as a plugin program, and can also be started directly with `texra run own:<name> --input paper.tex`.
+The assistant can also author reusable project programs. Any file it writes at `programs/<name>.js` in the project's memory folder becomes available as `own:<name>` on the next step—no restart or installation needed—and persists across conversations in the same project. It uses the same header declarations and default export as a plugin program, and can also be started directly with `texra run own:<name> --input paper.tex`.
 
-- **Storage:** These files live in project [memory](./memory.md) alongside saved notes, not in your repository, so cloning a repo never brings them in. `texra memory list` and the Memory tab list them; delete a file to remove its program. Self-written programs load even when the `memory` tool is switched off.
+- **Storage:** These files live in project [memory](./memory.md) alongside saved notes, not in your repository, so cloning a repo never brings them in. The Memory tab's **Open this project's memory folder** reveals the files; delete one to remove its program. Self-written programs load even when memory is switched off (that setting controls only whether a chat gets the memory folders and their indexes).
 - **Trust and approvals:** Self-written programs run in the same sandbox with only the tools listed in `uses`, subject to plugin switches and your approval policy. Unlike plugin programs, every helper agent or nested program they start still prompts for approval (and under `--approval-policy never`, tools that require approval are withheld). No plugin may use the reserved name `own`.
 - **Listing:** The first 20 self-written programs are listed to the assistant by name; any beyond that can still be invoked by name. Malformed files are rejected individually without blocking the rest.
 
@@ -507,7 +507,7 @@ texra tasks send <id> "<text>"                     # send a follow-up or resume
 texra tasks stop <id>                              # stop a running task
 ```
 
-You can shorten any `<id>` to a unique prefix. Multiple terminals can attach to the same task; `attach` is read-only, so answer pending approvals in `texra chat` via `/tasks`. Per-command approval flags (`--approval-policy`, `--no-input`, `TEXRA_APPROVAL_POLICY`) apply only to that task and can tighten the project policy (or set `yolo` unless the project policy is `never` / **Block**).
+You can shorten any `<id>` to a unique prefix. Multiple terminals can attach to the same task; `attach` is read-only, so answer pending approvals in `texra chat` via `/tasks`. Per-command approval settings (`--approval-policy`, `TEXRA_APPROVAL_POLICY`) apply only to that task and can tighten the project policy (or set `yolo` unless the project policy is `never` / **Block**). With `--no-input`, the task follows the same approval policy without prompting.
 
 Manage the service directly:
 
@@ -539,14 +539,6 @@ texra models show deepseek/deepseek-v4-pro
 texra models enabled
 texra models enable xai/grok-4.7
 texra models disable xai/grok-4.7
-```
-
-Inspect the memories the assistant has stored for this project (see
-[Memory](./memory.md)):
-
-```bash
-texra memory list
-texra memory show memories/<file>
 ```
 
 ## Project defaults
@@ -594,8 +586,8 @@ for every project. A project file that sets it is ignored and `texra doctor` rep
 
 The corresponding environment variables are `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. The approval policy a
-command asks for (`--approval-policy`, `TEXRA_APPROVAL_POLICY`, or
-`--no-input`, which asks for `never`) does not replace the stored one: it can
+command asks for (`--approval-policy` or `TEXRA_APPROVAL_POLICY`) does not
+replace the stored one: it can
 only narrow it for that command's tasks, and `yolo` auto-approves them unless
 the stored policy is `never` (**Block**). Run
 `texra doctor` to see which project config file was loaded and whether any

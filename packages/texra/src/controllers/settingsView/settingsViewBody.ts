@@ -124,7 +124,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
 
     // ── Controllers ──
 
-    const memoryPage = settingsMemoryCommands({ bindings, present });
+    const memory = settingsMemoryCommands({ roots, bindings, present });
     const gitPage = settingsGitCommands({ bindings, present });
     const toolsPage = settingsToolCommands({ roots, bindings, present });
     const pluginsPage = settingsPluginCommands({ roots, bindings, present });
@@ -174,7 +174,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           snapshots,
         })),
       ),
-      memoryPage.page,
       ...gitPage.pages,
       ...toolsPage.pages,
     ];
@@ -376,7 +375,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           changed('usage'),
         ),
 
-      ...memoryPage.handlers,
+      ...memory,
       ...gitPage.handlers,
       ...toolsPage.handlers,
       ...pluginsPage.handlers,

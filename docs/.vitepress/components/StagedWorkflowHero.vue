@@ -2,8 +2,8 @@
 // Frameless "staged workflow" card: the five-stage research-to-finalization
 // pipeline from guide/best-practices.md, rendered as numbered stage rows joined
 // by a connecting rail so the progression reads at a glance. Each stage names
-// the program(s) that fit it as accent verb-chips, reusing the .mc-cmd chip look
-// from MemoryCommandsHero. Standalone (no MockupFrame) — the focused pipeline
+// the program(s) that fit it as accent verb-chips (the `.mc-cmd` chip look).
+// Standalone (no MockupFrame) — the focused pipeline
 // card only.
 //
 // The card shell + inline mono header come by COMPOSITION from the shared
