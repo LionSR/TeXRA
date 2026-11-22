@@ -6,7 +6,7 @@
  * Two things to know before editing:
  *
  * 1. Every value is a token. The canonical controls (`.btn-*`,
- *    `.icon-button`, `.icon-surface`, `.settings-row`, the focus ring) are
+ *    `.action-icon-button`, `.icon-surface`, `.settings-row`, the focus ring) are
  *    not restyled here: the renderer adopts `packages/texra/src/ui/styles/controlStyles.ts`
  *    on its document (designTokens.ts), the same sheets every component
  *    adopts, so there is one definition for both trees.

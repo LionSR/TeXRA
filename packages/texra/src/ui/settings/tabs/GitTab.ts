@@ -245,7 +245,6 @@ export class GitTab extends TexraSignalElement {
                   ? TOKEN_ACTION_COPY.replace
                   : TOKEN_ACTION_COPY.set,
                 kind: 'secondary',
-                appearance: 'outlined',
                 onClick: this.handleSetGitHubToken,
               })}
               ${
@@ -262,7 +261,6 @@ export class GitTab extends TexraSignalElement {
                 icon: 'arrow-up-right-from-square',
                 text: TOKEN_ACTION_COPY.create,
                 kind: 'secondary',
-                appearance: 'outlined',
                 onClick: this.handleOpenGitHubTokenUrl,
               })}
             </span>
@@ -338,7 +336,6 @@ export class GitTab extends TexraSignalElement {
                                               text: 'Jump to agent',
                                               label: `Jump to ${owner.label}`,
                                               kind: 'secondary',
-                                              appearance: 'outlined',
                                               onClick: () =>
                                                 this.handleOpenPRSubscriptionStream(
                                                   owner.runId,
@@ -362,7 +359,6 @@ export class GitTab extends TexraSignalElement {
                             text: 'Stop monitoring',
                             label: `Stop monitoring ${subscription.key}`,
                             kind: 'secondary',
-                            appearance: 'outlined',
                             onClick: () =>
                               this.handleUnsubscribePR(subscription.key),
                           })}

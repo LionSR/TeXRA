@@ -10,8 +10,6 @@ import type { IconName } from '@ui/wa/iconNames';
 import { waSpinner } from './spinner';
 import { waIcon } from './webAwesomeIcons';
 
-type ActionButtonAppearance = 'accent' | 'filled' | 'outlined' | 'plain';
-type ActionButtonVariant = 'brand' | 'neutral';
 type ActionButtonKind = 'primary' | 'secondary' | 'ghost' | 'link' | 'danger';
 /**
  * Step on the shared `--control-size` scale (24 / 28 / 32px). Use this instead
@@ -26,13 +24,47 @@ const SIZE_CLASS = {
   l: 'is-size-l',
 } as const satisfies Record<ActionButtonSize, string>;
 
-const KIND_CLASS = {
-  primary: 'btn-primary',
-  secondary: 'btn-secondary',
-  ghost: 'btn-ghost',
-  link: 'btn-ghost is-link',
-  danger: 'btn-ghost is-danger',
-} as const satisfies Record<ActionButtonKind, string>;
+interface ActionButtonSkin {
+  readonly className?: string;
+  readonly appearance: 'accent' | 'filled' | 'outlined' | 'plain';
+  readonly variant: 'brand' | 'neutral';
+}
+
+/**
+ * What a kind paints: the skin class `controlStyles.ts` styles, and the Web
+ * Awesome appearance under it, so the two never disagree at a call site.
+ */
+const KIND_SKIN = {
+  primary: { className: 'btn-primary', appearance: 'filled', variant: 'brand' },
+  secondary: {
+    className: 'btn-secondary',
+    appearance: 'outlined',
+    variant: 'neutral',
+  },
+  ghost: { className: 'btn-ghost', appearance: 'plain', variant: 'neutral' },
+  link: {
+    className: 'btn-ghost is-link',
+    appearance: 'plain',
+    variant: 'neutral',
+  },
+  danger: {
+    className: 'btn-ghost is-danger',
+    appearance: 'plain',
+    variant: 'neutral',
+  },
+} as const satisfies Record<ActionButtonKind, ActionButtonSkin>;
+
+/** No kind: the base `.action-button` / `.action-icon-button` skin. */
+const PLAIN_SKIN: ActionButtonSkin = { appearance: 'plain', variant: 'neutral' };
+
+/**
+ * The main half of a split button: Web Awesome's own accent chrome, matching
+ * the trigger `splitButton.ts` renders beside it, with no skin class.
+ */
+const SPLIT_MAIN_SKIN: ActionButtonSkin = {
+  appearance: 'accent',
+  variant: 'brand',
+};
 
 /**
  * A hover hint is a `<wa-tooltip>`, which anchors to its button by `for`, so
@@ -53,9 +85,7 @@ interface ActionButtonCommon {
    * parent Web Awesome component (e.g. `<wa-input slot="end">`).
    */
   readonly slot?: string;
-  readonly appearance?: ActionButtonAppearance;
-  readonly variant?: ActionButtonVariant;
-  /** Semantic skin. Prefer this over choosing appearance/variant directly. */
+  /** Semantic skin; it decides the Web Awesome appearance too. */
   readonly kind?: ActionButtonKind;
   readonly disabled?: boolean;
   /** Selected state for toggle buttons. Reflected as `aria-pressed`. */
@@ -86,8 +116,8 @@ export type LabeledActionButtonOptions = ActionButtonCommon &
     readonly icon?: IconName;
     readonly text: string;
     readonly label?: string;
-    /** Let a containing Web Awesome primitive own the button's native chrome. */
-    readonly nativeChrome?: boolean;
+    /** The main half of a split button: the trigger's accent chrome. */
+    readonly splitMain?: boolean;
     /** A trailing caret: the button opens a menu (a dropdown trigger). */
     readonly caret?: boolean;
   };
@@ -99,7 +129,7 @@ type ActionButtonBaseOptions = ActionButtonCommon &
     readonly text?: string;
     readonly size?: ActionButtonSize;
     readonly busy?: boolean;
-    readonly nativeChrome?: boolean;
+    readonly splitMain?: boolean;
     readonly caret?: boolean;
   };
 
@@ -122,8 +152,6 @@ function renderActionButtonParts({
   action,
   className,
   slot,
-  appearance = 'plain',
-  variant = 'neutral',
   kind,
   size,
   disabled,
@@ -131,15 +159,18 @@ function renderActionButtonParts({
   expanded,
   busy,
   tooltip,
-  nativeChrome,
+  splitMain,
   caret,
   onClick,
 }: ActionButtonBaseOptions): ActionButtonParts {
   let baseClass: string | undefined;
-  if (!nativeChrome) baseClass = text ? 'action-button' : 'action-icon-button';
+  if (!splitMain) baseClass = text ? 'action-button' : 'action-icon-button';
+  let skin = PLAIN_SKIN;
+  if (splitMain) skin = SPLIT_MAIN_SKIN;
+  else if (kind) skin = KIND_SKIN[kind];
   const classes = [
     baseClass,
-    kind ? KIND_CLASS[kind] : undefined,
+    skin.className,
     busy ? 'is-busy' : undefined,
     // Only meaningful on the square icon variant; a labeled button is sized by
     // its text and the shared button height.
@@ -172,8 +203,8 @@ function renderActionButtonParts({
       id=${ifDefined(id)}
       slot=${ifDefined(slot)}
       class=${classes}
-      appearance=${appearance}
-      variant=${variant}
+      appearance=${skin.appearance}
+      variant=${skin.variant}
       size="s"
       type="button"
       aria-label=${ariaLabel}

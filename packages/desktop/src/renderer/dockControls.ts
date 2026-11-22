@@ -139,7 +139,8 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
           ${renderIconActionButton({
             icon: 'xmark',
             label: `Close ${tab.title}`,
-            className: 'icon-button btn-ghost is-compact',
+            kind: 'ghost',
+            className: 'is-compact',
             size: 's',
             onClick: () => actions.close(id),
           })}
