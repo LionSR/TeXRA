@@ -31,6 +31,7 @@ import {
 } from '@agent/runtime/sessionEventsLayer';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
+import { nativeCopiesDir } from '@common/plugins/installedPlugins';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -347,7 +348,11 @@ export function ownerProcessLayer(
   NodeServices
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  const catalog = pluginCatalogLayer(table, mcpConfigPathOf(storageRoot));
+  const catalog = pluginCatalogLayer(
+    table,
+    mcpConfigPathOf(storageRoot),
+    nativeCopiesDir(globalStorage),
+  );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
   const globalDatabase = globalDatabaseLayer(globalStorage).pipe(Layer.orDie);
   const services = Layer.mergeAll(

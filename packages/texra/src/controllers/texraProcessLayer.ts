@@ -99,8 +99,9 @@ interface TexraProcessHost extends Omit<
   readonly resourcesPath: string;
   /** The flags every skill read uses (the CLI's `--source`). */
   readonly skillSourceOptions?: SkillSourceOptions;
-  /** What the usage log stamps on each entry, and the host's own live
-   *  telemetry switch; the runtime's disposal drains the log's queue. */
+  /** What the usage log stamps on each entry; the runtime's disposal
+   *  drains the log's queue. The host's own telemetry switch is
+   *  `HostTelemetrySwitch`, provided by the host that has one. */
   readonly usageLog: UsageLogOptions;
   /** The runtime's floor for Effect diagnostics. */
   readonly minimumLogLevel: LogLevel.LogLevel;

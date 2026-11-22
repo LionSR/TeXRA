@@ -243,7 +243,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   going one more turn, but never approve on your behalf. A plugin can carry
   programs (`programs/<name>.js`, started as `<plugin>:<name>`) and native
   code (`harness.mjs`), which loads while TeXRA runs once you trust it
-  yourself. Agents get a `plugin_manager` tool, and switching a plugin on or
+  yourself and runs from a copy of the files you trusted. Agents get a `plugin_manager` tool, and switching a plugin on or
   off reaches open conversations at their next step.
 - **MCP servers.** List local stdio servers in `~/.texra/mcp.json` (the
   shape of Claude Code's `.mcp.json`) and name their tools in an agent's

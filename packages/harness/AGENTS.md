@@ -87,7 +87,14 @@ that step's calls (`ToolStep.services`). A plugin's layers are `RcMap`
 entries keyed by id and revision (`LayerKey`), so a replaced native plugin's
 new revision comes up beside the old one, which goes down when the last step
 that pinned it ends; a swap interrupts nothing. A native module is imported
-only when a step or a launch reads the table; a change to the install record
+only when a step or a launch reads the table, from a copy of its plugin
+made for that revision (`copyPlugin`, `common/plugins/pluginDigest.ts`) in
+the process's own directory under `<global storage>/plugins/.native`: Node
+caches a module by its path, so a revision imported from the plugin's own
+folder would run the modules the first revision's entry imported, and the
+copy is the files that were trusted whatever is written there afterwards.
+The directory goes with the process (one a killed process left is removed
+by the next loader); a change to the install record
 only takes out what no longer loads, so listing, installing or reviewing a
 plugin runs none of its code. The host decides how a native tool runs, not
 its definition: the loader (`hostRun`, `tools/nativePlugins.ts`) gives

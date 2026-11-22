@@ -20,7 +20,6 @@ import { GlobTool } from '@tools/glob';
 import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
-import { GOAL_MODULE } from '@tools/plan/goalScript';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { PluginManagerTool } from '@tools/PluginManagerTool';
 import { definePlugin, type Plugin } from '@tools/plugins';
@@ -31,6 +30,8 @@ import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
 import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
 import { MEMORY_ENABLED_SETTING } from '@shared/state/stateSettings';
+
+import GOAL_MODULE from './plan/goal.js?raw';
 
 const fileTools = (writeFilter?: WriteFilter) =>
   [

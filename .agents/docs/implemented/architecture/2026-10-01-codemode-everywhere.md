@@ -118,8 +118,8 @@ settles. So:
 The `SessionEvents` publisher makes commit order enqueue order, so the run
 history is the settle log. The worker's prelude makes `Date.now()`, argless
 `new Date()`, `Math.random()` and `Intl` throw, turns code generation off
-and freezes the promise prototype (`agent/codeSandbox/worker.ts`). The realm
-has no timers and no module loader. The guest's `tools.x()` returns a
+and freezes the promise prototype (`agent/codeSandbox/determinism.js`). The
+realm has no timers and no module loader. The guest's `tools.x()` returns a
 realm-native promise; the host settles it through one trusted function the
 prelude captures and never holds a guest object (Q1). What a script gives up
 against the old `yield*` protocol is the six narrowings of Q6.

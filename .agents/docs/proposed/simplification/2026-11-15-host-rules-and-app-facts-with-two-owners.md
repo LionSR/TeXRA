@@ -300,11 +300,34 @@ In order of size. Each needs the decision named.
 
 ## Still open after the 2026-11-21 sweep
 
-- `openGuiWindow` returns `present`, which no host reads now that the
-  desktop binding dropped it. The file was held by an open PR that day.
+- Landed 2026-11-21 (window-body sweep): `openGuiWindow` no longer returns
+  `present`, which no host read once the desktop binding dropped it.
+- Landed 2026-11-21 (window-body sweep): **what an editor's files give the
+  launcher.** The extension answered `useCurrentFile` (a latexdiff
+  artifact taken as the base file selects its source and commit) and
+  `addOpenedFiles` (which opened files a field takes) itself. The shared
+  body decides both over an optional `editor` binding
+  (`SharedHostCommandBindings`), and a host without an editor gets the
+  refusal it got before. The host verbs no longer take the window's bridge
+  and snapshot (`GuiWindowParts` is gone).
 - **Where a tool edit's staged pair lives** is decided per host: the
   desktop makes a directory per request and removes it whole, the extension
   writes into its storage directory and unlinks the two files
   (`packages/texra/src/controllers/approval/tempFileManager.ts` documents
   both). One staging owner would move the extension's previews out of its
   storage directory, a visible change that needs a decision.
+- **Whether a window offers to start a project** has two owners: the
+  snapshot's `shows.gettingStarted` row, and whether the host binds the
+  `gettingStarted` request (`own.gettingStarted`). The extension sets both,
+  the desktop neither. Reading the row from the binding needs the host's
+  half built before the snapshot, which moves the release of the
+  extension's comparison refresh after the snapshot's followers; checked
+  on 2026-11-21 and left for a run that can show the order does not matter.
+- **The notices' key prompt and guide page are bound twice per host.**
+  Each host passes `windowNotices` a `setApiKey` and an `openGuide` that
+  restate its `SharedHostCommandBindings.setApiKey` and
+  `openLink(openExternal, texraGuideUrl(page))`. `openGuiWindow` could build
+  the notices from the bindings, the host giving only `ask`, but a notice
+  runs on the session's fiber without the process services the extension's
+  key prompt reads (`withProcessServices`), and the desktop shows a failed
+  guide open in a dialog where the body would only log it.

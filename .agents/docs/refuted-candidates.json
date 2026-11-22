@@ -928,7 +928,7 @@
         {
           "file": "packages/harness/src/agent/runtime/processRun.ts",
           "symbol": "endProcessChild",
-          "signature": "const endProcessChild = ( runId: RunId, { logger, turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.Effect<void, Error, AgentRunServices> => {…};"
+          "signature": "const endProcessChild = Effect.fnUntraced( function* ( runId: RunId, { turn }: OpenedProcess, exit: Exit.Exit<ProcessReport, Error>, ): Effect.fn.Return<void, Error, AgentRunServices> {…}, (ended, _runId, { logger }) => Effect.ensuring( ended, Effect.sync(() => logger.close()), ), );"
         }
       ]
     },
