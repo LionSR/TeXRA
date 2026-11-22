@@ -42,7 +42,7 @@ import {
 import {
   acceptsFollowUp,
   AgentConfigSchema,
-  APPROVAL_POLICY_DEFAULT,
+  APPROVAL_POLICY_SETTING,
   descendantRuns,
   MESSAGE_TYPES,
   parseApprovalPolicy,
@@ -272,7 +272,7 @@ const HARNESS_RESOURCES_PATH = await Effect.runPromise(
 );
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
-  approvalPolicy: APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: 'ask',
   config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
   commandName: 'texra',
   configWarnings: [],
@@ -433,6 +433,10 @@ if (RESET_MULTI_AGENT_DISABLED) {
 const harnessRuntime = HARNESS_PLATFORM_SERVICES.runtime;
 // The roots that same init installed, held as data like every other entry.
 const harnessRoots = HARNESS_PLATFORM_SERVICES.roots;
+// These interactive scenarios exercise the approval and rejection controls.
+await harnessRuntime.runPromise(
+  harnessRoots.config.update(APPROVAL_POLICY_SETTING.key, 'ask', 'local'),
+);
 if (!harnessRoots) {
   throw new Error(
     'The TUI harness platform init installed no workspace roots.',
@@ -1451,7 +1455,7 @@ sessionMeta.set({
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
-  approvalPolicy: APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: 'ask',
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1797,7 +1801,7 @@ function appendHarnessTranscript(
 
 /** The harness chat's launch policy, which `/approval` sets, as the chat's
  *  does; it never writes the project's. */
-let harnessPolicy: ApprovalPolicy = APPROVAL_POLICY_DEFAULT;
+let harnessPolicy: ApprovalPolicy = 'ask';
 const harnessApprovalPolicy = (): ApprovalPolicy => harnessPolicy;
 
 function setHarnessApprovalPolicy(policy: ApprovalPolicy): void {
