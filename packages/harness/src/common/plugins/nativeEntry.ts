@@ -36,27 +36,27 @@ export interface NativeEntry {
 
 /** The kinds of contribution a plugin may have several of, each named in
  *  `provides` as `<word>:<name>`: the word, and what a review calls them. */
-export const NAMED_KINDS = {
+export const NAMED_KINDS = Object.freeze({
   tool: 'tools',
   program: 'programs',
   module: 'script modules',
-} as const;
+} as const);
 
 /** The kinds a plugin has one of or none, each named in `provides` by its
  *  word, the plugin's field of that name: the word, and what a review says
  *  of it. */
-export const SINGLE_KINDS = {
+export const SINGLE_KINDS = Object.freeze({
   processLayer: 'services held for the life of the process',
   sessionLayer: 'services held for each open session',
   prompt: 'a section of every request’s system text',
-} as const;
+} as const);
 
 /** How `provides` names each kind, as a message or a description lists
  *  them. */
-export const PROVIDES_WORDS: readonly string[] = [
+export const PROVIDES_WORDS: readonly string[] = Object.freeze([
   ...Struct.keys(NAMED_KINDS).map((word) => `${word}:<name>`),
   ...Struct.keys(SINGLE_KINDS),
-];
+]);
 
 /** One contribution `provides` may name. */
 const CONTRIBUTION = new RegExp(
