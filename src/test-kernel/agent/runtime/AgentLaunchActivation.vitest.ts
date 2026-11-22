@@ -39,6 +39,7 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
 /** What a run of a launch was offered and asked, and how its calls ended,
@@ -134,6 +135,7 @@ describe(
           'R6: a declared tool that asks is asked about, runs under a granted bypass, and is withheld where nobody answers',
           () =>
             Effect.gen(function* () {
+              yield* setTestApprovalPolicy('ask');
               const { roots } = yield* FakeHost;
               /** Launch the run on `session` with the launch's `approval`, and
                *  read what it was offered and asked once `ready` holds. */

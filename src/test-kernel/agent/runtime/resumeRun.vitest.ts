@@ -37,7 +37,10 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { queuedFollowUps } from '@test/support/sessionTestUtils';
+import {
+  queuedFollowUps,
+  setTestApprovalPolicy,
+} from '@test/support/sessionTestUtils';
 import {
   answersOf,
   crashedCopy,
@@ -193,6 +196,7 @@ describe(
           "a person's answer to a request a dead process left resumes the run, and the call that asked takes it",
           () =>
             Effect.gen(function* () {
+              yield* setTestApprovalPolicy('ask');
               const { roots } = yield* FakeHost;
               const { workspace } = roots;
               assert(workspace !== undefined);
@@ -270,6 +274,7 @@ describe(
           'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
           () =>
             Effect.gen(function* () {
+              yield* setTestApprovalPolicy('ask');
               const { session, runId, storage } = yield* waitingRunAfterCrash({
                 interactions: { approvalPromptsUnavailable: true },
               });
