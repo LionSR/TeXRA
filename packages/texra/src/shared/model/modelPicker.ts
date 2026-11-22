@@ -45,7 +45,7 @@ const FAST_FIRST_RESPONSE_PRICE_CEILING = 1;
 
 /** Hint prepended to a fast model's picker tooltip. */
 export const FAST_FIRST_RESPONSE_HINT =
-  '⚡ Fast first response — try this for quick replies';
+  'Fast first response — good for quick replies';
 
 /**
  * Whether a model's input price qualifies it as a fast first-try pick.
@@ -69,7 +69,7 @@ export function isFastFirstResponseModel(
 const EXPENSIVE_OUTPUT_PRICE_FLOOR = 80;
 
 /** Hint prepended to an expensive model's picker tooltip, and its badge. */
-export const EXPENSIVE_MODEL_HINT = '💸 Premium API pricing';
+export const EXPENSIVE_MODEL_HINT = 'Premium API pricing';
 
 /**
  * Whether API use of a model is expensive enough to warn about. Undefined

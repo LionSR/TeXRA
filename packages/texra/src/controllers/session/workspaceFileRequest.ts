@@ -54,7 +54,7 @@ type WorkspaceFileAction = Extract<
  *  tells the user nothing they can act on. */
 const outsideWorkspace = () =>
   new Rejected({
-    reason: 'Only files inside the workspace folder can be opened.',
+    reason: 'Only files inside the project folder can be opened.',
   });
 
 /** The rooted view's refusal (no folder open, or a path that leaves the

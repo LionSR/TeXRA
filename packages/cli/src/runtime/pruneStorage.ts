@@ -30,7 +30,7 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
     writeTextStderr(`Skipped ${path}: ${message}`);
   const { orphans, asides } = inventory;
   if (orphans.length === 0 && asides.length === 0) {
-    writeTextStdout('No orphaned workspace stores and no aside copies.');
+    writeTextStdout('No orphaned project stores or corrupt backups found.');
     return CliExitCode.Success;
   }
   const listed = (
@@ -47,7 +47,7 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
       ...(orphans.length === 0
         ? []
         : listed(
-            formatResultCount(orphans.length, 'orphaned workspace store'),
+            formatResultCount(orphans.length, 'orphaned project store'),
             orphans.map((orphan) => ({
               bytes: orphan.bytes,
               line: `${orphan.directory}  (${orphan.why})`,
@@ -56,7 +56,7 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
       ...(asides.length === 0
         ? []
         : listed(
-            formatResultCount(asides.length, 'aside copy', 'aside copies'),
+            formatResultCount(asides.length, 'corrupt backup'),
             asides.map((aside) => ({ bytes: aside.bytes, line: aside.path })),
           )),
     ].join('\n'),

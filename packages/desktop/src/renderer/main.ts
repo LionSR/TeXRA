@@ -338,14 +338,13 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
         <p>${TEXRA_TAGLINE}</p>
         <ul class="desktop-empty-workspace-capabilities">
           <li>
-            It reads your paper or code and does the work: derivations, proofs,
-            literature, edits.
+            Derive results, check proofs, search literature, and edit LaTeX or
+            code.
           </li>
           <li>
-            By default it asks before it acts: edits arrive as diffs you accept
-            or reject.
+            Review every edit as a diff and approve commands before they run.
           </li>
-          <li>You choose the model; progress stays in view.</li>
+          <li>Bring your own model keys or subscriptions.</li>
         </ul>
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
@@ -408,7 +407,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
-    sidebarToggleLabel = 'Show sidebar (approval pending)';
+    sidebarToggleLabel = 'Show sidebar (waiting on you)';
   }
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
@@ -433,9 +432,9 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     <header class="shell-workspace-toolbar">
       ${sidebarToggle}
       <span class="shell-workspace-project"
-        >${activeProject?.display.name ?? 'Research workspace'}</span
+        >${activeProject?.display.name ?? 'TeXRA'}</span
       >
-      <nav class="shell-view-switch" aria-label="Workspace views">
+      <nav class="shell-view-switch" aria-label="Project views">
         ${renderLabeledActionButton({
           id: 'shellToggleAgent',
           text: 'Agent',

@@ -47,7 +47,7 @@ const PLAN_NAMES = Object.freeze({
   },
   'kimi-code-subscription': {
     plan: codingPlanForUsageRoute('kimi-code-subscription').preference.title,
-    fallback: 'your own Moonshot API keys',
+    fallback: 'your own Moonshot API key',
   },
   'glm-coding-plan-subscription': {
     plan: codingPlanForUsageRoute('glm-coding-plan-subscription').preference
@@ -112,7 +112,10 @@ export function modelFailureText(failure: ModelFailure): string {
     const remedy = failure.session.needsReauth
       ? `${signInLabel} again`
       : 'Try again in a moment';
-    return `${subscriptionLabel} unavailable: ${failure.message} ${remedy}, or turn off "${subscriptionLabel}".`;
+    const detail = failure.message.endsWith('.')
+      ? failure.message
+      : `${failure.message}.`;
+    return `${subscriptionLabel} unavailable: ${detail} ${remedy}, or turn off "${subscriptionLabel}".`;
   }
   const used = usedUpPlanOf(failure);
   return used === undefined
@@ -194,13 +197,13 @@ export interface PlanCredits {
  */
 const PLAN_CREDITS: Readonly<Record<string, PlanCredits>> = Object.freeze({
   anthropic: {
-    hint: "Claude Max or Team? Your plan includes monthly API credits. Link a Console organization in claude.ai's Billing settings, then add a Console API key here.",
+    hint: 'Claude Max/Team plans include monthly API credits — link a Console org in claude.ai Billing, then add a key here.',
     docLabel: 'About plan API credits',
     docUrl:
       'https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers',
   },
   openai: {
-    hint: "ChatGPT Pro or Business? Your plan includes monthly API credits. Claim them in ChatGPT's Billing settings for an API organization you own, then add an OpenAI API key here.",
+    hint: 'ChatGPT Pro/Business plans include monthly API credits — claim them in ChatGPT Billing, then add a key here.',
     docLabel: 'About plan API credits',
     docUrl:
       'https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions',
@@ -216,7 +219,7 @@ export function planCreditsHint(provider: string): PlanCredits | undefined {
 /** The one-line form of the reminders above, where a surface names the
  *  API-key choice once for every provider rather than one row per key. */
 export const PLAN_CREDITS_SUMMARY =
-  "Claude Max or Team, or ChatGPT Pro or Business? Your plan includes monthly API credits you can spend through that provider's API key.";
+  'Claude Max/Team and ChatGPT Pro/Business plans include monthly API credits you can use via an API key.';
 
 /**
  * Display names for the ChatGPT plans the Codex token can name, keyed by the

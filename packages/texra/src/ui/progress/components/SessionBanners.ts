@@ -79,10 +79,6 @@ export class SessionBanners extends TexraElement {
             onClick: () => this.send({ kind: 'apiKeyBanner', action: 'guide' }),
           })}
         </div>
-        <span class="hint">
-          A ChatGPT subscription covers OpenAI models. Other chat subscriptions
-          don't include API access; for those models, use a provider key.
-        </span>
       `,
     });
   }

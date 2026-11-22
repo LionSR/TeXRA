@@ -70,7 +70,7 @@ const ActiveSkillSourceScopeSchema: Literals<readonly ["bundled", "user", "proje
 Whether agents receive the skills discovered from every source.
 
 ```ts
-const AGENT_SKILLS_ENABLED_SETTING: { readonly key: "skills.enabled"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Enable skills for agents"; readonly description: "Expose enabled built-in and imported skills to agent prompts. Skills are off by default."; }
+const AGENT_SKILLS_ENABLED_SETTING: { readonly key: "skills.enabled"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Enable skills for agents"; readonly description: "Include enabled skills in agent prompts (off by default)."; }
 ```
 
 ## AgentConfig
@@ -331,13 +331,13 @@ lands inside the valid range instead of being rejected: `872` entered for
 and the failure then names a number the user never meant to set.
 
 ```ts
-const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: { readonly key: "chatgptCodex.contextWindowK"; readonly slot: "config"; readonly schema: withDecodingDefault<NullOr<Int>, never>; readonly title: "Subscription input token budget (K tokens)"; readonly description: "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it; a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery."; }
+const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: { readonly key: "chatgptCodex.contextWindowK"; readonly slot: "config"; readonly schema: withDecodingDefault<NullOr<Int>, never>; readonly title: "Subscription input token budget (K tokens)"; readonly description: "Input token budget (in thousands, up to 872) for ChatGPT subscription routing. Leave empty to use each model's default."; }
 ```
 
 ## CHATGPT_PREFER_SUBSCRIPTION_SETTING
 
 ```ts
-const CHATGPT_PREFER_SUBSCRIPTION_SETTING: { readonly key: "chatgptCodex.preferSubscription"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Prefer the ChatGPT subscription"; readonly description: "Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing takes the input window the Codex backend grants each model; use chatgptCodex.contextWindowK to override it."; }
+const CHATGPT_PREFER_SUBSCRIPTION_SETTING: { readonly key: "chatgptCodex.preferSubscription"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "ChatGPT subscription"; readonly description: "Route supported OpenAI models through your signed-in ChatGPT subscription instead of an API key (experimental)."; }
 ```
 
 ## CHILD_RUN_CONCURRENCY_BUDGET_SETTING
@@ -345,7 +345,7 @@ const CHATGPT_PREFER_SUBSCRIPTION_SETTING: { readonly key: "chatgptCodex.preferS
 How many native child model conversations one session runs at once.
 
 ```ts
-const CHILD_RUN_CONCURRENCY_BUDGET_SETTING: { readonly key: "childRunConcurrencyBudget"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Agents at once"; readonly description: "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free."; }
+const CHILD_RUN_CONCURRENCY_BUDGET_SETTING: { readonly key: "childRunConcurrencyBudget"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Agents at once"; readonly description: "Maximum agents a task can run in parallel (0 uses your CPU count). Extra agents wait for a slot."; }
 ```
 
 ## collapseWhitespace
@@ -457,7 +457,7 @@ filter decides what that surface prints, so no producer reads this row to
 widen or narrow a log; only a view build does.
 
 ```ts
-const DEBUG_MODE_SETTING: { readonly key: "logger.debugMode"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Verbose transcript"; readonly description: "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet)."; }
+const DEBUG_MODE_SETTING: { readonly key: "logger.debugMode"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Verbose transcript"; readonly description: "Show debug entries and full tool payloads in task transcripts."; }
 ```
 
 ## DeclinableUsageRoute
@@ -540,13 +540,13 @@ const DiffStatsSchema: Struct<{ readonly added: optional<Int>; readonly removed:
 ## DISABLED_SKILL_SOURCES_SETTING
 
 ```ts
-const DISABLED_SKILL_SOURCES_SETTING: { readonly key: "skills.disabledSources"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<Literals<readonly ["bundled", "user", "project", "interop", "custom"]>>, never>; readonly title: "Skill sources"; readonly description: "Enable or disable skill source groups in this workspace. The imported group, the `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the workspace and in the home directory, is off until enabled."; }
+const DISABLED_SKILL_SOURCES_SETTING: { readonly key: "skills.disabledSources"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<Literals<readonly ["bundled", "user", "project", "interop", "custom"]>>, never>; readonly title: "Skill sources"; readonly description: "Enable or disable skill folders in this project. Imported folders (.agents, .claude, .codex, .gemini) start off."; }
 ```
 
 ## DISABLED_SKILLS_SETTING
 
 ```ts
-const DISABLED_SKILLS_SETTING: { readonly key: "skills.disabled"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<String>, never>; readonly title: "Skills"; readonly description: "Enable or disable individual skills in this workspace."; }
+const DISABLED_SKILLS_SETTING: { readonly key: "skills.disabled"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<String>, never>; readonly title: "Skills"; readonly description: "Enable or disable individual skills in this project."; }
 ```
 
 ## DispatchFacts
@@ -977,13 +977,13 @@ const GIT_MARK_COMMITS_SETTING: { readonly key: "git.markCommits"; readonly slot
 ## GIT_WORKTREE_SUPPORT_SETTING
 
 ```ts
-const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; readonly slot: "repoState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Subagent worktrees"; readonly description: "Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict."; }
+const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; readonly slot: "repoState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Agent worktrees"; readonly description: "Run parallel agents in isolated git worktrees so edits do not conflict."; }
 ```
 
 ## GLM_CODING_PLAN_SETTING
 
 ```ts
-const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Treat the GLM API key as a Coding Plan subscription key instead of pay-as-you-go. Requests go to the same GLM endpoint either way; the plan's quota is shown and its limits are reported as plan limits. Ignored while a custom GLM endpoint is set."; }
+const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Use your GLM API key with GLM Coding Plan quota tracking (ignored with a custom endpoint)."; }
 ```
 
 ## GLM_REGION_SETTING
@@ -999,7 +999,7 @@ round; `0` disables the cap. Read when the goal launches, into its script.
 Global: a committed project config must not raise or remove the user's cap.
 
 ```ts
-const GOAL_MAX_COST_SETTING: { readonly key: "goal.maxCostUsd"; readonly slot: "config"; readonly schema: withDecodingDefault<Number, never>; readonly configTarget: "global"; readonly title: "Goal spend cap (USD)"; readonly description: "Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key)."; }
+const GOAL_MAX_COST_SETTING: { readonly key: "goal.maxCostUsd"; readonly slot: "config"; readonly schema: withDecodingDefault<Number, never>; readonly configTarget: "global"; readonly title: "Goal spend cap (USD)"; readonly description: "Maximum spend (USD) across rounds before an autonomous goal pauses. Set to 0 for no cap."; }
 ```
 
 ## GOAL_STRATEGY_SETTING
@@ -1011,7 +1011,7 @@ the cap is: the strategy is what checks the cap, so a committed project
 config must not pick one that ignores it.
 
 ```ts
-const GOAL_STRATEGY_SETTING: { readonly key: "goal.strategy"; readonly slot: "config"; readonly schema: withDecodingDefault<String, never>; readonly configTarget: "global"; readonly title: "Goal strategy"; readonly description: "The script module a plan run as a goal runs, by its import specifier (`builtIn:<module>`): its `goal(objective, { maxCostUsd })` export decides the rounds, what context each starts from and when to stop, and resolves to the goal's result. Defaults to the goal plugin's own module."; }
+const GOAL_STRATEGY_SETTING: { readonly key: "goal.strategy"; readonly slot: "config"; readonly schema: withDecodingDefault<String, never>; readonly configTarget: "global"; readonly title: "Goal strategy"; readonly description: "Built-in script module (`builtIn:<name>`) that controls autonomous goal rounds and stopping."; }
 ```
 
 ## GoalResultSchema
@@ -1031,7 +1031,7 @@ const GoalResultSchema: Union<readonly [Struct<{ readonly rounds: Int; readonly 
 ## GOOGLE_INTERACTIONS_SERVER_STATE_SETTING
 
 ```ts
-const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING: { readonly key: "model.useGoogleInteractionsServerState"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Server-side conversation state"; readonly description: "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round."; }
+const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING: { readonly key: "model.useGoogleInteractionsServerState"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Server-side conversation state"; readonly description: "Keep conversation state on Google's servers so each turn sends only new messages. Turn off to resend the full history each turn."; }
 ```
 
 ## HARNESS_INSTRUCTION_KEY
@@ -1082,7 +1082,7 @@ the run's own model. An app names its own (`settingsCatalog`'s
 `defaults`).
 
 ```ts
-const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model used for a run's auxiliary calls, such as session descriptions and the helper calls of an app's features. When unset, a run's helper calls use the run's own model."; }
+const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model for quick helper steps like task titles and merges. Leave empty to use the task's own model."; }
 ```
 
 ## HookEvent
@@ -1215,7 +1215,7 @@ function joinFacts(
 ## KIMI_CODE_PREFER_SETTING
 
 ```ts
-const KIMI_CODE_PREFER_SETTING: { readonly key: "kimiCode.prefer"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Kimi Code subscription"; readonly description: "Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform."; }
+const KIMI_CODE_PREFER_SETTING: { readonly key: "kimiCode.prefer"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Kimi Code subscription"; readonly description: "Route dual-backend Kimi models (K3) through Kimi Code when a Kimi Code API key is set."; }
 ```
 
 ## labelFileName
@@ -1301,7 +1301,7 @@ type LogLevel = typeof LogLevelSchema.Type;
 ## MAX_IMAGE_DIMENSION_SETTING
 
 ```ts
-const MAX_IMAGE_DIMENSION_SETTING: { readonly key: "maxImageDimension"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Maximum image size (px)"; readonly description: "Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio."; }
+const MAX_IMAGE_DIMENSION_SETTING: { readonly key: "maxImageDimension"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Maximum image size (px)"; readonly description: "Resize attached images larger than this dimension (width or height, in pixels)."; }
 ```
 
 ## McpToolOutput
@@ -1324,7 +1324,7 @@ Every host's runtime honors the row through the `memory` entry of the
 memory-workflow plugin's `injectedWhen` (`@tools/plugins`).
 
 ```ts
-const MEMORY_ENABLED_SETTING: { readonly key: "memory.enabled"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Enable memory for chat agents"; readonly description: "Remember useful details across chat sessions."; }
+const MEMORY_ENABLED_SETTING: { readonly key: "memory.enabled"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Enable memory"; readonly description: "Remember useful details across tasks."; }
 ```
 
 ## MemoryViewItem
@@ -1383,7 +1383,7 @@ row to the global scope would hide (and block writes to) a workspace
 override the runtime honors.
 
 ```ts
-const MODEL_COMPACTION_THRESHOLD_SETTING: { readonly key: "model.compactionThresholdPercent"; readonly slot: "config"; readonly schema: withDecodingDefault<Number, never>; readonly title: "Compaction threshold"; readonly description: "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable."; }
+const MODEL_COMPACTION_THRESHOLD_SETTING: { readonly key: "model.compactionThresholdPercent"; readonly slot: "config"; readonly schema: withDecodingDefault<Number, never>; readonly title: "Compaction threshold"; readonly description: "Summarize earlier messages when a conversation reaches this percentage of the context limit (0 disables)."; }
 ```
 
 ## MODEL_RETRY_MAX_ATTEMPTS_SETTING
@@ -1391,7 +1391,7 @@ const MODEL_COMPACTION_THRESHOLD_SETTING: { readonly key: "model.compactionThres
 The number of automatic retries after the initial model request.
 
 ```ts
-const MODEL_RETRY_MAX_ATTEMPTS_SETTING: { readonly key: "model.retry.maxAttempts"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Automatic retries"; readonly description: "Additional automatic retries after the initial model request (0–5). A request cut off by a stop or a crash counts as none: its run sends it again when resumed."; }
+const MODEL_RETRY_MAX_ATTEMPTS_SETTING: { readonly key: "model.retry.maxAttempts"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Automatic retries"; readonly description: "Automatic retries after a failed model request (0–5). Interrupted requests retry when resumed."; }
 ```
 
 ## ModelAvailabilityKind
@@ -1525,7 +1525,7 @@ const offeredGrant: (request: { readonly answeredBy: "bash" | "toolEdit" | "supe
 ## OPENAI_FAST_TIER_SETTING
 
 ```ts
-const OPENAI_FAST_TIER_SETTING: { readonly key: "model.openaiFastTier"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Fast mode"; readonly description: "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect."; }
+const OPENAI_FAST_TIER_SETTING: { readonly key: "model.openaiFastTier"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Fast mode"; readonly description: "Use OpenAI's fast service tier on supported models (faster responses at a higher per-token price)."; }
 ```
 
 ## OpenFilePayload
@@ -2253,7 +2253,7 @@ const RunWorkspaceFileSchema: Struct<{ readonly path: String; readonly size: Int
 ## SAVE_MODEL_IO_SETTING
 
 ```ts
-const SAVE_MODEL_IO_SETTING: { readonly key: "debug.saveModelIO"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Save model requests and responses"; readonly description: "Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML."; }
+const SAVE_MODEL_IO_SETTING: { readonly key: "debug.saveModelIO"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Save model requests and responses"; readonly description: "Save raw model requests and responses (JSON) and final prompts (XML) for debugging."; }
 ```
 
 ## ScriptDeliverySummary
@@ -2649,7 +2649,7 @@ Keep file-oriented tools inside the active working directory unless the
 user explicitly grants them access to arbitrary filesystem paths.
 
 ```ts
-const TOOL_PATH_PROTECTION_SETTING: { readonly key: "tools.restrictPathsToWorkingDirectory"; readonly slot: "workspaceState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Restrict tool paths to the working directory"; readonly description: "Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths."; }
+const TOOL_PATH_PROTECTION_SETTING: { readonly key: "tools.restrictPathsToWorkingDirectory"; readonly slot: "workspaceState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Restrict tools to project folder"; readonly description: "Keep file, search, and PDF tools inside the current project folder. Turn off only if an agent needs outside files."; }
 ```
 
 ## ToolCallLog
@@ -2908,7 +2908,7 @@ type UserQuestionRequest = (typeof UserQuestionRequestSchema)['Type'];
 The OpenAI WebSocket transport (experimental).
 
 ```ts
-const WEBSOCKET_OPENAI_SETTING: { readonly key: "websocket.openai"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "OpenAI WebSocket"; readonly description: "EXPERIMENTAL: send OpenAI Responses requests over a persistent WebSocket (lower latency for tool-use loops). Applies only to an OpenAI API key on the default endpoint; the ChatGPT subscription and background responses keep HTTP. Off by default."; }
+const WEBSOCKET_OPENAI_SETTING: { readonly key: "websocket.openai"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "OpenAI WebSocket"; readonly description: "Experimental: send OpenAI API-key requests over WebSocket for lower latency (off by default)."; }
 ```
 
 ## WorkspaceFileLocation
@@ -2926,5 +2926,5 @@ type WorktreeInfo = typeof WorktreeInfoSchema.Type;
 ## XAI_PREFER_SUBSCRIPTION_SETTING
 
 ```ts
-const XAI_PREFER_SUBSCRIPTION_SETTING: { readonly key: "xaiGrok.preferSubscription"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Prefer the Grok subscription"; readonly description: "Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice."; }
+const XAI_PREFER_SUBSCRIPTION_SETTING: { readonly key: "xaiGrok.preferSubscription"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Grok subscription"; readonly description: "Route xAI models through your signed-in Grok subscription instead of an API key (experimental)."; }
 ```

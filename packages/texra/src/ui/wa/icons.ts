@@ -7,7 +7,7 @@ export const AGENT_DECORATORS = Object.freeze({
     chat: Object.freeze({ icon: 'screwdriver-wrench', label: 'Chat' }),
   }),
   streamKinds: Object.freeze({
-    process: Object.freeze({ icon: 'terminal', label: 'Process' }),
+    process: Object.freeze({ icon: 'terminal', label: 'Command' }),
     script: Object.freeze({ icon: 'code', label: 'Script' }),
   }),
 } as const);

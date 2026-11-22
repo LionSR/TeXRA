@@ -181,7 +181,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
 <section class="bottom-cta">
   <h2>Start in under two minutes</h2>
-  <p>Install the VS Code extension from the Marketplace or the CLI (<code>npm install -g @texra-ai/cli</code>); add your own API key or connect a provider subscription, and run your first task.</p>
+  <p>Install the VS Code extension from the Marketplace, the CLI (<code>npm install -g @texra-ai/cli</code>), or the upcoming <a href="/guide/desktop">Desktop App</a>; add your own API key or connect a provider subscription, and run your first task.</p>
   <div class="cta-buttons">
     <a href="/guide/quick-start" class="cta-button cta-primary">Quick start guide</a>
     <a href="/guide/programs" class="cta-button cta-secondary">Browse the programs</a>
@@ -210,7 +210,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Can I use it without VS Code?</summary>
-    <p>Yes. The <code>@texra-ai/cli</code> terminal client runs the same assistant, programs, and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
+    <p>Yes. Use the <code>@texra-ai/cli</code> terminal client for interactive sessions, scripts, CI, and remote machines (<a href="/guide/texra-cli">CLI guide</a>), or the standalone <a href="/guide/desktop">Desktop App</a> (coming soon).</p>
   </details>
 
   <details>
@@ -220,7 +220,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Is TeXRA open source?</summary>
-    <p>Yes. The extension, the CLI, and the agent runtime are published under the Apache 2.0 license, and you run them with your own model keys or subscriptions. Read the <a href="/guide/open-source">open source guide</a>.</p>
+    <p>Yes. The VS Code extension, desktop app, CLI, and agent runtime are published under the Apache 2.0 license, and you run them with your own model keys or subscriptions. Read the <a href="/guide/open-source">open source guide</a>.</p>
   </details>
   <details>
     <summary>Can I tailor TeXRA to my project?</summary>

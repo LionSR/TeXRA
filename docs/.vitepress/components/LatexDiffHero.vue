@@ -17,7 +17,7 @@ import MockupFrame from './MockupFrame.vue';
             library="texra"
             name="source-control"
           ></wa-icon>
-          <span class="sec-lbl">LaTeXDiffs</span>
+          <span class="sec-lbl">latexdiff</span>
         </div>
 
         <!-- Base -->

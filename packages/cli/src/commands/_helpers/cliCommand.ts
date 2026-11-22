@@ -98,15 +98,12 @@ const Quiet = GlobalFlag.Setting('quiet')({
   ).pipe(Flag.withAlias('q')),
 });
 const Verbose = GlobalFlag.Setting('verbose')({
-  flag: boolFlag(
-    'verbose',
-    'Emit debug-level diagnostics (the terminal has no level filter of its own)',
-  ),
+  flag: boolFlag('verbose', 'Show debug-level diagnostics'),
 });
 const Cwd = GlobalFlag.Setting('cwd')({
   flag: Flag.String('cwd').pipe(
     Flag.withMetavar('directory'),
-    Flag.withDescription('Directory the command works in (defaults to $PWD)'),
+    Flag.withDescription('Project directory (defaults to $PWD)'),
     Flag.optional,
   ),
 });
@@ -119,7 +116,7 @@ const OutputFormat = GlobalFlag.Setting('output-format')({
 const ApprovalPolicy = GlobalFlag.Setting('approval-policy')({
   flag: Flag.Literals('approval-policy', APPROVAL_POLICIES).pipe(
     Flag.withDescription(
-      'Privileged tool actions: never (deny all), ask (prompt), or yolo (auto-approve by default)',
+      'Approval policy: never (Block), ask (Ask), or yolo (Auto-approve)',
     ),
     Flag.optional,
   ),
@@ -128,7 +125,7 @@ const Color = GlobalFlag.Setting('color')({
   flag: Flag.Boolean('color').pipe(
     Flag.withDefault(true),
     Flag.withDescription(
-      'Emit ANSI color (also honors NO_COLOR / FORCE_COLOR / TERM); --no-color disables it on every stream',
+      'Colorize output (honors NO_COLOR / FORCE_COLOR; --no-color disables)',
     ),
   ),
 });

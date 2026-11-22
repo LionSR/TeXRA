@@ -31,7 +31,7 @@ export function handleCompileTikzFigures(
     roots,
     {
       action: 'compile TikZ figures',
-      errorMessage: 'compileTikzFigures command failed',
+      errorMessage: 'Could not compile TikZ figures',
     },
     Effect.fnUntraced(function* ({ relativePath: filePath }) {
       yield* Effect.logDebug(
@@ -43,12 +43,12 @@ export function handleCompileTikzFigures(
       yield* withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'Compiling TikZ Figures',
+          title: 'Compiling TikZ figures…',
           cancellable: false,
         },
         Effect.fnUntraced(function* (progress) {
           progress.report({
-            message: 'Extracting and compiling TikZ pictures...',
+            message: 'Extracting and compiling TikZ figures…',
           });
 
           // Over the session's rooted filesystems the command root
@@ -61,7 +61,7 @@ export function handleCompileTikzFigures(
           );
 
           if (compiledFiles.length === 0) {
-            yield* showLoggedInfoMessage('No TikZ figures found to compile');
+            yield* showLoggedInfoMessage('No TikZ figures found to compile.');
             return;
           }
 
@@ -73,8 +73,7 @@ export function handleCompileTikzFigures(
           }));
 
           const selected = yield* quickPick(items, {
-            placeHolder: 'Compiled TikZ figures (select to open)',
-            prompt: 'Select a compiled TikZ figure to open in the editor',
+            placeHolder: 'Select a compiled TikZ figure to open',
             canPickMany: false,
           });
 
@@ -83,7 +82,7 @@ export function handleCompileTikzFigures(
           }
 
           yield* showLoggedInfoMessage(
-            `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
+            `Compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}.`,
           );
         }),
       );

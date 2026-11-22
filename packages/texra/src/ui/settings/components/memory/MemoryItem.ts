@@ -237,7 +237,7 @@ export class MemoryItem extends TexraElement {
         : renderLoadingState('Loading contents…');
     }
     if (!item.preview.trim()) {
-      return renderEmptyMessage('This note is empty.');
+      return renderEmptyMessage('This memory is empty.');
     }
     return html`<div class="markdown-content">
       ${unsafeHTML(this.renderMarkdown(item.preview))}

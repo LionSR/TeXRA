@@ -27,7 +27,7 @@ const LISTED_BUILD_DIRECTORIES = 10;
 export const confirmCleanBuild = Effect.gen(function* () {
   const directories = yield* findBuildDirectories;
   if (directories.length === 0) {
-    yield* showLoggedInfoMessage('No build/ folders found in this workspace.');
+    yield* showLoggedInfoMessage('No build/ folders found in this project.');
     return;
   }
   const listed = directories.slice(0, LISTED_BUILD_DIRECTORIES);
@@ -50,7 +50,7 @@ export const confirmCleanBuild = Effect.gen(function* () {
   const failed = yield* removeBuildDirectories(directories);
   if (failed.length > 0) {
     yield* showLoggedMessage(
-      `Could not delete ${failed.length} of ${directories.length} build/ ${noun}: ${failed.join(', ')}. See the TeXRA log for the cause.`,
+      `Could not delete ${failed.length} of ${directories.length} build/ ${noun}: ${failed.join(', ')}. See the TeXRA output channel for details.`,
     );
     return;
   }

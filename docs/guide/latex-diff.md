@@ -13,13 +13,13 @@ When an agent revises a derivation, proof, or section of your manuscript, you ne
 
 TeXRA generates diff files after program runs that modify `.tex` files (such as `edit` or `apply`), comparing the run-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous revision's output. You can see what the program did as soon as the run finishes.
 
-This guide explains how to use TeXRA's LaTeXdiff features to compare arbitrary file versions and how to read the results.
+This guide explains how to use TeXRA's `latexdiff` tools to compare file versions and read the results.
 
 ::: tip CLI
-The LaTeXDiffs section buttons described below belong to the VS Code
-extension. The automatic post-run diffs are generated on every host, including
+The **latexdiff** sheet buttons below belong to the VS Code
+extension. Automatic post-run diffs are generated in every TeXRA app, including
 `texra run edit` in the CLI, where the TUI lists each one
-as a "Latexdiff:" line under its revision. To diff two arbitrary files from the terminal, run the
+as a `"latexdiff:"` line under its revision. To diff two arbitrary files from the terminal, run the
 [`latexdiff` program](./programs.md#task-programs):
 `texra run latexdiff --input old.tex --input new.tex`.
 :::
@@ -32,9 +32,9 @@ TeXRA compares each revision of a program's output to your original input and ca
 
 By default, TeXRA passes `--subtype=ONLYCHANGEDPAGE` to `latexdiff` so compiled diff PDFs show only pages with edits. Disable **Only changed pages in diff PDFs** in the LaTeX tab when you need a full-document diff PDF.
 
-## The LaTeXDiffs section
+## The latexdiff sheet
 
-The LaTeX diff features live in the "LaTeXDiffs" sheet of the TeXRA interface, shown in the slice above. Open it from the header menu of the TeXRA view with **LaTeXDiffs…**.
+The `latexdiff` tools live in the **latexdiff** sheet, opened from the header menu of the TeXRA view via **latexdiff…**.
 
 This section provides:
 
@@ -133,7 +133,7 @@ By default, latexdiff wraps each edit in a markup command that is defined in the
 
 1.  **Compile first**: Compile the generated `_diff.tex` document to see the rendered changes (as shown in the slice at the top of this page). TeXRA does this automatically using LaTeX Workshop if it is installed. Live examples are embedded below.
 
-2.  **VS Code diff view**: For a quick source-level comparison, pick the original (`draft.tex`) as the base file and the generated diff source (`draft_diff.tex` for a workspace diff, `draft-diff<hash>.tex` for a commit diff, or `draft_diffr1r0.tex` between revisions) as the edited file, then press **Compare** in the LaTeXDiffs section. This opens both files side by side in VS Code's diff editor, as shown below.
+2.  **VS Code diff view**: For a quick source-level comparison, pick the original (`draft.tex`) as the base file and the generated diff source (`draft_diff.tex` for a project diff, `draft-diff<hash>.tex` for a commit diff, or `draft_diffr1r0.tex` between revisions) as the edited file, then press **Compare** in the **latexdiff** sheet. This opens both files side by side in VS Code's diff editor, as shown below.
 
 3.  **Verify the fragile parts**: mathematical expressions, cross-references, and citations are where AI edits most often go wrong.
 

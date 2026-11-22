@@ -84,7 +84,7 @@ const SETTINGS_TAB_METADATA: {
     group: 'AI',
     icon: 'database',
     label: 'Memory',
-    description: 'Control and inspect the notes TeXRA keeps across tasks.',
+    description: 'Control and inspect the memories TeXRA keeps across tasks.',
     sections: {},
   },
   general: {

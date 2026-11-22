@@ -90,14 +90,14 @@ diff -u <run-folder>/r0/intro.tex <run-folder>/r1/intro.tex
 ```
 
 VS Code: the Tasks view shows side-by-side diffs and lets you accept
-the output back into the workspace.
+the output back into your project.
 
 <CompareHero />
 
 <p class="hero-caption">The Tasks view opens the polished revision as a diff. Accept each change back into your draft.</p>
 
 For a **compiled PDF comparison** (additions in blue, deletions in red),
-use the LaTeXdiff feature in the TeXRA panel. Read the
+use **latexdiff** in the TeXRA panel. Read the
 [LaTeX Diff](../latex-diff.md) guide.
 
 ## How the second revision works
@@ -126,5 +126,5 @@ iteration. Use **the second** (`r1/`) when the draft is close to final.
 - [The assistant and programs](../programs.md): every program you can start
 - [LaTeX Diff](../latex-diff.md): compiled PDF comparison of revisions
 - [Models](../models.md): picking a model for a polish
-- [Configuration](../configuration.md): workspace defaults
+- [Configuration](../configuration.md): project defaults
 - [Programs: how they work](../agent-architecture.md): revisions and the optional critic review

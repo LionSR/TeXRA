@@ -30,11 +30,11 @@ export function latexdiffPackMessage(
 ): string | undefined {
   switch (result.status) {
     case 'noFiles':
-      return 'No LaTeX diff files found to process';
+      return 'No latexdiff files found.';
     case 'cleaned':
-      return 'LaTeXdiff files cleaned';
+      return 'Deleted latexdiff files.';
     case 'success':
-      return `Files packed into ${result.outputFolder}`;
+      return `Archived latexdiff files to ${result.outputFolder}.`;
     case 'processed':
       return undefined;
   }
@@ -127,7 +127,7 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
 
     yield* discard(tempFiles);
 
-    yield* Effect.logInfo(`Files packed into ${outputFolder}`).pipe(
+    yield* Effect.logInfo(`Archived latexdiff files to ${outputFolder}`).pipe(
       withLogChannel(CHANNEL),
     );
     return { status: 'success', outputFolder } satisfies LatexdiffPackResult;

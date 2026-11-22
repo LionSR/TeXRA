@@ -70,7 +70,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   const { resourcesRoot } = yield* HostResources;
   if (resourcesRoot === undefined) {
     const cause = new Error(
-      'This host ships no packaged resources, so it cannot export a transcript.',
+      'Export assets are missing in this build, so this conversation cannot be exported.',
     );
     return yield* new TranscriptExportFailed({ message: cause.message, cause });
   }
@@ -86,16 +86,14 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
             return Effect.fail(
               new Rejected({
                 reason: {
-                  no_record: 'This run has no saved data to export.',
-                  no_rows:
-                    'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
+                  no_record: 'This task has no saved data to export.',
+                  no_rows: 'No conversation was saved for this task.',
                 }[error.status],
               }),
             );
           if (error instanceof TraceViewerMissing) {
             const cause = new Error(
-              `Trace-viewer standalone bundle missing at ${error.path}: ` +
-                'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
+              `HTML export template is missing (${error.path}). Reinstall or rebuild TeXRA.`,
             );
             return Effect.fail(
               new TranscriptExportFailed({ message: cause.message, cause }),
@@ -133,11 +131,11 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   const loaded = yield* loadChatExportInput(runId, options.session);
   if (loaded._tag === 'noConfig')
     return yield* new Rejected({
-      reason: 'This run has no saved data to export.',
+      reason: 'This task has no saved data to export.',
     });
   if (loaded._tag === 'noConversation')
     return yield* new Rejected({
-      reason: 'No conversation was saved for this run.',
+      reason: 'No conversation was saved for this task.',
     });
   const exportInput = loaded.input;
 

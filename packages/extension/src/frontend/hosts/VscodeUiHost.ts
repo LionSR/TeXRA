@@ -88,7 +88,7 @@ class VscodeUiHost implements Dialogs {
     return this.showMessage(level, message, {}).pipe(
       Effect.catch((failure) =>
         Effect.logWarning(
-          `VS Code would not show a notice: ${failure.message}`,
+          `Could not show notification: ${failure.message}`,
         ).pipe(withLogChannel('VscodeUiHost')),
       ),
       Effect.forkDetach,
@@ -117,7 +117,7 @@ class VscodeUiHost implements Dialogs {
         (failure) =>
           new HostFailed({
             member: 'confirm',
-            message: 'VS Code would not show the confirmation dialog.',
+            message: 'Could not show the confirmation dialog.',
             cause: failure.cause,
           }),
       ),
@@ -142,7 +142,7 @@ class VscodeUiHost implements Dialogs {
       (cause) =>
         new HostFailed({
           member: 'input',
-          message: 'VS Code would not show the input box.',
+          message: 'Could not show the input box.',
           cause,
         }),
     );

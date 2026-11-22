@@ -44,7 +44,9 @@ export function settingsToolCommands(ports: {
   const requireEditor = editor
     ? Effect.succeed(editor)
     : Effect.fail(
-        new SettingsRequestFailed({ message: 'This host has no code editor.' }),
+        new SettingsRequestFailed({
+          message: 'No code editor is available here.',
+        }),
       );
   /** Probe this workspace's tools again; the rows follow what it finds. */
   const refresh = Effect.flatMap(ToolAvailability, (availability) =>

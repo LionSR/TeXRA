@@ -38,10 +38,10 @@ export const CHATGPT_AUTH = Object.freeze({
       'OpenAI models through ChatGPT Plus, Pro, or Team; no API key needed',
   }),
   signOutLabel: 'Sign out of ChatGPT',
-  deviceCodeLabel: 'Sign in to ChatGPT with a code',
+  deviceCodeLabel: 'Sign in with ChatGPT (one-time code)',
   startingDevice: 'Starting ChatGPT device-code sign-in.',
   startingNoBrowser: 'Starting ChatGPT sign-in.',
-  startingBrowser: 'Opening browser for ChatGPT sign-in...',
+  startingBrowser: 'Opening browser for ChatGPT sign-in…',
 } as const);
 
 /** Grok / xAI subscription account. */
@@ -55,10 +55,10 @@ export const GROK_AUTH = Object.freeze({
     description: 'Grok models through SuperGrok; no API key needed',
   }),
   signOutLabel: 'Sign out of Grok',
-  deviceCodeLabel: 'Sign in to Grok with a code',
+  deviceCodeLabel: 'Sign in with Grok (one-time code)',
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
-  startingBrowser: 'Opening browser for Grok sign-in...',
+  startingBrowser: 'Opening browser for Grok sign-in…',
 } as const);
 
 /** Each OAuth subscription's copy, keyed by the provider id it belongs to. */
@@ -92,16 +92,16 @@ export const SIGN_IN_PROMPT = Object.freeze({
   presentFailed: (providerDisplayName: string): string =>
     `The ${providerDisplayName} sign-in instructions could not be shown`,
   /** The sign-in link prompt's button that copies the link. */
-  copyLinkLabel: 'Copy Sign-in Link',
+  copyLinkLabel: 'Copy sign-in link',
   /** After the link is copied: where to paste it (`copyTarget`: the
    *  service whose browser session owns the account). */
   linkCopied: (copyTarget: string): string =>
     `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
   /** The one-time-code prompt's button that opens the verification page. */
-  openVerificationLabel: 'Open Verification Page',
+  openVerificationLabel: 'Open verification page',
   /** Why a sign-in asked for a browser callback shows a one-time code. */
-  deviceCodeFallback: (providerDisplayName: string): string =>
-    `No browser could take the sign-in callback, so ${providerDisplayName} is signing in with a one-time code instead.`,
+  deviceCodeFallback: (_providerDisplayName: string): string =>
+    'Could not open a browser callback — sign in with a one-time code instead.',
 });
 
 /**

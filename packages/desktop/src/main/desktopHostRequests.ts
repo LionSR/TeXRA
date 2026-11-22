@@ -102,7 +102,7 @@ export const createDesktopHostRequests = (
                 )
             : Effect.fail(
                 new Rejected({
-                  reason: 'No project shows its settings yet; try again.',
+                  reason: 'Settings are still loading. Try again in a moment.',
                 }),
               );
         }),

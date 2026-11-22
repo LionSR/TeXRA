@@ -1,7 +1,7 @@
 {
   "name": "texra",
   "displayName": "TeXRA",
-  "description": "TeXRA: Your 24/7 AI Theorist.",
+  "description": "An open-source AI theorist for LaTeX, derivations, and Lean 4.",
   "version": "0.41.0",
   "publisher": "texra-ai",
   "engines": {
@@ -48,7 +48,7 @@
       },
       {
         "command": "texra.cleanBuild",
-        "title": "Delete All build/ Folders in Workspace",
+        "title": "Delete All build/ Folders in Project",
         "category": "TeXRA",
         "icon": "$(close-all)"
       },
@@ -74,7 +74,7 @@
       },
       {
         "command": "texra.getTeXCount",
-        "title": "Count Words in Current TeX File",
+        "title": "Count Words in Current LaTeX File",
         "category": "TeXRA",
         "icon": "$(symbol-number)",
         "enablement": "!virtualWorkspace"
@@ -91,7 +91,7 @@
       },
       {
         "command": "texra.execute",
-        "title": "Execute Agent",
+        "title": "Run Task",
         "category": "TeXRA"
       },
       {
@@ -188,12 +188,12 @@
       {
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
-        "description": "Connect a model, open your paper, let the setup assistant check your project, then run your first task.",
+        "description": "Connect a model, open your project, run the setup assistant, and start your first task.",
         "steps": [
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Connect a model",
-            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run OpenAI models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nEverything ships bundled; nothing needs a TeXRA account.",
+            "description": "Sign in with a ChatGPT or Grok subscription, or add an API key (Anthropic, OpenAI, Google, DeepSeek, Kimi, GLM, and more).\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n[Set API key](command:texra.setApiKey)",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the provider API key settings"
@@ -205,11 +205,11 @@
           },
           {
             "id": "texra.gettingStarted.openPaper",
-            "title": "Open your paper",
-            "description": "TeXRA works inside one folder: the folder that holds your LaTeX project.\n\n[Open Folder](command:workbench.action.files.openFolder)\n\nNo project at hand? Start from the bundled sample, clone one from Overleaf, or download a paper's source from arXiv.\n\n[Create the sample project](command:texra.createSampleProject)\n\n[Clone from Overleaf](command:texra.walkthroughWorkspaceAction?%5B%22texra.cloneOverleafProject%22%5D)\n\n[Download from arXiv](command:texra.walkthroughWorkspaceAction?%5B%22texra.downloadArXivSource%22%5D)",
+            "title": "Open a project",
+            "description": "Open your LaTeX project folder, or start with one of the options below.\n\n[Open folder](command:workbench.action.files.openFolder)\n\n[Create sample project](command:texra.createSampleProject)\n\n[Clone from Overleaf](command:texra.walkthroughWorkspaceAction?%5B%22texra.cloneOverleafProject%22%5D)\n\n[Download from arXiv](command:texra.walkthroughWorkspaceAction?%5B%22texra.downloadArXivSource%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/file-selection.png",
-              "altText": "Screenshot of a paper's files attached to a new task"
+              "altText": "Screenshot of a project's files attached to a new task"
             },
             "completionEvents": [
               "onContext:workspaceFolderCount == 1",
@@ -221,10 +221,10 @@
           {
             "id": "texra.gettingStarted.setupAssistant",
             "title": "Run the setup assistant",
-            "description": "One conversation covers the rest. The setup assistant checks your LaTeX tools and offers to install what is missing, then runs a first polish on your paper that ends at a diff. It asks before every command it runs.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)",
+            "description": "Checks your LaTeX tools, helps install anything missing, and runs a quick test edit with diff preview. Asks before every command.\n\n[Run setup assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
-              "altText": "Screenshot of a TeXRA session"
+              "altText": "Screenshot of a TeXRA task"
             },
             "completionEvents": [
               "onCommand:texra.runSetupAssistant"
@@ -232,8 +232,8 @@
           },
           {
             "id": "texra.gettingStarted.firstTask",
-            "title": "Your first task",
-            "description": "Open **New task** in the TeXRA panel, say what you want (for example, \"tighten the introduction\"), and send it. For a larger job, the assistant plans the work and hands parts to helper agents or programs.\n\n[New task](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)\n\nEvery task becomes a session. The **Sessions** button at the top of the panel lists them, running or finished, so you can come back to one.\n\nBefore the assistant edits a file or runs a command, it asks in the conversation, and edits open in VS Code's diff view so you see each change first. To change how often it asks, set the approval policy under Settings > General > Approval.\n\n[Approval settings](command:texra.walkthroughWorkspaceAction?%5B%22texra.showApprovalSettings%22%5D)",
+            "title": "Start your first task",
+            "description": "Open **New task**, describe what you need (e.g., \"tighten the introduction\"), and send. Track running or past work under **Tasks**.\n\n[New task](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)\n\nEdits and commands ask for approval by default. Adjust this anytime in **Settings → General → Approval**.\n\n[Approval settings](command:texra.walkthroughWorkspaceAction?%5B%22texra.showApprovalSettings%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/vscode-compare.png",
               "altText": "Screenshot of the VS Code diff view"

@@ -324,7 +324,7 @@ export function createEditorPane(
     if (state.nodes.length === 0) {
       return renderEmptyState({
         icon: 'folder-open',
-        title: 'No files found in this workspace.',
+        title: 'No files found in this project.',
         // h2, not h3: the surrounding "Project" label (desktopShell.ts) is a
         // plain div, not a heading, so there's no h1/h2 in this sidebar
         // subtree to nest under.
@@ -643,7 +643,7 @@ export function createEditorPane(
       }),
       onFailure: (error) => {
         callbacks.onError(error);
-        return { error: 'Could not list workspace files.' };
+        return { error: 'Could not list project files.' };
       },
     }),
     Effect.flatMap((listed) =>

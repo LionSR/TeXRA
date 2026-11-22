@@ -174,7 +174,7 @@ function documentTaskRunDetailGroups(
       );
     }
     for (const [index, entry] of record.latexdiffs.entries()) {
-      const label = `Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`;
+      const label = `latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`;
       const key = `latexdiff:${round}:${index}`;
       const { tone } = LATEXDIFF_STATUS[entry.status];
       if (entry.status === 'failed') {

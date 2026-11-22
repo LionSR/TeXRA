@@ -268,7 +268,6 @@ export class GitTab extends TexraSignalElement {
           <wa-details
             class="panel-collapsible instructions"
             summary="How to get a token"
-            ?open=${this.githubTokenStatus === 'none'}
           >
             <ol>
               <li>

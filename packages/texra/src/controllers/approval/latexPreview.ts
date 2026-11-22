@@ -257,7 +257,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     const workspaceRoot = entry.request.roots.workspace;
     if (!workspaceRoot) {
       return yield* new PreviewWorkspaceMissing({
-        message: 'No workspace folder open',
+        message: 'No project folder open',
       });
     }
 
@@ -324,7 +324,7 @@ export const runLatexdiff = (
 ): Effect.Effect<void, never, PreviewServices> =>
   withLatexOperation(
     entry,
-    'LaTeXdiff',
+    'latexdiff',
     Effect.gen(function* () {
       const [originalContent, proposedContent] = yield* Effect.all(
         [

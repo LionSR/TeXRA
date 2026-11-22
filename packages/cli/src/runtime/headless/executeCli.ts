@@ -298,13 +298,13 @@ export const executeCliConfig: (
           duration: SESSION_CLOSE_DEADLINE_MS,
           orElse: () =>
             sayShutdownFailure(
-              `The run did not finish stopping within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
-              `run ${launchRunId} is left as its rows stand; \`${runContext.commandName} history show ${launchRunId}\` says whether it can be resumed`,
+              `Task did not finish stopping within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
+              `saved progress for ${launchRunId} is intact; check \`${runContext.commandName} history show ${launchRunId}\` to see if it can be resumed`,
             ),
         }),
         Effect.catchCause((cause) =>
           sayShutdownFailure(
-            "The run's shutdown step failed; the exit does not wait for its finalization",
+            'Task shutdown failed; exiting without waiting for cleanup',
             Cause.pretty(cause),
           ),
         ),

@@ -354,7 +354,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
               html`
                 ${renderEmptyState({
                   icon: 'table-columns',
-                  title: target ? 'Empty group' : 'Open a view',
+                  title: target ? 'Empty pane' : 'Open a view',
                   body: 'Drag a tab here, or choose a view below.',
                 })}
                 <div class="shell-dock-empty-actions">
@@ -369,7 +369,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
                   ${
                     target
                       ? renderLabeledActionButton({
-                          text: 'Close empty group',
+                          text: 'Close pane',
                           icon: 'xmark',
                           kind: 'ghost',
                           onClick: () => {

@@ -18,7 +18,7 @@ export function isFatalDesktopShutdownRequested(): boolean {
 export function reportFatalStartupError(error: unknown): void {
   reportFatalDesktopError(error, {
     title: 'TeXRA failed to start',
-    message: 'TeXRA hit a startup error before the desktop window was ready.',
+    message: 'TeXRA could not start.',
   });
 }
 
@@ -30,12 +30,10 @@ export function installPostStartupRejectionHandler(): void {
   const report = (error: unknown) => {
     const ready = app.isReady();
     reportFatalDesktopError(error, {
-      title: ready
-        ? 'TeXRA encountered a fatal error'
-        : 'TeXRA failed to start',
+      title: ready ? 'TeXRA closed unexpectedly' : 'TeXRA failed to start',
       message: ready
-        ? 'TeXRA hit an unrecoverable error after startup and must close.'
-        : 'TeXRA hit a startup error before the desktop window was ready.',
+        ? 'TeXRA ran into an unrecoverable error and needs to close.'
+        : 'TeXRA could not start.',
       forceQuit: ready,
     });
   };

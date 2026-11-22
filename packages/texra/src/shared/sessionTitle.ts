@@ -11,6 +11,8 @@ interface SessionTitleStyle {
   readonly brand: string;
   /** Placed between the brand and the project name. */
   readonly separator: string;
+  /** Placed between the state marker and the brand. */
+  readonly markerSeparator: string;
   /** State marker, or `undefined` to leave that state unmarked. */
   readonly marker: Record<SessionTitleState, string | undefined>;
 }
@@ -20,12 +22,14 @@ interface SessionTitleStyle {
 export const TERMINAL_TAB_TITLE: SessionTitleStyle = Object.freeze({
   brand: '{T}',
   separator: '·',
+  markerSeparator: ' ',
   marker: Object.freeze({ idle: undefined, running: '⠋', approval: '⚠' }),
 });
 
 export const NATIVE_WINDOW_TITLE: SessionTitleStyle = Object.freeze({
   brand: 'TeXRA',
   separator: ' · ',
+  markerSeparator: ' · ',
   marker: Object.freeze({
     idle: undefined,
     running: runStatusLabel('running'),
@@ -56,6 +60,8 @@ export function formatSessionTitle(
     state === 'running'
       ? (detail ?? style.marker.running)
       : style.marker[state];
-  const head = marker ? `${marker} ${style.brand}` : style.brand;
+  const head = marker
+    ? `${marker}${style.markerSeparator}${style.brand}`
+    : style.brand;
   return project ? `${head}${style.separator}${project}` : head;
 }

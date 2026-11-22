@@ -27,7 +27,7 @@ export const CODEX_MODEL_SETTING = Object.freeze({
   key: 'codexModel',
   ...CODEX_MODEL_VALUES,
   title: 'Codex model',
-  description: 'OpenAI model selected for Codex agent sessions.',
+  description: 'OpenAI model used for Codex tasks.',
   ...AGENT_CLI_PLACEMENT,
 } as const satisfies TexraSettingRow<string>);
 
@@ -35,7 +35,8 @@ export const CODEX_REASONING_EFFORT_SETTING = Object.freeze({
   key: 'codexReasoningEffort',
   ...AGENT_CLI_EFFORT_VALUES,
   title: 'Codex reasoning effort',
-  description: 'Reasoning effort for Codex runs, up to what the model takes.',
+  description:
+    'Reasoning effort for Codex tasks, up to what the model supports.',
   ...AGENT_CLI_PLACEMENT,
 } as const satisfies TexraSettingRow<AgentCliEffort>);
 
@@ -43,7 +44,7 @@ export const CLAUDE_AGENT_MODEL_SETTING = Object.freeze({
   key: 'claudeAgentModel',
   ...CLAUDE_AGENT_MODEL_VALUES,
   title: 'Claude Code model',
-  description: 'Claude model selected for Claude Code agent sessions.',
+  description: 'Claude model used for Claude Code tasks.',
   ...AGENT_CLI_PLACEMENT,
 } as const satisfies TexraSettingRow<string>);
 
@@ -51,7 +52,8 @@ export const CLAUDE_AGENT_EFFORT_SETTING = Object.freeze({
   key: 'claudeAgentEffort',
   ...AGENT_CLI_EFFORT_VALUES,
   title: 'Claude Code reasoning effort',
-  description: 'Reasoning effort for Claude Code, up to what the model takes.',
+  description:
+    'Reasoning effort for Claude Code, up to what the model supports.',
   ...AGENT_CLI_PLACEMENT,
 } as const satisfies TexraSettingRow<AgentCliEffort>);
 

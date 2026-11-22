@@ -136,16 +136,16 @@ export function settingWriteFailure(
       return undefined;
     case 'workspace-required':
       return new SettingsRequestFailed({
-        message: `Open a workspace folder before changing the “${result.entry.title}” setting.`,
+        message: `Open a project folder before changing "${result.entry.title}".`,
       });
     case 'needs-key':
       return new SettingsRequestFailed({
-        message: `Add a ${providerDisplayName(result.plan.apiProvider)} API key before turning on “${result.entry.title}”.`,
+        message: `Add a ${providerDisplayName(result.plan.apiProvider)} API key before turning on "${result.entry.title}".`,
       });
     case 'rejected':
       return new SettingsRequestFailed({
         message: formatError(
-          `Invalid value for “${result.entry.title}”`,
+          `Invalid value for "${result.entry.title}"`,
           result.error,
         ),
         cause: result.error,

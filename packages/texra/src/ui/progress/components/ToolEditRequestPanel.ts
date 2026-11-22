@@ -101,7 +101,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
         activate: () => this.emitAction({ action: 'previewProposed' }),
       },
       {
-        label: 'With changes marked (LaTeXdiff)',
+        label: 'With changes marked (latexdiff)',
         activate: () => this.emitAction({ action: 'showLatexdiff' }),
       },
     ]);

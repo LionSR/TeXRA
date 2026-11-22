@@ -114,24 +114,19 @@ function renderWelcomeHtml(): string {
   <h1>Welcome to TeXRA</h1>
   <p>${TEXRA_TAGLINE}</p>
   <ol>
-    <li>Open a single-folder workspace containing your LaTeX project, or start with the sample project.</li>
-    <li>${ONBOARDING_CARD_TITLE}: the TeXRA panel asks once the folder is open.</li>
-    <li>Run the setup assistant: it checks LaTeX and starts your first task.</li>
+    <li>Open a project folder (one folder at a time) or create the sample project.</li>
+    <li>${ONBOARDING_CARD_TITLE} in the TeXRA panel once the folder is open.</li>
+    <li>Run the setup assistant to check LaTeX tools and start your first task.</li>
   </ol>
-  <p class="section-label">Open your project</p>
   <div class="actions">
-    <a class="button" href="${openFolder}">Open Folder</a>
-    <a class="button secondary" href="${createSample}">Try the Sample Project</a>
+    <a class="button" href="${openFolder}">Open folder</a>
+    <a class="button secondary" href="${createSample}">Create sample project</a>
   </div>
   <div class="link-list">
     <a href="${openWalkthrough}">Open walkthrough</a>
     <a href="${cloneRepo}">Clone repository</a>
     <a href="${TEXRA_SITE_URL}">Read docs</a>
   </div>
-  <p class="muted">
-    TeXRA needs a single-folder workspace. Multi-root workspaces aren't
-    supported &mdash; open one folder at a time.
-  </p>
 </body>
 </html>`;
 }

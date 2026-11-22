@@ -287,7 +287,7 @@ function checkConfig(
         return warn(
           'config',
           'Config',
-          `Workspace config has warnings: ${filePath}`,
+          `Project config has warnings: ${filePath}`,
           warnings.join(' '),
         );
       }
@@ -295,11 +295,11 @@ function checkConfig(
         return skip(
           'config',
           'Config',
-          'No readable workspace CLI config file found.',
+          'No readable project CLI config file found.',
           'Optional defaults may be placed in .texra/config.json.',
         );
       }
-      return pass('config', 'Config', `Workspace config: ${filePath}`);
+      return pass('config', 'Config', `Project config: ${filePath}`);
     }),
   );
 }
@@ -370,7 +370,7 @@ export const buildDoctorReport = Effect.fn('buildDoctorReport')(function* (
   const [workspace, resources, sessionDependentChecks, latex, config] =
     yield* Effect.all(
       [
-        checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
+        checkDirectory('workspace', 'Project', context.cwd, 'readwrite'),
         checkDirectory(
           'resources',
           'Packaged resources',

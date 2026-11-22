@@ -169,7 +169,7 @@ export const makeWindowTable = () => {
         return Effect.fail(
           new WindowCallFailed({
             reason: 'detached',
-            message: 'No TeXRA window of this project is attached.',
+            message: 'No TeXRA window is open for this project.',
           }),
         );
       const within = ASKED_WITHIN[kind];
@@ -184,7 +184,7 @@ export const makeWindowTable = () => {
             Effect.fail(
               new WindowCallFailed({
                 reason: 'no-answer',
-                message: `The TeXRA window did not answer within ${within}.`,
+                message: `The TeXRA window did not respond within ${within}.`,
               }),
             ),
         }),
@@ -197,11 +197,11 @@ export const makeWindowTable = () => {
                 Cause.hasDies(cause)
                   ? new WindowCallFailed({
                       reason: 'failed',
-                      message: `The TeXRA window answered ${kind} with a value it does not take.`,
+                      message: `The TeXRA window returned an unexpected response for ${kind}.`,
                     })
                   : new WindowCallFailed({
                       reason: 'detached',
-                      message: 'The TeXRA window closed before it answered.',
+                      message: 'The TeXRA window closed before responding.',
                     }),
               ),
         ),

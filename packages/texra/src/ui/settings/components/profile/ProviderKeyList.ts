@@ -225,7 +225,7 @@ export class ProviderKeyList extends TexraElement {
           </div>
         </div>
         ${
-          planCredits && (isExpanded || entry.status !== 'secret')
+          planCredits && isExpanded
             ? renderPlanCreditsHint(planCredits)
             : nothing
         }
@@ -236,7 +236,7 @@ export class ProviderKeyList extends TexraElement {
 
   override render(): TemplateResult {
     const description =
-      "Add a key from each provider's developer console. Kimi Code and GLM Coding Plan keys go on their rows; a ChatGPT or Grok plan signs in below instead.";
+      "Add a key from each provider's developer console. For ChatGPT or Grok plans, sign in under Subscriptions.";
 
     return html`
       <div class="provider-keys-section">

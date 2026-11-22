@@ -302,7 +302,7 @@ const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
     const createSample = 'Create Sample Project';
     const choice = yield* vscodeUi.ask(
       'info',
-      'TeXRA agents run inside a single-folder workspace. Open your LaTeX project folder or create the sample project first.',
+      'Open a single project folder or create the sample project first.',
       { items: [openFolder, createSample] },
     );
     if (choice === openFolder) {

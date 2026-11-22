@@ -79,7 +79,7 @@ export const CLI_MODEL_SETTING = Object.freeze({
   schema: CliModelSchema,
   title: 'Default model',
   description:
-    'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
+    'Default model for `texra` commands when not set by `--model`, `TEXRA_MODEL`, or a command default.',
 } as const satisfies SettingRow<string | undefined>);
 
 /** `texra chat`'s override of the top-level `model` row. */
@@ -108,7 +108,7 @@ export const CLI_OUTPUT_FORMAT_SETTING = Object.freeze({
   schema: CliOutputFormatSchema,
   title: 'Output format',
   description:
-    'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
+    'Default CLI output format: text, json, or ndjson. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
 } as const satisfies SettingRow<typeof CliOutputFormatSchema.Type>);
 
 export const AUTO_OPEN_FINAL_SETTING = Object.freeze({
@@ -117,7 +117,7 @@ export const AUTO_OPEN_FINAL_SETTING = Object.freeze({
   schema: decodingDefault(Schema.Boolean, true),
   title: 'Open the final revision',
   description:
-    "When a document task completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
+    'Automatically preview the final revised file when a document task finishes.',
 } as const satisfies SettingRow<boolean>);
 
 export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
@@ -126,7 +126,7 @@ export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
   schema: decodingDefault(Schema.String, ''),
   title: 'Default bibliography file',
   description:
-    'Default path to bibliography file (.bib). Agents are told this path so they can search it for citations. Supports Zotero auto-exported .bib files.',
+    'Default .bib file path for citation search (supports Zotero auto-export).',
 } as const satisfies SettingRow<string>);
 
 /** The port of Zotero's local endpoints: the Connector API and Better
@@ -140,7 +140,7 @@ export const ZOTERO_PORT_SETTING = Object.freeze({
   ),
   title: 'Zotero port',
   description:
-    'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
+    'Local Zotero port for Connector API and Better BibTeX (default: 23119).',
 } as const satisfies SettingRow<number>);
 
 export const LATEXINDENT_CONFIG_SETTING = Object.freeze({
@@ -148,7 +148,7 @@ export const LATEXINDENT_CONFIG_SETTING = Object.freeze({
   slot: 'config',
   schema: decodingDefault(Schema.String, ''),
   title: 'latexindent configuration file',
-  description: 'Path to latexindent configuration file',
+  description: 'Optional config file path passed to latexindent.',
 } as const satisfies SettingRow<string>);
 
 export const TEXFMT_CONFIG_SETTING = Object.freeze({
@@ -156,7 +156,7 @@ export const TEXFMT_CONFIG_SETTING = Object.freeze({
   slot: 'config',
   schema: decodingDefault(Schema.String, ''),
   title: 'tex-fmt configuration file',
-  description: 'Path to tex-fmt configuration file',
+  description: 'Optional config file path passed to tex-fmt.',
 } as const satisfies SettingRow<string>);
 
 export const TIKZ_INPUT_DIRECTORY_SETTING = Object.freeze({
@@ -165,16 +165,16 @@ export const TIKZ_INPUT_DIRECTORY_SETTING = Object.freeze({
   schema: decodingDefault(Schema.String, ''),
   title: 'TikZ input directory',
   description:
-    'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
+    'Extra absolute directory added to TEXINPUTS when compiling TikZ figures.',
 } as const satisfies SettingRow<string>);
 
 export const INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING = Object.freeze({
   key: 'latex.includeWorkspaceInTexinputs',
   slot: 'config',
   schema: decodingDefault(Schema.Boolean, true),
-  title: 'Workspace in TEXINPUTS',
+  title: 'Project root in TEXINPUTS',
   description:
-    'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
+    'Include the project root in TEXINPUTS when compiling TikZ figures.',
 } as const satisfies SettingRow<boolean>);
 
 export const TIKZ_TEMPLATE_SETTING = Object.freeze({
@@ -183,7 +183,7 @@ export const TIKZ_TEMPLATE_SETTING = Object.freeze({
   schema: decodingDefault(Schema.String, DEFAULT_TIKZ_TEMPLATE),
   title: 'TikZ template',
   description:
-    'Template used for generating standalone documents when extracting and compiling TikZ figures',
+    'Standalone LaTeX template used when extracting and compiling TikZ figures.',
 } as const satisfies SettingRow<string>);
 
 export const ENABLED_REPLACEMENTS_SETTING = Object.freeze({
@@ -249,7 +249,7 @@ const USAGE_RECORD_WORDING = {
   timestamp: 'time of the call',
   streamId: 'task ID',
   extensionVersion: 'version',
-  editorType: 'host',
+  editorType: 'app',
 } as const satisfies Record<keyof UsageLogEntry, string>;
 
 /**
@@ -307,7 +307,7 @@ export const INLINE_CRITICISM_SETTING = Object.freeze({
   schema: decodingDefault(Schema.Boolean, false),
   title: 'Show criticism as editor diagnostics',
   description:
-    'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',
+    'Highlight \\criticize annotations in revised LaTeX files as editor diagnostics.',
   category: 'latex',
   slot: 'globalState',
   surfaces: Object.freeze({ settingsView: 'latex' }),
@@ -323,8 +323,7 @@ export const GIT_COMMITS_TO_SHOW_SETTING = Object.freeze({
     20,
   ),
   title: 'Commits to show',
-  description:
-    'Number of recent commits to show in the commit selection dropdown',
+  description: 'Number of recent commits shown in the commit picker.',
 } as const satisfies SettingRow<number>);
 
 /** The audio tools' SoX binary, when automatic detection should not decide. */

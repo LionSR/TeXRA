@@ -61,9 +61,9 @@ export function instructionSuppressible(key: string): boolean {
 export const INSTRUCTION_ACTION_BUTTON_LABELS: Readonly<
   Record<InstructionAction, string>
 > = Object.freeze({
-  [INSTRUCTION_ACTION.SET_API_KEY]: 'Set API Key',
-  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
-  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
+  [INSTRUCTION_ACTION.SET_API_KEY]: 'Set API key',
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration guide',
+  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model documentation',
 });
 
 /** The button beside a failure that names a guide page. */

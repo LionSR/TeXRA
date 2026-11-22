@@ -58,7 +58,7 @@ export function createDesktopSettingsDialog(
           <div class="settings-row-text">
             <label for="desktopTheme" class="settings-row-label">Theme</label>
             <span id="desktopThemeHelp" class="settings-row-help">
-              Choose light or dark, or follow your system appearance.
+              Match your OS or pick a fixed appearance.
             </span>
           </div>
           <div class="settings-row-control">

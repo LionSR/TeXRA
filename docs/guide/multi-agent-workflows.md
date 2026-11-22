@@ -103,12 +103,12 @@ you, or the spend cap is reached.
    is not retried for you; ask the assistant if you want it redone.
 5. **A result when it finishes.** The assistant receives the script's return
    value and its last log lines. A program's outputs land in run storage; the
-   assistant reviews them and brings them into the workspace with your
+   assistant reviews them and brings them into the project with your
    approval.
 
 <CliSubagentsHero />
 
-<p class="hero-caption">A chat in the CLI. The helpers a script starts appear in this same subagent panel, each as a focusable stream with its own transcript.</p>
+<p class="hero-caption">A chat in the CLI. Helper agents started by a script appear in the agent list, each with its own transcript.</p>
 
 ## Background scripts
 
@@ -133,8 +133,8 @@ script fails partway, the assistant fixes the code and sends it again:
 everything that already finished comes back as **Reused** at no cost. Editing
 one of a call's files makes that call run again.
 
-In the CLI, `texra resume <id>` continues a stopped run, a background script
-run included. Read [Execution history](./texra-cli.md#execution-history).
+In the CLI, `texra resume <id>` continues a stopped task, including a background
+script. Read [Task history](./texra-cli.md#task-history).
 
 ## Limits
 

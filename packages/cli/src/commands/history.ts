@@ -51,7 +51,7 @@ const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
       visibleEntries,
       visibleEntries.length
         ? formatCliHistoryText(visibleEntries)
-        : 'No history yet. Runs appear here after you start a task.',
+        : 'No tasks yet. Tasks appear here after you start one.',
     ),
   );
 });
@@ -106,8 +106,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
     }
     if (exportResult.status === 'incomplete') {
       return yield* failUsage(
-        `Run ${id} exists but has nothing to export yet (no stored ` +
-          `config and/or conversation). Run \`texra history show ${id}\` to see what is available.`,
+        `Task ${id} has nothing to export yet. Run \`texra history show ${id}\` to inspect it.`,
       );
     }
     writeRawStdout(formatChatAsMarkdown(exportResult.exportInput));
@@ -125,18 +124,14 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
           case 'no_record':
             return failUsage(formatCliHistoryNotFoundText(id, context.cwd));
           case 'no_rows':
-            return failUsage(
-              `Run ${id} exists but has no transcript to replay (it produced no output).`,
-            );
+            return failUsage(`Task ${id} has no saved conversation to export.`);
           default:
             return absurd(status);
         }
       },
       TraceViewerMissing: () =>
         failUsage(
-          'The bundled trace-viewer standalone template was not found in this ' +
-            'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
-            'packages/trace-viewer builds.',
+          'HTML export template is missing from this CLI install. Reinstall @texra-ai/cli to restore it.',
         ),
       // Any other failure to read the bundle (EACCES, a transient I/O
       // error) is not "rebuild the CLI": it names the real cause.
@@ -215,7 +210,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
     : CliExitCode.Success;
 });
 
-const TASK_ID_DESCRIPTION = 'Task id from `texra history list`';
+const TASK_ID_DESCRIPTION = 'Task ID from `texra history list`';
 
 // `texra history` on its own is `texra history list`: the group takes the
 // listing's flags and runs it.

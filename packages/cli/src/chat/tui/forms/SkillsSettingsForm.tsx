@@ -7,6 +7,7 @@ import {
   type SkillDisplayItem,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
+  formatResultCount,
   joinFacts,
 } from '@texra-ai/worldline/schemas';
 import { Skills } from '@texra-ai/worldline/host';
@@ -61,7 +62,7 @@ export function SkillsSettingsForm(
       items={(data) => [
         ...ActiveSkillSourceScopeSchema.literals.map((scope) => ({
           value: { kind: 'source' as const, scope },
-          label: `Source: ${scope}`,
+          label: `Source: ${scope === 'interop' ? 'imported' : scope}`,
           description: enabledLabel(!data.disabledScopes.includes(scope)),
         })),
         ...data.skills.map((skill) => ({
@@ -78,7 +79,9 @@ export function SkillsSettingsForm(
       description={<Text dimColor>Toggle skills for this project.</Text>}
       detailFor={(data) =>
         data.issueCount > 0 ? (
-          <Text dimColor>{data.issueCount} skill load issues</Text>
+          <Text dimColor>
+            {formatResultCount(data.issueCount, 'skill load issue')}
+          </Text>
         ) : undefined
       }
       detailRowsFor={(data) => (data.issueCount > 0 ? 1 : 0)}

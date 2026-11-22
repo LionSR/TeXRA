@@ -70,7 +70,7 @@ const capabilitiesOf = (host: WindowHost): HostCapability[] =>
  *  only to a window that offers it, so this is a service of another mind. */
 const unoffered = (kind: HostCapability) =>
   Effect.fail(
-    new HostCallFailed({ message: `This window does not offer ${kind}.` }),
+    new HostCallFailed({ message: `This window does not support ${kind}.` }),
   );
 
 /** A call a run waits on, answered however it ends, a defect included, so

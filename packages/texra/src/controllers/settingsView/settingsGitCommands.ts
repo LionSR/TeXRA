@@ -156,9 +156,9 @@ export function settingsGitCommands(ports: {
         (result) =>
           ({
             revealed: Effect.void,
-            missing: notice('The agent run is no longer available.'),
+            missing: notice('This task is no longer available.'),
             unavailable: alert(
-              'The Sessions view is not available. Please try again.',
+              'The Tasks view is not available. Please try again.',
             ),
           })[result],
       ),

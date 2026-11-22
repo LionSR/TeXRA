@@ -189,7 +189,7 @@ export function latexdiffVerbs(parts: {
     );
     const total = recorded.length + pairs.length;
     if (total === 0) {
-      yield* notify('info', 'No LaTeX diff operations available for this run.');
+      yield* notify('info', 'No latexdiff operations available for this task.');
       return;
     }
 
@@ -223,7 +223,7 @@ export function latexdiffVerbs(parts: {
     const fresh =
       pairs.length === 0
         ? []
-        : yield* host.withProgress('Running LaTeX diffs', diffPairs);
+        : yield* host.withProgress('Running latexdiff', diffPairs);
     const diffPaths = [
       ...recorded.flatMap((entry) =>
         entry.status === 'ok' ? [entry.diff.absolutePath] : [],
@@ -233,15 +233,15 @@ export function latexdiffVerbs(parts: {
 
     if (diffPaths.length === 0) {
       return yield* new Rejected({
-        reason: 'All LaTeX diff operations failed',
+        reason: 'All latexdiff operations failed',
       });
     }
     yield* diffPaths.length < total
       ? notify(
           'warning',
-          `${diffPaths.length} of ${total} LaTeX diff operations completed successfully`,
+          `${diffPaths.length} of ${total} latexdiff operations completed`,
         )
-      : notify('info', 'All LaTeX diffs completed successfully');
+      : notify('info', 'All latexdiff runs completed');
     yield* host.openDiffs(diffPaths);
   }, withLogChannel(CHANNEL));
 

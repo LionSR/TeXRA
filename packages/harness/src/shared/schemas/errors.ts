@@ -134,7 +134,7 @@ export function modelFailureMessage(failure: ModelFailure): string {
   if (failure.kind === 'context-overflow')
     return (
       `${failure.message} Retrying would resend the same oversized request. ` +
-      'Start a new session, or reduce attached files and tool output.'
+      'Start a new task, or reduce attached files and tool output.'
     );
   const { status } = failure;
   const statusText = status === undefined ? undefined : reasonPhrase(status);

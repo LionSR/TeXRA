@@ -32,7 +32,7 @@ export function desktopSignInPresenters(
       choose(window, {
         type: 'info',
         message: `Signing in with ${names.displayName}`,
-        detail: `Opened your default browser. ${SIGN_IN_PROMPT.otherBrowser(names.sessionName)}\n\n${url}`,
+        detail: `Opened your default browser. ${SIGN_IN_PROMPT.otherBrowser(names.sessionName)}`,
         choices: [
           { label: SIGN_IN_PROMPT.copyLinkLabel, value: url, default: true },
         ],
@@ -58,8 +58,7 @@ export function desktopSignInPresenters(
           message: `Sign in with ${displayName}`,
           detail:
             `${SIGN_IN_PROMPT.deviceCodeFallback(displayName)}\n\n` +
-            `${SIGN_IN_PROMPT.deviceCodeSteps(displayName, prompt, copied)}\n\n` +
-            'TeXRA is waiting for you to approve it.',
+            SIGN_IN_PROMPT.deviceCodeSteps(displayName, prompt, copied),
           choices: [
             {
               label: SIGN_IN_PROMPT.openVerificationLabel,

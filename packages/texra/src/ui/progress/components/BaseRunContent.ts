@@ -102,11 +102,11 @@ export abstract class BaseRunContent extends LitElement {
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     let explanation = `${runStatus(run).word}.`;
     if (run.holder === 'here')
-      explanation = `This ${runNoun(run)} takes no messages.`;
+      explanation = `You cannot send follow-up messages to this ${runNoun(run)}.`;
     else if (run.actions.includes('resume'))
       explanation += ' Resume to continue.';
     else if (run.actions.includes('fork'))
-      explanation += ' Fork to continue with this conversation’s history.';
+      explanation += " Fork to continue with this conversation's history.";
     return html`<div class="conversation-ended">
       <span role="status" aria-atomic="true"
         >${runNoticeText(run) ?? explanation}</span
@@ -148,8 +148,8 @@ export abstract class BaseRunContent extends LitElement {
     if (source === null) return nothing;
     return html`<p class="forked-from-line">
       ${waIcon('code-branch')}
-      ${TASK_ACTIONS.forkedFromRun(this.view?.runs.get(source.id))} at step
-      ${source.at}: the model holds that conversation up to there.
+      ${TASK_ACTIONS.forkedFromRun(this.view?.runs.get(source.id))} (step
+      ${source.at}).
     </p>`;
   }
 

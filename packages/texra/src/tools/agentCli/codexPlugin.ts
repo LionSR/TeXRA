@@ -96,7 +96,7 @@ export const codex: TexraPlugin = texraPlugin({
       authCommand: 'codex login',
       configNotes:
         'Requires the native `codex` binary, which @openai/codex-sdk drives.',
-      authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
+      authNote: 'Uses ChatGPT subscription (included with Plus/Pro)',
     },
   },
 });

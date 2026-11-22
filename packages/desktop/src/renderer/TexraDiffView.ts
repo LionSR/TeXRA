@@ -143,7 +143,7 @@ export class TexraDiffView extends LitElement {
     }
     const loading = this.editorLoad !== undefined;
     return html`
-      ${loading ? renderLoadingState('Loading diff...') : nothing}
+      ${loading ? renderLoadingState('Loading diff…') : nothing}
       <div class="diff-view" ?hidden=${loading}>
         <slot></slot>
       </div>

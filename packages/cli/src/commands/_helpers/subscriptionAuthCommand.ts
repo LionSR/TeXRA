@@ -106,7 +106,7 @@ export function defineSubscriptionAuthCommand(
     config: {
       device: boolFlag(
         'device',
-        'For SSH, containers, or any headless shell: sign in with a one-time device code where the provider has one, otherwise print the browser sign-in URL',
+        'Sign in with a one-time code (best for SSH or headless shells)',
       ),
       noBrowser: boolFlag(
         'no-browser',
