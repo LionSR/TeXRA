@@ -18,7 +18,7 @@ const CONFIG_CATEGORY_LABELS: Readonly<Record<SettingCategory, string>> = {
   documents: 'Documents',
   model: 'Models and providers',
   latex: 'LaTeX',
-  latexdiff: 'Latexdiff',
+  latexdiff: 'latexdiff',
   tools: 'Tools',
   privacy: 'Privacy',
 };

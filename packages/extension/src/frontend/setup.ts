@@ -65,7 +65,7 @@ export function initializeLatexSupport(
         askNotice,
         globalState,
         'latex-workshop-install',
-        `LaTeX Workshop extension is recommended for full TeXRA functionality (${LATEX_WORKSHOP_FEATURES}). Install now?`,
+        `Install LaTeX Workshop for ${LATEX_WORKSHOP_FEATURES}?`,
         [INSTALL],
       );
       if (choice !== INSTALL) return;
@@ -75,7 +75,7 @@ export function initializeLatexSupport(
         .pipe(
           Effect.catch((err) =>
             showLoggedErrorMessage(
-              `Error installing extension ${LATEX_WORKSHOP_EXT_ID}`,
+              'Could not install LaTeX Workshop',
               err,
             ).pipe(Effect.asVoid),
           ),

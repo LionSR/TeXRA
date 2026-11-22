@@ -98,9 +98,10 @@ const platform = nodePlatform({
 
 const program = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots);
-  // With no approval handler attached, the session offers no tool that
-  // requires approval and denies every request a run opens (§3).
+  // This run can read files. Under Ask, a session without a handler
+  // withholds tools that would require approval.
   const run = yield* session.start({
+    approval: 'ask',
     label: 'abstract_editor',
     system: 'You review LaTeX abstracts for concision.',
     tools: ['read_file'],
@@ -176,7 +177,8 @@ An embedder decides them in one of three ways:
   answers with `session.request({ kind: 'request.decide', runId, requestId,
   decision })`. Whichever answer lands first is the decision.
 - **Do neither.** Then nobody can answer, and the session's approval
-  policy decides every request as it opens: under `ask` (the default) or
+  policy decides every request as it opens. The default, `yolo`, allows
+  ordinary commands and edits without a handler. Under `ask` or
   `never` it denies them, retries included, and no run is offered a tool
   that requires approval.
 

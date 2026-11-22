@@ -144,7 +144,7 @@ function goldenRoot(): string {
     mkdtempSync(join(os.tmpdir(), 'texra-golden-')),
   );
   roots.push(root);
-  const db = new DatabaseSync(join(root, 'texra.db'));
+  const db = new DatabaseSync(join(root, 'texra.project-v1.db'));
   try {
     db.exec(GOLDEN);
   } finally {
@@ -154,7 +154,7 @@ function goldenRoot(): string {
 }
 
 const raw = <T>(storage: string, read: (db: DatabaseSync) => T): T => {
-  const db = new DatabaseSync(join(storage, 'texra.db'));
+  const db = new DatabaseSync(join(storage, 'texra.project-v1.db'));
   try {
     db.exec('PRAGMA busy_timeout = 5000');
     return read(db);
@@ -736,8 +736,8 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     })((it) => {
       it.effect.each([
         [
-          "an earlier build's row",
-          `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
+          'a retired execution row',
+          `UPDATE event SET type = 'model.retry' WHERE "commit" = ${RESPONSE}`,
           refusedAs({ kind: 'earlierBuild', cause: expect.any(String) }),
         ],
         [

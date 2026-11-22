@@ -21,7 +21,12 @@ export const vscodeOpener: ExternalOpener = Object.freeze({
     return Effect.tryPromise({
       try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
       catch: (cause) =>
-        externalOpenFailed(url, 'openExternal', 'VS Code rejected it.', cause),
+        externalOpenFailed(
+          url,
+          'openExternal',
+          'VS Code could not open the link.',
+          cause,
+        ),
     }).pipe(
       // openExternal resolves `false` — does not throw — when VS Code
       // declines the URI, its documented path for an unhandled scheme. That
@@ -34,7 +39,7 @@ export const vscodeOpener: ExternalOpener = Object.freeze({
           externalOpenFailed(
             url,
             'openExternal',
-            'VS Code declined it: no handler took it.',
+            'No application is registered to handle this link.',
             undefined,
           ),
       ),

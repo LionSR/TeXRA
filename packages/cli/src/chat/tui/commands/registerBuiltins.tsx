@@ -311,8 +311,7 @@ export function builtinSlashCommands(options: {
         },
         {
           name: 'resume',
-          description:
-            'Resume a previous task; /resume all continues every interrupted one',
+          description: 'Resume a previous task (or `/resume all`)',
           category: 'session',
           echo: 'ifPersists',
           handler: Effect.fn('handler')(function* (remainder, context) {
@@ -321,7 +320,7 @@ export function builtinSlashCommands(options: {
             const id = parseCliHistoryId(remainder);
             if (!id)
               return yield* new CliUsageError({
-                message: `Invalid task id: ${remainder}`,
+                message: `Invalid task ID: ${remainder}`,
               });
             yield* context.resumeRun(id);
           }),
@@ -331,8 +330,7 @@ export function builtinSlashCommands(options: {
           ? [
               {
                 name: 'tasks',
-                description:
-                  "Every project's tasks in the TeXRA service; attach to one live",
+                description: 'View and attach to tasks across projects',
                 category: 'session' as const,
                 echo: 'never' as const,
                 formComponent: TasksFormAdapter,

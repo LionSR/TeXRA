@@ -183,9 +183,9 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await expect(panel('agent').locator('session-composer')).toBeVisible();
   // An explicitly split empty group must offer an immediate way to remove it.
   const groupsBeforeSplit = await page.locator('.dv-groupview').count();
-  await menu(groupOf(tab('agent')), 'Split group right');
+  await menu(groupOf(tab('agent')), 'Split right');
   const closeEmpty = page.getByRole('button', {
-    name: 'Close empty group',
+    name: 'Close pane',
     exact: true,
   });
   await expect(closeEmpty).toBeVisible();
@@ -284,7 +284,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await expect(
     groupOf(first).locator('.shell-dock-tab[data-kind="editor"]'),
   ).toHaveCount(2);
-  await menu(groupOf(second), 'Split group below');
+  await menu(groupOf(second), 'Split down');
   await expect(panel('editor')).toHaveCount(2);
   // The outer edge makes a full-height column alongside the whole workspace,
   // independently of the nested editor split under the pointer.
@@ -410,7 +410,7 @@ test('moves live terminals and unsaved editors without recreating resources', as
   await expect(tab('terminal')).toHaveCount(1);
   await menu(groupOf(terminal1), 'Terminal');
   const terminal2 = tab('terminal').last();
-  await menu(groupOf(terminal2), 'Split group right');
+  await menu(groupOf(terminal2), 'Split right');
   await expect(panel('terminal')).toHaveCount(2);
   expect(await terminalNode?.evaluate((node) => node.isConnected)).toBe(true);
   expect(process.kill(pid, 0)).toBe(true);
@@ -704,7 +704,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
   }
 });
 
-test('Close group asks about each unsaved editor in turn', async () => {
+test('Close pane asks about each unsaved editor in turn', async () => {
   const { page } = launched;
   const names = ['third.ts', 'fourth.ts'];
   for (const name of names) {
@@ -718,7 +718,7 @@ test('Close group asks about each unsaved editor in turn', async () => {
   }
   const editorTab = (name: string) =>
     page.locator(`.shell-dock-tab[data-tab-id="workbench:editor:${name}"]`);
-  await menu(groupOf(editorTab('fourth.ts')), 'Close group');
+  await menu(groupOf(editorTab('fourth.ts')), 'Close pane');
   const dialog = page.locator('wa-dialog.desktop-discard-overlay[open]');
   // One question per unsaved editor, in the group's order: the first is
   // discarded, the second kept.

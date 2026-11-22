@@ -144,8 +144,8 @@ export class LatexdiffResults extends TexraElement {
 
     const summaryText =
       this.entries.length === 1
-        ? 'Latexdiff result'
-        : `Latexdiff results (${this.entries.length})`;
+        ? 'latexdiff result'
+        : `latexdiff results (${this.entries.length})`;
 
     return html`
       ${buildDetailsCard({

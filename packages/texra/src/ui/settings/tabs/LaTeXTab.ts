@@ -451,7 +451,7 @@ export class LaTeXTab extends TexraSignalElement {
         ${renderSettingsSectionHeading({
           title: 'Compile and diff',
           description:
-            'What TeXRA does with the LaTeX an agent writes in this workspace.',
+            'What TeXRA does with LaTeX files an agent writes in this project.',
           icon: 'bolt',
         })}
         ${renderStateSettingToggleRow(DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING)}

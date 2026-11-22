@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 
-// Publish the repo-root README (which documents both the VS Code extension and
-// the CLI) as the npm package README, mirroring the extension's
-// scripts/copy-docs.mjs. The generated packages/cli/README.md is gitignored.
+// Publish the CLI-focused npm README (`README.npm.md`) as the packaged
+// `packages/cli/README.md` (which is gitignored).
 import { copyFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const cliRoot = path.resolve(import.meta.dirname, '..');
-const repoRoot = path.resolve(cliRoot, '..', '..');
 
 await copyFile(
-  path.join(repoRoot, 'README.md'),
+  path.join(cliRoot, 'README.npm.md'),
   path.join(cliRoot, 'README.md'),
 );

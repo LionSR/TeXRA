@@ -132,5 +132,5 @@ Wolfram, prove theorems in Lean 4, and compile LaTeX. Read
 - [**Polish a draft**](./workflows/polish-a-draft.md): the `edit` program in depth: revisions, limits, multi-file projects
 - [**The assistant and programs**](./programs.md): what you can ask for, and every program you can start
 - [**Models**](./models.md): choosing a model that matches the work
-- [**TeXRA CLI**](./texra-cli.md): sign-in, workspace defaults, headless output formats
+- [**TeXRA CLI**](./texra-cli.md): sign-in, project defaults, headless output formats
 - [**LaTeX Diff**](./latex-diff.md): compiled PDF comparison of revisions

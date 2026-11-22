@@ -35,7 +35,7 @@ export function toolDependencyStatusLabel(
 /** The page's own copy. */
 export const PLUGINS_PAGE = Object.freeze({
   description:
-    'Everything that adds tools or agents: TeXRA’s plugins, installed Claude Code and Codex plugins, and your MCP servers.',
+    "Tools and agents from TeXRA's built-in plugins, installed Claude Code and Codex plugins, and your MCP servers.",
   add: 'Add plugin',
   recheck: 'Re-check',
   openMcpConfig: 'Open mcp.json',
@@ -55,7 +55,7 @@ export const PLUGINS_PAGE = Object.freeze({
     'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
   addPlaceholder: 'github.com/owner/repo',
   added: (names: readonly string[]) =>
-    `Installed ${names.join(', ')}. Switch it on to review what it declares and trust it.`,
+    `Installed ${names.join(', ')}. Switch ${names.length === 1 ? 'it' : 'them'} on to review and trust.`,
   trustQuestion: (name: string, version: string | null) =>
     `Trust ${name}${version ? ` ${version}` : ''} and enable it?`,
   trustAction: 'Trust and enable',
@@ -159,8 +159,8 @@ export function pluginRowTrust(row: PluginRow): string | null {
     plugin.commit === undefined ? plugin.version : shortPluginId(plugin.commit);
   if (plugin.trusted) return revision ? `trusted at ${revision}` : 'trusted';
   return plugin.enabled
-    ? 'not trusted as it is now: review it to load it'
-    : 'not trusted yet: switching it on shows what it declares';
+    ? 'needs review after update before loading'
+    : 'not trusted yet — switch on to review';
 }
 
 /**
@@ -179,7 +179,7 @@ export function pluginRowProblem(row: PluginRow): string | null {
     case 'installed':
       if (row.plugin.problem) return row.plugin.problem;
       return row.plugin.code.length > 0
-        ? `ships ${row.plugin.code.join(', ')}, which TeXRA does not run yet`
+        ? `contains ${row.plugin.code.join(', ')}, which TeXRA cannot run yet`
         : null;
     case 'mcp':
       return null;

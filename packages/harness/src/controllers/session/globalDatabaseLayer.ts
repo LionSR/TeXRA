@@ -58,7 +58,7 @@ export const globalDatabaseLayer = (
   Layer.effect(
     GlobalDatabase,
     Effect.gen(function* () {
-      const name = storeFileName(yield* AppNamespace);
+      const name = storeFileName(yield* AppNamespace, 'global');
       const path = join(storage, name);
       const openFailed = (cause: unknown) =>
         new DatabaseOpenFailed({ path, cause });

@@ -78,7 +78,7 @@ export function createEditorFileNotice(options: {
       const headline = {
         load: "The editor couldn't load. Open a file to try again.",
         open: `Couldn't open ${name}.`,
-        reload: `Couldn't reload ${name} from disk. The editor shows the last version read, and saving it would overwrite the file on disk.`,
+        reload: `Couldn't reload ${name}. Saving now will overwrite the file on disk.`,
         save: `Couldn't save ${name}. Your changes are still in the editor.`,
       }[action];
       show({

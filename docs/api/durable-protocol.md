@@ -1,6 +1,6 @@
 # Durable Protocol & Recovery
 
-A run's state in [`@texra-ai/worldline`](./harness/) is the reduction of the append-only rows committed to its session database (`texra.db`). If a process exits or crashes mid-run, the next process that opens the storage root lists the run as interrupted, and `session.resume(runId)` continues it from its last write point.
+A run's state in [`@texra-ai/worldline`](./harness/) is the reduction of the append-only rows committed to its session database (`texra.project-v1.db`). If a process exits or crashes mid-run, the next process that opens the storage root lists the run as interrupted, and `session.resume(runId)` continues it from its last write point.
 
 ## Approvals, commands, and resume in code
 
@@ -87,7 +87,7 @@ const manageRun = Effect.gen(function* () {
 
 ## Storage model and the one process per store
 
-When opened with `{ persistent: true }`, a [`Session`](./harness/#session) opens `texra.db` under `roots.storage`; without `persistent: true`, it runs the same SQLite schema in memory.
+When opened with `{ persistent: true }`, a [`Session`](./harness/#session) opens `texra.project-v1.db` under `roots.storage`; without `persistent: true`, it runs the same SQLite schema in memory.
 
 Every durable event is a row in the `event` table with two sequence numbers:
 
@@ -149,11 +149,11 @@ one (section 9):
 
 ## Storage failure outcomes (`S1`–`S6`)
 
-| ID     | Failure class                                                                                      | Behavior                                                                                                                                                                                                                                  |
-| ------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **S1** | [`DatabaseOpenFailed`](./harness/#databaseopenfailed)                                              | Session open fails with the underlying cause (a store an earlier or newer build wrote fails unchanged); a damaged one is moved aside to `texra.db.corrupt-<ms>` ([`SessionStoreMovedAside`](./harness/schemas#sessionstoremovedaside)).   |
-| **S2** | `DatabaseStoreNewer`                                                                               | Store written by a newer schema version is rejected whole without partial reads or writes.                                                                                                                                                |
-| **S3** | [`DatabaseReadFailed`](./harness/#databasereadfailed) (`DatabaseRowCorrupt`, `DatabaseRowEarlier`) | A run with an undecodable or pre-1.0 row is marked unreadable in listings and refused on resume without blocking other runs in the store.                                                                                                 |
-| **S4** | [`DatabaseWriteFailed`](./harness/#databasewritefailed)                                            | Transaction rolls back completely and the active run terminates with a typed failure.                                                                                                                                                     |
-| **S5** | [`DatabaseAggregateClosed`](./harness/schemas#databaseaggregateclosed)                             | Nothing is written; a run whose aggregate closed under it stops, with no retry. A project store another process holds does not open at all.                                                                                               |
-| **S6** | `RunChanged`                                                                                       | A deletion requested against a run lifetime that has since restarted writes nothing and reports that the run changed. A row that breaks the store's own invariants (such as a duplicate `run.start`) fails the writing fiber as a defect. |
+| ID     | Failure class                                                                                      | Behavior                                                                                                                                                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **S1** | [`DatabaseOpenFailed`](./harness/#databaseopenfailed)                                              | Session open fails with the underlying cause (a store an earlier or newer build wrote fails unchanged); a damaged one is moved aside to `texra.project-v1.db.corrupt-<ms>` ([`SessionStoreMovedAside`](./harness/schemas#sessionstoremovedaside)). |
+| **S2** | `DatabaseStoreNewer`                                                                               | Store written by a newer schema version is rejected whole without partial reads or writes.                                                                                                                                                         |
+| **S3** | [`DatabaseReadFailed`](./harness/#databasereadfailed) (`DatabaseRowCorrupt`, `DatabaseRowEarlier`) | A run with an undecodable or pre-1.0 row is marked unreadable in listings and refused on resume without blocking other runs in the store.                                                                                                          |
+| **S4** | [`DatabaseWriteFailed`](./harness/#databasewritefailed)                                            | Transaction rolls back completely and the active run terminates with a typed failure.                                                                                                                                                              |
+| **S5** | [`DatabaseAggregateClosed`](./harness/schemas#databaseaggregateclosed)                             | Nothing is written; a run whose aggregate closed under it stops, with no retry. A project store another process holds does not open at all.                                                                                                        |
+| **S6** | `RunChanged`                                                                                       | A deletion requested against a run lifetime that has since restarted writes nothing and reports that the run changed. A row that breaks the store's own invariants (such as a duplicate `run.start`) fails the writing fiber as a defect.          |

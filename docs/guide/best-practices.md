@@ -32,7 +32,7 @@ Match model capability to task complexity: overpowered models waste money, under
 
 <ModelTierMatrixCard />
 
-<p class="hero-caption">Find the row that matches your task, then pick one of the recommended model handles.</p>
+<p class="hero-caption">Find the row that matches your task, then pick one of the recommended model references.</p>
 
 Read the [AI models guide](./models.md) for detailed comparisons.
 

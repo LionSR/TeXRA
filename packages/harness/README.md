@@ -394,12 +394,16 @@ the session store's source; in short:
 
 ## Generated files and deletion
 
-Under its storage root a session owns the store (`<namespace>.db`, named
-for the settings catalog's namespace: `harness.db` unless `nodePlatform`
+The first row-format baseline starts a new project history beside the development
+database. The older database stays at `<namespace>.db`; an earlier build can
+still open it. The global settings database keeps its existing filename.
+
+Under its storage root a session owns the store (`<namespace>.project-v1.db`, named
+for the settings catalog's namespace: `harness.project-v1.db` unless `nodePlatform`
 is given a catalog of the embedder's own) and one
 directory per run, `executions/<runId>/`, holding the files the run
 generated. A deletion removes nothing else: the project's own files are
-never touched, and a store moved aside (`<namespace>.db.corrupt-<ms>`) is never read again
+never touched, and a store moved aside (`<namespace>.project-v1.db.corrupt-<ms>`) is never read again
 and goes only when a person deletes it (`deleteStorageInventory`, which
 `texra doctor --prune-storage` runs after asking).
 

@@ -50,7 +50,7 @@ export const pluginTrustFacts = (
   plugin: request.version
     ? `${request.plugin} ${request.version}`
     : request.plugin,
-  location: `${request.path} (digest ${shortPluginId(request.digest)})`,
+  location: `${request.path} (${shortPluginId(request.digest)})`,
 });
 
 /** The noun each request kind goes by where a row names what waits on the
@@ -88,9 +88,10 @@ export const REQUEST_ASK = Object.freeze({
   plan: 'Approve this plan',
   /** The words before the plugin's name; one with native code says so
    *  after it. */
-  pluginTrust: 'Trust and load the plugin',
+  pluginTrust: 'Trust and load plugin',
   /** What a plugin's native code is, said wherever its trust is asked. */
-  nativeCode: 'Its native code runs inside this process, as you, unsandboxed.',
+  nativeCode:
+    'Runs native code directly in TeXRA with your user permissions (unsandboxed).',
   /** The words before the proposed agent: an agent launched on a task
    *  runs it; any other is delegated one. */
   proposal: (task: boolean): string => (task ? 'Run' : 'Delegate a task to'),

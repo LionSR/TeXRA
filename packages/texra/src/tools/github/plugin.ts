@@ -52,28 +52,27 @@ export const githubActivity: TexraPlugin = texraPlugin({
         if (tokenPresent && inGitRepo)
           return {
             available: true,
-            statusDetail:
-              'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.',
+            statusDetail: 'GitHub token and git repository ready.',
           };
         if (!tokenPresent && !inGitRepo)
           return {
             available: false,
             statusLabel: 'Needs setup',
             statusDetail:
-              'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or Settings → General.',
+              'Open a git repository with a github.com remote, then add a token in Settings → General → Git (or /config → GitHub token).',
           };
         if (!tokenPresent)
           return {
             available: false,
             statusLabel: 'Needs token',
             statusDetail:
-              'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or Settings → General to enable PR activity subscriptions.',
+              'Add a GitHub personal access token in Settings → General → Git (or /config → GitHub token).',
           };
         return {
           available: false,
           statusLabel: 'Needs git repo',
           statusDetail:
-            'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.',
+            'Open a git repository with a github.com remote to subscribe to PR activity.',
         };
       }),
     },
@@ -81,16 +80,14 @@ export const githubActivity: TexraPlugin = texraPlugin({
   dashboard: {
     name: 'GitHub Activity Subscription',
     description:
-      'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
+      'Watch GitHub repositories, pull requests, and issues for new comments, reviews, and CI updates.',
     setup: {
       installGuide:
-        'Requires a git-tracked workspace and a GitHub personal access token:\n\n' +
-        '  1. Open the folder as a git repo (or `git init` + set a github.com remote).\n' +
-        '  2. In the CLI, /config → GitHub token can store a token or open the token page with the right scopes pre-filled. In VS Code or desktop, use TeXRA Settings → General.\n' +
-        '  3. Scopes: "repo" for private repositories, "public_repo" for public only.\n' +
-        '  4. Store the token in host secret storage, or export GITHUB_TOKEN/GH_TOKEN for CLI and automation.',
+        'Requires a git repository with a github.com remote and a GitHub personal access token:\n\n' +
+        '  1. Add a token in Settings → General → Git (or /config → GitHub token in the CLI), or export GITHUB_TOKEN / GH_TOKEN.\n' +
+        '  2. Scopes: "repo" for private repositories, "public_repo" for public only.',
       installUrl: 'https://github.com/settings/tokens',
-      configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. The CLI /config → GitHub token row and Settings → General in VS Code both manage the stored token. Requires a git repository in the workspace. Polls every ${Duration.format(Duration.millis(GITHUB_POLL_INTERVAL_MS))}; cap: ${MAX_SUBSCRIPTIONS.pull} concurrent PRs and ${MAX_SUBSCRIPTIONS.repo} concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
+      configNotes: `Polls every ${Duration.format(Duration.millis(GITHUB_POLL_INTERVAL_MS))} (up to ${MAX_SUBSCRIPTIONS.pull} PRs and ${MAX_SUBSCRIPTIONS.repo} repos). Bot events are ignored.`,
       authNote: 'Uses personal access token',
     },
   },

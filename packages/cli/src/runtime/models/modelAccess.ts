@@ -164,7 +164,6 @@ export function formatCliModelDetails(model: ModelOptionData): string {
   lines.push(`id: ${model.value}`);
   lines.push(`label: ${model.label}`);
   if (model.provider) lines.push(`provider: ${model.provider}`);
-  lines.push(`status: ${cliModelStatus(model)}`);
   lines.push(`availability: ${modelAvailabilityLabel(model)}`);
   // Why it cannot run is the verdict's own sentence; how to add a key
   // from a shell is the terminal's.

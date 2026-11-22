@@ -208,7 +208,7 @@ export const databaseLayer = (
     Database,
     Effect.gen(function* () {
       const roots = yield* SessionWorkspace;
-      const name = storeFileName(yield* AppNamespace);
+      const name = storeFileName(yield* AppNamespace, 'project');
       const path =
         mode === 'ephemeral' ? IN_MEMORY_STORE : join(roots.storage, name);
       const openFailed = (cause: unknown): DatabaseOpenFailed =>

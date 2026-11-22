@@ -22,6 +22,7 @@
  *   the harness's setting rows ([`SettingRow`](#settingrow), each a
  *   [`StateKey`](#statekey)), [`TraceDocumentSchema`](#tracedocumentschema).
  */
+export { PROJECT_STORE_FORMAT } from '@utils/system/appNamespace';
 export type {
   AgentConfig,
   AgentConfigPayload,

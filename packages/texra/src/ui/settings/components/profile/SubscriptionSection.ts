@@ -154,7 +154,10 @@ export class SubscriptionSection extends TexraSignalElement {
                   signedIn
                     ? html`${waIcon('circle-check')}
                         <bdi dir="auto"
-                          >${ACCOUNT_OUTCOME.signedInAs(SUBSCRIPTION_AUTH_COPY[provider.providerId].label, account)}</bdi
+                          >${ACCOUNT_OUTCOME.signedInAs(
+                            SUBSCRIPTION_AUTH_COPY[provider.providerId].label,
+                            account,
+                          ).replace(/\.$/, '')}</bdi
                         >`
                     : provider.accountTitle
                 }
@@ -229,13 +232,12 @@ export const SUBSCRIPTION_SECTIONS = Object.freeze({
     sectionId: 'chatgpt-subscription',
     title: CHATGPT_AUTH.subscriptionLabel,
     description:
-      'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
+      'Use OpenAI models through ChatGPT Plus, Pro, or Team without an API key.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preferLabel: CHATGPT_AUTH.subscriptionLabel,
-    preferDescription: 'Use the subscription for eligible OpenAI models.',
-    accountTitle: 'ChatGPT account',
-    connectDescription:
-      'Connect the ChatGPT account that owns your subscription.',
+    preferDescription: 'Route eligible OpenAI models through this plan.',
+    accountTitle: 'Account',
+    connectDescription: 'Sign in with your ChatGPT account.',
     signInText: CHATGPT_AUTH.signInLabel,
     providerId: 'chatgpt',
     accountLabel: codexAccountLabel,
@@ -250,13 +252,12 @@ export const SUBSCRIPTION_SECTIONS = Object.freeze({
     sectionId: 'grok-subscription',
     title: GROK_AUTH.subscriptionLabel,
     description:
-      'Use xAI Grok models through your SuperGrok / xAI account. No xAI API key is needed.',
-    note: 'Uses the public Grok CLI OAuth client. xAI may change or revoke that registration without notice.',
+      'Use xAI Grok models through SuperGrok without an xAI API key.',
+    note: 'Uses the public Grok CLI OAuth client, which xAI may change or revoke.',
     preferLabel: GROK_AUTH.subscriptionLabel,
-    preferDescription: 'Use the subscription instead of an xAI API key.',
-    accountTitle: 'Grok account',
-    connectDescription:
-      'Connect the xAI account that owns your SuperGrok plan.',
+    preferDescription: 'Route xAI models through this plan.',
+    accountTitle: 'Account',
+    connectDescription: 'Sign in with your xAI account.',
     signInText: GROK_AUTH.signInLabel,
     providerId: 'grok',
     accountLabel: xaiAccountLabel,

@@ -36,10 +36,13 @@ function storeRows<T>(
   const project = existsSync(storage)
     ? readdirSync(storage).find((name) => name.startsWith('project-'))
     : undefined;
-  if (!project || !existsSync(join(storage, project, 'texra.db'))) return [];
+  if (!project || !existsSync(join(storage, project, 'texra.project-v1.db')))
+    return [];
   // The service holds the store: its rows are read from a copy.
   return withStoreCopy(join(storage, project), (copy) => {
-    const db = new DatabaseSync(join(copy, 'texra.db'), { readOnly: true });
+    const db = new DatabaseSync(join(copy, 'texra.project-v1.db'), {
+      readOnly: true,
+    });
     try {
       return db.prepare(sql).all(...params) as T[];
     } finally {

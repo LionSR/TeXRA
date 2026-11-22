@@ -5,6 +5,7 @@
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import { Schema } from 'effect';
 import {
+  APPROVAL_POLICY_DEFAULT,
   type ApprovalPolicy,
   RunIdSchema,
   type RunId,
@@ -12,7 +13,6 @@ import {
   FACT_SEPARATOR,
 } from '@texra-ai/worldline/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/worldline/transcript';
-import { TEXRA_APPROVAL_DEFAULT } from '@texra/shared/approvalPolicy';
 import type { ChatLaunch } from '@texra/shared/session/surface';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import {
@@ -58,7 +58,7 @@ const EMPTY_SESSION_META: SessionMeta = {
   model: '',
   modelSource: 'builtin-default',
   cwd: '',
-  approvalPolicy: TEXRA_APPROVAL_DEFAULT,
+  approvalPolicy: APPROVAL_POLICY_DEFAULT,
   version: '',
 };
 

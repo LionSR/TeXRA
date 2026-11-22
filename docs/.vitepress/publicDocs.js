@@ -26,16 +26,15 @@ export const publicRootDocs = [
 ];
 
 // Root-level directories whose contents are published (minus any per-page
-// exclusions in `srcExclude`, e.g. the guide/desktop.md beta page). `api/`
-// holds a tracked landing page; its `harness/` and `llm/` folders are copied
-// by `sync-content` from the packages' generated references and .gitignored.
+// exclusions in `srcExclude`). `api/` holds a tracked landing page; its
+// `harness/` and `llm/` folders are copied by `sync-content` from the packages'
+// generated references and .gitignored.
 export const publicRootDirs = ['guide', 'api'];
 
 // Sources excluded from the public build. Root-level *.md entries are internal
 // docs; `name/**` entries exclude whole internal directories.
 export const srcExclude = [
   'README.md',
-  'guide/desktop.md',
   'dev/**',
   'architecture/**',
   'supabase/**',

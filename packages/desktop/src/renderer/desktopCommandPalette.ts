@@ -285,7 +285,7 @@ export function createDesktopCommandPalette({
         <footer class="desktop-command-palette-footer">
           <div class="desktop-command-palette-help" aria-hidden="true">
             <span><kbd>↑↓</kbd> Navigate</span>
-            <span><kbd>↵</kbd> Open</span>
+            <span><kbd>↵</kbd> Select</span>
           </div>
         </footer>
       `,

@@ -72,7 +72,7 @@ const EXAMPLES = [
     'texra plugin install github.com/<owner>/<repo>',
     'install a Claude Code or Codex plugin for its skills',
   ],
-  ['texra init', 'save workspace defaults to .texra/config.json'],
+  ['texra init', 'save project defaults to .texra/config.json'],
   [
     'texra install-github-action',
     'add the TeXRA code-review workflow and open a PR',

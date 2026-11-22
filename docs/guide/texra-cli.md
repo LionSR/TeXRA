@@ -295,34 +295,27 @@ texra run chat --instruction "Profile scripts/simulate.py, then speed up its hot
 
 <CliSubagentsHero />
 
-<p class="hero-caption">The assistant delegates while helper agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
+<p class="hero-caption">Helper agents stream below the assistant as numbered rows. Focus any helper agent to view its own transcript.</p>
 
-Focusing a subagent shows only its own transcript. Scroll back through its
-earlier output with normal terminal scrolling and search. Each subagent keeps
-its own scoped history that persists across sessions, and resuming a subagent
-continues it where it left off.
+Focusing a helper agent shows only its own transcript, which persists across sessions and can be resumed where it left off.
 
 ## Skills
 
 Skills are reusable instruction folders the assistant can apply to a request.
-It receives no skills until you turn on **Enable skills for agents**
-(`skills.enabled`) with `texra config edit`; `texra skills list` says so while
-it is off. List what's available, and pull in extra skill folders for any
-run:
+Enable **Enable skills for agents** (`texra.skills.enabled`) via `texra config`
+or **Settings → Agents → Skills**. List available skills or attach extra folders
+with `--source` (`-s`, repeatable):
 
 ```bash
 texra skills list
 texra run edit --input paper.tex --source ~/my-skills
 ```
 
-`--source` (alias `-s`) adds an additional skill root and may be repeated.
-The `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the
-workspace and in the home directory are the imported source group, off by
-default; enable it with the `skills.disabledSources` setting (`texra config
-edit`) or the Skills section of **Settings → Agents**. The project's own
-skills live in `.texra/skills/`. When skills share a name, a `--source` folder
-wins, then the project's skills, then your own. In chat, pick a skill with
-`/skills` to apply it to your next request.
+Imported skill folders (`.agents`, `.claude`, `.codex`, `.gemini`) start disabled
+by default; toggle them under `texra config` → Skills or **Settings → Agents →
+Skills** (`texra.skills.disabledSources`). Project skills live in `.texra/skills/`
+and override user skills (`--source` overrides both). In chat, pick a skill with
+`/skills`.
 
 ### Plugins
 
@@ -355,7 +348,7 @@ An installed plugin stays off until you enable it:
 
 - **Trust on enable**: `texra plugin enable` shows what the plugin declares (skills, commands, agents, and each MCP server's command line) and asks you to trust it. Trust covers that version, every file in the plugin folder, and the MCP servers' commands, arguments, and environment values. External binaries a server runs (such as `node`) are trusted by path, size, and modification time. If any covered file or setting changes, the plugin stops loading until you re-enable and re-trust it.
 - **Names and unsupported features**: A plugin's name uses lowercase letters, digits and single hyphens, at most 32 characters, and cannot be `own`, which names the [programs an agent writes for itself](#programs-an-agent-writes-for-itself). Plugins with LSP servers cannot be enabled yet; output styles and apps are not loaded.
-- **Hooks**: Claude Code hooks run as processes in the workspace. A `Stop` hook that blocks (`decision: "block"`, or exit code 2) continues the run for one extra turn using its reason as the next instruction, even under `texra run`. The stop after that turn passes `stop_hook_active: true` and cannot block again.
+- **Hooks**: Claude Code hooks run as processes in the project folder. A `Stop` hook that blocks (`decision: "block"`, or exit code 2) continues the task for one extra turn using its reason as the next instruction, even under `texra run`. The stop after that turn passes `stop_hook_active: true` and cannot block again.
 
 Once enabled and trusted, a plugin's components load under its namespace:
 
@@ -434,44 +427,41 @@ lookup in slow shells with:
 export TEXRA_COMPLETION_DYNAMIC=0
 ```
 
-## Execution history
+## Task history
 
-TeXRA stores every execution in the workspace run store. List recent runs:
+TeXRA stores every task in the project task store. List recent tasks:
 
 ```bash
 texra history list
-texra history list --limit 10        # only the most recent runs (alias: -n)
+texra history list --limit 10        # only the most recent tasks (alias: -n)
 texra history list --output-format ndjson
 ```
 
-Text output prints one tab-separated row per run, with no header line:
+Text output prints one tab-separated row per task, with no header line:
 
 ```text
 <id>    <timestamp>    <name>    <status>    <subject>
 ```
 
-The name is the run's label (a program's name, or the chat's), and the
+The name is the task's label (a program's name, or the chat's), and the
 subject is its first input file's name, else its title, else `-`.
 
 The NDJSON form is stable for scripts under the version 3 contract above.
-Each line has kind `history-entry` and contains the same run entry object used
+Each line has kind `history-entry` and contains the same task entry object used
 by JSON output, with the terminal `outcome` spelled as `completed`,
 `cancelled`, or `failed` (`null` when none was recorded) and `continues`
-saying whether `texra resume` continues it. The text form's status column
-words the same outcome as the progress view does (`Completed`, `Stopped`,
-`Error`), or `No outcome`, followed by `(can continue)` for a finished
-conversation that takes another message, or `(can resume)` for an
-interrupted, failed or stopped run.
+saying whether `texra resume` continues it. The text status column matches the Tasks view (`Completed`, `Stopped`, `Error`, or `No outcome`), plus `(can continue)` or `(can resume)` when resumable.
 
-Inspect or delete one run:
+Inspect, export, or delete tasks:
 
 ```bash
-texra history show <id>
-texra history delete <id>
-texra doctor --prune-storage   # review and remove orphaned project stores and corrupt backups
+texra history show <id>                  # summary (--full for full conversation)
+texra history show <id> --export html    # export standalone HTML or Markdown (md)
+texra history delete <id>                # delete one task (--all --yes deletes all)
+texra doctor --prune-storage             # review and remove orphaned project stores and corrupt backups
 ```
 
-Continue a stored session, on its saved model:
+Continue a stored task on its saved model:
 
 ```bash
 texra resume <id>
@@ -499,96 +489,36 @@ A fork holds the conversation as it stood at the end of its last turn and
 leaves the original task unchanged. Forking continues in an interactive chat,
 so it needs a terminal, and a program run cannot be forked.
 
-When `texra chat` opens, nothing resumes on its own: the tasks a closed or
-crashed TeXRA stopped mid-way sit in the agent list (Tab) as interrupted.
-`/resume all` continues them and `/resume` picks one; a task that needs a
-plugin that is off or not trusted says so when resumed and stays interrupted
-until that is fixed. `texra run` never resumes
-anything either.
+When `texra chat` opens, interrupted tasks stay paused until you resume them with `/resume` or `/resume all`. `texra run` never auto-resumes either.
 
-A run another TeXRA process still holds is refused, and the message names
-that process's pid and host. A holder that cannot be reached (it ran on another
-machine, or its liveness cannot be proven) counts as holding the run; when you
-are sure it is gone, delete the run from history and start a new one.
+If another TeXRA process still holds a task, resume refuses with that process's PID and host. If the original process is gone and cannot be verified (for example on another machine), delete the task from history and start a new one.
 
 ## Background service
 
-The CLI, VS Code extension, and desktop app share one local task service
-when they use the same storage root.
-It starts on its own the first time a chat or a `texra tasks` command needs
-it, keeps running the tasks it started when the terminal that started them
-closes, and exits after ten minutes with no client connected and no task
-at work. A conversation waiting for your next message does not keep it
-up: it stops with the service, and `texra resume` continues it.
+On macOS and Linux, the CLI, VS Code extension, and desktop app share a local background service (started automatically by `texra chat`, `texra tasks`, VS Code, or the desktop app; it exits after 10 minutes idle). Tasks keep running if you close the terminal, and any open VS Code or desktop window for the same project handles window-only actions like diff previews and diagnostics.
 
-A task in the service asks a window of its own project for what only a
-window has, and the window focused last answers. A chat shows its
-project's task notices (a refused resume, an error). When the asked window
-closes or does not answer in time, the tool says so instead of waiting;
-with no window of the project open, the task runs as a headless run does.
-
-`texra chat` (and a bare `texra`) is a client of the service: the
-conversation's runs run there, so `/tasks` in another terminal lists it and
-can attach to it while it works. `texra resume <id>` of a conversation the
-service is running continues it there. When the service cannot start, or
-`TEXRA_NO_SERVICE=1` is set, the chat runs in its own process and says so
-once; other terminals then do not see it. While a service holds a project,
-a `texra` command in that folder reads the project's settings and stored
-tasks through it (`texra history`, `texra resume`, the chat's `/resume` and
-`/status`) and opens no store of its own, as a window does. `texra run`,
-`-p` and `--output-format ndjson` always run in their own process.
+If the service cannot start (or `TEXRA_NO_SERVICE=1` is set, or on Windows), `texra chat` runs locally in its own process. `texra run`, `-p`, and `--output-format ndjson` always run locally.
 
 ```bash
-texra tasks list                                   # every project's tasks, newest first
-texra tasks start --instruction "<text>"           # start a task in the service; prints its id
-texra tasks attach <id>                            # follow it live until it ends
-texra tasks send <id> "<text>"                     # send it a follow-up
-texra tasks stop <id>                              # stop it; it can be resumed later
+texra tasks list                                   # tasks across projects (* = running)
+texra tasks start --instruction "<text>"           # start a task in the service
+texra tasks attach <id>                            # follow live (Ctrl-C detaches)
+texra tasks send <id> "<text>"                     # send a follow-up or resume
+texra tasks stop <id>                              # stop a running task
 ```
 
-`list` marks the tasks the service is running now with `*`. Any number of
-terminals can attach to the same task at once and all of them print the
-same transcript; Ctrl-C detaches one terminal and leaves the task running.
-Attached to a task that has not ended and that no service runs any more
-(the service stopped under it), `attach` prints what the task has so far,
-says so and exits 1; `texra tasks send` continues such a task.
-An id may be shortened to any prefix only one task has. `tasks start` runs
-the task under the project's approval policy; an approval policy it asks for
-(`--approval-policy`, `TEXRA_APPROVAL_POLICY`) applies to that
-task alone: it narrows the project's, and `yolo` auto-approves the task
-unless the project's policy is `never`. It never changes the project's policy. A service task that asks
-for approval waits for an answer: `texra tasks attach` only watches, so
-answer it from the chat with `/tasks`. With
-`--output-format ndjson`, `attach` writes the task's own events (not its
-agents') as `progress` records, in the shape `texra run` uses.
+You can shorten any `<id>` to a unique prefix. Multiple terminals can attach to the same task; `attach` is read-only, so answer pending approvals in `texra chat` via `/tasks`. Per-command approval settings (`--approval-policy`, `TEXRA_APPROVAL_POLICY`) apply only to that task and can tighten the project policy (or set `yolo` unless the project policy is `never` / **Block**). With `--no-input`, the task follows the same approval policy without prompting.
 
-Manage the service itself:
+Manage the service directly:
 
 ```bash
-texra service status    # pid, version, socket, clients, tasks running
-texra service stop      # stop it; its running tasks stop and can be resumed
-texra service restart
-texra serve             # run it in the foreground, logging to stderr
+texra service status    # pid, version, socket, clients, running tasks
+texra service stop      # stop the service (running tasks can be resumed)
+texra service restart   # reload shell PATH, keys, or config.json changes
+texra serve             # run in the foreground
 ```
 
-The service listens on a socket in `~/.texra/run/` that only your user can
-open, and writes its log to `~/.texra/run/serve.log`. A newer TeXRA that
-finds an older service asks it to finish its running tasks and exit, and
-starts its own once the old one exits. An already-open tab or window
-reconnects automatically when it finds a compatible service. If the
-replacement speaks a different protocol, the tab leaves it running and
-asks you to reopen the CLI or reload the window with the updated build.
-
-The service takes its environment (`PATH`,
-provider keys) from your login shell, not from the terminal or window that
-happened to start it, so `latexmk` and `git` are found the same way from
-every window; it logs the `PATH` it uses. The provider keys a terminal or
-window holds travel with each task it starts. The service reads its own
-environment and your settings when it starts: after you export or remove
-a key in your shell profile, or edit `config.json`, run
-`texra service restart`. The
-service does not run on Windows yet; there, chats run in their own
-process.
+The service listens on a user-only socket in `~/.texra/run/` (logs in `~/.texra/run/serve.log`) and inherits `PATH` and keys from your login shell. When a newer TeXRA version starts, it asks any older service to finish active tasks and exit before starting the updated one.
 
 ## Tools and integrations
 
@@ -611,16 +541,16 @@ texra models enable xai/grok-4.7
 texra models disable xai/grok-4.7
 ```
 
-## Workspace defaults
+## Project defaults
 
 Run `texra config` in a terminal, or `/config` in a chat, to open the
 configuration view; `texra config show` prints the settings for scripts.
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
-current workspace. Scaffold one with `texra init` (add `--yes` to accept
+current project. Scaffold one with `texra init` (add `--yes` to accept
 defaults non-interactively, or `--gitignore` to add `.texra/` to `.gitignore`).
 Command-line flags override environment variables, environment variables
-override the workspace file, the workspace file overrides your user
+override the project file, the project file overrides your user
 configuration file (`~/.texra/v1/global-storage/config.json`), and that file
 overrides built-in defaults.
 
@@ -651,16 +581,16 @@ built-in CLI model default is `deepseek/deepseek-v4-pro`.
 The approval policy (`texra.approvalPolicy`) is never read from
 `.texra/config.json`, because a repository you clone can carry that file. Set
 it with `/config` or the settings view: it is kept in your own storage for the
-current workspace, and a value in your user configuration file is the default
-for every workspace. A project file that sets it is ignored and `texra doctor` reports the key.
+current project, and a value in your user configuration file is the default
+for every project. A project file that sets it is ignored and `texra doctor` reports the key.
 
 The corresponding environment variables are `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. The approval policy a
 command asks for (`--approval-policy` or `TEXRA_APPROVAL_POLICY`) does not
 replace the stored one: it can
 only narrow it for that command's tasks, and `yolo` auto-approves them unless
-the stored policy is `never`. Run
-`texra doctor` to see which workspace config file was loaded and whether any
+the stored policy is `never` (**Block**). Run
+`texra doctor` to see which project config file was loaded and whether any
 keys were ignored.
 
 Two more switches live in the environment:

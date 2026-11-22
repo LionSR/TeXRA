@@ -154,7 +154,7 @@ export const makeInlineComments: Effect.Effect<
       ]);
       sequence += 1;
       const threadId = `c${sequence}`;
-      thread.label = threadId;
+      thread.label = `Comment #${sequence}`;
       thread.canReply = true;
       thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
       setThreadResolved(thread, false);

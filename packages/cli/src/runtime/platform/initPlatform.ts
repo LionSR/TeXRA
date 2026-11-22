@@ -177,7 +177,7 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
   // `.texra/config.json` layered over the user-level
   // `~/.texra/v1/global-storage/config.json`. One provider per process is
   // what keeps a value `texra config` writes readable at the next startup.
-  // The project's `texra.db` is owned by the platform's scope; AppState
+  // The project's `texra.project-v1.db` is owned by the platform's scope; AppState
   // (global) is the runtime's.
   const roots = yield* openNodeWorkspaceRoots({
     workspaceRoot: context.cwd,

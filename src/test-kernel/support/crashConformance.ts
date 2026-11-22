@@ -1234,7 +1234,10 @@ export function crashConformanceSuite(
                     yield* tx.append(titled('first half'));
                     yield* Effect.sync(() => {
                       mkdirSync(cut);
-                      for (const file of ['texra.db', 'texra.db-wal'])
+                      for (const file of [
+                        'texra.project-v1.db',
+                        'texra.project-v1.db-wal',
+                      ])
                         cpSync(join(roots.storage, file), join(cut, file));
                     });
                     yield* tx.append(titled('second half'));

@@ -20,7 +20,6 @@ import {
   outputDiffCounts,
   outputDisplayName,
   formatRoundLabel,
-  OUTPUT_DOCUMENTS_TAG,
   type OutputFileInfo,
   type RoundOutput,
   roundAlerts,
@@ -156,9 +155,8 @@ export class FileList extends TexraElement {
       <div class="storage-hint" role="note">
         ${waIcon('folder-open')}
         <span class="storage-hint__text">
-          Files stay in run storage until accepted. Click a file to preview it,
-          use Accept to copy it into your workspace, or use the folder button to
-          open the full run.
+          Preview a file, accept it into your project, or open the task folder
+          from the ⋯ menu.
         </span>
         ${renderIconActionButton({
           id: 'storage-hint-dismiss-button',
@@ -213,8 +211,7 @@ export class FileList extends TexraElement {
                   tabindex="0"
                   >Open the reply</span
                 >
-                to check its
-                <code dir="ltr">&lt;${OUTPUT_DOCUMENTS_TAG}&gt;</code> block
+                to inspect the generated output
               </li>`
             : nothing
         }
@@ -375,13 +372,13 @@ export class FileList extends TexraElement {
       ${fileActionButton(idPrefix, 'accept', {
         icon: 'check',
         label: `Accept edits for ${displayPath}`,
-        tooltip: 'Accept edits into the workspace file',
+        tooltip: 'Accept edits into the project file',
         onClick: act('accept'),
       })}
       ${fileActionButton(idPrefix, 'merge', {
         icon: 'code-merge',
         label: `Merge edits for ${displayPath}`,
-        tooltip: 'Merge edits into the workspace file',
+        tooltip: 'Merge edits into the project file',
         onClick: act('merge'),
       })}
     `;

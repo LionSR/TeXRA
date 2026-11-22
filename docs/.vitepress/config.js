@@ -90,6 +90,7 @@ const guideSidebar = [
         link: '/guide/working-with-overleaf',
       },
       { text: 'TeXRA CLI', link: '/guide/texra-cli' },
+      { text: 'Desktop App', link: '/guide/desktop' },
       { text: 'Code Review', link: '/guide/code-review' },
       { text: 'Agent Integrations', link: '/guide/agent-integrations' },
       { text: 'File Management', link: '/guide/file-management' },
@@ -114,7 +115,7 @@ const baseConfig = {
   title: 'TeXRA',
   base,
   description:
-    'An AI theorist for advancing theoretical science. One assistant derives results, checks derivations in Wolfram, formalizes proofs in Lean 4, splits large jobs across helper agents and programs, and helps you do good work, in VS Code and the terminal.',
+    'An open-source AI theorist for VS Code, desktop, and the terminal. Derives results, checks derivations in Wolfram, formalizes proofs in Lean 4, and splits large jobs across helper agents and programs.',
   head: [
     ['link', { rel: 'icon', href: `${base}favicon.svg` }],
     [

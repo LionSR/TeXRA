@@ -85,7 +85,7 @@ export function handleIndentCurrentTeX(
       const formatter = yield* resolveLatexFormatter(roots);
       if (!formatter) {
         yield* showLoggedInfoMessage(
-          'LaTeX formatter is disabled; no file was indented',
+          'LaTeX formatter is disabled; no changes were made.',
         );
         return;
       }
@@ -97,9 +97,9 @@ export function handleIndentCurrentTeX(
       );
 
       if (success) {
-        yield* showLoggedInfoMessage('LaTeX file indented successfully');
+        yield* showLoggedInfoMessage('Formatted LaTeX file.');
       } else {
-        yield* showLoggedMessage('Failed to indent LaTeX file');
+        yield* showLoggedMessage('Could not format LaTeX file.');
       }
     }),
   ).pipe(withLogChannel(CHANNEL));
@@ -111,11 +111,11 @@ export function handleGetTeXCount(
   return runGuardedLatexCommand(
     roots,
     {
-      action: 'get TeX count',
-      errorMessage: 'Error getting tex count',
+      action: 'count words in LaTeX file',
+      errorMessage: 'Error counting words',
     },
     Effect.fnUntraced(function* ({ relativePath }) {
-      yield* Effect.logDebug(`Getting tex count for: ${relativePath}`);
+      yield* Effect.logDebug(`Counting words for: ${relativePath}`);
 
       const countingMode = yield* quickPick<
         vscode.QuickPickItem & { value: TexcountMode }
@@ -142,11 +142,11 @@ export function handleGetTeXCount(
       yield* withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'Counting LaTeX Document',
+          title: 'Counting words…',
           cancellable: false,
         },
         Effect.fnUntraced(function* (progress) {
-          progress.report({ message: 'Running texcount...' });
+          progress.report({ message: 'Running texcount…' });
 
           const { output, errors } = yield* getTeXCount(
             roots.workspace,
@@ -155,9 +155,7 @@ export function handleGetTeXCount(
           );
 
           if (!output) {
-            const message =
-              errors[0] ??
-              'Failed to get tex count. Please verify the file path.';
+            const message = errors[0] ?? 'Could not count words in this file.';
             yield* showLoggedMessage(message);
             return;
           }
@@ -165,7 +163,7 @@ export function handleGetTeXCount(
           const stats = parseTeXCountStats(output);
 
           yield* quickPick(stats, {
-            placeHolder: 'TeXCount Results (press Esc to dismiss)',
+            placeHolder: 'Word count results (press Esc to dismiss)',
             canPickMany: false,
           });
         }),

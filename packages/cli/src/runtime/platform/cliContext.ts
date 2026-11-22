@@ -542,8 +542,9 @@ export function launchApprovalNotice(
     effectiveApprovalPolicy(requested, configured) === requested
   )
     return undefined;
-  const change = `Change the project's policy with /config in \`texra chat\` or in the settings view.`;
+  const change =
+    'Change the project policy with /config in `texra chat` or in Settings.';
   return requested === 'yolo'
-    ? `Auto-approve can't override Block: tasks run under the project's Block policy. ${change}`
-    : `Tasks run under the project's approval policy, ${approvalPolicyLabel(configured)}, not ${approvalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. ${change}`;
+    ? `Auto-approve cannot override the project's Block policy. ${change}`
+    : `Using project policy (${approvalPolicyLabel(configured)}) instead of ${approvalPolicyLabel(requested)} — per-command flags can only tighten it. ${change}`;
 }

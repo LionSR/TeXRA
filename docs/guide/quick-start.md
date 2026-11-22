@@ -36,26 +36,15 @@ interactive session with `texra chat`, or run a single program with
 
 ## Add a key or connect a subscription
 
-A credential is the one step no agent can do for you. On a fresh install, the **Connect a model** card in the
-TeXRA panel offers the two main access choices; other subscriptions connect from Settings:
+On a fresh install, the **Connect a model** card in the TeXRA panel offers two quick choices (other subscriptions connect from Settings):
 
-1. **Use your own API keys**: Anthropic, OpenAI, Google, and more. Open the **Models** page
-   (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
-   set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
-   variables like `OPENAI_API_KEY`.
-2. **Use ChatGPT subscription**: OpenAI models through your ChatGPT plan. Open the Settings **Models**
-   page and use the **Subscriptions** sign-in section.
-3. **Another provider subscription** (from Settings, not the card): Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
-   already pay for. Connect them from the same **Models** page.
+1. **Use your own API keys**: Open **Settings → Models → API keys** (gear icon at the top of the panel) and paste a provider key, or add keys to a project `.env` file.
+2. **Use ChatGPT subscription**: Sign in under **Settings → Models → Subscriptions**.
+3. **Other provider subscriptions**: Connect Grok (xAI), Kimi Code, or the GLM Coding Plan from the same **Models** page.
 
-The full per-provider key reference (the **API keys** list, its Set / Get / Remove actions, and per-provider settings) lives in [Models → Setting API keys](./models.md#setting-api-keys).
+See [Models → Setting API keys](./models.md#setting-api-keys) for the full provider list. There is no TeXRA account — everything runs directly on your configured credentials.
 
-::: tip No TeXRA account
-There is no TeXRA sign-in. The assistant and every program ship
-bundled and run on the credential you configured above.
-:::
-
-Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
+Once connected, the **setup assistant** checks your environment and runs a quick test edit ending at a diff. [First run](./first-run.md) covers the same steps manually.
 
 ::: tip CLI credentials
 The terminal uses the same paths: provider env vars for your own keys,
@@ -114,31 +103,27 @@ Each category holds an ordered list. Add as many files as the task needs and dra
 
 <p class="hero-caption">The file selector of a proposal you are editing: Input holds the document the program revises, Context holds references and preamble, and Media holds figures.</p>
 
-::: tip Save Prompts for Later
-For advanced debugging, enable the `texra.debug.saveModelIO` setting in `.texra/config.json` to store the generated prompt alongside other debug artifacts.
-:::
-
 ### Start the task and watch it
 
-Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The Tasks view opens in the TeXRA view and streams the run live. Read the [Tasks view guide](./progress-board.md) for help interpreting the logs.
+Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The Tasks view opens in the TeXRA panel and streams progress live. Read the [Tasks view guide](./progress-board.md) for details.
 
 <GuideIntroHero />
 
-<p class="hero-caption">The Tasks view streams the run live (delegated subagents and the tool calls) with the output files alongside.</p>
+<p class="hero-caption">The Tasks view streams progress live (helper agents and tool calls) alongside the output files.</p>
 
 ### Review results
 
-1. When the program's run completes, VS Code opens the final revision from the run folder (for `edit`, `r1/draft.tex`, keeping your input filename).
-2. Inspect the proposed edits; the scientific judgment stays yours. Compare the original and modified versions with either tool:
-   - **Tasks view diff**: Under **Generated files**, select a file's <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** button to compare the original file against the generated run-storage output.
+1. When the program completes, VS Code opens the final revision from run storage (for `edit`, `r1/draft.tex`, keeping your input filename).
+2. Inspect the proposed edits; the scientific judgment stays yours. Compare original and modified versions with either tool:
+   - **Tasks view diff**: Under **Generated files**, select <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** to diff the original against the generated output.
 
      <CompareHero />
 
-     <p class="hero-caption">VS Code's diff editor opens with the first revision (<code>r0/draft.tex</code>) on the left and your original on the right: improved text in green, removed text in red.</p>
+     <p class="hero-caption">VS Code's diff editor opens the generated revision beside your original: additions in green, removals in red.</p>
 
      You can accept reviewed outputs from the Tasks view after comparing the changes.
 
-   - **TeXRA's LaTeXdiff feature**: Use a file's latexdiff button, or **LaTeXDiffs…** in the panel's **⋯** menu, for a compiled, visual comparison. It creates a PDF with additions highlighted in blue and deletions in red.
+   - **latexdiff**: Use a file's latexdiff button, or **latexdiff…** in the panel's **⋯** menu, for a compiled PDF with additions in blue and deletions in red.
 
 <div class="quick-pdf-viewer">
   <div class="pdf-tabs">
@@ -194,9 +179,10 @@ Claude Max/Team and ChatGPT Pro/Business subscriptions include monthly API credi
 
 <p class="hero-caption">What a one-shot run looks like: revisions stream as progress, then the full path to the revised document prints on stdout.</p>
 
-Run history is shared with VS Code, so a run started in the CLI shows up in the
-extension's Tasks view (and vice versa). Read the [TeXRA CLI guide](./texra-cli.md) for
-sign-in, workspace defaults, and headless output formats.
+Task history is shared across the CLI, VS Code extension, and desktop app, so a
+task started in the CLI shows up in the Tasks view (and vice versa). Read the
+[TeXRA CLI guide](./texra-cli.md) for sign-in, project defaults, and headless
+output formats.
 
 <style>
 .quick-pdf-viewer {
@@ -296,15 +282,11 @@ Some common tasks to try with TeXRA. Ask the assistant in the New task view, or 
 
 ## Understanding the output
 
-A completed run writes everything into the run folder under run storage, one
-folder per revision (`r0/`, `r1/`, …). Each revision folder holds the revised document,
-which keeps your **input filename** (`draft.tex`, not `output.tex`), and the model's raw
-reply (`output.xml`); the run's latexdiff PDFs go under `diff/r{revision}/` and compile
-logs under `compile/`:
+A completed task writes everything into its run folder, one folder per revision (`r0/`, `r1/`, …). Each revision holds the revised document (keeping your **input filename**, e.g. `draft.tex`) and raw reply (`output.xml`); `latexdiff` files go under `diff/r{revision}/`, compiled PDFs under `output/r{revision}/`, and compile logs under `compile/`:
 
 <OutputArtifactsTree />
 
-<p class="hero-caption">One folder per revision: the revised document at <code>r{revision}/&lt;input-filename&gt;</code> with the model's reply; latexdiff PDFs under <code>diff/</code> and compile logs under <code>compile/</code> sit beside the revision folders. Each further revision repeats the layout in <code>r1/</code>, <code>r2/</code>, …</p>
+<p class="hero-caption">One folder per revision: revised document at <code>r{revision}/&lt;input-filename&gt;</code> with the model's reply; <code>latexdiff</code> files under <code>diff/</code>, compiled PDFs under <code>output/</code>, and compile logs under <code>compile/</code>.</p>
 
 The CLI writes the same per-revision tree under `executions/<run-id>/` in the
 project's storage folder under `~/.texra`, which VS Code shares. Read [First run](./first-run.md) for the terminal walkthrough.

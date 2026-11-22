@@ -77,7 +77,7 @@ export function createProjectNavigation(options: {
       }),
     openFolder: Effect.fn('desktop.openWorkspaceFolder')(function* () {
       const selectedPath = yield* host.pickFolder(
-        'Open Workspace Folder',
+        'Open Project Folder',
         projects.active().roots.workspace ?? app.getPath('home'),
       );
       if (!selectedPath) return;

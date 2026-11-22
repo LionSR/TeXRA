@@ -242,7 +242,7 @@ export const sessionStoreFaults = (
   });
 
 /** The store's file in a session root. */
-const storeFile = (storage: string) => join(storage, 'texra.db');
+const storeFile = (storage: string) => join(storage, 'texra.project-v1.db');
 
 /**
  * Rebuild a copy of the clean store as a process killed after commit `n`
@@ -293,7 +293,7 @@ export const readStoreSnapshot = <A>(
 ): A => {
   const dir = mkdtempSync(join(tmpdir(), 'texra-store-snapshot-'));
   try {
-    const copy = join(dir, 'texra.db');
+    const copy = join(dir, 'texra.project-v1.db');
     cpSync(storeFile(storage), copy);
     const wal = `${storeFile(storage)}-wal`;
     if (existsSync(wal)) cpSync(wal, `${copy}-wal`);

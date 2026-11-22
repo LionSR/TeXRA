@@ -43,9 +43,7 @@ export function createDesktopWindowHost(options: {
   };
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
-    spawn(
-      notify('error', `A desktop operation failed: ${toErrorMessage(error)}`),
-    );
+    spawn(notify('error', toErrorMessage(error)));
   };
 
   /** A program whose failure or defect reaches the async-error report; an
@@ -111,12 +109,12 @@ export function createDesktopWindowHost(options: {
     showDiscardDialog: () =>
       dialog.showMessageBoxSync(window, {
         type: 'warning',
-        buttons: ['Keep Editing', 'Discard Changes'],
+        buttons: ['Keep editing', 'Discard'],
         defaultId: 0,
         cancelId: 0,
-        title: 'Unsaved Changes',
-        message: 'There are unsaved editor changes.',
-        detail: 'Discard the changes and continue?',
+        title: 'Unsaved changes',
+        message: 'Discard unsaved changes?',
+        detail: 'Your unsaved edits will be lost.',
       }),
     /** Tell the user a newer release exists. It opens the known-constant
      *  releases page rather than any network-provided URL, so an

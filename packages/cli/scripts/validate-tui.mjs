@@ -596,7 +596,7 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 10 more',
+      '… 9 more rows',
     ],
     unexpect: [
       '/ap  Switch',
@@ -860,7 +860,7 @@ const SCENARIOS = [
       'Mark agent commits',
       'Agent commit author',
       'Agent commit email',
-      'Subagent worktrees',
+      'Agent worktrees',
       '↑/↓ navigate',
       'Enter toggle / edit / open',
       'Esc back',

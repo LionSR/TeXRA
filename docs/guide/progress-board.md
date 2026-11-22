@@ -6,50 +6,42 @@ import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
 
 # Tasks view
 
-The Tasks view is TeXRA's live view in VS Code for watching running tasks, inspecting tool calls and reasoning, reviewing generated files, and resuming or forking past runs.
+The Tasks view is TeXRA's live view in VS Code and the desktop app for watching running tasks, inspecting tool calls and reasoning, reviewing generated files, and resuming or forking past tasks.
 
 ::: tip CLI
-The Tasks view is the VS Code extension's live view. The CLI shows the same
-streaming reasoning, tool calls, and diffs in its `texra chat` terminal UI. Past
-tasks are shared across surfaces. Browse them with `texra history list` in the terminal, or with the **Tasks**
-button of the TeXRA view in VS Code.
+The CLI shows the same streaming reasoning, tool calls, and diffs in `texra chat`. Past tasks are shared across VS Code, desktop, and CLI: browse them with `texra history list` in the terminal or under **Tasks** in VS Code and the desktop app.
 :::
 
 ::: info Background service
-On macOS and Linux, a VS Code window runs its tasks in the background TeXRA
-service, the same one `texra chat` uses. A task keeps running when its window
-closes, and another window, or `/tasks` in a terminal, can follow it. The
-window's editor still serves those tasks: diagnostics, inline criticism,
-opening a PDF and the editable diff of a proposed edit. If the service cannot
-start, the window runs its tasks itself and says so once.
+On macOS and Linux, tasks run through the shared background TeXRA service. A task keeps running if you close the window, and another window or `/tasks` in a terminal can follow it. If the service cannot start, the window runs tasks locally instead.
 :::
 
 <CliHistoryHero />
 
-<p class="hero-caption">The board's tasks, from a terminal: one tab-separated row each. <code>texra resume</code> picks a stored task back up.</p>
+<p class="hero-caption">The same tasks from a terminal: one tab-separated row each. <code>texra resume</code> continues a stored task.</p>
 
 ## Opening the Tasks view
 
-The Tasks view shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Tasks** button at the top left of the panel lists every task, and **+** starts a new task.
+The Tasks view shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Tasks** button at the top left lists every task, and **+** starts a new task.
 
-- **Automatic**: It usually opens when you execute an agent.
-- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Tasks**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS). From the New task screen this opens the newest task.
-- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open tasks in editor** from the panel's **⋯** menu, to open the Tasks view as a full editor tab.
+- **Automatic**: Opens automatically when you start a task.
+- **Manual**: Run **TeXRA: Show Tasks** (`Ctrl+Alt+P` / `Cmd+Option+P`).
+- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open tasks in editor** from the panel's **⋯** menu.
 
 <GuideIntroHero />
 
-<p class="hero-caption">The Tasks view: stream header and live log on the left, the run's output files on the right.</p>
+<p class="hero-caption">The Tasks view: header and live log on the left, output files on the right.</p>
 
 ## Layout overview
 
 The Tasks view has two parts:
 
-1.  **Task list**: In the sidebar, the **Tasks** button opens it as a drawer; in the editor tab it is docked beside the task.
-2.  **Content Area**: The header and log details for the selected task.
+1. **Task list**: In the sidebar, **Tasks** opens it as a drawer; in an editor tab it stays docked on the left.
+2. **Content area**: Header, conversation log, and generated files for the selected task.
 
 ## Task list
 
-This section lists the stored tasks for the workspace, including tasks started earlier and from other TeXRA hosts; their conversations load from the workspace's SQLite database.
+Lists stored tasks for the project, including tasks started from the CLI or desktop app.
 
 - **Switching tasks**: Select a task's title to view its logs and status in the Content Area.
 - **Renaming or deleting a task**: Each row's <wa-icon library="texra" name="ellipsis"></wa-icon> menu offers **Rename…** and **Delete task**; deleting removes the stored task and its run folder, not just the row. Double-clicking a title also renames it.
@@ -61,7 +53,7 @@ This area shows the details for the task selected in the Task list.
 
 ### Header
 
-The header provides a summary and actions for the selected stream:
+The header summarizes and controls the selected task:
 
 - **Task title**: Displays the title of the current task (select it to
   rename). Input files stay on the files panel, not on the task row.
@@ -87,22 +79,16 @@ The header provides a summary and actions for the selected stream:
     - **Delete output files**: Remove the task's run folder.
   - **Chat tasks**:
     - **Compact conversation**: Summarize earlier turns.
-    - **Run again…**: Open the New task form filled with the chat's model, first instruction, skills and images; sending it starts a fresh chat with the system text and tools the original run recorded.
-  - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **LaTeXDiffs…**.
+    - **Run again…**: Open the New task form prefilled with the chat's model, instruction, skills, and images to start a fresh task.
+  - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **latexdiff…**.
 - **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or program runs with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 Reviewed outputs are accepted per file: each row under **Generated files** has
-an **Accept** action that copies the edited version into your workspace.
+an **Accept** action that copies the edited version into your project.
 
 ### Checking a launch
 
-When the assistant asks to start a helper agent or a program, its card shows
-the model, the instruction and the files it would run; for a program run it
-names the program. **Edit** (`e`) opens the
-New task form filled with that proposal. Change the files, the instruction or the model, then press **Approve** to start it
-with your changes. It still runs as the asking agent's child, and its
-result goes back to that agent. **Back to …** returns to the asking task and
-leaves the proposal waiting.
+When the assistant proposes a helper agent or program, the card shows the model, instruction, and files. Select **Edit** (`e`) to adjust them before clicking **Approve**; select **Back to …** to return to the calling task while leaving the proposal pending.
 
 ### Auto-approval
 

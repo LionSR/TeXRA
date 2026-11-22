@@ -40,7 +40,7 @@ export const getLinterMessages = Effect.fn('linter.getLinterMessages')(
         new DiagnosticsReadFailed({
           reason: 'read-failed',
           path: filePath,
-          message: 'VS Code would not report diagnostics for this file.',
+          message: 'Could not read diagnostics for this file.',
           cause,
         }),
     });

@@ -14,13 +14,13 @@
   <div
     class="mockup merge-panel"
     role="group"
-    aria-label="LaTeXDiffs merge controls"
+    aria-label="latexdiff merge controls"
   >
     <div class="diffui">
       <div class="sechead">
         <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
         <wa-icon class="sec-ic" library="texra" name="source-control"></wa-icon>
-        <span class="sec-lbl">LaTeXDiffs</span>
+        <span class="sec-lbl">latexdiff</span>
       </div>
 
       <!-- Step 1 · Base File -->

@@ -135,15 +135,15 @@ Every run gets an isolated run folder under TeXRA's workspace storage directory:
 executions/<executionId>/
 ```
 
-A program's outputs are listed in the Tasks view under **Generated files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
+A program's outputs are listed in the Tasks view under **Generated files** (select a filename to preview it, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a task's outputs:
 
-- **Accept**: Copies the reviewed output file into your workspace.
-- **Pack / Archive outputs to History** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run folder (its output files, logs, and mirrored dependencies) into a timestamped folder under `History/`.
-- **Clean / Delete output files** (<wa-icon library="texra" name="trash"></wa-icon>): Deletes the run folder and its generated artifacts while leaving your workspace input files untouched.
+- **Accept**: Copies the reviewed output file into your project.
+- **Archive outputs to History** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run folder (output files, logs, and mirrored dependencies) into a timestamped folder under `History/`.
+- **Delete output files** (<wa-icon library="texra" name="trash"></wa-icon>): Deletes the run folder and its generated artifacts while leaving your project files untouched.
 
 <StorageLifecycleFlow />
 
-<p class="hero-caption">Accept copies reviewed outputs into the workspace, Pack archives the run into History, and Clean deletes the run folder. Your input files are never touched.</p>
+<p class="hero-caption">Accept copies reviewed outputs into your project, Archive saves a snapshot into History, and Delete removes the run folder. Your input files are never touched.</p>
 
 The CLI follows the same storage-first lifecycle: it reads and writes the
 same `executions/<executionId>/` run store, and `--output` plays the role of

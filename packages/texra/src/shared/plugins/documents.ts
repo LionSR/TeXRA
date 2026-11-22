@@ -63,13 +63,7 @@ export type DocumentsOutput = typeof DocumentsOutputSchema.Type;
 export const DOCUMENTS_OUTPUT_KIND = Object.freeze({
   plugin: THEORY_PLUGIN,
   kind: 'output',
-  // v2: a proposed task's fact carries its `diffs`. v3: each round holds
-  // its `latexdiffs` and its `reply`, which were log rows. v4: a round's
-  // compile check is its `compile` outcome, an output's lineage is its
-  // `base` and `document`, and a latexdiff records its math markup. v5: the
-  // row carries its program's `task`. An earlier version is an earlier
-  // build's row, and an earlier build reads a v5 one as a newer build's.
-  version: 5,
+  version: 1,
   schema: DocumentsOutputSchema,
   // A document task runs a program, which is never forked.
   fork: 'drop',

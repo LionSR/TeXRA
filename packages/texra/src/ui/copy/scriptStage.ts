@@ -14,7 +14,6 @@ import {
   formatResultCount,
   joinFacts,
 } from '@texra-ai/worldline/schemas';
-import { REQUEST_NOUN } from '@ui/copy/requestCards';
 import { runStatusLook, type StatusLook } from '@ui/copy/runStatus';
 
 export const SCRIPT_CALL_STATUS_LABEL = Object.freeze({
@@ -58,23 +57,23 @@ function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
   if (detail.kind !== 'request')
     return detail.kind === 'notRun'
       ? 'The task ended before this call started.'
-      : 'Stopped with its task. Resume the task to continue.';
+      : 'Stopped with the task. Resume to continue.';
   const { payload } = detail;
   switch (payload.kind) {
     case 'bash':
-      return `Wants ${REQUEST_NOUN.bash}: ${payload.data.command}`;
+      return `Run command: ${payload.data.command}`;
     case 'toolEdit':
-      return `Wants ${REQUEST_NOUN.toolEdit}: ${payload.data.relativePath}`;
+      return `Edit file: ${payload.data.relativePath}`;
     case 'retry':
-      return `Wants ${REQUEST_NOUN.retry}: ${payload.data.operation}`;
+      return `Retry: ${payload.data.operation}`;
     case 'proposal':
-      return `Wants approval for a ${REQUEST_NOUN.proposal}`;
+      return 'Approve proposed agent';
     case 'planApproval':
-      return `Wants approval for a ${REQUEST_NOUN.planApproval}`;
+      return 'Approve plan';
     case 'userQuestion':
-      return `Wants an answer to a ${REQUEST_NOUN.userQuestion}`;
+      return 'Answer question';
     case 'pluginTrust':
-      return `Wants you to trust the ${REQUEST_NOUN.pluginTrust} ${payload.data.plugin}`;
+      return `Trust plugin ${payload.data.plugin}`;
     default:
       return payload satisfies never;
   }
@@ -85,7 +84,7 @@ export function scriptCallSummary(call: ScriptCallView): string | undefined {
   return call.detail === undefined ? call.summary : detailText(call.detail);
 }
 
-/** A call's one line: `Running: drafter · gpt-5 — Wants bash: make`. */
+/** A call's one line: `Running: drafter · gpt-5 — Run command: make`. */
 export function scriptCallLine(call: ScriptCallView): string {
   const detail = call.detail
     ? `${DETAIL_SEPARATOR}${detailText(call.detail)}`
@@ -97,7 +96,8 @@ export function scriptCallLine(call: ScriptCallView): string {
 export function scriptStageSummary(stage: ScriptStageView): string {
   return joinFacts([
     stage.agents > 0 && formatResultCount(stage.agents, 'agent'),
-    stage.needsYou > 0 && `${stage.needsYou} needs you`,
+    stage.needsYou > 0 &&
+      (stage.needsYou === 1 ? '1 needs you' : `${stage.needsYou} need you`),
     stage.costUsd > 0 && formatCostUsd(stage.costUsd),
   ]);
 }

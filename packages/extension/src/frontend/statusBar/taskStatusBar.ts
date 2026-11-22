@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 import { appSignalStream } from '@texra-ai/worldline/host';
 import { Settings, type AppSignals } from '@texra-ai/worldline/plugins';
 import {
-  DETAIL_SEPARATOR,
   APPROVAL_POLICY_SETTING,
   descendantRuns,
   formatCount,
@@ -16,10 +15,7 @@ import {
   type SessionView,
   type TokenUsageStats,
 } from '@texra-ai/worldline/schemas';
-import {
-  approvalPolicyLabel,
-  formatApprovalPolicy,
-} from '@ui/copy/approvalPolicy';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { visibleTokenStats } from '@ui/copy/tokenUsage';
 import { runStatusLabel, sectionCountLabel } from '@ui/copy/runStatus';
@@ -76,10 +72,10 @@ function paint(
   // The project's persisted policy: what a run here, or the service's for
   // this project, decides under.
   const policy = Settings.getConfig(config, APPROVAL_POLICY_SETTING);
-  const policyLine = `Approval policy: ${approvalPolicyLabel(policy)}${DETAIL_SEPARATOR}${formatApprovalPolicy(policy)}`;
+  const policyLine = `Approval policy: ${formatApprovalPolicy(policy)}`;
   const { cost, inputTokens, outputTokens } = usage;
   if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
-    item.tooltip = `${policyLine}\n\nClick to show TeXRA sessions`;
+    item.tooltip = `${policyLine}\n\nClick to show TeXRA tasks`;
   } else {
     const tip = new vscode.MarkdownString(
       [
@@ -92,7 +88,7 @@ function paint(
           ({ label, value }) => `| ${label} | ${formatCount(value)} |`,
         ),
         '',
-        '*Click to show TeXRA sessions*',
+        '*Click to show TeXRA tasks*',
       ].join('\n'),
     );
     tip.isTrusted = false;

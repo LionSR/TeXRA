@@ -322,12 +322,12 @@ export function formatCliHistoryText(
 }
 
 export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
-  const workspace = cwd?.trim();
+  const project = cwd?.trim();
   return [
-    workspace
-      ? `Run not found in workspace ${workspace}: ${id}`
-      : `Run not found: ${id}`,
-    'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
+    project
+      ? `Task not found in project ${project}: ${id}`
+      : `Task not found: ${id}`,
+    'History is scoped by --cwd; use the project from the original task or run `texra history list --cwd <project>`.',
   ].join('\n');
 }
 

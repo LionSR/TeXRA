@@ -78,7 +78,7 @@ export function createProjectWorkbench(options: {
   const unexpected = (outcome: HostOutcome) =>
     Effect.fail(
       new EditorPaneError({
-        message: `The host answered a file request with ${outcome.kind}.`,
+        message: `Unexpected response while reading file (${outcome.kind}).`,
       }),
     );
   // A read or a list on a hung mount would otherwise leave the pane's refresh

@@ -41,7 +41,7 @@ The **Memory** tab has two buttons, **Open your memory folder** and **Open this 
 
 In a task's view, a note the assistant writes appears as a file edit, with its diff.
 
-## Memory is shared across the run
+## Memory is shared across a task
 
 Within a single run, the assistant and every helper agent it starts read and write the **same** two folders. A helper agent can write a note that the assistant sees at its next step, and that note survives into the next conversation.
 

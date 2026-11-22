@@ -98,13 +98,13 @@ The assistant formalizes mathematical statements and proofs directly in Lean 4. 
 You can ask the assistant for any of this directly. When you want a fixed
 procedure, or a run from the terminal, start a program:
 
-| Program  | For                                                                                     |
-| :------- | :-------------------------------------------------------------------------------------- |
-| `search` | Finding papers and web sources, with citations; adds to Zotero, edits no workspace file |
-| `derive` | An analytical derivation or symbolic computation, checked with `wolframscript`          |
-| `review` | Auditing a manuscript's derivations, notation, references and code                      |
-| `solve`  | A research-level problem: literature, small cases, counterexamples, a checkable proof   |
-| `prove`  | Completing Lean proofs until Lean reports no error and no `sorry`                       |
+| Program  | For                                                                                   |
+| :------- | :------------------------------------------------------------------------------------ |
+| `search` | Finding papers and web sources, with citations; adds to Zotero, edits no project file |
+| `derive` | An analytical derivation or symbolic computation, checked with `wolframscript`        |
+| `review` | Auditing a manuscript's derivations, notation, references and code                    |
+| `solve`  | A research-level problem: literature, small cases, counterexamples, a checkable proof |
+| `prove`  | Completing Lean proofs until Lean reports no error and no `sorry`                     |
 
 Read [The assistant and programs](./programs.md) for the full list.
 

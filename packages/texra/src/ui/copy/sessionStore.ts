@@ -9,5 +9,5 @@ import type { SessionStoreMovedAside } from '@texra-ai/worldline/schemas';
 export function sessionStoreMovedAsideMessage(
   moved: SessionStoreMovedAside,
 ): string {
-  return `The task store in this workspace was damaged and could not be opened, so it was moved to ${moved.aside}. History starts fresh here.`;
+  return `Saved task history for this project was damaged and moved to ${moved.aside}. Starting fresh.`;
 }

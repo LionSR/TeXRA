@@ -187,7 +187,7 @@ describe('linkService', () => {
           expect(starts).toBe(3);
           expect(state).toStrictEqual({
             client: null,
-            away: `The TeXRA service failed to start 3 times in a row, so TeXRA stopped restarting it. The last failure: The TeXRA service exited with code 1 before it answered (its log: ${log}). Its log is ${log}. Fix what the log names, then restart TeXRA (in VS Code, reload the window); with TEXRA_NO_SERVICE=1 set, TeXRA runs tasks without the service.`,
+            away: `The TeXRA service failed to start 3 times in a row, so TeXRA stopped restarting it. The last failure: TeXRA service exited with code 1 before responding (log: ${log}). Its log is ${log}. Fix what the log names, then restart TeXRA (in VS Code, reload the window); with TEXRA_NO_SERVICE=1 set, TeXRA runs tasks without the service.`,
             lasting: true,
           });
         });

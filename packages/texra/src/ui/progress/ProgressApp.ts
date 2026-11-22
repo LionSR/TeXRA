@@ -50,6 +50,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
+import { READ_GUIDE_BUTTON_LABEL } from '@ui/copy/instructionActions';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 // Local imports - progress view frontend
@@ -119,7 +120,7 @@ export class ProgressApp extends LitElement {
           },
       {
         icon: 'code-compare',
-        label: 'LaTeXDiffs…',
+        label: 'latexdiff…',
         activate: () =>
           this.dispatchEvent(
             SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
@@ -192,7 +193,7 @@ export class ProgressApp extends LitElement {
                   href=${texraGuideUrl(error.docsPage)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  >Read the file management guide</a
+                  >${READ_GUIDE_BUTTON_LABEL}</a
                 >`
               : nothing
           }
@@ -361,12 +362,16 @@ export class ProgressApp extends LitElement {
     if (edited === null) return null;
     const { data, run } = edited;
     const asking = run?.label ?? 'An agent';
+    const askingSubject =
+      asking === 'assistant'
+        ? 'The assistant'
+        : `${asking.charAt(0).toUpperCase()}${asking.slice(1)}`;
     return html`<section class="hero" aria-labelledby="shell-hero-title">
       <div class="hero-mark" aria-hidden="true">${waIcon('pencil')}</div>
       <h1 id="shell-hero-title">Check ${data.label} before it runs</h1>
       <p>
-        ${asking} asked to run ${data.label}. Change what you need, then approve
-        to start it with your changes.
+        ${askingSubject} asked to run ${data.label}. Change what you need, then
+        approve to start it with your changes.
       </p>
       <div class="hero-actions">
         ${renderLabeledActionButton({

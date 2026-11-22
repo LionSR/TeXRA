@@ -12,7 +12,8 @@
  * which the client receives as that class. The procedures:
  *
  * - `service.hello`: the handshake; a client compares `protocol` (the
- *   digest of every procedure's shapes, {@link PROTOCOL}) with its own.
+ *   digest of the procedure shapes and project store format, {@link PROTOCOL})
+ *   with its own.
  * - `service.stop`: stop now (`drain: false`), or stop taking new work and
  *   exit once the running tasks end (`drain: true`, the upgrade path).
  * - `tasks.list`: every task in every project this storage root holds.
@@ -51,6 +52,7 @@ import {
 } from '@texra-ai/worldline';
 import {
   AgentConfigSchema,
+  PROJECT_STORE_FORMAT,
   AssembleTraceResultSchema,
   AgentRunListingEntrySchema,
   RunEndSchema,
@@ -412,7 +414,8 @@ const shapes: Readonly<Record<string, string>> = Object.freeze(
 
 /**
  * The protocol's identity: `shapes`, each procedure's shape as the module
- * loads, and `digest`, the digest of all of them. A client and a service
+ * loads, and `digest`, the digest of the shapes and the project store format.
+ * A client and a service
  * with one digest speak the same protocol; with two, the newer build
  * retires the older (`isOlder`, `client.ts`), and a build that is neither
  * (a development build) restarts the service. `service.hello` and
@@ -423,8 +426,11 @@ export const PROTOCOL: {
   readonly digest: string;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  digest: digest12(
+  // A service that understands the RPCs but writes a different project
+  // history must finish its tasks before the new host attaches.
+  digest: digest12([
+    PROJECT_STORE_FORMAT,
     Object.entries(shapes).toSorted(([a], [b]) => a.localeCompare(b)),
-  ),
+  ]),
   shapes,
 });

@@ -25,7 +25,7 @@ export const previewUnavailable = (reason: string): string =>
   `Preview unavailable: ${reason}`;
 
 const notApplied = (relativePath: string) =>
-  `Your changes to the proposed ${relativePath} were not applied: its request closed without them.`;
+  `Your changes to ${relativePath} were not applied because the approval request closed.`;
 
 /**
  * What a window says when a tool edit's request closes without the changes

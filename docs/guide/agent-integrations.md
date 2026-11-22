@@ -37,9 +37,9 @@ In the terminal client, `/plugins` lists the same integrations with their
 state and switches each one on or off. Install and sign in to each CLI with its
 own installer and sign-in command.
 
-Each integration's options live on its row and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → General → Approval**: the **Approval policy** select (Auto-approve by default, Ask, or Block). Choose Ask to review each launch, or approve all agent work for the task on its first request card. The child's own sandbox or permission mode follows that decision: a launch you approved runs Codex in `workspace-write` and Claude Code in `acceptEdits`; under Auto-approve or an all-agent-work grant it runs Codex with full access (`danger-full-access`) and Claude Code with every permission bypassed. Codex never stops to ask on its own.
+Each integration's options live on its row and are scoped to the current project. Per-call approval prompts follow **Settings → General → Approval**: **Auto-approve** (default), **Ask**, or **Block**. Choose **Ask** to review each launch, or approve all agent work for the task on its first request card. When you approve a single launch, Codex runs in `workspace-write` mode and Claude Code in `acceptEdits`; under **Auto-approve** (or an all-agent-work grant), both run with full permissions. Codex never stops to ask on its own.
 
-Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
+Both CLIs are installed once per machine and shared by VS Code, the desktop app, and the CLI. Neither ships inside TeXRA, so TeXRA uses whichever version is installed on your machine.
 
 ::: warning Windows
 TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe`, not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in terminal** offers there. For Codex, **Install in terminal** on Windows runs OpenAI's PowerShell installer (`irm https://chatgpt.com/codex/install.ps1 | iex`), which installs a native `codex.exe` that TeXRA finds without a restart. TeXRA looks for each CLI in the environment it runs in, so an install inside WSL is found only when TeXRA itself runs inside WSL (the **WSL Remote** case below), not from a native Windows window.
@@ -117,9 +117,10 @@ Both tools deliver their result as a follow-up message, so they are not availabl
 
 ## MCP servers
 
-TeXRA can call the tools of local [Model Context Protocol](https://modelcontextprotocol.io)
-servers. List them in `~/.texra/mcp.json`, in the same shape as Claude Code's
-`.mcp.json` (**Settings → Plugins → Open mcp.json** opens it):
+TeXRA supports local stdio [Model Context Protocol](https://modelcontextprotocol.io) servers:
+
+- **Plugin-bundled MCP servers** (recommended): any MCP servers included in an [installed plugin](./texra-cli.md#plugins) are automatically available to the assistant while that plugin is enabled.
+- **Manual `~/.texra/mcp.json`**: open via **Settings → Plugins → Open mcp.json** (same format as Claude Code's `.mcp.json`). Note: servers listed _only_ in `~/.texra/mcp.json` are currently available only to custom runs/scripts that explicitly request `mcp__<server>__<tool>` (or `mcp__<server>__*`) — the default assistant does not automatically load them yet.
 
 ```json
 {
@@ -133,44 +134,12 @@ servers. List them in `~/.texra/mcp.json`, in the same shape as Claude Code's
 }
 ```
 
-A server name uses letters, digits, `_` and `-` (at most 32 characters, no
-`__`, and not ending in `_`). Only stdio servers (a `command` TeXRA starts) are
-supported. An entry that does not match this shape is skipped, and a run that
-asks for MCP tools shows why in its transcript.
+Server names may use letters, digits, `_`, and `-` (up to 32 characters, no `__`, not ending in `_`). Servers must support MCP revision `2025-11-25` (TypeScript SDK 1.25+); incompatible or failing servers are skipped with an explanation in the transcript.
 
-TeXRA speaks MCP revision 2025-11-25. A server built on an MCP SDK older than
-that revision (the TypeScript SDK before 1.25, December 2025) does not start:
-the run's transcript names the server, the revision it answered and the one
-required, and says to update it. The rest of the run goes on without its tools.
-
-The MCP servers an [installed plugin](./texra-cli.md#plugins) carries are
-offered to the assistant while the plugin is enabled. A server listed only in
-`~/.texra/mcp.json` is offered to a run that names its tools
-(`mcp__<server>__<tool>`, or `mcp__<server>__*` for all of them); the
-assistant does not name any yet.
-
-- **Every call goes through shell-command approval.** The prompt shows the
-  server, the tool and its arguments. It follows **Settings → General →
-  Approval** like a shell command does: no prompt under Auto-approve or
-  once you approve all agent work for the task, and every call refused
-  under Block. A session where approval
-  prompts can't be shown (a headless run) is not offered MCP tools unless the
-  policy is Auto-approve.
-- **The server starts when a run first uses it.** TeXRA starts it when the
-  first run that names it begins; the project's runs share that one process,
-  which stops 30 minutes after the last run using it ends, or when the session
-  closes. Editing a server's entry takes effect for runs started afterwards;
-  runs already in progress keep the server they started with. A server that
-  failed to start is retried by the project's next top-level run.
-- **Environment.** A server inherits TeXRA's environment minus variables whose
-  names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`, so your
-  provider API keys don't reach it. Pass what a server needs through its `env`.
-- **Limits.** A call times out after 60 seconds, and output beyond 200,000
-  characters keeps its beginning and its end.
-- **A server that fails to start** (a missing command, no answer within 30
-  seconds, an older MCP revision, a malformed tool list) contributes no tools;
-  the run continues with the rest and its transcript names the server and the
-  reason.
+- **Approval:** Every MCP tool call uses the same approval rules as shell commands (**Settings → General → Approval**). Headless runs require **Auto-approve** to call MCP tools.
+- **Lifecycle:** A server starts on first use, is shared by tasks in the project, and stops 30 minutes after the last task finishes.
+- **Environment:** Inherited environment variables containing `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, or `CREDENTIAL` are stripped so provider keys are never leaked; pass required credentials explicitly in `env`.
+- **Limits:** Calls time out after 60 seconds, and output over 200,000 characters is truncated in the middle.
 
 Not yet supported: a project-level `.texra/mcp.json`, HTTP servers, servers
 that change their tool list while running, and MCP resources and prompts.

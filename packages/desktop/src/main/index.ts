@@ -172,11 +172,10 @@ export const startDesktop = (mainDir: string): void => {
           projects = registry;
           const unopenedProjects = [
             ...remembered.missing.map(
-              (root) => `${root} (no such folder; forgotten)`,
+              (root) => `${root} — folder not found (removed from list)`,
             ),
             ...remembered.unreadable.map(
-              ({ root, reason }) =>
-                `${root} (could not be read; kept for the next launch): ${reason}`,
+              ({ root, reason }) => `${root} — could not read: ${reason}`,
             ),
           ];
           yield* Effect.forEach(

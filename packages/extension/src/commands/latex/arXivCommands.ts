@@ -60,17 +60,15 @@ export const downloadArXivSource: (
       [
         {
           label: `References/${paperId}`,
-          description: 'Download into References folder',
           value: 'references',
         },
         {
-          label: 'Workspace root',
-          description: 'Download directly into the workspace root',
+          label: 'Project root',
           value: 'root',
         },
       ],
       {
-        placeHolder: 'Where should the source be downloaded?',
+        placeHolder: 'Choose download destination',
         canPickMany: false,
       },
     );
@@ -84,15 +82,15 @@ export const downloadArXivSource: (
     // Asked only where the download is indented at all.
     const indent =
       indentsDestination(destination) &&
-      (yield* quickPick(['Indent files', 'Skip'], {
-        placeHolder: 'Auto-indent LaTeX files after download?',
+      (yield* quickPick(['Format files', 'Skip'], {
+        placeHolder: 'Format LaTeX files after download?',
         canPickMany: false,
-      })) === 'Indent files';
+      })) === 'Format files';
 
     const extractedPath = yield* withVSCodeProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'Downloading arXiv Source',
+        title: 'Downloading arXiv source…',
         cancellable: true,
       },
       (progress, token) =>

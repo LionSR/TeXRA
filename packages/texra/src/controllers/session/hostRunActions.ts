@@ -279,12 +279,12 @@ export const createHostRunActions = Effect.fn(
       const config = yield* readConfig(runId);
       if (!config)
         return yield* new Rejected({
-          reason: 'This run saved no setup to act on.',
+          reason: 'This task has no saved settings for this action.',
         });
       const run = runView(runId);
       if (run === undefined || !isDocumentTaskRun(run))
         return yield* new Rejected({
-          reason: 'This action applies to a document task.',
+          reason: 'This action only applies to document tasks.',
         });
       return config;
     },
@@ -299,7 +299,7 @@ export const createHostRunActions = Effect.fn(
     const config = yield* readConfig(runId);
     if (!config) {
       return yield* new Rejected({
-        reason: "This run's configuration was not saved.",
+        reason: 'This task has no saved configuration.',
       });
     }
     return config;
@@ -400,7 +400,7 @@ export const createHostRunActions = Effect.fn(
       // A pack names its folder for the input; a clean needs none.
       if (operation === 'pack' && !inputFile)
         return yield* new Rejected({
-          reason: 'Select an input file before packing.',
+          reason: 'Select an input file before archiving outputs.',
         });
       const outcome = yield* session
         .request({
@@ -425,7 +425,7 @@ export const createHostRunActions = Effect.fn(
           Effect.catchTag('RunActive', () =>
             Effect.fail(
               new Rejected({
-                reason: 'This run is running or held elsewhere.',
+                reason: 'This task is still running or open in another window.',
               }),
             ),
           ),
@@ -434,21 +434,21 @@ export const createHostRunActions = Effect.fn(
       switch (result.status) {
         case 'error':
           return yield* new Rejected({
-            reason: `Error during ${operation === 'pack' ? 'packing' : 'cleaning'}: ${result.error}`,
+            reason: `Could not ${operation === 'pack' ? 'archive' : 'delete'} outputs: ${result.error}`,
           });
         case 'noFiles':
           return yield* ports.notify(
             'info',
-            `No files found to ${operation} for ${inputFile}`,
+            `No output files to ${operation === 'pack' ? 'archive' : 'delete'} for ${inputFile}.`,
           );
         case 'done':
           return yield* ports.notify(
             'info',
             operation === 'clean'
-              ? `Cleanup complete for ${inputFile}`
+              ? `Deleted output files for ${inputFile}.`
               : result.to
-                ? `Files packed into ${result.to}`
-                : 'Files packed.',
+                ? `Archived outputs to ${result.to}.`
+                : 'Archived output files.',
           );
       }
     }),
@@ -456,7 +456,7 @@ export const createHostRunActions = Effect.fn(
       if (!view().runs.has(runId)) {
         return yield* new Unavailable({
           runId,
-          reason: 'The run is no longer open.',
+          reason: 'This task is no longer open.',
         });
       }
       const config = yield* readConfig(runId);

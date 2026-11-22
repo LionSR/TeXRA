@@ -130,9 +130,9 @@ If your TikZ figures depend on custom styles or macros, specify an input directo
 
 The directory is added to the LaTeX search path when compiling figures.
 
-### Including workspace in `TEXINPUTS`
+### Including project root in `TEXINPUTS`
 
-By default TeXRA adds your workspace root to `TEXINPUTS`:
+By default TeXRA adds your project root to `TEXINPUTS`:
 
 ```json
 "texra.latex.includeWorkspaceInTexinputs": true

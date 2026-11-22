@@ -266,7 +266,7 @@ const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
     yield* context.resumeRun(fork);
     const title = source ? source.title : runId;
     appendLocalNotice(
-      `${TASK_ACTIONS.forkedFrom(title)}. The model holds that conversation; the original is in /resume.`,
+      `${TASK_ACTIONS.forkedFrom(title)}. Original task remains in /resume.`,
       fork,
     );
   });
@@ -289,15 +289,14 @@ export function sessionContributions(): SlashCommandContribution[] {
         },
         {
           name: 'fork',
-          description:
-            'Continue a new task holding this conversation; the original stays as it is',
+          description: 'Fork this conversation into a new task',
           category: 'session',
           echo: 'ifPersists',
           handler: (_remainder, context) => forkCliTask(context),
         },
         {
           name: 'rename',
-          description: 'Give the focused task a title of your own',
+          description: 'Rename the current task',
           category: 'session',
           echo: 'ifPersists',
           handler: (remainder, context) =>

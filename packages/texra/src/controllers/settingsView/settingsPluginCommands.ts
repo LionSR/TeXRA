@@ -70,7 +70,7 @@ export function settingsPluginCommands(ports: {
     if (yield* fs.exists(mcpConfigPath))
       return yield* bindings.openPath(mcpConfigPath);
     yield* present.notice(
-      `No MCP servers are configured. Create ${mcpConfigPath} as { "mcpServers": { "<name>": { "command": "…", "args": [] } } }, the shape Claude Code's .mcp.json uses.`,
+      `No MCP servers configured yet. Create ${mcpConfigPath} (same format as Claude Code's .mcp.json).`,
     );
   });
 
@@ -84,7 +84,7 @@ export function settingsPluginCommands(ports: {
     if (name === undefined)
       return Effect.fail(
         new PluginRequestError({
-          message: `The ${message.action} action names no plugin.`,
+          message: `No plugin specified for "${message.action}".`,
         }),
       );
     switch (message.action) {

@@ -81,9 +81,9 @@ const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
 const DOCTOR_CONFIG = {
   pruneStorage: boolFlag(
     'prune-storage',
-    'List the workspace stores whose project is gone and the aside copies of session stores, and delete them once confirmed',
+    'List and remove orphaned project stores and corrupt backups after confirmation',
   ),
-  yes: boolFlag('yes', 'Delete what --prune-storage lists without asking').pipe(
+  yes: boolFlag('yes', 'Delete listed items without prompting').pipe(
     Flag.withAlias('y'),
   ),
 };
@@ -91,7 +91,7 @@ const DOCTOR_CONFIG = {
 /** `--prune-storage` is a program on the process runtime, which reads the
  *  global root's store records. */
 const pruneStorageCommand = selectCliCommand('doctor', {
-  description: 'Delete the stores whose project is gone',
+  description: 'Remove orphaned project stores and corrupt backups',
   config: DOCTOR_CONFIG,
   run: (context, input) => pruneStorage(context, input.yes),
   catchExitCode: CliExitCode.ModelOrNetworkError,

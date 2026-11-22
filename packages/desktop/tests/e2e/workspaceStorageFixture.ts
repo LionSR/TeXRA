@@ -12,7 +12,7 @@ export function cleanupDirectory(path: string): void {
 }
 
 /**
- * `use` over a copy of the project store at `storagePath` (its `texra.db`
+ * `use` over a copy of the project store at `storagePath` (its `texra.project-v1.db`
  * and write-ahead log): the process that holds a project store accepts no
  * other, so a test reads what it has committed from the files. The copy
  * is removed once `use` returns, or once the promise it returns finishes.
@@ -22,7 +22,7 @@ export function withStoreCopy<A>(
   use: (copy: string) => A,
 ): A {
   const copy = mkdtempSync(join(tmpdir(), 'texra-e2e-store-copy-'));
-  for (const name of ['texra.db', 'texra.db-wal']) {
+  for (const name of ['texra.project-v1.db', 'texra.project-v1.db-wal']) {
     const file = join(storagePath, name);
     if (existsSync(file)) cpSync(file, join(copy, name));
   }
