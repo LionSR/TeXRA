@@ -1928,6 +1928,8 @@ async function validateMidTurnDelivery() {
         'chat',
         '--agent',
         VALIDATION_RUNS.midturn_validation,
+        '--approval-policy',
+        'ask',
         '--model',
         'openai/gpt-5.6-sol',
       ],
