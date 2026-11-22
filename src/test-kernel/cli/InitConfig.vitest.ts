@@ -3,60 +3,16 @@ import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
-import { it, layer } from '@effect/vitest';
+import { it } from '@effect/vitest';
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { Settings } from '@texra-ai/harness/plugins';
 import { ensureTexraGitignored } from '@cli/runtime/platform/initConfig';
-import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
 import { errnoError } from '@test/support/fsTestUtils';
-import { FakeHost } from '@test/support/testKernel';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { TEXRA_APP } from '@test/support/texraApp';
-import {
-  CLI_CHAT_SETTING,
-  CLI_MODEL_SETTING,
-} from '@texra/shared/settings/texraSettings';
 
 const tempDirs = useTempDirs();
-
-layer(
-  FakeHost.layer({
-    app: TEXRA_APP,
-    config: {
-      model: 'deepseek/deepseek-v4-flash',
-      chat: {
-        agent: 'chat',
-        model: 'deepseek/deepseek-v4-flash',
-      },
-    },
-  }),
-)('setWorkspaceCliChatAgent', (it) => {
-  it.effect(
-    'updates only chat.agent and preserves the other command defaults',
-    () =>
-      Effect.gen(function* () {
-        const { roots } = yield* FakeHost;
-        const chatSection = () => Settings.get(roots, CLI_CHAT_SETTING);
-
-        yield* setWorkspaceCliChatAgent(roots, 'builtIn:review');
-        expect(yield* chatSection()).toEqual({
-          agent: 'builtIn:review',
-          model: 'deepseek/deepseek-v4-flash',
-        });
-        expect(yield* Settings.get(roots, CLI_MODEL_SETTING)).toBe(
-          'deepseek/deepseek-v4-flash',
-        );
-
-        yield* setWorkspaceCliChatAgent(roots, undefined);
-        expect(yield* chatSection()).toEqual({
-          model: 'deepseek/deepseek-v4-flash',
-        });
-      }),
-  );
-});
 
 describe('ensureTexraGitignored', () => {
   it.effect('does not overwrite .gitignore on a non-ENOENT read failure', () =>

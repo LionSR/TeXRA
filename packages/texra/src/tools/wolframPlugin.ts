@@ -10,6 +10,10 @@ import { probeCommand } from '@texra/utils/system/toolChecks';
 
 export const wolfram: TexraPlugin = texraPlugin({
   id: 'wolfram',
+  prompt: ({ offered }) =>
+    offered.includes('bash')
+      ? "Run Wolfram Language through bash with `wolframscript -code '...'` or `wolframscript -file script.wl`; each run is a fresh session, so write a .wl script for iterative work. Check a symbolic result by substituting test values or taking limiting cases, and convert a final result with TeXForm before putting it in a document."
+      : '',
   // Interruption reaches the spawned `wolframscript -version`, so an
   // interrupted dashboard refresh kills the probe instead of abandoning it.
   availability: {

@@ -164,10 +164,7 @@ test('settings across themes and window sizes', async () => {
       animations: 'disabled',
     });
     await settings.getByRole('tab', { name: 'Agents', exact: true }).click();
-    const catalog = settings.locator('agent-selection-panel');
-    await expect(
-      catalog.getByRole('textbox', { name: 'Search agents', exact: true }),
-    ).toBeVisible();
+    await expect(settings.locator('skills-tab')).toBeVisible();
     await page.screenshot({
       path: test.info().outputPath(`settings-agents-compact-${theme}.png`),
       animations: 'disabled',

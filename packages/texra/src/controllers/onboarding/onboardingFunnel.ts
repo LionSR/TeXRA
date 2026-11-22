@@ -35,7 +35,7 @@ import {
   type StateStore,
   type StateWriteFailed,
 } from '@texra-ai/harness/plugins';
-import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
+import { SETUP_AGENT_NAME } from '@texra/agent/entryAgent';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
 

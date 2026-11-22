@@ -67,7 +67,7 @@ export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
  * owns the next step. The CLI prints it as a transcript notice when the setup
  * agent takes over the first-run session; the extension/desktop setup card
  * shows it under the "Credential ready" title. Surface-specific hints (the
- * CLI's `/agent`, the card's Run-setup button) stay in the surface.
+ * card's Run-setup button) stay in the surface.
  */
 export const ONBOARDING_SETUP_HANDOFF =
   "You're starting with the setup assistant: it checks your environment and helps you run your first task.";

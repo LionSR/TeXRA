@@ -12,20 +12,12 @@ import {
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
 } from '@texra-ai/harness/schemas';
-import {
-  AgentOptionDataSchema,
-  ModelOptionDataSchema,
-} from '@texra/shared/pickerOptions';
+import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
 const WorkspaceRootOptionDataSchema = Schema.Struct({
   value: Schema.String,
   label: Schema.String,
-});
-
-const AgentConfigBannerDataSchema = Schema.Struct({
-  agentName: Schema.String,
-  customDirSet: Schema.Boolean,
 });
 
 /**
@@ -86,8 +78,6 @@ export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
-  /** Every agent the workspace's agent selector lists. */
-  agentOptions: Schema.Array(AgentOptionDataSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
   /** How a tool call is painted, from what the process's plugins declare
    *  (`TexraPlugin`): its icon by normalized tool name, and the tools whose
@@ -110,8 +100,6 @@ export const HostSnapshotSchema = Schema.Struct({
     /** A credential that worked (a task has finished) stopped working;
      *  before a first task the "Connect a model" card is the prompt. */
     apiKey: Schema.Boolean,
-    /** An agent's definition did not load. */
-    agentConfig: Schema.NullOr(AgentConfigBannerDataSchema),
     /** The tools TeXRA needs that this machine lacks; never empty. */
     dependency: Schema.NullOr(Schema.Array(MissingToolSchema)),
     gettingStarted: Schema.Boolean,
@@ -139,7 +127,6 @@ export type HostSnapshot = typeof HostSnapshotSchema.Type;
 export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
     project,
-    agentOptions: [],
     modelOptions: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
@@ -149,7 +136,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     recording: null,
     banners: {
       apiKey: false,
-      agentConfig: null,
       dependency: null,
       gettingStarted: false,
       service: null,

@@ -52,8 +52,8 @@ function runConfig(
 layer(texraHosted, { excludeTestServices: true })(
   'completedRunArchive facade',
   (it) => {
-    // The built-in agents are the bundled personas, so a resume resolves the
-    // run's `orchestrator` the way a real host does.
+    // The built-in agents are the kernel suites' stand-in, so a resume resolves the
+    // run's `assistant` the way a real host does.
     it.layer(
       FakeHost.layer(async () => {
         const host = await createTempDirPlatform(
@@ -90,7 +90,7 @@ layer(texraHosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const runId = Schema.decodeSync(RunIdSchema)('0aa1110aa111');
-            const config = runConfig('orchestrator');
+            const config = runConfig('assistant');
 
             // The session over the host's roots, on its persistent store.
             const session = yield* sessionHandleOf(

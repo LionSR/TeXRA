@@ -151,7 +151,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         kind: 'editProposal',
         proposal: { runId: data.runId, requestId: data.requestId },
         patch: {
-          ...proposalLaunchPatch(data, this.run ?? undefined, host),
+          ...proposalLaunchPatch(data),
           model: this.model,
         },
       }),

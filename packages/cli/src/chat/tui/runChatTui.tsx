@@ -17,7 +17,7 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { AgentCatalog, appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_SETTING,
   type RuntimeCommand,
@@ -29,7 +29,6 @@ import {
 import { isWorking } from '@texra-ai/harness/schemas';
 import { SESSION_CLOSE_DEADLINE_MS, Settings } from '@texra-ai/harness/plugins';
 import {
-  CliUsageError,
   effectiveApprovalPolicy,
   launchApprovalNotice,
   projectApprovalPolicy,
@@ -58,7 +57,8 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { resolveChatToolUseAgent } from './commands/handlers/agentModelCommands';
+import { setupAgent } from '@texra/agent/entryAgent';
+import { cliEntryAgent } from '@cli/runtime/cliEntryAgent';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { builtinSlashCommands } from './commands/registerBuiltins';
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
@@ -112,8 +112,8 @@ interface ChatResult {
 type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
 
 export interface RunChatInit {
-  /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
-  readonly agentOverride?: string;
+  /** The setup conversation: the entry agent with the setup tools. */
+  readonly setup?: boolean;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
   readonly modelOverride?: string;
   /** Startup resume from `texra resume <id>`, with the run's persisted
@@ -176,25 +176,15 @@ export async function runChat(
       // waits for the connection instead of ending the process.
       const credential = yield* checkModelConnection(services);
       if (credential.notice) startupNotices.push(credential.notice);
-      const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
       const defaults = resolveChatDefaults({
         stores: services,
-        agentOverride: explicitAgent,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
-        envAgent: context.envAgent,
         envModel: context.envModel,
-        visibleToolUseAgents: yield* (yield* AgentCatalog)
-          .workspaceAgents(services)
-          .visible(),
       });
-      const agentEntry = yield* resolveChatToolUseAgent(
-        services,
-        defaults.agent,
-      );
-      if (agentEntry instanceof CliUsageError) {
-        writeTextStderr(agentEntry.message);
-        return { exitCode: CliExitCode.Usage };
-      }
+      // A resumed conversation keeps the agent its run recorded.
+      const agent =
+        initialResume?.config ??
+        (init.setup ? setupAgent() : yield* cliEntryAgent);
       const modelSelectionExit = yield* Effect.exit(
         credential.ready
           ? selectCliRunnableModel(
@@ -209,8 +199,8 @@ export async function runChat(
       }
       const modelSelection = modelSelectionExit.value;
       sessionMetaSignal.set({
-        agent: defaults.agent,
-        agentSource: { kind: agentEntry.source },
+        agent: agent.agent,
+        agentSource: agent.agentSource,
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,

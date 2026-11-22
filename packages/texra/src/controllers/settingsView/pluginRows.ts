@@ -3,22 +3,18 @@
  * settings view's Plugins page and the TUI's `/plugins` both render: TeXRA's
  * own plugins (their dashboard cards, availability included), the installed
  * Claude Code and Codex plugins, and the MCP servers of the user's
- * `~/.texra/mcp.json`, listed read-only. Each row names the agents whose
- * tool lists reach it; nothing here turns another row on.
+ * `~/.texra/mcp.json`, listed read-only. Nothing here turns another row on.
  */
 import { Effect } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
-  AgentCatalog,
-  agentToolNames,
   InstalledPlugins,
   mcpConfigPathOf,
   readMcpConfig,
   type ExternalToolCheckResult,
   type PluginEnv,
 } from '@texra-ai/harness/host';
-import { mcpServerOfToolName } from '@texra-ai/harness/transcript';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
@@ -45,22 +41,6 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
     },
   results: readonly ExternalToolCheckResult[],
 ) {
-  const agents = (yield* AgentCatalog).list().map((agent) => ({
-    name: agent.name,
-    tools: agentToolNames(agent),
-  }));
-  const usedBy = (reaches: (tool: string) => boolean) => [
-    ...new Set(
-      agents
-        .filter((agent) => agent.tools.some(reaches))
-        .map((agent) => agent.name),
-    ),
-  ];
-  const usesServer = (servers: readonly string[]) => (tool: string) => {
-    const server = mcpServerOfToolName(tool);
-    return server !== undefined && servers.includes(server);
-  };
-
   // The three loads are independent.
   const [items, installed, mcp] = yield* Effect.all(
     [
@@ -75,9 +55,6 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
     ...items.map((item): PluginRow => ({
       kind: 'texra',
       item,
-      usedBy: usedBy((tool) =>
-        item.tools.some((offered) => offered.name === tool),
-      ),
     })),
     ...installed.map((plugin): PluginRow => ({
       kind: 'installed',
@@ -96,13 +73,11 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
         mcpServers: [...plugin.mcpServers],
         problem: plugin.problem,
       },
-      usedBy: usedBy(usesServer(plugin.mcpServers)),
     })),
     ...(mcp?.servers ?? []).map((server): PluginRow => ({
       kind: 'mcp',
       name: server.name,
       command: [server.command, ...server.args].join(' '),
-      usedBy: usedBy(usesServer([server.name])),
     })),
   ];
   return { rows, mcpWarnings: mcp?.warnings ?? [] };

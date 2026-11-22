@@ -88,50 +88,8 @@ export class SessionBanners extends TexraElement {
     });
   }
 
-  private agentConfigBanner(
-    state: NonNullable<HostSnapshot['banners']['agentConfig']>,
-  ): TemplateResult {
-    const send = (action: 'edit' | 'dir' | 'docs') =>
-      this.send({
-        kind: 'agentConfigBanner',
-        action,
-        customDirSet: state.customDirSet,
-      });
-    // prettier-ignore
-    const message = html`Agent file for “<bdi dir="auto">${state.agentName}</bdi>” is missing.`;
-    return renderWarningBanner({
-      id: 'agentConfigBanner',
-      role: 'status',
-      body: html`
-        <span>${message}</span>
-        <div class="actions">
-          ${renderLabeledActionButton({
-            id: 'agentConfigEditButton',
-            icon: 'pencil',
-            text: 'Edit agents',
-            onClick: () => send('edit'),
-          })}
-          ${renderLabeledActionButton({
-            id: 'agentConfigDirButton',
-            icon: 'folder',
-            text: state.customDirSet
-              ? 'Open agent directory'
-              : 'Set agent directory',
-            onClick: () => send('dir'),
-          })}
-          ${renderLabeledActionButton({
-            id: 'agentConfigDocButton',
-            icon: 'book',
-            text: 'Read agent docs',
-            onClick: () => send('docs'),
-          })}
-        </div>
-      `,
-    });
-  }
-
   override render(): TemplateResult | typeof nothing {
-    const { apiKey, agentConfig, dependency, service } = this.banners;
+    const { apiKey, dependency, service } = this.banners;
     let warning: TemplateResult;
     if (service?.kind === 'offline') {
       warning = renderWarningBanner({
@@ -141,8 +99,6 @@ export class SessionBanners extends TexraElement {
       });
     } else if (apiKey) {
       warning = this.apiKeyBanner();
-    } else if (agentConfig !== null) {
-      warning = this.agentConfigBanner(agentConfig);
     } else if (dependency !== null) {
       warning = html`<dependency-banner
         .missingTools=${dependency}

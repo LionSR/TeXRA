@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Predicate, Result, Schema, type Types } from 'effect';
+import { Effect, Predicate, Result, Schema } from 'effect';
 
 // Local imports - platform
 import { modelConfig, MODELS } from '@texra-ai/llm';
@@ -17,11 +17,8 @@ import {
 } from '@texra-ai/harness/node';
 
 // Local imports - shared
-import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
-import { isImplicitDefaultEligible } from '@texra/shared/constants/agents';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
-  CLI_AGENT_SETTING,
   CLI_CHAT_SETTING,
   CLI_MODEL_SETTING,
   CLI_RUN_SETTING,
@@ -51,10 +48,7 @@ const COMMAND_SECTIONS = {
 } as const;
 type CliCommandRole = keyof typeof COMMAND_SECTIONS;
 
-/**
- * Agent and model for one command, after the section/top-level fallthrough:
- * the members of the widest section, `texra.chat`.
- */
+/** The model for one command, after the section/top-level fallthrough. */
 type CliCommandDefaults = NonNullable<typeof CLI_CHAT_SETTING.schema.Type>;
 
 function normalizeCliModelLookupKey(value: string): string {
@@ -125,25 +119,10 @@ export interface CliStartupConfig {
 }
 
 /**
- * An agent named by configuration or the environment, trimmed, or undefined
- * when it may not be started on implicitly: `simplifier` set as the chat
- * agent is ignored rather than auto-selected. An explicit `--agent` is
- * honored as given and never passes through here.
- */
-export function usableDefaultAgent(
-  value: string | undefined,
-): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed && isImplicitDefaultEligible(trimmed) ? trimmed : undefined;
-}
-
-/**
- * Agent and model for one command: its own `texra.chat` / `texra.run` section
- * over the top-level `texra.agent` / `texra.model` rows, both resolved through
- * the setting slots the caller holds — the ones `CliPlatform` handed back,
- * so the value read here is the value `texra config` writes. The agent is
- * the one a launch would start on (`usableDefaultAgent`), so what `texra
- * agents` shows as the default is what the chat starts.
+ * The model for one command: its own `texra.chat` / `texra.run` section over
+ * the top-level `texra.model` row, resolved through the setting slots the
+ * caller holds — the ones `CliPlatform` handed back, so the value read here
+ * is the value `texra config` writes.
  */
 export function cliCommandDefaults(
   stores: SettingsStores,
@@ -153,52 +132,12 @@ export function cliCommandDefaults(
     COMMAND_SECTIONS[role];
   const section = Settings.getConfig(stores.config, sectionRow) ?? {};
   return {
-    agent: usableDefaultAgent(
-      section.agent ?? Settings.getConfig(stores.config, CLI_AGENT_SETTING),
-    ),
     model:
       section.model ?? Settings.getConfig(stores.config, CLI_MODEL_SETTING),
   };
 }
 
-/**
- * Update the workspace chat-agent default without replacing unrelated config.
- * Nested command defaults remain a JSON object under the canonical `texra.chat`
- * key, written through the catalog's own write path so the row's schema
- * validates it and the write lands in the store this process reads back.
- */
-export const setWorkspaceCliChatAgent = Effect.fn(
-  'cliConfig.setWorkspaceCliChatAgent',
-)(function* (stores: SettingsStores, agent: string | undefined) {
-  const trimmed = agent?.trim();
-  if (agent !== undefined && !trimmed) {
-    return yield* new SettingsRequestFailed({
-      message: 'The default chat agent must not be empty.',
-    });
-  }
-  // The workspace file's own section, not the merged read: the write below
-  // lands in the workspace target, so seeding from `workspace over user` would
-  // copy a user-level `texra.chat.model` into the project file and pin it
-  // above every later user-level edit.
-  // A section its row rejects (a string, an array) seeds nothing.
-  const stored = stores.config.inspect<unknown>(
-    CLI_CHAT_SETTING.key,
-  ).workspaceValue;
-  const next: Types.Mutable<CliCommandDefaults> = Predicate.isObject(stored)
-    ? { ...stored }
-    : {};
-  if (trimmed) next.agent = trimmed;
-  else delete next.agent;
-  yield* Settings.set(
-    stores,
-    CLI_CHAT_SETTING,
-    Object.keys(next).length > 0 ? next : undefined,
-  );
-});
-
-/** The `texra.chat` / `texra.run` rows, each with the members it accepts.
- *  `texra run` takes its agent as a required argument, so its section sets
- *  only the model. */
+/** The `texra.chat` / `texra.run` rows, each with the members it accepts. */
 const COMMAND_SECTION_MEMBERS = [CLI_CHAT_SETTING, CLI_RUN_SETTING].map(
   (row) =>
     [row, new Set(Object.keys(Schema.required(row.schema).fields))] as const,

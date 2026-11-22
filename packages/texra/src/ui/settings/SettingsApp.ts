@@ -260,13 +260,7 @@ export class SettingsApp extends TexraSignalElement {
         `;
       case 'agents':
         return html`
-          <agents-tab
-            .section=${section}
-            .agents=${host.agents?.agents ?? []}
-            .customAgentDir=${host.customAgentDir?.path ?? ''}
-            .customAgentDirIsDefault=${host.customAgentDir?.isDefault ?? true}
-            .customAgentScanIssues=${host.agents?.customAgentIssues ?? []}
-          >
+          <agents-tab .section=${section}>
             <skills-tab
               slot="skills"
               .skills=${host.skills?.skills ?? []}

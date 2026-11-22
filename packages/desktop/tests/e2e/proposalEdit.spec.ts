@@ -62,13 +62,12 @@ const listed = (page: Page, group: 'Input' | 'Context' | 'Media') =>
       items.map((item) => item.getAttribute('data-path')),
     );
 
-/** The launch form holds the program's setup: its agent and model, the
+/** The launch form holds the program's setup: its model, the
  *  draft as its input, and `form`'s instruction and context files. */
 async function expectForm(
   page: Page,
   form: { readonly instruction: string; readonly context: readonly string[] },
 ): Promise<void> {
-  await expect(page.locator('#composer-agent')).toHaveText('edit');
   await expect(page.locator('#composer-model')).toHaveText(
     'GPT-6.1 Sol (high)',
   );

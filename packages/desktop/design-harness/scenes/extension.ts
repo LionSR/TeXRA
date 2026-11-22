@@ -61,11 +61,6 @@ const NO_GRANTS: ApprovalGrants = Object.freeze({
 function host(): HostSnapshot {
   return {
     ...emptyHostSnapshot(PROJECT),
-    agentOptions: [
-      { value: 'orchestrator', label: 'orchestrator', isOrchestrator: true },
-      { value: 'search', label: 'search' },
-      { value: 'review', label: 'review' },
-    ],
     modelOptions: [
       {
         value: 'gemini-3.8-flash',
@@ -107,7 +102,6 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
       patch: {
         inputFiles: ['main.tex'],
         contextFiles: ['library.bib'],
-        agent: 'orchestrator',
         model: 'gemini-3.8-flash',
         baseFile: 'main.tex',
         editedFile: 'main_polish.tex',

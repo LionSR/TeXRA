@@ -369,10 +369,11 @@ export const storedRows = (storage: string): StoredRow[] =>
 export const REAL_RUN_TIMEOUT = 30_000;
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
-/** The personas the extension ships, the built-in agents of a real host. */
+/** The agent directory the kernel suites give a host as its built-in one:
+ *  TeXRA ships no agent files, and the harness still resolves names here. */
 export const BUNDLED_AGENTS = resolve(
   REPO_ROOT,
-  'packages/extension/resources/agents',
+  'src/test-kernel/fixtures/agents',
 );
 const VALIDATION = {
   [VALIDATION_SWITCH]: '1',

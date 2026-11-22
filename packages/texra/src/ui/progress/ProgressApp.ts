@@ -67,7 +67,7 @@ import './components/FileSelectGroup';
 import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
-import { editedProposal, formHost } from './proposalEdit';
+import { editedProposal } from './proposalEdit';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
@@ -385,10 +385,8 @@ export class ProgressApp extends LitElement {
   private renderEmptyState(
     view: SessionView,
     surface: Surface,
-    shownHost: HostSnapshot,
+    host: HostSnapshot,
   ): TemplateResult {
-    // Open on a proposal, the form offers the agents that run may launch.
-    const host = formHost(surface, view, shownHost);
     if (host.onboarding === 'needs-credential') {
       // Without a credential the pickers and files are meaningless: the
       // welcome card replaces the whole New-task state.

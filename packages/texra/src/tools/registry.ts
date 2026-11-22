@@ -84,6 +84,7 @@ import { OpenPdfTool } from './OpenPdfTool';
  * layer over what the host passes `texraPlugins`.
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
+import { SETUP_PROMPT } from './setup/setupPrompt';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
@@ -216,6 +217,11 @@ const core = (
       return [
         ...(offers('bash') ? [FIND_TEX_SOURCES] : []),
         MATH_IN_REPLIES,
+        ...(offers('open_pdf')
+          ? [
+              'After compiling a document the user asked to see, show it with `open_pdf`.',
+            ]
+          : []),
         ...(bibPath
           ? [
               `The default bibliography file is ${bibPath}.${offers('grep', 'read_file', 'bash') ? ' You can grep or read this file to search for citations and references.' : ''}`,
@@ -253,6 +259,8 @@ const setup = (
 ) =>
   definePlugin<SetupPlatform | SetupHost>({
     id: 'setup',
+    prompt: ({ offered }) =>
+      offered.includes('probe_environment') ? SETUP_PROMPT : '',
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(SetupPlatform)(platform),

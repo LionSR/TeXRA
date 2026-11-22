@@ -22,7 +22,7 @@
  *   `agent` child that looks its parent up and messages it, which
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
- * - two `review` runs over the same notes: the context blobs they share.
+ * - two entry-agent runs over the same notes: the context blobs they share.
  * - an `edit` program run with `--output`: the theory plugin's output
  *   fact, its diffs included, and the program's `run.end` with its documents
  *   as `output.structured`. Its documents have no `\documentclass` and no
@@ -111,6 +111,7 @@ import { zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import { splitValidationAgent } from './validationAgent.mjs';
 import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
@@ -337,10 +338,17 @@ process.stdin.on('end', function answer() {
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const argv = (command) => [binaryPath, ...command, '--cwd', project];
+  // A command's `--agent <name>` is the script's, not the CLI's: it becomes
+  // the validation build's variable.
+  const launch = (written, base) => {
+    const { command, env: agent } = splitValidationAgent(written);
+    return { args: argv(command), env: { ...base, ...agent } };
+  };
   const run = (command, input, runEnv = env) => {
-    const result = spawnSync(process.execPath, argv(command), {
+    const { args, env: launchEnv } = launch(command, runEnv);
+    const result = spawnSync(process.execPath, args, {
       cwd: project,
-      env: runEnv,
+      env: launchEnv,
       encoding: 'utf8',
       input,
     });
@@ -359,12 +367,13 @@ process.stdin.on('end', function answer() {
     const cols = 100;
     const rows = 40;
     const term = new Terminal({ cols, rows, allowProposedApi: true });
-    const child = spawnPty(process.execPath, argv(command), {
+    const { args, env: launchEnv } = launch(command, env);
+    const child = spawnPty(process.execPath, args, {
       name: 'xterm-256color',
       cols,
       rows,
       cwd: project,
-      env: { ...env, TERM: 'xterm-256color' },
+      env: { ...launchEnv, TERM: 'xterm-256color' },
     });
     spawned.add(child);
     let done = false;
@@ -465,9 +474,10 @@ process.stdin.on('end', function answer() {
   };
   // A headless run in the background, for the generator to kill.
   const start = (command) => {
-    const child = spawn(process.execPath, argv(command), {
+    const { args, env: launchEnv } = launch(command, env);
+    const child = spawn(process.execPath, args, {
       cwd: project,
-      env,
+      env: launchEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     spawned.add(child);
@@ -543,6 +553,8 @@ async function generate(root) {
 
   cli.run([
     'run',
+    'chat',
+    '--agent',
     'golden_parent',
     '--model',
     'openai/gpt-5.6-sol',
@@ -555,11 +567,11 @@ async function generate(root) {
     '--print',
   ]);
 
-  // Two runs of one agent over one file: the blobs they share.
+  // Two runs of the entry agent over one file: the blobs they share.
   for (let i = 0; i < 2; i += 1)
     cli.run([
       'run',
-      'review',
+      'chat',
       '--model',
       'openai/gpt-5.6-sol',
       '--instruction',
@@ -777,6 +789,8 @@ async function generate(root) {
 
   cli.run([
     'run',
+    'chat',
+    '--agent',
     'golden_script',
     '--model',
     'openai/gpt-5.6-sol',
@@ -795,6 +809,8 @@ async function generate(root) {
   // view held.
   cli.run([
     'run',
+    'chat',
+    '--agent',
     'golden_fork',
     '--model',
     'openai/gpt-5.6-sol',
@@ -883,6 +899,8 @@ async function generate(root) {
   cli.run(['plugin', 'enable', 'golden-effect-hooks', '--print'], 'y\n');
   const effect = cli.start([
     'run',
+    'chat',
+    '--agent',
     'golden_effect',
     '--model',
     'openai/gpt-5.6-sol',
@@ -908,6 +926,8 @@ async function generate(root) {
   );
   cli.run([
     'run',
+    'chat',
+    '--agent',
     'golden_child',
     '--model',
     'openai/gpt-5.6-sol',
@@ -948,6 +968,7 @@ async function generate(root) {
       client([
         'tasks',
         'start',
+        '--agent',
         'golden_script',
         '--model',
         'openai/gpt-5.6-sol',

@@ -427,8 +427,8 @@ describe('the golden 1.0 store', () => {
       expect(runsOf(folded)).toEqual([
         run(PARENT, 'golden_parent', { children: [DELEGATED] }),
         run(DELEGATED, 'golden_child', { parent: PARENT }),
-        run('a00000000003', 'review'),
-        run('a00000000004', 'review'),
+        run('a00000000003', 'assistant'),
+        run('a00000000004', 'assistant'),
         // The document task and the two revisions its program ran.
         run(DOCUMENT_TASK, 'edit', { children: REVISIONS }),
         // Listed in start order, while the parent names them sorted.

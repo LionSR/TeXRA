@@ -7,12 +7,10 @@ import {
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
-import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
 import {
   CLI_CHEAP_START_MODEL,
   cliCommandDefaults,
   resolveKnownCliModelId,
-  usableDefaultAgent,
 } from '../platform/cliConfig';
 import {
   CliUsageError,
@@ -98,7 +96,6 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
 });
 
 interface ChatDefaults {
-  readonly agent: string;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
 }
@@ -106,27 +103,20 @@ interface ChatDefaults {
 interface ResolveChatDefaultsInit {
   /** The setting slots the `texra.chat` section is read from. */
   readonly stores: SettingsStores;
-  readonly agentOverride?: string;
   /** `--model` (checked by the chat command) or the resumed run's model. */
   readonly modelOverride?: string;
-  readonly envAgent?: string;
   readonly envModel?: string;
-  readonly visibleToolUseAgents?: readonly { readonly name: string }[];
 }
 
 /**
- * The chat's agent and model before availability is known: the same tiers
- * as a headless command (`--agent`/`--model` → environment → `texra.chat` →
- * the built-in agent pick and the cheap-start model). The chat opens without
+ * The chat's model before availability is known: the same tiers as a
+ * headless command (`--model` → environment → `texra.chat` → the cheap-start
+ * model). The chat opens without
  * a credential, so whether the model can run is checked by its caller.
  */
 export function resolveChatDefaults(
   init: ResolveChatDefaultsInit,
 ): ChatDefaults {
-  const agent =
-    init.agentOverride?.trim() ||
-    usableDefaultAgent(init.envAgent) ||
-    cliCommandDefaults(init.stores, 'chat').agent;
   const modelDecision = decideRunModel(
     cliModelCandidates(init.stores, 'chat', init.modelOverride, init.envModel),
   );
@@ -135,7 +125,6 @@ export function resolveChatDefaults(
   if (modelDecision === null)
     throw new Error('The chat model decision named no model');
   return {
-    agent: agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
     model: modelDecision.model,
     modelSource: modelDecision.reason,
   };

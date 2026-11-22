@@ -42,11 +42,24 @@ export const lean4: TexraPlugin = texraPlugin({
     // The script tool's description lists the programs; a run offered
     // `program` without it reads them here.
     prompt: ({ offered }) =>
-      offered.includes('program') && !offered.includes('script')
-        ? `The Lean programs \`program\` starts: ${Object.entries(LEAN_PROGRAMS)
-            .map(([name, { description }]) => `\`${name}\` (${description})`)
-            .join('; ')}.`
-        : '',
+      [
+        ...(offered.includes('lean_diagnostics')
+          ? [
+              'For Lean 4, build, check and inspect proofs with the `lean_*` tools and search Mathlib with `lean_loogle`. Outline the informal proof first, formalize it, then iterate on the diagnostics until they are clean.',
+            ]
+          : []),
+        ...(offered.includes('program') && !offered.includes('script')
+          ? [
+              `The Lean programs \`program\` starts: ${Object.entries(
+                LEAN_PROGRAMS,
+              )
+                .map(
+                  ([name, { description }]) => `\`${name}\` (${description})`,
+                )
+                .join('; ')}.`,
+            ]
+          : []),
+      ].join('\n'),
     scriptModules: LEAN_MODULES,
     programs: LEAN_PROGRAMS,
     availability: {

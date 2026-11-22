@@ -131,19 +131,6 @@ export interface CompletionSource {
 }
 
 const COMPLETION_SOURCES = {
-  agents: {
-    shellFunction: '_texra_agents',
-    command: 'agents list --quiet',
-  },
-  /**
-   * Every launchable agent, hidden ones included. The name column prints the
-   * source-qualified key for a name two listed agents share, so a collision
-   * completes to a spelling that names exactly one agent.
-   */
-  launchableAgents: {
-    shellFunction: '_texra_launchable_agents',
-    command: 'agents list --quiet --all',
-  },
   models: {
     shellFunction: '_texra_models',
     command: 'models list --quiet',
@@ -152,24 +139,19 @@ const COMPLETION_SOURCES = {
 
 /**
  * Positional completions backed by a dynamic listing source, keyed by the
- * space-joined command path whose Nth argument (e.g. `texra run <agent>`) is
+ * space-joined command path whose Nth argument (e.g. `texra models show <model>`) is
  * completed against the source. Every shell generator renders this into its own
  * syntax, so a positional source only ever changes here.
  */
 export const POSITIONAL_COMPLETION_SOURCES: Readonly<
   Record<string, CompletionSource>
 > = Object.freeze({
-  run: COMPLETION_SOURCES.launchableAgents,
-  'agents show': COMPLETION_SOURCES.agents,
-  'agents customize': COMPLETION_SOURCES.launchableAgents,
-  'agents reset': COMPLETION_SOURCES.agents,
-  'agents keep': COMPLETION_SOURCES.agents,
   'models show': COMPLETION_SOURCES.models,
 });
 
 /**
- * Dynamic flag-value completions, keyed by flag name. `--model`/`-m` and
- * `--agent` complete their value from a listing source; generators with a
+ * Dynamic flag-value completions, keyed by flag name. `--model`/`-m`
+ * completes its value from a listing source; generators with a
  * dynamic-value mechanism (bash, zsh, fish) derive their flag cases from this,
  * so a new dynamic-value flag is not silently absent in one shell.
  */
@@ -177,7 +159,6 @@ export const DYNAMIC_VALUE_FLAG_SOURCES: Readonly<
   Record<string, CompletionSource>
 > = Object.freeze({
   model: COMPLETION_SOURCES.models,
-  agent: COMPLETION_SOURCES.launchableAgents,
 });
 
 /** Every dynamic listing source, for the generators that emit each function. */

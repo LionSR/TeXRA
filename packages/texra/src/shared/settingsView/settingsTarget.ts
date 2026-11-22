@@ -36,7 +36,7 @@ export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
  */
 export const SETTINGS_PAGE_SECTIONS = Object.freeze({
   models: Object.freeze(['keys', 'subscriptions', 'models'] as const),
-  agents: Object.freeze(['library', 'skills', 'advanced'] as const),
+  agents: Object.freeze(['skills', 'advanced'] as const),
   plugins: Object.freeze([] as const),
   latex: Object.freeze([
     'dependencies',

@@ -9,7 +9,7 @@ import {
 import { presentRunFailure } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
-import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
+import { SETUP_AGENT_NAME, setupAgent } from '@texra/agent/entryAgent';
 import type { Dialogs } from '@texra/hosts/uiHosts';
 import type { Run, Session, Notices } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
@@ -17,7 +17,7 @@ import type { SettingsStores } from '@texra-ai/harness/plugins';
 /** The setup assistant's log channel, for its launch and what follows it. */
 const CHANNEL = 'SetupAssistant';
 
-/** Instruction handed to the setup agent when launched. */
+/** The first instruction of the setup conversation. */
 const SETUP_INSTRUCTION =
   'Finish installing TeXRA. Probe my environment, install anything missing, and configure a working credential.';
 
@@ -79,7 +79,7 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
       contextFiles: [],
       mediaFiles: [],
       outputFiles: [],
-      agent: SETUP_AGENT_NAME,
+      ...setupAgent(),
       model,
       instruction: SETUP_INSTRUCTION,
       memories: [],

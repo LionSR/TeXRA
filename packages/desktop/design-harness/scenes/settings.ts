@@ -25,7 +25,6 @@ const ROWS: PluginRow[] = [
       setup: { status: 'available', installActions: [] },
       switch: 'always-on',
     },
-    usedBy: ['lean-prover', 'assistant'],
   },
   {
     kind: 'texra',
@@ -55,7 +54,6 @@ const ROWS: PluginRow[] = [
       },
       switch: 'off',
     },
-    usedBy: ['assistant'],
   },
   {
     kind: 'installed',
@@ -73,13 +71,11 @@ const ROWS: PluginRow[] = [
       programs: [],
       mcpServers: ['mathlib-search'],
     },
-    usedBy: ['lean-prover'],
   },
   {
     kind: 'mcp',
     name: 'arxiv-mcp',
     command: 'npx -y arxiv-mcp-server',
-    usedBy: ['assistant'],
   },
 ];
 

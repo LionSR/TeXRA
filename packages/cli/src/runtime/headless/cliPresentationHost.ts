@@ -11,7 +11,6 @@ import { shownFailureText } from '@ui/copy/modelAccess';
 // Local imports - CLI runtime
 import { writeNdjsonStdout, writeTextStderr } from '../platform/logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
-import { missingAgentMessage } from '../agents';
 import type {
   Session,
   RuntimePresentationEvent,
@@ -20,6 +19,11 @@ import type {
 import type { PresentationEventHandlers } from '@texra-ai/harness/host';
 import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
 import type { CliContext } from '../platform/cliContext';
+
+/** What a run says when it names an agent no installed plugin has. */
+export function missingAgentMessage(name: string): string {
+  return `Agent not found: ${name}.`;
+}
 
 interface CliRuntimeHost {
   emit<K extends RuntimePresentationEvent>(

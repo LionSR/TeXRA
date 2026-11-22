@@ -77,7 +77,7 @@ async function checks() {
   // The commands that open the extension's own surfaces run without throwing.
   for (const command of [
     'texra.showProgressView',
-    'texra.showAgents',
+    'texra.showModels',
     'texra.openProgressViewInTab',
   ])
     await step(command, () => vscode.commands.executeCommand(command), 30_000);

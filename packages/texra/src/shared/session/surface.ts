@@ -51,15 +51,12 @@ const UIFileFieldsSchema = FileFieldsSchema.mapFields(
 
 /**
  * The new-task composer's selections, separate from host-derived state:
- * one agent and one instruction, which chats. The file lists are what a
+ * one instruction for the entry agent, which chats. The file lists are what a
  * program's proposal, opened in the form, is edited with.
  */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
   Struct.assign({
     workingDirectory: decodingDefault(Schema.String, ''),
-    /** Empty until the person chooses one: the launch starts the default
-     *  of the agents the form lists (`pickDefaultToolUseAgent`). */
-    agent: decodingDefault(Schema.String, ''),
     model: decodingDefault(Schema.String, DEFAULT_AGENT_MODEL),
     commit: decodingDefault(Schema.String, 'HEAD'),
     instruction: decodingDefault(Schema.String, ''),

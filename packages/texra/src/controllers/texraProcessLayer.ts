@@ -17,7 +17,6 @@ import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 // Local imports
 import {
   AgentDirectoryService,
-  BUNDLED_AGENTS_DIRECTORY,
   processLayer,
   type ProcessServices,
 } from '@texra-ai/harness/host';
@@ -60,28 +59,28 @@ export const TEXRA_CLIENT: ClientIdentity = Object.freeze({
   id: 'texra',
 });
 
-/** A host's resources directory holds no bundled agents: a bundle copied
- *  without its `resources/`, or a broken checkout. */
+/** A host's resources directory holds no bundled plugin resources: a bundle
+ *  copied without its `resources/`, or a broken checkout. */
 class ResourcesNotFound extends Schema.TaggedError<ResourcesNotFound>()(
   'ResourcesNotFound',
   { message: Schema.String },
 ) {}
 
-/** `resourcesPath`, failing by its path when it holds no bundled agents
+/** `resourcesPath`, failing by its path when it holds no bundled `plugins/`
  *  directory: what a host checks before it builds {@link texraProcessLayer}
  *  over that path. */
 export const checkResourcesPath = Effect.fn('checkResourcesPath')(function* (
   resourcesPath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const agents = join(resourcesPath, BUNDLED_AGENTS_DIRECTORY);
-  const isDirectory = yield* fs.stat(agents).pipe(
+  const plugins = join(resourcesPath, 'plugins');
+  const isDirectory = yield* fs.stat(plugins).pipe(
     Effect.map((info) => info.type === 'Directory'),
     Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
   );
   if (!isDirectory)
     return yield* new ResourcesNotFound({
-      message: `TeXRA resources not found: ${resourcesPath} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
+      message: `TeXRA resources not found: ${resourcesPath} holds no plugins/ directory`,
     });
   return resourcesPath;
 });
@@ -94,8 +93,8 @@ interface TexraProcessHost extends Omit<
 > {
   /** The storage root the process opens: sessions, global state, secrets. */
   readonly storageRoot: string;
-  /** The packaged resources root the built-in agents and bundled skills are
-   *  read from. */
+  /** The packaged resources root the bundled plugins' resources are read
+   *  from. */
   readonly resourcesPath: string;
   /** The flags every skill read uses (the CLI's `--source`). */
   readonly skillSourceOptions?: SkillSourceOptions;

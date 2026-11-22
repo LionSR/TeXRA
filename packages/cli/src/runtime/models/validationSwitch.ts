@@ -21,3 +21,7 @@ export const VALIDATION_SCENARIOS = Object.freeze({
   scriptFanout: 'TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT',
   historyQuery: 'TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY',
 } as const);
+/** Under the switch, the agent a launch starts in place of the entry agent,
+ *  by its name in the agent directories: the scripted conversations are
+ *  keyed by agent, and no command names one. */
+export const VALIDATION_AGENT = 'TEXRA_INTERNAL_VALIDATE_AGENT';

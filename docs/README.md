@@ -22,8 +22,7 @@ Git repository.
 
 - `architecture/` documents current system boundaries and invariants
   (`YYYY-MM-DD-` prefix).
-- `dev/` contains development procedures, release operations, and
-  skill-authoring conventions.
+- `dev/` contains development procedures and release operations.
 - Dated PRDs, proposals, and design notes live under `.agents/docs/` as
   `{lifecycle}/{class}/yyyy-mm-dd-topic.md`, outside this VitePress root so
   they are not published. See `.agents/docs/README.md`.

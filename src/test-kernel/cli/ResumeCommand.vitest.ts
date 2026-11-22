@@ -31,7 +31,6 @@ import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
-  BUNDLED_AGENTS,
   crashAt,
   crashedCopy,
   REAL_RUN_TIMEOUT,
@@ -75,7 +74,7 @@ const cliProcess = Effect.gen(function* () {
   const context = createTestCliContext({
     cwd: workspace,
     storageRoot,
-    resourcesPath: path.dirname(BUNDLED_AGENTS),
+    resourcesPath: path.resolve('packages/extension/resources'),
     mode: 'interactive',
     approvalPolicy: 'ask',
     stdoutIsTty: true,
@@ -126,7 +125,7 @@ describe('texra resume', { timeout: REAL_RUN_TIMEOUT }, () => {
               );
               const ran = first.runFork(
                 runHeadlessAgent(context, {
-                  agent: 'assistant',
+                  target: 'chat',
                   model: MODEL,
                   inputFiles: [],
                   contextFiles: [],
@@ -211,7 +210,7 @@ describe('texra resume', { timeout: REAL_RUN_TIMEOUT }, () => {
               const ran = yield* Effect.promise(() =>
                 runCli([
                   'run',
-                  'assistant',
+                  'chat',
                   '--instruction',
                   'Answer once.',
                   '--cwd',

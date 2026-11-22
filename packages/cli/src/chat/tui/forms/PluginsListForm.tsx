@@ -26,7 +26,6 @@ import {
   pluginRowSwitchable,
   pluginRowSummary,
   pluginRowTrust,
-  pluginRowUsedBy,
 } from '@ui/copy/plugins';
 import { PLUGINS_TUI } from '../commands/pluginsCopy';
 import { appendLocalNotice } from '../state/transcript';
@@ -55,7 +54,6 @@ function rowDescription(row: PluginRow): string {
     pluginRowSummary(row),
     pluginRowTrust(row),
     pluginRowProblem(row),
-    pluginRowUsedBy(row),
   ]);
 }
 

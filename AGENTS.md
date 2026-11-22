@@ -229,9 +229,10 @@ its `rootRun` requires the composition root's `SessionOwner`; call
 `executeAgent` only when you already own the `runId`. Run-loop rules, write
 points, and the event and card channels: `packages/harness/AGENTS.md`.
 
-Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
-`temperature`) in `packages/extension/resources/agents/`, created with the
-built-in `creator` agent or the settings view's Agents tab. A plugin registers
+Every host starts one agent, the entry agent: an app constant
+(`packages/texra/src/agent/entryAgent.ts`: its base text and the tools it
+declares), launched as an inline persona. TeXRA ships no agent files; each
+plugin says what its tools are for in its `prompt` section. A plugin registers
 programs (`Plugin.programs`): script modules started by name, each a run
 opened on `script.kind: 'program'`. The `theory` plugin's programs are in
 `packages/texra/src/tools/theory/programs.ts`. An installed plugin carries
