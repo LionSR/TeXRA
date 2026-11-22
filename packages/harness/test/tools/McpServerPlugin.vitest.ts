@@ -59,7 +59,8 @@ const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
 /** A stdio MCP server listing one tool, `echo`, that answers one call; its
  *  input has an array property named `default` that names no `items`. With
  *  `FIXTURE_MODE=hang` it never answers a call: it records the call's id
- *  beside its pid file, and the last cancellation it receives. */
+ *  beside its pid file, and the last cancellation it receives. With
+ *  `FIXTURE_MODE=old` it answers MCP 2025-06-18 whatever it is asked. */
 const FIXTURE_SERVER = `
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], String(process.pid));
@@ -75,7 +76,7 @@ require('node:readline')
     const { id, method, params } = JSON.parse(line);
     if (method === 'initialize')
       send({ jsonrpc: '2.0', id, result: {
-        protocolVersion: params.protocolVersion,
+        protocolVersion: process.env.FIXTURE_MODE === 'old' ? '2025-06-18' : params.protocolVersion,
         capabilities: { tools: {} },
         serverInfo: { name: 'fixture', version: '0' },
       } });
@@ -347,6 +348,39 @@ describe('MCP server plugins', () => {
           expect(
             JSON.parse(yield* writtenText(`${pidFile}.cancelled`)),
           ).toStrictEqual({ requestId });
+        }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
+      20_000,
+    );
+
+    // Failure mode: a server on an older MCP revision starts with no tools
+    // and nothing saying why.
+    it.effect(
+      'refuses a server on an older revision, saying so',
+      () =>
+        Effect.gen(function* () {
+          const dir = yield* tempDir;
+          writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
+          writeFileSync(
+            path.join(dir, 'mcp.json'),
+            JSON.stringify({
+              mcpServers: {
+                fixture: {
+                  command: process.execPath,
+                  args: [path.join(dir, 'server.cjs'), path.join(dir, 'pid')],
+                  env: { FIXTURE_MODE: 'old' },
+                },
+              },
+            }),
+          );
+          const session = yield* isolatedTestSession();
+          const services = yield* Layer.build(mcpToolTableLayer(dir));
+          const { tools, warnings } = yield* openFixtureStep(session).pipe(
+            Effect.provideContext(services),
+          );
+          expect(tools.definitions).toEqual([]);
+          expect(warnings.join('\n')).toContain(
+            'it answered MCP revision 2025-06-18, but MCP 2025-11-25 is required',
+          );
         }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
       20_000,
     );
