@@ -19,6 +19,7 @@ import {
   type PendingRequest,
   type RequestPayload,
 } from '@texra-ai/harness/schemas';
+import { focusIsOnTextEntry, isTypingIn } from '@ui/textEntryFocus';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { RunView } from '@texra-ai/harness/schemas';
@@ -57,18 +58,6 @@ const requestKey = (request: PendingRequest): string => request.requestId;
 /** A select and its listbox options: their keys (typeahead, arrows)
  *  pick an option, never a card shortcut. */
 const CHOOSER = /^wa-(select|option)$/;
-
-/** True for a text field, looking through open shadow roots. */
-function isTextInput(el: Element | null): boolean {
-  if (!el) return false;
-  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    return true;
-  }
-  if (el instanceof HTMLElement && el.isContentEditable) return true;
-  const tagName = el.tagName.toLowerCase();
-  if (tagName.includes('textarea') || tagName.includes('input')) return true;
-  return isTextInput(el.shadowRoot?.activeElement ?? null);
-}
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
@@ -122,9 +111,8 @@ export class RequestPanels extends LitElement {
    *  keep their keys. */
   private handleKeydown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (isTypingIn(document, event)) return;
     const path = event.composedPath();
-    const [origin] = path;
-    if (isTextInput(origin instanceof Element ? origin : null)) return;
     if (path.some((t) => t instanceof Element && CHOOSER.test(t.localName)))
       return;
     const card = path.find(
@@ -156,7 +144,7 @@ export class RequestPanels extends LitElement {
     // The card was just connected in this render pass; its first Lit update
     // is a microtask that cannot run until this `updated()` returns.
     void card.updateComplete.then(() => {
-      if (isTextInput(document.activeElement)) return;
+      if (focusIsOnTextEntry(document)) return;
       if (this.matches(':focus-within')) return;
       const target =
         card.shadowRoot?.querySelector<HTMLElement>(
