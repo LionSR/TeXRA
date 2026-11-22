@@ -52,6 +52,25 @@ async function workspaceWithConfig(config: string): Promise<string> {
 }
 
 describe('CLI context config defaults', () => {
+  it('auto-approves a new interactive project and honors a saved Ask', async () => {
+    const storageRoot = await makeTempDir('texra-approval-', tempDirs);
+    const cwd = await workspaceWithConfig('{}');
+    const init = {
+      ambient: { ...ambient, isCi: false, stdinIsTty: true },
+      globalArgs: { cwd },
+      storageRoot,
+    };
+    const fresh = await cliContext(init);
+    expect(fresh.approvalPolicy).toBe('yolo');
+    const local = resolveWorkspaceStoragePath(storageRoot, fresh.cwd);
+    await mkdir(local, { recursive: true });
+    await writeFile(
+      join(local, 'config.json'),
+      JSON.stringify({ 'texra.approvalPolicy': 'ask' }),
+    );
+    expect((await cliContext(init)).approvalPolicy).toBe('ask');
+  });
+
   it('reads the approval policy from the user files, never the project file', async () => {
     const storageRoot = await makeTempDir('texra-cli-user-config-', tempDirs);
     const globalStorage = resolveGlobalStoragePath(storageRoot);
@@ -148,7 +167,7 @@ describe('CLI config values a row rejects', () => {
     // The telemetry reader sees the string and stays off; it must not see
     // the row's default `true` in its place.
     expect(context.config.get('telemetry.enabled')).toBe('false');
-    // The policy reads as its default, not the user-wide Auto-approve.
+    // A misspelled policy must still ask before allowing an operation.
     expect(context.approvalPolicy).toBe('ask');
   });
 });

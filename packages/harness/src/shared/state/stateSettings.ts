@@ -66,6 +66,8 @@ export interface StateKey<A = unknown> {
 
 /** One setting, whose schema decodes its stored value to an `A`. */
 export interface SettingRow<A = unknown> extends StateKey<A> {
+  /** Value to use after warning about an invalid stored setting, when an absent default could grant more access. */
+  readonly invalidValue?: A;
   /** Short sentence-case label every settings UI shows for the row. */
   readonly title: string;
   /** Human-readable description, shared across every host that renders it. */
@@ -333,6 +335,7 @@ export const APPROVAL_POLICY_SETTING = {
   key: 'approvalPolicy',
   slot: 'config',
   schema: decodingDefault(ApprovalPolicySchema, APPROVAL_POLICY_DEFAULT),
+  invalidValue: APPROVAL_POLICY_DEFAULT,
   title: 'Approval policy',
   description:
     'Whether agents ask before running shell commands and editing files.',
