@@ -25,6 +25,7 @@ import {
 import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
 import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
+import { formatWordList } from '@utils/text/stringUtils';
 
 // Local imports - this module's neighbours
 import {
@@ -470,7 +471,7 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
   const primary = manifests[0];
   if (!primary) {
     return yield* failPlugin(
-      `No plugin manifest in ${dir}: expected ${PLUGIN_MANIFEST_FILES.join(' or ')}.`,
+      `No plugin manifest in ${dir}: expected ${formatWordList(PLUGIN_MANIFEST_FILES, 'or')}.`,
     );
   }
   const name = Schema.decodeUnknownResult(SkillNameSchema)(primary.name);

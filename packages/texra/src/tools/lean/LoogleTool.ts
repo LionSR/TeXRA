@@ -8,7 +8,14 @@ import {
   truncateWithEllipsis,
   formatResultCount,
 } from '@texra-ai/harness/schemas';
-import { Array as Arr, Cause, Effect, Schema } from 'effect';
+import {
+  Array as Arr,
+  Cause,
+  Duration,
+  Effect,
+  Number as Num,
+  Schema,
+} from 'effect';
 import { HttpClientResponse } from 'effect/http';
 
 import {
@@ -216,7 +223,7 @@ const searchOne = Effect.fn('LoogleTool.searchOne')((
         Cause.isTimeoutError(error)
           ? fail(
               errorResult(
-                `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
+                `Loogle API request timed out after ${Duration.format(Duration.millis(LOOGLE_TIMEOUT_MS))}. ` +
                   `The Loogle server may be overloaded. Retry the request. ` +
                   `If it persists, try a simpler type signature or search by name instead.`,
                 { summary: 'Timeout' },
@@ -249,7 +256,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
     return `## Query: \`${q}\`\n\n${resultText}`;
   });
 
-  const totalHits = results.reduce((sum, r) => sum + r.hits.length, 0);
+  const totalHits = Num.sumAll(results.map((r) => r.hits.length));
   const allFailed = results.every(({ result }) => result.status === 'error');
   const counted = formatResultCount(queries.length, 'query');
   let summary: string;

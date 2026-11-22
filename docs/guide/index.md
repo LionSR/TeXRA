@@ -23,15 +23,15 @@ serve as supporting capabilities within your research project.
 
 ## Use it
 
-| Task                                       | Workflow                                                          |
-| ------------------------------------------ | ----------------------------------------------------------------- |
-| Verify proofs and derivations              | `review` program, see [Programs](./programs.md#task-programs)     |
-| Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                        |
-| Search literature, no fabricated citations | `assistant`, see [Research tools](./research-tools.md)            |
-| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)                   |
-| Fix typos, grammar and notation            | `edit` program, see [Programs](./programs.md#document-programs)   |
-| Build slides from a paper                  | `slides` program, see [Programs](./programs.md#document-programs) |
-| Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                                 |
+| Task                                       | Workflow                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------- |
+| Verify proofs and derivations              | `review` program, see [Programs](./programs.md#task-programs)                |
+| Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                                   |
+| Search literature, no fabricated citations | the assistant or `search` program, see [Research tools](./research-tools.md) |
+| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)                              |
+| Fix typos, grammar and notation            | `edit` program, see [Programs](./programs.md#document-programs)              |
+| Build slides from a paper                  | `slides` program, see [Programs](./programs.md#document-programs)            |
+| Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                                            |
 
 ## Understand the system
 
@@ -93,8 +93,8 @@ TeXRA works in two ways:
 
 <p class="hero-caption">A document program runs a structured pipeline and returns a diff; the assistant works conversationally with grounded tools and starts task programs.</p>
 
-TeXRA combines three mechanisms: **reflection** (critiquing and revising their
-own output), **tool use** (checking work against compilers, language servers,
+TeXRA combines three mechanisms: **reflection** (critiquing and revising output),
+**tool use** (checking work against compilers, language servers,
 and search APIs), and **planning** (breaking a problem into steps and adapting
 as results come back).
 

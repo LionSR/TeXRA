@@ -81,7 +81,7 @@ Open `your-local-folder` in VS Code and work with the assistant and its programs
 
 <OverleafEditActions />
 
-<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Start task</code>, reviewing outputs, and <code>latexdiff</code>/merge.</p>
+<p class="hero-caption">Each action in the local edit loop, from picking a model and writing instructions through <code>Start task</code>, reviewing outputs, and <code>latexdiff</code>/merge.</p>
 
 ### 3. Commit local changes
 

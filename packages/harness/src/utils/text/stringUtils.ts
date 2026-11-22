@@ -123,6 +123,22 @@ export function joinFacts(
   return facts.filter(Boolean).join(FACT_SEPARATOR);
 }
 
+const WORD_LISTS = {
+  and: new Intl.ListFormat('en', { type: 'conjunction' }),
+  or: new Intl.ListFormat('en', { type: 'disjunction' }),
+} as const;
+
+/**
+ * Items as an English list joined by `and` or `or` (`a`, `a or b`,
+ * `a, b, or c`), so every sentence that names several things reads the same.
+ */
+export function formatWordList(
+  items: Iterable<string>,
+  conjunction: keyof typeof WORD_LISTS,
+): string {
+  return WORD_LISTS[conjunction].format(items);
+}
+
 /**
  * The first `max` items of a list, then how many it leaves out
  * (`a, b, c +2 more`), so every clipped list reads the same.

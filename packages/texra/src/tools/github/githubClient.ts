@@ -23,7 +23,7 @@ import type { Headers, HttpClient } from 'effect/http';
 
 const API_ORIGIN = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
-const TIMEOUT_MS = 15_000;
+const TIMEOUT = Duration.seconds(15);
 
 /** What {@link ghGet} reads from the environment: the token store and the HTTP client. */
 export type GitHubServices = Secrets | HttpClient.HttpClient;
@@ -231,11 +231,11 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
       ),
     ),
     Effect.timeoutOrElse({
-      duration: Duration.millis(TIMEOUT_MS),
+      duration: TIMEOUT,
       orElse: () =>
         Effect.fail(
           new GitHubTransientError({
-            message: `GitHub request failed (TIMEOUT): request exceeded ${TIMEOUT_MS}ms`,
+            message: `GitHub request failed (TIMEOUT): request exceeded ${Duration.format(TIMEOUT)}`,
           }),
         ),
     }),

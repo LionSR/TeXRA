@@ -103,50 +103,53 @@ console.log(result.outcome);
 
 ### What a run is
 
-There are no agent files. A start names what the run is (`StartRequestSchema`
-from `@texra-ai/harness/schemas`): `system`, its own system text, before
-what the harness appends (the project's `AGENTS.md`, attached memories,
-tool-use instructions and the plugins' sections); `tools`, the tool names it
-declares (`mcp__<server>__*` for every tool of a configured MCP server; none,
-and it answers in text only); `temperature`; and `label`, the name its card,
-listings and run directory show. The run records them on its configuration,
-so a resume reads nothing else. A tool it names that no plugin offers fails
-the run before any model call. Custom tools for this run alone, made with
-`defineTool`, go in `runTools`, and a resume passes them again.
+There are no agent files. Each `session.start` call describes the run directly
+(`StartRequestSchema` from `@texra-ai/harness/schemas`):
 
-A run's `agent` calls write their children the same way (`system`, `tools`,
-`label`); `agentName` names an agent an installed Claude Code or Codex plugin
-provides (`<plugin>:<name>`), which is read once, at the call, into the
-child's configuration.
+- `system`: the run's own system text, placed before what the harness appends
+  (the project's `AGENTS.md`, attached memories, tool-use instructions, and
+  active plugin sections).
+- `tools`: the tool names the run declares (`mcp__<server>__*` expands to every
+  tool of a configured MCP server; omit or leave empty for text-only replies).
+  Naming a tool that no plugin provides fails the run before any model call.
+- `temperature` and `label`: the sampling temperature and display label shown on
+  cards, listings, and the run directory.
+- `runTools`: custom tools built with `defineTool` for this run alone (pass the
+  same `runTools` again when calling `session.resume`).
 
-Nothing in the package calls `Effect.runPromise` itself: the
-`Effect.runPromise` above is the embedder's own boundary, as is any host
-entry that runs the program.
+The run stores its configuration in history, so resuming it reads nothing else
+from disk. When a run spawns a child via `agent`, it records the child's
+`system`, `tools`, and `label` the same way. Passing `agentName`
+(`<plugin>:<name>`) reads an installed Claude Code or Codex plugin's agent once
+at call time and writes it into the child's configuration.
+
+Nothing in the package calls `Effect.runPromise` itself: the `Effect.runPromise`
+call above belongs to the embedder's entry point, just as it does in any host.
 
 ### A persistent session, and resume
 
-`sessions.open(roots, { persistent: true })` keeps the session's history in
-the root's SQLite store under the platform's `storageDir`. Without
-`persistent: true`, the store is in memory and ends with the session. Reopening
-an already-open workspace root returns the existing session; passing a
-different `persistent` option fails with `SessionOptionsConflict` until the
-session is closed.
+`sessions.open(roots, { persistent: true })` keeps session history in the root's
+SQLite store under the platform's `storageDir`. Without `persistent: true`, the
+store is in memory and ends with the session. Reopening an already-open
+workspace root returns the existing session; passing a different `persistent`
+option fails with `SessionOptionsConflict` until the session is closed.
 
 A later process can open the same root and call `session.resume(runId)` to
-continue a run from its committed history, returning the same `Run` handle that
-`start` returns. A run that cannot continue fails with `ResumeRefused`, whose
-`reason` is a `ResumeRefusal`: its `kind` is `finished`, `unusableCheckpoint`,
-`earlierBuild` (with its `cause`), `pluginUnavailable` (it holds a fact of the
-plugin named by `plugin`, which this process does not load), or
-`notResumable` (it was deleted). If
-`runId` belongs to a child run owned by an active parent call,
-`session.resume` resumes the parent and sets `run.redirectedFrom` to the
-requested child `runId`. Pass the same `runTools` to `resume` that were
-passed to `start`. Calling `resume` on a run already running or resuming in
-this process starts nothing: it returns the `Run` of the activation running,
-and reads no input. `run.activation` is that activation's commit;
-`session.run(runId, activation)` gives the same handle again, which a host
-uses to answer a handle it carried across a process boundary.
+continue a run from its committed history, returning the same `Run` handle as
+`start` (pass the same `runTools` that were given to `start`):
+
+- **Unresumable runs:** Fails with `ResumeRefused`, whose `reason` is a
+  `ResumeRefusal` with `kind` set to `finished`, `unusableCheckpoint`,
+  `earlierBuild` (with its `cause`), `pluginUnavailable` (naming the missing
+  `plugin` whose facts the run holds), or `notResumable` (the run was deleted).
+- **Owned child runs:** If `runId` belongs to a child owned by an active parent
+  call, `session.resume` resumes the parent instead and sets
+  `run.redirectedFrom` to the requested child `runId`.
+- **Already active runs:** Calling `resume` on a run already active in this
+  process starts nothing—it returns the live activation's `Run` handle and reads
+  no input. `run.activation` identifies that activation's commit, and
+  `session.run(runId, activation)` recovers the same handle across a process
+  boundary.
 
 ```ts
 const program = Effect.gen(function* () {
@@ -448,28 +451,28 @@ version of the usage program against a packed tarball is in
 
 ## The platform
 
-Every run needs an `AgentPlatform`: the process services the package
-composes (its secret store and, optionally, a resources root plugins read)
-plus the `WorkspaceRoots` of the folder the runs
-work in (workspace path, its storage path, config, workspace state, and the
-process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under (stdio servers
-speaking MCP 2025-11-25; one answering an older revision does not start), and a run's
-system prompt carries the workspace's `AGENTS.md`, or the storage root's when
-the workspace has none.
-`nodePlatform()` supplies all of them: process-local config and state,
-the ordinary storage layout under the `storageDir` you name (required; the
-package never falls back to a per-user directory), that directory's `mcp.json`
-and `AGENTS.md`, and environment-variable secrets (so provider API keys are read from
-`process.env`; nothing is persisted). The setting rows your own plugins read
-go to it as `nodePlatform({ settings })`, a catalog built with
-`settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which
-resolves them after the harness's own; a platform with its own
-`ConfigProvider` carries that catalog as its `catalog`. Keys are relative to
-the namespace (`'memory.enabled'`), which the stores add to every key they
-write. Code reads and
-writes a setting through `Settings` (`get`, `set`, `reset`) against the
-stores it holds.
+Every run needs an `AgentPlatform`: the process services the package composes
+(its secret store and an optional `resourcesRoot` for plugin assets) plus the
+`WorkspaceRoots` for the target folder (workspace path, storage path, config,
+workspace state, and process-wide global state).
+
+- **MCP servers and project rules:** The tool registry reads stdio MCP servers
+  from `mcp.json` at the storage root (`roots.storageRoot` / `storageDir`, not
+  `roots.globalStorage`; servers must speak MCP revision `2025-11-25`, and those
+  answering an older revision do not start). Each run's system prompt loads the
+  workspace's `AGENTS.md`, falling back to `AGENTS.md` at `roots.storageRoot`
+  when the workspace has none.
+- **`nodePlatform(options)`:** Supplies ready-made defaults—process-local config
+  and state, the standard layout under the required `storageDir` (the package
+  never falls back to a per-user directory), that directory's `mcp.json` and
+  `AGENTS.md`, and environment-variable secrets (`process.env`, nothing
+  persisted).
+- **Custom settings:** Pass plugin settings via `nodePlatform({ settings })`,
+  using `settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`
+  (or attach the catalog to your own `ConfigProvider` as `catalog`). Keys are
+  relative to the namespace (such as `'memory.enabled'`), which the stores
+  prepend on write. Code reads and writes settings through `Settings` (`get`,
+  `set`, `reset`).
 
 Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity

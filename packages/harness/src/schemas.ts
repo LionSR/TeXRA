@@ -291,6 +291,7 @@ export {
   formatResetDuration,
   formatResultCount,
   formatWallTime,
+  formatWordList,
   joinFacts,
   pluralize,
   previewLabel,

@@ -23,7 +23,11 @@ import * as NodeServices from '@effect/platform-node/NodeServices';
 
 // Local imports - harness and app
 import { setLogSink } from '@texra-ai/harness/node';
-import { APPROVAL_POLICIES, ensureError } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICIES,
+  ensureError,
+  formatWordList,
+} from '@texra-ai/harness/schemas';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import { CLI_OUTPUT_FORMATS } from '@texra/shared/cliOutputFormat';
 
@@ -209,12 +213,9 @@ function rejectHeadlessOnlyFlags(
     globalArgs.noInput === true ? '--no-input' : undefined,
   ].filter((label) => label !== undefined);
   if (labels.length === 0) return Effect.void;
-  const list = new Intl.ListFormat('en', { type: 'conjunction' }).format(
-    labels,
-  );
   return Effect.fail(
     new CliUsageError({
-      message: `texra ${commandName} is interactive and does not support ${list}. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
+      message: `texra ${commandName} is interactive and does not support ${formatWordList(labels, 'and')}. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
     }),
   );
 }

@@ -30,6 +30,7 @@ import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports
 import { meansAbsent } from '@utils/files/fsEntryExists';
+import { formatWordList } from '@utils/text/stringUtils';
 
 /** The directory of a plugin that holds its programs. */
 const PROGRAMS_DIRECTORY = 'programs';
@@ -200,7 +201,10 @@ function readDeclarations(
         ...(tools === undefined ? [list.name] : []),
       ];
       return refuse(
-        `${headerForm}; ${missing.map((name) => `\`${name}\``).join(' and ')} ${missing.length === 1 ? 'is' : 'are'} not declared there`,
+        `${headerForm}; ${formatWordList(
+          missing.map((name) => `\`${name}\``),
+          'and',
+        )} ${missing.length === 1 ? 'is' : 'are'} not declared there`,
       );
     }
     skip();

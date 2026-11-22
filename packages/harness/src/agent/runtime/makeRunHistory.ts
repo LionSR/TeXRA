@@ -33,6 +33,7 @@ import {
 import type { HistoryMessage, WithBlobs } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
 import type { SessionLogShape } from '@shared/session/sessionLog';
+import { formatWordList } from '@utils/text/stringUtils';
 import {
   runHistoryRows,
   storedDraft,
@@ -130,7 +131,7 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
   ].filter(Predicate.isNotNull);
   return violations.length === 0
     ? null
-    : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
+    : `${url.protocol}//${url.host}${url.pathname} carries ${formatWordList(violations, 'and')}`;
 }
 
 /**

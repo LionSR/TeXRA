@@ -65,8 +65,8 @@ symlink:
 
 ```bash
 node packages/cli/dist/texra.js --help
-node packages/cli/dist/texra.js agents list
-node packages/cli/dist/texra.js run polish --input paper.tex --output paper.polished.tex --print
+node packages/cli/dist/texra.js models list
+node packages/cli/dist/texra.js run edit --input paper.tex --instruction "Polish the prose" --output paper.polished.tex --print
 ```
 
 All flags from the public guide work the same way — substitute

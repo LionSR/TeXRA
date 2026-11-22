@@ -27,7 +27,7 @@ const actions = [
   <div class="mockup sha" role="group" aria-label="Stream header actions">
     <!-- Identity strip: name + live status dot + token/cost summary -->
     <div class="stream-head">
-      <span class="sh-name">polish: paper.tex</span>
+      <span class="sh-name">edit: paper.tex</span>
       <span class="sh-dot" title="Running"></span>
       <span class="sh-badge">r0–r2 · 48.2K in / 6.1K out · $0.21</span>
     </div>

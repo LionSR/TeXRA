@@ -85,7 +85,7 @@ A program started with `args: { autoExtractTikzFigure: true }` finds the `tikzpi
 
 <TikzDepsHero />
 
-<p class="hero-caption">TikZ extraction needs the compiler and, for rasterising, Ghostscript with GraphicsMagick or ImageMagick. Here <strong>Image Processing</strong> is <strong>Not found</strong>; its <strong>Setup guide</strong> holds the install steps.</p>
+<p class="hero-caption">TikZ extraction needs the compiler and, for rasterizing, Ghostscript with GraphicsMagick or ImageMagick. Here <strong>Image Processing</strong> is <strong>Not found</strong>; its <strong>Setup guide</strong> holds the install steps.</p>
 
 Read the [TikZ figures guide](./tikz-figures.md) for workflows and the [installation guide](./installation.md) for dependency setup.
 

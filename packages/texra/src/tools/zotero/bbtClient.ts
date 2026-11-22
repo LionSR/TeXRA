@@ -12,7 +12,15 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Predicate, Result, Schema, SchemaGetter } from 'effect';
+import {
+  Cause,
+  Duration,
+  Effect,
+  Predicate,
+  Result,
+  Schema,
+  SchemaGetter,
+} from 'effect';
 import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
@@ -221,7 +229,7 @@ function zoteroRequestFailure(
 ): ToolError {
   if (Cause.isTimeoutError(error)) {
     return new ToolError(
-      `Zotero request timed out after ${timeout / 1000}s. ` +
+      `Zotero request timed out after ${Duration.format(Duration.millis(timeout))}. ` +
         `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
     );
   }
