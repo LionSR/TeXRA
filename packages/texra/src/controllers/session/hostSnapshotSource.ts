@@ -31,6 +31,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import {
+  appSignalStream,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
@@ -157,6 +158,9 @@ export interface HostSnapshotSource {
     never,
     FileSystem.FileSystem | Path.Path
   >;
+  /** Each write TeXRA made inside the project, for a host view of the
+   *  project's files beside the launcher (the desktop's file tree). */
+  readonly filesWritten: Stream.Stream<void, never, AppSignals>;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** A tool may have been installed: the missing tools are checked again,
    *  with the credential. */
@@ -216,6 +220,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     | AgentCatalog
     | Secrets
     | SubscriptionAccounts
+    | FileSystem.FileSystem
+    | Path.Path
   > {
     const { stores } = options;
     const appState = yield* AppState;
@@ -400,15 +406,20 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // alike; a host may also follow edits made outside TeXRA
     // (`refreshFiles`).
     const root = options.root;
-    if (root !== undefined)
-      yield* follow(
-        Stream.filter(
-          yield* subscribeAppSignal('workspaceFilesWritten'),
-          ({ absolutePaths }) =>
-            absolutePaths.some((written) => isPathWithin(root, written)),
-        ),
-        loadFiles,
-      );
+    const writtenInProject = ({
+      absolutePaths,
+    }: {
+      readonly absolutePaths: readonly string[];
+    }) =>
+      root !== undefined &&
+      absolutePaths.some((written) => isPathWithin(root, written));
+    yield* follow(
+      Stream.filter(
+        yield* subscribeAppSignal('workspaceFilesWritten'),
+        writtenInProject,
+      ),
+      loadFiles,
+    );
     // The approval policy is read live as each snapshot is mapped; a
     // settings view's write republishes the inputs so the change shows.
     yield* follow(
@@ -490,6 +501,10 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         { concurrency: 'unbounded', discard: true },
       ).pipe(Effect.andThen(write({ loaded: true }))),
       refreshFiles: loadFiles,
+      filesWritten: appSignalStream('workspaceFilesWritten').pipe(
+        Stream.filter(writtenInProject),
+        Stream.as(undefined),
+      ),
       refreshCommits: loadCommits,
       refreshHostBanners: hostBanners,
       refreshWorkspaceRoots: Effect.suspend(() =>
