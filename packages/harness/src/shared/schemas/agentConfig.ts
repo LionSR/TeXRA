@@ -10,14 +10,41 @@ export const TemperatureSchema = Schema.Number.check(
   Schema.isGreaterThanOrEqualTo(0),
 ).check(Schema.isLessThanOrEqualTo(1));
 
+/** What Windows rejects in a file name, besides control characters. */
+const UNSAFE_FILE_NAME_CHARACTERS = '<>:"/\\|?*';
+/** Windows' device names, which no file may take, with or without an
+ *  extension. */
+const RESERVED_FILE_NAME =
+  /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(?:\..*)?$/iu;
+/** The longest segment a label gives, in code points. */
+const LABEL_FILE_NAME_MAX = 80;
+
 /**
- * A run's display name as one file-name segment: an installed plugin's
- * agent is labelled `<plugin>:<name>`, and `:` is not a file-name character
- * on every platform. Run packs, run directories and copy stems derive their
- * names through this alone.
+ * A run's display name as one file-name segment, safe on every platform.
+ * A label is free text (a model writes a child's), so a path separator,
+ * a character Windows rejects or a control character becomes `_`; leading
+ * dots and spaces go (no `..`, no hidden file), and trailing ones, which
+ * Windows drops; a device name gets a leading `_`; the result is at most
+ * {@link LABEL_FILE_NAME_MAX} code points, and `run` when nothing is left.
+ * Every file or folder named for a run takes its label through this alone.
  */
 export function labelFileName(label: string): string {
-  return label.replaceAll(':', '__');
+  const replaced = [...label]
+    .map((char) =>
+      char.charCodeAt(0) < 0x20 ||
+      char === '\u007f' ||
+      UNSAFE_FILE_NAME_CHARACTERS.includes(char)
+        ? '_'
+        : char,
+    )
+    .join('')
+    .replace(/^[.\s]+/u, '');
+  const segment = [...replaced]
+    .slice(0, LABEL_FILE_NAME_MAX)
+    .join('')
+    .replace(/[.\s]+$/u, '');
+  if (segment === '') return 'run';
+  return RESERVED_FILE_NAME.test(segment) ? `_${segment}` : segment;
 }
 
 /** A run's launch configuration, as its `run.config` row records it. */

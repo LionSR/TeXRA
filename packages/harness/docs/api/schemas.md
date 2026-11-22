@@ -1208,10 +1208,13 @@ const KIMI_CODE_PREFER_SETTING: { readonly key: "kimiCode.prefer"; readonly slot
 
 ## labelFileName
 
-A run's display name as one file-name segment: an installed plugin's
-agent is labelled `<plugin>:<name>`, and `:` is not a file-name character
-on every platform. Run packs, run directories and copy stems derive their
-names through this alone.
+A run's display name as one file-name segment, safe on every platform.
+A label is free text (a model writes a child's), so a path separator,
+a character Windows rejects or a control character becomes `_`; leading
+dots and spaces go (no `..`, no hidden file), and trailing ones, which
+Windows drops; a device name gets a leading `_`; the result is at most
+{@link LABEL_FILE_NAME_MAX} code points, and `run` when nothing is left.
+Every file or folder named for a run takes its label through this alone.
 
 ```ts
 function labelFileName(label: string): string
