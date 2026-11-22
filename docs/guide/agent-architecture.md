@@ -31,7 +31,7 @@ A program is started in one of three ways:
 - `texra run <program> --input …` in the terminal;
 - the **Merge** action, which starts `merge`.
 
-The Lean programs `prove` and `blueprint` work on Lean files in rounds and are
+The Lean programs (`prove`, `lean-simplify`, `blueprint`, `lean-search`) are
 described in [Lean 4 proofs](./lean.md#lean-programs); the task programs
 (`review`, `derive`, `fix-latex`, …) hand the job to one helper agent and
 return its report. The rest of this page is about the document programs.

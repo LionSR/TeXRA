@@ -218,11 +218,14 @@ decides whether to do the work itself or start the program.
 
 ## Lean programs
 
-The Lean plugin adds two: `prove` completes the proofs in `.lean` files until
-Lean reports no error and no `sorry` and the files declare no new `axiom`, and
-`blueprint` writes or updates a LeanBlueprint document until
-`leanblueprint web` and `leanblueprint checkdecls` pass. Read
-[Lean 4 proofs](./lean.md#lean-programs).
+The Lean plugin adds four: `prove` completes the proofs in `.lean` files
+until Lean reports no error and no `sorry` and the files declare no new
+`axiom`; `lean-simplify` brings them toward Mathlib quality without changing
+what they state, under the same check; `blueprint` writes or updates a
+LeanBlueprint document until `leanblueprint web` and
+`leanblueprint checkdecls` pass; and `lean-search` finds what Mathlib and the
+project already have for a statement or an API and says what is missing.
+Read [Lean 4 proofs](./lean.md#lean-programs).
 
 ## Your own programs
 
@@ -237,7 +240,8 @@ for what an agent used to do, or start the matching program: `review`,
 (was `numerics`), `code` (was `coder` and `engineer`), `review-code`,
 `simplify`, `test`, `fix-latex` (was `latexFixer`) and `latexdiff`. Slide
 decks and posters are the `slides` and `poster` programs; the Lean agents'
-jobs are `prove` and `blueprint`. Custom agent files are not read; see
+jobs are `prove`, `lean-simplify` (was `leanSimplifier`), `lean-search` (was
+`leanSearch`) and `blueprint`. Custom agent files are not read; see
 [Tailoring TeXRA](./customizing.md).
 :::
 

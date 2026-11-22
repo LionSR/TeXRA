@@ -81,8 +81,8 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `codeReviewer`), `simplify` (was `simplifier` and `codeSimplifier`),
   `test` (was `testEngineer`), `fix-latex` (was `latexFixer`) and
   `latexdiff` (was `latexDiff`). Slides and posters are the `slides` and
-  `poster` programs, and the Lean agents' jobs are the Lean plugin's `prove`
-  and `blueprint`. `orchestrator`, `assistant`, `progressCheck` and
+  `poster` programs, and the Lean agents' jobs are the Lean plugin's `prove`,
+  `lean-simplify`, `lean-search` and `blueprint`. `orchestrator`, `assistant`, `progressCheck` and
   `creator` have no replacement of their own: the assistant plans and
   delegates, and a goal's judge checks its rounds. Setup and the fix after a
   failed compile are the assistant, started with a first message written
@@ -211,9 +211,10 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `texra resume <id> --fork`) opens a new task holding the conversation and
   leaves the original as it was; **Fork from here** on one of your messages
   forks before it, keeping its images. **Rename…** (`/rename <title>`) gives
-  a task your own title. A finished task's **Run again…** opens the New task
-  form filled from that task, and the assistant's proposal card has **Edit**
-  to change what it would start before approving it.
+  a task your own title. A finished chat's **Run again…** opens the New task
+  form filled from it and starts a fresh chat with the system text and tools
+  the original recorded, and the assistant's proposal card has **Edit** to
+  change what it would start before approving it.
 - **Scripts: the assistant writes code to call its tools.** It is sent the
   `script` tool and call their other tools from JavaScript
   (`await tools.read_file({ path })`, `Promise.all`, loops, `try`/`catch`),
@@ -247,7 +248,8 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `search`, `derive`, `solve`, `experiment`, `code`, `review-code`,
   `simplify`, `test`, `fix-latex`, `latexdiff`), and the Lean plugin has
   `prove` (completes the proofs in the `.lean` files you pass, checked with
-  Lean's diagnostics) and `blueprint`. A document program takes
+  Lean's diagnostics), `lean-simplify` (brings them toward Mathlib quality
+  under the same check), `blueprint` and `lean-search`. A document program takes
   `reflect: true` to have a critic read each revision's diff and compile
   result.
 - **Plugins.** Install Claude Code and Codex plugins from GitHub, a git URL
@@ -263,8 +265,11 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   off reaches open conversations at their next step.
 - **MCP servers.** List local stdio servers in `~/.texra/mcp.json` (the
   shape of Claude Code's `.mcp.json`), or install a plugin that carries
-  them. Each call asks like a shell command, and a server does not inherit
-  your API-key environment variables.
+  them. A plugin's servers are offered to the assistant while the plugin is
+  on; a server listed only in `mcp.json` is offered to a run whose tools name
+  it (`mcp__<server>__*`), and the assistant names none yet. Each call asks
+  like a shell command, and a server does not inherit your API-key
+  environment variables.
 - **Settings in six pages.** Models, Agents, Plugins, LaTeX, Memory and
   General, with sub-tabs, and a gear in the TeXRA panel header.
   Plugins lists TeXRA's own plugins, installed ones and MCP servers in one
@@ -304,13 +309,16 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `texra doctor --prune-storage` lists history left by deleted projects and
   old backup copies, and deletes them when you confirm.
 - **Usage logging is anonymous.** When on, it carries a random install ID
-  instead of an account, and never prompts, paths or document text. Opt out
+  instead of an account, and never prompts, paths or document text. It
+  names a program only for a program TeXRA ships, and nothing for a chat. Opt out
   with `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1` or
   `DO_NOT_TRACK=1`; opting out now also covers subscription rounds.
 - **Agent SDK: `@texra-ai/harness` and `@texra-ai/llm` are published for
   the first time.** `@texra-ai/harness` is the agent runtime TeXRA runs on:
-  sessions with persistent history, resume, fork and approvals, agents
-  written inline or as files, tools and plugins of your own. Its authoring
+  sessions with persistent history, resume, fork and approvals, and tools
+  and plugins of your own. A run is started with its system text, the tools
+  it declares, the instruction and the model, and a run's helper agents are
+  written the same way or named from an installed plugin's agents. Its authoring
   surface is `@texra-ai/harness/plugins` and the built-in plugins are
   `@texra-ai/harness/builtins`. The store file and the environment
   variables it reads are named after the embedding app's settings namespace

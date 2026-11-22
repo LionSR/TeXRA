@@ -61,8 +61,9 @@ files, without a chat. The document programs (`edit`, `annotate`, `enhance`,
 `apply`, `merge`, `transcribe`, `slides`, `poster`) revise or create
 documents; the task programs (`review`, `search`, `derive`, `code`,
 `review-code`, `simplify`, `test`, `experiment`, `solve`, `fix-latex`,
-`latexdiff`) answer with a report; the Lean programs `prove` and `blueprint`
-work on a Lean project's files in place. Every program needs at least one
+`latexdiff`) answer with a report; the Lean programs `prove`,
+`lean-simplify` and `blueprint` work on a Lean project's files in place, and
+`lean-search` reports what Mathlib and the project already have. Every program needs at least one
 `--input`. Run one from a project directory:
 
 ```bash
@@ -345,7 +346,7 @@ texra plugin remove paper-protocol
 An installed plugin stays off until you enable it:
 
 - **Trust on enable**: `texra plugin enable` shows what the plugin declares (skills, commands, agents, and each MCP server's command line) and asks you to trust it. Trust covers that version, every file in the plugin folder, and the MCP servers' commands, arguments, and environment values. External binaries a server runs (such as `node`) are trusted by path, size, and modification time. If any covered file or setting changes, the plugin stops loading until you re-enable and re-trust it.
-- **Reserved names and unsupported features**: A plugin cannot be named `custom`, `builtIn`, or `plugin`. Plugins with LSP servers cannot be enabled yet; output styles and apps are not loaded.
+- **Names and unsupported features**: A plugin's name uses lowercase letters, digits and single hyphens, at most 32 characters, and cannot be `own`, which names the [programs an agent writes for itself](#programs-an-agent-writes-for-itself). Plugins with LSP servers cannot be enabled yet; output styles and apps are not loaded.
 - **Hooks**: Claude Code hooks run as processes in the workspace. A `Stop` hook that blocks (`decision: "block"`, or exit code 2) continues the run for one extra turn using its reason as the next instruction, even under `texra run`. The stop after that turn passes `stop_hook_active: true` and cannot block again.
 
 Once enabled and trusted, a plugin's components load under its namespace:
@@ -435,11 +436,14 @@ texra history list --limit 10        # only the most recent runs (alias: -n)
 texra history list --output-format ndjson
 ```
 
-Text output prints one tab-separated row per run:
+Text output prints one tab-separated row per run, with no header line:
 
 ```text
-<id>    <timestamp>    <name>    <status>    <primary input>
+<id>    <timestamp>    <name>    <status>    <subject>
 ```
+
+The name is the run's label (a program's name, or the chat's), and the
+subject is its first input file's name, else its title, else `-`.
 
 The NDJSON form is stable for scripts under the version 3 contract above.
 Each line has kind `history-entry` and contains the same run entry object used

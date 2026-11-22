@@ -161,6 +161,10 @@ TeXRA's capabilities, packaged as portable agent skills. **texra-scientific-skil
 ```text
 # Claude Code
 /plugin marketplace add texra-ai/texra-scientific-skills
+
+# TeXRA
+texra plugin install github.com/texra-ai/texra-scientific-skills
+texra plugin enable texra-scientific-skills
 ```
 
 Skills use the standard `SKILL.md` format. You can also install them through Codex or by symlinking individual skill directories into your agent's skills location.
@@ -184,13 +188,20 @@ Skills use the standard `SKILL.md` format. You can also install them through Cod
 - **lean-proof-assistant**: develops and debugs Lean proofs with goal inspection and lemma search
 - **lean-search**: locates existing Lean 4 and Mathlib lemmas, APIs, and formalization patterns
 - **lean-simplifier**: refactors code toward Mathlib-quality style while preserving meaning
-- **lean-tactic-improver**: turns repeated proof patterns into reusable project automation
+- **lean-conventions**: the shared style, naming, documentation, review and proof-integrity conventions for a formalization project
+- **lean-build-cache**: keeps Lean and Mathlib builds fast by fetching prebuilt artifacts and reusing a warm build across worktrees
+- **paper-gap-notes**: records where a formalization departs from its cited sources as standalone mathematical notes
+- **find-simplification**: finds evidence-backed simplification candidates in a Lean development for a later cleanup
 
 ### Quick start
 
 ```text
 # Claude Code
 /plugin marketplace add texra-ai/texra-lean-skills
+
+# TeXRA
+texra plugin install github.com/texra-ai/texra-lean-skills
+texra plugin enable texra-lean-skills
 ```
 
 You can also install the skills through Codex or by symlinking individual skill directories into your agent's skills location.
@@ -221,6 +232,10 @@ A working Zotero library accumulates errors. **zotcleanup** is a Claude Code / C
 ```text
 # Claude Code
 /plugin marketplace add texra-ai/zotero-cleanup-skills
+
+# TeXRA
+texra plugin install github.com/texra-ai/zotero-cleanup-skills
+texra plugin enable zotcleanup
 ```
 
 The scripts also run standalone with [uv](https://docs.astral.sh/uv/) (Python ≥ 3.10) and your Zotero credentials. Every command defaults to a dry run that previews changes before `--apply` writes them.

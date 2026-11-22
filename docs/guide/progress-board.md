@@ -83,11 +83,12 @@ The header provides a summary and actions for the selected stream:
     - **Copy diagnostics**: Copy the task's title, agent, model, status, task ID, output paths, and compile failures as plain text for bug reports or follow-up tasks.
     - **Delete task**: Remove the task once stopped.
   - **Program runs**:
-    - **Run again…**: Pre-fill the New task form with the same program, model, files, and instruction to start a fresh run.
     - **Run latexdiff on the outputs**: Compare the original input `.tex` file(s) with the generated output `.tex` file(s) using `latexdiff` (read the [LaTeX Diff guide](./latex-diff.md)).
     - **Archive outputs to History**: Copy the run folder (outputs, logs, mirrored dependencies) into a timestamped folder under `History/` (read the [file management guide](./file-management.md)).
     - **Delete output files**: Remove the task's run folder.
-  - **Chat tasks**: **Compact conversation** (summarize earlier turns).
+  - **Chat tasks**:
+    - **Compact conversation**: Summarize earlier turns.
+    - **Run again…**: Open the New task form filled with the chat's model, first instruction, skills and images; sending it starts a fresh chat with the system text and tools the original run recorded.
   - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **LaTeXDiffs…**.
 - **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or workflows with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 

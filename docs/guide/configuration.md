@@ -128,11 +128,14 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records an agent label, the model name, the
-provider API it was called through, the billing route (API key or
-subscription), token counts, the cost at list prices, response time, the time
-of the call, the task identifier, version, and host. The agent label is never
-a name you or a plugin wrote: such a name is sent as `custom`. No account is
+When telemetry is enabled, TeXRA records the model name, the provider API it
+was called through, the billing route (API key or subscription), token
+counts, the cost at list prices, response time, the time of the call, the
+task identifier, version, and host. A call made by a program TeXRA ships also
+carries that program's name, and a draft polish in the composer carries
+`polish`. A chat sends no name, and neither does a program from an installed
+plugin or one the assistant wrote, so a name you or a plugin wrote is never
+sent. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
 not send prompt text, document content, file paths, or error text. The first
