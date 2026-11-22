@@ -194,8 +194,8 @@ const NO_SERVICE = 'TEXRA_NO_SERVICE';
 /** Why a caller that starts no service holds none. */
 const NONE_RUNNING = 'no TeXRA service is running';
 
-/** How long a started service has to answer its first hello: it loads the
- *  agent catalog first, which a loaded machine makes slow. */
+/** How long a started service has to answer its first hello: it builds
+ *  its process before it answers, which a loaded machine makes slow. */
 const START_TIMEOUT = '60 seconds';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';

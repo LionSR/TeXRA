@@ -127,7 +127,8 @@ const HostSurfaceActionSchema = Schema.Union([
    *  cancelled: the host decides the transition once and sends it to one
    *  port, which plays the completion chime. */
   Schema.Struct({ kind: Schema.Literal('chime') }),
-  /** The setup agent selected by the onboarding funnel. */
+  /** A change to the launcher's form the host makes: the run Run again…
+   *  opens it on, or the commit of a base file the editor picked. */
   Schema.Struct({ kind: Schema.Literal('launch'), patch: LaunchPatchSchema }),
 ]);
 export type HostSurfaceAction = typeof HostSurfaceActionSchema.Type;

@@ -379,8 +379,8 @@ function reset(
 }
 
 /**
- * Read a state key that is not a catalog row (onboarding flags, the custom
- * agent directory, the reasoning overrides) as its schema decodes it: the
+ * Read a state key that is not a catalog row (onboarding flags, the
+ * reasoning overrides) as its schema decodes it: the
  * schema's default when the key is absent, and, as for a catalog row, the
  * default after a warning when a present value fails it. The one decode of
  * these keys, so no reader casts the store's `unknown` to the type it hopes
