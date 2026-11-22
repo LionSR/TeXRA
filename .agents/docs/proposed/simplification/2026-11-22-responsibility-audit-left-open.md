@@ -8,7 +8,7 @@ launcher's file list) and a read-only survey of the per-host bindings of
 the shared GUI window body (`openGuiWindow.ts`) and the followers of the
 `workspaceFilesWritten` app signal.
 
-The PR that adds this note lands three findings. In each, a rule the
+The PR that adds this note lands four findings. In each, a rule the
 shared window body owns was decided by a host instead:
 
 - **The launcher's file list after TeXRA's own writes.** Only the
@@ -25,6 +25,14 @@ shared window body owns was decided by a host instead:
   answers `Internal`. The file-action controller, which already words a
   missing side, now words a diff view that would not open as a rejection
   the surface shows.
+- **Which form an editor file takes in the launcher.** The binding's
+  contract said the body decides, but the extension applied
+  `workspaceRelativePath` itself, twice, with different no-folder
+  behaviour (the current file absolute, the opened files empty). The
+  binding now returns absolute paths and the body's `useCurrentFile` and
+  `addOpenedFiles` cases make them project-relative, so with no folder
+  open "Add opened files" lists the open files by absolute path, as the
+  current file already did.
 
 ## Open
 
@@ -49,12 +57,3 @@ shared window body owns was decided by a host instead:
    all of `ProcessServices`, which `Context.pick` cannot forward wholesale.
    First narrow `HostVerb`'s requirements for `setApiKey` to what the two
    hosts read, then the body owns the notice's verb.
-3. **The extension turns editor files into launcher paths, twice, with
-   different no-folder behaviour.** `getCurrentFile` and `getOpenedFiles`
-   (`packages/extension/src/progressView/extensionHostRequests.ts`) each
-   apply `workspaceRelativePath`, although the binding's contract says the
-   body decides which form a launcher field takes. With no folder open, the
-   current file comes back absolute and the opened files come back empty.
-   Decision: which of those two is right; then the body's `useCurrentFile`
-   and `addOpenedFiles` cases apply it and the binding returns absolute
-   paths.
