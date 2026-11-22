@@ -50,12 +50,12 @@ describe('PromptBuilder', () => {
     'names no shell or file tool to a run offered none (golden_child: executions)',
     () =>
       Effect.gen(function* () {
-        const storageRoot = mkdtempSync(join(os.tmpdir(), 'texra-prompt-'));
+        const storageRoot = mkdtempSync(join(os.tmpdir(), 'notes-{{title}}-'));
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => rmSync(storageRoot, { recursive: true })),
         );
         // cast: the opening reads only the workspace and the storage root.
-        const roots = { workspace: undefined, storageRoot } as WorkspaceRoots;
+        const roots = { workspace: storageRoot, storageRoot } as WorkspaceRoots;
         const system = yield* buildOpeningSystemPrompt(
           'Answer the task.',
           {
@@ -68,6 +68,7 @@ describe('PromptBuilder', () => {
           },
           { roots, textOnly: false, offered: ['executions', 'plan'] },
         );
+        expect(system).toContain('notes-{{title}}-');
         expect(system).toContain('<tool_use_instructions>');
         // `Shell:` in `<workspace_info>` names the user's shell, not a tool.
         expect(system).not.toMatch(/bash tool|glob\/grep|read_file/);

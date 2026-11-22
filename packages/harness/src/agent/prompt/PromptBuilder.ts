@@ -163,10 +163,12 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
       ...[agentsMd, attachedMemories].filter(Boolean),
     ].join('\n');
     if (options.textOnly) return systemPrompt;
-    const suffix = yield* renderPrompt(
-      [toolUseInstructions(options.offered), workspaceInfo].join('\n'),
+    const instructions = yield* renderPrompt(
+      toolUseInstructions(options.offered),
       inputs,
     );
-    return [systemPrompt, suffix].filter(Boolean).join('\n');
+    return [systemPrompt, instructions, workspaceInfo]
+      .filter(Boolean)
+      .join('\n');
   },
 );
