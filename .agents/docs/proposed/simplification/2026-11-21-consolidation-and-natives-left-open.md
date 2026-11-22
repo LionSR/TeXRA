@@ -14,6 +14,10 @@ that adds this note:
 - `raisedBy` read from one module
 - two inline plurals through `formatResultCount`
 
+Item 3, whether focus is in a text field, landed in the 2026-11-22 UI audit:
+`isTypingKeystroke` and `textEntryHasFocus` (`packages/texra/src/ui/wa/keyActivation.ts`)
+answer it for the desktop shortcut registry and the request cards.
+
 ## Open
 
 1. **The home directory is read four ways.**
@@ -33,13 +37,6 @@ that adds this note:
    (`packages/texra/src/tools/agentCli/`) expands `~/` and `~\` on every
    platform. One `expandHome(input, home)` beside `homeDirectory` once item 1
    decides how a synchronous caller gets `home`.
-3. **Whether focus is in a text field, two rules.**
-   `packages/desktop/src/renderer/desktopShortcutRegistry.ts` counts
-   `select` and walks the event's composed path;
-   `packages/texra/src/ui/progress/components/RequestPanels.ts` counts any
-   tag containing `input` or `textarea` (so `wa-input`) and reads only the
-   active element. One reader in `packages/texra/src/ui/` needs the union
-   decided and a check in both renderers.
 
 ## Checked and declined
 

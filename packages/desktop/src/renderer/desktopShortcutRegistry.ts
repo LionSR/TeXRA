@@ -1,3 +1,4 @@
+import { isTypingKeystroke } from '@ui/wa/keyActivation';
 import { toElectronAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
@@ -59,7 +60,7 @@ export function createDesktopShortcutRegistry(
     );
     if (!entry) return;
     if (
-      isTextEntryTarget(view, options.document, event) &&
+      isTypingKeystroke(event, options.document) &&
       !hasPrimaryModifier(event)
     ) {
       return;
@@ -84,53 +85,6 @@ export function createDesktopShortcutRegistry(
       view?.removeEventListener('keydown', handleKeydown);
     },
   };
-}
-
-/**
- * Cross-realm element check. The registry is handed the renderer's `Document`,
- * whose `Element` constructor need not be this module's global (tests install a
- * separate DOM), so `instanceof` has to go through that view.
- */
-function isElementFrom(
-  view: Document['defaultView'],
-  target: EventTarget | null,
-): target is Element {
-  return view != null && target instanceof view.Element;
-}
-
-/**
- * True when the keystroke is ordinary typing: it either travels through a text
- * entry control or one is focused, possibly inside a shadow root.
- */
-function isTextEntryTarget(
-  view: Document['defaultView'],
-  document: Document,
-  event: KeyboardEvent,
-): boolean {
-  if (event.composedPath().some((target) => isTextEntryElement(view, target))) {
-    return true;
-  }
-  return isTextEntryElement(view, getDeepActiveElement(document));
-}
-
-function isTextEntryElement(
-  view: Document['defaultView'],
-  target: EventTarget | null,
-): boolean {
-  if (!isElementFrom(view, target)) return false;
-  return (
-    target.closest(
-      'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
-    ) != null
-  );
-}
-
-function getDeepActiveElement(document: Document): Element | null {
-  let activeElement = document.activeElement;
-  while (activeElement?.shadowRoot?.activeElement) {
-    activeElement = activeElement.shadowRoot.activeElement;
-  }
-  return activeElement;
 }
 
 function hasPrimaryModifier(event: KeyboardEvent): boolean {
