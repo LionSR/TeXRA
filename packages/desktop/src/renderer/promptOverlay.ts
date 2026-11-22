@@ -119,11 +119,7 @@ export function createDesktopPromptOverlay(
   const served = runtime.runSync(
     serveOverMessages((_main, message) =>
       Effect.sync(() =>
-        postToMain({
-          command: DESKTOP_PROMPT_COMMANDS.ANSWER,
-          // cast: `rpc`'s messages are plain objects.
-          message: message as unknown as Record<string, unknown>,
-        }),
+        postToMain({ command: DESKTOP_PROMPT_COMMANDS.ANSWER, message }),
       ),
     ),
   );

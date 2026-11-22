@@ -1,5 +1,5 @@
 import { Effect, Fiber, FiberSet, type Scope } from 'effect';
-import { RpcClient, type RpcMessage } from 'effect/rpc';
+import { RpcClient } from 'effect/rpc';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { callOverMessages } from '@texra/shared/rpcOverMessages';
@@ -37,13 +37,7 @@ export const makeDesktopPrompts = Effect.fnUntraced(function* (
   Scope.Scope
 > {
   const { protocol, receive } = yield* callOverMessages((message) =>
-    Effect.sync(() =>
-      post({
-        command: DESKTOP_PROMPT_COMMANDS.SHOW,
-        // cast: `rpc`'s messages are plain objects.
-        message: message as unknown as Record<string, unknown>,
-      }),
-    ),
+    Effect.sync(() => post({ command: DESKTOP_PROMPT_COMMANDS.SHOW, message })),
   );
   const client = yield* RpcClient.make(DesktopPromptRpcs).pipe(
     Effect.provideService(RpcClient.Protocol, protocol),
@@ -53,10 +47,9 @@ export const makeDesktopPrompts = Effect.fnUntraced(function* (
     routes: {
       [DESKTOP_PROMPT_COMMANDS.ANSWER]: parsedRoute(
         DesktopAnswerPromptMessageSchema,
-        ({ message }) =>
-          // cast: `rpc` reads its own message, and a reply for no call in
-          // flight (one whose asker gave up) it drops.
-          receive(message as unknown as RpcMessage.FromServerEncoded),
+        // A reply for no call in flight (one whose asker gave up) `rpc`
+        // drops.
+        ({ message }) => receive(message),
       ),
     },
     request: ({ title, prompt, password }) =>

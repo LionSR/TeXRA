@@ -11,7 +11,6 @@ import {
   Effect,
   FiberHandle,
   Ref,
-  type Schema,
   type Scope,
   Stream,
 } from 'effect';
@@ -43,7 +42,7 @@ export interface WindowClient {
   }) => Stream.Stream<HostAttachFrame, Error>;
   readonly 'host.answer': (input: {
     readonly attachment: string;
-    readonly message: typeof Schema.Json.Type;
+    readonly message: RpcMessage.FromServerEncoded;
   }) => Effect.Effect<void, Error>;
   readonly 'host.focus': (input: {
     readonly attachment: string;
@@ -219,17 +218,12 @@ function attachTo(
       capabilities: capabilitiesOf(host),
     }).pipe(
       Stream.runForEach((frame) => {
-        if (frame.kind === 'call')
-          // cast: `rpc` reads its own message.
-          return receive(
-            frame.message as unknown as RpcMessage.FromClientEncoded,
-          );
+        if (frame.kind === 'call') return receive(frame.message);
         return Effect.gen(function* () {
           const served = yield* serveOverMessages((_service, message) =>
             client['host.answer']({
               attachment: frame.attachment,
-              // cast: `rpc`'s messages are JSON.
-              message: message as unknown as typeof Schema.Json.Type,
+              message,
             }).pipe(
               Effect.catch((error) =>
                 Effect.logWarning(

@@ -30,7 +30,7 @@ import type { TranscriptInterest } from '@texra-ai/harness/transcript';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
-  SessionEnvelopeSchema,
+  ServerEnvelopeSchema,
   SessionRpcs,
   type HostOutcome,
   type HostSurfaceAction,
@@ -134,7 +134,7 @@ export function installWebviewTransport(
   ) => void = () => undefined;
 
   const receive = (data: unknown): void => {
-    const parsed = Schema.decodeUnknownResult(SessionEnvelopeSchema)(data);
+    const parsed = Schema.decodeUnknownResult(ServerEnvelopeSchema)(data);
     if (!Result.isSuccess(parsed)) {
       console.error(
         '[progress] malformed session message',
@@ -151,11 +151,7 @@ export function installWebviewTransport(
       console.warn(`[progress] dropped a message for session ${key}: not open`);
       return;
     }
-    // cast: `rpc` reads its own message, and a reply it cannot read fails
-    // the call it answers.
-    runtime.runFork(
-      session.deliver(message as unknown as RpcMessage.FromServerEncoded),
-    );
+    runtime.runFork(session.deliver(message));
   };
 
   const close = (key: string): void => {

@@ -20,12 +20,13 @@
  * - `session.request` and `host.request`: one runtime or host command,
  *   answered with its outcome or the error it failed with, as the class.
  *
- * Every message on the channel is a {@link SessionEnvelopeSchema}: the session it
- * belongs to, the frontend instance that sent or is answered, and one of
- * `rpc`'s own messages.
+ * Every message on the channel is an envelope ({@link ClientEnvelopeSchema}
+ * up, {@link ServerEnvelopeSchema} down): the session it belongs to, the
+ * frontend instance that sent or is answered, and one of `rpc`'s own
+ * messages.
  */
 import { Schema } from 'effect';
-import { Rpc, RpcGroup, type RpcMessage } from 'effect/rpc';
+import { Rpc, RpcGroup } from 'effect/rpc';
 
 import {
   OutcomeSchema,
@@ -38,6 +39,10 @@ import {
   SessionViewInputSchema,
   TranscriptSubscriptionSchema,
 } from '@texra-ai/harness/transcript';
+import {
+  RpcClientMessageSchema,
+  RpcServerMessageSchema,
+} from '../rpcOverMessages';
 import { BridgeErrorSchema } from './bridgeErrors';
 import { HostCommandSchema } from './hostRequest';
 import { HostSnapshotSchema } from './hostSnapshot';
@@ -151,22 +156,30 @@ export const SessionRpcs = RpcGroup.make(
   }),
 );
 
+const envelopeFields = {
+  session: Schema.NonEmptyString,
+  client: Schema.NonEmptyString,
+};
+
 /**
  * One message on a session channel. `client` names the frontend instance:
  * a webview that reloads on the same port starts again with a new one, so
  * the host drops what is still in flight for the old instance instead of
- * answering the new one with it. `message` is an `rpc` message, which
- * `rpc` itself decodes.
+ * answering the new one with it. Up, the frontend's client message; down,
+ * the host's server message.
  */
-export const SessionEnvelopeSchema = Schema.Struct({
-  session: Schema.NonEmptyString,
-  client: Schema.NonEmptyString,
-  message: Schema.Record(Schema.String, Schema.Unknown),
+export const ClientEnvelopeSchema = Schema.Struct({
+  ...envelopeFields,
+  message: RpcClientMessageSchema,
+});
+
+/** {@link ClientEnvelopeSchema}'s answer: the host's server message. */
+export const ServerEnvelopeSchema = Schema.Struct({
+  ...envelopeFields,
+  message: RpcServerMessageSchema,
 });
 
 /** A message as one end posts it: up, a client's; down, a server's. */
-export interface SessionWire {
-  readonly session: string;
-  readonly client: string;
-  readonly message: RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded;
-}
+export type SessionWire =
+  | typeof ClientEnvelopeSchema.Type
+  | typeof ServerEnvelopeSchema.Type;
