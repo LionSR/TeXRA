@@ -14,10 +14,18 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   each command and edit as before, or to **Block** to refuse them. A policy
   you already chose is kept.
 
-- **The `texra memory` commands and the chat's `/memory` are removed.**
-  The notes an agent saves are ordinary Markdown files: open them from the
-  Memory tab's **Open memory folder**, or in the project's storage directory
-  under `memories/`.
+- **Memory is two folders of Markdown files, with no memory tool.** An
+  agent reads and writes its notes with its ordinary file tools, and is
+  shown each folder's index, `MEMORY.md`, at every request, so nothing has
+  to be loaded by hand at the start of a conversation. There is a folder
+  for you in every project (`~/.texra/memories/`) beside the project's own.
+  Pinning is gone: what an agent should always see goes in `MEMORY.md`.
+  The Memory tab is the switch and two **Open folder** buttons; its list,
+  the `texra memory` commands and the chat's `/memory` are removed, and so
+  is the `memories` option of the `agent` and `program` tools. Notes
+  already saved stay where they are, with no `MEMORY.md` until an agent or
+  you write one. A custom agent that lists the `memory` tool needs that
+  line removed.
 
 - **TeXRA 1.0 starts fresh.** Conversations, saved runs, settings kept by the
   app, remembered desktop projects and the CLI's input history from 0.40 are

@@ -44,17 +44,7 @@ import {
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
 import { ProfilePageSchema } from './profileViewMessages';
-import {
-  DeleteMemoryMessageSchema,
-  GetMemoryDataMessageSchema,
-  GetMemoryPreviewMessageSchema,
-  OpenMemoryFileMessageSchema,
-  OpenMemoryFolderMessageSchema,
-  PinMemoryMessageSchema,
-  UnpinMemoryMessageSchema,
-  MemoryPageSchema,
-  UpdateMemoryPreviewMessageSchema,
-} from './memoryViewMessages';
+import { OpenMemoryFolderMessageSchema } from './memoryViewMessages';
 import { commandOnly } from './messageFactories';
 import {
   PluginActionMessageSchema,
@@ -433,7 +423,6 @@ const LatexStatusPageSchema = Schema.Struct({
  * change (`UPDATE_HOST_STATE`), and the view keeps the latest of each.
  */
 const SettingsHostStateSchema = Schema.Struct({
-  memory: MemoryPageSchema,
   profile: ProfilePageSchema,
   models: ModelSelectionPageSchema,
   agents: AgentSelectionPageSchema,
@@ -462,7 +451,6 @@ const UpdateHostStateMessageSchema = Schema.Struct({
 export const SettingsViewOutboundMessageSchema = Schema.Union([
   SetTabMessageSchema,
   UpdateHostStateMessageSchema,
-  UpdateMemoryPreviewMessageSchema,
   UpdateSettingsSnapshotMessageSchema,
 ]);
 
@@ -684,13 +672,7 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   ApplyLatexSettingsMessageSchema,
   RunInstallCommandMessageSchema,
   // Memory messages
-  GetMemoryDataMessageSchema,
-  GetMemoryPreviewMessageSchema,
-  OpenMemoryFileMessageSchema,
   OpenMemoryFolderMessageSchema,
-  DeleteMemoryMessageSchema,
-  PinMemoryMessageSchema,
-  UnpinMemoryMessageSchema,
   // Profile messages
   SetProviderKeyMessageSchema,
   RemoveProviderKeyMessageSchema,

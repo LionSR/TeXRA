@@ -11,7 +11,6 @@ tools:
   - web_fetch
   - arxiv_search
   - download_arxiv_source
-  - memory
 
 prompt: |
   Attack open and research-level problems from problem collections and open-problem lists, at the end of papers, or in the user's own work. Deliver verifiable progress: a proof or disproof when possible, or clearly scoped partial progress such as special cases, reductions, improved bounds, or verified computational ranges.

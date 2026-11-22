@@ -417,15 +417,18 @@ function goldenTurn(
       ? Effect.succeed([call('executions', { path: '/executions' })])
       : Effect.never;
   }
-  // The own-program run: it writes itself a program with the memory tool,
-  // then its next step's script starts that program by name.
+  // The own-program run: it writes itself a program into the project
+  // memory folder its system text names, then its next step's script starts
+  // that program by name.
   if (system.includes('GOLDEN-OWN')) {
+    const folder = /^\s*(.+): Project memory: .*\(writable\)$/m.exec(
+      system,
+    )?.[1];
     const step = [
       () =>
-        call('memory', {
-          command: 'create',
-          path: '/memories/programs/greet.js',
-          file_text: GOLDEN_OWN_PROGRAM,
+        call('write_file', {
+          path: `${folder}/programs/greet.js`,
+          content: GOLDEN_OWN_PROGRAM,
         }),
       () =>
         call('script', {

@@ -44,10 +44,17 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
 
 import {
+  memoryFolders,
+  memoryRoots,
+  memorySection,
+  type MemoryFolder,
+} from '@agent/memory/memoryLayout';
+import {
   OWN_PROGRAMS_LISTED,
   readOwnPrograms,
 } from '@agent/memory/ownPrograms';
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
+import { EXTERNAL_ROOT_TOOLS } from '@agent/prompt/workspaceInfo';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
@@ -90,7 +97,10 @@ import { blobRows, systemTextAt, stored } from '../run/recordedRequest';
 import { appendRow } from './rows';
 import { stepHooks, type StepHooks } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
-import { AGENT_SKILLS_ENABLED_SETTING } from '@shared/state/stateSettings';
+import {
+  AGENT_SKILLS_ENABLED_SETTING,
+  MEMORY_ENABLED_SETTING,
+} from '@shared/state/stateSettings';
 
 /** The project's side of the tool catalog ({@link SessionTools}): its
  *  plugin layers and MCP servers, built in the session's scope and closed
@@ -103,7 +113,8 @@ export class ProjectTools extends Context.Service<ProjectTools, SessionTools>()(
 export interface StepTools extends ResolvedTools {
   /** The pinned plugins' process and session services. */
   readonly services: PluginContext;
-  /** The read-only skill directories its calls may read. */
+  /** The directories its calls reach beside the workspace: its skills',
+   *  read-only, and its memory folders. */
   readonly stepRoots: readonly StepRoot[];
   /** The command hooks of the installed plugins it accepted, by plugin id:
    *  its calls, and the prompts and stops under it, run these. */
@@ -134,6 +145,13 @@ export interface OpenStep {
   readonly warnings: readonly string[];
   /** The skills its system text lists. */
   readonly listed: readonly SkillCatalogEntry[];
+  /** Its memory folders and the section of its system text that shows
+   *  their indexes, or null for a step with no memory: memory is off, or
+   *  the step has no tool to read a note with. */
+  readonly memory: {
+    readonly folders: readonly MemoryFolder[];
+    readonly section: string;
+  } | null;
   /** The plugins whose sections its system text renders, by id. */
   readonly contributing: readonly Plugin[];
 }
@@ -410,17 +428,33 @@ const openStep = Effect.fn('Step.open')(function* (
         : offered(recordedSkills);
     const activated = offered(names);
     const hooks = stepHooks(run, pinned.installed, recordedHooks);
+    // Memory: the folders are roots this step's file tools read and write,
+    // and their indexes are in its system text as they read now, so a note
+    // one step writes is listed to the next. A run that takes no injected
+    // tool (a program, a text-only persona) has none, as it had no memory
+    // tool, and neither has a step with nothing to read a note with.
+    const remembers =
+      run.toolInputs.injectTools &&
+      EXTERNAL_ROOT_TOOLS.some((name) => tools.registry.has(name)) &&
+      (yield* Settings.get(roots, MEMORY_ENABLED_SETTING));
+    const folders = remembers ? memoryFolders(roots) : [];
+    const memory = remembers
+      ? { folders, section: yield* memorySection(folders) }
+      : null;
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
       tools: {
         ...tools,
         services,
         // Its catalog entries carry their directories canonical already.
-        stepRoots: [...listed, ...activated].flatMap(({ name, directory }) =>
-          directory === null
-            ? []
-            : [{ absolutePath: directory, label: `Skill ${name}` }],
-        ),
+        stepRoots: [
+          ...[...listed, ...activated].flatMap(({ name, directory }) =>
+            directory === null
+              ? []
+              : [{ absolutePath: directory, label: `Skill ${name}` }],
+          ),
+          ...memoryRoots(folders),
+        ],
         hooks,
         modules,
       },
@@ -437,6 +471,7 @@ const openStep = Effect.fn('Step.open')(function* (
       withheld: resolved.withheldForApproval,
       skills,
       listed,
+      memory,
       notOffered: [...notOffered],
       holding,
       contributing: contributing.toSorted(
@@ -488,6 +523,7 @@ const openStep = Effect.fn('Step.open')(function* (
   return {
     tools,
     listed,
+    memory: step.memory,
     contributing: step.contributing,
     skills,
     changed: toolsChanged || skillsChanged,
@@ -535,6 +571,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
   waits: boolean,
   opening?: (
     offered: readonly string[],
+    memory: readonly MemoryFolder[],
   ) => Effect.Effect<
     string,
     Error,
@@ -559,11 +596,16 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const offered = tools.definitions.map(({ name }) => name);
   const context = {
-    ...stepInstructions(step.contributing, step.listed, {
-      offered,
-      isChild: run.entry.parent !== null,
-      config: roots.config,
-    }),
+    ...stepInstructions(
+      step.contributing,
+      step.listed,
+      step.memory?.section ?? null,
+      {
+        offered,
+        isChild: run.entry.parent !== null,
+        config: roots.config,
+      },
+    ),
     ...(delegation && { delegation }),
   };
   const base =
@@ -571,7 +613,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
       ? stored(state, state.input.system, Schema.String)
       : opening === undefined
         ? undefined
-        : yield* opening(offered);
+        : yield* opening(offered, step.memory?.folders ?? []);
   const { system, update } = systemTextAt(state, base, context);
   const modules = Record.map(tools.modules, sha256);
   const changed =

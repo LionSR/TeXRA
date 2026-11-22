@@ -321,8 +321,6 @@ export function testLaunch(
         AGENT_DOCS_DIR: '',
       },
       activated: [],
-      attachedMemories: null,
-      attachedMemoryMisses: [],
     },
     entry: testEntry(runId, config),
     ...over,

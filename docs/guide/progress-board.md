@@ -135,7 +135,7 @@ When a run recorded a compile failure, **Fix compile errors** still appears unde
 
 ### Memory
 
-Agents can remember things between sessions. When memory is enabled (toggle in the Settings **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in Settings, reached with **TeXRA: Open Settings**. Read the [memory guide](./memory.md) for a full walkthrough.
+Agents can remember things between sessions. When memory is enabled (toggle in the Settings **Memory** tab), agents keep useful notes about you and your project as Markdown files. The **Memory** tab in Settings, reached with **TeXRA: Open Settings**, opens the two folders they live in. Read the [memory guide](./memory.md) for a full walkthrough.
 
 ### Log content
 

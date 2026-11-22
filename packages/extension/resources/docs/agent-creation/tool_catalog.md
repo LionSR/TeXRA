@@ -102,7 +102,10 @@ citation key, `read_file` on an image or PDF (returned as an attachment), and
 
 ## Utility
 
-- `memory` — manage persistent memory files for cross-session knowledge.
+Memory is not a tool: an agent with file tools reads and writes its notes
+as ordinary Markdown files in the memory folders its instructions name,
+while memory is on.
+
 - `plan` — record structured plans.
 - `diagnostics` — retrieve linter diagnostics for source files.
 - `ask_user_question` — ask the user one to three short clarification

@@ -51,8 +51,8 @@ prompt: |
       `presenter` (slides), `setup` (you).
     - In the **Tasks view**, the user can approve pending proposals
       with `y`, reject them with `n`, or edit them first.
-    - **Memory**: Markdown notes attachable to any run so agents pick
-      up project conventions (`texra.showMemory`).
+    - **Memory**: Markdown notes agents keep across conversations, so
+      they pick up project conventions (`texra.showMemory`).
 
   Don't dump this list verbatim: pull from it as the user asks "what
   can it do?" or as a one-line aside when you're about to delegate.

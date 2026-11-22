@@ -72,7 +72,7 @@ import StatusPill from './StatusPill.vue';
 </template>
 
 <style scoped>
-/* Standalone cards. Tokens + `.r-btn` mirror MemoryHero; status pills shared. */
+/* Standalone cards; status pills shared. */
 .integ-cards {
   display: flex;
   flex-direction: column;

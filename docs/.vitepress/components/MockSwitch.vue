@@ -1,7 +1,7 @@
 <script setup>
 // A real Web Awesome <wa-switch>, bridged to the --mk-* palette so it themes to
 // the mockup surface and flips with the docs light/dark theme. Replaces the two
-// hand-rolled role=switch buttons (ApiKeysHero, MemoryHero) with one accessible
+// hand-rolled role=switch buttons (ApiKeysHero) with one accessible
 // primitive and demonstrates a bridged wa-* control inside a figure.
 //
 // Bridging: theme/mockup.css maps --wa-form-control-* onto --mk-* on `.mockup`;

@@ -127,8 +127,8 @@ template rendered once when the run launches, with `CWD` (the run's working
 directory) among its variables. Its expressions are evaluated in your
 process, so a prompt is its author's code: pass an end user's text as the
 `instruction`, never as part of a persona's `prompt`. Nothing else the system
-prompt carries (the workspace's path and branch, `AGENTS.md`, attached
-memories) is rendered.
+prompt carries (the workspace's path and branch, `AGENTS.md`, the memory
+indexes) is rendered.
 
 ```ts
 const program = Effect.gen(function* () {
@@ -499,6 +499,17 @@ process-wide global state). The tool registry reads the MCP servers of the
 `mcp.json` at the storage root that global storage lies under, and a run's
 system prompt carries the workspace's `AGENTS.md`, or the storage root's when
 the workspace has none.
+
+**Memory.** While the `memory.enabled` setting is on (the default), a run
+with file tools has two folders of Markdown notes it reads and writes with
+those tools: `<storageDir>/memories`, for what holds across workspaces, and
+`memories/` under the workspace's own storage directory. The run's system
+text says where they are and carries each folder's `MEMORY.md`, its index,
+as it reads at every request (the first 16,000 characters). There is no
+memory tool and nothing else is loaded: a note is read when the model opens
+it. `memoryFolders(platform.roots)` from `./plugins` names the two folders.
+Turn memory off with `Settings.set(platform.roots, MEMORY_ENABLED_SETTING,
+false)`.
 `nodePlatform()` supplies all of them: process-local config and state,
 the ordinary storage layout under the `storageDir` you name (required; the
 package never falls back to a per-user directory), that directory's `mcp.json`

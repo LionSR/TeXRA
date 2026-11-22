@@ -121,13 +121,12 @@ export function withInput(
 ): RunFacts['input'] {
   if (recorded === undefined) return input;
   const { instruction: was, ...kept } = input;
-  const { instruction, system, activated, memoryMisses } = recorded;
+  const { instruction, system, activated } = recorded;
   const next = instruction === undefined ? was : (instruction ?? undefined);
   return {
     ...kept,
     ...(system !== undefined && { system }),
     ...(activated !== undefined && { activated }),
-    ...(memoryMisses !== undefined && { memoryMisses }),
     ...(next !== undefined && { instruction: next }),
   };
 }

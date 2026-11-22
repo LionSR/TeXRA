@@ -238,8 +238,8 @@ opened on `script.kind: 'program'`. The `theory` plugin's programs are in
 programs as `programs/<name>.js`, started as `<plugin>:<name>`; the file is
 third-party code, so its description and tools are read from its text
 (`packages/harness/src/common/plugins/pluginPrograms.ts`) and it is evaluated
-only in the script sandbox. An agent writes its own with the memory tool as
-`/memories/programs/<name>.js`, started as `own:<name>` from its next step
+only in the script sandbox. An agent writes its own with its file tools as
+`programs/<name>.js` in the project's memory folder, started as `own:<name>` from its next step
 (`packages/harness/src/agent/memory/ownPrograms.ts`); nobody reviews one, so
 what it starts is asked about as a model's script's is. Where a program
 comes from (`programOrigin`: listed, installed or own) decides what its

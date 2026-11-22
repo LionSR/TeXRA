@@ -111,13 +111,12 @@ export {
   type ToolPathResolution,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-// The memory tool's tree as a host reads and edits it outside a run, over
-// the session's storage view.
+// An agent's memory folders, for a host that opens them outside a run.
 export {
-  MemoryStore,
-  type MemoryPinResult,
-  type MemoryPreview,
-} from '@tools/memory/memoryStore';
+  MEMORY_INDEX,
+  memoryFolders,
+  type MemoryFolder,
+} from '@agent/memory/memoryLayout';
 export { noLaterTurn } from '@agent/runtime/RunCall';
 export {
   ChildRuns,

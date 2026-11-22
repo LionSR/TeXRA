@@ -17,8 +17,9 @@ import { meansAbsent } from '@utils/files/fsEntryExists';
  *
  * The agent-catalog follower every host's process runtime builds
  * registers the agent directories. The
- * registry itself is platform-agnostic. A run's step adds its own read-only
- * roots to its calls' lookups (`StepRoot`), which nothing registers.
+ * registry itself is platform-agnostic. A run's step adds its own roots to
+ * its calls' lookups (`StepRoot`: its skills, read-only, and its memory
+ * folders), which nothing registers.
  *
  * Security notes
  * --------------
@@ -71,12 +72,13 @@ interface ExternalRootOptions {
   readonly label: string;
 }
 
-/** A read-only directory one step accepts for its own calls, beside the
- *  registered roots: a skill it lists or its user activated, canonical as
- *  its catalog entry records it (`canonicalizePath`). */
+/** A directory one step accepts for its own calls, beside the registered
+ *  roots, canonical (`canonicalizePath`): a skill it lists or its user
+ *  activated, read-only, or a memory folder, which its calls also write. */
 export interface StepRoot {
   readonly absolutePath: string;
   readonly label: string;
+  readonly writable?: boolean;
 }
 
 export interface MatchedExternalRoot extends Omit<ExternalRoot, 'kind'> {
@@ -218,7 +220,7 @@ export function findExternalRoot(
   let best: MatchedExternalRoot | null = null;
   for (const root of [
     ...roots.values(),
-    ...stepRoots.map((root) => ({ ...root, writable: false })),
+    ...stepRoots.map((root) => ({ ...root, writable: root.writable ?? false })),
   ]) {
     if (!isPathWithin(root.absolutePath, resolved)) continue;
 

@@ -88,7 +88,6 @@ export type {
   AgentConfigInput,
   AgentProposal,
   AgentSource,
-  AttachedMemoryMiss,
   CatalogAgentSource,
   CompactionActivityData,
   CompactionActivityOutcome,
@@ -185,11 +184,6 @@ export {
   type RequestError,
   type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
-// A memory as a memory list shows it.
-export {
-  MemoryViewItemSchema,
-  type MemoryViewItem,
-} from '@shared/tools/memoryView';
 // A model's display name.
 export { getModelLabel } from '@shared/model/modelLabel';
 // Error messages.

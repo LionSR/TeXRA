@@ -429,10 +429,8 @@ export const ALLOW_ORCHESTRATOR_KILL_SETTING = {
     'Allow a task to stop the agents it started once they are no longer needed.',
 } as const satisfies SettingRow<boolean>;
 
-/**
- * Every host's runtime honors the row through the `memory` entry of the
- * memory-workflow plugin's `injectedWhen` (`@tools/plugins`).
- */
+/** While on, a step with file tools is given the memory folders and shown
+ *  their indexes (`openStep`, `agent/runtime/loop/step.ts`). */
 export const MEMORY_ENABLED_SETTING = {
   key: 'memory.enabled',
   slot: 'globalState',

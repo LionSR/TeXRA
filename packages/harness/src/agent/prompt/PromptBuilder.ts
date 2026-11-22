@@ -13,6 +13,7 @@ import type { PromptSection } from '@tools/toolTable';
 // Local imports - utilities
 import { renderPrompt } from '@agent/prompt/promptRender';
 import { loadAgentsMd } from '@agent/prompt/agentsMd';
+import type { MemoryFolder } from '@agent/memory/memoryLayout';
 import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -61,14 +62,15 @@ const toolCalls = (offered: readonly string[]) =>
 /**
  * The context a step renders: the tools it offers and the sections it adds
  * after the run's recorded prompt, by name, in order: how to issue tool
- * calls, the skills the step lists, then each pinned plugin's section, in
- * plugin id order. They are built from the step (its settings, offered tools
+ * calls, the skills the step lists, its memory, then each pinned plugin's
+ * section, in plugin id order. They are built from the step (its settings, offered tools
  * and pinned contributors) and the skill catalog it discovers, so a setting
  * change reaches the next request, and a resume rebuilds them.
  */
 export function stepInstructions(
   plugins: readonly Pick<Plugin, 'id' | 'prompt'>[],
   skills: readonly SkillCatalogEntry[],
+  memory: string | null,
   ctx: Parameters<PromptSection>[0],
 ): PromptSections {
   const sections = Object.fromEntries([
@@ -83,6 +85,7 @@ export function stepInstructions(
           ],
         ]
       : []),
+    ...(memory === null ? [] : [['memory', memory]]),
     ...plugins.flatMap(({ id, prompt }) => {
       const text = prompt?.(ctx);
       return text ? [[`${id} plugin`, text]] : [];
@@ -120,7 +123,7 @@ export function contextUpdate(
 
 /**
  * The system text a conversation opens with: its persona's prompt rendered,
- * then the project's `AGENTS.md` and the attached memories, and the suffix of
+ * then the project's `AGENTS.md`, and the suffix of
  * tool-use instructions and workspace facts, which a text-only persona (one
  * a program defines with no tools) goes without. Only the persona's prompt
  * is a template: the suffix is text this module builds, and the workspace
@@ -131,7 +134,7 @@ export function contextUpdate(
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
   function* (
     personaPrompt: string,
-    { inputs, attachedMemories }: TemplateOpening,
+    { inputs }: TemplateOpening,
     options: {
       /** The run's session roots: the workspace whose `AGENTS.md` and
        *  `<workspace_info>` it reads, the storage root whose `AGENTS.md`
@@ -143,6 +146,9 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
       /** The tools the run's first step offers, by name: the suffix names
        *  only those. */
       offered: readonly string[];
+      /** The memory folders that step reads and writes, none for a run
+       *  with no memory: `<workspace_info>` says where they are. */
+      memory: readonly MemoryFolder[];
     },
   ): Effect.fn.Return<
     string,
@@ -157,14 +163,15 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
         loadAgentsMd(roots.workspace, roots.storageRoot),
         options.textOnly
           ? Effect.succeed('')
-          : buildWorkspaceInfoBlock(roots.workspace, options.offered),
+          : buildWorkspaceInfoBlock(
+              roots.workspace,
+              options.offered,
+              options.memory,
+            ),
       ],
       { concurrency: 'unbounded' },
     );
-    const systemPrompt = [
-      rendered,
-      ...[agentsMd, attachedMemories].filter(Boolean),
-    ].join('\n');
+    const systemPrompt = [rendered, agentsMd].filter(Boolean).join('\n');
     if (options.textOnly) return systemPrompt;
     return [
       systemPrompt,

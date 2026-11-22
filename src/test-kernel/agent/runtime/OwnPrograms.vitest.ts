@@ -105,7 +105,7 @@ describe(
                       kind: 'inline',
                       persona: {
                         prompt: 'GOLDEN-OWN: write a program, then start it.',
-                        tools: ['memory', 'script', 'program'],
+                        tools: ['write_file', 'script', 'program'],
                       },
                     },
                     model: 'openai/gpt-5.6-sol',
@@ -125,32 +125,46 @@ describe(
                         (row.type === 'run.end' && row.run === root),
                     ),
                   );
-                /** The one request `runId` opened, once it has. */
-                const requestOf = (runId: RunId) =>
+                /** The request `runId` opened after `earlier` others, once
+                 *  it has, and its last so far. */
+                const requestOf = (runId: RunId, earlier = 0) =>
                   Effect.gen(function* () {
-                    yield* untilRow(
-                      'request.opened',
-                      (row) => row.run === runId,
+                    yield* untilStored(
+                      storage,
+                      (rows) =>
+                        rowsOf(rows, runId, 'request.opened').length >
+                          earlier ||
+                        rows.some(
+                          (row) => row.type === 'run.end' && row.run === root,
+                        ),
                     );
-                    const [opened, ...more] = rowsOf(
+                    const opened = rowsOf(
                       storedRows(storage),
                       runId,
                       'request.opened',
                     );
+                    const request = opened[earlier];
                     assert(
-                      opened?.requestId !== undefined && more.length === 0,
-                      `one request of ${runId}`,
+                      request?.requestId !== undefined &&
+                        opened.length === earlier + 1,
+                      `request ${earlier + 1} of ${runId}`,
                     );
-                    return { ...opened, requestId: opened.requestId };
+                    return { ...request, requestId: request.requestId };
                   });
                 const approve = (runId: RunId, requestId: string) =>
                   decideRequest(runId, requestId, { action: 'approve' }).pipe(
                     Effect.provide(session),
                   );
 
+                // The program's file is written with the file tool, an edit
+                // like any other, which this host's policy asks about.
+                const write = yield* requestOf(root);
+                expect(write.payload).toMatchObject({ kind: 'toolEdit' });
+                expect(yield* approve(root, write.requestId)).toBe(true);
+
                 // The script's `program('own:greet')` is asked about, as any
                 // launch a model's script makes; the person approves it.
-                const launch = yield* requestOf(root);
+                const launch = yield* requestOf(root, 1);
                 expect(launch.payload).toMatchObject({
                   kind: 'proposal',
                   data: { agent: 'own:greet' },
@@ -200,7 +214,7 @@ describe(
 
                 // The run's first step offered no such module; the step
                 // after the write records it, by the address of the module
-                // the file holds under the memory tool's header.
+                // the file holds.
                 const offers = rowsOf(rows, root, 'tools.offered').map(
                   (row) => row.payload?.modules?.['own:greet'],
                 );
@@ -217,15 +231,12 @@ describe(
                   join(storage, 'memories', 'programs', 'greet.js'),
                   'utf8',
                 );
-                expect(file.startsWith('---\nmodifiedBy: golden_own\n')).toBe(
-                  true,
-                );
                 expect(
                   source.startsWith(
                     '// Asks a child and reports its answer.\nexport const description = ',
                   ),
                 ).toBe(true);
-                expect(file.endsWith(`---\n${source}`)).toBe(true);
+                expect(file).toBe(source);
               }),
           );
         },

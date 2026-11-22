@@ -371,11 +371,12 @@ export const openToolUse = Effect.fn('toolUse.open')(
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
         // The first step renders the prompt over the tools it offers, and
         // stores its base text.
-        const step = yield* stepFor(run, opening, false, (offered) =>
+        const step = yield* stepFor(run, opening, false, (offered, memory) =>
           buildOpeningSystemPrompt(run.persona.prompt, inputs, {
             roots,
             textOnly: bound.textOnly,
             offered,
+            memory,
           }),
         );
         openingSystem = step.base;
@@ -413,12 +414,10 @@ export const openToolUse = Effect.fn('toolUse.open')(
         return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
       }),
     );
-    const { activated = [], attachedMemoryMisses: misses = [] } =
-      run.opening ?? {};
+    const { activated = [] } = run.opening ?? {};
     const input = {
       ...(openingSystem !== undefined && { system: sha256(openingSystem) }),
       ...(activated.length > 0 && { activated: [...activated] }),
-      ...(misses.length > 0 && { memoryMisses: misses }),
     };
     // The opening (registration, held trace), then the entry once it
     // finished: a stop lands before the opening or after both.
@@ -693,9 +692,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     runId,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { failure: { kind: 'model' as const, failure: at.lastError } }
-      : {}),
-    ...(at.input.memoryMisses?.length
-      ? { memoryMisses: [...at.input.memoryMisses] }
       : {}),
   });
 

@@ -4,7 +4,7 @@ import MockCard from './MockCard.vue';
 // Frameless "Dashboard → Tools" category map: the seven tool categories a
 // tool-use agent can be granted, each with its icon, a one-line capability
 // sub-label, and the example tool names rendered as mono accent code-chips —
-// the same `.mc-cmd` vocabulary used in MemoryCommandsHero, so each chip
+// the `.mc-cmd` chip look, so each chip
 // visibly reads as "a token you list in your YAML `tools:` array".
 //
 // Standalone (no MockupFrame). The root carries `.mockup` so the shared
@@ -66,10 +66,9 @@ const categories = [
   },
   {
     icon: 'type-hierarchy',
-    name: 'Memory & Workflow',
-    desc: 'Persistent memory, plans, sub-agent and task delegation',
+    name: 'Workflow',
+    desc: 'Plans, sub-agent and task delegation',
     tools: [
-      'memory',
       'plan',
       'agent',
       'program',
@@ -160,7 +159,7 @@ const categories = [
   flex-wrap: wrap;
   gap: var(--mk-space-5);
 }
-/* Mono accent code-chip — mirrors MemoryCommandsHero's .mc-cmd so each tool
+/* Mono accent code-chip (`.mc-cmd`), so each tool
    name reads as a token to drop into the YAML `tools:` array. */
 .tcat-chip {
   color: var(--mk-accent);

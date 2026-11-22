@@ -4,13 +4,9 @@ import { AgentConfigSchema } from './agentConfig';
 import { FileFieldsSchema } from './fileFields';
 
 export const BaseProposalFieldsSchema = Schema.Struct({
-  // The agent's resolved source (an inline agent's persona), its memories
-  // and its working directory, as the run they propose will record them.
-  ...Struct.pick(AgentConfigSchema.fields, [
-    'agentSource',
-    'memories',
-    'workingDirectory',
-  ]),
+  // The agent's resolved source (an inline agent's persona) and its working
+  // directory, as the run they propose will record them.
+  ...Struct.pick(AgentConfigSchema.fields, ['agentSource', 'workingDirectory']),
   // Named in full by every proposal: no launch default applies.
   agent: Schema.String,
   model: Schema.String,
@@ -52,7 +48,6 @@ export interface ProposalFileFields {
   readonly contextFiles?: readonly string[];
   readonly mediaFiles?: readonly string[];
   readonly outputFiles?: readonly string[];
-  readonly memories?: readonly string[];
 }
 
 export interface ProposalFileGroup {
@@ -82,6 +77,5 @@ export function getProposalFileGroups(
       clickable: true,
     },
     { label: 'Output', files: data.outputFiles ?? [], clickable: true },
-    { label: 'Memories', files: data.memories ?? [], clickable: false },
   ].filter((g) => g.files.length > 0);
 }

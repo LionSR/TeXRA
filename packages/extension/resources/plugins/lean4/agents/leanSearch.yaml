@@ -7,7 +7,6 @@ tools:
   - edit_file
   - glob
   - grep
-  - memory
   - lean_diagnostics
   - lean_file
   - lean_project

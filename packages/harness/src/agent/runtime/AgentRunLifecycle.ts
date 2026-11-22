@@ -91,9 +91,7 @@ export const endVerdict = Effect.fnUntraced(function* (
 
 /** The report of a run that ended before its loop produced an output. */
 function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
-  const misses = ctx.opening?.attachedMemoryMisses ?? [];
-  const report = { outcome, output: emptyRunEndOutput(), runId: ctx.runId };
-  return misses.length > 0 ? { ...report, memoryMisses: misses } : report;
+  return { outcome, output: emptyRunEndOutput(), runId: ctx.runId };
 }
 
 /**

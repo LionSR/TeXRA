@@ -8,7 +8,6 @@ tools:
   - glob
   - grep
   - diagnostics
-  - memory
 
 prompt: |
   Simplify scientific code, LaTeX, and prose while preserving exact behavior and meaning. Prefer readable, explicit code and direct scientific writing over compact solutions.

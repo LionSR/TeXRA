@@ -1,89 +1,60 @@
-<script setup>
-import MemoryItemAnatomy from '../.vitepress/components/MemoryItemAnatomy.vue';
-</script>
-
 # Memory
 
-Agents in TeXRA can save notes that persist across conversations. The next time you start a chat, even days later, the agent loads those notes and picks up where it left off, without you having to re-explain the project.
-
-<MemoryHero />
-
-<p class="hero-caption">The Memory tab in Settings: toggle memory for chat agents, and browse, pin, open, or delete the notes agents have saved.</p>
+Agents in TeXRA keep notes that persist across conversations. The next time you start a chat, even days later, the agent sees an index of those notes and picks up where it left off, without you having to re-explain the project.
 
 ## What memory is for
 
-Memory is for facts the agent should remember about **your project**, not the conversation itself. Good things to save:
+Memory is for facts the agent should remember about **you** and **your project**, not the conversation itself. Good things to keep:
 
 - Conventions you want enforced (label prefixes, citation styles, notation choices)
 - Project structure (where figures live, which file is the main document)
 - Decisions you've made that the agent would otherwise revisit
 - Pitfalls you keep hitting (a compiler quirk, a finicky package, a flaky reference)
+- Your own preferences that hold in every project (spelling, tone, how much explanation you want)
 
-Memory is **not** a chat transcript. The agent doesn't replay old conversations; it reads the notes you've curated.
+Memory is **not** a chat transcript. The agent doesn't replay old conversations; it reads the notes.
+
+## Memory is two folders of Markdown files
+
+There is no memory tool. An agent's notes are ordinary Markdown files in two folders, which it reads and writes with the same file tools it uses on your project:
+
+| Folder             | What belongs in it                    | Where it is                                                       |
+| ------------------ | ------------------------------------- | ----------------------------------------------------------------- |
+| **Your memory**    | What is true of you, in every project | `~/.texra/memories/`                                              |
+| **Project memory** | What is true of this project          | `~/.texra/v1/workspace-storage/<workspace-name>-<hash>/memories/` |
+
+Neither folder is inside your repository, so a project you clone brings no memory with it, and nothing an agent remembers is committed. The VS Code extension, the desktop app and the CLI share both folders.
+
+Each folder has an index, `MEMORY.md`, with one line per note. The index is the only part of memory an agent is shown automatically: its current text is in the agent's instructions at every request, so a note written in one conversation is listed in the next, and a note written mid-task is listed at the agent's next step. The notes themselves are read when a line of the index looks relevant. Only the first 16,000 characters of an index are shown, so keep it to one short line per note.
+
+Instructions you want followed in full, every time, belong in [`AGENTS.md`](./custom-agents.md), which is loaded whole; memory is for what the agent learns as it works.
 
 ## Enabling memory
 
-Memory is **on by default**. To turn it off, open **Settings** (Command Palette → `TeXRA: Open Settings`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. The same switch turns it back on.
+Memory is **on by default**. To turn it off, open **Settings** (Command Palette → `TeXRA: Open Settings`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. While it is off, agents are given neither folder and no index.
 
-When memory is on, every chat has access to the `memory` tool: it can create, view, update, rename, delete, pin, and unpin notes under `/memories`.
+Memory needs the file tools: an agent with no tool to read a file has no memory, and under the **Block** approval policy an agent can read its notes but not write them. Writing a note is a file edit like any other, so under **Ask** you review it; under the default, Auto-approve, it is written without asking.
 
-## How an agent uses memory
+## Reading and editing notes yourself
 
-Agents work with memory through a small set of commands on the `memory` tool:
+The **Memory** tab has two buttons, **Open your memory folder** and **Open this project's memory folder**. The notes are plain files: read them, edit them, delete them, or add your own in any editor. To make sure an agent sees a note you wrote, add a line for it to that folder's `MEMORY.md`.
 
-| Command       | What it does                                                               |
-| ------------- | -------------------------------------------------------------------------- |
-| `view`        | List `/memories` or read a single note                                     |
-| `create`      | Write a new note (or overwrite an existing one)                            |
-| `str_replace` | Edit a note by replacing a substring                                       |
-| `insert`      | Insert text at a specific line                                             |
-| `delete`      | Remove a note                                                              |
-| `rename`      | Move a note to a new path                                                  |
-| `pin`         | Mark a note as a **core long-term memory** (loaded at every session start) |
-| `unpin`       | Remove the pinned status                                                   |
-
-Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live in the shared TeXRA root at `~/.texra/v1/workspace-storage/<workspace-name>-<hash>/memories/`, which the VS Code extension, the desktop app, and the CLI all share for the same workspace. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned. That header is what the metadata strip in Settings shows.
-
-<MemoryCommandsHero />
-
-<p class="hero-caption">A run's <code>memory</code> tool calls: the agent lists existing notes, writes a new one, edits another, then pins the convention note so it loads at every session start.</p>
-
-## Pinned vs. unpinned
-
-Unpinned notes are searchable context: the agent can read them when it needs to, but they don't take up space in every prompt.
-
-**Pinned notes** load at the start of every session, so reserve them for high-value notes: conventions, hard-won techniques, and recurring pitfalls. You can pin up to **10 notes**; if you hit the limit, unpin a stale note before pinning the next one.
-
-<MemoryPinHero />
-
-<p class="hero-caption">Pinned notes carry a blue left border and a <code>Pinned</code> badge in the metadata strip.</p>
-
-## Managing memories from Settings
-
-The Memory tab shows every saved note, with pinned notes first and the rest sorted by most recently
-updated. For each note you get:
-
-- **Path**: the canonical `/memories/...` location
-- **Metadata strip**: `Pinned · size · line count · updated · by <agent>`
-- **Contents**: a collapsible Markdown preview rendered inline (pinned notes start expanded)
-- **Actions**: pin / unpin, open in editor, delete
-
-The toolbar above the list has **Refresh memories** and **Open memory folder**. Open memory folder reveals the on-disk `memories/` directory in your file explorer, useful if you want to edit notes by hand or check them into a side repo.
-
-<MemoryItemAnatomy />
+In a task's view, a note an agent writes appears as a file edit, with its diff.
 
 ## Memory is shared across the run
 
-Within a single run, the orchestrator and every subagent it spawns see the **same** `/memories` directory. A specialist agent can write a note that the orchestrator picks up on its next turn, and that note survives into the next conversation. This is why memory is most useful for **project-level** facts rather than turn-level scratch space: once it's written, it persists.
+Within a single run, the orchestrator and every subagent it starts read and write the **same** two folders. A specialist agent can write a note that the orchestrator sees at its next step, and that note survives into the next conversation.
+
+An agent can also keep programs for itself in the project folder: a file at `programs/<name>.js` there is the program `own:<name>` (see [the CLI guide](./texra-cli.md)).
 
 ## When _not_ to use memory
 
 - **Throwaway intermediate work**: that belongs in the agent's plan or scratch reasoning, not in a saved note.
-- **Sensitive credentials**: memory files are plain Markdown on disk; treat them like any other workspace file.
+- **Sensitive credentials**: memory files are plain Markdown on disk; treat them like any other file.
 - **Auto-generated logs**: runs already have run storage for artifacts; don't duplicate them as memories.
 
 ## Related
 
-- [Tasks view](./progress-board.md): see what an agent is doing in real time, including which memories it has read or written
+- [Tasks view](./progress-board.md): see what an agent is doing in real time, including the notes it reads and writes
 - [Configuration](./configuration.md): the full list of Settings tabs
-- [Custom agents](./custom-agents.md): give your own agents access to the `memory` tool
+- [Custom agents](./custom-agents.md): `AGENTS.md`, and writing your own agents

@@ -1,86 +1,16 @@
 /**
- * Schema definitions for MemoryView messages.
- *
- * Outbound: Backend → Frontend (the `memory` page of the host state, UPDATE_MEMORY_PREVIEW)
- * Inbound: Frontend → Backend (GET_MEMORY_DATA, OPEN_MEMORY_FILE, etc.)
+ * The Memory page's one message: open a memory folder. The notes in it are
+ * ordinary files a person reads and edits in their own editor.
  */
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 
-import { MemoryViewItemSchema } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { commandOnly } from './messageFactories';
 
-// ============================================================
-// Data schemas
-// ============================================================
+/** Which folder: the person's own, or this project's. */
+export const MEMORY_FOLDER_SCOPES = Object.freeze(['user', 'project'] as const);
+export type MemoryFolderScope = (typeof MEMORY_FOLDER_SCOPES)[number];
 
-const MemoryPreviewSchema = Schema.Struct({
-  storagePath: Schema.String,
-  lineCount: Schema.optional(Schema.Number),
-  preview: Schema.optional(Schema.String),
-  error: Schema.optional(Schema.Boolean),
+export const OpenMemoryFolderMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
+  folder: Schema.Literals(MEMORY_FOLDER_SCOPES),
 });
-
-// ============================================================
-// Outbound message schemas (backend → frontend)
-// ============================================================
-
-/** The Memory page's list. */
-export const MemoryPageSchema = Schema.Struct({
-  items: Schema.Array(MemoryViewItemSchema),
-});
-
-export const UpdateMemoryPreviewMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW),
-  preview: MemoryPreviewSchema,
-});
-
-// ============================================================
-// Inbound message schemas (frontend → backend)
-// ============================================================
-
-/** Memory path message for file operations (reusable field schema) */
-const MemoryPathMessageSchema = Schema.Struct({
-  storagePath: Schema.NonEmptyString,
-});
-
-// Inbound messages with command literals
-export const GetMemoryDataMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA,
-);
-
-export const GetMemoryPreviewMessageSchema = MemoryPathMessageSchema.mapFields(
-  Struct.assign({
-    command: Schema.Literal(SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW),
-  }),
-);
-
-export const OpenMemoryFileMessageSchema = MemoryPathMessageSchema.mapFields(
-  Struct.assign({
-    command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE),
-  }),
-);
-
-export const OpenMemoryFolderMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
-);
-
-/** Carries the display path so the host can confirm before deleting. */
-export const DeleteMemoryMessageSchema = MemoryPathMessageSchema.mapFields(
-  Struct.assign({
-    command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_MEMORY),
-    displayPath: Schema.NonEmptyString,
-  }),
-);
-
-export const PinMemoryMessageSchema = MemoryPathMessageSchema.mapFields(
-  Struct.assign({
-    command: Schema.Literal(SETTINGS_VIEW_COMMANDS.PIN_MEMORY),
-  }),
-);
-
-export const UnpinMemoryMessageSchema = MemoryPathMessageSchema.mapFields(
-  Struct.assign({
-    command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY),
-  }),
-);

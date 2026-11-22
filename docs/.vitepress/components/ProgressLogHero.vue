@@ -5,7 +5,7 @@
 // chrome; the root carries `.mockup` so it inherits the --mk-* token block and
 // flips with the docs light/dark theme.
 //
-// Row layout mirrors MemoryCommandsHero (.mc-row + a leading severity dot).
+// Row layout: `.mc-row` with a leading severity dot.
 // Severity colours reuse the shared --color-success / --color-warning /
 // --color-error tokens. The error row is expanded one level (a nested detail
 // line) to illustrate "expand nested entries to see detailed information", and

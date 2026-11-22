@@ -63,30 +63,6 @@ function apply(message: SettingsViewOutboundMessage): void {
         settingSignal(HELPER_MODEL_SETTING).set(patch.models.helperModel);
       return;
     }
-    case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW: {
-      const memory = hostState.get().memory;
-      if (!memory) return;
-      const { storagePath, preview, lineCount, error } = message.preview;
-      const items = memory.items.map((item) => {
-        if (item.storagePath !== storagePath) return item;
-        if (error) {
-          return {
-            ...item,
-            preview: undefined,
-            lineCount: undefined,
-            previewError: true,
-          };
-        }
-        return {
-          ...item,
-          preview,
-          lineCount: lineCount ?? item.lineCount,
-          previewError: undefined,
-        };
-      });
-      hostState.set({ ...hostState.get(), memory: { items } });
-      return;
-    }
     case SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT: {
       applySettingsSnapshot(message.values);
       const revisions = settingsSnapshotRevisions.get();

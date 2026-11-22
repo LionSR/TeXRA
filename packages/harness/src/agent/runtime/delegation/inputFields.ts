@@ -18,7 +18,6 @@ import {
 
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
-import { displayToStoragePath } from '@agent/memory/memoryLayout';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { ToolError, type RunId } from '@shared/schemas';
@@ -44,27 +43,6 @@ import {
   GIT_WORKTREE_SUPPORT_SETTING,
   settingName,
 } from '@shared/state/stateSettings';
-
-/**
- * Shared field for the `memories` parameter on delegation tools.
- * Validates that all paths are within /memories using displayToStoragePath
- * (prefix + traversal checks). Existence is NOT checked — getAttachedMemories
- * handles read failures gracefully, avoiding a TOCTOU race.
- */
-const memoriesField = nullishWithDefault(
-  Schema.Array(Schema.String),
-  [],
-  'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
-).check(
-  Schema.makeFilter((memories) =>
-    memories.flatMap((memory, i) => {
-      const parsed = displayToStoragePath(memory);
-      return Result.isSuccess(parsed)
-        ? []
-        : [{ path: [i], issue: parsed.failure.message }];
-    }),
-  ),
-);
 
 const WORKTREE_DISABLED_MESSAGE = `git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on the ${settingName(GIT_WORKTREE_SUPPORT_SETTING)} setting.`;
 
@@ -195,9 +173,8 @@ export const CHILD_FIELDS = Object.freeze({
 });
 
 /** The fields an `agent` or `program` launch takes beside its own: those of
- *  every child, memories, the call's reuse id, and whether a script waits. */
+ *  every child, the call's reuse id, and whether a script waits. */
 export const CALL_FIELDS = Object.freeze({
-  memories: memoriesField,
   working_directory: workingDirectoryField,
   id: optionalInput(
     Schema.String,

@@ -63,7 +63,7 @@ export interface ToolSectionFile {
 }
 
 /** Which path vocabulary a {@link ToolFileSection} names. */
-export type ToolFileNamespace = 'workspace' | 'memory' | 'run';
+export type ToolFileNamespace = 'workspace' | 'run';
 
 /** What every tool-row section carries. */
 export interface ToolSectionBase {

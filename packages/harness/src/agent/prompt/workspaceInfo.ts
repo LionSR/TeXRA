@@ -7,6 +7,7 @@ import { DateTime, Effect } from 'effect';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
+import type { MemoryFolder } from '@agent/memory/memoryLayout';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import {
   currentBranch,
@@ -18,7 +19,7 @@ import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { runsInWsl } from '@utils/system/wslDetect';
 
 /** The tools the external directories are listed for, as the list names them. */
-const EXTERNAL_ROOT_TOOLS = [
+export const EXTERNAL_ROOT_TOOLS = [
   'read_file',
   'write_file',
   'grep',
@@ -91,10 +92,12 @@ const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
  * @param offered - The tools the run offers, by name: the external
  *   directories are listed only for a run offered a tool that reads them,
  *   and the advice before a git command only for one offered `bash`.
+ * @param memory - The run's memory folders, listed with those directories.
  */
 export const buildWorkspaceInfoBlock = Effect.fn(function* (
   wsPath: string | undefined,
   offered: readonly string[],
+  memory: readonly MemoryFolder[],
 ) {
   const platform = getPlatformLabel();
   const shell = yield* detectShell;
@@ -130,7 +133,14 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
   const externalRoots = EXTERNAL_ROOT_TOOLS.some((name) =>
     offered.includes(name),
   )
-    ? listExternalRoots()
+    ? [
+        ...listExternalRoots(),
+        ...memory.map((folder) => ({
+          absolutePath: folder.path,
+          label: `${folder.label}: notes on ${folder.holds}`,
+          writable: true,
+        })),
+      ]
     : [];
   if (externalRoots.length > 0) {
     lines.push('');

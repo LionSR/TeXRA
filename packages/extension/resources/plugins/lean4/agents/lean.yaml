@@ -12,7 +12,6 @@ tools:
   - edit_file
   - glob
   - grep
-  - memory
   - github_subscription
 
 prompt: |

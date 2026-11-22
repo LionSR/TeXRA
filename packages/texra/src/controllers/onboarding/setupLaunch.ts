@@ -82,7 +82,6 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
       agent: SETUP_AGENT_NAME,
       model,
       instruction: SETUP_INSTRUCTION,
-      memories: [],
     };
     const run = yield* ports.start(config).pipe(
       // The launcher has shown its rejection already.
