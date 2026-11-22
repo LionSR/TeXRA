@@ -252,8 +252,53 @@ layer(
 // TeXRA's plugins: Lean's programs follow its probe, the theory plugin's
 // need nothing.
 layer(texraHosted, { excludeTestServices: true })(
-  'programs of a probed plugin',
+  'host and plugin tool availability',
   (it) => {
+    it.effect(
+      'offers only supported tools from a portable setup declaration',
+      () =>
+        Effect.gen(function* () {
+          const hostTools = [
+            'diagnostics',
+            'inline_comment',
+            'open_pdf',
+            'invoke_command',
+            'install_vscode_extension',
+            'send_to_terminal',
+          ];
+          const session = yield* isolatedTestSession({ emit: () => {} });
+          const runId = generateRunId();
+          yield* publishTestRunStart(session, runId);
+          const config = Schema.decodeUnknownSync(AgentConfigSchema)({
+            label: 'chat',
+            model: 'test-model',
+            tools: ['read_file', ...hostTools],
+            workingDirectory: process.cwd(),
+          });
+          const warnings: string[] = [];
+          const seen: InvokeRequest[] = [];
+          const ctx = {
+            ...validationLaunch(runId, config),
+            logger: {
+              ...noopTrace,
+              warn: (message: string) => void warnings.push(message),
+            },
+          };
+          yield* Effect.flatMap(openToolUse(), runToolUse).pipe(
+            Effect.provide(runLayer(session, ctx, [], seen)),
+            Effect.orDie,
+          );
+
+          expect(seen).toHaveLength(1);
+          const offered = (seen[0].tools ?? []).map(({ name }) => name);
+          expect(offered).toContain('read_file');
+          for (const name of hostTools) {
+            expect(offered).not.toContain(name);
+            expect(warnings).not.toContainEqual(expect.stringContaining(name));
+          }
+        }),
+    );
+
     it.effect(
       'a plugin whose dependency is missing offers no program, as it offers no tool',
       () =>

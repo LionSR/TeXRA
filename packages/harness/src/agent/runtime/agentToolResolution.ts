@@ -40,11 +40,9 @@
  * step withholds their programs and prompt sections with their tools: this
  * module is the one reader of the probe's results for a run.
  *
- * A switched-off plugin is withheld silently: the user chose it. Every other
- * withholding of a declared tool (a missing dependency, a capability the
- * host lacks) is returned as a warning, which
- * the step reports when the offered set changes, not on every step; an
- * injected tool the run never named goes quietly.
+ * Disabled plugins and capabilities the host does not serve are withheld
+ * silently. Missing dependencies of declared tools are returned as warnings
+ * for the step to report when the offer changes.
  */
 
 import { Context, Effect, SubscriptionRef } from 'effect';
@@ -153,24 +151,13 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     enabled.get(name)?.tool.scriptGlobal?.withScript === true;
 
   const withheldForApproval: string[] = [];
-  // A declared tool a gate withholds says so; an injected one goes quietly,
-  // as the run never asked for it by name.
-  const withheld = (name: string, declared: boolean, reason: string): false => {
-    if (declared)
-      warnings.push(`Declared tool "${name}" is not offered: ${reason}`);
-    return false;
-  };
   const passesRuntimeGates = (name: string, declared: boolean): boolean => {
     const tool = enabled.get(name)?.tool ?? table.get(name);
     if (
       tool?.hostCapability !== undefined &&
       !input.hostCapabilities.has(tool.hostCapability)
     )
-      return withheld(
-        name,
-        declared,
-        `this host does not serve "${tool.hostCapability}".`,
-      );
+      return false;
     if (tool && asksApproval(tool) && input.approvalPromptsUnavailable) {
       // Only a declared one is reported; an injected one, or one whose
       // plugin is off, is withheld silently.
