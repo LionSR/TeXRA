@@ -5,7 +5,9 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": ["stage.start"]
+        "enum": [
+          "stage.start"
+        ]
       },
       "stageId": {
         "anyOf": [
@@ -28,7 +30,12 @@
         "minLength": 3
       }
     },
-    "required": ["type", "id", "label", "aggregateId"],
+    "required": [
+      "type",
+      "id",
+      "label",
+      "aggregateId"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

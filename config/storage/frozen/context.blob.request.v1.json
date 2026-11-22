@@ -5,7 +5,10 @@
     "properties": {
       "mode": {
         "type": "string",
-        "enum": ["foreground", "background"]
+        "enum": [
+          "foreground",
+          "background"
+        ]
       },
       "system": {
         "anyOf": [
@@ -38,13 +41,21 @@
               },
               "thinkingLevel": {
                 "type": "string",
-                "enum": ["minimal", "low", "medium", "high", "xhigh"]
+                "enum": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ]
               },
               "toolChoice": {
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["auto"]
+                    "enum": [
+                      "auto"
+                    ]
                   },
                   {
                     "type": "object",
@@ -54,7 +65,9 @@
                         "minLength": 1
                       }
                     },
-                    "required": ["name"],
+                    "required": [
+                      "name"
+                    ],
                     "additionalProperties": true
                   }
                 ]
@@ -90,7 +103,11 @@
                   },
                   {
                     "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
+                    "enum": [
+                      "Infinity",
+                      "-Infinity",
+                      "NaN"
+                    ]
                   },
                   {
                     "type": "null"
@@ -104,7 +121,9 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["auto"]
+                    "enum": [
+                      "auto"
+                    ]
                   },
                   {
                     "type": "object",
@@ -114,7 +133,9 @@
                         "minLength": 1
                       }
                     },
-                    "required": ["name"],
+                    "required": [
+                      "name"
+                    ],
                     "additionalProperties": true
                   }
                 ]
@@ -147,7 +168,9 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "enum": ["pro"]
+                            "enum": [
+                              "pro"
+                            ]
                           },
                           {
                             "type": "null"
@@ -158,7 +181,9 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "enum": ["auto"]
+                            "enum": [
+                              "auto"
+                            ]
                           },
                           {
                             "type": "null"
@@ -166,7 +191,11 @@
                         ]
                       }
                     },
-                    "required": ["effort", "mode", "summary"],
+                    "required": [
+                      "effort",
+                      "mode",
+                      "summary"
+                    ],
                     "additionalProperties": true
                   },
                   {
@@ -178,7 +207,9 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["fast"]
+                    "enum": [
+                      "fast"
+                    ]
                   },
                   {
                     "type": "null"
@@ -217,7 +248,9 @@
               },
               "toolChoice": {
                 "type": "string",
-                "enum": ["auto"]
+                "enum": [
+                  "auto"
+                ]
               },
               "thinking": {
                 "anyOf": [
@@ -226,10 +259,14 @@
                     "properties": {
                       "mode": {
                         "type": "string",
-                        "enum": ["disabled"]
+                        "enum": [
+                          "disabled"
+                        ]
                       }
                     },
-                    "required": ["mode"],
+                    "required": [
+                      "mode"
+                    ],
                     "additionalProperties": true
                   },
                   {
@@ -237,14 +274,21 @@
                     "properties": {
                       "mode": {
                         "type": "string",
-                        "enum": ["adaptive"]
+                        "enum": [
+                          "adaptive"
+                        ]
                       },
                       "display": {
                         "type": "string",
-                        "enum": ["summarized"]
+                        "enum": [
+                          "summarized"
+                        ]
                       }
                     },
-                    "required": ["mode", "display"],
+                    "required": [
+                      "mode",
+                      "display"
+                    ],
                     "additionalProperties": true
                   },
                   {
@@ -252,7 +296,9 @@
                     "properties": {
                       "mode": {
                         "type": "string",
-                        "enum": ["enabled"]
+                        "enum": [
+                          "enabled"
+                        ]
                       },
                       "budgetTokens": {
                         "type": "integer",
@@ -261,10 +307,16 @@
                       },
                       "display": {
                         "type": "string",
-                        "enum": ["summarized"]
+                        "enum": [
+                          "summarized"
+                        ]
                       }
                     },
-                    "required": ["mode", "budgetTokens", "display"],
+                    "required": [
+                      "mode",
+                      "budgetTokens",
+                      "display"
+                    ],
                     "additionalProperties": true
                   }
                 ]
@@ -273,7 +325,13 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["low", "medium", "high", "xhigh", "max"]
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
                   },
                   {
                     "type": "null"
@@ -282,7 +340,10 @@
               },
               "cache": {
                 "type": "string",
-                "enum": ["disabled", "5m"]
+                "enum": [
+                  "disabled",
+                  "5m"
+                ]
               }
             },
             "required": [
@@ -300,7 +361,13 @@
         "type": "string"
       }
     },
-    "required": ["mode", "system", "tools", "controls", "agent"],
+    "required": [
+      "mode",
+      "system",
+      "tools",
+      "controls",
+      "agent"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

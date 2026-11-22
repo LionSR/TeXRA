@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["run.report"]
+        "enum": [
+          "run.report"
+        ]
       },
       "report": {
         "anyOf": [
@@ -32,7 +34,11 @@
         ]
       }
     },
-    "required": ["aggregateId", "type", "report"],
+    "required": [
+      "aggregateId",
+      "type",
+      "report"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

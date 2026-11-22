@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["run.start"]
+        "enum": [
+          "run.start"
+        ]
       },
       "identity": {
         "anyOf": [
@@ -28,7 +30,9 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["agent"]
+                "enum": [
+                  "agent"
+                ]
               },
               "agent": {
                 "type": "string",
@@ -46,7 +50,10 @@
                 ]
               }
             },
-            "required": ["kind", "agent"],
+            "required": [
+              "kind",
+              "agent"
+            ],
             "additionalProperties": true
           },
           {
@@ -54,14 +61,19 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["process"]
+                "enum": [
+                  "process"
+                ]
               },
               "tool": {
                 "type": "string",
                 "minLength": 1
               }
             },
-            "required": ["kind", "tool"],
+            "required": [
+              "kind",
+              "tool"
+            ],
             "additionalProperties": true
           },
           {
@@ -69,14 +81,19 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["script"]
+                "enum": [
+                  "script"
+                ]
               },
               "title": {
                 "type": "string",
                 "minLength": 1
               }
             },
-            "required": ["kind", "title"],
+            "required": [
+              "kind",
+              "title"
+            ],
             "additionalProperties": true
           }
         ]
@@ -93,7 +110,9 @@
                 "type": "string"
               }
             },
-            "required": ["workingDirectory"],
+            "required": [
+              "workingDirectory"
+            ],
             "additionalProperties": true
           },
           {
@@ -108,7 +127,9 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["fork"]
+                "enum": [
+                  "fork"
+                ]
               },
               "from": {
                 "type": "object",
@@ -123,7 +144,10 @@
                     "format": "uuid"
                   }
                 },
-                "required": ["id", "uid"],
+                "required": [
+                  "id",
+                  "uid"
+                ],
                 "additionalProperties": true
               },
               "at": {
@@ -132,7 +156,11 @@
                 "exclusiveMinimum": 0
               }
             },
-            "required": ["kind", "from", "at"],
+            "required": [
+              "kind",
+              "from",
+              "at"
+            ],
             "additionalProperties": true
           },
           {
@@ -148,15 +176,27 @@
             "properties": {
               "bash": {
                 "type": "string",
-                "enum": ["on", "off", "parent"]
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
               },
               "toolEdit": {
                 "type": "string",
-                "enum": ["on", "off", "parent"]
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
               },
               "superYolo": {
                 "type": "string",
-                "enum": ["on", "off", "parent"]
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
               }
             },
             "additionalProperties": true
@@ -165,14 +205,21 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["bash", "toolEdit", "superYolo"]
+              "enum": [
+                "bash",
+                "toolEdit",
+                "superYolo"
+              ]
             }
           },
           "limit": {
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["never", "ask"]
+                "enum": [
+                  "never",
+                  "ask"
+                ]
               },
               {
                 "type": "null"
@@ -180,7 +227,10 @@
             ]
           }
         },
-        "required": ["own", "goal"],
+        "required": [
+          "own",
+          "goal"
+        ],
         "additionalProperties": true
       },
       "maxCostUsd": {
@@ -220,7 +270,11 @@
                         "type": "boolean"
                       }
                     },
-                    "required": ["callId", "card", "awaited"],
+                    "required": [
+                      "callId",
+                      "card",
+                      "awaited"
+                    ],
                     "additionalProperties": true
                   },
                   {
@@ -229,7 +283,10 @@
                 ]
               }
             },
-            "required": ["id", "call"],
+            "required": [
+              "id",
+              "call"
+            ],
             "additionalProperties": true
           },
           {

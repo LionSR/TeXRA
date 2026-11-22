@@ -5,6 +5,7 @@
   "sortPackageJson": false,
   "ignorePatterns": [
     "pnpm-lock.yaml",
+    "config/storage/frozen/",
     "packages/cli/.texra-validate-run/",
     "packages/extension/resources/traceViewer/",
     "packages/extension/resources/templates/",

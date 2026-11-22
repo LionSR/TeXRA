@@ -19,14 +19,24 @@
       },
       "type": {
         "type": "string",
-        "enum": ["run.stop"]
+        "enum": [
+          "run.stop"
+        ]
       },
       "reason": {
         "type": "string",
-        "enum": ["user", "released", "cap"]
+        "enum": [
+          "user",
+          "released",
+          "cap"
+        ]
       }
     },
-    "required": ["aggregateId", "type", "reason"],
+    "required": [
+      "aggregateId",
+      "type",
+      "reason"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

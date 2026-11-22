@@ -9,7 +9,9 @@
         "description": "The plan document: what to achieve, the approach, and a verifiable stopping condition"
       }
     },
-    "required": ["objective"],
+    "required": [
+      "objective"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

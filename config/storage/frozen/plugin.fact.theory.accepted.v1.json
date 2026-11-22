@@ -16,12 +16,19 @@
           },
           {
             "type": "string",
-            "enum": ["Infinity", "-Infinity", "NaN"]
+            "enum": [
+              "Infinity",
+              "-Infinity",
+              "NaN"
+            ]
           }
         ]
       }
     },
-    "required": ["absolutePaths", "acceptedAt"],
+    "required": [
+      "absolutePaths",
+      "acceptedAt"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

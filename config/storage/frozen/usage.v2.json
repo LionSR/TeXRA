@@ -5,7 +5,9 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": ["usage"]
+        "enum": [
+          "usage"
+        ]
       },
       "stageId": {
         "anyOf": [
@@ -37,7 +39,11 @@
               },
               {
                 "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
+                "enum": [
+                  "Infinity",
+                  "-Infinity",
+                  "NaN"
+                ]
               }
             ]
           },
@@ -129,7 +135,11 @@
             ]
           }
         },
-        "required": ["inputTokens", "outputTokens", "cost"],
+        "required": [
+          "inputTokens",
+          "outputTokens",
+          "cost"
+        ],
         "additionalProperties": true
       },
       "aggregateId": {
@@ -137,7 +147,11 @@
         "minLength": 3
       }
     },
-    "required": ["type", "usage", "aggregateId"],
+    "required": [
+      "type",
+      "usage",
+      "aggregateId"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["process.exit"]
+        "enum": [
+          "process.exit"
+        ]
       },
       "code": {
         "anyOf": [
@@ -37,7 +39,12 @@
         "type": "boolean"
       }
     },
-    "required": ["aggregateId", "type", "code", "timedOut"],
+    "required": [
+      "aggregateId",
+      "type",
+      "code",
+      "timedOut"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

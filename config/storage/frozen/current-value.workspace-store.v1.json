@@ -8,7 +8,9 @@
         "minLength": 1
       }
     },
-    "required": ["root"],
+    "required": [
+      "root"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

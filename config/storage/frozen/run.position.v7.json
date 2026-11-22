@@ -19,14 +19,21 @@
       },
       "type": {
         "type": "string",
-        "enum": ["run.position"]
+        "enum": [
+          "run.position"
+        ]
       },
       "payload": {
         "type": "object",
         "properties": {
           "at": {
             "type": "string",
-            "enum": ["turn.ready", "turn.begin", "turn.end", "waiting"]
+            "enum": [
+              "turn.ready",
+              "turn.begin",
+              "turn.end",
+              "waiting"
+            ]
           },
           "turn": {
             "type": "integer",
@@ -34,11 +41,18 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["at", "turn"],
+        "required": [
+          "at",
+          "turn"
+        ],
         "additionalProperties": true
       }
     },
-    "required": ["aggregateId", "type", "payload"],
+    "required": [
+      "aggregateId",
+      "type",
+      "payload"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

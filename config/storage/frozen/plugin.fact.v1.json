@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["plugin.fact"]
+        "enum": [
+          "plugin.fact"
+        ]
       },
       "plugin": {
         "type": "string",
@@ -36,7 +38,14 @@
       },
       "value": {}
     },
-    "required": ["aggregateId", "type", "plugin", "kind", "version", "value"],
+    "required": [
+      "aggregateId",
+      "type",
+      "plugin",
+      "kind",
+      "version",
+      "value"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

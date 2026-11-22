@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["approval.policy"]
+        "enum": [
+          "approval.policy"
+        ]
       },
       "snapshot": {
         "type": "object",
@@ -29,15 +31,27 @@
             "properties": {
               "bash": {
                 "type": "string",
-                "enum": ["on", "off", "parent"]
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
               },
               "toolEdit": {
                 "type": "string",
-                "enum": ["on", "off", "parent"]
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
               },
               "superYolo": {
                 "type": "string",
-                "enum": ["on", "off", "parent"]
+                "enum": [
+                  "on",
+                  "off",
+                  "parent"
+                ]
               }
             },
             "additionalProperties": true
@@ -46,14 +60,21 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["bash", "toolEdit", "superYolo"]
+              "enum": [
+                "bash",
+                "toolEdit",
+                "superYolo"
+              ]
             }
           },
           "limit": {
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["never", "ask"]
+                "enum": [
+                  "never",
+                  "ask"
+                ]
               },
               {
                 "type": "null"
@@ -61,11 +82,18 @@
             ]
           }
         },
-        "required": ["own", "goal"],
+        "required": [
+          "own",
+          "goal"
+        ],
         "additionalProperties": true
       }
     },
-    "required": ["aggregateId", "type", "snapshot"],
+    "required": [
+      "aggregateId",
+      "type",
+      "snapshot"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

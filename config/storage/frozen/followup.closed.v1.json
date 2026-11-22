@@ -19,10 +19,15 @@
       },
       "type": {
         "type": "string",
-        "enum": ["followup.closed"]
+        "enum": [
+          "followup.closed"
+        ]
       }
     },
-    "required": ["aggregateId", "type"],
+    "required": [
+      "aggregateId",
+      "type"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

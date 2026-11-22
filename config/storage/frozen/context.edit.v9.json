@@ -19,20 +19,30 @@
       },
       "type": {
         "type": "string",
-        "enum": ["context.edit"]
+        "enum": [
+          "context.edit"
+        ]
       },
       "payload": {
         "type": "object",
         "properties": {
           "cause": {
             "type": "string",
-            "enum": ["compaction", "edit", "fork"]
+            "enum": [
+              "compaction",
+              "edit",
+              "fork"
+            ]
           },
           "trigger": {
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["context-limit", "user", "overflow"]
+                "enum": [
+                  "context-limit",
+                  "user",
+                  "overflow"
+                ]
               },
               {
                 "type": "null"
@@ -53,7 +63,10 @@
                 "maximum": 9007199254740991
               }
             },
-            "required": ["from", "to"],
+            "required": [
+              "from",
+              "to"
+            ],
             "additionalProperties": true
           },
           "messages": {
@@ -65,7 +78,9 @@
                   "properties": {
                     "role": {
                       "type": "string",
-                      "enum": ["user"]
+                      "enum": [
+                        "user"
+                      ]
                     },
                     "content": {
                       "type": "array",
@@ -76,13 +91,18 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": ["text"]
+                                "enum": [
+                                  "text"
+                                ]
                               },
                               "text": {
                                 "type": "string"
                               }
                             },
-                            "required": ["kind", "text"],
+                            "required": [
+                              "kind",
+                              "text"
+                            ],
                             "additionalProperties": true
                           },
                           {
@@ -90,7 +110,9 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": ["image"]
+                                "enum": [
+                                  "image"
+                                ]
                               },
                               "mimeType": {
                                 "type": "string",
@@ -111,7 +133,11 @@
                                 ]
                               }
                             },
-                            "required": ["kind", "mimeType", "digest"],
+                            "required": [
+                              "kind",
+                              "mimeType",
+                              "digest"
+                            ],
                             "additionalProperties": true
                           },
                           {
@@ -119,7 +145,11 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": ["audio", "video", "document"]
+                                "enum": [
+                                  "audio",
+                                  "video",
+                                  "document"
+                                ]
                               },
                               "mimeType": {
                                 "type": "string",
@@ -129,7 +159,11 @@
                                 "type": "string"
                               }
                             },
-                            "required": ["kind", "mimeType", "digest"],
+                            "required": [
+                              "kind",
+                              "mimeType",
+                              "digest"
+                            ],
                             "additionalProperties": true
                           }
                         ]
@@ -137,7 +171,10 @@
                       "minItems": 1
                     }
                   },
-                  "required": ["role", "content"],
+                  "required": [
+                    "role",
+                    "content"
+                  ],
                   "additionalProperties": true
                 },
                 {
@@ -145,7 +182,9 @@
                   "properties": {
                     "role": {
                       "type": "string",
-                      "enum": ["assistant"]
+                      "enum": [
+                        "assistant"
+                      ]
                     },
                     "origin": {
                       "anyOf": [
@@ -172,7 +211,10 @@
                                   "minLength": 1
                                 }
                               },
-                              "required": ["endpoint", "credentialScope"],
+                              "required": [
+                                "endpoint",
+                                "credentialScope"
+                              ],
                               "additionalProperties": true
                             },
                             "codecVersion": {
@@ -203,7 +245,9 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": ["message"]
+                                "enum": [
+                                  "message"
+                                ]
                               },
                               "content": {
                                 "type": "array",
@@ -212,13 +256,19 @@
                                   "properties": {
                                     "kind": {
                                       "type": "string",
-                                      "enum": ["text", "refusal"]
+                                      "enum": [
+                                        "text",
+                                        "refusal"
+                                      ]
                                     },
                                     "text": {
                                       "type": "string"
                                     }
                                   },
-                                  "required": ["kind", "text"],
+                                  "required": [
+                                    "kind",
+                                    "text"
+                                  ],
                                   "additionalProperties": true
                                 }
                               },
@@ -235,7 +285,10 @@
                                         "type": "object"
                                       }
                                     },
-                                    "required": ["kind", "data"],
+                                    "required": [
+                                      "kind",
+                                      "data"
+                                    ],
                                     "additionalProperties": true
                                   },
                                   {
@@ -244,7 +297,10 @@
                                 ]
                               }
                             },
-                            "required": ["kind", "content"],
+                            "required": [
+                              "kind",
+                              "content"
+                            ],
                             "additionalProperties": true
                           },
                           {
@@ -252,7 +308,9 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": ["reasoning"]
+                                "enum": [
+                                  "reasoning"
+                                ]
                               },
                               "summary": {
                                 "type": "array",
@@ -261,13 +319,18 @@
                                   "properties": {
                                     "kind": {
                                       "type": "string",
-                                      "enum": ["text"]
+                                      "enum": [
+                                        "text"
+                                      ]
                                     },
                                     "text": {
                                       "type": "string"
                                     }
                                   },
-                                  "required": ["kind", "text"],
+                                  "required": [
+                                    "kind",
+                                    "text"
+                                  ],
                                   "additionalProperties": true
                                 }
                               },
@@ -280,13 +343,18 @@
                                       "properties": {
                                         "kind": {
                                           "type": "string",
-                                          "enum": ["text"]
+                                          "enum": [
+                                            "text"
+                                          ]
                                         },
                                         "text": {
                                           "type": "string"
                                         }
                                       },
-                                      "required": ["kind", "text"],
+                                      "required": [
+                                        "kind",
+                                        "text"
+                                      ],
                                       "additionalProperties": true
                                     }
                                   },
@@ -308,7 +376,10 @@
                                         "type": "object"
                                       }
                                     },
-                                    "required": ["kind", "data"],
+                                    "required": [
+                                      "kind",
+                                      "data"
+                                    ],
                                     "additionalProperties": true
                                   },
                                   {
@@ -317,7 +388,11 @@
                                 ]
                               }
                             },
-                            "required": ["kind", "summary", "evidence"],
+                            "required": [
+                              "kind",
+                              "summary",
+                              "evidence"
+                            ],
                             "additionalProperties": true
                           },
                           {
@@ -325,7 +400,9 @@
                             "properties": {
                               "kind": {
                                 "type": "string",
-                                "enum": ["local-call"]
+                                "enum": [
+                                  "local-call"
+                                ]
                               },
                               "providerCallId": {
                                 "type": "string",
@@ -351,7 +428,10 @@
                                         "type": "object"
                                       }
                                     },
-                                    "required": ["kind", "data"],
+                                    "required": [
+                                      "kind",
+                                      "data"
+                                    ],
                                     "additionalProperties": true
                                   },
                                   {
@@ -372,7 +452,11 @@
                       }
                     }
                   },
-                  "required": ["role", "origin", "content"],
+                  "required": [
+                    "role",
+                    "origin",
+                    "content"
+                  ],
                   "additionalProperties": true
                 },
                 {
@@ -380,7 +464,9 @@
                   "properties": {
                     "role": {
                       "type": "string",
-                      "enum": ["tool"]
+                      "enum": [
+                        "tool"
+                      ]
                     },
                     "results": {
                       "type": "array",
@@ -394,7 +480,10 @@
                           },
                           "status": {
                             "type": "string",
-                            "enum": ["success", "error"]
+                            "enum": [
+                              "success",
+                              "error"
+                            ]
                           },
                           "content": {
                             "type": "array",
@@ -405,13 +494,18 @@
                                   "properties": {
                                     "kind": {
                                       "type": "string",
-                                      "enum": ["text"]
+                                      "enum": [
+                                        "text"
+                                      ]
                                     },
                                     "text": {
                                       "type": "string"
                                     }
                                   },
-                                  "required": ["kind", "text"],
+                                  "required": [
+                                    "kind",
+                                    "text"
+                                  ],
                                   "additionalProperties": true
                                 },
                                 {
@@ -419,7 +513,9 @@
                                   "properties": {
                                     "kind": {
                                       "type": "string",
-                                      "enum": ["image"]
+                                      "enum": [
+                                        "image"
+                                      ]
                                     },
                                     "mimeType": {
                                       "type": "string",
@@ -440,7 +536,11 @@
                                       ]
                                     }
                                   },
-                                  "required": ["kind", "mimeType", "digest"],
+                                  "required": [
+                                    "kind",
+                                    "mimeType",
+                                    "digest"
+                                  ],
                                   "additionalProperties": true
                                 },
                                 {
@@ -448,7 +548,11 @@
                                   "properties": {
                                     "kind": {
                                       "type": "string",
-                                      "enum": ["audio", "video", "document"]
+                                      "enum": [
+                                        "audio",
+                                        "video",
+                                        "document"
+                                      ]
                                     },
                                     "mimeType": {
                                       "type": "string",
@@ -458,20 +562,31 @@
                                       "type": "string"
                                     }
                                   },
-                                  "required": ["kind", "mimeType", "digest"],
+                                  "required": [
+                                    "kind",
+                                    "mimeType",
+                                    "digest"
+                                  ],
                                   "additionalProperties": true
                                 }
                               ]
                             }
                           }
                         },
-                        "required": ["callOrdinal", "status", "content"],
+                        "required": [
+                          "callOrdinal",
+                          "status",
+                          "content"
+                        ],
                         "additionalProperties": true
                       },
                       "minItems": 1
                     }
                   },
-                  "required": ["role", "results"],
+                  "required": [
+                    "role",
+                    "results"
+                  ],
                   "additionalProperties": true
                 },
                 {
@@ -479,14 +594,19 @@
                   "properties": {
                     "role": {
                       "type": "string",
-                      "enum": ["system"]
+                      "enum": [
+                        "system"
+                      ]
                     },
                     "text": {
                       "type": "string",
                       "minLength": 1
                     }
                   },
-                  "required": ["role", "text"],
+                  "required": [
+                    "role",
+                    "text"
+                  ],
                   "additionalProperties": true
                 }
               ]
@@ -514,7 +634,11 @@
                       },
                       {
                         "type": "string",
-                        "enum": ["Infinity", "-Infinity", "NaN"]
+                        "enum": [
+                          "Infinity",
+                          "-Infinity",
+                          "NaN"
+                        ]
                       }
                     ]
                   },
@@ -612,7 +736,11 @@
                       },
                       {
                         "type": "string",
-                        "enum": ["Infinity", "-Infinity", "NaN"]
+                        "enum": [
+                          "Infinity",
+                          "-Infinity",
+                          "NaN"
+                        ]
                       }
                     ]
                   },
@@ -691,7 +819,10 @@
                               "type": "string"
                             }
                           },
-                          "required": ["path", "reason"],
+                          "required": [
+                            "path",
+                            "reason"
+                          ],
                           "additionalProperties": true
                         }
                       },
@@ -709,11 +840,21 @@
             ]
           }
         },
-        "required": ["cause", "trigger", "range", "messages", "usage"],
+        "required": [
+          "cause",
+          "trigger",
+          "range",
+          "messages",
+          "usage"
+        ],
         "additionalProperties": true
       }
     },
-    "required": ["aggregateId", "type", "payload"],
+    "required": [
+      "aggregateId",
+      "type",
+      "payload"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

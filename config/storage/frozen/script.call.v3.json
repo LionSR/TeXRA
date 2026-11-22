@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["script.call"]
+        "enum": [
+          "script.call"
+        ]
       },
       "payload": {
         "type": "object",
@@ -44,7 +46,10 @@
           "input": {},
           "replay": {
             "type": "string",
-            "enum": ["safe", "unsafe"]
+            "enum": [
+              "safe",
+              "unsafe"
+            ]
           },
           "logId": {
             "type": "string",
@@ -74,7 +79,11 @@
         "additionalProperties": true
       }
     },
-    "required": ["aggregateId", "type", "payload"],
+    "required": [
+      "aggregateId",
+      "type",
+      "payload"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

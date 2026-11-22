@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["followup.consumed"]
+        "enum": [
+          "followup.consumed"
+        ]
       },
       "followUpId": {
         "type": "string",
@@ -32,7 +34,9 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["turn"]
+                "enum": [
+                  "turn"
+                ]
               },
               "turn": {
                 "type": "integer",
@@ -40,7 +44,10 @@
                 "exclusiveMinimum": 0
               }
             },
-            "required": ["kind", "turn"],
+            "required": [
+              "kind",
+              "turn"
+            ],
             "additionalProperties": true
           },
           {
@@ -48,10 +55,14 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["answered"]
+                "enum": [
+                  "answered"
+                ]
               }
             },
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "additionalProperties": true
           },
           {
@@ -59,10 +70,14 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["applied"]
+                "enum": [
+                  "applied"
+                ]
               }
             },
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "additionalProperties": true
           },
           {
@@ -70,20 +85,35 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["dropped"]
+                "enum": [
+                  "dropped"
+                ]
               },
               "reason": {
                 "type": "string",
-                "enum": ["noop", "ended", "closed", "cancelled"]
+                "enum": [
+                  "noop",
+                  "ended",
+                  "closed",
+                  "cancelled"
+                ]
               }
             },
-            "required": ["kind", "reason"],
+            "required": [
+              "kind",
+              "reason"
+            ],
             "additionalProperties": true
           }
         ]
       }
     },
-    "required": ["aggregateId", "type", "followUpId", "disposition"],
+    "required": [
+      "aggregateId",
+      "type",
+      "followUpId",
+      "disposition"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

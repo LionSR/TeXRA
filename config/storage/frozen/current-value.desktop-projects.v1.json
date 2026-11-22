@@ -18,7 +18,10 @@
         }
       }
     },
-    "required": ["remembered", "recent"],
+    "required": [
+      "remembered",
+      "recent"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

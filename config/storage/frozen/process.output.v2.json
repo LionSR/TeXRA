@@ -5,7 +5,9 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": ["process.output"]
+        "enum": [
+          "process.output"
+        ]
       },
       "stageId": {
         "anyOf": [
@@ -19,7 +21,10 @@
       },
       "stream": {
         "type": "string",
-        "enum": ["stdout", "stderr"]
+        "enum": [
+          "stdout",
+          "stderr"
+        ]
       },
       "text": {
         "type": "string"
@@ -41,7 +46,12 @@
         "minLength": 3
       }
     },
-    "required": ["type", "stream", "text", "aggregateId"],
+    "required": [
+      "type",
+      "stream",
+      "text",
+      "aggregateId"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

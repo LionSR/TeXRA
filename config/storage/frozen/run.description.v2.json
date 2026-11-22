@@ -19,14 +19,19 @@
       },
       "type": {
         "type": "string",
-        "enum": ["run.description"]
+        "enum": [
+          "run.description"
+        ]
       },
       "description": {
         "type": "string"
       },
       "by": {
         "type": "string",
-        "enum": ["model", "user"]
+        "enum": [
+          "model",
+          "user"
+        ]
       },
       "usage": {
         "anyOf": [
@@ -50,7 +55,11 @@
                   },
                   {
                     "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
+                    "enum": [
+                      "Infinity",
+                      "-Infinity",
+                      "NaN"
+                    ]
                   }
                 ]
               },
@@ -148,7 +157,11 @@
                   },
                   {
                     "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
+                    "enum": [
+                      "Infinity",
+                      "-Infinity",
+                      "NaN"
+                    ]
                   }
                 ]
               },
@@ -172,7 +185,12 @@
         ]
       }
     },
-    "required": ["aggregateId", "type", "description", "by"],
+    "required": [
+      "aggregateId",
+      "type",
+      "description",
+      "by"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

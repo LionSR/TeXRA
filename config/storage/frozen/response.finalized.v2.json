@@ -5,7 +5,9 @@
     "properties": {
       "type": {
         "type": "string",
-        "enum": ["response.finalized"]
+        "enum": [
+          "response.finalized"
+        ]
       },
       "stageId": {
         "anyOf": [
@@ -24,7 +26,10 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["length", "content-filter"]
+            "enum": [
+              "length",
+              "content-filter"
+            ]
           },
           {
             "type": "null"
@@ -36,7 +41,11 @@
         "minLength": 3
       }
     },
-    "required": ["type", "text", "aggregateId"],
+    "required": [
+      "type",
+      "text",
+      "aggregateId"
+    ],
     "additionalProperties": true
   },
   "definitions": {}

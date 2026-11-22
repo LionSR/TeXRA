@@ -19,7 +19,9 @@
       },
       "type": {
         "type": "string",
-        "enum": ["context.blob"]
+        "enum": [
+          "context.blob"
+        ]
       },
       "payload": {
         "type": "object",
@@ -29,11 +31,18 @@
           },
           "value": {}
         },
-        "required": ["digest", "value"],
+        "required": [
+          "digest",
+          "value"
+        ],
         "additionalProperties": true
       }
     },
-    "required": ["aggregateId", "type", "payload"],
+    "required": [
+      "aggregateId",
+      "type",
+      "payload"
+    ],
     "additionalProperties": true
   },
   "definitions": {}
