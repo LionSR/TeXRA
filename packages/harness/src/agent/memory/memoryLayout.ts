@@ -80,17 +80,21 @@ const bounded = (text: string): string => {
 
 /**
  * The memory section of a step's system text: how to use the folders, and
- * each index as it reads now. It names a folder by its label and never by
- * its path, which the run's opening states once with its workspace: the
- * section is built again at every step, and a path in it would read as a
- * change to a run resumed with its storage somewhere else. A folder with no
- * index says so. An index that is there and cannot be read is named with
- * its error, and logged, because a section that silently dropped it would
- * read as a folder the agent never wrote to.
+ * each index as it reads now. By default it names each folder by its label
+ * and not its path, which the run's opening states once in `<workspace_info>`:
+ * the section is built again at every step, and a path in it would read as a
+ * change to a run resumed with its storage somewhere else. When memory was off
+ * at opening (`includePaths: true`), `<workspace_info>` carries no memory
+ * paths, so the section supplies them directly. A folder with no index says
+ * so. An index that is there and cannot be read is named with its error, and
+ * logged, because a section that silently dropped it would read as a folder
+ * the agent never wrote to.
  */
 export const memorySection = Effect.fn('memory.section')(function* (
   folders: readonly MemoryFolder[],
+  options: { readonly includePaths?: boolean } = {},
 ): Effect.fn.Return<string, never, FileSystem.FileSystem> {
+  const includePaths = options.includePaths === true;
   const fs = yield* FileSystem.FileSystem;
   const indexes = yield* Effect.forEach(
     folders,
@@ -109,7 +113,7 @@ export const memorySection = Effect.fn('memory.section')(function* (
         ),
         Effect.map(
           (text) =>
-            `<memory_index folder="${label}">\n${
+            `<memory_index folder="${label}"${includePaths ? ` path="${folder}"` : ''}>\n${
               text === '' ? `(no ${MEMORY_INDEX} yet)` : text
             }\n</memory_index>`,
         ),
@@ -117,8 +121,18 @@ export const memorySection = Effect.fn('memory.section')(function* (
     },
     { concurrency: 'unbounded' },
   );
+  const folderSummary = folders
+    .map(({ label, path: folder, holds }) =>
+      includePaths
+        ? `"${label}" (${folder}), for ${holds}`
+        : `"${label}", for ${holds}`,
+    )
+    .join('; ');
+  const pathHint = includePaths
+    ? ''
+    : ' Their paths are listed with the accessible directories in <workspace_info>.';
   return `<memory>
-You have ${folders.length} folders of Markdown notes that persist across conversations: ${folders.map(({ label, holds }) => `"${label}", for ${holds}`).join('; ')}. Their paths are listed with the accessible directories in <workspace_info>. They are ordinary files: read and write them with your file tools, by absolute path. Each folder's ${MEMORY_INDEX} is its index, shown below as it reads now, one line per note; the notes themselves are not shown, so read one when its line looks relevant to the request.
+You have ${folders.length} folders of Markdown notes that persist across conversations: ${folderSummary}.${pathHint} They are ordinary files: read and write them with your file tools, by absolute path. Each folder's ${MEMORY_INDEX} is its index, shown below as it reads now, one line per note; the notes themselves are not shown, so read one when its line looks relevant to the request.
 When you learn something a later conversation will need (a preference, a decision, a convention, a pitfall), write it to a note in the folder it belongs to and keep that folder's ${MEMORY_INDEX} current. Update or remove a note that is no longer true rather than adding a second one. Do not store what the project's own files already state, and do not write anything when there is nothing worth keeping.
 ${indexes.join('\n')}
 </memory>`;

@@ -98,7 +98,7 @@ keeps its meaning. The session database's format stamp and row versions:
 A pnpm workspace in three layers (design:
 `.agents/docs/implemented/architecture/2026-10-02-harness-package-split.md`):
 
-- `packages/harness/src` (`@texra-ai/harness`): the Effect-only harness and SDK
+- `packages/harness/src` (`@texra-ai/worldline`): the Effect-only harness and SDK
   surface, built and releasable at 0.x. There is no `@texra/core`.
 - `packages/texra/src` (`@texra-ai/texra`): the app: TeXRA's plugins, LaTeX,
   the UI kit (`@ui/*`) and the host-side controllers.
@@ -116,7 +116,7 @@ aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
 `packages/harness/src` (an ESM package) a relative import names its `.js` file.
 
 **The harness boundary is frozen, not open.** The app and hosts reach the
-harness only through `@texra-ai/harness` and its subpaths (`/builtins`,
+harness only through `@texra-ai/worldline` and its subpaths (`/builtins`,
 `/host`, `/node`, `/plugins`, `/schemas`, `/transcript`); a host holds the
 `LocalSession` that `Sessions.open` returns. The harness imports nothing from the app,
 and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
@@ -162,8 +162,8 @@ Where things go:
   `packages/desktop/src/main/desktopHostRequests.ts`).
 - `packages/harness/src/utils/` is host-agnostic, **not** browser-safe. The
   webview frontends import no `@utils/*` module at runtime; they get path,
-  error, text and escaping helpers from `@texra-ai/harness/schemas` and the
-  transcript helpers from `@texra-ai/harness/transcript`.
+  error, text and escaping helpers from `@texra-ai/worldline/schemas` and the
+  transcript helpers from `@texra-ai/worldline/transcript`.
 - `AppSignals` (`packages/harness/src/platform/appSignals.ts`) carries only
   app-lifecycle signals (auth, subscriptions, credentials, workspace-file
   writes), not run or session progress.
@@ -229,9 +229,13 @@ its `rootRun` requires the composition root's `SessionOwner`; call
 `executeAgent` only when you already own the `runId`. Run-loop rules, write
 points, and the event and card channels: `packages/harness/AGENTS.md`.
 
-Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
-`temperature`) in `packages/extension/resources/agents/`, created with the
-built-in `creator` agent or the settings view's Agents tab. A plugin registers
+Every host starts one agent, the entry agent: an app constant
+(`packages/texra/src/agent/entryAgent.ts`: its base text and the tools it
+declares). There are no agent files: a chat run's config records its own
+`system` text, `tools` and display `label`, and an `agent` call writes its
+child's the same way (an installed plugin's agent, `<plugin>:<name>`, is read
+into the child's config at the call). Each plugin says what its tools are for
+in its `prompt` section. A plugin registers
 programs (`Plugin.programs`): script modules started by name, each a run
 opened on `script.kind: 'program'`. The `theory` plugin's programs are in
 `packages/texra/src/tools/theory/programs.ts`. An installed plugin carries

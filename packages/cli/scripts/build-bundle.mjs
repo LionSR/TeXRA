@@ -24,7 +24,7 @@ const {
     // (scripts/service-host-harness.ts), which attaches to the service.
     'host-harness': hostHarness,
     // `--sdk-harness` bundles the validator's SDK embedder
-    // (scripts/sdk-harness.ts), which runs an inline persona.
+    // (scripts/sdk-harness.ts).
     'sdk-harness': sdkHarness,
   },
 } = parseArgs({

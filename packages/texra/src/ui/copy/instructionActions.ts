@@ -8,7 +8,7 @@
 import {
   HARNESS_INSTRUCTION_KEY,
   type HarnessInstructionKey,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** Host-agnostic action tokens; `windowNotices` runs a window's button for
  *  each, and the CLI prints a hint. */

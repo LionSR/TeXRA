@@ -13,7 +13,7 @@ import {
   AgentConfigSchema,
   RunIdSchema,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
@@ -60,7 +60,7 @@ const publishRun = (
       type: 'run.config',
       aggregateId,
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent,
+        label: agent,
         model: 'deepseek/deepseek-v4-flash',
         inputFiles: ['paper.tex'],
         contextFiles: [],

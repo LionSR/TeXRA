@@ -10,10 +10,10 @@ import {
   assertNoParentTraversal,
   resolveToolPath,
   ToolError,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { FakeHost } from '@test/support/testKernel';
 import { assertWritable } from '@tools/pathResolution';
-import { registerExternalRoot } from '@utils/files/externalRoots';
+import { canonicalizePath } from '@utils/files/externalRoots';
 
 describe('assertNoParentTraversal', () => {
   it.effect.each(['../x', 'a/../../x'])('rejects %s', (targetPath) =>
@@ -80,33 +80,27 @@ layer(FakeHost.layer({ workspaceRoot }), { buildPerTest: true })(
     );
 
     it.effect(
-      'keeps a read-only external root that sits inside the workspace non-writable',
+      'keeps a read-only step root that sits inside the workspace non-writable',
       () =>
         Effect.gen(function* () {
           const { roots } = yield* FakeHost;
-          const packagedAgents = path.join(
-            workspaceRoot,
-            'packages',
-            'extension',
-            'resources',
-            'agents',
-          );
-          const unregister = registerExternalRoot(packagedAgents, {
-            kind: 'builtIn',
-            writable: false,
-            label: 'Packaged agents',
-          });
-          yield* Effect.addFinalizer(() => Effect.sync(unregister));
+          const skill = path.join(workspaceRoot, '.texra', 'skills', 'proof');
+          const stepRoots = [
+            { absolutePath: canonicalizePath(skill), label: 'Skill proof' },
+          ];
 
-          const targetPath = 'packages/extension/resources/agents/proof.yaml';
-          const resolved = yield* resolveToolPath({ roots }, targetPath);
+          const targetPath = '.texra/skills/proof/SKILL.md';
+          const resolved = yield* resolveToolPath(
+            { roots, stepRoots },
+            targetPath,
+          );
 
           expect(resolved.external?.writable).toBe(false);
           expect(
             yield* Effect.flip(assertWritable(resolved, targetPath)),
           ).toEqual(
             new ToolError(
-              `Cannot write ${targetPath}: Packaged agents is read-only.`,
+              `Cannot write ${targetPath}: Skill proof is read-only.`,
             ),
           );
         }),

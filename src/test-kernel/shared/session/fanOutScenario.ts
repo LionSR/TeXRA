@@ -16,7 +16,7 @@ import {
   type RunIdentity,
   RunIdSchema,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { emptyRunEndOutput, type RunParent } from '@shared/schemas';
 import {
@@ -24,7 +24,7 @@ import {
   type SessionViewUpdater,
 } from '@shared/session/sessionViewUpdate';
 import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
-import type { SessionViewInput } from '@texra-ai/harness/transcript';
+import type { SessionViewInput } from '@texra-ai/worldline/transcript';
 
 export const ROOT = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
 export const CHILD = Schema.decodeUnknownSync(RunIdSchema)('bbbbbbbbbbbb');
@@ -202,7 +202,7 @@ export function buildScenario({ proposal = false } = {}) {
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
       model: 'claude-sonnet-5-5',
       instruction: 'review the draft',
-      agent: 'review',
+      label: 'review',
     }),
   });
   log.emit(ROOT, T.root + 1, {
@@ -239,7 +239,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'search',
+      label: 'search',
       model: 'claude-sonnet-5-5',
       instruction: 'search',
     }),
@@ -350,7 +350,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(PROCESS, T.process, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'bash',
+      label: 'bash',
       model: 'unused',
       instruction: 'npm test',
     }),
@@ -381,7 +381,9 @@ export function buildScenario({ proposal = false } = {}) {
           requestId: 'req-plan',
           runId: ROOT,
           task: true,
-          agent: 'review',
+          label: 'review',
+          system: '',
+          tools: [],
           model: 'claude-sonnet-5-5',
           instruction: 'Review the draft.',
           inputFiles: ['draft.tex'],

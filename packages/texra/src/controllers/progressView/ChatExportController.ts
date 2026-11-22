@@ -16,9 +16,9 @@ import {
   StorageFs,
   WorkspaceFs,
   pathToLocationIn,
-  AgentDirectories,
-} from '@texra-ai/harness/plugins';
-import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
+  HostResources,
+} from '@texra-ai/worldline/plugins';
+import { toErrorMessage, Rejected } from '@texra-ai/worldline/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
@@ -30,8 +30,8 @@ import {
   TraceViewerMissing,
 } from '@texra/agent/export/standaloneTraceHtml';
 import { TranscriptExportFailed } from './exportTranscript';
-import type { Session } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { Session } from '@texra-ai/worldline';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 /** Write one export beneath its run's storage directory. */
 const writeExport = Effect.fn('writeTranscript.writeExport')(function* (
@@ -67,7 +67,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 ) {
   // The packaged resources hold the trace-viewer bundle and the LaTeX
   // export's preamble.
-  const { resourcesRoot } = yield* AgentDirectories;
+  const { resourcesRoot } = yield* HostResources;
   if (resourcesRoot === undefined) {
     const cause = new Error(
       'This host ships no packaged resources, so it cannot export a transcript.',

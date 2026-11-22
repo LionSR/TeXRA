@@ -21,7 +21,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   persistentTestSession,
   REAL_RUN_TIMEOUT,
@@ -72,14 +72,9 @@ const limitsRun = Effect.gen(function* () {
   yield* rootRun({
     runId: root,
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'golden_limits',
-      agentSource: {
-        kind: 'inline',
-        persona: {
-          prompt: 'GOLDEN-LIMITS: one script, two self() children.',
-          tools: ['script', 'executions'],
-        },
-      },
+      label: 'golden_limits',
+      system: 'GOLDEN-LIMITS: one script, two self() children.',
+      tools: ['script', 'executions'],
       model: MODEL,
       instruction: 'Run the limits script.',
     }),

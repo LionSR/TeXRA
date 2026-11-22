@@ -1,9 +1,9 @@
 // Third-party imports
 import { Context, Effect, Option, Schema } from 'effect';
-import { ToolContext } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/worldline/plugins';
 
 // Internal imports
-import { toErrorMessage, formatResultCount } from '@texra-ai/harness/schemas';
+import { toErrorMessage, formatResultCount } from '@texra-ai/worldline/schemas';
 import {
   resolveToolPath,
   executed,
@@ -12,7 +12,7 @@ import {
   type ToolResult,
   withLogChannel,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 // Local file imports
 

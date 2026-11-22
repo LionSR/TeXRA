@@ -42,7 +42,7 @@ import {
 } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   connectJsonRpcProcess,
   type JsonRpcConnectionDisposed,
@@ -50,7 +50,7 @@ import {
   withLogChannel,
   type PerKeyLane,
   withPerKeyLane,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { LeanServerInfo } from '../leanServerInfo';
 import {
@@ -391,7 +391,7 @@ const make = ({
             duration: SHUTDOWN_TIMEOUT,
             orElse: () =>
               Effect.logDebug(
-                `[${root}] shutdown request timed out after ${Duration.toMillis(SHUTDOWN_TIMEOUT)}ms`,
+                `[${root}] shutdown request timed out after ${Duration.format(SHUTDOWN_TIMEOUT)}`,
               ).pipe(withLogChannel(LOG_CHANNEL)),
           }),
           Effect.catch((error) =>

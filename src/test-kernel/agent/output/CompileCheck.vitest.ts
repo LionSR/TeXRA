@@ -8,7 +8,7 @@ import { Effect, Schema } from 'effect';
 import { assert, expect } from 'vitest';
 
 // Local imports
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { FakeHost } from '@test/support/testKernel';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
 

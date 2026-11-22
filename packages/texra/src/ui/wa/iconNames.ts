@@ -103,7 +103,6 @@ export const ICON_NAMES = Object.freeze([
   'screwdriver-wrench',
   'server',
   'shield',
-  'star',
   'table-columns',
   'terminal',
   'thumbtack',

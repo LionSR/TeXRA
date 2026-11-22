@@ -10,8 +10,11 @@
  */
 
 // Local imports
-import type { AgentTrace, ToolCardHandle } from '@texra-ai/harness/plugins';
-import { formatResultCount, type ToolUseLog } from '@texra-ai/harness/schemas';
+import type { AgentTrace, ToolCardHandle } from '@texra-ai/worldline/plugins';
+import {
+  formatResultCount,
+  type ToolUseLog,
+} from '@texra-ai/worldline/schemas';
 
 // Third-party type imports
 import type { SDKBackgroundTasksChangedMessage } from '@anthropic-ai/claude-agent-sdk';

@@ -2,8 +2,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { pluralize } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { pluralize } from '@texra-ai/worldline/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,

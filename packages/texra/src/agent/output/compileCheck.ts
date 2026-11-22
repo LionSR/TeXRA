@@ -7,8 +7,8 @@ import {
   type RunStorageFileLocation,
   toErrorMessage,
   hasExtension,
-} from '@texra-ai/harness/schemas';
-import { runDirUnder, pathToLocationIn } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { runDirUnder, pathToLocationIn } from '@texra-ai/worldline/plugins';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 
 import { Effect, FileSystem } from 'effect';
@@ -31,8 +31,8 @@ import {
   type AgentTrace,
   Settings,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+} from '@texra-ai/worldline/plugins';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import {
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,

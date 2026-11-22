@@ -7,14 +7,14 @@
  * tool on turn 1 and summarizes the tool output on turn 2.
  */
 import { Effect, Layer, Schema } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import {
   definePlugin,
   executed,
   nullishWithDefault,
   defineTool,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
@@ -78,12 +78,9 @@ const program = Effect.gen(function* () {
   const session = yield* sessions.open(platform.roots);
 
   const run = yield* session.start({
-    agent: {
-      name: 'equation_auditor',
-      description: 'Counts equations in LaTeX drafts.',
-      prompt: 'Use count_equations to inspect the snippet.',
-      tools: ['count_equations'],
-    },
+    label: 'equation_auditor',
+    system: 'Use count_equations to inspect the snippet.',
+    tools: ['count_equations'],
     instruction: 'Count the equations in section 1.',
     model: route.model,
   });

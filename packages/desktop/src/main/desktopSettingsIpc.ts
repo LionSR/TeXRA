@@ -1,7 +1,7 @@
 import { Effect, type Scope } from 'effect';
 
 import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
@@ -13,8 +13,8 @@ import {
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 import type { DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 export interface DesktopSettingsIpcOptions {

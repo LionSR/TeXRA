@@ -42,7 +42,7 @@ const answers = (command: readonly string[]) =>
  *  PDF conversion asks, and each probe spawns two processes. A miss is not
  *  kept, so a tool installed mid-session is found on the next ask. */
 const FoundImageTool = Context.Reference<Ref.Ref<ImageTool | undefined>>(
-  '@texra-ai/harness/FoundImageTool',
+  '@texra-ai/worldline/FoundImageTool',
   {
     defaultValue: () => Ref.makeUnsafe<ImageTool | undefined>(undefined),
   },

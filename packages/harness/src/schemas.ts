@@ -1,6 +1,6 @@
 /**
  * Browser-safe Effect Schemas, derived types, and pure read helpers for
- * `@texra-ai/harness`.
+ * `@texra-ai/worldline`.
  *
  * > **Guide:** Read [Views, Transcripts & Renderers](/api/views-and-transcripts)
  * > and [Durable Protocol & Recovery](/api/durable-protocol) for how views,
@@ -15,9 +15,9 @@
  *   ([`RuntimeCommand`](#runtimecommand)), [`RequestDecision`](#requestdecision),
  *   [`OutcomeSchema`](#outcomeschema), [`RequestErrorSchema`](#requesterrorschema),
  *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
- * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
- *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
- *   [`RunIdSchema`](#runidschema), [`StartRequestSchema`](#startrequestschema).
+ * - **Run configurations & outcomes**: [`AgentConfigSchema`](#agentconfigschema),
+ *   [`RunEndSchema`](#runendschema), [`RunIdSchema`](#runidschema),
+ *   [`StartRequestSchema`](#startrequestschema).
  * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
  *   the harness's setting rows ([`SettingRow`](#settingrow), each a
  *   [`StateKey`](#statekey)), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -87,8 +87,6 @@ export type { QueuedFollowUp } from '@shared/session/runRows';
 export type {
   AgentConfigInput,
   AgentProposal,
-  AgentSource,
-  CatalogAgentSource,
   CompactionActivityData,
   CompactionActivityOutcome,
   ContextManagementData,
@@ -103,7 +101,6 @@ export type {
   FollowUpControl,
   FollowUpSender,
   HookEvent,
-  InlinePersona,
   HarnessInstructionKey,
   LoadedMediaMetadata,
   LocalRuntimeState,
@@ -115,7 +112,6 @@ export type {
   ModelBackend,
   NormalizedToolUse,
   RequestPayload,
-  Persona,
   ProposalFileGroup,
   OpenFilePayload,
   RequestShowErrorPayload,
@@ -131,7 +127,6 @@ export type {
   ScriptDeliverySummary,
   SessionRow,
   SessionRowDraft,
-  AgentNotFoundPayload,
   Stage,
   ToolCallLog,
   ToolCallStatus,
@@ -289,6 +284,7 @@ export {
   formatResetDuration,
   formatResultCount,
   formatWallTime,
+  formatWordList,
   joinFacts,
   pluralize,
   previewLabel,
@@ -324,19 +320,9 @@ export {
   ACTIVATED_SKILLS_MAX,
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
-  AGENT_FILE_EXTENSION,
-  AGENT_SOURCE,
   AgentConfigSchema,
-  agentFileName,
-  agentKey,
-  agentKeyOf,
-  agentMatchesIdentifier,
-  agentName,
-  AgentNameSchema,
+  labelFileName,
   type AgentProposalRequest,
-  type AgentScanIssue,
-  AgentScanIssueSchema,
-  AgentSourceSchema,
   type BashRequest,
   type ContextStateData,
   CredentialSwitchSchema,
@@ -351,13 +337,11 @@ export {
   formatHunkLines,
   getProposalFileGroups,
   GoalResultSchema,
-  InlinePersonaSchema,
   InstalledPluginSchema,
   shortPluginId,
   HARNESS_INSTRUCTION_KEY,
   isEmptyUsage,
   isModelOptionAvailable,
-  isPackagedAgentSource,
   isRunId,
   isPlainAgentIdentity,
   programOf,
@@ -392,7 +376,6 @@ export {
   type RetryRequest,
   RUN_OUTCOME,
   RunEndSchema,
-  runIdentityDisplayName,
   runIdentityName,
   runNoun,
   NESTED_NOUNS,
@@ -423,7 +406,6 @@ export {
   type UserQuestionRequest,
   type UserQuestionPrompt,
   UserQuestionPromptSchema,
-  type WorkspaceAgentsSelection,
   type WorktreeInfo,
   ToolDependencyStatusSchema,
   type ToolDependencyStatus,

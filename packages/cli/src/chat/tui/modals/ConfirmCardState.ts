@@ -1,4 +1,4 @@
-import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
+import { FACT_SEPARATOR } from '@texra-ai/worldline/schemas';
 import { isEscapeInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
 import { BACK_HINT, keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
@@ -21,7 +21,7 @@ import {
   requestDeclineLabel,
   requestPrimaryLabel,
 } from '@ui/copy/requestCards';
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
 const APPROVAL_PULSE_FRAMES = [STATUS_DOT, HOLLOW_DOT] as const;
 

@@ -11,7 +11,7 @@ import './shell.css';
 // bundle's entry) because the scrubber remounts it: a fresh shell is a fresh
 // client, and the bridge answers it at the new cut.
 import './traceHostBridge';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { render } from 'lit';
 import '@ui/wa';
 import { renderEmptyState } from '@ui/wa/emptyState';
@@ -26,7 +26,7 @@ import {
   tracePositions,
   type TracePosition,
 } from './traceFrames';
-import type { TraceDocument } from '@texra-ai/harness/schemas';
+import type { TraceDocument } from '@texra-ai/worldline/schemas';
 
 /**
  * Last-resort error surface for a trace that fails to load or parse. A

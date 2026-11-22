@@ -11,7 +11,7 @@ import {
   GLM_CODING_PLAN_SETTING,
   KIMI_CODE_PREFER_SETTING,
   type SettingRow,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { type KeyPlanRoute, PLAN_ROUTES } from '@texra-ai/llm';
 import type { SubscriptionUsageProvider } from './subscriptionUsage';
 

@@ -8,12 +8,11 @@ import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { meansAbsent, writeFileAtomic } from '@texra-ai/harness/node';
+import { meansAbsent, writeFileAtomic } from '@texra-ai/worldline/node';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 
 export interface InitAnswers {
-  readonly agent: string;
   readonly model: string;
   readonly outputFormat: CliOutputFormat;
 }
@@ -22,7 +21,7 @@ export interface InitAnswers {
 export interface InitConfigShape {
   readonly 'texra.model': string;
   readonly 'texra.outputFormat': CliOutputFormat;
-  readonly 'texra.chat': { readonly agent: string; readonly model: string };
+  readonly 'texra.chat': { readonly model: string };
 }
 
 /** Map wizard answers to the canonical config object. */
@@ -30,7 +29,7 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
   return {
     'texra.model': answers.model,
     'texra.outputFormat': answers.outputFormat,
-    'texra.chat': { agent: answers.agent, model: answers.model },
+    'texra.chat': { model: answers.model },
   };
 }
 

@@ -8,8 +8,8 @@ import {
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   joinFacts,
-} from '@texra-ai/harness/schemas';
-import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { Secrets, type SettingsStores } from '@texra-ai/worldline/plugins';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@ui/copy/subscriptionUsage';
 import {

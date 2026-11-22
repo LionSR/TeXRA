@@ -38,7 +38,7 @@ import { formatDisplayTimestamp } from '../formatters/timestampUtils';
 import type {
   ScriptDeliverySummary,
   StoredMediaSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** A user message's "Fork from here": the cut and the message with the
  *  media it attached, which the fork's composer holds. */

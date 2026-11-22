@@ -13,7 +13,7 @@ import {
   descendantRuns,
   type RunView,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { watchTask } from '@texra/controllers/server/serviceSession';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
@@ -21,8 +21,8 @@ import {
   type ServiceConnection,
 } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import type { OutcomeOf } from '@texra-ai/harness';
-import type { GlobalValues } from '@texra-ai/harness/plugins';
+import type { OutcomeOf } from '@texra-ai/worldline';
+import type { GlobalValues } from '@texra-ai/worldline/plugins';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {

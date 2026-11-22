@@ -3,7 +3,7 @@
 
 import { Cause, Effect } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 
 import { formProgress, setTransientNotice } from '../state/cliState';
 import {

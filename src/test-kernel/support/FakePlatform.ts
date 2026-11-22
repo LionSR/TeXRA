@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { Effect, Scope, Stream } from 'effect';
 
 // Local imports
-import type { AgentDirectoriesPort, AppStateStore } from '@platform/interfaces';
+import type { AppStateStore } from '@platform/interfaces';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
@@ -22,7 +22,7 @@ import {
   type SettingsCatalog,
 } from '@shared/state/stateSettings';
 import type { Plugin } from '@tools/plugins';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { ClientIdentity } from '@texra-ai/llm/node';
 
@@ -213,13 +213,12 @@ export interface FakePlatformOptions {
   storagePath?: string;
 }
 
-/** A fake host's shutdown scope and the port it serves as
- *  `AgentDirectories`, held per host because hosts change per test. */
+/** A fake host's shutdown scope, held per host because hosts change per
+ *  test. */
 export interface FakeProcessPorts {
   /** The host's shutdown: a command that must act before its sessions close
    *  registers in a child scope of this; closing it is the shutdown. */
   readonly shutdownScope: Scope.Closeable;
-  readonly agentDirectories: AgentDirectoriesPort;
 }
 
 /**

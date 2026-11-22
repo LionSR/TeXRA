@@ -2,7 +2,7 @@
 // Frameless "staged workflow" card: the five-stage research-to-finalization
 // pipeline from guide/best-practices.md, rendered as numbered stage rows joined
 // by a connecting rail so the progression reads at a glance. Each stage names
-// the agent(s) that own it as accent verb-chips (the `.mc-cmd` chip look).
+// the program(s) that fit it as accent verb-chips (the `.mc-cmd` chip look).
 // Standalone (no MockupFrame) — the focused pipeline
 // card only.
 //
@@ -11,20 +11,20 @@
 // too and the card flips cleanly between the docs light / dark themes.
 import MockCard from './MockCard.vue';
 
-// Each stage: number · icon · stage name · one-line purpose · owning agent(s)
-// rendered as accent verb-chips. Agent names match those on the page exactly.
+// Each stage: number · icon · stage name · one-line purpose · program(s)
+// rendered as accent verb-chips. Program names match those on the page exactly.
 const stages = [
   {
     icon: 'mortar-board',
     name: 'Research',
     purpose: 'Find papers and verify ideas',
-    agents: ['search', 'research'],
+    agents: ['search', 'derive'],
   },
   {
     icon: 'pencil',
     name: 'Writing',
     purpose: 'Draft LaTeX content interactively',
-    agents: ['research', 'orchestrator'],
+    agents: ['assistant', 'review'],
   },
   {
     icon: 'sparkle',
@@ -36,7 +36,7 @@ const stages = [
     icon: 'file-media',
     name: 'Visualization',
     purpose: 'Produce figures and slides',
-    agents: ['research', 'presenter'],
+    agents: ['slides', 'poster'],
   },
   {
     icon: 'check',

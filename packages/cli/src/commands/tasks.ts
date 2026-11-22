@@ -13,7 +13,7 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
   type RequestError,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
   findTask,
@@ -25,7 +25,7 @@ import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
-import { resolveCliRunAgent } from '../runtime/agents';
+import { cliEntryAgent } from '../runtime/cliEntryAgent';
 import {
   CliUsageError,
   launchApproval,
@@ -45,7 +45,7 @@ import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 import { cliCommand, modelFlag } from './_helpers/cliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
-import type { RuntimeCommand } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */
@@ -123,7 +123,7 @@ const listCommand = cliCommand('list', {
         tasks,
         tasks.length
           ? tasks.map(taskLine).join('\n')
-          : `${EMPTY_TASK_LIST.title}. \`texra tasks start <agent> --instruction …\` starts one.`,
+          : `${EMPTY_TASK_LIST.title}. \`texra tasks start --instruction …\` starts one.`,
       ),
     );
   }, Effect.scoped),
@@ -162,15 +162,12 @@ const attachCommand = cliCommand('attach', {
 });
 
 const startCommand = cliCommand('start', {
-  description: 'Start an agent as a task in the TeXRA service and print its id',
+  description: 'Start a task in the TeXRA service and print its id',
   config: {
-    agent: Argument.String('agent').pipe(
-      Argument.withDescription('Agent name from `texra agents list`'),
-    ),
     instruction: Flag.String('instruction').pipe(
-      Flag.withDescription('What the agent should do'),
+      Flag.withDescription('What the assistant should do'),
     ),
-    model: modelFlag('Model for the agent'),
+    model: modelFlag('Model for the task'),
   },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
@@ -193,7 +190,6 @@ const startCommand = cliCommand('start', {
       projectApprovalPolicy(services.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
-    const agent = yield* resolveCliRunAgent(services, input.agent);
     const model = yield* selectCliRunModel(
       context,
       Option.getOrUndefined(input.model),
@@ -201,8 +197,7 @@ const startCommand = cliCommand('start', {
       services,
     );
     const payload: AgentConfigPayload = {
-      agent: input.agent,
-      agentSource: { kind: agent.source },
+      ...(yield* cliEntryAgent),
       model,
       inputFiles: [],
       contextFiles: [],

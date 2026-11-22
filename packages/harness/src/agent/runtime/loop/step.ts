@@ -54,7 +54,10 @@ import {
   readOwnPrograms,
 } from '@agent/memory/ownPrograms';
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
-import { EXTERNAL_ROOT_TOOLS } from '@agent/prompt/workspaceInfo';
+import {
+  ACCESSIBLE_EXTERNAL_DIRS_HEADING,
+  EXTERNAL_ROOT_TOOLS,
+} from '@agent/prompt/workspaceInfo';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
@@ -86,7 +89,6 @@ import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import {
-  declaredToolNames,
   heldToRecord,
   resolveStepTools,
   type ResolvedTools,
@@ -106,7 +108,7 @@ import {
  *  plugin layers and MCP servers, built in the session's scope and closed
  *  with it. A run holds what it declares here, and each step pins from it. */
 export class ProjectTools extends Context.Service<ProjectTools, SessionTools>()(
-  '@texra-ai/harness/session/ProjectTools',
+  '@texra-ai/worldline/session/ProjectTools',
 ) {}
 
 /** The tools one step offers. */
@@ -185,9 +187,7 @@ function describedAtFreeze<T extends ResolvedTools>(
     tools.registry.get(name)?.describe !== undefined;
   if (!tools.definitions.some(({ name }) => describes(name))) return tools;
   const names = new Set(
-    declaredToolNames(declaration).filter(
-      (name) => mcpServerOfToolName(name) === undefined,
-    ),
+    declaration.filter((name) => mcpServerOfToolName(name) === undefined),
   );
   const declared = tools.definitions
     .filter(({ name }) => names.has(name) && !describes(name))
@@ -435,8 +435,22 @@ const openStep = Effect.fn('Step.open')(function* (
       EXTERNAL_ROOT_TOOLS.some((name) => tools.registry.has(name)) &&
       (yield* Settings.get(roots, MEMORY_ENABLED_SETTING));
     const folders = remembers ? memoryFolders(roots) : [];
+    // Include folder paths directly in the dynamic memory section only when
+    // the opening `<workspace_info>` did not already list them (e.g. memory
+    // started off and was turned on mid-run).
+    const includeMemoryPaths =
+      remembers &&
+      state.input.system !== undefined &&
+      !stored(state, state.input.system, Schema.String).includes(
+        ACCESSIBLE_EXTERNAL_DIRS_HEADING,
+      );
     const memory = remembers
-      ? { folders, section: yield* memorySection(folders) }
+      ? {
+          folders,
+          section: yield* memorySection(folders, {
+            includePaths: includeMemoryPaths,
+          }),
+        }
       : null;
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
@@ -586,11 +600,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const { tools, skills } = step;
   const roots = yield* SessionRoots;
-  const delegation = yield* readDelegationTargets(
-    tools,
-    roots,
-    run.config.delegationAgentScope ?? undefined,
-  );
+  const delegation = yield* readDelegationTargets(tools, roots);
   const offered = tools.definitions.map(({ name }) => name);
   const context = {
     ...stepInstructions(

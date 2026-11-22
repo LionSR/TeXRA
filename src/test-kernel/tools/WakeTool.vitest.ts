@@ -25,7 +25,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   answersOf,
   persistentTestSession,
@@ -62,14 +62,9 @@ const arrange = Effect.fn('arrange')(function* (
     runId,
     interactive: true,
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'golden_wake',
-      agentSource: {
-        kind: 'inline',
-        persona: {
-          prompt: 'GOLDEN-WAKE: arrange to be continued later.',
-          tools: ['wake'],
-        },
-      },
+      label: 'golden_wake',
+      system: 'GOLDEN-WAKE: arrange to be continued later.',
+      tools: ['wake'],
       model: 'openai/gpt-5.6-sol',
       instruction,
     }),

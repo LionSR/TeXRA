@@ -4,8 +4,8 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { AppSignals, Secrets, Settings } from '@texra-ai/harness/plugins';
-import { DISABLED_SKILLS_SETTING } from '@texra-ai/harness/schemas';
+import { AppSignals, Secrets, Settings } from '@texra-ai/worldline/plugins';
+import { DISABLED_SKILLS_SETTING } from '@texra-ai/worldline/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import {

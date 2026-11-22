@@ -1,7 +1,7 @@
 import { computed } from '@lit-labs/signals';
 
-import { stripControlCharacters } from '@texra-ai/harness/schemas';
-import { isWorking } from '@texra-ai/harness/schemas';
+import { stripControlCharacters } from '@texra-ai/worldline/schemas';
+import { isWorking } from '@texra-ai/worldline/schemas';
 import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToClock } from '@cli/tui/useLiveNowMs';
@@ -17,7 +17,7 @@ import { attentionRequests } from './state/approvalQueue';
 import { sessionView } from './state/sessionView';
 import { writeOsc } from './notifications/terminalNotifier';
 import { canStopRootRun } from './state/sessionRunState';
-import type { SessionTitleState } from '@texra-ai/harness/schemas';
+import type { SessionTitleState } from '@texra-ai/worldline/schemas';
 
 // The TUI's ASCII spin cycle reads as stray punctuation once a frame stands
 // alone in a tab title (a `-` is indistinguishable from a separator), so the

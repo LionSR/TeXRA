@@ -7,13 +7,13 @@ import { type CliSignInProgress } from '@cli/runtime/models/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
-import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { Session } from '@texra-ai/harness';
+import type { RunId, ApprovalPolicy } from '@texra-ai/worldline/schemas';
+import type { Session } from '@texra-ai/worldline';
 import type {
   ProcessServices,
   RunModelCandidate,
-} from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/host';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
 import type { Effect } from 'effect';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 import type { ScopeRunner } from '../../../scopeRunner';

@@ -23,9 +23,9 @@
  *    `cancelled` with nothing left held.
  */
 import { Effect, Exit, Fiber, Layer, Option, Stream } from 'effect';
-import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { Sessions, type LocalSession } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
@@ -104,12 +104,9 @@ const heldIds = (session: LocalSession) =>
 const runId = await inSession((session) =>
   Effect.gen(function* () {
     const run = yield* session.start({
-      agent: {
-        name: 'abstract_writer',
-        description: 'Writes and revises an abstract.',
-        prompt: 'Write what is asked, briefly.',
-        tools: [],
-      },
+      label: 'abstract_writer',
+      system: 'Write what is asked, briefly.',
+      tools: [],
       instruction: 'Draft the abstract.',
       model: route.model,
       interactive: true,

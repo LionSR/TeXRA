@@ -4,7 +4,7 @@
  * Outbound: Backend → Frontend (the `profile` page of the host state)
  */
 import { Schema } from 'effect';
-import { decodingDefault } from '@texra-ai/harness/schemas';
+import { decodingDefault } from '@texra-ai/worldline/schemas';
 import { CredentialOriginSchema } from '@texra-ai/llm';
 
 // ============================================================

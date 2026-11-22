@@ -6,16 +6,16 @@ import { layer } from '@effect/vitest';
 import { Effect, Context } from 'effect';
 import { expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import {
   APPROVAL_POLICY_SETTING,
   generateRunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   JsonConfigProvider,
   JsonStore,
   nodeFileServices,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';

@@ -13,7 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports
 import { TickerController } from '@ui/litControllers/TickerController';
-import { formatCompactDuration } from '@texra-ai/harness/schemas';
+import { formatCompactDuration } from '@texra-ai/worldline/schemas';
 
 @customElement('tool-timer')
 export class ToolTimer extends LitElement {

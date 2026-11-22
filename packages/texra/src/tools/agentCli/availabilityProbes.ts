@@ -8,9 +8,9 @@
 import { Effect, type FileSystem } from 'effect';
 
 // Local imports
-import { IS_WINDOWS, runsInWsl } from '@texra-ai/harness/node';
-import { toErrorMessage, causeChain } from '@texra-ai/harness/schemas';
-import { ToolProbeFailed } from '@texra-ai/harness/plugins';
+import { IS_WINDOWS, runsInWsl } from '@texra-ai/worldline/node';
+import { toErrorMessage, causeChain } from '@texra-ai/worldline/schemas';
+import { ToolProbeFailed } from '@texra-ai/worldline/plugins';
 import { hasPackageManager } from '@texra/utils/system/toolChecks';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {

@@ -1,6 +1,6 @@
 /**
  * Node.js platform implementation and host building blocks for
- * `@texra-ai/harness`.
+ * `@texra-ai/worldline`.
  *
  * > **Guide:** Read [Philosophy & Architecture](/api/) for a minimal Node.js
  * > embedding example using `nodePlatform` and `Sessions.layer`.

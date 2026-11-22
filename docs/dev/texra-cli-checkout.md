@@ -53,7 +53,7 @@ corepack pnpm --filter @texra-ai/cli build
 The symlink is used instead of `pnpm link --global` because the CLI package
 still has workspace-only dependencies, while the built binary is self-contained.
 
-Shell-completion dynamic lookups (`texra agents list`, `texra models list`)
+Shell-completion dynamic lookups (`texra models list`)
 reflect the current checkout. Disable them in slow shells with
 `export TEXRA_COMPLETION_DYNAMIC=0` — see the public guide for the completion
 install steps themselves.
@@ -65,8 +65,8 @@ symlink:
 
 ```bash
 node packages/cli/dist/texra.js --help
-node packages/cli/dist/texra.js agents list
-node packages/cli/dist/texra.js run polish --input paper.tex --output paper.polished.tex --print
+node packages/cli/dist/texra.js models list
+node packages/cli/dist/texra.js run edit --input paper.tex --instruction "Polish the prose" --output paper.polished.tex --print
 ```
 
 All flags from the public guide work the same way — substitute

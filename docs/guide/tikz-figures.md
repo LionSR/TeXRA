@@ -6,25 +6,18 @@ import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCard
 
 [TikZ](https://github.com/pgf-tikz/pgf) is a LaTeX package for creating vector graphics programmatically. It is widely used in academia for diagrams, plots, and technical illustrations because of its output quality and its integration with LaTeX. Learning TikZ can feel like learning a new language. TeXRA helps with that, so the figures that illustrate a derivation or a result take less of your time than the theory itself.
 
-TeXRA offers features built for TikZ, centered on agents with tools, which write TikZ, compile it, and visually verify the result, together with automatic extraction for document programs and a compile command. This guide covers the TikZ-specific workflows.
-
-::: info No dedicated `draw` agent
-Earlier versions of TeXRA shipped a standalone `draw` agent. Figure generation
-is now handled by the general agents `research` and `presenter`, which
-can write TikZ, compile it, inspect the rendered output, and iterate until it
-looks right.
-:::
+TeXRA offers features built for TikZ, centered on the assistant, which writes TikZ, compiles it, and visually verifies the result, together with automatic extraction for document programs and a compile command. This guide covers the TikZ-specific workflows.
 
 ::: tip General media handling
 For other figure types (standard images, PDFs) and media selection in the UI, read the [Working with figures](./working-with-figures.md) guide.
 :::
 
-## <wa-icon library="texra" name="sparkle"></wa-icon> Generating TikZ with agents
+## <wa-icon library="texra" name="sparkle"></wa-icon> Generating TikZ with the assistant
 
-Agents with tools (`research` or `presenter`) can create new TikZ figures from a description, refine existing diagrams, fix compilation errors, and inspect the rendered PDF in a loop until the layout is clean:
+The assistant can create new TikZ figures from a description, refine existing diagrams, fix compilation errors, and inspect the rendered PDF in a loop until the layout is clean:
 
 <ToolCallPanel
-  title="research"
+  title="assistant"
   icon="sparkle"
   caption="drawing a TikZ figure · iterating · this run"
   :calls="[
@@ -35,23 +28,22 @@ Agents with tools (`research` or `presenter`) can create new TikZ figures from a
   ]"
 />
 
-<p class="hero-caption">The agent writes, compiles, looks at the rendered PDF, and loops back to fix what it sees: a self-correcting draw cycle, not a one-shot generation.</p>
+<p class="hero-caption">The assistant writes, compiles, looks at the rendered PDF, and loops back to fix what it sees: a self-correcting draw cycle, not a one-shot generation.</p>
 
 ![TikZ Figure Example](/images/tikz-figure-example.png)
 
 ### Creating new figures
 
-1. Select an agent, `research` or `presenter` (<wa-icon library="texra" name="robot"></wa-icon>).
+1. Open a new task in the TeXRA panel.
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`, and `google/gemini-4-argon` are good choices for complex drawings.
 3. Describe the figure you want in detail.
 4. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
-From the CLI, the same draw, compile, and inspect loop shown below runs
-headlessly (`texra run` takes any agent, which runs with your
-`--instruction`):
+From the CLI, the same draw, compile, and inspect loop runs headlessly with
+`texra run chat`:
 
 ```bash
-texra run research --input figures.tex \
+texra run chat --input figures.tex \
   --instruction "Create a TikZ flowchart of the ML pipeline in Section 2."
 ```
 
@@ -66,8 +58,8 @@ Connect the steps with arrows and add appropriate labels.
 
 ### Enhancing existing figures
 
-1. Select an agent (`research` or `presenter`).
-2. Describe the improvements you want, and name the file that holds the TikZ code; the agent reads it with its own tools.
+1. Open a new task in the TeXRA panel.
+2. Describe the improvements you want, and name the file that holds the TikZ code; the assistant reads it with its own tools.
 3. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 **Example instruction:**
@@ -84,7 +76,7 @@ TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 
 ### Automatic extraction
 
-A program run can attach the compiled TikZ figures of its input files. An agent switches this on with `args: { autoExtractTikzFigure: true }` on its `program` call; ask for it in plain words ("attach the compiled TikZ figures").
+A program run can attach the compiled TikZ figures of its input files. The assistant switches this on with `args: { autoExtractTikzFigure: true }` on its `program` call; ask for it in plain words ("attach the compiled TikZ figures").
 
 When automatic extraction is enabled, each `tikzpicture` in your selected files is extracted into a standalone `.tex` document, compiled to PDF with `pdflatex`, and attached to the prompt alongside the source code:
 
@@ -92,7 +84,7 @@ When automatic extraction is enabled, each `tikzpicture` in your selected files 
   { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
   { icon: 'file-submodule', title: 'Extract', desc: 'A standalone LaTeX document per figure.', chips: [{ text: 'fig1.tex', variant: 'neutral' }, { text: 'fig2.tex', variant: 'neutral' }, { text: 'fig3.tex', variant: 'neutral' }] },
   { icon: 'play-circle', title: 'Compile', desc: 'pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
-  { icon: 'output', title: 'Attach', desc: 'Models with native PDF support read the PDFs directly; others get rasterised PNGs via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: 'PDF or PNG', variant: 'success', icon: 'eye' }] },
+  { icon: 'output', title: 'Attach', desc: 'Models with native PDF support read the PDFs directly; others get rasterized PNGs via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: 'PDF or PNG', variant: 'success', icon: 'eye' }] },
   { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered output.', chips: [{ text: 'code + image', variant: 'accent' }] }
 ]" />
 
@@ -112,7 +104,7 @@ This wraps each TikZ figure in a standalone file, compiles it to PDF, and lets y
 
 ### In a chat
 
-A chat agent has no dedicated extraction tool: to look at a TikZ figure it copies the `tikzpicture` into a standalone document, compiles it in the shell, and opens the PDF with `read_file`, which attaches it for a multimodal model. Ask for it in plain words ("render the second diagram and check the labels").
+The assistant has no dedicated extraction tool: to look at a TikZ figure it copies the `tikzpicture` into a standalone document, compiles it in the shell, and opens the PDF with `read_file`, which attaches it for a multimodal model. Ask for it in plain words ("render the second diagram and check the labels").
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Customizing TikZ processing
 
@@ -154,9 +146,9 @@ Agents with tools can reuse existing figures as references when creating new one
 
 ### Using reference figures
 
-1. Name the files that hold the earlier TikZ figures in your instructions; the agent reads them with its own tools.
+1. Name the files that hold the earlier TikZ figures in your instructions; the assistant reads them with its own tools.
 2. Say what to take from them.
-3. Ask the agent to adopt similar styles or approaches.
+3. Ask the assistant to adopt similar styles or approaches.
 
 **Example instruction:**
 

@@ -17,12 +17,12 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { Run, Session, Notices } from '@texra-ai/harness';
+import type { Run, Session, Notices } from '@texra-ai/worldline';
 import {
   presentRunFailure,
   type ProcessRuntime,
   type ProcessServices,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   type RuntimeCommand,
   type RunView,
@@ -35,7 +35,7 @@ import {
   Rejected,
   acceptsFollowUp,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
@@ -62,6 +62,7 @@ import {
   presentInTranscript,
 } from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
+import { chatOf } from '@texra/shared/session/surface';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
@@ -71,7 +72,7 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
+import type { ApprovalPolicy } from '@texra-ai/worldline/schemas';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import {
   EMPTY_DRAFT,
@@ -82,7 +83,7 @@ import {
   type InputDraft,
 } from './tui/input/draftAttachments';
 import type { ModelConnection } from './tui/modelConnection';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 // ---------------------------------------------------------------------------
@@ -239,13 +240,9 @@ export function createChatSessionController(
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
-  const adoptRunConfig = (
-    config: Pick<AgentConfig, 'agent' | 'agentSource' | 'model'>,
-    modelSource?: 'history',
-  ): void =>
+  const adoptRunConfig = (config: AgentConfig, modelSource?: 'history'): void =>
     patchSessionMeta({
-      agent: config.agent,
-      agentSource: config.agentSource ?? undefined,
+      chat: chatOf(config),
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
     });
@@ -387,8 +384,8 @@ export function createChatSessionController(
           Effect.tapError(() =>
             Effect.sync(() => appendLocalUserTranscript(shownInstruction)),
           ),
-          Effect.tap((config) => Effect.sync(() => adoptRunConfig(config))),
           Effect.flatMap(decodeLaunchConfig),
+          Effect.tap((config) => Effect.sync(() => adoptRunConfig(config))),
           Effect.tapError(showFailure),
         );
         const launch = Effect.gen(function* () {
@@ -672,8 +669,7 @@ export function createChatSessionController(
           reason: meta.modelSource,
         });
         return {
-          agent: meta.agent,
-          agentSource: meta.agentSource,
+          ...meta.chat,
           model: selection.model,
           instruction,
           ...(skills.length > 0 && { skills: [...skills] }),

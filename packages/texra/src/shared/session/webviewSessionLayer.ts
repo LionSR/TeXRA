@@ -19,7 +19,7 @@ import {
   SessionInputs,
   viewDiagnosticsLayer,
   withForkFailureReporting,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 
 /** The view of the session `key` over `read`, for the caller's scope. */
 export const remoteSessionView = (

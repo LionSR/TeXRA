@@ -1,8 +1,8 @@
-# `@texra-ai/harness/builtins`
+# `@texra-ai/worldline/builtins`
 
 <!-- Generated from `packages/harness/src/builtins.ts` by `npm run docgen`; do not edit. -->
 
-The harness's built-in plugins for `@texra-ai/harness`: what a process
+The harness's built-in plugins for `@texra-ai/worldline`: what a process
 lists in `Sessions.layer({ platform, plugins, client })` beside its own.
 
 > **Guide:** Read [Plugins, Tools & Codemode](/api/plugins-and-codemode) for
@@ -21,7 +21,7 @@ lists in `Sessions.layer({ platform, plugins, client })` beside its own.
   [`web`](#web).
 
 A plugin or tool of your own is written with
-[`@texra-ai/harness/plugins`](./plugins), which imports none of these.
+[`@texra-ai/worldline/plugins`](./plugins), which imports none of these.
 
 ## AGENT_TOOL_NAME
 
@@ -37,8 +37,8 @@ Code mode: the `script` tool, a program that calls the run's other tools,
 `self()`, the function a script runs this agent again with, and
 `context`, which reads and edits the run's own model view. An agent gets
 `script` and `context` if its configuration names them, or as every run
-that takes injected tools does (not a program's run, a text-only persona,
-or a plugin agent that names its own tools). A step that offers `script`
+that takes injected tools does (not a script's run or a text-only
+run). A step that offers `script`
 sends it and the run's own tools alone, so `context` is called from a
 script there and directly elsewhere; its session layer is the code
 sandbox the scripts run in.

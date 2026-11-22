@@ -2,13 +2,13 @@
  *  availability check and its card. */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Duration, Effect } from 'effect';
 
 // Local imports
-import { definePlugin, Secrets } from '@texra-ai/harness/plugins';
+import { definePlugin, Secrets } from '@texra-ai/worldline/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { texraPlugin } from '@texra/tools/texraPlugin';
-import { isGitRepository } from '@texra-ai/harness/node';
+import { isGitRepository } from '@texra-ai/worldline/node';
 import { getGitHubToken, GITHUB_TOKEN_STORAGE_KEY } from './githubAuth';
 import { GitHubSubscriptionTool } from './githubSubscriptionTool';
 import {
@@ -25,6 +25,10 @@ export const githubActivity: TexraPlugin = texraPlugin({
     // cover repos and issues but the persistence key is stable.
     id: 'github-pr-subscription',
     tools: [GitHubSubscriptionTool],
+    prompt: ({ offered }) =>
+      offered.includes('github_subscription')
+        ? 'Use `github_subscription` when the user asks you to follow up on review comments or CI of a pull request.'
+        : '',
     toggle: 'off',
     processLayer: {
       layer: gitHubSubscriptionsLayer,
@@ -86,7 +90,7 @@ export const githubActivity: TexraPlugin = texraPlugin({
         '  3. Scopes: "repo" for private repositories, "public_repo" for public only.\n' +
         '  4. Store the token in host secret storage, or export GITHUB_TOKEN/GH_TOKEN for CLI and automation.',
       installUrl: 'https://github.com/settings/tokens',
-      configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. The CLI /config → GitHub token row and Settings → General in VS Code both manage the stored token. Requires a git repository in the workspace. Polls every ${GITHUB_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_SUBSCRIPTIONS.pull} concurrent PRs and ${MAX_SUBSCRIPTIONS.repo} concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
+      configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. The CLI /config → GitHub token row and Settings → General in VS Code both manage the stored token. Requires a git repository in the workspace. Polls every ${Duration.format(Duration.millis(GITHUB_POLL_INTERVAL_MS))}; cap: ${MAX_SUBSCRIPTIONS.pull} concurrent PRs and ${MAX_SUBSCRIPTIONS.repo} concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
       authNote: 'Uses personal access token',
     },
   },

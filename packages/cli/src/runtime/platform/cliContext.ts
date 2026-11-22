@@ -13,14 +13,17 @@ import {
   type LogLevel,
 } from 'effect';
 
-import { DatabaseOpenFailed, type SkillSourceOptions } from '@texra-ai/harness';
-import { Settings, type ConfigProvider } from '@texra-ai/harness/plugins';
+import {
+  DatabaseOpenFailed,
+  type SkillSourceOptions,
+} from '@texra-ai/worldline';
+import { Settings, type ConfigProvider } from '@texra-ai/worldline/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
   meansAbsent,
   approvalPolicyEnv,
   canonicalizeWorkspaceRoot,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import {
   APPROVAL_POLICY_SETTING,
   parseApprovalPolicy,
@@ -28,7 +31,7 @@ import {
   type ApprovalPolicy,
   type LaunchApproval,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { checkResourcesPath } from '@texra/controllers/texraProcessLayer';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
@@ -90,7 +93,6 @@ export interface CliContext {
   readonly configWarnings: readonly string[];
   /** The config problems `--quiet` does not hide; see `CliStartupConfig`. */
   readonly configDegradations: readonly string[];
-  readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
 }
@@ -254,7 +256,7 @@ export function readCliVersion(): string {
  * `dist/resources/`, the service's `serve/` beside the extension's and the
  * desktop app's `resources/`), and the build stamps that location; a source
  * run reads the extension package's own tree, four directories above this
- * module. Fails by its path when it holds no bundled agents
+ * module. Fails by its path when it holds no bundled plugin resources
  * ({@link checkResourcesPath}).
  */
 export const resolveCliResourcesPath = Effect.fn(
@@ -492,7 +494,6 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       config,
       configWarnings,
       configDegradations: degradations,
-      envAgent: yield* envTier('TEXRA_AGENT'),
       envModel,
       skillSourceOptions: {
         additionalPaths: init.globalArgs.skillSourcePaths ?? [],

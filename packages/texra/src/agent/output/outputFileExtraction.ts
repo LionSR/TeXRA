@@ -12,11 +12,11 @@ import {
   toErrorMessage,
   type AgentConfig,
   type FileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { Array as Arr, Effect, FileSystem } from 'effect';
 
-import { readNormalizedFile } from '@texra-ai/harness/node';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import {
@@ -28,8 +28,8 @@ import { replaceInputCommands } from './fileMapping';
 import { baseOf } from './lineageMapping';
 import { extractReplyDocuments } from './replyDocuments';
 import type { ExpectedDocuments } from './extraction/filenameHeaders';
-import type { AgentTrace } from '@texra-ai/harness/plugins';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { AgentTrace } from '@texra-ai/worldline/plugins';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 /** What the output pipeline reads of the document task's run. */
 export interface OutputDependencies {

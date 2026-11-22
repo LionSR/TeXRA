@@ -4,7 +4,7 @@ import { Context, Deferred, Effect, Fiber, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import {
   RunRegistry,
   SessionRunRegistry,
@@ -31,7 +31,7 @@ import {
 const defaultSession = Effect.flatMap(TestSession, sessionHandleOf);
 
 const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
-  agent: 'chat',
+  label: 'chat',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
 });

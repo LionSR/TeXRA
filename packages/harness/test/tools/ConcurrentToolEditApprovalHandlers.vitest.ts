@@ -4,7 +4,7 @@ import { Effect, Fiber, Layer, Stream, Context } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import { requestToolEditApproval } from '@texra-ai/worldline/plugins';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';

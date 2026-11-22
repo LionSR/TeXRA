@@ -1,7 +1,6 @@
 /**
  * The `workspaceFile` host request: the editor pane's directory listing,
- * file read and write-if-unchanged on the session's workspace, plus the agent
- * definitions it opens by catalog name. A path from a surface is untrusted
+ * file read and write-if-unchanged on the session's workspace. A path from a surface is untrusted
  * input: `../` traversal or a symlink would otherwise reach anything the user
  * can, so every path is confined to the workspace before touching disk.
  *
@@ -20,22 +19,19 @@ import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
 // Local imports - harness
 import {
-  agentKey,
-  AGENT_SOURCE,
-  isPackagedAgentSource,
   normalizeFilePath,
   Rejected,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
-import { AgentCatalog, OFFICE_EXTENSIONS } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { OFFICE_EXTENSIONS } from '@texra-ai/worldline/host';
 import {
   entryTypeIn,
   meansAbsent,
   readDirectoryTypedTolerant,
   readNormalizedFile,
   isPathWithin,
-} from '@texra-ai/harness/node';
-import { WorkspaceFs } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/node';
+import { WorkspaceFs } from '@texra-ai/worldline/plugins';
 
 // Local imports - app
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
@@ -46,11 +42,6 @@ import {
   prepareFileFilters,
   shouldVisitDirectory,
 } from '@texra/common/files/fileListingRules';
-import {
-  agentDocumentIdentity,
-  agentDocumentTarget,
-  isAgentDocumentTarget,
-} from '@texra/shared/agentDocumentTarget';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 
@@ -141,48 +132,6 @@ const resolveWritable = Effect.fn('workspaceFileRequest.resolveWritable')(
   },
 );
 
-/** An agent definition the editor names by catalog identity, resolved afresh
- *  on each read and save (also after a restart), so a removed definition
- *  keeps no old file grant alive and a surface never names a file by an
- *  absolute path. */
-const resolveAgentDocument = Effect.fn('workspaceFileRequest.agentDocument')(
-  function* (target: string, write: boolean) {
-    const identity = agentDocumentIdentity(target);
-    const entry =
-      identity &&
-      (yield* AgentCatalog).get(agentKey(identity.source, identity.name));
-    if (!entry?.path) {
-      return yield* new Rejected({
-        reason:
-          'This agent definition is no longer available. Open its current definition from Settings.',
-      });
-    }
-    if (write && isPackagedAgentSource(entry.source)) {
-      return yield* new Rejected({
-        reason:
-          'Built-in and plugin definitions are read-only. Customize the agent to edit a copy.',
-      });
-    }
-    return entry.path;
-  },
-);
-
-/** The editor target of the agent definition at `filePath`, the settings
- *  body having already resolved it; shadowed packaged definitions count, so
- *  "View built-in" still opens the original. */
-export const agentDocumentForPath = (filePath: string) =>
-  Effect.map(AgentCatalog, (catalog) => {
-    for (const item of catalog.list()) {
-      for (const source of Object.values(AGENT_SOURCE)) {
-        const entry = catalog.get(agentKey(source, item.name));
-        if (entry?.path === filePath) {
-          return agentDocumentTarget(source, entry.name);
-        }
-      }
-    }
-    return undefined;
-  });
-
 /**
  * One directory of the project tree. The tree is a code editor, not the
  * agent input picker: it shares the ignore policy but not the picker's
@@ -256,9 +205,7 @@ const writeFile = Effect.fn('workspaceFileRequest.writeFile')(function* (
   base: string | null,
   write: WriteProjectFile,
 ) {
-  const absolutePath = yield* isAgentDocumentTarget(target)
-    ? resolveAgentDocument(target, true)
-    : resolveWritable(target);
+  const absolutePath = yield* resolveWritable(target);
   const written = yield* write(
     absolutePath,
     contents,
@@ -271,9 +218,7 @@ const readFile = Effect.fn('workspaceFileRequest.readFile')(function* (
   target: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const absolutePath = yield* isAgentDocumentTarget(target)
-    ? resolveAgentDocument(target, false)
-    : resolveExisting(target);
+  const absolutePath = yield* resolveExisting(target);
   // LF-only with a UTF-8 BOM kept, so the editor's verbatim save keeps it.
   const contents = yield* readNormalizedFile(fs, absolutePath);
   return { kind: 'contents', contents } satisfies HostOutcome;
@@ -292,7 +237,7 @@ export const answerWorkspaceFile = Effect.fn('answerWorkspaceFile')(
   ): Effect.fn.Return<
     HostOutcome,
     Rejected | PlatformError.PlatformError,
-    WorkspaceFs | FileSystem.FileSystem | Path.Path | AgentCatalog
+    WorkspaceFs | FileSystem.FileSystem | Path.Path
   > {
     switch (action.kind) {
       case 'list':

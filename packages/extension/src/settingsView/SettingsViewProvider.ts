@@ -1,15 +1,14 @@
 import * as vscode from 'vscode';
 import { Effect, Latch, Predicate } from 'effect';
 
-import { hasExtension } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { hasExtension } from '@texra-ai/worldline/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   executeVscodeCommand,
   safeExecuteCommand,
 } from '@frontend/system/commandUtils';
-import { selectFolder } from '@frontend/ui/dialogs';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
@@ -21,12 +20,12 @@ import { BundledViewContentProvider } from '../common/webview/BundledViewContent
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type {
   ProcessRuntime,
   ProcessServices,
   ScopedFork,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 
 /** Lift VS Code's rejected post at the typed settings transport boundary. */
 function postToWebview(
@@ -114,20 +113,6 @@ export class SettingsViewProvider {
               : showDocument(() => vscode.workspace.openTextDocument(filePath)),
           revealPath: (filePath) =>
             executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
-          // An untitled buffer holds the text, so Ctrl+S prompts for a new
-          // location instead of writing back over the source.
-          showReadOnlyYaml: (_fileName, text) =>
-            showDocument(() =>
-              vscode.workspace.openTextDocument({
-                content: text.replaceAll('\r\n', '\n'),
-                language: 'yaml',
-              }),
-            ),
-          pickFolder: (title) =>
-            Effect.map(
-              selectFolder({ title, openLabel: 'Select Folder' }),
-              (selected) => selected ?? undefined,
-            ),
           ...progressView.window.settingsRuns,
           signInSubscription: (providerId) =>
             signInWithSubscription(roots, providerId),

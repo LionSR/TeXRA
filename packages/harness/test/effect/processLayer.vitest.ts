@@ -15,9 +15,9 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Logger, References } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { Sessions } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import { HARNESS_APP } from '@test/support/FakePlatform';
 
 describe('Sessions.layer', () => {
@@ -29,13 +29,14 @@ describe('Sessions.layer', () => {
     });
     const dir = mkdtempSync(join(tmpdir(), 'texra-embedder-log-'));
     const platform = nodePlatform({
-      agentsDir: join(dir, 'agents'),
       storageDir: join(dir, 'storage'),
       workspaceDir: dir,
     });
     return Effect.gen(function* () {
       yield* (yield* Sessions).open(platform.roots);
-      expect(lines.some((line) => /Loaded \d+ agents/.test(line))).toBe(true);
+      expect(lines.some((line) => line.startsWith('First install:'))).toBe(
+        true,
+      );
     }).pipe(
       Effect.scoped,
       Effect.provide(
@@ -47,7 +48,7 @@ describe('Sessions.layer', () => {
           Layer.provideMerge(
             Layer.merge(
               Logger.layer([captured]),
-              // The catalog's load time is a debug line.
+              // The plugin switches' first-install line is a debug line.
               Layer.succeed(References.MinimumLogLevel)('Debug'),
             ),
           ),

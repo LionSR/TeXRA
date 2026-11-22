@@ -8,7 +8,7 @@
  */
 
 import * as path from 'node:path';
-import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
+import { getBasename, normalizeFilePath } from '@texra-ai/worldline/schemas';
 
 import {
   getExtractedDocOutputFileName,

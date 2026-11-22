@@ -22,13 +22,13 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, PubSub, Schema, Stream } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import {
   definePlugin,
   defineTool,
   AppSignals,
-} from '@texra-ai/harness/plugins';
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { SessionViewAccess } from '@shared/session/runHistory';
@@ -113,15 +113,9 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             const release = join(roots.workspace, 'release');
             yield* rootRun({
               config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                agent: 'command_runner',
-                agentSource: {
-                  kind: 'inline',
-                  persona: {
-                    description: 'Runs one command.',
-                    prompt: `GOLDEN-APPROVAL bash until [ -e ${release} ]; do sleep 0.05; done`,
-                    tools: ['bash'],
-                  },
-                },
+                label: 'command_runner',
+                system: `GOLDEN-APPROVAL bash until [ -e ${release} ]; do sleep 0.05; done`,
+                tools: ['bash'],
                 model: 'openai/gpt-5.6-sol',
                 instruction: 'Run the command.',
               }),
@@ -202,17 +196,14 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
               persistent: true,
             });
             // The validation model's approval script, for a tool that asks
-            // for no approval: the persona's turn calls the tool named after
+            // for no approval: the run's turn calls the tool named after
             // the marker, then answers.
             const note = (kind: 'broken' | 'written') =>
               session
                 .start({
-                  agent: {
-                    name: `${kind}_noter`,
-                    description: `Records a ${kind} note.`,
-                    prompt: `GOLDEN-APPROVAL note_${kind}`,
-                    tools: [`note_${kind}`],
-                  },
+                  label: `${kind}_noter`,
+                  system: `GOLDEN-APPROVAL note_${kind}`,
+                  tools: [`note_${kind}`],
                   instruction: 'Record the note.',
                   model: 'openai/gpt-5.6-sol',
                 })

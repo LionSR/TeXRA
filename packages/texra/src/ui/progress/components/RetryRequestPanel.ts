@@ -9,7 +9,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
-import type { RetryRequest } from '@texra-ai/harness/schemas';
+import type { RetryRequest } from '@texra-ai/worldline/schemas';
 import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import { REQUEST_ASK, RETRY_OWN_KEY_LABEL } from '@ui/copy/requestCards';

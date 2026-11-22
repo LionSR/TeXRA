@@ -26,7 +26,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
-import { DETAIL_SEPARATOR, type SettingRow } from '@texra-ai/harness/schemas';
+import { DETAIL_SEPARATOR, type SettingRow } from '@texra-ai/worldline/schemas';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import {
   renderSettingsNumberRow,

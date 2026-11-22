@@ -13,7 +13,7 @@ import { Effect, Exit, Fiber, Schedule } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { executeCommand } from '@texra-ai/harness/node';
+import { executeCommand } from '@texra-ai/worldline/node';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 

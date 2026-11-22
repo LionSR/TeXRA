@@ -18,7 +18,7 @@ import {
   InstalledPluginSchema,
   RunEndSchema,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
 
 /**

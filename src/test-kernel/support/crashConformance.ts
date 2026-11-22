@@ -61,6 +61,7 @@
  * - a crash inside one publisher job, between two of its appends, leaves
  *   either half on disk (a job is one SQLite transaction).
  */
+import { GOLDEN_AGENTS } from '@cli/runtime/models/validationAgents';
 import {
   cpSync,
   existsSync,
@@ -86,7 +87,7 @@ import {
 } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import {
   rootRun,
@@ -912,7 +913,7 @@ export function crashConformanceSuite(
                   (session) =>
                     rootRun({
                       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                        agent: 'golden_crash',
+                        ...GOLDEN_AGENTS.golden_crash,
                         model: 'openai/gpt-5.6-sol',
                         instruction: 'Work through the crash task.',
                       }),
@@ -1121,7 +1122,7 @@ export function crashConformanceSuite(
                   (session) =>
                     rootRun({
                       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                        agent: 'golden_delivery',
+                        ...GOLDEN_AGENTS.golden_delivery,
                         model: 'openai/gpt-5.6-sol',
                         instruction: 'Send the children off.',
                       }),

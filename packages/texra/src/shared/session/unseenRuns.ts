@@ -4,7 +4,7 @@
  * top-level run, the `lastTimestamp` it showed (`RunSurface.seen`); the view
  * says when the run last changed.
  */
-import type { RunId, SessionView } from '@texra-ai/harness/schemas';
+import type { RunId, SessionView } from '@texra-ai/worldline/schemas';
 
 import { runSurface, shownRun, updateRun, type Surface } from './surface';
 

@@ -36,8 +36,8 @@ import type {
   UserQuestionAnswers,
   UserQuestionRequest,
   UserQuestionPrompt,
-} from '@texra-ai/harness/schemas';
-import { DETAIL_SEPARATOR } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
+import { DETAIL_SEPARATOR } from '@texra-ai/worldline/schemas';
 
 interface UserQuestionProps {
   readonly availableRows?: number;

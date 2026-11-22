@@ -30,7 +30,7 @@ import { layer } from '@effect/vitest';
 import { Effect, Fiber, Context, Schema } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/worldline';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { Inbox } from '@agent/followUp/Inbox';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -55,7 +55,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** A resume in `session`. */
 const resume = (
@@ -205,15 +205,9 @@ describe(
                   const session = yield* persistentTestSession(roots);
                   yield* rootRun({
                     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                      agent: 'command_runner',
-                      agentSource: {
-                        kind: 'inline',
-                        persona: {
-                          description: 'Runs one command.',
-                          prompt: `GOLDEN-APPROVAL bash echo ran >> ${effects}`,
-                          tools: ['bash'],
-                        },
-                      },
+                      label: 'command_runner',
+                      system: `GOLDEN-APPROVAL bash echo ran >> ${effects}`,
+                      tools: ['bash'],
                       model: 'openai/gpt-5.6-sol',
                       instruction: 'Run the command.',
                     }),
@@ -382,10 +376,8 @@ describe(
 
 /** The persona the run-once cases run. */
 const NOTES_AGENT = {
-  name: 'note_taker',
-  description: 'Answers each message.',
-  prompt: 'Answer each message.',
-  tools: [],
+  label: 'note_taker',
+  system: 'Answer each message.',
 };
 
 describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
@@ -408,7 +400,7 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
               Effect.gen(function* () {
                 const session = yield* sessions.open(roots, options);
                 const run = yield* session.start({
-                  agent: NOTES_AGENT,
+                  ...NOTES_AGENT,
                   instruction: 'Start the notes.',
                   model: 'openai/gpt-5.6-sol',
                 });
@@ -444,7 +436,7 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
               answeredFromView: true,
             });
             const run = yield* session.start({
-              agent: NOTES_AGENT,
+              ...NOTES_AGENT,
               instruction: 'Start the notes.',
               model: 'openai/gpt-5.6-sol',
             });

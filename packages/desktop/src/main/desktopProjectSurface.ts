@@ -4,7 +4,7 @@
 // lives in a child of the window's scope, closed and replaced, awaited, when
 // the window switches projects.
 
-import { app, shell } from 'electron';
+import { shell } from 'electron';
 import { Effect, Exit, Scope } from 'effect';
 
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
@@ -16,9 +16,7 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
-import { agentDocumentForPath } from '@texra/controllers/session/workspaceFileRequest';
-import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/worldline/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { makeDesktopPrompts } from './desktopPromptController.js';
 import type {
@@ -75,23 +73,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
       const postForActiveProject = (message: DesktopPush): void => {
         if (surfaceScope === owner) host.post(message);
       };
-      /** Open the agent definition at `filePath` as a document, or, when
-       *  the catalog holds none there, run `otherwise`. */
-      const openAgentDocument = <E, R>(
-        filePath: string,
-        otherwise: Effect.Effect<void, E, R>,
-      ) =>
-        Effect.flatMap(agentDocumentForPath(filePath), (target) =>
-          target
-            ? Effect.sync(() => {
-                postForActiveProject({
-                  command: DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT,
-                  session: project.key,
-                  target,
-                });
-              })
-            : otherwise,
-        );
       return {
         post: (message) =>
           Effect.flatMap(message, (built) =>
@@ -119,29 +100,9 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         externalOpener: {
           openExternal: host.openExternalUrl,
         },
-        openPath: (filePath) =>
-          openAgentDocument(
-            filePath,
-            host.presented(previewHost.openPath(filePath)),
-          ),
+        openPath: (filePath) => host.presented(previewHost.openPath(filePath)),
         revealPath: (filePath) =>
           Effect.sync(() => shell.showItemInFolder(filePath)),
-        showReadOnlyYaml: (filePath) =>
-          openAgentDocument(
-            filePath,
-            Effect.fail(
-              new SettingsRequestFailed({
-                message:
-                  'This agent definition is no longer in the catalog. Refresh Settings and try again.',
-              }),
-            ),
-          ),
-        pickFolder: (title) =>
-          host.pickFolder(
-            title,
-            projects.active().roots.workspace ?? app.getPath('home'),
-            ['openDirectory', 'createDirectory'],
-          ),
         // The run verbs of the project these settings belong to, even while
         // the window is switching to another; a released binding's bridge
         // has no port left, so a late verb reaches no surface.

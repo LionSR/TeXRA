@@ -11,7 +11,7 @@
 import { useCallback, useMemo } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
-import { planOf, type RunId } from '@texra-ai/harness/schemas';
+import { planOf, type RunId } from '@texra-ai/worldline/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';

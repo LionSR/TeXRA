@@ -8,7 +8,6 @@ import { DateTime, Effect } from 'effect';
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import type { MemoryFolder } from '@agent/memory/memoryLayout';
-import { listExternalRoots } from '@utils/files/externalRoots';
 import {
   currentBranch,
   isGitRepository,
@@ -18,15 +17,18 @@ import { envVar } from '@utils/system/envFlags';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { runsInWsl } from '@utils/system/wslDetect';
 
+/** Heading introducing external directories (such as memory folders) in `<workspace_info>`. */
+export const ACCESSIBLE_EXTERNAL_DIRS_HEADING =
+  'Accessible external directories';
+
 /** The tools the external directories are listed for, as the list names them. */
-export const EXTERNAL_ROOT_TOOLS = [
+export const EXTERNAL_ROOT_TOOLS = Object.freeze([
   'read_file',
   'write_file',
   'grep',
   'glob',
   'edit_file',
-] as const;
-
+] as const);
 interface GitInfo {
   branch: string | null;
   dirty: boolean;
@@ -133,19 +135,16 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
   const externalRoots = EXTERNAL_ROOT_TOOLS.some((name) =>
     offered.includes(name),
   )
-    ? [
-        ...listExternalRoots(),
-        ...memory.map((folder) => ({
-          absolutePath: folder.path,
-          label: `${folder.label}: notes on ${folder.holds}`,
-          writable: true,
-        })),
-      ]
+    ? memory.map((folder) => ({
+        absolutePath: folder.path,
+        label: `${folder.label}: notes on ${folder.holds}`,
+        writable: true,
+      }))
     : [];
   if (externalRoots.length > 0) {
     lines.push('');
     lines.push(
-      `Accessible external directories (absolute paths; use ${EXTERNAL_ROOT_TOOLS.join(', ')}):`,
+      `${ACCESSIBLE_EXTERNAL_DIRS_HEADING} (absolute paths; use ${EXTERNAL_ROOT_TOOLS.join(', ')}):`,
     );
     for (const root of externalRoots) {
       const rw = root.writable ? 'writable' : 'read-only';
@@ -154,6 +153,5 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
       );
     }
   }
-
   return `\n<workspace_info>\n${lines.join('\n')}\n</workspace_info>`;
 });

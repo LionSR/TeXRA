@@ -22,8 +22,8 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <span class="trust-icon" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18.5" r="2.5"/><circle cx="19" cy="18.5" r="2.5"/><path d="M12 7.5v3.5M12 11h-7v5M12 11h7v5"/></svg>
     </span>
-    <h3>A team of specialist agents</h3>
-    <p>An orchestrator splits the task and hands the pieces to researchers, numericists, reviewers, and formalizers, each with its own tools and model.</p>
+    <h3>One assistant, many hands</h3>
+    <p>You tell one assistant what you need. It splits a large job across helper agents and programs that search, compute, review, and formalize, each with only the tools its piece needs.</p>
   </div>
   <div class="trust-card">
     <span class="trust-icon" aria-hidden="true">
@@ -35,8 +35,8 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 </section>
 
 <section class="architecture-section">
-  <h2>One orchestrator, a team of specialists</h2>
-  <p class="arch-subtitle">You describe the problem. The orchestrator breaks it into sub-tasks, delegates to specialist agents in parallel, and returns results you approve before they touch your files.</p>
+  <h2>One assistant, programs for every stage</h2>
+  <p class="arch-subtitle">You describe the problem. The assistant breaks it into sub-tasks, runs helper agents and programs in parallel, and returns results you approve before they touch your files.</p>
 
   <!-- Research Lifecycle -->
   <div class="lifecycle">
@@ -56,7 +56,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
       </div>
       <div class="phase-name">Derive</div>
-      <div class="phase-agents">research &middot; numerics</div>
+      <div class="phase-agents">derive &middot; experiment</div>
       <div class="phase-desc">Wolfram, bash</div>
     </div>
     <div class="lifecycle-arrow">
@@ -67,7 +67,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       </div>
       <div class="phase-name">Verify</div>
-      <div class="phase-agents">review &middot; lean</div>
+      <div class="phase-agents">review &middot; prove</div>
       <div class="phase-desc">Wolfram checks, Lean proofs</div>
     </div>
     <div class="lifecycle-arrow">
@@ -78,7 +78,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
       </div>
       <div class="phase-name">Write</div>
-      <div class="phase-agents">edit &middot; annotate &middot; research</div>
+      <div class="phase-agents">edit &middot; annotate &middot; apply</div>
       <div class="phase-desc">LaTeX, figures, diffs</div>
     </div>
     <div class="lifecycle-arrow">
@@ -125,11 +125,11 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
       <div class="orch-icon">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>
       </div>
-      <div class="orch-label">Orchestrator</div>
-      <div class="orch-desc">Breaks work into sub-tasks, delegates to specialized agents, coordinates results</div>
+      <div class="orch-label">Assistant</div>
+      <div class="orch-desc">Breaks work into sub-tasks, starts helper agents and programs, coordinates results</div>
     </div>
     <div class="paradigm paradigm-tooluse">
-      <div class="paradigm-label">Chat agents</div>
+      <div class="paradigm-label">Chat</div>
       <div class="paradigm-flow">
         <span class="pf-node">Your question</span>
         <span class="pf-edge">&rarr;</span>
@@ -164,7 +164,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <div class="case-card">
       <span class="case-label">Derive</span>
       <h3>Steady-state entanglement in a driven spin chain</h3>
-      <p>The <code>research</code> agent builds the Lindblad superoperator, solves for the steady state in Wolfram, computes the concurrence analytically, and cross-checks with exact diagonalization in Julia at N=8.</p>
+      <p>The assistant (or the <code>derive</code> program) builds the Lindblad superoperator, solves for the steady state in Wolfram, computes the concurrence analytically, and cross-checks with exact diagonalization in Julia at N=8.</p>
     </div>
     <div class="case-card">
       <span class="case-label">Write</span>
@@ -174,17 +174,17 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <div class="case-card">
       <span class="case-label">Verify</span>
       <h3>Formalizing subadditivity of entropy in Lean 4</h3>
-      <p>The <code>lean</code> agent searches Loogle for the right Mathlib lemma, reads the proof state, adds a missing hypothesis, and produces a proof that compiles with zero errors.</p>
+      <p>The assistant (or the <code>prove</code> program) searches Loogle for the right Mathlib lemma, reads the proof state, adds a missing hypothesis, and produces a proof that compiles with zero errors.</p>
     </div>
   </div>
 </section>
 
 <section class="bottom-cta">
   <h2>Start in under two minutes</h2>
-  <p>Install the VS Code extension from the Marketplace or the CLI (<code>npm install -g @texra-ai/cli</code>); add your own API key or connect a provider subscription, and run your first agent.</p>
+  <p>Install the VS Code extension from the Marketplace or the CLI (<code>npm install -g @texra-ai/cli</code>); add your own API key or connect a provider subscription, and run your first task.</p>
   <div class="cta-buttons">
     <a href="/guide/quick-start" class="cta-button cta-primary">Quick start guide</a>
-    <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse all agents</a>
+    <a href="/guide/programs" class="cta-button cta-secondary">Browse the programs</a>
     <a href="/guide/texra-cli" class="cta-button cta-secondary">Use the CLI</a>
   </div>
   <LandingCliStrip />
@@ -195,7 +195,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>What models does it support?</summary>
-    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code and the GLM Coding Plan). Each agent a lead delegates to can run a different model.</p>
+    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, Meta Muse Spark, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code and the GLM Coding Plan). Each helper agent or program the assistant starts can run a different model.</p>
   </details>
 
   <details>
@@ -210,12 +210,12 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Can I use it without VS Code?</summary>
-    <p>Yes. The <code>@texra-ai/cli</code> terminal client runs the same agents and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
+    <p>Yes. The <code>@texra-ai/cli</code> terminal client runs the same assistant, programs, and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
   </details>
 
   <details>
     <summary>Is my data private?</summary>
-    <p>Yes. Model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model. TeXRA sends anonymous usage metadata (agent, model, token counts), never prompts or document content, and you can turn it off; read <a href="/guide/configuration#usage-logging">Usage logging</a>.</p>
+    <p>Yes. Model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model. TeXRA sends anonymous usage metadata (built-in program name, model, token counts), never prompts or document content, and you can turn it off; read <a href="/guide/configuration#usage-logging">Usage logging</a>.</p>
   </details>
 
   <details>
@@ -223,8 +223,8 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <p>Yes. The extension, the CLI, and the agent runtime are published under the Apache 2.0 license, and you run them with your own model keys or subscriptions. Read the <a href="/guide/open-source">open source guide</a>.</p>
   </details>
   <details>
-    <summary>Can I build custom agents?</summary>
-    <p>Yes. Agents are YAML files you can modify or create from scratch. Read the <a href="/guide/custom-agents">custom agents guide</a>.</p>
+    <summary>Can I tailor TeXRA to my project?</summary>
+    <p>Yes. Put your project's conventions in <code>AGENTS.md</code>, add skills, and install plugins that carry skills and programs of your own. Read <a href="/guide/customizing">Tailoring TeXRA</a>.</p>
   </details>
 
   <details>

@@ -90,7 +90,7 @@ export function nativeToolTestLayer(
       const { session, ...runFields } = run;
       const toolRun: RunCallShape['run'] = {
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: 'test',
+          label: 'test',
           model: 'test-model',
         }),
         // cast: a tool reads only the id and the protocol (for an image's

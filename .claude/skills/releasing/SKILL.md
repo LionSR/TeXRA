@@ -76,7 +76,7 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    `log-usage`'s own pin (`supabase/functions/log-usage/deno.json`) prices
    only what 0.40 clients send.
 
-## npm packages: `@texra-ai/llm` and `@texra-ai/harness`
+## npm packages: `@texra-ai/llm` and `@texra-ai/worldline`
 
 The SDK pair is released apart from the app: its own version, its own tag
 (`sdk-vX.Y.Z`), cut only when what the two packages ship changed. The
@@ -119,21 +119,21 @@ Steps:
    is skipped, so a failed job can be re-run as is. A version is permanent
    once published (`npm deprecate` is the only way back).
 4. **Verify from the registry.** In an empty directory, `npm install
-   @texra-ai/harness @texra-ai/llm @effect/platform-node
-   @effect/sql-sqlite-node effect` and import `@texra-ai/harness`,
-   `@texra-ai/harness/node`, `@texra-ai/harness/builtins` and
-   `@texra-ai/harness/plugins`.
+   @texra-ai/worldline @texra-ai/llm @effect/platform-node
+   @effect/sql-sqlite-node effect` and import `@texra-ai/worldline`,
+   `@texra-ai/worldline/node`, `@texra-ai/worldline/builtins` and
+   `@texra-ai/worldline/plugins`.
 
 **First publish, once per package.** npm attaches a Trusted Publisher only to
 a package that exists, so the owner publishes the first version by hand,
 then configures it:
 
-1. `corepack pnpm --filter @texra-ai/harness run example:packed` must end
+1. `corepack pnpm --filter @texra-ai/worldline run example:packed` must end
    with `done`; `node packages/harness/scripts/publish-npm.mjs --dry-run`
    names both packages, the version and its dist-tag.
 2. `npm login`, then `node packages/harness/scripts/publish-npm.mjs` (npm
    asks for the OTP).
-3. On npmjs.com, for each of `@texra-ai/llm` and `@texra-ai/harness`:
+3. On npmjs.com, for each of `@texra-ai/llm` and `@texra-ai/worldline`:
    Settings, Trusted Publisher, GitHub Actions, with this repository and the
    workflow `release.yml`, as for `@texra-ai/cli`. From then on, releases
    go through the tag.

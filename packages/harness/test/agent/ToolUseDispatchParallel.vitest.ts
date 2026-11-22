@@ -14,7 +14,7 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
 // Local imports
-import { type RunId } from '@texra-ai/harness/schemas';
+import { type RunId } from '@texra-ai/worldline/schemas';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -40,7 +40,7 @@ import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 import { recordSessionEvents } from '@test/agent/progressTestUtils';
-import type { ITool, ToolResult } from '@texra-ai/harness/plugins';
+import type { ITool, ToolResult } from '@texra-ai/worldline/plugins';
 
 /** The calls a folded state holds settled. */
 const settledIds = (state: RunState | null | undefined): string[] =>

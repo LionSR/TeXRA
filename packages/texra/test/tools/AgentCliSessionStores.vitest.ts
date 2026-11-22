@@ -7,7 +7,7 @@ import { Context, Effect, Exit, Fiber, Layer, Scheduler, Scope } from 'effect';
 import { assert, expect } from 'vitest';
 
 // Local imports
-import { PluginHold } from '@texra-ai/harness/plugins';
+import { PluginHold } from '@texra-ai/worldline/plugins';
 import {
   CodexThreads,
   codexThreadsLayer,

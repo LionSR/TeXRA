@@ -11,12 +11,12 @@ import {
   serializeFilteredConfig,
   type AgentRunListingEntry,
   type RunResult,
-} from '@texra-ai/harness/schemas';
-import type { Session } from '@texra-ai/harness';
+} from '@texra-ai/worldline/schemas';
+import type { Session } from '@texra-ai/worldline';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
@@ -30,7 +30,7 @@ import {
   createConversationTranscript,
   formatConversation,
 } from './history/conversationFormat';
-import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunView, AgentConfig } from '@texra-ai/worldline/schemas';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */
@@ -368,7 +368,7 @@ export function formatCliHistoryDetailsText(
     `Run: ${details.id}`,
     `Status: ${status}`,
     `Timestamp: ${run ? new Date(run.launchedAt).toISOString() : 'unknown'}`,
-    `Agent: ${config?.agent ?? 'unknown'}`,
+    `Agent: ${config?.label ?? 'unknown'}`,
     `Model: ${model ?? 'unknown'}`,
   ];
 
@@ -418,7 +418,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
   return {
     id: entry.id,
     timestamp: entry.timestamp,
-    agent: config.agent,
+    agent: config.label,
     // The model the run is on, as the listing derives it from the run's
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,

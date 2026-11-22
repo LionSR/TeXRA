@@ -6,24 +6,24 @@
  * 2. Runs an agent whose script calls the built-in `read_file` tool on
  *    `paper.tex` (the model is sent `script` alone), and answers from its
  *    contents.
- * 3. Reads `SessionView` with `@texra-ai/harness/schemas` helpers
+ * 3. Reads `SessionView` with `@texra-ai/worldline/schemas` helpers
  *    (`sessionActivity`, `attentionOf`, `acceptsFollowUp`) and formats every
- *    `TranscriptRow` with `@texra-ai/harness/transcript` (`rowHeadline`,
+ *    `TranscriptRow` with `@texra-ai/worldline/transcript` (`rowHeadline`,
  *    `elideText`).
  */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { Effect, Layer } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 import {
   acceptsFollowUp,
   attentionOf,
   generateRunId,
   sessionActivity,
-} from '@texra-ai/harness/schemas';
-import { elideText, rowHeadline } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { elideText, rowHeadline } from '@texra-ai/worldline/transcript';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
@@ -65,12 +65,9 @@ const program = Effect.gen(function* () {
 
   const run = yield* session.start({
     runId,
-    agent: {
-      name: 'reader',
-      description: 'Reads LaTeX files.',
-      prompt: 'Read paper.tex and report its title.',
-      tools: ['read_file'],
-    },
+    label: 'reader',
+    system: 'Read paper.tex and report its title.',
+    tools: ['read_file'],
     instruction: 'What is the title in paper.tex?',
     model: route.model,
   });

@@ -1,5 +1,5 @@
 // Third-party imports
-import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import { truncateWithEllipsis } from '@texra-ai/worldline/schemas';
 import { queuedMessagesTitle } from '@ui/copy/queuedMessages';
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';

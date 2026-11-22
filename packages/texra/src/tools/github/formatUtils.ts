@@ -7,7 +7,7 @@
  * paths are `targetPath` (`./subscriptionTarget`).
  */
 
-import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import { truncateWithEllipsis } from '@texra-ai/worldline/schemas';
 import type { GhIssueComment } from './prTypes';
 import {
   TARGET_LABEL,

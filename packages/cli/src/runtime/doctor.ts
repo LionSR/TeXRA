@@ -15,8 +15,8 @@ import {
 import {
   formatResultCount,
   isModelOptionAvailable,
-} from '@texra-ai/harness/schemas';
-import { redactDiagnostics } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { redactDiagnostics } from '@texra-ai/worldline/host';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { latexToolchainHealth } from '@latex/latexToolchain';
 import {

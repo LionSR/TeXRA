@@ -6,7 +6,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { RUN_GRANT_TONE } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
 function grantChip(
   id: string,

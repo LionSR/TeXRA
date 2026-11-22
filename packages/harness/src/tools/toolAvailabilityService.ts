@@ -57,4 +57,4 @@ export class ToolAvailability extends Context.Service<
       roots: ToolProbeInputs,
     ) => Effect.Effect<void, never, Scope.Scope>;
   }
->()('@texra-ai/harness/tools/ToolAvailability') {}
+>()('@texra-ai/worldline/tools/ToolAvailability') {}

@@ -18,7 +18,7 @@ import {
   ToolContext,
   ToolError,
   type ToolResult,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   AgentConfigSchema,
   ensureError,
@@ -28,7 +28,7 @@ import {
   type RunId,
   type TokenUsageStats,
   type ToolUseLog,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import type { ClaimThread } from './agentCliSessionStores';
 
@@ -210,7 +210,7 @@ function launchTurn<I extends { readonly prompt: string }, S, R>(
         // so the model's reference is stated here rather than inherited
         // from the generic AgentConfig defaults.
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: provider.name,
+          label: provider.name,
           model: launch.modelRef,
           instruction: input.prompt,
         }),

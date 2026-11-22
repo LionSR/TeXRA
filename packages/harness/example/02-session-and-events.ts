@@ -1,16 +1,16 @@
 /**
- * Example 02 — Sessions, inline personas, typed launch refusals, and `run.events`.
+ * Example 02 — Sessions, a run written inline, typed launch refusals, and `run.events`.
  *
  * Composes `Sessions.layer({ platform, plugins: harnessBuiltins, client })`, opens a
- * session, checks an `InlinePersonaSchema` definition, handles a `LaunchRefused`
- * refusal on a missing agent, and runs an inline persona while streaming its
+ * session, checks a start against `StartRequestSchema`, handles a
+ * `LaunchRefused` refusal on an unknown model, and runs the start while streaming its
  * `run.events` (through `responseText`) and awaiting `run.result` (`RunEnd`),
  * then reads the ended run's events again, replayed from the session.
  */
 import { Effect, Layer, Result, Schema, Stream } from 'effect';
-import { responseText, Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { InlinePersonaSchema } from '@texra-ai/harness/schemas';
+import { responseText, Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { StartRequestSchema } from '@texra-ai/worldline/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
@@ -27,34 +27,31 @@ const program = Effect.gen(function* () {
   const open = yield* sessions.list;
   console.log('[02] open sessions:', open.length);
 
-  // 1. Validate an inline persona against the published Effect Schema
-  const personaResult = Schema.decodeUnknownResult(InlinePersonaSchema)({
-    name: 'abstract_editor',
-    description: 'Reviews abstracts for concision.',
-    prompt: 'You review LaTeX abstracts for concision.',
+  // 1. Validate a start against the published Effect Schema
+  const startResult = Schema.decodeUnknownResult(StartRequestSchema)({
+    label: 'abstract_editor',
+    system: 'You review LaTeX abstracts for concision.',
     tools: ['read_file'],
+    instruction: 'Check the abstract length.',
+    model: route.model,
   });
-  if (!Result.isSuccess(personaResult)) {
-    throw new Error(personaResult.failure.message);
+  if (!Result.isSuccess(startResult)) {
+    throw new Error(startResult.failure.message);
   }
-  console.log('[02] inline persona valid:', personaResult.success.name);
+  console.log('[02] start valid:', startResult.success);
 
-  // 2. Typed launch refusal when an agent does not exist
+  // 2. Typed launch refusal for a model the build does not know
   const refusal = yield* Effect.flip(
     session.start({
-      agent: 'no-such-agent',
+      system: 'Nothing to do.',
       instruction: 'Nothing to do.',
-      model: route.model,
+      model: 'no-such-provider/no-such-model',
     }),
   );
   console.log(`[02] refusal: ${refusal._tag} - ${refusal.message}`);
 
-  // 3. Start a run with the inline persona and stream its events
-  const run = yield* session.start({
-    agent: personaResult.success,
-    instruction: 'Check the abstract length.',
-    model: route.model,
-  });
+  // 3. Start the run and stream its events
+  const run = yield* session.start(startResult.success);
 
   // The answer's text only: the run's events also stream the model's
   // thinking and tool output.

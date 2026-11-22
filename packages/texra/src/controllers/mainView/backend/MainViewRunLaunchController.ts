@@ -1,31 +1,20 @@
 import { Effect } from 'effect';
 
-import { type StartInput } from '@texra-ai/harness';
-import type { StateReadFailed } from '@texra-ai/harness/plugins';
-import {
-  AgentCatalog,
-  type WorkspaceAgentsStores,
-} from '@texra-ai/harness/host';
-import {
-  AGENT_SOURCE,
-  agentKey,
-  agentKeyOf,
-  agentName,
-  type AgentConfig,
-  Rejected,
-} from '@texra-ai/harness/schemas';
-import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
+import { type StartInput } from '@texra-ai/worldline';
+import { type AgentConfig, Rejected } from '@texra-ai/worldline/schemas';
+import { entryAgent } from '@texra/agent/entryAgent';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import type { LaunchPatchSchema } from '@texra/shared/session/surface';
+import { chatOf, type LaunchPatchSchema } from '@texra/shared/session/surface';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostCommand, { kind: 'launch' }>;
 
-/** The session's slots a launch reads: its agent selection and storage
- *  root, under which its pasted images live. */
-type LaunchRoots = WorkspaceAgentsStores & { readonly storage: string };
+/** The session's storage root, under which a launch's pasted images live. */
+interface LaunchRoots {
+  readonly storage: string;
+}
 
 /**
  * The run option an Auto-approve launch adds: its run starts with every
@@ -39,50 +28,23 @@ export function launchApprovalOptions({
   return launch.approval === 'autoApprove' ? { approval: 'autoApprove' } : {};
 }
 
-/** Both GUI hosts launch the selections carried by the requesting surface. */
+/** Both GUI hosts launch the selections carried by the requesting surface:
+ *  a conversation with the entry agent, or with the run Run again… opened
+ *  the form on. */
 export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
   function* (
     { launch, instruction }: LaunchRequest,
-    /** The requesting session's slots and storage root, carried as data: the
+    /** The requesting session's storage root, carried as data: the
      *  pasted-image paths it names are joined onto its root rather than
      *  resolved from an ambient read at this depth. */
     roots: LaunchRoots,
-  ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {
+  ): Effect.fn.Return<AgentConfig, Rejected> {
     // The form sends an empty model while nothing is selected; say so in
     // the form's words rather than as a schema issue.
     if (!launch.model)
-      return yield* new Rejected({
-        reason: 'Choose an agent and a model first.',
-      });
-    // An agent the catalog does not know launches all the same: its own
-    // resolution shows the agent-config banner. A failed load refuses the
-    // launch.
-    const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
-    const visible = yield* workspaceAgents.visible();
-    // An empty agent is the person choosing none: the default of the agents
-    // the form lists, the one its agent chip shows.
-    const agent = launch.agent || pickDefaultToolUseAgent(visible);
-    const entry = yield* workspaceAgents.forLaunch(agent).pipe(
-      Effect.catchTags({
-        AgentNotFound: () => Effect.succeed(null),
-        AgentCatalogLoadError: (failed) =>
-          Effect.fail(new Rejected({ reason: failed.message })),
-      }),
-    );
-    // The form lists the workspace's visible agents (`agentOptionsData`) and
-    // reads the mode from the one its selection names, so a launch runs only
-    // one of them. The catalog also finds an agent hidden since it was chosen
-    // (or the hidden agent of a run Run again… opened the form on); the form
-    // shows no agent for it, so its launch is refused.
-    if (
-      entry !== null &&
-      !visible.some((shown) => agentKeyOf(shown) === agentKeyOf(entry))
-    )
-      return yield* new Rejected({
-        reason: `Choose an agent first: ${entry.name} is hidden from the agent selector.`,
-      });
+      return yield* new Rejected({ reason: 'Choose a model first.' });
     return yield* decodeLaunchConfig({
-      agent,
+      ...(launch.chat ?? entryAgent()),
       model: launch.model,
       instruction,
       ...(launch.skills.length > 0 && { skills: launch.skills }),
@@ -101,31 +63,20 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
 
 /**
  * The launcher's selections that would launch `config` again, the reverse
- * of {@link buildLaunchConfig}: Run again… opens the form on them. An
- * agent its caller defined (inline) is in no catalog, so the form cannot
- * hold it and Run again… refuses.
+ * of {@link prepareSurfaceLaunch}: Run again… opens the form on them. A
+ * run records its own system text and tools, so the form starts the same
+ * conversation whoever wrote it.
  */
 export function launchFormOf(
   config: AgentConfig,
-): Effect.Effect<typeof LaunchPatchSchema.Type, Rejected> {
-  const source = config.agentSource?.kind;
-  if (source === AGENT_SOURCE.INLINE)
-    return Effect.fail(
-      new Rejected({
-        reason: `'${config.agent}' was defined by the run that started it and is not in your agents, so the form cannot run it again.`,
-      }),
-    );
-  return Effect.succeed({
-    // A form launch already names its agent by key.
-    agent:
-      source === undefined
-        ? config.agent
-        : agentKey(source, agentName(config.agent)),
+): typeof LaunchPatchSchema.Type {
+  return {
     // Effort and mode included: the model menu offers it as itself.
     model: config.model,
     instruction: config.instruction,
     skills: [...(config.skills ?? [])],
     workingDirectory: config.workingDirectory ?? '',
     mediaFiles: [...config.mediaFiles],
-  });
+    chat: chatOf(config),
+  };
 }

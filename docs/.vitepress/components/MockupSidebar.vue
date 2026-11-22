@@ -1,6 +1,5 @@
 <script setup>
-// TeXRA sidebar on the Progress tab — the orchestrator (a tool-use agent)
-// delegating. `view` is shared with the parent so clicking a tool-use row or
+// TeXRA sidebar on the Progress tab — the assistant delegating. `view` is shared with the parent so clicking a tool-use row or
 // the latexdiff result switches the editor pane on the right.
 const view = defineModel('view', { type: String, default: 'diff' });
 </script>
@@ -12,12 +11,12 @@ const view = defineModel('view', { type: String, default: 'diff' });
         ><wa-icon library="texra" name="pencil"></wa-icon> New task</span
       >
       <span class="bt bt-on"
-        ><wa-icon library="texra" name="robot"></wa-icon> Progress</span
+        ><wa-icon library="texra" name="robot"></wa-icon> Tasks</span
       >
     </div>
 
     <div class="stream-head">
-      <span class="sh-name">orchestrator (anthropic/claude-opus-5-5)</span>
+      <span class="sh-name">assistant (anthropic/claude-opus-5-5)</span>
       <span class="sh-dot" title="Running"></span>
       <span class="sh-badge"
         ><wa-icon class="sh-pulse" library="texra" name="pulse"></wa-icon>3
@@ -68,7 +67,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
         </div>
 
         <div class="reason">
-          I'll hand the derivation and its checks to a research agent, then have
+          I'll hand the derivation and its checks to a helper agent, then have
           the edit program tighten the prose and return a diff.
         </div>
 
@@ -100,14 +99,14 @@ const view = defineModel('view', { type: String, default: 'diff' });
             ></wa-icon>
             <span class="tc-sp"></span>
             <span class="tc-label"
-              ><span class="tc-tool">agent</span> — unify λ₂ notation across
+              ><span class="tc-tool">program</span> — unify λ₂ notation across
               §2–3</span
             >
             <span class="tc-time tc-timer">0:18</span>
           </div>
           <div class="tc-body">
             <div class="tc-row">
-              <span class="tc-k">Agent</span><code class="tc-code">edit</code
+              <span class="tc-k">Program</span><code class="tc-code">edit</code
               ><span class="tc-model">(google/gemini-4-argon)</span>
             </div>
             <div class="tc-row">

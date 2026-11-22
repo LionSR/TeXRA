@@ -13,7 +13,7 @@ import {
   type PendingRequest,
   type RunId,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { emptySessionView } from '@shared/session/sessionView';
@@ -77,7 +77,7 @@ export function viewWith(
     log.emit(run.id, 1, {
       type: 'run.config',
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'agent',
+        label: 'agent',
         model: 'test-model',
         instruction: 'go',
       }),

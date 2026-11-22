@@ -45,7 +45,7 @@ export interface CommittedBatch {
 /** Whether this fiber runs a publisher job: one that opened another would
  *  publish the inner job's rows before its own transaction committed. */
 export const InPublisherJob = Context.Reference<boolean>(
-  '@texra-ai/harness/session/InPublisherJob',
+  '@texra-ai/worldline/session/InPublisherJob',
   { defaultValue: () => false },
 );
 
@@ -187,6 +187,6 @@ export class SessionEvents extends Context.Service<
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
   }
->()('@texra-ai/harness/session/SessionEvents') {}
+>()('@texra-ai/worldline/session/SessionEvents') {}
 
 export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;

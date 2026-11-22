@@ -19,18 +19,18 @@ import {
 } from 'effect';
 
 // Local imports
-import { meansAbsent, createSymlink } from '@texra-ai/harness/node';
+import { meansAbsent, createSymlink } from '@texra-ai/worldline/node';
 import {
   runDirUnder,
   sourceLocationUnder,
   withLogChannel,
   withFileWriteLane,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   type FileLocation,
   type RunId,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 const CHANNEL = 'runStorage';
 

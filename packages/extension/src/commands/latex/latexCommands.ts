@@ -3,7 +3,7 @@ import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedInfoMessage,
@@ -18,12 +18,14 @@ import {
 } from '@latex/texcount';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
+import { entryAgent } from '@texra/agent/entryAgent';
+import { COMPILE_FIX_RULES } from '@texra/agent/output/compileFixer';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 
 export function handleFixCompilation(
   roots: WorkspaceRoots,
@@ -43,19 +45,19 @@ export function handleFixCompilation(
       );
 
       const instruction = yield* buildLatexdiffAwareFixInstruction(
-        `Fix the LaTeX compilation errors in ${relativePath}.`,
+        `Fix the LaTeX compilation errors in ${relativePath}. ${COMPILE_FIX_RULES}`,
         editor.document.fileName,
         roots.workspace,
       );
 
-      // This is a "run latexFixer" command, so it starts on the default
+      // The command starts the fix on the default
       // model and `helperModel` swaps in the helper model, which is checked
       // there for the tool calls the fixer needs.
       // The command finishes when the run ends. A run that does not start
       // finishes it too: the launcher has told why, so the guard's error
       // would tell it again.
       const config = yield* decodeLaunchConfig({
-        agent: 'latexFixer',
+        ...entryAgent(),
         model: DEFAULT_AGENT_MODEL,
         instruction,
       });

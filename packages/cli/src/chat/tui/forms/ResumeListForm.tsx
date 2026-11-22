@@ -16,12 +16,12 @@ import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 import {
   collapseWhitespace,
   type RunId,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 interface ResumeListFormProps {
   /** The session whose stored runs the listing reads: the chat's, here or

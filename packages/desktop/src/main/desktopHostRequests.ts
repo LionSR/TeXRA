@@ -6,7 +6,7 @@
 // perform is `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
-import { Rejected } from '@texra-ai/harness/schemas';
+import { Rejected } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import {

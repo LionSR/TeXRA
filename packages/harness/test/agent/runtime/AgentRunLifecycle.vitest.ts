@@ -18,8 +18,8 @@ import {
   RUN_OUTCOME,
   AgentConfigSchema,
   type RunId,
-} from '@texra-ai/harness/schemas';
-import { setLogSink } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/schemas';
+import { setLogSink } from '@texra-ai/worldline/node';
 import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -61,7 +61,7 @@ const lifecycleFixture = (agent = 'test-agent') =>
     const runId = generateRunId();
     const ctx = testLaunch(runId, {
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent,
+        label: agent,
         model: 'test-model',
       }),
     });

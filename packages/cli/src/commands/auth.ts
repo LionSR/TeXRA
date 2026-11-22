@@ -1,5 +1,5 @@
 import { Command } from 'effect/cli';
-import type { SubscriptionAuthProvider } from '@texra-ai/harness/schemas';
+import type { SubscriptionAuthProvider } from '@texra-ai/worldline/schemas';
 
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 

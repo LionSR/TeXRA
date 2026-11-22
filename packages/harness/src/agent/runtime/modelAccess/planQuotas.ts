@@ -117,7 +117,7 @@ export interface PlanQuotasShape {
 
 /** The process's plan quotas ({@link PlanQuotasShape}). */
 export class PlanQuotas extends Context.Service<PlanQuotas, PlanQuotasShape>()(
-  '@texra-ai/harness/PlanQuotas',
+  '@texra-ai/worldline/PlanQuotas',
 ) {
   static readonly layer: Layer.Layer<PlanQuotas> = Layer.effect(
     PlanQuotas,

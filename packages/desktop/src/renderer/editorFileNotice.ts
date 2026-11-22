@@ -4,7 +4,7 @@
 // silently leaves them editing a version that is no longer on disk: both can
 // cost them work.
 
-import { getBasename, extractErrorMessage } from '@texra-ai/harness/schemas';
+import { getBasename, extractErrorMessage } from '@texra-ai/worldline/schemas';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 

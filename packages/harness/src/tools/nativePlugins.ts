@@ -145,7 +145,7 @@ const EFFECT = Object.freeze({
  *  plugin authoring surface and the modules of its `effect` a plugin is
  *  written with. */
 export interface NativePluginHost {
-  /** `@texra-ai/harness/plugins`, as this process loaded it. */
+  /** `@texra-ai/worldline/plugins`, as this process loaded it. */
   readonly plugins: typeof plugins;
   /** `effect`'s authoring modules, as this process loaded them: `Effect`,
    *  `Context`, `Layer`, `Schema`, `Stream`, `Scope` and the data and

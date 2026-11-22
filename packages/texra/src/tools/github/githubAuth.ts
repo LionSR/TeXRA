@@ -16,7 +16,7 @@ import {
   resolveCredential,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
+import { Secrets, type PlatformSecrets } from '@texra-ai/worldline/plugins';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */

@@ -14,19 +14,13 @@ import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
-import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
 import type { InitAnswers } from '../runtime/platform/initConfig';
-import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import { isModelOptionAvailable } from '@texra-ai/worldline/schemas';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { cliModelStatus } from '../runtime/models/modelAccess';
 import { CANCEL_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 
-interface InitWizardAgentOption {
-  readonly name: string;
-}
-
 interface InitWizardOptions {
-  readonly agents: readonly InitWizardAgentOption[];
   readonly models: readonly ModelOptionData[];
   readonly colorEnabled?: boolean;
 }
@@ -42,18 +36,16 @@ const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   ndjson: 'newline-delimited JSON stream',
 };
 
-const STEPS = Object.freeze(['agent', 'model', 'output', 'gitignore'] as const);
+const STEPS = Object.freeze(['model', 'output', 'gitignore'] as const);
 type Step = (typeof STEPS)[number];
 
 const STEP_TITLES: Record<Step, string> = {
-  agent: 'Default agent for texra chat',
   model: 'Default model',
   output: 'Default output format',
   gitignore: 'Add .texra/ to .gitignore?',
 };
 
 interface Draft {
-  agent?: string;
   model?: string;
   outputFormat?: CliOutputFormat;
   gitignore?: boolean;
@@ -73,14 +65,6 @@ function initWizardModelSelectItems(
       disabled: hasAvailableModel && !available,
     };
   });
-}
-
-function initWizardDefaultAgentIndex(
-  agents: readonly InitWizardAgentOption[],
-): number {
-  const defaultAgent = pickDefaultToolUseAgent(agents);
-  const index = agents.findIndex((agent) => agent.name === defaultAgent);
-  return index >= 0 ? index : 0;
 }
 
 interface WizardAppProps {
@@ -111,18 +95,13 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
     // the step list and the answer shape drifted apart, which is a bug in this
     // file: report it instead of resolving as "the user backed out", which
     // would drop the answers they just gave with no explanation.
-    if (
-      merged.agent === undefined ||
-      merged.model === undefined ||
-      merged.outputFormat === undefined
-    ) {
+    if (merged.model === undefined || merged.outputFormat === undefined) {
       throw new Error(
         'texra init wizard reached its last step with an unanswered question: STEPS and InitAnswers are out of sync.',
       );
     }
     props.onResolve({
       answers: {
-        agent: merged.agent,
         model: merged.model,
         outputFormat: merged.outputFormat,
       },
@@ -133,20 +112,6 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
 
   let picker: React.JSX.Element;
   switch (step) {
-    case 'agent':
-      picker = (
-        <Select
-          key={step}
-          initialIndex={initWizardDefaultAgentIndex(props.options.agents)}
-          items={props.options.agents.map((agent) => ({
-            value: agent.name,
-            label: agent.name,
-          }))}
-          onSelect={(agent) => commit({ agent })}
-          onCancel={cancel}
-        />
-      );
-      break;
     case 'model':
       picker = (
         <Select

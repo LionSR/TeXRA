@@ -1,5 +1,5 @@
 // Third-party imports
-import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
+import { FACT_SEPARATOR } from '@texra-ai/worldline/schemas';
 import { css, html, nothing, type CSSResult, type TemplateResult } from 'lit';
 
 type MetaPart = string | TemplateResult;

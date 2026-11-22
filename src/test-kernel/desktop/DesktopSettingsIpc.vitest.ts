@@ -1,14 +1,14 @@
 import { layer } from '@effect/vitest';
 import { Effect, FiberSet, Result, Schema } from 'effect';
 import { expect, vi } from 'vitest';
-import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/worldline/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
 import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
 import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ConfigProvider } from '@texra-ai/harness/plugins';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ConfigProvider } from '@texra-ai/worldline/plugins';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 
 const noOpEffect = (): Effect.Effect<void> => Effect.void;
 
@@ -24,8 +24,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     externalOpener: { openExternal: noOpEffect },
     openPath: noOpEffect,
     revealPath: noOpEffect,
-    showReadOnlyYaml: noOpEffect,
-    pickFolder: () => Effect.undefined,
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     runInTerminal: noOpEffect,

@@ -23,15 +23,15 @@ import {
   ToolError,
   sourceLocationUnder,
   pathToLocationIn,
-  AgentDirectories,
-} from '@texra-ai/harness/plugins';
+  HostResources,
+} from '@texra-ai/worldline/plugins';
 import {
   programOf,
   toErrorMessage,
   fileLocationDisplayPath,
   type FileListEntry,
   type FileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { processInputFiles, type InputMediaOptions } from '@latex/latexMedia';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -59,8 +59,8 @@ import {
   promptDocument,
   readFilesAsPromptXml,
 } from '@texra/tools/documents/promptDocuments';
-import type { CallRequests, ToolEnv } from '@texra-ai/harness/plugins';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { CallRequests, ToolEnv } from '@texra-ai/worldline/plugins';
+import type { AgentConfig } from '@texra-ai/worldline/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
@@ -194,7 +194,7 @@ export interface RevisionRequest extends InputMediaOptions {
 /** Where the plugin's template files ship, under the host's packaged
  *  resources; undefined for a host that ships none. */
 export const templateDirectory = Effect.map(
-  AgentDirectories,
+  HostResources,
   ({ resourcesRoot }) =>
     resourcesRoot === undefined
       ? undefined

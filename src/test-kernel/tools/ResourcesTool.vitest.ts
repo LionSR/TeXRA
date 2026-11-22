@@ -28,7 +28,7 @@ import { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { Settings } from '@shared/config/settings';
 import { KIMI_CODE_PREFER_SETTING } from '@shared/state/stateSettings';
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import {
   persistentTestSession,
   REAL_RUN_TIMEOUT,
@@ -194,14 +194,9 @@ describe(
                   runId: root,
                   interactive: false,
                   config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                    agent: 'golden_resources',
-                    agentSource: {
-                      kind: 'inline',
-                      persona: {
-                        prompt: 'GOLDEN-RESOURCES: read your resources.',
-                        tools: ['script', 'resources'],
-                      },
-                    },
+                    label: 'golden_resources',
+                    system: 'GOLDEN-RESOURCES: read your resources.',
+                    tools: ['script', 'resources'],
                     model: 'openai/gpt-5.6-sol',
                     instruction: 'Read your resources.',
                   }),

@@ -7,7 +7,7 @@ import { Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
-import { Secrets } from '@texra-ai/harness/plugins';
+import { Secrets } from '@texra-ai/worldline/plugins';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';

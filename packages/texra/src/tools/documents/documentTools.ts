@@ -23,7 +23,7 @@ import {
   type AgentTrace,
   sourceLocationUnder,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -32,7 +32,7 @@ import {
   type FileLocation,
   NonNegativeIntSchema,
   hasExtension,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
@@ -158,7 +158,7 @@ const openTask = Effect.fn('documents.openTask')(function* (
   const unreadable = inputs.filter((input) => !input.ok);
   if (inputs.length === 0 || unreadable.length > 0)
     return yield* new ToolError(
-      `The document program '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text): ${
+      `The document program '${config.label}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text): ${
         unreadable.length > 0
           ? `cannot read ${unreadable.map((input) => `${input.path} (${input.error})`).join(', ')}.`
           : 'it has none.'

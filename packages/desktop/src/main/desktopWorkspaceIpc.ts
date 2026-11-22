@@ -16,7 +16,7 @@ import {
   type DesktopWorkspaceInboundMessage,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 

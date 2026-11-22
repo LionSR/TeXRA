@@ -11,7 +11,7 @@ import {
   transcriptText,
   type ErrorRow,
   type TranscriptText,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import { absurd } from 'effect';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
@@ -21,13 +21,13 @@ import type {
   ModelFailure,
   TokenUsageStats,
   UsageRoute,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   formatCostUsd,
   modelFailureMessage,
   usageLimitMessage,
   usedUpPlanOf,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /**
  * Each plan a model call can bill through, as a person knows it: the name of

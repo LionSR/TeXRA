@@ -1,5 +1,8 @@
-import { formatResultCount, type ExportNode } from '@texra-ai/harness/schemas';
-import { formatConversationMessage } from '@texra-ai/harness/host';
+import {
+  formatResultCount,
+  type ExportNode,
+} from '@texra-ai/worldline/schemas';
+import { formatConversationMessage } from '@texra-ai/worldline/host';
 
 import type {
   CliHistoryConversation,

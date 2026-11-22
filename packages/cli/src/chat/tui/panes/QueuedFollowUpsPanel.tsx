@@ -6,7 +6,7 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
-import { pluralize, type RunView } from '@texra-ai/harness/schemas';
+import { pluralize, type RunView } from '@texra-ai/worldline/schemas';
 import { queuedMessagesTitle } from '@ui/copy/queuedMessages';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;

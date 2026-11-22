@@ -1,10 +1,10 @@
 import { Effect, Schema } from 'effect';
 
-import { helperCall, normalizeProviderError } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { helperCall, normalizeProviderError } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { removeCDATA } from '@texra/utils/text/xmlCdata';
 
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 const CHANNEL = 'TextEnhancement';
 

@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from 'node:util';
 import {
   collapseWhitespace,
   stripControlCharacters,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import cliTruncate from 'cli-truncate';
 import sliceAnsi from 'slice-ansi';

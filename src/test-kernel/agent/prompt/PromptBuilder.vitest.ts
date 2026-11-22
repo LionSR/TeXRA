@@ -16,7 +16,6 @@ import {
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { registerExternalRoot } from '@utils/files/externalRoots';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 describe('PromptBuilder', () => {
@@ -24,12 +23,6 @@ describe('PromptBuilder', () => {
     'names no shell or file tool to a run offered none (golden_child: executions)',
     () =>
       Effect.gen(function* () {
-        const unregister = registerExternalRoot(join(os.tmpdir(), 'agents'), {
-          kind: 'builtIn',
-          writable: false,
-          label: 'Built-in agents',
-        });
-        yield* Effect.addFinalizer(() => Effect.sync(unregister));
         const storageRoot = mkdtempSync(join(os.tmpdir(), 'texra-prompt-'));
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => rmSync(storageRoot, { recursive: true })),
@@ -41,9 +34,6 @@ describe('PromptBuilder', () => {
           {
             inputs: {
               CWD: '/work',
-              BUILTIN_AGENTS_DIR: '',
-              CUSTOM_AGENTS_DIR: '',
-              AGENT_DOCS_DIR: '',
             },
             activated: [],
           },
@@ -84,12 +74,7 @@ describe('PromptBuilder', () => {
         const system = yield* buildOpeningSystemPrompt(
           'Work in {{ CWD }}.',
           {
-            inputs: {
-              CWD: '/work',
-              BUILTIN_AGENTS_DIR: '',
-              CUSTOM_AGENTS_DIR: '',
-              AGENT_DOCS_DIR: '',
-            },
+            inputs: { CWD: '/work' },
             activated: [],
           },
           { roots, textOnly: false, offered: ['bash'], memory: [] },
@@ -119,12 +104,7 @@ describe('PromptBuilder', () => {
         const system = yield* buildOpeningSystemPrompt(
           'Answer the task.',
           {
-            inputs: {
-              CWD: '/work',
-              BUILTIN_AGENTS_DIR: '',
-              CUSTOM_AGENTS_DIR: '',
-              AGENT_DOCS_DIR: '',
-            },
+            inputs: { CWD: '/work' },
             activated: [],
           },
           { roots, textOnly: true, offered: [], memory: [] },

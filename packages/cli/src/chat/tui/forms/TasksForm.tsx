@@ -13,7 +13,7 @@ import {
   type RunId,
   toErrorMessage,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { ToneLine } from '@cli/tui/ui/ToneLine';

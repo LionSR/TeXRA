@@ -19,8 +19,8 @@ import {
   type RunId,
   acceptsFollowUp,
   isUnreadable,
-} from '@texra-ai/harness/schemas';
-import { isScriptCall } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { isScriptCall } from '@texra-ai/worldline/transcript';
 import { isCtrlInput, isEscapeInput, metaChordInput } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
@@ -82,8 +82,8 @@ import {
   runViewOf,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
-import type { Session } from '@texra-ai/harness';
-import type { RuntimeCommand } from '@texra-ai/harness/schemas';
+import type { Session } from '@texra-ai/worldline';
+import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
 import type { InputHistory } from './history/inputHistory';
 import { EMPTY_DRAFT, type InputDraft } from './input/draftAttachments';
 import { useChatProcess } from './chatProcess';

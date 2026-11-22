@@ -23,7 +23,7 @@ import {
   selectDocumentTaskRunDetailLines,
   DocumentTaskRunDetails,
 } from './DocumentTaskRunDetails';
-import { isWorking } from '@texra-ai/harness/schemas';
+import { isWorking } from '@texra-ai/worldline/schemas';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 

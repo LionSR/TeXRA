@@ -7,13 +7,13 @@ import {
   type ScriptCallStatus,
   type ScriptCallView,
   type ScriptStageView,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 import {
   DETAIL_SEPARATOR,
   formatCostUsd,
   formatResultCount,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { REQUEST_NOUN } from '@ui/copy/requestCards';
 import { runStatusLook, type StatusLook } from '@ui/copy/runStatus';
 

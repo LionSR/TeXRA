@@ -27,9 +27,9 @@ import {
 import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
-} from '@texra-ai/harness';
-import { GlobalValues, logFailure } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline';
+import { GlobalValues, logFailure } from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 
 import { TEXRA_SERVICE, type ServiceRecord } from './protocol';
 

@@ -23,7 +23,7 @@ import {
   type AgentConfig,
 } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
-import type { UsageLog } from '@shared/usageLog';
+import { usageAgentName, type UsageLog } from '@shared/usageLog';
 import { descriptionRow } from '@shared/session/runFacts';
 import type { RouteRetries } from './ModelRetryGate';
 import type { PlanQuotas } from './modelAccess/planQuotas';
@@ -50,22 +50,13 @@ function cleanSessionDescription(text: string): string {
   return cleaned;
 }
 
-const SYSTEM_PROMPT = `Generate a short session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Refactoring the retry logic").`;
+const SYSTEM_PROMPT = `Generate a short session label from the run's name and the user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Refactoring the retry logic").`;
 
 /**
  * Build a user prompt for session description generation.
  */
-function buildUserPrompt(
-  agentName: string,
-  agentDescription: string | undefined,
-  instruction: string,
-): string {
-  const parts = [`<agent>${agentName}</agent>`];
-  if (agentDescription) {
-    parts.push(`<agent-purpose>${agentDescription}</agent-purpose>`);
-  }
-  parts.push(`<instruction>${instruction}</instruction>`);
-  return parts.join('\n');
+function buildUserPrompt(label: string, instruction: string): string {
+  return `<agent>${label}</agent>\n<instruction>${instruction}</instruction>`;
 }
 
 /**
@@ -90,7 +81,7 @@ export function getDisplayedInstruction(
  * run is never labelled and keeps its agent name.
  */
 export const LabelsRootRuns = Context.Reference<boolean>(
-  '@texra-ai/harness/agent/LabelsRootRuns',
+  '@texra-ai/worldline/agent/LabelsRootRuns',
   { defaultValue: () => false },
 );
 
@@ -124,7 +115,6 @@ const generateSessionDescription = Effect.fn('generateSessionDescription')(
   function* (
     runId: RunId,
     config: AgentConfig,
-    agentDescription: string | undefined,
     resumed: boolean,
   ): Effect.fn.Return<
     void,
@@ -151,15 +141,11 @@ const generateSessionDescription = Effect.fn('generateSessionDescription')(
       const answered = yield* helperCall(
         roots,
         {
-          userPrompt: buildUserPrompt(
-            config.agent,
-            agentDescription,
-            instruction,
-          ),
+          userPrompt: buildUserPrompt(config.label, instruction),
           systemPrompt: SYSTEM_PROMPT,
         },
         {
-          agentName: config.agent,
+          agentName: usageAgentName(config),
           runId,
         },
         // No automatic retry and a short deadline: the run's end joins this
@@ -211,19 +197,12 @@ const generateSessionDescription = Effect.fn('generateSessionDescription')(
  * ended, and could recreate a run another host deleted.
  */
 export const withSessionDescription =
-  (
-    runId: RunId,
-    config: AgentConfig,
-    agentDescription: string | undefined,
-    resumed: boolean,
-  ) =>
+  (runId: RunId, config: AgentConfig, resumed: boolean) =>
   <A extends { readonly outcome: RunOutcome }, E, R>(
     flow: Effect.Effect<A, E, R>,
   ) =>
     Effect.acquireUseRelease(
-      Effect.forkChild(
-        generateSessionDescription(runId, config, agentDescription, resumed),
-      ),
+      Effect.forkChild(generateSessionDescription(runId, config, resumed)),
       () => flow,
       (description, exit) =>
         (Exit.isSuccess(exit)

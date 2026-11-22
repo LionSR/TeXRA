@@ -292,4 +292,4 @@ outages. Use **Re-run failed jobs** on the run page to try again.
 ## Next steps
 
 - [TeXRA CLI](./texra-cli.md): the `texra` command the action runs.
-- [Built-in agents](./built-in-agents.md#review): what the `review` agent checks.
+- [The assistant and programs](./programs.md#task-programs): what the `review` and `review-code` programs check.

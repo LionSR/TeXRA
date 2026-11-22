@@ -18,9 +18,9 @@
  *    and the message's turn is requested once, from the new model.
  */
 import { Effect, Layer, Option, Stream } from 'effect';
-import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { Sessions, type LocalSession } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import type { RunId } from '@texra-ai/worldline/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
@@ -75,12 +75,9 @@ const waitsAtTurn = (session: LocalSession, runId: RunId, turn: number) =>
 const runId = await inSession((session) =>
   Effect.gen(function* () {
     const run = yield* session.start({
-      agent: {
-        name: 'proof_writer',
-        description: 'Writes a proof step by step.',
-        prompt: 'Write what is asked, briefly.',
-        tools: [],
-      },
+      label: 'proof_writer',
+      system: 'Write what is asked, briefly.',
+      tools: [],
       instruction: 'Outline the proof.',
       model: route.model,
       interactive: true,

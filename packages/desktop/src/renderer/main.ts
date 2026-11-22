@@ -6,7 +6,7 @@ import { Schema } from 'effect';
 import {
   decodingDefault,
   extractErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 
@@ -726,12 +726,6 @@ const routeMessage = createMessageRoutes({
   // than introducing a second, subtler kind of refresh.
   'desktop:workspace:filesChanged': (message) => {
     void projectWorkbenches.get(message.session)?.refreshFiles();
-  },
-  'desktop:workspace:openDocument': (message) => {
-    const project = projectWorkbenches.get(message.session);
-    if (!project) return;
-    if (message.session === shell.active) settingsDialog.close();
-    project.openDocument(message.target);
   },
   'desktop:openSettings': (message) => settingsDialog.open(message.tab),
   'desktop:setLog': (message) => logsController.applySnapshot(message),

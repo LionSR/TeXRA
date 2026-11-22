@@ -11,7 +11,7 @@
 import { Context, type Effect, Schema } from 'effect';
 
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
-import type { FileLocation } from '@texra-ai/harness/schemas';
+import type { FileLocation } from '@texra-ai/worldline/schemas';
 
 /**
  * Why the host could not read a file's diagnostics: the LaTeX build the read

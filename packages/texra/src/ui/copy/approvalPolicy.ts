@@ -2,11 +2,11 @@
  * The approval policy in the user's words: each policy's label and
  * description, and the order selectors list them in. Copy, not policy: the
  * policy itself is the harness's (`ApprovalPolicy` in
- * `@texra-ai/harness/schemas`).
+ * `@texra-ai/worldline/schemas`).
  */
 import { Record as EffectRecord } from 'effect';
 
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
+import type { ApprovalPolicy } from '@texra-ai/worldline/schemas';
 import type { RunTone } from '@ui/copy/runStatus';
 
 /** Each policy's copy, declared in the order selectors list them, and the

@@ -1,9 +1,6 @@
 import { Record as EffectRecord } from 'effect';
 
-import type {
-  ApprovalBypassKind,
-  InlinePersona,
-} from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,
@@ -57,15 +54,24 @@ export const DELEGATION_APPROVAL_COPY = Object.freeze({
     'Auto-approve later agent work, file edits, and shell commands in this task',
 } as const);
 
+/** The first sentence of `text`, on one line: a card's summary of a
+ *  child's system text. */
+const firstSentence = (text: string): string => {
+  const flat = text.trim().replaceAll(/\s+/g, ' ');
+  const end = flat.search(/[.!?](?:\s|$)/);
+  return end === -1 ? flat : flat.slice(0, end + 1);
+};
+
 /**
- * An agent the call defines (an `inline` `AgentProposal.agentSource`), as
- * every approval surface shows it: its name and the tools it asks for, then
- * its prompt.
+ * A chat child a call proposes, as every approval surface shows it: its name
+ * and the tools it asks for, the first sentence of its system text, then
+ * the whole text on request.
  */
-export const DEFINED_AGENT_COPY = Object.freeze({
-  heading: (agent: string, persona: Pick<InlinePersona, 'tools'>) =>
-    `Defines agent '${agent}' · tools: ${persona.tools?.length ? persona.tools.join(', ') : 'none'}`,
-  promptLabel: 'Its system prompt',
+export const CHILD_AGENT_COPY = Object.freeze({
+  heading: (label: string, tools: readonly string[]) =>
+    `Agent '${label}' · tools: ${tools.length > 0 ? tools.join(', ') : 'none'}`,
+  summary: firstSentence,
+  promptLabel: 'Its system text',
   instructionLabel: 'Its task',
 });
 

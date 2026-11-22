@@ -1,9 +1,9 @@
 import { Cause, Effect, Record } from 'effect';
 
 // Local imports - shared constants
-import { logFailure } from '@texra-ai/harness/plugins';
-import { CommandDirs } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { logFailure } from '@texra-ai/worldline/plugins';
+import { CommandDirs } from '@texra-ai/worldline/node';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { probeLatexTools } from '@latex/latexToolchain';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,

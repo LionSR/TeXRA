@@ -1,11 +1,11 @@
-// Validation harness: an embedder of `@texra-ai/harness` on the validation
+// Validation harness: an embedder of `@texra-ai/worldline` on the validation
 // model, which prints what it saw as JSON lines. Built with the validator's
 // bundle (`build-bundle.mjs --sdk-harness`), which carries the model; the
 // program provides it beneath its sessions, as the CLI's runtime does, so
 // the model's gate can open. Without it a run binds the provider's route.
 //
 //   node sdk-harness.js <workspace> <storageDir> inline <instruction>
-//     Runs one inline persona (no agent file anywhere) on an in-memory
+//     Starts one run that names its own system text on an in-memory
 //     session and prints the run's id, its result and the identity its
 //     session view gives it.
 //   node sdk-harness.js <workspace> <storageDir> ask <instruction>
@@ -22,11 +22,11 @@ import path from 'node:path';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
 
-import { Sessions, type ApprovalHandler } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { defineTool } from '@texra-ai/harness/plugins';
-import type { PendingRequest, RunId } from '@texra-ai/harness/schemas';
+import { Sessions, type ApprovalHandler } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { defineTool } from '@texra-ai/worldline/plugins';
+import type { PendingRequest, RunId } from '@texra-ai/worldline/schemas';
 import { validationModelLayer } from '../src/runtime/models/validationModel';
 
 const [workspace, storageDir, mode, argument] = process.argv.slice(2);
@@ -80,7 +80,6 @@ const approveAll: ApprovalHandler = (request) =>
   });
 
 const platform = nodePlatform({
-  agentsDir: `${storageDir}/no-agents`,
   storageDir,
   workspaceDir: workspace,
 });
@@ -91,11 +90,8 @@ const program = Effect.gen(function* () {
     case 'inline': {
       const session = yield* sessions.open(platform.roots);
       const run = yield* session.start({
-        agent: {
-          name: 'inline_echo',
-          description: 'Say what the model was shown.',
-          prompt: 'Say what you were shown.',
-        },
+        label: 'inline_echo',
+        system: 'Say what you were shown.',
         instruction: argument,
         model: 'openai/gpt-5.6-sol',
       });
@@ -112,15 +108,11 @@ const program = Effect.gen(function* () {
       });
       yield* session.attach({ approve: reportOnly });
       const run = yield* session.start({
-        agent: {
-          name: 'approval_validation',
-          description: 'Record one note once it is approved.',
-          prompt: 'GOLDEN-APPROVAL record_approval',
-          tools: [],
-        },
+        label: 'approval_validation',
+        system: 'GOLDEN-APPROVAL record_approval',
         instruction: argument,
         model: 'openai/gpt-5.6-sol',
-        tools,
+        runTools: tools,
       });
       yield* print({ started: run.runId });
       return yield* run.result;
@@ -131,7 +123,9 @@ const program = Effect.gen(function* () {
       });
       yield* session.attach({ approve: approveAll });
       // `argument` is the id the `ask` phase printed.
-      const run = yield* session.resume(argument as RunId, { tools });
+      const run = yield* session.resume(argument as RunId, {
+        runTools: tools,
+      });
       const result = yield* run.result;
       return yield* print({ runId: run.runId, answered, result });
     }

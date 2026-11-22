@@ -15,7 +15,7 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { Effect, LogLevel, Option, Predicate, Stream } from 'effect';
 
-import { type RunOutcome } from '@texra-ai/harness/schemas';
+import { type RunOutcome } from '@texra-ai/worldline/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
@@ -27,7 +27,7 @@ import { watchTask } from '@texra/controllers/server/serviceSession';
 
 import { writeTextStdout } from '../platform/logSinks';
 import { writeProgressRow } from './sessionProgressSubscription';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/worldline/schemas';
 
 /** How the attached task is printed. */
 interface TaskAttachOutput {

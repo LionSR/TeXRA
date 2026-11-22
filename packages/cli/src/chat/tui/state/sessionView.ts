@@ -9,15 +9,15 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream } from 'effect';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import type {
   RunView,
   SessionView,
   TranscriptView,
-} from '@texra-ai/harness/schemas';
-import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import type { Session } from '@texra-ai/worldline';
+import type { ProcessRuntime } from '@texra-ai/worldline/host';
 
 /** A transcript row as the TUI reads it off the session view. */
 export type TranscriptRow = TranscriptView['rows'][number];

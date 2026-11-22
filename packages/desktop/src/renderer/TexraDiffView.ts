@@ -2,7 +2,7 @@
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared modules
-import { extractErrorMessage } from '@texra-ai/harness/schemas';
+import { extractErrorMessage } from '@texra-ai/worldline/schemas';
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { commonViewStyles, designTokens } from '@ui/styles';

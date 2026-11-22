@@ -14,10 +14,14 @@
  *    the `cancelled` end it stored.
  */
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { definePlugin, executed, defineTool } from '@texra-ai/harness/plugins';
-import type { PendingRequest } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import {
+  definePlugin,
+  executed,
+  defineTool,
+} from '@texra-ai/worldline/plugins';
+import type { PendingRequest } from '@texra-ai/worldline/schemas';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
@@ -77,12 +81,9 @@ const program = Effect.gen(function* () {
   });
 
   const run = yield* session.start({
-    agent: {
-      name: 'release_manager',
-      description: 'Stages preprints after approval.',
-      prompt: 'Stage the preprint when asked.',
-      tools: ['publish_preprint'],
-    },
+    label: 'release_manager',
+    system: 'Stage the preprint when asked.',
+    tools: ['publish_preprint'],
     instruction: 'Stage the manuscript for arXiv.',
     model: route.model,
     interactive: true,

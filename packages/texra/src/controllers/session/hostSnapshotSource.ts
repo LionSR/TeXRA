@@ -4,7 +4,7 @@
  * follows a change and on every subscribe, so a surface never asks for a
  * catalog and never holds a stale one. Every producer is a read the host
  * already owns; nothing here is a fact about a run (`SessionView`) or a
- * choice of the user's (`Surface`). The catalogs, the file lists, the recent
+ * choice of the user's (`Surface`). The model options, the file lists, the recent
  * commits and the onboarding funnel are host-neutral; the host injects its
  * workspace-root picker and which notices it shows (a VS Code window shows
  * the lost-credential banner and offers to start a project; the desktop
@@ -14,7 +14,7 @@
  * and then writes its own fields, so the last write of a field wins and no
  * producer waits on another; the snapshot is the inputs mapped, so a field
  * derived from several inputs (the funnel, a banner's visibility) is never
- * stored. The catalogs and the credential follow the app signals that
+ * stored. The model options and the credential follow the app signals that
  * announce their changes, written by any writer in the process, so no host
  * or settings page pushes a reload; the approval policy is read live as
  * each snapshot is mapped.
@@ -34,7 +34,7 @@ import {
   appSignalStream,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   Settings,
   logFailure,
@@ -42,13 +42,12 @@ import {
   type Secrets,
   type SettingsStores,
   AppState,
-  AgentDirectories,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   APPROVAL_POLICY_SETTING,
   ensureError,
-} from '@texra-ai/harness/schemas';
-import { isPathWithin, recentCommitLabels } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/schemas';
+import { isPathWithin, recentCommitLabels } from '@texra-ai/worldline/node';
 import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import type {
@@ -58,7 +57,6 @@ import type {
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import {
   hasUsableSetupCredential,
@@ -71,7 +69,6 @@ import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
-import type { AgentCatalog } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
@@ -113,15 +110,14 @@ interface HostSnapshotSourceOptions {
 /** What the producers write; the snapshot is {@link snapshotOf} of it. */
 interface Inputs {
   /** False until the first {@link HostSnapshotSource.refresh} has finished,
-   *  so the shell never paints the empty catalogs. */
+   *  so the shell never paints an empty model list. */
   readonly loaded: boolean;
-  readonly catalogs: Pick<HostSnapshot, 'agentOptions' | 'modelOptions'>;
+  readonly modelOptions: HostSnapshot['modelOptions'];
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
   readonly fileOptions: FileOptions;
   readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
   readonly missingTools: readonly MissingTool[];
   readonly recording: HostSnapshot['recording'];
-  readonly agentConfig: HostSnapshot['banners']['agentConfig'];
   readonly service: HostSnapshot['banners']['service'];
   /** A dismissal lasts the session. */
   readonly dismissed: ReadonlySet<DismissibleBanner>;
@@ -143,7 +139,6 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    | AgentCatalog
     | Secrets
     | SubscriptionAccounts
     | FileSystem.FileSystem
@@ -173,15 +168,6 @@ export interface HostSnapshotSource {
   readonly refreshWorkspaceRoots: Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): Effect.Effect<void>;
-  /** A launch could not find its agent: the banner's actions edit the
-   *  agents, and open the custom agent directory only when the user
-   *  configured one. */
-  showAgentConfigBanner(
-    agentName: string,
-  ): Effect.Effect<void, never, AgentDirectories | FileSystem.FileSystem>;
-  /** A launch resolved its agent and started a run, so the missing-agent
-   *  warning no longer describes the launcher. */
-  readonly clearAgentConfigBanner: Effect.Effect<void>;
   /** The user dismissed a notice for the rest of this session. */
   dismissBanner(banner: DismissibleBanner): Effect.Effect<void>;
   /** Where the window's tasks run, when the user should be told: its
@@ -204,9 +190,9 @@ const keepOnFailure =
     );
 
 /**
- * The project's display record and the catalogs, assembled per session for
- * the caller's scope: the scope holds the followers of the onboarding flags,
- * the catalogs, the credential and the approval policy.
+ * The project's display record and the model options, assembled per session
+ * for the caller's scope: the scope holds the followers of the onboarding
+ * flags, the model options, the credential and the approval policy.
  */
 export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
   function* (
@@ -217,7 +203,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     | Scope.Scope
     | AppState
     | AppSignals
-    | AgentCatalog
     | Secrets
     | SubscriptionAccounts
     | FileSystem.FileSystem
@@ -227,13 +212,12 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const appState = yield* AppState;
     const inputs = yield* SubscriptionRef.make<Inputs>({
       loaded: false,
-      catalogs: { agentOptions: [], modelOptions: [] },
+      modelOptions: [],
       workspaceRoots: options.workspaceRoots(),
       fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
       commits: { commits: [], isGitRepo: false },
       missingTools: [],
       recording: null,
-      agentConfig: null,
       service: null,
       dismissed: new Set(),
       credential: undefined,
@@ -268,16 +252,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       return keepOnFailure(what)(load).pipe(lane.withPermit);
     });
 
-    const loadAgents = yield* producer(
-      'the agents',
-      Effect.gen(function* () {
-        const agentOptions = yield* agentOptionsData(stores);
-        yield* SubscriptionRef.update(inputs, (s) => ({
-          ...s,
-          catalogs: { ...s.catalogs, agentOptions },
-        }));
-      }),
-    );
     // The project's `.env` over the process's: the keys a run of this
     // project would use, for its models as for its credential below. An
     // unreadable `.env` dies in its layer; here it fails the read, so the
@@ -289,13 +263,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       );
     const loadModels = yield* producer(
       'the models',
-      Effect.gen(function* () {
-        const modelOptions = yield* loadModelOptions(stores);
-        yield* SubscriptionRef.update(inputs, (s) => ({
-          ...s,
-          catalogs: { ...s.catalogs, modelOptions },
-        }));
-      }).pipe(underProjectEnv),
+      Effect.flatMap(loadModelOptions(stores), (modelOptions) =>
+        SubscriptionRef.update(inputs, (s) => ({ ...s, modelOptions })),
+      ).pipe(underProjectEnv),
     );
     const loadFiles = yield* producer(
       'the project files',
@@ -337,10 +307,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
     );
 
-    const catalogs = Effect.all([loadAgents, loadModels], {
-      concurrency: 'unbounded',
-      discard: true,
-    });
     const hostBanners = Effect.all([loadCredential, loadDependencies], {
       concurrency: 'unbounded',
       discard: true,
@@ -371,12 +337,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         ),
         Effect.forkScoped,
       );
-    // The agent catalog reloaded or the agent list was edited
-    // (`workspaceAgentsChanged`).
-    yield* follow(
-      yield* subscribeAppSignal('workspaceAgentsChanged'),
-      catalogs,
-    );
     // Any secret written (`credentialChanged`) may change the credential;
     // only a provider's API key, or a model-access preference or
     // enabled-model write (`modelAccessChanged`), changes the models listed,
@@ -399,7 +359,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         ),
         yield* subscribeAppSignal('modelAccessChanged'),
       ),
-      Effect.andThen(loadCredential, catalogs),
+      Effect.andThen(loadCredential, loadModels),
     );
     // A write TeXRA made inside the project (an accepted output or diff, a
     // service task's file) can add a file the launcher lists, on every host
@@ -449,7 +409,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         stores.config,
         APPROVAL_POLICY_SETTING,
       ),
-      ...s.catalogs,
+      modelOptions: s.modelOptions,
       workspaceRoots: s.workspaceRoots,
       fileOptions: {
         ...s.fileOptions,
@@ -464,7 +424,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           options.shows.apiKeyBanner &&
           s.credential === false &&
           s.flags?.firstRunDone === true,
-        agentConfig: s.agentConfig,
         dependency:
           s.missingTools.length > 0 && !s.dismissed.has('dependency')
             ? s.missingTools
@@ -497,7 +456,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Stream.changes,
       ),
       refresh: Effect.all(
-        [catalogs, loadFiles, loadCommits, hostBanners, loadFlags],
+        [loadModels, loadFiles, loadCommits, hostBanners, loadFlags],
         { concurrency: 'unbounded', discard: true },
       ).pipe(Effect.andThen(write({ loaded: true }))),
       refreshFiles: loadFiles,
@@ -511,28 +470,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         write({ workspaceRoots: options.workspaceRoots() }),
       ),
       setRecording: (recording) => write({ recording }),
-      showAgentConfigBanner: Effect.fn(
-        'hostSnapshotSource.showAgentConfigBanner',
-      )(function* (agentName) {
-        // An unreadable setting is reported and the banner offers the agent
-        // settings, which always open, instead of a directory it cannot name.
-        const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
-          dirs.customConfigured(),
-        ).pipe(
-          Effect.catch((cause) =>
-            logFailure(
-              CHANNEL,
-              'Whether a custom agent directory is set could not be read',
-            )(cause).pipe(Effect.as(false)),
-          ),
-        );
-        yield* write({ agentConfig: { agentName, customDirSet } });
-      }),
-      clearAgentConfigBanner: SubscriptionRef.updateSome(inputs, (s) =>
-        s.agentConfig !== null
-          ? Option.some({ ...s, agentConfig: null })
-          : Option.none(),
-      ),
       dismissBanner: (banner) =>
         SubscriptionRef.updateSome(inputs, (s) =>
           s.dismissed.has(banner)

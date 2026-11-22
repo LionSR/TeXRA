@@ -1,5 +1,4 @@
 <script setup>
-import StreamHeaderActions from '../.vitepress/components/StreamHeaderActions.vue';
 import StatusDotLegend from '../.vitepress/components/StatusDotLegend.vue';
 import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
 import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
@@ -48,17 +47,17 @@ The Tasks view has two parts:
 1.  **Task list**: In the sidebar, the **Tasks** button opens it as a drawer; in the editor tab it is docked beside the task.
 2.  **Content Area**: The header and log details for the selected task.
 
-## Stream tabs section
+## Task list
 
 This section lists the stored tasks for the workspace, including tasks started earlier and from other TeXRA hosts; their conversations load from the workspace's SQLite database.
 
 - **Switching tasks**: Select a task's title to view its logs and status in the Content Area.
 - **Renaming or deleting a task**: Each row's <wa-icon library="texra" name="ellipsis"></wa-icon> menu offers **Rename…** and **Delete task**; deleting removes the stored task and its run folder, not just the row. Double-clicking a title also renames it.
-- **Metadata**: A row's second line shows the agent, when the task was last active, and the model, with an icon for the kind of task.
+- **Metadata**: A row's second line shows the run label (assistant or program), when the task was last active, and the model, with an icon for the kind of task.
 
 ## Content area
 
-This area shows the details for the stream selected in the Stream Tabs section.
+This area shows the details for the task selected in the Task list.
 
 ### Header
 
@@ -83,23 +82,24 @@ The header provides a summary and actions for the selected stream:
     - **Copy diagnostics**: Copy the task's title, agent, model, status, task ID, output paths, and compile failures as plain text for bug reports or follow-up tasks.
     - **Delete task**: Remove the task once stopped.
   - **Program runs**:
-    - **Run again…**: Pre-fill the New task form with the same program, model, files, and instruction to start a fresh run.
     - **Run latexdiff on the outputs**: Compare the original input `.tex` file(s) with the generated output `.tex` file(s) using `latexdiff` (read the [LaTeX Diff guide](./latex-diff.md)).
     - **Archive outputs to History**: Copy the run folder (outputs, logs, mirrored dependencies) into a timestamped folder under `History/` (read the [file management guide](./file-management.md)).
     - **Delete output files**: Remove the task's run folder.
-  - **Chat tasks**: **Compact conversation** (summarize earlier turns).
+  - **Chat tasks**:
+    - **Compact conversation**: Summarize earlier turns.
+    - **Run again…**: Open the New task form filled with the chat's model, first instruction, skills and images; sending it starts a fresh chat with the system text and tools the original run recorded.
   - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **LaTeXDiffs…**.
-- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or workflows with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
+- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or program runs with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 Reviewed outputs are accepted per file: each row under **Generated files** has
 an **Accept** action that copies the edited version into your workspace.
 
-### Checking an agent's launch
+### Checking a launch
 
-When an agent asks to start another agent, its card shows the agent, the
-model, the instruction and the files it would run; for a program run it
+When the assistant asks to start a helper agent or a program, its card shows
+the model, the instruction and the files it would run; for a program run it
 names the program. **Edit** (`e`) opens the
-New task form filled with that proposal. Change the files, the instruction, the model or (for an agent) the agent, then press **Approve** to start it
+New task form filled with that proposal. Change the files, the instruction or the model, then press **Approve** to start it
 with your changes. It still runs as the asking agent's child, and its
 result goes back to that agent. **Back to …** returns to the asking task and
 leaves the proposal waiting.
@@ -123,7 +123,7 @@ policy a new task starts with. In the CLI, `/status` lists the same grants
 
 A **Context** gauge next to the token count shows how full the model's context window is, as tokens used, the window size and a percentage. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session. An agent can also replace parts of its own context with text it writes (its `context` tool), for example a long tool output it no longer needs; the transcript shows this as **Agent edited its context** with the number of messages replaced and the tokens freed, and still shows the original messages.
 
-### After a workflow run
+### After a program run
 
 To follow up on a finished program run in chat, use **Copy diagnostics** in the
 header menu to put the task's output paths and compile failures on the

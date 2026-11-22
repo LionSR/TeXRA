@@ -5,7 +5,7 @@ import {
   isInterrupted,
   type RunId,
   type RunView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/headless/terminalStatus';
 

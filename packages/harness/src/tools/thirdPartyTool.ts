@@ -38,7 +38,7 @@ export const withinDeadline = <E, R>(
       orElse: () =>
         Effect.succeed(
           errorResult(
-            `${what} did not finish within ${Duration.toSeconds(THIRD_PARTY_CALL_TIMEOUT)}s.`,
+            `${what} did not finish within ${Duration.format(THIRD_PARTY_CALL_TIMEOUT)}.`,
           ),
         ),
     }),

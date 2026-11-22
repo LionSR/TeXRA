@@ -4,9 +4,9 @@
  */
 import { Effect, FileSystem } from 'effect';
 
-import { memoryFolders } from '@texra-ai/harness/plugins';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import { memoryFolders } from '@texra-ai/worldline/plugins';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 
 import type {
   SettingsHostBindings,

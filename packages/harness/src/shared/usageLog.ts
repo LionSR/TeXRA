@@ -3,22 +3,27 @@ import { Context, Effect, Layer, Schema } from 'effect';
 import { TurnProtocolSchema } from '@texra-ai/llm';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
-  AGENT_SOURCE,
   UsageRouteSchema,
-  type AgentSource,
   NonNegativeIntSchema,
+  programOf,
+  programOrigin,
+  type AgentConfig,
 } from '@shared/schemas';
 
 /**
- * The agent name a usage entry may carry. Telemetry is metadata only, and a
- * user-authored (or plugin) agent's name can be any private string, so only a
- * bundled agent's id goes out; every other agent is the literal `custom`.
+ * The program name a usage entry may carry (`agentName`). Telemetry is
+ * metadata only, and a run's label, an installed plugin's program name or
+ * an agent's own program name can be any private string, so only the name
+ * of a program a listed plugin registers goes out; a chat run, or any other
+ * program's, carries none.
  */
 export function usageAgentName(
-  name: string,
-  source: AgentSource | null | undefined,
-): string {
-  return source === AGENT_SOURCE.BUILT_IN ? name : 'custom';
+  config: Pick<AgentConfig, 'script'>,
+): string | undefined {
+  const program = programOf(config);
+  return program !== null && programOrigin(program.name) === 'listed'
+    ? program.name
+    : undefined;
 }
 
 const Count = NonNegativeIntSchema;
@@ -45,6 +50,8 @@ export const UsageLogEntrySchema = Schema.Struct({
   /** Wire surface of the turn (`openai-responses`, `anthropic-messages`,
    *  ...), stored in the `provider` column. */
   provider: TurnProtocolSchema,
+  /** The listed program the call served (`usageAgentName`); absent for a
+   *  chat run and a call outside any run's program. */
   agentName: Schema.optional(Schema.NonEmptyString),
   /** The route the call was billed through. */
   usageRoute: Schema.optional(UsageRouteSchema),
@@ -83,7 +90,7 @@ export class UsageLog extends Context.Service<
       env?: Readonly<Record<string, string | undefined>>,
     ) => Effect.Effect<void>;
   }
->()('@texra-ai/harness/UsageLog') {
+>()('@texra-ai/worldline/UsageLog') {
   static readonly disabled = Layer.succeed(UsageLog)({
     log: () => Effect.void,
   });

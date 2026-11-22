@@ -6,8 +6,8 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { defineTool } from '@texra-ai/harness/plugins';
-import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
+import { defineTool } from '@texra-ai/worldline/plugins';
+import { effectDiagnosticsLayer } from '@texra-ai/worldline/node';
 
 import { captureLogEntries } from '@test/support/logSinkCapture';
 

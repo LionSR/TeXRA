@@ -18,7 +18,7 @@ import type {
 import type {
   ExportNode,
   MediaAttachmentKind,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {
@@ -68,7 +68,7 @@ function collectFiles(
 function extractMeta(input: ChatExportInput): DocumentMeta {
   return {
     date: new Date(input.timestamp).toLocaleString(),
-    agent: input.config.agent,
+    agent: input.config.label,
     model: input.config.model,
     description: input.description,
     instruction: input.config.instruction?.trim() || undefined,

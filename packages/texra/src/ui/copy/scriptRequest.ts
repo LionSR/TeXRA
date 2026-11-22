@@ -4,7 +4,7 @@ import {
   truncateSummary,
   type AgentProposalRequest,
   joinFacts,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** How much of the first agent's instruction the request quotes: the full
  *  text is in the folded code. */

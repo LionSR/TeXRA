@@ -8,8 +8,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { workspaceRelativePath } from '@texra-ai/harness/node';
-import { Rejected } from '@texra-ai/harness/schemas';
+import { workspaceRelativePath } from '@texra-ai/worldline/node';
+import { Rejected } from '@texra-ai/worldline/schemas';
 import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import {

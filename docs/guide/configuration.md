@@ -19,13 +19,12 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **Models**: **API keys** (including Kimi Code and the GLM Coding Plan),
   **Subscriptions** (ChatGPT and Grok sign-in), and
   **Models** (which models appear, and the helper model).
-- **Agents**: the agent **Library**, **Skills**, and **Advanced**
-  (compaction, retries, and multi-agent coordination).
+- **Agents**: **Skills**, and **Advanced** (compaction, retries, and
+  multi-agent coordination).
 - **Memory**: the notes TeXRA keeps across tasks.
-- **Plugins**: everything that adds tools or agents: TeXRA's plugins (such as
-  Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
-  plugins, and your MCP servers. Each plugin can be made available to agents
-  or not.
+- **Plugins**: everything that adds tools or programs: TeXRA's plugins (such
+  as Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
+  plugins, and your MCP servers. Each plugin can be switched on or off.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
 - **General**: **Appearance** (desktop app only), **Approval** (the approval
@@ -89,15 +88,15 @@ file. A project file that sets any of these is ignored with a warning naming
 the key.
 Usage logging (`texra.telemetry.enabled`) follows the same rule with one
 exception: a project file may switch it off but never on, so a `false` there
-is honoured and a `true` is ignored with the same warning.
+is honored and a `true` is ignored with the same warning.
 
 ## Model access and credentials
 
 The **Models** page is the single home for model access: provider API keys,
 provider behavior, subscription sign-in (ChatGPT and Grok), and model
 visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
-their provider rows with their usage meters. There is no TeXRA account; every
-agent ships bundled.
+their provider rows with their usage meters. There is no TeXRA account; everything ships
+bundled.
 
 Saved provider keys and subscription tokens live in `~/.texra/secrets/` (an
 owner-only folder shared across the extension, desktop app, and CLI), never in
@@ -108,8 +107,8 @@ TeXRA host launched with that environment.
 
 Put standing instructions for a project, such as spelling conventions,
 notation, or how to build the paper, in an `AGENTS.md` file at the workspace
-root. Every agent adds it to its system prompt. Instructions that are your
-own, whatever the project, go in `~/.texra/AGENTS.md`: every agent reads it
+root. The assistant adds it to its instructions in every conversation. Instructions that are your
+own, whatever the project, go in `~/.texra/AGENTS.md`: the assistant reads it
 too, before the project's, so the project's is the later word where the two
 disagree. The project file is the same one Codex and other coding agents
 read, so one file serves all of them. TeXRA
@@ -120,22 +119,25 @@ The whole file goes into every prompt, so keep it short.
 
 ## Skills, tools, and privacy
 
-The **Plugins** page controls which plugins, and so which tools, agents can
-use; approval controls are under **General → Approval**; the skills switch is
+The **Plugins** page controls which plugins, and so which tools, the
+assistant can use; approval controls are under **General → Approval**; the skills switch is
 on the **Agents** page. The CLI exposes the same skills switch from `/config` during a chat.
-Tools that are disabled globally are removed from an agent's available
-tool list even when its definition names them.
+A plugin switched off adds no tools, programs or instructions to any
+conversation.
 
 The **General** page contains the telemetry switch. The environment
 variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records the agent name, the model name, the
-provider API it was called through, the billing route (API key or
-subscription), token counts, the cost at list prices, response time, the time
-of the call, the task identifier, version, and host. Only a bundled agent's id is sent; a custom or plugin
-agent is reported as `custom`. No account is
+When telemetry is enabled, TeXRA records the model name, the provider API it
+was called through, the billing route (API key or subscription), token
+counts, the cost at list prices, response time, the time of the call, the
+task identifier, version, and host. A call made by a program TeXRA ships also
+carries that program's name, and a draft polish in the composer carries
+`polish`. A chat sends no name, and neither does a program from an installed
+plugin or one the assistant wrote, so a name you or a plugin wrote is never
+sent. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
 not send prompt text, document content, file paths, or error text. The first
@@ -156,43 +158,23 @@ A new ID is made on the next send.
 
 ## Goal mode
 
-A goal is a script that runs the agent again, in rounds. By default, each
-round continues the conversation as it stood when the goal started, is given
-the objective and the last round's report, works toward the objective with
-the agent's own tools, and ends by submitting a verdict: done, keep going,
-or needs you. A round's "done" is only a claim: the agent runs once more
-with no earlier conversation, as a judge that did not do the work, and
-checks every requirement of the objective itself with its tools. Its
-answer is one claim per requirement, `verified`, `failed` or
-`unverified`, each with a check you can run again and what it showed. The
-goal completes when no claim failed; otherwise the next round is told what
-the judge found. The goal ends when it completes, when a round needs you,
-when a round or the judge fails or gives no verdict, or at the spend cap,
-and its result says which, with the last report and the judge's claims:
-read the `unverified` and `failed` ones yourself. Each judge is one more
-agent run, counted in the goal's spend.
+A goal is a script that runs the assistant in rounds until an objective is met.
 
-Approving a plan with **Run as goal** (press `r` in the terminal) runs the
-plan as a goal: a background script of the conversation, which you can
-watch like any other. It auto-approves shell commands in the goal (or all
-agent work, if you chose that); the conversation's own approvals stay as
-they were. The goal's result arrives in the conversation when it ends:
-`completed`, or `paused` with the reason (a round needs you, a round
-failed, a round gave no verdict, the judge gave none, or the spend cap),
-the rounds it ran, what it spent and the judge's claims. The rounds are a
-script module, `builtIn:goal`, which a script can also call itself, along
-with its `judge`; a script can equally run its own loop with
-[`self()`](./multi-agent-workflows.md), with a stopping rule of its own.
+**How each round works:**
 
-On your own API key a goal has no natural end, so it carries a spend cap:
-`texra.goal.maxCostUsd`, under **General → Approval** and in `/config`, defaults to
-$5 and is always a user-wide setting, never read from a project
-`.texra/config.json`. It counts everything the goal has spent: every round,
-failed ones too, and any agent a round left running. It is checked after
-each round, so a single long round can overshoot it. When the cap is
-reached the goal ends paused and says why; raise the cap and run the goal
-again to continue. `0` removes the cap. A goal has no round limit. Each
-time it runs it stops after 24 hours; resuming it starts a new 24 hours.
+- By default, each round forks from the conversation as it stood when the goal started, receives the objective and the previous round's report, works with the assistant's tools, and submits a verdict: `done`, `keep going`, or `needs you`.
+- A round's `done` is treated as a claim, not proof. TeXRA launches a fresh judge (with no prior conversation) that independently checks every requirement of the objective using tools.
+- The judge marks each requirement `verified`, `failed`, or `unverified`, along with a reproducible check and its result.
+- If no requirement fails, the goal completes. Otherwise, the next round receives the judge's findings and continues.
+- A goal stops when it completes, when a round needs you, when a round or judge fails or returns no verdict, or when the spend cap is reached. Its final summary reports the stop reason, the last round's report, and the judge's claims—review any `unverified` or `failed` claims yourself. Each judge counts toward the goal's spend.
+
+**Starting and steering a goal:**
+
+Approve a plan with **Run as goal** (press `r` in the terminal) to run it as a background script of the conversation. It auto-approves shell commands inside the goal (or all agent work, if you choose that), while leaving the conversation's own approval settings unchanged. When the goal finishes, it delivers its outcome (`completed`, or `paused` with the reason, round count, spend, and judge claims) back into the conversation. The built-in script module is `builtIn:goal` (which also exports `judge`), so custom scripts can call it directly or implement their own loop with [`self()`](./multi-agent-workflows.md).
+
+**Spend cap and duration limits:**
+
+Because a goal on your own API key has no natural stopping point, it carries a user-wide spend cap (`texra.goal.maxCostUsd`, under **General → Approval** and in `/config`; default `$5`, never read from a project `.texra/config.json`, `0` disables the cap). It counts every round—including failed rounds, judge runs, and child agents—and is checked after each round, so one long round can overshoot it. When hit, the goal pauses and says why; raise the cap and run it again to continue. There is no round limit, and each run has a 24-hour wall-clock limit (resuming starts a fresh 24 hours).
 
 ## File discovery
 
@@ -222,11 +204,11 @@ Some rows recommend settings owned by VS Code or another extension, such as an
 Explorer exclusion. Those rows are explicitly labeled and are separate from
 TeXRA's native configuration.
 
-## Agent execution settings (webview interface)
+## Per-task settings (webview interface)
 
 Per-run controls in the task composer affect only the task being launched: the
-agent, the model, the approval policy and attached media.
-Persistent agent visibility belongs in Settings instead.
+model, the approval policy and attached media. Persistent choices belong in
+Settings instead.
 
 ## Debugging
 

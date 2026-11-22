@@ -16,13 +16,14 @@ import { Context, Effect, Exit, Fiber, Layer, Schema, Scope } from 'effect';
 import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
+import type { AgentConfigPayload } from '@texra-ai/worldline/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import {
   provideCliInvocation,
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import { GOLDEN_AGENTS } from '@cli/runtime/models/validationAgents';
 import { executeCliConfig } from '@cli/runtime/headless/executeCli';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -100,9 +101,13 @@ describe('executeCliConfig', { timeout: REAL_RUN_TIMEOUT }, () => {
         'offers a headless $policy run no approval-gated tool',
         ({ overrides }) =>
           Effect.gen(function* () {
-            // The persona declares `bash`, which asks for approval.
+            // The run declares `bash`, which asks for approval.
             const run = yield* runHeadless(
-              { agent: 'golden_effect', model: MODEL, instruction: 'Go.' },
+              {
+                ...GOLDEN_AGENTS.golden_effect,
+                model: MODEL,
+                instruction: 'Go.',
+              },
               yield* headless(overrides),
             );
             assert(run.ok, 'the run ended');
@@ -125,7 +130,7 @@ describe('executeCliConfig', { timeout: REAL_RUN_TIMEOUT }, () => {
             const run = yield* Effect.forkChild(
               runHeadless(
                 {
-                  agent: 'golden_fork',
+                  ...GOLDEN_AGENTS.golden_fork,
                   model: MODEL,
                   instruction: 'GOLDEN-PARK',
                 },

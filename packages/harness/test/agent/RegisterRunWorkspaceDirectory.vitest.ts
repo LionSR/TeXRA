@@ -6,7 +6,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -17,7 +17,7 @@ import {
 } from '@test/support/testKernel';
 
 const baseConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
-  agent: 'chat',
+  label: 'chat',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
 });

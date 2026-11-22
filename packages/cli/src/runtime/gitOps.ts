@@ -1,12 +1,12 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command's
 // writes and its `gh` check. The repository reads are the harness's
-// (`@texra-ai/harness/node`). Every call captures output and never fails —
+// (`@texra-ai/worldline/node`). Every call captures output and never fails —
 // callers branch on `success`.
 //
 // These commands carry no TeXRA settings, so they use the user's Git identity.
 import { Effect } from 'effect';
 
-import { executeCommand, type ExecResult } from '@texra-ai/harness/node';
+import { executeCommand, type ExecResult } from '@texra-ai/worldline/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type GitRead<A> = Effect.Effect<A, never, ChildProcessSpawner>;

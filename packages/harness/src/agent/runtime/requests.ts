@@ -485,4 +485,4 @@ export const openRequest = <P extends RequestPayload, E>(
 export class SessionRequests extends Context.Service<
   SessionRequests,
   SessionRequestsShape
->()('@texra-ai/harness/session/SessionRequests') {}
+>()('@texra-ai/worldline/session/SessionRequests') {}

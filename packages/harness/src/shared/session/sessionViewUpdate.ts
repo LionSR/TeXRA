@@ -26,7 +26,7 @@ import {
   programOf,
   listingKeyOf,
   isTranscriptEvent,
-  runIdentityDisplayName,
+  runIdentityName,
   emptyUsageStats,
   sumUsageStats,
   type RunId,
@@ -319,7 +319,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turnOver: false,
     turnStartedAt: null,
   });
-  const label = runIdentityDisplayName(event.identity);
+  const label = runIdentityName(event.identity);
   const common = {
     id,
     identity: event.identity,
@@ -330,7 +330,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     modelLabel: null,
     command: null,
     inputFiles: [],
-    agentScope: null,
     facts: {},
     worktree: event.worktree,
     position: 'ready' as const,
@@ -722,10 +721,6 @@ function applyRunEvent(
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
-        agentScope:
-          ('delegationAgentScope' in config
-            ? config.delegationAgentScope
-            : undefined) ?? null,
         program: programOf(config)?.name ?? null,
       };
     }

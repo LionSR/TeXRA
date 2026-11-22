@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Result, Schema } from 'effect';
+import { Duration, Effect, Result, Schema } from 'effect';
 
 // Internal imports
 import {
@@ -119,7 +119,7 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
     ).pipe(
       Effect.mapError((error) =>
         toFetchToolError(error, {
-          timeout: `Web search timed out after ${DDG_TIMEOUT_MS / 1000}s. Retry the request.`,
+          timeout: `Web search timed out after ${Duration.format(Duration.millis(DDG_TIMEOUT_MS))}. Retry the request.`,
           http: (status) =>
             `Web search failed: HTTP ${status} from DuckDuckGo.`,
           network: (message) => `Web search failed: network error: ${message}`,

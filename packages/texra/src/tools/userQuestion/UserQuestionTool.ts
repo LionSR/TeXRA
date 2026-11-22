@@ -6,13 +6,13 @@ import {
   defineTool,
   withLogChannel,
   optionalInput,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   formatResultCount,
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
   type UserQuestionRequest,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 const CHANNEL = 'UserQuestionTool';
 

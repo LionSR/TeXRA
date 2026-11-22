@@ -60,7 +60,6 @@ const PRESENTATION = {
   'texra.auth.chatgpt.signIn': { icon: '$(comment-discussion)' },
   'texra.showMemory': { palette: false, icon: '$(database)' },
   'texra.showModels': { palette: false, icon: '$(hubot)' },
-  'texra.showAgents': { palette: false, icon: '$(symbol-method)' },
   'texra.showTools': { palette: false, icon: '$(extensions)' },
   'texra.showApprovalSettings': { palette: false, icon: '$(shield)' },
   'texra.showGitSettings': { palette: false, icon: '$(git-branch)' },

@@ -3,7 +3,7 @@
  * suites drive real sessions over a real SQLite file and the validation
  * model, and fail, hold or crash that store where a case needs a race. Each
  * takes what it runs on from the calling block (`SessionGraph`): the
- * sessions, the store handles and the agent catalog are the block's.
+ * sessions and the store handles are the block's.
  *
  * - {@link sessionStoreFaults} arms faults on the `Database` the block's
  *   process holds for a persistent session's root, the instance its
@@ -32,7 +32,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import {
@@ -49,7 +49,6 @@ import {
 import { vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   attachInteractions,
   Interactions,
@@ -82,10 +81,9 @@ import {
 
 import { generateRunId } from '@shared/schemas';
 import type { TestApp } from './FakePlatform';
-import { REPO_ROOT } from './repoRoot';
 import { createTempDirPlatform } from './tempDirPlatform';
 import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
-import type { Sessions, HostInteractions } from '@texra-ai/harness';
+import type { Sessions, HostInteractions } from '@texra-ai/worldline';
 
 const WRITES = ['appendAll', 'job'] as const;
 const READS = [
@@ -368,12 +366,6 @@ export const storedRows = (storage: string): StoredRow[] =>
  *  10 seconds is too tight. */
 export const REAL_RUN_TIMEOUT = 30_000;
 
-const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
-/** The personas the extension ships, the built-in agents of a real host. */
-export const BUNDLED_AGENTS = resolve(
-  REPO_ROOT,
-  'packages/extension/resources/agents',
-);
 const VALIDATION = {
   [VALIDATION_SWITCH]: '1',
   [VALIDATION_SCENARIOS.golden]: '1',
@@ -382,18 +374,17 @@ const VALIDATION = {
 
 /**
  * The host a test runs on, as a layer built per test (`buildPerTest: true`)
- * inside a `SessionGraph` block, whose agent catalog it loads: a temp-dir
- * host whose agents are the golden fixtures and the bundled personas and
- * whose model is the validation model, running `app` (the harness's
- * unless named), where a golden agent plays its
- * script and any other answers with what it was sent. No provider key comes
+ * inside a `SessionGraph` block: a temp-dir host whose model is the
+ * validation model, running `app` (the harness's unless named), where a
+ * run started as a golden agent (`GOLDEN_AGENTS`) plays its script and any
+ * other answers with what it was sent. No provider key comes
  * from the shell: its keys are the ones its secrets store. The release puts
  * the environment back and removes the temp dir.
  */
 export const validationHost = (
   prefix: string,
   app?: TestApp,
-): Layer.Layer<FakeHost, never, AgentCatalog> =>
+): Layer.Layer<FakeHost> =>
   Layer.effect(
     FakeHost,
     Effect.gen(function* () {
@@ -407,18 +398,7 @@ export const validationHost = (
       );
       const host = Context.get(
         yield* Layer.build(
-          FakeHost.layer(async () => {
-            const host = await createTempDirPlatform(prefix, tempDirs, app);
-            const agents = {
-              custom: () => Effect.succeed(AGENTS),
-              customConfigured: () => Effect.succeed(false),
-              builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-            };
-            return {
-              ...host,
-              platform: { ...host.platform, agentDirectories: agents },
-            };
-          }),
+          FakeHost.layer(() => createTempDirPlatform(prefix, tempDirs, app)),
         ),
         FakeHost,
       );
@@ -445,7 +425,6 @@ export const validationHost = (
         );
       mkdirSync(workspace, { recursive: true });
       writeFileSync(flag, VALIDATION_FLAG_CONTENT);
-      yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
       // A golden child's model is chosen among those a key makes available.
       yield* host.secrets
         .set(apiKeySecretName('openai'), 'validation-fake-key')
@@ -545,8 +524,30 @@ export const waitingAfter =
     );
   };
 
+/** The kernel suites' general assistant: a run with the file, shell and
+ *  delegation tools, whose instruction the validation model answers with
+ *  what it was sent. */
+export const ASSISTANT = Object.freeze({
+  label: 'assistant',
+  system: 'Help with the task you are given, using your tools.',
+  tools: Object.freeze([
+    'plan',
+    'bash',
+    'read_file',
+    'write_file',
+    'edit_file',
+    'glob',
+    'grep',
+    'agent',
+    'program',
+    'script',
+    'executions',
+    'ask_user_question',
+  ]),
+});
+
 /**
- * Launch a root run of the bundled `assistant` with `instruction` on
+ * Launch a root run of {@link ASSISTANT} with `instruction` on
  * `session`, a persistent session, and wait until it
  * answered and waiting for input. The launch lives in the caller's
  * scope.
@@ -560,7 +561,7 @@ export const waitingRoot = (
     const runId = generateRunId();
     yield* rootRun({
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'assistant',
+        ...ASSISTANT,
         model: 'openai/gpt-5.6-sol',
         instruction,
       }),
@@ -580,7 +581,7 @@ interface CrashedRun {
 }
 
 /**
- * Launch a root run of the bundled `assistant` with `instruction`, let it
+ * Launch a root run of {@link ASSISTANT} with `instruction`, let it
  * answer and wait for input, then crash: the store's committed
  * state is copied as a killed process leaves it, and a session over the
  * copy opens for the caller's scope (`interactions` attached as its host).

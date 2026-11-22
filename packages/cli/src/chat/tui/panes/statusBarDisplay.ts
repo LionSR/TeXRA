@@ -10,8 +10,8 @@ import {
   formatCostUsd,
   formatResultCount,
   joinFacts,
-} from '@texra-ai/harness/schemas';
-import { isWorking } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
+import { isWorking } from '@texra-ai/worldline/schemas';
 import {
   keyHintText,
   LEFT_RIGHT_KEYS,
@@ -63,7 +63,7 @@ import type {
   RequestKind,
   RunView,
   SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 /** Which approval bypasses are on for a run, its own or inherited. */
 export type BypassState = ReturnType<typeof runBypasses>;

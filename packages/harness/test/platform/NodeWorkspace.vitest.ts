@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeWorkspaceRoot,
   relativeToRoot,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('Node workspace identity', () => {

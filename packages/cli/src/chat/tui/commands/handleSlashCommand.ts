@@ -1,6 +1,6 @@
 import { Cause, Effect } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import { setTransientNotice } from '../state/cliState';
@@ -18,7 +18,7 @@ import {
   type SlashCommand,
   type SlashCommands,
 } from './slashRegistry';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 
 /**
  * Run a command body with centralized echo and error persistence. A typed

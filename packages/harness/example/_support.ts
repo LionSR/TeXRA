@@ -18,9 +18,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Layer } from 'effect';
-import { ModelFetch, type AgentPlatform } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import type { ExportNode } from '@texra-ai/harness/schemas';
+import { ModelFetch, type AgentPlatform } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import type { ExportNode } from '@texra-ai/worldline/schemas';
 
 /** The app the examples sign in and send model requests as: the harness and
  *  llm name no client of their own. */
@@ -184,7 +184,6 @@ export async function makeExampleWorkspace(
   existing?: string,
 ): Promise<{
   readonly workspace: string;
-  readonly agentsDir: string;
   readonly platform: AgentPlatform;
   /** The scripted model's requests, in order; empty on a real route. */
   readonly requests: Readonly<Record<string, unknown>>[];
@@ -205,16 +204,12 @@ export async function makeExampleWorkspace(
 
   const workspace =
     existing ?? (await mkdtemp(join(tmpdir(), 'texra-harness-example-')));
-  const agentsDir = join(workspace, 'agents');
-  await mkdir(agentsDir, { recursive: true });
   const platform = nodePlatform({
-    agentsDir,
     storageDir: join(workspace, 'storage'),
     workspaceDir: workspace,
   });
   return {
     workspace,
-    agentsDir,
     requests,
     platform,
     route: {

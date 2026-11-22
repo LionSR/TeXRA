@@ -15,7 +15,7 @@
 // output stays byte-identical.
 
 import { Array as Arr } from 'effect';
-import { ACTIVATED_SKILLS_MAX } from '@texra-ai/harness/schemas';
+import { ACTIVATED_SKILLS_MAX } from '@texra-ai/worldline/schemas';
 
 /** Collapse a paste into a chip when it exceeds either bound. */
 const PASTE_CHAR_THRESHOLD = 800;

@@ -23,7 +23,11 @@ import {
 } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
 
-import { setModelEnabled, Skills, withSessionFs } from '@texra-ai/harness/host';
+import {
+  setModelEnabled,
+  Skills,
+  withSessionFs,
+} from '@texra-ai/worldline/host';
 import {
   Settings,
   type StorageFs,
@@ -32,12 +36,12 @@ import {
   type AppSignalPayloads,
   type PerKeyLane,
   withPerKeyLane,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
-} from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { appSignalStream } from '@texra-ai/worldline/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import {
@@ -51,7 +55,6 @@ import {
   invalidateSubscriptionUsage,
 } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 import { setModelAccessPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
-import { settingsAgentCommands } from '@texra/controllers/settingsView/settingsAgentCommands';
 import { settingsGitCommands } from '@texra/controllers/settingsView/settingsGitCommands';
 import {
   hostStatePage,
@@ -92,8 +95,8 @@ import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsHandlers = SettingsViewInboundHandlerRegistry<
@@ -125,7 +128,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     const gitPage = settingsGitCommands({ bindings, present });
     const toolsPage = settingsToolCommands({ roots, bindings, present });
     const pluginsPage = settingsPluginCommands({ roots, bindings, present });
-    const agents = settingsAgentCommands({ roots, bindings, present });
 
     // ── Pages ──
 
@@ -174,7 +176,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       ),
       ...gitPage.pages,
       ...toolsPage.pages,
-      ...agents.pages,
     ];
 
     // ── What a change runs beyond this view ──
@@ -328,7 +329,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       // The view (re)opened: every page is sent, and this workspace's tools
       // are probed again (a follower below), which the Plugins page follows.
       webviewReady: () => changed('view'),
-      ...agents.handlers,
       setProviderKey: (message) =>
         keyAction(setProviderKey(bindings.dialogs, roots, message.provider)),
       removeProviderKey: (message) =>
@@ -474,12 +474,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           // The re-probe's network checks (Zotero and others) never hold the
           // view's ready answer, so the host's tab reveal is not kept waiting.
           moved([]).pipe(Stream.runForEach(() => finish(toolsPage.refresh))),
-          // A run that binds a GitHub subscription, an agent catalog reload,
-          // and a provider key written by any writer (the setup agent's
+          // A run that binds a GitHub subscription and a provider key written by any writer (the setup agent's
           // `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
           followSignal('githubSubscriptionsChanged', () => changed('github')),
-          followSignal('workspaceAgentsChanged', () => changed('agents')),
           followSignal('credentialChanged', ({ key }) => {
             const provider = apiKeyEntry(key);
             return provider === undefined || provider === 'unknown'

@@ -1,10 +1,10 @@
 // Node imports
 import { join } from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { normalizeFilePath } from '@texra-ai/worldline/schemas';
 import {
   meansAbsent,
   readDirectoryTypedTolerant,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 
 // Third-party imports
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';

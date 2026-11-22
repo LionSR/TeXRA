@@ -17,14 +17,14 @@ import {
   type LocalSession,
   type Session,
   type SessionOpenError,
-} from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline';
+import type { ProcessServices } from '@texra-ai/worldline/host';
 import {
   type SettingsStores,
   AppState,
   StateStores,
-} from '@texra-ai/harness/plugins';
-import { openNodeWorkspaceRoots } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/plugins';
+import { openNodeWorkspaceRoots } from '@texra-ai/worldline/node';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openLocalSession } from '@texra/controllers/session/openProjectSession';
 import {

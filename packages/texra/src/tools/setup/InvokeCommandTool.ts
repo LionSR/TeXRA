@@ -2,7 +2,7 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
+import { executed, ToolError, defineTool } from '@texra-ai/worldline/plugins';
 import type { CommandId } from '@texra/shared/commands/catalog';
 
 // Local file imports
@@ -29,7 +29,6 @@ const SETUP_INVOKABLE_COMMANDS = [
   'texra.removeApiKey',
   'texra.showMemory',
   'texra.showModels',
-  'texra.showAgents',
   'texra.showTools',
   'texra.showGitSettings',
   'texra.showMainView',

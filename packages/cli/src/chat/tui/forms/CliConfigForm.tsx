@@ -1,4 +1,8 @@
-import { Secrets, Settings, type AppSignals } from '@texra-ai/harness/plugins';
+import {
+  Secrets,
+  Settings,
+  type AppSignals,
+} from '@texra-ai/worldline/plugins';
 import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';
@@ -17,7 +21,6 @@ import {
   saveGitHubToken,
 } from '@texra/tools/github/githubAuth';
 
-import { WorkspaceAgentsForm } from './WorkspaceAgentsForm';
 import { ConfigForm } from './ConfigForm';
 import { useAsyncListForm, useAsyncResource } from './_shared/useAsyncListForm';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
@@ -115,11 +118,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       resetValue={(entry) => applyUpdate(entry, null)}
       formLinks={[
         {
-          name: 'agents',
-          label: 'Agents',
-          description: 'workspace agents and the default chat agent',
-        },
-        {
           name: 'api-keys',
           label: 'API keys',
           description: formatProviderApiKeySummary(apiKeyStatusView),
@@ -131,14 +129,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         },
       ]}
       formRenderers={{
-        agents: (onBack) => (
-          <WorkspaceAgentsForm
-            workspaceRoot={roots.workspace}
-            availableRows={props.availableRows}
-            onClose={onBack}
-            onError={props.onError}
-          />
-        ),
         'api-keys': (onBack) => (
           <ProviderApiKeyForm
             availableRows={props.availableRows}

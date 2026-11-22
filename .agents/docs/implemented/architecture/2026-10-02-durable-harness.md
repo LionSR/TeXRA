@@ -100,7 +100,7 @@ approval policy.
 
 A plugin is a `Plugin` value (`tools/plugins.ts`, `definePlugin`), passed to
 `Sessions.layer({ platform, plugins })`. `harnessBuiltins`
-(`@texra-ai/harness/plugins`) is the harness's own list; each TeXRA host passes
+(`@texra-ai/worldline/plugins`) is the harness's own list; each TeXRA host passes
 the built-ins plus TeXRA's app plugins. `Session.resume(runId)` returns the same
 `Run` handle as `start`.
 
@@ -190,7 +190,7 @@ Ruled by the owner on 2026-10-02 (PR #13612).
    (Removed 2026-10-22: reset and handoff.)
 4. **Fork only at a settled position: yes.** A cut anywhere else is refused, so
    a fork never contains a result nobody produced.
-5. **Package names.** Settled later: `@texra-ai/harness`, `@texra-ai/llm`, and
+5. **Package names.** Settled later: `@texra-ai/worldline`, `@texra-ai/llm`, and
    the app `@texra-ai/texra` at `packages/texra`
    ([package split](./2026-10-02-harness-package-split.md), §8).
 6. **Resuming an owned child goes through its parent (D4): yes.** A user cannot

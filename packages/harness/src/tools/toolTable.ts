@@ -80,7 +80,7 @@ export type SessionPluginLayer = Layer.Layer<never, never, PluginHold>;
 export class PluginHold extends Context.Service<
   PluginHold,
   (until: Effect.Effect<void>) => Effect.Effect<void>
->()('@texra-ai/harness/tools/PluginHold') {}
+>()('@texra-ai/worldline/tools/PluginHold') {}
 
 /**
  * A plugin's section of each request's system text, rendered from the tool
@@ -363,5 +363,5 @@ export const withNatives = (
  *  process's, read outside any run), and inside a run the table its launch
  *  or its step read, which holds the native plugins loaded then. */
 export class ToolRegistry extends Context.Service<ToolRegistry, ToolTable>()(
-  '@texra-ai/harness/tools/ToolRegistry',
+  '@texra-ai/worldline/tools/ToolRegistry',
 ) {}

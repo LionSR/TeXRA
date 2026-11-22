@@ -2,8 +2,8 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { logFailure, withLogChannel } from '@texra-ai/harness/plugins';
-import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
+import { logFailure, withLogChannel } from '@texra-ai/worldline/plugins';
+import { meansAbsent, entryTypeIn } from '@texra-ai/worldline/node';
 import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';

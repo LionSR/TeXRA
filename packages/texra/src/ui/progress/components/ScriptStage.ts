@@ -1,6 +1,6 @@
 /**
  * `<script-stage>`: the calls one `script` call issued, painted from the
- * shared script-stage model (`scriptStages` in `@texra-ai/harness/transcript`): the card's
+ * shared script-stage model (`scriptStages` in `@texra-ai/worldline/transcript`): the card's
  * summary line, then each section's calls as plain rows in issue order. An
  * `agent` row opens its child run; Review opens the run that is asking;
  * "Stop this agent", in a running row's menu, stops the call's child, which
@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { joinFacts } from '@texra-ai/harness/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -41,8 +41,8 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
   ScriptCallView,
   ScriptStageView,
-} from '@texra-ai/harness/transcript';
-import type { SessionView, RunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/transcript';
+import type { SessionView, RunId } from '@texra-ai/worldline/schemas';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';

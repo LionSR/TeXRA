@@ -30,16 +30,16 @@
  * read the goal's result.
  */
 import { Effect, Layer, Schema, Stream } from 'effect';
-import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
+import { Sessions, type LocalSession } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { definePlugin, defineTool } from '@texra-ai/worldline/plugins';
 import {
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,
   GoalResultSchema,
   type SessionView,
   type PendingRequest,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   EXAMPLE_CLIENT,
@@ -97,10 +97,9 @@ const ledgerPlugin = definePlugin({
   scriptModules: { 'goal-ledger': LEDGER_STRATEGY },
 });
 
-const PERSONA = {
-  name: 'goal_runner',
-  description: 'Proposes a plan and runs it as a goal.',
-  prompt: 'Propose a plan, then wait while it runs as a goal.',
+const RUN = {
+  label: 'goal_runner',
+  system: 'Propose a plan, then wait while it runs as a goal.',
   tools: ['hold_turn'],
 };
 
@@ -203,7 +202,7 @@ const sent = (index: number): string => JSON.stringify(requests[index]);
 const runGoal = (session: LocalSession, opening: string) =>
   Effect.gen(function* () {
     const conversation = yield* session.start({
-      agent: PERSONA,
+      ...RUN,
       instruction: opening,
       model: route.model,
       interactive: true,
@@ -349,7 +348,7 @@ const program = Effect.gen(function* () {
   // 5. A conversation's own script composes the judge differently: two
   // judges of one objective, in parallel, with no goal at all.
   const d = yield* session.start({
-    agent: PERSONA,
+    ...RUN,
     instruction: 'Judge goal D.',
     model: route.model,
   });

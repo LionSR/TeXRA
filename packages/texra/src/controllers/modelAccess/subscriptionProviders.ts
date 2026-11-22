@@ -18,12 +18,12 @@ import {
   type SubscriptionOAuthError,
   type SubscriptionSessionStatus,
 } from '@texra-ai/llm/node';
-import { SubscriptionPreference } from '@texra-ai/harness/host';
+import { SubscriptionPreference } from '@texra-ai/worldline/host';
 import {
   Cancelled,
   SUBSCRIPTION_ROUTES,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   codexAccountLabel,
@@ -31,7 +31,7 @@ import {
   type SubscriptionAuthStatus,
   xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
-import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
@@ -41,7 +41,7 @@ import {
   type AppSignals,
   type SettingsStores,
   ConfigWriteFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 
 const CHANNEL = 'subscriptionProviders';
 

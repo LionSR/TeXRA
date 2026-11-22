@@ -15,41 +15,29 @@
  */
 import * as path from 'node:path';
 
-import {
-  Context,
-  Effect,
-  Exit,
-  FileSystem,
-  Layer,
-  Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Exit, Layer, Scope, Stream, SubscriptionRef } from 'effect';
 
 import type {
   Session,
   WorkspaceRoots,
   HostPresentation,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
-  AgentCatalog,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
   type PresentationEventHandlers,
   type ProcessServices,
-} from '@texra-ai/harness/host';
-import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/host';
+import { commitExists, workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   AppSignals,
   pathToLocationIn,
   ToolRegistry,
   type StorageFs,
   WorkspaceFs,
-  AgentDirectories,
-} from '@texra-ai/harness/plugins';
-import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
+} from '@texra-ai/worldline/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
@@ -102,14 +90,13 @@ import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/worldline/schemas';
 import {
-  agentKeyOf,
   formatResultCount,
   Cancelled,
   Rejected,
   Unavailable,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
 import {
@@ -229,10 +216,9 @@ export interface GuiWindowHost {
   readonly notify: Dialogs['notify'];
   readonly bindings: SharedHostCommandBindings;
   readonly own: OwnHostHandlers;
-  /** The runtime's notices this host presents its own way. A missing agent
-   *  is the window's own banner, so the window's opening answers that one. */
+  /** The runtime's notices this host presents its own way. */
   readonly notices: PresentationEventHandlers<
-    Omit<RuntimePresentationEventPayloads, 'agentNotFound'>,
+    RuntimePresentationEventPayloads,
     HostPresentation
   >;
   /** What the window's editor does for its project's runs, here or in the
@@ -336,27 +322,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     handleHostCommand: handle,
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
-  // Entering the setup step selects the setup agent on the launcher; a
-  // snapshot already there leaves a user who switched agents alone. It
-  // never starts setup: the user launches it from the setup card.
-  const catalog = yield* AgentCatalog;
-  yield* Effect.forkScoped(
-    snapshot.changes.pipe(
-      Stream.map((current) => current.onboarding),
-      Stream.changes,
-      Stream.filter((step) => step === 'setup'),
-      Stream.runForEach(() =>
-        Effect.sync(() => {
-          // The catalog's key, so the launcher's list matches by value.
-          const entry = catalog.get(SETUP_AGENT_NAME);
-          bridge.surfaceAction({
-            kind: 'launch',
-            patch: { agent: entry ? agentKeyOf(entry) : SETUP_AGENT_NAME },
-          });
-        }),
-      ),
-    ),
-  );
   const host = yield* ports.host;
 
   // The window is its project's window wherever its runs run: here,
@@ -365,20 +330,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // itself.
   const workspace = roots.workspace ?? roots.storage;
   const signals = yield* AppSignals;
-  // A notice is presented after the request that opened the window has
-  // returned, so the banner's read carries its two services with it.
-  const bannerServices = Context.pick(
-    AgentDirectories,
-    FileSystem.FileSystem,
-  )(yield* Effect.context<AgentDirectories | FileSystem.FileSystem>());
-  const notices: PresentationEventHandlers<
-    RuntimePresentationEventPayloads,
-    HostPresentation
-  > = {
-    ...host.notices,
-    agentNotFound: ({ agentName }) =>
-      Effect.provide(snapshot.showAgentConfigBanner(agentName), bannerServices),
-  };
+  const { notices } = host;
   const window: WindowHost = {
     ...host.window,
     emit: (event, payload) => notices[event](payload),
@@ -425,8 +377,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     ...host.runs,
     // A run this window started is in the window's view before it is in a
     // surface's, whose frames are cut from the session after it: each
-    // surface selects the run once its own view holds its activation. The
-    // missing-agent warning the run's agent resolved goes at once.
+    // surface selects the run once its own view holds its activation.
     launched: (run) =>
       Effect.sync(() =>
         bridge.surfaceAction({
@@ -434,7 +385,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           runId: run.runId,
           cursor: run.activation,
         }),
-      ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
+      ),
     roots,
     present,
     session,
@@ -682,9 +633,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'runAgain': {
           // The form opens on the run's setup; the person changes it and
           // starts it, so nothing launches here.
-          const form = yield* launchFormOf(
-            yield* runActions.runAgain(request.runId),
-          );
+          const form = launchFormOf(yield* runActions.runAgain(request.runId));
           bridge.surfaceAction({ kind: 'selectNew' });
           bridge.surfaceAction({ kind: 'launch', patch: form });
           return done;
@@ -773,34 +722,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
                 bindings.openExternal,
                 texraGuideUrl('installation', 'setting-up-api-keys'),
               );
-          return done;
-        case 'agentConfigBanner':
-          switch (request.action) {
-            case 'edit':
-              yield* bindings.openSettings('agents/library');
-              return done;
-            case 'dir': {
-              // Without a custom directory there is nothing to reveal, so the
-              // banner's link is the agent settings instead.
-              if (!request.customDirSet) {
-                yield* bindings.openSettings('agents/library');
-                return done;
-              }
-              const directory = yield* (yield* AgentDirectories).custom();
-              if (!directory)
-                return yield* new Rejected({
-                  reason: 'No custom agent directory is set.',
-                });
-              yield* host.files.openDirectory(directory);
-              return done;
-            }
-            case 'docs':
-              yield* openLink(
-                bindings.openExternal,
-                texraGuideUrl('custom-agents'),
-              );
-              return done;
-          }
           return done;
         case 'recheckDependencies':
           yield* snapshot.refreshHostBanners;

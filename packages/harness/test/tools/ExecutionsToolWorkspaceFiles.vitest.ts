@@ -11,7 +11,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   RunIdSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { errorOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -87,7 +87,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 session,
                 runId,
                 Schema.decodeUnknownSync(AgentConfigSchema)({
-                  agent: 'chat',
+                  label: 'chat',
                   model: 'deepseek/deepseek-v4-flash',
                   workingDirectory: workspace,
                 }),

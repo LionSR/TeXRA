@@ -1,10 +1,10 @@
 import { Cause, Effect, Exit, Scope } from 'effect';
 import { app, BrowserWindow, session } from 'electron';
 
-import { Sessions } from '@texra-ai/harness';
-import { GlobalValues } from '@texra-ai/harness/plugins';
-import { withProcessServices } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { GlobalValues } from '@texra-ai/worldline/plugins';
+import { withProcessServices } from '@texra-ai/worldline/host';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { reachBundledService } from '@texra/controllers/server/client';

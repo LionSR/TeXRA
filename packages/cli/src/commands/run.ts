@@ -7,7 +7,7 @@ import {
   toErrorMessage,
   RUN_OUTCOME,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { CliDocumentTaskResult } from '@cli/schemas/cliOutput';
 import { documentsOf } from '@texra/shared/plugins/documents';
 
@@ -25,8 +25,8 @@ import { selectCliRunModel } from '../runtime/models/launchDefaults';
 import {
   RUN_TARGET_NAME_DESCRIPTION,
   missingRunTargetMessage,
-  resolveCliRunAgent,
-} from '../runtime/agents';
+} from '../runtime/runTarget';
+import { cliEntryAgent } from '../runtime/cliEntryAgent';
 import {
   cliPlatform,
   type CliPlatform,
@@ -67,20 +67,25 @@ import {
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
-import type { Sessions } from '@texra-ai/harness';
+import type { Sessions } from '@texra-ai/worldline';
 import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import {
   programLaunch,
   programsNow,
   type ProcessServices,
-} from '@texra-ai/harness/host';
-import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import type { AgentConfigPayload } from '@texra-ai/worldline/schemas';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for a program over several inputs; --output is only for a single final artifact.';
 
+/** The `texra run` target that is no program: one answer from the entry
+ *  agent, printed in the terminal. */
+const CHAT_TARGET = 'chat';
+
 interface HeadlessRunInit {
-  readonly agent: string;
+  /** A program's name, or {@link CHAT_TARGET}. */
+  readonly target: string;
   readonly inputFiles: string[];
   readonly contextFiles: string[];
   readonly output?: string;
@@ -91,12 +96,12 @@ interface HeadlessRunInit {
 }
 
 /**
- * `texra run <program | agent>`: the one headless run command. A name a
+ * `texra run <program | chat>`: the one headless run command. A name a
  * plugin registers as a program runs that program over `--input` files
- * (taking `--output`/`--output-dir` and producing document artifacts); any
- * other name is an agent's, which takes a required instruction
- * (`--instruction`, `--instruction-file`, or both) and runs one model/tool
- * cycle. Flags that belong to the other shape are usage errors.
+ * (taking `--output`/`--output-dir` and producing document artifacts);
+ * `chat` gives the entry agent a required instruction (`--instruction`,
+ * `--instruction-file`, or both) and runs one model/tool cycle. Flags that
+ * belong to the other shape are usage errors.
  */
 export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
@@ -115,43 +120,23 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // platform init keeps a plain usage error cheap.
   if (!instruction && init.inputFiles.length === 0) {
     return yield* failUsage(
-      'Provide --instruction or --instruction-file for an agent, or --input for a program.',
+      `Provide --instruction or --instruction-file for \`${CHAT_TARGET}\`, or --input for a program.`,
     );
   }
 
   const services = yield* cliPlatform;
   const { programs, withheld } = yield* programsNow(services.roots);
-  const program = programs.get(init.agent);
-  // An installed plugin names its agents and its programs `<plugin>:<name>`
-  // alike: a name that is both is refused rather than one picked unsaid.
-  if (program !== undefined && programOrigin(init.agent) === 'installed') {
-    const agent = yield* Effect.result(
-      resolveCliRunAgent(services, init.agent),
-    );
-    if (Result.isSuccess(agent))
-      return yield* failUsage(
-        `${init.agent} names both a program and an agent of its plugin; rename one of them in the plugin.`,
-      );
-  }
+  const program = programs.get(init.target);
   if (program === undefined) {
-    // Resolve once, before stdin is read or the runtime host starts; the
-    // run pins the resolved source.
-    const { source } = yield* resolveCliRunAgent(
-      services,
-      init.agent,
-      // A program read from a file may be one that does not load now.
-      [
-        missingRunTargetMessage(init.agent, [...programs.keys()]),
-        ...(programOrigin(init.agent) === 'listed' ? [] : withheld),
-      ].join(' '),
-    );
-    return yield* runToolUseAgent(
-      context,
-      init,
-      { kind: source },
-      instruction,
-      services,
-    );
+    if (init.target !== CHAT_TARGET)
+      return yield* failUsage(
+        // A program read from a file may be one that does not load now.
+        [
+          missingRunTargetMessage(init.target, [...programs.keys()]),
+          ...(programOrigin(init.target) === 'listed' ? [] : withheld),
+        ].join(' '),
+      );
+    return yield* runToolUseAgent(context, init, instruction, services);
   }
 
   // A program with no `--input` cannot run, and the output probes below
@@ -247,7 +232,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       };
       const config: AgentConfigPayload = {
         ...launch,
-        ...(yield* programLaunch(init.agent, {}, launch, services.roots)),
+        ...(yield* programLaunch(init.target, {}, launch, services.roots)),
       };
 
       return yield* executeCliRun(config, context, {
@@ -265,7 +250,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
 const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   context: CliContext,
   init: HeadlessRunInit,
-  agentSource: AgentConfigPayload['agentSource'],
   instruction: string,
   services: CliPlatformServices,
 ): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
@@ -275,7 +259,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     (init.output && '--output') || (init.outputDir && '--output-dir');
   if (programOnlyFlag) {
     return yield* failUsage(
-      `${programOnlyFlag} is only available for programs; "${init.agent}" is an agent.`,
+      `${programOnlyFlag} is only available for programs; \`${CHAT_TARGET}\` answers in the terminal.`,
     );
   }
   if (!instruction) {
@@ -296,8 +280,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
       writtenFiles,
     }) {
       const config: AgentConfigPayload = {
-        agent: init.agent,
-        agentSource,
+        ...(yield* cliEntryAgent),
         model,
         inputFiles,
         mediaFiles,
@@ -452,7 +435,7 @@ const fileFlag = (name: string, description: string) =>
   );
 
 export const headlessRunCommand = cliCommand('run', {
-  description: 'Run a program or an agent headlessly',
+  description: 'Run a program, or one chat answer, headlessly',
   config: {
     ...SKILL_SOURCES_CONFIG,
     target: Argument.String('target').pipe(
@@ -480,7 +463,7 @@ export const headlessRunCommand = cliCommand('run', {
     model: modelFlag('Model for the agent'),
     instruction: Flag.String('instruction').pipe(
       Flag.withDescription(
-        'Instruction passed to the agent or program (an agent needs this or --instruction-file)',
+        'Instruction passed to the program or `chat` (`chat` needs this or --instruction-file)',
       ),
       Flag.optional,
     ),
@@ -491,7 +474,7 @@ export const headlessRunCommand = cliCommand('run', {
   },
   run: (context, input) =>
     runHeadlessAgent(context, {
-      agent: input.target,
+      target: input.target,
       inputFiles: [...input.input],
       contextFiles: [...input.context],
       instruction: Option.getOrElse(input.instruction, () => ''),

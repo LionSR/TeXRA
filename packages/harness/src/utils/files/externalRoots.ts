@@ -8,86 +8,42 @@ import { isPathWithin } from '@utils/core/pathCore';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /**
- * Allowlist of external filesystem roots that tools may read or write.
- *
- * Tools like read_file, write_file, glob, and grep normally refuse any
- * path outside the workspace. Registering a root here lets those tools
- * operate on absolute paths that fall inside it, while paths outside the
- * registry keep their current "stay within the workspace" rejection.
- *
- * The agent-catalog follower every host's process runtime builds
- * registers the agent directories. The
- * registry itself is platform-agnostic. A run's step adds its own roots to
- * its calls' lookups (`StepRoot`: its skills, read-only, and its memory
- * folders), which nothing registers.
+ * The external filesystem roots a tool call may reach: the directories its
+ * run's step accepts for its own calls (`StepRoot`: a skill the step lists or
+ * its user activated, read-only, or a memory folder, which its calls also
+ * write). Tools like read_file, write_file, edit_file, glob and grep normally
+ * refuse any path outside the workspace; a path inside one of these roots is
+ * accepted according to its `writable` flag. Nothing is registered
+ * process-wide: a root is gone once no step holds it.
  *
  * Security notes
  * --------------
- * - `registerExternalRoot` rejects non-absolute inputs so the registry cannot
- *   be seeded with process-CWD-relative values.
- * - Both register and find canonicalise inputs through the same pipeline
- *   (resolve → realpath), so symlinks in any registered root component do
- *   not cause silent matching failures. Canonicalisation is tolerant of
- *   non-existent trailing segments (essential for writes that create new
- *   files) and fails closed on permission errors (any EACCES/EPERM makes
- *   `findExternalRoot` return null rather than accept an un-verifiable path).
- * - A symlink inside a writable root that resolves outside the root (e.g.
- *   at `/etc/passwd`) is NOT matched and tools reject it.
+ * - Lookup canonicalises its input (resolve, then realpath), as the step
+ *   canonicalised its roots, so symlinks in a root component do not cause
+ *   silent matching failures. Canonicalisation is tolerant of non-existent
+ *   trailing segments and fails closed on permission errors (any EACCES/EPERM
+ *   makes `findExternalRoot` return null rather than accept an un-verifiable
+ *   path).
+ * - A symlink inside a root that resolves outside it (e.g. at `/etc/passwd`)
+ *   is NOT matched and tools reject it.
  * - Containment is tested via `path.relative`, which works correctly even
- *   for filesystem roots like `/` or `C:\` (where `root + path.sep` would
- *   produce a bad prefix). When multiple registered roots could contain a
- *   path (nested registration), the most specific (longest) wins; ties on
- *   path length prefer read-only so a writable entry cannot silently grant
- *   write access to a directory that is also registered read-only under a
- *   different kind (e.g. if a user points the custom agents dir at the
- *   built-in agents dir).
- * - The registry keys on `ExternalRootKind`, not on the path — each kind
- *   gets exactly one slot. Two different kinds may canonicalise to the
- *   same path (legitimate when a user overlays a custom dir on a built-in
- *   one) and both coexist; tiebreaking in `findExternalRoot` makes the
- *   read-only one win for permission purposes.
- * - A skill directory is never registered: the step that lists it, or whose
- *   user activated it, holds it as a read-only `StepRoot` and hands it to
- *   its own calls' lookups, so no other run reads it, and it is gone once no
- *   step holds it.
+ *   for filesystem roots like `/` or `C:\`; when several roots contain a
+ *   path, the most specific (longest) wins.
  */
 
-/** Stable identifier for each registered root. Label strings are for display
- *  only and must not be used as keys. */
-export type ExternalRootKind = 'builtIn' | 'custom' | 'agentDocs';
-
-interface ExternalRoot {
-  /** Stable key, independent of UI text. */
-  readonly kind: ExternalRootKind;
-  /** Absolute, canonical filesystem path. */
-  readonly absolutePath: string;
-  readonly writable: boolean;
-  /** Human-readable label shown in workspace_info. */
-  readonly label: string;
-}
-
-interface ExternalRootOptions {
-  readonly kind: ExternalRootKind;
-  readonly writable: boolean;
-  readonly label: string;
-}
-
-/** A directory one step accepts for its own calls, beside the registered
- *  roots, canonical (`canonicalizePath`): a skill it lists or its user
- *  activated, read-only, or a memory folder, which its calls also write. */
+/** A directory one step accepts for its own calls, canonical
+ *  (`canonicalizePath`): a skill it lists or its user activated, read-only,
+ *  or a memory folder, which its calls also write. */
 export interface StepRoot {
   readonly absolutePath: string;
   readonly label: string;
   readonly writable?: boolean;
 }
 
-export interface MatchedExternalRoot extends Omit<ExternalRoot, 'kind'> {
-  /** The registered root's kind; absent for a step root. */
-  readonly kind?: ExternalRootKind;
+/** The root a path falls in, as a tool's permission check reads it. */
+export interface MatchedExternalRoot extends StepRoot {
+  readonly writable: boolean;
 }
-
-/** Keyed by kind. */
-const roots = new Map<ExternalRootKind, ExternalRoot>();
 
 /**
  * Canonicalise a path: resolve `.`/`..` segments, then walk symlinks via
@@ -149,64 +105,19 @@ function readLinkOrUndefined(entry: string): string | undefined {
 }
 
 /**
- * Register or replace the external root for the given kind. Calling again
- * with the same kind (e.g. when the custom agents dir changes) replaces
- * the previous entry for that kind in place. Returns the registration's
- * removal, which deletes the entry only while it is still this one, so a
- * caller that must leave the registry as it found it (a test) can.
- */
-export function registerExternalRoot(
-  absolutePath: string,
-  options: ExternalRootOptions,
-): () => void {
-  if (!path.isAbsolute(absolutePath)) {
-    throw new Error(
-      `External root path must be absolute, got: ${absolutePath}`,
-    );
-  }
-  // Canonicalise at registration so find-time canonicalisation lands in the
-  // same space. canonicalizePath tolerates non-existent trailing segments itself
-  // and only throws on permission errors or unexpected failures; per the
-  // fail-closed contract in its JSDoc, let those propagate so an
-  // un-verifiable path is never accepted to the allowlist. Registration is
-  // setup-time and the caller already has a try/catch that surfaces a
-  // meaningful error.
-  const canonicalPath = canonicalizePath(absolutePath);
-  // Frozen: the registry hands these entries to tool code and to
-  // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
-  // silently widen the allowlist for every later lookup.
-  const entry = Object.freeze({
-    kind: options.kind,
-    absolutePath: canonicalPath,
-    writable: options.writable,
-    label: options.label,
-  });
-  roots.set(options.kind, entry);
-  return () => {
-    if (roots.get(options.kind) === entry) roots.delete(options.kind);
-  };
-}
-
-/**
- * Return the registered root that contains `absolutePath`, or null when no
- * registered root matches or the path cannot be canonicalised (fail closed).
- * `stepRoots` are the read-only roots the asking call's step accepts; a call
- * outside a run has none.
- * Uses `path.relative` for containment so filesystem-root registrations
- * (e.g. `/` on POSIX) behave correctly, and picks the most-specific
- * registered root when multiple would match. Ties on path length prefer
- * read-only so overlapping registrations can never silently grant write
- * access.
+ * Return the step root that contains `absolutePath`, or null when none
+ * matches or the path cannot be canonicalised (fail closed). `stepRoots` are
+ * the read-only roots the asking call's step accepts; a call outside a run
+ * has none. The most specific root wins.
  */
 export function findExternalRoot(
   absolutePath: string,
   stepRoots: readonly StepRoot[] = [],
 ): MatchedExternalRoot | null {
   if (!path.isAbsolute(absolutePath)) return null;
-  // No registered root and no step root means nothing can match. Checked
-  // before canonicalisation so a lookup with nothing to match pays no
-  // realpath syscall.
-  if (roots.size === 0 && stepRoots.length === 0) return null;
+  // Checked before canonicalisation so a lookup with nothing to match pays
+  // no realpath syscall.
+  if (stepRoots.length === 0) return null;
 
   let resolved: string;
   try {
@@ -217,31 +128,11 @@ export function findExternalRoot(
     return null;
   }
 
-  let best: MatchedExternalRoot | null = null;
-  for (const root of [
-    ...roots.values(),
-    ...stepRoots.map((root) => ({ ...root, writable: root.writable ?? false })),
-  ]) {
+  let best: StepRoot | null = null;
+  for (const root of stepRoots) {
     if (!isPathWithin(root.absolutePath, resolved)) continue;
-
-    const candidate: MatchedExternalRoot = root;
-
-    // Prefer the most-specific (longest) match; on ties, prefer read-only so a
-    // writable entry cannot override a colocated read-only one.
-    if (
-      best === null ||
-      candidate.absolutePath.length > best.absolutePath.length ||
-      (candidate.absolutePath.length === best.absolutePath.length &&
-        best.writable &&
-        !candidate.writable)
-    ) {
-      best = candidate;
-    }
+    if (best === null || root.absolutePath.length > best.absolutePath.length)
+      best = root;
   }
-  return best;
-}
-
-/** Snapshot of the current registry for display purposes. */
-export function listExternalRoots(): ExternalRoot[] {
-  return [...roots.values()];
+  return best === null ? null : { ...best, writable: best.writable ?? false };
 }

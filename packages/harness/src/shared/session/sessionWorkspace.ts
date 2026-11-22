@@ -25,4 +25,4 @@ export class SessionWorkspace extends Context.Service<
     readonly storage: string;
     readonly config?: ConfigProvider;
   }
->()('@texra-ai/harness/session/SessionWorkspace') {}
+>()('@texra-ai/worldline/session/SessionWorkspace') {}

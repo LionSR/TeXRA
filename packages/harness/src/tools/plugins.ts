@@ -4,8 +4,8 @@
  * passes its list, built-ins included, to `processLayer`, and the
  * process's `ToolRegistry` holds it, which every
  * reader takes it from: availability probes, the first-install switch seed,
- * the switches, a run's injected tools, and the bundled skills and agents
- * at `resources/plugins/<id>/`, which a switched-off plugin withholds with
+ * the switches, a run's injected tools, and the bundled skills at
+ * `resources/plugins/<id>/skills`, which a switched-off plugin withholds with
  * its tools. How the app shows a plugin is its own record, keyed by id. An
  * installed plugin's native entry (`harness.mjs`) returns one too, loaded
  * while the process runs (`@tools/nativePlugins`): it joins the table a run
@@ -103,7 +103,7 @@ export interface Plugin {
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
-   *  run (a program) and a text-only persona get none. */
+   *  run (a program) and a text-only run get none. */
   readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;

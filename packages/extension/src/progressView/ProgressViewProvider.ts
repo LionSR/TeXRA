@@ -13,15 +13,15 @@ import {
   Stream,
 } from 'effect';
 
-import { scopedFork } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { scopedFork } from '@texra-ai/worldline/host';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   attentionOf,
   formatResultCount,
   type AgentConfig,
   type FileLocation,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
@@ -63,12 +63,12 @@ import {
   createExtensionHostRequests,
   type ExtensionHostRequestsOptions,
 } from './extensionHostRequests';
-import type { Session, WorkspaceRoots } from '@texra-ai/harness';
+import type { Session, WorkspaceRoots } from '@texra-ai/worldline';
 import type {
   ProcessRuntime,
   ProcessServices,
   ScopedFork,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 
 const CHANNEL = 'ProgressViewProvider';
 
@@ -86,7 +86,7 @@ function launchNotice(config: AgentConfig): string {
   } else if (outputFiles[0]) {
     outputPart = ` (to ${path.basename(outputFiles[0])})`;
   }
-  return `"${config.agent}" is processing ${inputName} with ${config.model}${outputPart}.`;
+  return `"${config.label}" is processing ${inputName} with ${config.model}${outputPart}.`;
 }
 
 /** Focus the sidebar view. */

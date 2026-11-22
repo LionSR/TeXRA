@@ -68,7 +68,7 @@ export const HostSkillSources = Context.Reference<
       'resourcesPath' | 'projectDataDirName' | 'pluginIds' | 'options'
     >
   | undefined
->('@texra-ai/harness/HostSkillSources', { defaultValue: () => undefined });
+>('@texra-ai/worldline/HostSkillSources', { defaultValue: () => undefined });
 
 interface DisabledSkills {
   readonly names: readonly string[];

@@ -2,7 +2,7 @@
   "name": "acme-notes",
   "version": "1.0.0",
   "private": true,
-  "description": "A native plugin package for @texra-ai/harness, built outside the harness: a tool, a script module, a program and a versioned fact kind",
+  "description": "A native plugin package for @texra-ai/worldline, built outside the harness: a tool, a script module, a program and a versioned fact kind",
   "type": "module",
   "exports": {
     ".": {
@@ -15,7 +15,7 @@
     "index.d.ts"
   ],
   "peerDependencies": {
-    "@texra-ai/harness": "*",
+    "@texra-ai/worldline": "*",
     "effect": "^4.1.0"
   }
 }

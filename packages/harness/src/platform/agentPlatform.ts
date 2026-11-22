@@ -4,7 +4,6 @@
  * in. `nodePlatform()` builds one; a host composing its own process supplies
  * the same ports to `processLayer` one by one.
  */
-import type { AgentDirectoriesPort } from './interfaces';
 import type { PlatformSecrets } from './secrets';
 import type { WorkspaceRoots } from './workspaceRoots';
 
@@ -14,8 +13,9 @@ import type { WorkspaceRoots } from './workspaceRoots';
  * embedder supplying its own names its workspace roots beside them.
  */
 export interface AgentPlatform {
-  /** The agent directories this process's `AgentDirectories` service serves. */
-  readonly agentDirectories: AgentDirectoriesPort;
+  /** The packaged resources root this process's `HostResources` service
+   *  serves; absent for an embedder that ships none. */
+  readonly resourcesRoot?: string;
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;

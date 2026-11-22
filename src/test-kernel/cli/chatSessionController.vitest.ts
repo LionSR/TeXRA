@@ -1,7 +1,7 @@
 /**
  * The chat-session controller over a real session: its runs start, resume
  * and stop on a persistent session over the validation host, whose model is
- * the only fake (the bundled `assistant` answers with what it was sent).
+ * the only fake (the entry agent answers with what it was sent).
  * Each case drives the controller's public verbs (`submit`, `resume`,
  * `stop`) and reads what the person and the process get: the run's view,
  * the session's stored rows, and the chat's exit code.
@@ -31,8 +31,8 @@ import {
 } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import type { LocalSession } from '@texra-ai/harness';
-import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import type { LocalSession } from '@texra-ai/worldline';
+import { RunIdSchema, type RunId } from '@texra-ai/worldline/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { scopeRunner } from '@cli/chat/scopeRunner';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
@@ -67,6 +67,7 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
+import { entryAgent } from '@texra/agent/entryAgent';
 
 /** The validation host's model, which its stored key makes available. */
 const MODEL = 'openai/gpt-5.6-sol';
@@ -106,7 +107,7 @@ const rootStarts = (storage: string) =>
   );
 
 /**
- * A conversation of the bundled `assistant` that answered and was stopped,
+ * A conversation of the entry agent that answered and was stopped,
  * as one the person left: started on the session as a host starts it, then
  * stopped, so its view reads it cancelled and resumable.
  */
@@ -127,7 +128,7 @@ const stoppedConversation = (session: LocalSession) =>
 /**
  * The chat over a persistent session of the test's host, as the chat entry
  * builds it: the session's view bound into the TUI's signal, a fresh
- * conversation on the bundled `assistant` and the validation model, and the
+ * conversation on the entry agent and the validation model, and the
  * controller over its own chat and shutdown scopes, closed with the test.
  * `served`: the chat is a client of the background service.
  */
@@ -154,7 +155,7 @@ const openChat = (
     yield* Effect.acquireRelease(
       Effect.sync(() => {
         startChat();
-        patchSessionMeta({ agent: 'assistant', model: MODEL });
+        patchSessionMeta({ chat: entryAgent(), model: MODEL });
       }),
       () => Effect.sync(() => startChat()),
     );

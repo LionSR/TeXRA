@@ -15,7 +15,7 @@
 // ↑/↓ (line motion falling back to history recall), and Ctrl-V (async image
 // paste). Those stay explicit in TextInput.
 
-import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
+import { FACT_SEPARATOR } from '@texra-ai/worldline/schemas';
 import {
   isCtrlInput,
   isUnhandledControlInput,

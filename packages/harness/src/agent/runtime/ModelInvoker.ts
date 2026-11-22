@@ -183,7 +183,7 @@ export class ModelInvoker extends Context.Service<
       },
     ) => Effect.Effect<ModelCallResult, Error>;
   }
->()('@texra-ai/harness/agent/ModelInvoker') {}
+>()('@texra-ai/worldline/agent/ModelInvoker') {}
 
 /**
  * Build a request service for one run; its model is run-owned, and every row
@@ -209,10 +209,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
       const attribution = {
-        agentName: usageAgentName(
-          run.config.agent,
-          run.config.agentSource?.kind,
-        ),
+        agentName: usageAgentName(run.config),
         runId,
       };
 
@@ -530,7 +527,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 backend: failed.backend,
                 declinedRoutes,
                 textOnly: failed.textOnly,
-                temperature: run.persona.temperature,
               })
               // The ref masks its acquisition; a stop must still cut a
               // bind in progress.

@@ -33,7 +33,7 @@ import {
 } from 'effect';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import type { Theme } from '@texra/shared/ipc';
 import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -139,7 +139,6 @@ interface EditorPaneCallbacks {
     contents: string,
     base: string | null,
   ): Effect.Effect<'saved' | 'changedOnDisk', EditorPaneError>;
-  isReadOnly?(path: string): boolean;
   /** A path's unsaved state changed; the tab strip redraws its mark, which
    *  it reads back through `hasUnsavedChanges`. */
   onDirtyChange(path: string): void;
@@ -618,13 +617,6 @@ export function createEditorPane(
               ...state,
               openPath: path,
             }));
-            target.updateOptions({
-              readOnly: callbacks.isReadOnly?.(path) ?? false,
-              readOnlyMessage: {
-                value:
-                  'This definition is read-only. Use **Customize** in Settings to edit a copy.',
-              },
-            });
             notice.clear(path);
           }).pipe(
             Effect.catch((error) =>
@@ -709,8 +701,7 @@ export function createEditorPane(
   function save(path: string | undefined, overwrite = false): Promise<void> {
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
-    if (!path || !file || !model || callbacks.isReadOnly?.(path))
-      return Promise.resolve();
+    if (!path || !file || !model) return Promise.resolve();
     return run(
       file.lane
         .withPermit(

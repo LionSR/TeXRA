@@ -9,14 +9,14 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   executeCommand,
   type ExecuteCommandBaseOptions,
   whichOnExtendedPath,
   type ExecResult,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   installAdvice,

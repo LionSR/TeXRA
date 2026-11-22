@@ -6,7 +6,7 @@
 import { createContext, useContext } from 'react';
 
 // Local imports
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ScopeRunner } from '../scopeRunner';
 
 export interface ChatProcess {

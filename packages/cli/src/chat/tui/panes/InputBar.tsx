@@ -8,7 +8,7 @@ import {
 import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
 import { Effect, SubscriptionRef } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { attachClipboardImage } from '@cli/runtime/terminal/clipboardImage';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';

@@ -9,7 +9,7 @@ import {
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { format } from 'node:util';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { normalizeFilePath } from '@texra-ai/worldline/schemas';
 
 import {
   app,
@@ -17,8 +17,8 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
-import { redactDiagnostics } from '@texra-ai/harness/host';
-import { setLogSink, type LogEntry } from '@texra-ai/harness/node';
+import { redactDiagnostics } from '@texra-ai/worldline/host';
+import { setLogSink, type LogEntry } from '@texra-ai/worldline/node';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 

@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/worldline/plugins';
 
 import { versionControlDiffStem } from '@latex/latexdiff/diffFileNameManager';
 import { PACKED_DIFFS_DIRECTORY } from '@texra/common/files/fileHandlingRules';

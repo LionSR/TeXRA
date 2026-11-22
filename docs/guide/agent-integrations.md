@@ -5,22 +5,19 @@ import DelegatedStreamHero from '../.vitepress/components/DelegatedStreamHero.vu
 
 # Agent integrations
 
-TeXRA agents can delegate programming tasks—such as running numerical checks or writing figure scripts—to a local coding agent. Two integrations are supported:
+TeXRA's assistant can delegate programming tasks—such as running numerical checks or writing figure scripts—to a local coding agent. Two integrations are supported:
 
 - **OpenAI Codex**: a sandboxed coding agent on your ChatGPT Plus / Pro plan
-  (or an OpenAI API key). TeXRA agents reach it through the `codex` tool. A
-  Pro or Business plan also includes
-  [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
-  for an OpenAI API key, which TeXRA's own OpenAI models can use; Codex itself
-  does not draw on them.
+  (or an OpenAI API key). The assistant reaches it through the `codex` tool.
+  (ChatGPT Pro/Business plans also include monthly API credits for TeXRA's own
+  OpenAI models; see [Getting API keys](./installation.md#setting-up-api-keys).)
 - **Claude Code**: Anthropic's coding agent on your Claude Pro / Max plan
-  (or an Anthropic API key). TeXRA agents reach it through the `claude_code`
-  tool. A Max or Team plan also includes
-  [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)
-  for an Anthropic API key, which TeXRA's own Anthropic models can use.
+  (or an Anthropic API key). The assistant reaches it through the `claude_code`
+  tool. (Claude Max/Team plans also include monthly API credits for TeXRA's own
+  Anthropic models; see [Getting API keys](./installation.md#setting-up-api-keys).)
 
-Each one is set up from its own row on **Settings → Plugins**. When a
-TeXRA agent uses the tool, the work runs in a side panel on the Tasks view
+Each one is set up from its own row on **Settings → Plugins**. When the
+assistant uses the tool, the work runs in a side panel on the Tasks view
 that you can watch live. TeXRA carries on while the side agent
 works.
 
@@ -40,7 +37,7 @@ In the terminal client, `/plugins` lists the same integrations with their
 state and switches each one on or off. Install and sign in to each CLI with its
 own installer and sign-in command.
 
-Each integration's options live on its row and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → General → Approval**: the **Approval policy** select (Auto-approve, Ask, or Block; default Auto-approve). Under the default, agents call Codex or Claude Code without confirming each time. Set the policy to Ask to confirm each call; you can then approve all agent work for a task on its first request card. The child's own sandbox or permission mode follows that decision: a launch you approved runs Codex in `workspace-write` and Claude Code in `acceptEdits`; under Auto-approve or an all-agent-work grant it runs Codex with full access (`danger-full-access`) and Claude Code with every permission bypassed. Codex never stops to ask on its own.
+Each integration's options live on its row and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → General → Approval**: the **Approval policy** select (Auto-approve, Ask, or Block; default Auto-approve). Under the default, the assistant calls Codex or Claude Code without confirming each time. Set the policy to Ask to confirm each call; you can then approve all agent work for the task on its first request card. The child's own sandbox or permission mode follows that decision: a launch you approved runs Codex in `workspace-write` and Claude Code in `acceptEdits`; under Auto-approve or an all-agent-work grant it runs Codex with full access (`danger-full-access`) and Claude Code with every permission bypassed. Codex never stops to ask on its own.
 
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
@@ -100,9 +97,7 @@ running refuses another until that turn's result has been delivered.
 
 ## Running an integration
 
-Check which agents have the `codex` or `claude_code` tool enabled on the
-**Agents** tab (<wa-icon library="texra" name="robot"></wa-icon>), then prompt
-one of them:
+Turn the integration on under **Settings → Plugins**, then ask the assistant:
 
 > Use codex to sketch a minimal FastAPI server that returns a JSON healthcheck.
 
@@ -113,19 +108,18 @@ When the tool fires:
 1. A new stream tab opens on the Tasks view labelled `codex` or `claude_code`.
 2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>), all live.
 3. When the turn ends, the run shows **Completed**. Each call is one turn: to send a follow-up, the agent calls the tool again with the `thread_id` or `session_id` the result carried. Select <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop** to end a turn early.
-4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
+4. The result (final message and token cost) is handed back to the assistant (or helper agent) that asked for it, which then continues its own work.
 
-Both tools deliver their result as a follow-up message, so they are not available in a one-shot run such as `texra run`; there the agent delegates with `agent` instead.
+Both tools deliver their result as a follow-up message, so they are not available in a one-shot run such as `texra run`; there the assistant delegates to a helper agent instead.
 
 <DelegatedStreamHero />
 <p class="hero-caption">The delegated session streams live in its own Tasks view tab (reasoning, commands, file changes, and web searches), then shows <strong>Completed</strong> and hands its result back to the calling agent.</p>
 
 ## MCP servers
 
-TeXRA agents can call the tools of local [Model Context Protocol](https://modelcontextprotocol.io)
+TeXRA can call the tools of local [Model Context Protocol](https://modelcontextprotocol.io)
 servers. List them in `~/.texra/mcp.json`, in the same shape as Claude Code's
-`.mcp.json` (**Settings → Plugins → Open mcp.json** opens it, and the page lists
-each server with the agents that use it):
+`.mcp.json` (**Settings → Plugins → Open mcp.json** opens it):
 
 ```json
 {
@@ -149,15 +143,11 @@ that revision (the TypeScript SDK before 1.25, December 2025) does not start:
 the run's transcript names the server, the revision it answered and the one
 required, and says to update it. The rest of the run goes on without its tools.
 
-An agent gets a server's tools only when its YAML `tools:` list names them,
-either one by one as `mcp__<server>__<tool>` or all at once as
-`mcp__<server>__*`:
-
-```yaml
-tools:
-  - read_file
-  - mcp__notion__*
-```
+The MCP servers an [installed plugin](./texra-cli.md#plugins) carries are
+offered to the assistant while the plugin is enabled. A server listed only in
+`~/.texra/mcp.json` is offered to a run that names its tools
+(`mcp__<server>__<tool>`, or `mcp__<server>__*` for all of them); the
+assistant does not name any yet.
 
 - **Every call goes through shell-command approval.** The prompt shows the
   server, the tool and its arguments. It follows **Settings → General →

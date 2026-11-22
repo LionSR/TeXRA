@@ -52,7 +52,7 @@ export interface BoundModel extends Binding {
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
-  /** Bound for a text-only persona, with the model's whole output budget; a
+  /** Bound for a text-only run, with the model's whole output budget; a
    *  rebinding keeps it. */
   readonly textOnly: boolean;
   /** The ChatGPT plan the subscription's token names; display-only. */
@@ -83,7 +83,9 @@ export interface BindRequest {
   /** The routes the run declined, as its rows record them. */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   readonly textOnly: boolean;
-  readonly temperature: number;
+  /** The temperature of a call that must not be sampled (a helper's
+   *  one-shot text). A run names none: its model samples at its own. */
+  readonly temperature?: number;
 }
 
 /** Model access for one project's runs. */
@@ -102,7 +104,7 @@ export class ModelAccess extends Context.Service<
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<string | null, RouteUnavailable>;
   }
->()('@texra-ai/harness/ModelAccess') {}
+>()('@texra-ai/worldline/ModelAccess') {}
 
 /** The settings one binding reads; a subscription session that cannot be
  *  read already fails as its route. */

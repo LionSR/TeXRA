@@ -2,7 +2,7 @@
 // the harness's public entries, with its declarations in `index.d.ts`. Node
 // strips no types inside node_modules, so the package ships JavaScript.
 import { Effect, Schema } from 'effect';
-import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
+import { definePlugin, defineTool } from '@texra-ai/worldline/plugins';
 
 export const PLUGIN_ID = 'acme-notes';
 

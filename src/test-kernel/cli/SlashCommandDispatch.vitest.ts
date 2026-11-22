@@ -15,7 +15,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { scopeRunner } from '@cli/chat/scopeRunner';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SessionGraph, TestSession } from '@test/support/testKernel';
-import type { ApprovalPolicy, RunId } from '@texra-ai/harness/schemas';
+import type { ApprovalPolicy, RunId } from '@texra-ai/worldline/schemas';
 
 /**
  * The process stores the built-in commands and the slash context read, the

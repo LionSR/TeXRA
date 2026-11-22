@@ -13,14 +13,14 @@ import {
   apiKey,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
+import { Secrets, withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   executeCommand,
   homeDirectory,
   inheritedEnv,
-} from '@texra-ai/harness/node';
-import { meansAbsent } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/node';
+import { meansAbsent } from '@texra-ai/worldline/node';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'claudeAgent';

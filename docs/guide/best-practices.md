@@ -24,7 +24,7 @@ Explicitly protect macros, labels, theorem numbering, and settled sections:
 
 ### Separate content derivations from prose polishing
 
-Run derivation, proof, or literature tasks (`research`, `prover`, `lean`, or the Orchestrator) first. Once the technical claims and equations are settled, ask for a polish or a proofread of the finished `.tex` file (the `edit` program).
+Settle derivations, proofs, and the literature first (ask the assistant, or run the `derive`, `solve`, `search` or `prove` programs). Once the technical claims and equations are settled, ask for a polish or a proofread of the finished `.tex` file (the `edit` program).
 
 ## Model selection
 
@@ -34,7 +34,7 @@ Match model capability to task complexity: overpowered models waste money, under
 
 <p class="hero-caption">Find the row that matches your task, then pick one of the recommended model handles.</p>
 
-Read the [AI models](./models.md) for detailed comparisons.
+Read the [AI models guide](./models.md) for detailed comparisons.
 
 ## Project and LaTeX organization
 
@@ -48,7 +48,7 @@ project/
 └── .texra/
 ```
 
-- **Keep an `AGENTS.md` at the workspace root**: record project-wide notation conventions, custom macros, compilation commands, and forbidden edits so every agent session inherits them automatically.
+- **Keep an `AGENTS.md` at the workspace root**: record project-wide notation conventions, custom macros, compilation commands, and forbidden edits so every conversation inherits them automatically.
 - **Give a program only the files it needs**: the target `.tex` file as input and shared preamble or `.bib` files as context.
 - **Format before running `latexdiff`**: run `latexindent` or `tex-fmt` before comparing revisions so line-wrapping differences do not obscure prose edits.
 - **Archive milestone revisions**: use **Archive outputs to History** in the Tasks view menu to copy key revisions into `History/`, and delete stale run folders when no longer needed.
@@ -57,11 +57,11 @@ project/
 
 ### Staged approach
 
-A typical project moves through five stages, each owned by one or more agents or programs:
+A typical project moves through five stages, each suited to one or more programs or to the assistant itself:
 
 <StagedWorkflowHero />
 
-<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent or program best suited for it.</p>
+<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the program, or the assistant, best suited for it.</p>
 
 ### Quality assurance
 
@@ -76,5 +76,5 @@ Use [LaTeX Diff](./latex-diff.md) to visualize changes between versions.
 ## Next steps
 
 - [Configuration](/guide/configuration): Customize TeXRA
-- [Custom agents](/guide/custom-agents): Create specialized agents
+- [Tailoring TeXRA](/guide/customizing): Project instructions, skills, plugins and your own programs
 - [Intelligent Merge](/guide/intelligent-merge): Merge document versions

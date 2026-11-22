@@ -13,8 +13,8 @@
  *    read ends without waiting for the resumed one.
  */
 import { Effect, Layer, Option, Stream } from 'effect';
-import { responseText, Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { responseText, Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 
 import { EXAMPLE_CLIENT, makeExampleWorkspace } from './_support.ts';
 
@@ -28,12 +28,9 @@ const program = Effect.gen(function* () {
   const session = yield* sessions.open(platform.roots, { persistent: true });
 
   const run1 = yield* session.start({
-    agent: {
-      name: 'section_drafter',
-      description: 'Drafts paper sections.',
-      prompt: 'Draft the requested section concisely.',
-      tools: ['read_file'],
-    },
+    label: 'section_drafter',
+    system: 'Draft the requested section concisely.',
+    tools: ['read_file'],
     instruction: 'Draft section 1.',
     model: route.model,
     interactive: true,

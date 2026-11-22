@@ -17,9 +17,9 @@
  * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
  */
 
-import { Effect, Result, Schema } from 'effect';
+import { Duration, Effect, Result, Schema } from 'effect';
 
-import { ToolContext } from '@texra-ai/harness/plugins';
+import { ToolContext } from '@texra-ai/worldline/plugins';
 import {
   ChildRuns,
   type RunInbox,
@@ -31,8 +31,8 @@ import {
   type ToolResult,
   Secrets,
   optionalInput,
-} from '@texra-ai/harness/plugins';
-import { formatResultCount, type RunId } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/plugins';
+import { formatResultCount, type RunId } from '@texra-ai/worldline/schemas';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -58,7 +58,7 @@ import {
   currentBranch,
   originDefaultBranch,
   originUrl,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { GhIssueSchema } from './prTypes';
 
@@ -488,7 +488,7 @@ export const GitHubSubscriptionTool = defineTool({
     '- list: list active subscriptions on this run.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
     'Bot-authored events are dropped end-to-end by policy.',
-    `Caps: ${MAX_SUBSCRIPTIONS.pull} concurrent PR subscriptions, ${MAX_SUBSCRIPTIONS.issue} concurrent issue subscriptions, ${MAX_SUBSCRIPTIONS.repo} concurrent repo subscriptions per process. Poll interval ≈ ${GITHUB_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it via /config → GitHub token (CLI), Settings → General (VS Code / desktop), or GITHUB_TOKEN / GH_TOKEN.`,
+    `Caps: ${MAX_SUBSCRIPTIONS.pull} concurrent PR subscriptions, ${MAX_SUBSCRIPTIONS.issue} concurrent issue subscriptions, ${MAX_SUBSCRIPTIONS.repo} concurrent repo subscriptions per process. Poll interval ≈ ${Duration.format(Duration.millis(GITHUB_POLL_INTERVAL_MS))}. Requires a GitHub token: set it via /config → GitHub token (CLI), Settings → General (VS Code / desktop), or GITHUB_TOKEN / GH_TOKEN.`,
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
   execute: Effect.fn('githubSubscriptionTool.execute')(function* (

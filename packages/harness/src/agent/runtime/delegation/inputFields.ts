@@ -100,21 +100,6 @@ export function withToolUseSubagentHandoffInstruction(
   return parts.join('\n\n');
 }
 
-/** An agent an `agent` call defines instead of naming one from the
- *  catalog, named by its `agentName`. */
-export const personaField = optionalInput(
-  Schema.Struct({
-    prompt: Schema.NonEmptyString.annotate({
-      description: 'Its system prompt: who it is and how it works.',
-    }),
-    tools: optionalInput(
-      Schema.Array(Schema.NonEmptyString),
-      'The tools it gets, by name; omitted, none. It gets only those you have.',
-    ),
-  }),
-  'Define the agent here, named `agentName`, instead of naming one from the catalog: for this call alone.',
-);
-
 /**
  * Shared field for the `working_directory` parameter on delegation tools.
  * Validates and normalizes in one step so downstream code always receives the
@@ -161,7 +146,10 @@ export const CHILD_FIELDS = Object.freeze({
     Schema.String,
     'Model reference, `@effort` suffix allowed (`@low` … `@max`, `@none`). Defaults to your current model when available.',
   ),
-  label: optionalInput(Schema.String, 'A short title for the call’s card.'),
+  label: optionalInput(
+    Schema.String,
+    'A short name for the child: its card’s title and its run’s name.',
+  ),
   timeoutMs: timeoutMsField.annotate({
     description:
       'Stops the child after this many milliseconds: `TimedOut`. Only for a call that waits for its child.',

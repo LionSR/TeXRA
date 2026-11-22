@@ -8,7 +8,7 @@ import {
   type Plan,
   type RequestDecision,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports

@@ -5,7 +5,7 @@ import {
   RunIdSchema,
   AgentConfigSchema,
   runBypasses,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { activationRows, registerRun } from '@agent/storage/runLifecycle';
@@ -15,7 +15,6 @@ import {
   SessionViewAccess,
   Approvals,
 } from '@shared/session/runHistory';
-import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -33,22 +32,8 @@ const tempDirs = useTempDirs();
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'AgentLaunchContext',
   (it) => {
-    // The built-in agents are the bundled personas: a launch resolves its
-    // agent, or misses, against the catalog a real host scans.
     it.layer(
-      FakeHost.layer(async () => {
-        const host = await createTempDirPlatform('texra-launch-', tempDirs);
-        return {
-          ...host,
-          platform: {
-            ...host.platform,
-            agentDirectories: {
-              ...host.platform.agentDirectories,
-              builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-            },
-          },
-        };
-      }),
+      FakeHost.layer(() => createTempDirPlatform('texra-launch-', tempDirs)),
       { buildPerTest: true },
     )((it) => {
       it.effect(
@@ -61,7 +46,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // on without a human re-arming it.
             const session = yield* isolatedTestSession();
             const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-              agent: 'chat',
+              label: 'chat',
               model: 'openai/gpt-5.5-2026-04-23',
             });
             yield* registerRun(EXECUTION_ID, config, {

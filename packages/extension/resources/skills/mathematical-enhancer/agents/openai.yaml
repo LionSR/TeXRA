@@ -1,4 +1,0 @@
-interface:
-  display_name: 'Mathematical Enhancer'
-  short_description: "Strengthen a paper's mathematics"
-  default_prompt: 'Use $mathematical-enhancer to improve the mathematical substance of this paper and annotate harder extensions separately.'

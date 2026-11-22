@@ -7,10 +7,9 @@ import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStac
 
 # TeXRA CLI
 
-The TeXRA CLI brings TeXRA's theorist agents to the terminal: a local `texra`
-command for chatting with an agent, running long autonomous attempts at a
-problem, delegating to specialist agents, and running document workflows over
-your project. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
+The TeXRA CLI brings TeXRA's assistant to the terminal: a local `texra`
+command for chatting with it, running long autonomous attempts at a problem,
+and running [programs](./programs.md) over your project. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
 
 ## Install
 
@@ -32,19 +31,17 @@ Verify the command:
 ```bash
 texra --help
 texra version
-texra agents list
 texra config
 ```
 
 Run `texra` with no model connected and the chat still opens, with a
 **Connect a model** panel in front: sign in with a ChatGPT or Grok
 subscription, or add a provider API key. A message typed before you connect
-is sent as soon as you do. The chat starts on the default agent; `/agent`
-picks another until your first message in any new chat.
+is sent as soon as you do.
 
 For a guided first run, use `texra setup`. It walks you through sign-in
 (a ChatGPT or Grok subscription, or an API key), checks your
-environment, shows your agents, and starts your first task:
+environment, and starts your first task:
 
 ```bash
 texra setup
@@ -57,13 +54,17 @@ first, by URL, git URL, or 24-character project id:
 texra clone <project> ./project
 ```
 
-## Running agents
+## Running programs
 
-`texra run` takes a program or an agent. A [program](./built-in-agents.md#programs)
-(`edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`,
-`poster`) revises or creates documents from `--input` files; the Lean programs
-`prove` and `blueprint` work on a Lean project's files in place. Run one from a
-project directory:
+`texra run <program>` runs one of the [programs](./programs.md) over `--input`
+files, without a chat. The document programs (`edit`, `annotate`, `enhance`,
+`apply`, `merge`, `transcribe`, `slides`, `poster`) revise or create
+documents; the task programs (`review`, `search`, `derive`, `code`,
+`review-code`, `simplify`, `test`, `experiment`, `solve`, `fix-latex`,
+`latexdiff`) answer with a report; the Lean programs `prove`,
+`lean-simplify` and `blueprint` work on a Lean project's files in place, and
+`lean-search` reports what Mathlib and the project already have. Every program needs at least one
+`--input`. Run one from a project directory:
 
 ```bash
 texra run edit --input paper.tex --instruction "Polish the prose" --output paper.polished.tex --print
@@ -82,7 +83,7 @@ texra run edit --input paper.tex --instruction "Polish the prose" --output paper
 
 The instruction says what the program should do: how far `edit` goes (with no
 instruction it proofreads), which point of view `annotate` reads from, what
-`enhance` looks at. Pass it with `--instruction <text>` or
+`review` should check. Pass it with `--instruction <text>` or
 `--instruction-file <file>`. When both are set, the file contents are passed
 first:
 
@@ -126,7 +127,7 @@ Programs always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in
 run storage. A program that generates no document, such as `prove`, prints its
-final reply instead.
+final reply instead, as does a task program such as `review`.
 
 With `--output`, TeXRA also copies the final artifact to the requested
 filesystem destination. JSON and NDJSON output keep `output.documents.outputs[]` as the
@@ -147,27 +148,30 @@ switched on or off; the run records each change in its history.
 
 Every `--output-format ndjson` line is one JSON object whose first key is
 `kind`, followed by the record's own fields, a `ts` timestamp, and
-`contract: 3`, the version of this contract. Version 3 is the 1.0 contract:
+`contract: 3` (the 1.0 contract version):
 
-- `kind: "progress"` records carry a session event verbatim. `event` is the
+- `kind: "progress"` carries a session event verbatim, with `event` set to the
   event's `type` (`run.start`, `run.activate`, `run.end`, `usage`, `stage.start`,
-  `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
-  the rest of the event under its own field names. A `usage` event is one
-  priced model turn, so a run's spend is the sum of its `usage` events. A
-  run's events name it through `payload.aggregateId`, its run id (an
-  event a plugin owns carries the plugin's key behind `plugin:` instead); a
-  parent edge is `payload.parent` on `run.start`; the terminal fact is
-  `run.end` with its `outcome`. A run's turns are its `run.position`
-  events (`turn.begin`, `turn.end`); a `stage.start`/`stage.end` pair is a
-  labelled span inside one, such as a plugin's section, and a stage still
-  open when its run ends closes with that `run.end`. A script's calls are
-  the `tool.start` cards whose `stageId` is the `logId` of the `script`
-  card that issued them, which closes with its own `tool.end`. One record with no session event behind it,
-  `event: "run.children"`, reports a parent run's live children as
-  `{ runId, children }`, each child carrying its `childRunId`, `identity`,
-  `agentName`, and `status` — where its loop stands: `running`,
-  `waiting`, or `ready` before the child's first activation. A child that reached a terminal outcome leaves the
-  list; its `run.end` record carries the outcome.
+  `tool.start`, `run.description`, `run.removed`, and so on) and `payload`
+  holding the remaining fields:
+  - **Identity & outcomes:** Run events identify their run via
+    `payload.aggregateId` (plugin-owned events use a `plugin:` key instead).
+    Parent edges appear on `run.start` as `payload.parent`; terminal outcomes
+    appear on `run.end` as `outcome`.
+  - **Spend:** Each `usage` event represents one priced model turn, so total
+    run spend is the sum of its `usage` events.
+  - **Turns, stages & scripts:** Run turns appear as `run.position` events
+    (`turn.begin`, `turn.end`). A `stage.start`/`stage.end` pair marks a
+    labelled span (such as a script section); any stage still open when the run
+    ends closes with `run.end`. Tool calls made inside a script carry a
+    `stageId` matching the enclosing `script` card's `logId`, which closes with
+    its own `tool.end`.
+  - **Live children (`event: "run.children"`):** The one synthetic progress event (no
+    underlying session row) reports a parent's active children as
+    `{ runId, children }`, where each entry carries `childRunId`, `identity`,
+    `agentName`, and `status` (`running`, `waiting`, or `ready` before first
+    activation). Completed children leave this list and report their outcome on
+    `run.end`.
 - `kind: "agent-result"` and `kind: "result"` carry the run result described
   above under `result`, with `runId`.
 - History records (`history-entry`, `history-detail`) carry the run's
@@ -178,7 +182,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 ## Authentication
 
 Model calls run on your own provider API keys, or on a provider subscription
-you already pay for. There is no TeXRA account: every agent ships bundled.
+you already pay for. There is no TeXRA account: everything ships bundled.
 
 **Bring your own provider keys.** Set the environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
@@ -189,11 +193,9 @@ export ANTHROPIC_API_KEY=sk-…
 texra run edit --input paper.tex
 ```
 
-A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
-Anthropic API key can spend once you link a Console organization to the plan.
-A ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
-that an OpenAI API key can spend once you claim them for an API organization
-you own.
+Claude Max/Team and ChatGPT Pro/Business plans also include monthly API credits
+that a standard Anthropic or OpenAI API key can spend; see
+[Getting API keys](./installation.md#setting-up-api-keys).
 
 A project's `.env` file is read by every task of that project. A key set
 only in this terminal (`OPENAI_API_KEY=… texra chat`) travels with the
@@ -250,17 +252,18 @@ models the CLI can reach with the current credentials.
 `texra chat` opens an interactive chat in the terminal. It streams
 reasoning, tool calls, and diffs, and writes to the same run history as the VS
 Code extension. Running bare `texra` in a terminal opens this same session.
+While a run is working, pressing `Enter` delivers your message at its next model
+step, while `Shift-Tab` holds it until the end of the current turn.
 
 <CliChatHero />
 
 <p class="hero-caption">A <code>texra chat</code> session streams reasoning and tool calls inline, shows diffs as the agent edits, and lists its key hints at the bottom.</p>
 
 ```bash
-texra chat                                      # default chat agent and model
-texra chat --agent research                     # pick the agent for the session
+texra chat                                      # default model
 texra chat --model deepseek/deepseek-flash@high # override the session model and effort
-# headless chat run for scripts and CI
-texra run review --input main.tex --instruction "Check the proof." --print
+# one headless answer for scripts and CI
+texra run chat --input main.tex --instruction "Check the proof of Lemma 2." --print
 ```
 
 Slash commands inside the session:
@@ -272,35 +275,27 @@ Slash commands inside the session:
 - `/skills`: list available skills and apply one to your next request.
 - `/resume`: restore a stored execution (`/resume all` continues every interrupted task).
 - `/rename <title>`: rename the focused task.
-- `/help`: list every slash command, including `/agent`, `/models`, `/key`, `/status`, `/plan`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
+- `/help`: list every slash command, including `/models`, `/key`, `/status`, `/plan`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
 - `/tasks`: list tasks running in the [background service](#background-service) across every project. Picking one attaches to it live: Enter sends a follow-up, approval requests appear inline, and Esc detaches while the task keeps running.
 
-`texra chat` requires an interactive terminal. For scripts and CI, use `texra run <program | agent>` with `--print` or `--output-format json|ndjson`:
+`texra chat` requires an interactive terminal. For scripts and CI, use `texra run <program | chat>` with `--print` or `--output-format json|ndjson`:
 
-- An **agent** accepts `--input` and `--context` files plus a required instruction (`--instruction`, `--instruction-file`, or both).
-- A **program** runs over `--input` files (required), accepts `--output` / `--output-dir`, and writes versioned document outputs. A name that is neither a program nor an agent prints the program names.
-- A bare agent name picks the highest-priority match (`custom`, then `builtIn`, then `plugin`); pass a qualified key such as `texra run builtIn:assistant` to target a specific source.
+- **`chat`** gives the assistant one instruction (`--instruction`, `--instruction-file`, or both; required) with optional `--input` and `--context` files, and prints its answer.
+- A **program** runs over `--input` files (required), accepts `--output` / `--output-dir`, and writes versioned document outputs. A name that is neither a program nor `chat` prints the program names.
 
-## Lead agents
+## Helper agents
 
-A lead agent plans the work and delegates to specialists: `orchestrator` for
-research projects, `leanOrchestrator` for Lean 4 projects, and `engineer` for
-a project's code. Start one like any other agent:
+For a larger job the assistant hands pieces of the work to helper agents it
+sets up for each piece, or starts programs, and can fan them out in parallel
+as a scripted [multi-agent workflow](./multi-agent-workflows.md):
 
 ```bash
-texra run engineer --instruction "Profile and speed up scripts/simulate.py" --print
-texra chat --agent engineer
+texra run chat --instruction "Profile scripts/simulate.py, then speed up its hot loops without changing its results" --print
 ```
-
-The lead delegates to the agents your workspace shows. For example, `engineer`
-hands work to `coder`, `codeReviewer`, `testEngineer`, and `codeSimplifier`.
-Pass `--input` and `--context` files as with any `texra run`. When the work
-splits cleanly, the lead can fan it out as a scripted
-[multi-agent workflow](./multi-agent-workflows.md).
 
 <CliSubagentsHero />
 
-<p class="hero-caption">A chat led by <code>engineer</code>. The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
+<p class="hero-caption">The assistant delegates while helper agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
 
 Focusing a subagent shows only its own transcript. Scroll back through its
 earlier output with normal terminal scrolling and search. Each subagent keeps
@@ -309,10 +304,10 @@ continues it where it left off.
 
 ## Skills
 
-Skills are reusable instruction folders the agent can apply to a request.
-Agents receive no skills until you turn on **Enable skills for agents**
+Skills are reusable instruction folders the assistant can apply to a request.
+It receives no skills until you turn on **Enable skills for agents**
 (`skills.enabled`) with `texra config edit`; `texra skills list` says so while
-it is off. List what's available, and pull in extra skill folders for any agent
+it is off. List what's available, and pull in extra skill folders for any
 run:
 
 ```bash
@@ -324,9 +319,10 @@ texra run edit --input paper.tex --source ~/my-skills
 The `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the
 workspace and in the home directory are the imported source group, off by
 default; enable it with the `skills.disabledSources` setting (`texra config
-edit`) or the Skills tab. When skills share a name,
-project and user skills take precedence over bundled ones. In chat, pick a
-skill with `/skills` to apply it to your next request.
+edit`) or the Skills section of **Settings → Agents**. The project's own
+skills live in `.texra/skills/`. When skills share a name, a `--source` folder
+wins, then the project's skills, then your own. In chat, pick a skill with
+`/skills` to apply it to your next request.
 
 ### Plugins
 
@@ -335,7 +331,12 @@ plugin's own manifest, `.claude-plugin/plugin.json` or
 `.codex-plugin/plugin.json`, and the folders beside it: skills from `skills/`,
 commands from `commands/`, agents from `agents/`, MCP servers from `.mcp.json`,
 plus any of these paths the manifest declares. A plugin can also carry
-[programs](#programs-in-a-plugin) for TeXRA in `programs/`.
+[programs](#programs-in-a-plugin) for TeXRA in `programs/` and a native
+`harness.mjs` entry that adds in-process tools, layers, or prompt sections once
+explicitly trusted at its file digest (loaded from a snapshot of the trusted
+files). In chat, `/plugins add` installs a plugin interactively, and the
+assistant can also list, install, or toggle plugins (always prompting you before
+trusting, disabling, or removing one) through the `plugin_manager` tool.
 
 ```bash
 texra plugin install github.com/LionSR/AgenticPublicationProtocol
@@ -353,13 +354,13 @@ texra plugin remove paper-protocol
 An installed plugin stays off until you enable it:
 
 - **Trust on enable**: `texra plugin enable` shows what the plugin declares (skills, commands, agents, and each MCP server's command line) and asks you to trust it. Trust covers that version, every file in the plugin folder, and the MCP servers' commands, arguments, and environment values. External binaries a server runs (such as `node`) are trusted by path, size, and modification time. If any covered file or setting changes, the plugin stops loading until you re-enable and re-trust it.
-- **Reserved names and unsupported features**: A plugin cannot be named `custom`, `builtIn`, or `plugin`. Plugins with LSP servers cannot be enabled yet; output styles and apps are not loaded.
+- **Names and unsupported features**: A plugin's name uses lowercase letters, digits and single hyphens, at most 32 characters, and cannot be `own`, which names the [programs an agent writes for itself](#programs-an-agent-writes-for-itself). Plugins with LSP servers cannot be enabled yet; output styles and apps are not loaded.
 - **Hooks**: Claude Code hooks run as processes in the workspace. A `Stop` hook that blocks (`decision: "block"`, or exit code 2) continues the run for one extra turn using its reason as the next instruction, even under `texra run`. The stop after that turn passes `stop_hook_active: true` and cannot block again.
 
 Once enabled and trusted, a plugin's components load under its namespace:
 
 - **Names**: Skills, commands, agents and programs become `<plugin>:<name>`, and MCP tools are offered to top-level chat runs as `mcp__plugin_<plugin>_<server>__<tool>`.
-- **Tool inheritance**: A plugin agent that lists `tools` receives only those. One that omits `tools` inherits its parent's offered tools (for a subagent) or the file, shell, web, and enabled plugin tools (for a top-level run). A subagent never receives more tools than its parent.
+- **Tool inheritance**: The assistant starts a plugin agent by name with the `agent` tool. One that lists `tools` receives exactly those. One that omits `tools` receives the file, shell and web tools and, as a top-level run does, the tools the enabled plugins add, including installed plugins' MCP tools.
 - **Runtime changes**: Each MCP server runs as its own process in the plugin folder, with tool calls approved like shell commands. Enabling, disabling, or modifying a plugin takes effect at the next model request in a running conversation; calls to removed tools are refused, while earlier history is preserved.
 
 Fetched plugins are stored in `~/.texra/v1/global-storage/plugins/<name>/`, pinned to the resolved commit. `texra plugin update` re-fetches the branch or tag and pins the new commit. Local folders are used in place without copying, so edits take effect immediately and `texra plugin remove` only unregisters them (if removing a fetched plugin fails to delete its folder, run `texra plugin remove` again).
@@ -398,19 +399,19 @@ texra plugin enable my-programs
 texra run my-programs:todo-list --input paper.tex
 ```
 
-- **The two declarations**: the file must begin with `export const description = '...';` (one line, at most 300 characters) and `export const uses = ['...'];`, in either order, each a quoted literal ending in `;`, with only comments before and between them. `uses` names the tools the program's run is offered. TeXRA reads both from the text of the file and never runs the file to find them, so a computed value, a template string or code before them refuses that file by name; the plugin's other programs still load. (The list is not called `tools`: inside the program, `tools.read_file(...)` calls a tool, and a `tools` of your own would hide it.)
-- **The program**: the default export is `async (args, launch) => result`, where `launch` holds the `instruction` and the `inputFiles`, `contextFiles` and `mediaFiles` it was started with. What it returns is its answer. It runs in the same sandbox as a script a model writes: no filesystem, network, timers or `Date.now()`, only the tools `uses` names (`tools.<name>(...)`, and `agent(...)`, `program(...)` when listed). It can `import` the built-in modules and the other programs of enabled plugins by name.
-- **Naming**: the file name is the program's name: lowercase letters, digits and hyphens. TeXRA follows no symbolic link in `programs/`.
-- **Trust**: `texra plugin enable` lists each program with its description and tools, and each file it refused. A program acts only through the tools it lists. Unlike a built-in program's, those tools are withheld while their plugin is switched off. A call that needs approval (a shell command, an edit) is decided by the approval policy as for an agent; the agents and programs it starts are not asked about one by one. `texra run` refuses a name that is both a program and an agent of the plugin. Editing any file in the plugin, a program included, withdraws every program of the plugin until you enable it again.
-- **Where it shows**: `texra plugin list` and **Settings → Plugins** name a plugin's programs, `texra run <plugin>:<name>` starts one, and an agent that can start programs is told of it with the built-in ones.
+- **Header declarations:** Each file must begin with `export const description = '...';` (single line, at most 300 characters) and `export const uses = ['...'];`, in either order. Both must be quoted literals ending in `;`, with only comments before or between them. TeXRA parses them statically without executing the file; a computed value, template string, or leading statement causes that file to be rejected while the plugin's other programs still load. (`uses` is named so it never shadows the `tools` object inside the sandbox.)
+- **Program body:** The default export is `async (args, launch) => result`, where `launch` carries `instruction`, `inputFiles`, `contextFiles`, and `mediaFiles`, and the return value becomes the program's output. It runs in the same QuickJS sandbox as a model-written script—no filesystem, network, timers, or `Date.now()`, only the tools named in `uses` (`tools.<name>(...)`, plus `agent(...)` and `program(...)` when listed). It may also `import` built-in modules and programs from enabled plugins.
+- **Naming:** The filename is the program name (lowercase letters, digits, and hyphens). TeXRA does not follow symbolic links inside `programs/`.
+- **Trust and approvals:** `texra plugin enable` lists each program with its description, declared tools, and any rejected files. A program can only invoke the tools in `uses`, and unlike built-in programs, those tools are withheld while their owning plugin is off. Individual calls that require approval (shell commands, file edits) follow your approval policy, while agents and programs launched by a trusted plugin program are not re-prompted one by one. Editing any file in the plugin withdraws all of its programs until you re-enable and re-trust it.
+- **Discovery:** `texra plugin list` and **Settings → Plugins** list a plugin's programs; `texra run <plugin>:<name>` starts one directly, and the assistant sees it alongside the built-in programs.
 
 #### Programs an agent writes for itself
 
-An agent can also write a program for itself. A file it writes at `programs/<name>.js` in the project's memory folder is the program `own:<name>` from its next step, with no restart and nothing to install, and it stays for later conversations in the same project. The file has the form of a plugin's program: the two declarations, then the default export. `texra run own:<name> --input paper.tex` starts it too.
+The assistant can also author reusable project programs. Any file it writes at `programs/<name>.js` in the project's memory folder becomes available as `own:<name>` on the next step—no restart or installation needed—and persists across conversations in the same project. It uses the same header declarations and default export as a plugin program, and can also be started directly with `texra run own:<name> --input paper.tex`.
 
-- **Where it lives**: in the project's [memory](./memory.md), beside the notes agents save, not in the repository, so a cloned project brings none. The Memory tab's **Open this project's memory folder** shows the files; delete one to remove its program. Programs load whether or not memory is enabled for chat agents: that setting decides only whether a chat is given the memory folders and shown their indexes.
-- **Trust**: nobody reviews such a program, because it can do nothing the agent could not do itself. It runs in the script sandbox, is offered only the tools it lists, and those tools follow your plugin switches and approval policy. Unlike a plugin's program, each agent or program it starts is asked about, as one a model's script starts is; where no approval prompt can show (`--approval-policy never`), the tools that ask are withheld from it. No plugin can be named `own`.
-- **Listing**: an agent that can start programs is told of the first 20 of them by name; the others still start by name. A file that does not begin with the two declarations is refused by name, and the others load.
+- **Storage:** These files live in project [memory](./memory.md) alongside saved notes, not in your repository, so cloning a repo never brings them in. The Memory tab's **Open this project's memory folder** reveals the files; delete one to remove its program. Self-written programs load even when memory is switched off (that setting controls only whether a chat gets the memory folders and their indexes).
+- **Trust and approvals:** Self-written programs run in the same sandbox with only the tools listed in `uses`, subject to plugin switches and your approval policy. Unlike plugin programs, every helper agent or nested program they start still prompts for approval (and under `--approval-policy never`, tools that require approval are withheld). No plugin may use the reserved name `own`.
+- **Listing:** The first 20 self-written programs are listed to the assistant by name; any beyond that can still be invoked by name. Malformed files are rejected individually without blocking the rest.
 
 ## Shell completion
 
@@ -424,10 +425,10 @@ texra completion fish > ~/.config/fish/completions/texra.fish
 
 Restart the shell, or source the file you updated. Completion includes
 subcommands, flags, enum values such as `--output-format text|json|ndjson`,
-agent names for `texra run <TAB>`, and model names for `--model <TAB>`.
+and model names for `--model <TAB>`.
 
-Agent and model completion call back into `texra agents list` and
-`texra models list`. Disable those dynamic lookups in slow shells with:
+Model completion calls back into `texra models list`. Disable that dynamic
+lookup in slow shells with:
 
 ```bash
 export TEXRA_COMPLETION_DYNAMIC=0
@@ -443,11 +444,14 @@ texra history list --limit 10        # only the most recent runs (alias: -n)
 texra history list --output-format ndjson
 ```
 
-Text output prints one tab-separated row per run:
+Text output prints one tab-separated row per run, with no header line:
 
 ```text
-<id>    <timestamp>    <agent>    <status>    <primary input>
+<id>    <timestamp>    <name>    <status>    <subject>
 ```
+
+The name is the run's label (a program's name, or the chat's), and the
+subject is its first input file's name, else its title, else `-`.
 
 The NDJSON form is stable for scripts under the version 3 contract above.
 Each line has kind `history-entry` and contains the same run entry object used
@@ -464,29 +468,23 @@ Inspect or delete one run:
 ```bash
 texra history show <id>
 texra history delete <id>
+texra doctor --prune-storage   # review and remove orphaned project stores and corrupt backups
 ```
 
-Continue a stored session, on the saved agent and model:
+Continue a stored session, on its saved model:
 
 ```bash
 texra resume <id>
 texra --resume <id>
 ```
 
-A chat reopens in the interactive chat and waits for your next
-message, so without a terminal it exits with a usage error that points
-scripting at `texra run`. A task `texra run` started for an agent
-runs once and takes no messages: once it has ended, `texra resume`
-exits with code 2 and points you to `texra history show <id>` or
-`texra resume <id> --fork`; one stopped mid-turn resumes in the chat to finish
-that turn. A program run resumes headless under its original
-execution id and honors the headless globals (`--print`, `--output-format`,
-`--no-input`). A resumed task keeps the approval policy it was launched with:
-an `--approval-policy` you pass is reported as not applying (a chat's new
-messages take it). The interactive chat also accepts `/resume`: with no id it
-lists recent tasks by title, with an id it continues that task, and
-`/resume all` continues every interrupted one. `/rename <title>` gives the
-focused task your own title. A missing or malformed id exits with code 2.
+How `texra resume` handles each kind of run:
+
+- **Interactive chats:** Reopens in the interactive chat UI and waits for your next message. Without a TTY, it exits with a usage error pointing scripts at `texra run`.
+- **One-shot `texra run chat` tasks:** If stopped mid-turn, resumes in chat to finish that turn. Once ended, `texra resume` exits with code 2 and suggests `texra history show <id>` or `texra resume <id> --fork`.
+- **Program runs:** Resumes headlessly under the original execution ID and honors `--print`, `--output-format`, and `--no-input`.
+- **Approval policy:** A resumed run keeps its original approval policy (passing `--approval-policy` prints a notice that it does not apply to the resumed turn, though new messages in chat use it).
+- **In-chat commands:** Inside `texra chat`, `/resume` lists recent tasks by title, `/resume <id>` continues one, `/resume all` continues every interrupted task, and `/rename <title>` renames the focused task. A missing or malformed ID exits with code 2.
 
 Fork a conversation as you continue it:
 
@@ -503,9 +501,9 @@ so it needs a terminal, and a program run cannot be forked.
 
 When `texra chat` opens, nothing resumes on its own: the tasks a closed or
 crashed TeXRA stopped mid-way sit in the agent list (Tab) as interrupted.
-`/resume all` continues them and `/resume` picks one; a task whose agent is
-missing, or comes from a plugin that is off or not trusted, says so when
-resumed and stays interrupted until that is fixed. `texra run` never resumes
+`/resume all` continues them and `/resume` picks one; a task that needs a
+plugin that is off or not trusted says so when resumed and stays interrupted
+until that is fixed. `texra run` never resumes
 anything either.
 
 A run another TeXRA process still holds is refused, and the message names
@@ -515,7 +513,8 @@ are sure it is gone, delete the run from history and start a new one.
 
 ## Background service
 
-One TeXRA service per user and machine runs tasks for every terminal.
+The CLI, VS Code extension, and desktop app share one local task service
+when they use the same storage root.
 It starts on its own the first time a chat or a `texra tasks` command needs
 it, keeps running the tasks it started when the terminal that started them
 closes, and exits after ten minutes with no client connected and no task
@@ -541,7 +540,7 @@ tasks through it (`texra history`, `texra resume`, the chat's `/resume` and
 
 ```bash
 texra tasks list                                   # every project's tasks, newest first
-texra tasks start <agent> --instruction "<text>"   # start an agent in the service; prints its id
+texra tasks start --instruction "<text>"           # start a task in the service; prints its id
 texra tasks attach <id>                            # follow it live until it ends
 texra tasks send <id> "<text>"                     # send it a follow-up
 texra tasks stop <id>                              # stop it; it can be resumed later
@@ -575,7 +574,12 @@ texra serve             # run it in the foreground, logging to stderr
 The service listens on a socket in `~/.texra/run/` that only your user can
 open, and writes its log to `~/.texra/run/serve.log`. A newer TeXRA that
 finds an older service asks it to finish its running tasks and exit, and
-starts its own beside it. The service takes its environment (`PATH`,
+starts its own once the old one exits. An already-open tab or window
+reconnects automatically when it finds a compatible service. If the
+replacement speaks a different protocol, the tab leaves it running and
+asks you to reopen the CLI or reload the window with the updated build.
+
+The service takes its environment (`PATH`,
 provider keys) from your login shell, not from the terminal or window that
 happened to start it, so `latexmk` and `git` are found the same way from
 every window; it logs the `PATH` it uses. The provider keys a terminal or
@@ -597,7 +601,7 @@ on or off. Plugins you install yourself are also managed from the shell with
 ## Models and memories
 
 List the models TeXRA knows about, and manage which ones appear in the
-`/model` picker and the lead-model picker:
+model pickers:
 
 ```bash
 texra models list
@@ -609,27 +613,8 @@ texra models disable xai/grok-4.7
 
 ## Workspace defaults
 
-Run `texra config` in a terminal, or `/config` in a chat, to open the same
-configuration view. Its **Agents** section has two distinct choices:
-
-- **Workspace agents** controls which agents are available in the current
-  folder: every agent (**All agents**), or an exact **Custom selection**.
-- **Default chat agent** is the root agent selected for new chats in this
-  workspace. It is stored under `texra.chat` in `.texra/config.json` and does
-  not change which agents are visible.
-
-The corresponding non-interactive interface is `texra config agents`:
-
-```bash
-texra config agents                               # inspect the workspace agents
-texra config agents --agents all                  # make every agent visible in this folder
-texra config agents --agents assistant,research,review
-texra config agents --default-agent builtIn:assistant   # or `none` for the automatic default
-```
-
-`texra agents list` keeps a narrower responsibility: it inspects agents, but
-does not alter the workspace agents. `texra init` writes initial command
-defaults and likewise does not change agent visibility.
+Run `texra config` in a terminal, or `/config` in a chat, to open the
+configuration view; `texra config show` prints the settings for scripts.
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
 current workspace. Scaffold one with `texra init` (add `--yes` to accept
@@ -648,7 +633,6 @@ overrides built-in defaults.
   "texra.model": "deepseek/deepseek-v4-pro",
   "texra.outputFormat": "text",
   "texra.chat": {
-    "agent": "assistant",
     "model": "deepseek/deepseek-v4-pro"
   },
   "texra.run": {
@@ -657,10 +641,9 @@ overrides built-in defaults.
 }
 ```
 
-Supported top-level keys are `texra.agent`, `texra.model`, and
-`texra.outputFormat`; `texra.chat` may set command-specific `agent` and
-`model` defaults, and `texra.run` a `model` default (`texra run` takes its
-agent as an argument). Shared TeXRA settings
+Supported top-level keys are `texra.model` and `texra.outputFormat`;
+`texra.chat` and `texra.run` may each set a command-specific `model`
+default. Shared TeXRA settings
 the CLI honors, such as `texra.telemetry.enabled` (which a project file can
 only turn off), are also accepted. The
 built-in CLI model default is `deepseek/deepseek-v4-pro`.
@@ -671,7 +654,7 @@ it with `/config` or the settings view: it is kept in your own storage for the
 current workspace, and a value in your user configuration file is the default
 for every workspace. A project file that sets it is ignored and `texra doctor` reports the key.
 
-The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
+The corresponding environment variables are `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. The approval policy a
 command asks for (`--approval-policy` or `TEXRA_APPROVAL_POLICY`) does not
 replace the stored one: it can

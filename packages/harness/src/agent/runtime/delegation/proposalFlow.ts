@@ -9,19 +9,10 @@
 import { Context, type Deferred, Effect, Exit } from 'effect';
 
 // Local imports
-import {
-  findAgentByIdentifier,
-  type WorkspaceAgentsStores,
-} from '@agent/index/agentCatalog';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { recordedDecision } from '@agent/runtime/requests';
-import {
-  programOf,
-  programOrigin,
-  ToolError,
-  type ProgramOrigin,
-} from '@shared/schemas';
+import { programOf, programOrigin, type ProgramOrigin } from '@shared/schemas';
 import type {
   AgentProposal,
   DecisionOf,
@@ -39,10 +30,7 @@ import { Approvals, type RunHistoryRefused } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  delegationAgents,
-  selectAvailableDelegationModel,
-} from './delegationAvailability';
+import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
 import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
@@ -53,27 +41,9 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
 
-/** Resolve `name` from the agents `run` may launch, listing them on
- *  failure. */
-export const requireAgent = Effect.fn('requireAgent')(function* (
-  stores: WorkspaceAgentsStores,
-  name: string,
-  run: Pick<RunToolCall['run'], 'config'>,
-) {
-  const agents = yield* delegationAgents(
-    stores,
-    run.config.delegationAgentScope,
-  );
-  const agent = findAgentByIdentifier(agents, name);
-  if (agent) return agent;
-  return yield* new ToolError(
-    `Unknown agent '${name}'. Available: ${agents.map((a) => a.name).join(', ') || 'none'}`,
-  );
-});
-
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(proposal: AgentProposal): string {
-  const parts = [`Agent: ${proposal.agent}`, `Model: ${proposal.model}`];
+  const parts = [`Agent: ${proposal.label}`, `Model: ${proposal.model}`];
   if (proposal.inputFiles[0]) {
     parts.push(`File: ${proposal.inputFiles[0]}`);
   }
@@ -88,7 +58,7 @@ function proposalRefusalResult(
   refusal: RefusalDecision,
   proposal: AgentProposal,
 ): ToolResult {
-  const { agent: agentName } = proposal;
+  const { label: agentName } = proposal;
   const echo = summarizeProposal(proposal);
   switch (refusal.action) {
     case 'cancel': {
@@ -138,7 +108,7 @@ type ProposalRequestError =
  *  (`ScriptScope.shared`): the `ask` {@link decideDelegation} takes. */
 export const AgentRequest = Context.Service<
   Deferred.Deferred<RequestDecision, ProposalRequestError>
->('@texra-ai/harness/agent/AgentRequest');
+>('@texra-ai/worldline/agent/AgentRequest');
 
 /** How a child records an approval the run's delegated-work grant gave. */
 const GRANTED_CHILD = {
@@ -201,8 +171,8 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   },
 );
 
-/** The fields an approval changed from the proposal, other than its agent
- *  and model: the instruction and the file lists. */
+/** The fields an approval changed from the proposal, other than its
+ *  model: the instruction and the file lists. */
 function formEdits(
   proposal: AgentProposal,
   edit: ProposalEdit,
@@ -231,19 +201,19 @@ function formEdits(
   };
 }
 
-/** How an approved delegation launches: the proposal with the agent and
- *  model the approval finished on, and how it was approved. */
+/** How an approved delegation launches: the proposal with the model the
+ *  approval finished on, and how it was approved. */
 interface ApprovedDelegation {
   readonly proposal: AgentProposal;
   readonly approvalMeta: ApprovalMeta;
 }
 
 /**
- * The proposal-or-bypass decision every delegation takes, and the agent and
- * model an approval changed, re-checked against the live lists: a declined
- * or unusable approval is the call's result, an approval is what launches.
- * A request the calls of one script share (`ask`) approves the script, not
- * one call's agent or model, so it changes neither.
+ * The proposal-or-bypass decision every delegation takes, and the model an
+ * approval changed, re-checked against the live list: a declined or
+ * unusable approval is the call's result, an approval is what launches. A
+ * request the calls of one script share (`ask`) approves the script, not
+ * one call's model, so it changes none.
  */
 export const decideDelegation = Effect.fn('decideDelegation')(function* (
   parent: RunToolCall,
@@ -290,32 +260,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     modelOverride = modelExit.value.model;
   }
 
-  const agentOverride =
-    edit?.agent && edit.agent !== proposal.agent ? edit.agent : undefined;
-  const resolvedAgentOverride = agentOverride
-    ? findAgentByIdentifier(
-        yield* delegationAgents(
-          parent.env.roots,
-          parent.run.config.delegationAgentScope,
-        ),
-        agentOverride,
-      )
-    : undefined;
-
-  // Re-validate against the current registry — between proposal display and
-  // approval the agent may have been removed/renamed, or the approval could
-  // carry a malformed value. Fail fast so the orchestrator sees the problem
-  // synchronously instead of after an async launch.
-  if (agentOverride && !resolvedAgentOverride) {
-    return errorResult(
-      `Cannot launch '${agentOverride}': it is not currently a visible agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
-      {
-        summary: `Approved agent override '${agentOverride}' is not available`,
-      },
-    );
-  }
-
-  // What the person changed in the launch form besides the agent and model.
+  // What the person changed in the launch form besides the model.
   // A changed input list drops the proposal's outputs: they were named for
   // its inputs, and a program names its own for the new ones.
   const edited = edit ? formEdits(proposal, edit) : {};
@@ -324,20 +269,11 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       ...proposal,
       ...edited,
       ...(modelOverride && { model: modelOverride }),
-      // Carry the override's resolved source alongside its name so launch
-      // pins the exact entry the re-validation just resolved.
-      ...(resolvedAgentOverride && {
-        agent: resolvedAgentOverride.name,
-        agentSource: { kind: resolvedAgentOverride.source },
-      }),
     },
     approvalMeta: {
       childApproval: 'inherit',
       ...(modelOverride && {
         model: { chosen: modelOverride, proposed: proposal.model },
-      }),
-      ...(agentOverride && {
-        agent: { chosen: agentOverride, proposed: proposal.agent },
       }),
     },
   } satisfies ApprovedDelegation;

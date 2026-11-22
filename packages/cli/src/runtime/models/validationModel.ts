@@ -25,8 +25,8 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@texra-ai/llm';
-import { ValidationModel } from '@texra-ai/harness/host';
-import { envVar } from '@texra-ai/harness/node';
+import { ValidationModel } from '@texra-ai/worldline/host';
+import { envVar } from '@texra-ai/worldline/node';
 
 // Local imports - component
 import {
@@ -35,6 +35,7 @@ import {
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH as SWITCH,
 } from './validationSwitch';
+import { GOLDEN_AGENTS } from './validationAgents';
 
 /** Which scripted conversations the model plays, as a turn reads them. */
 interface ValidationScenario {
@@ -54,8 +55,19 @@ const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 This document was produced by the internal TeXRA CLI validation model.
 `;
 
+/** The golden child as a call writes it: its system text, tools and name. */
+const GOLDEN_CHILD = Object.freeze({
+  system: GOLDEN_AGENTS.golden_child.system,
+  tools: GOLDEN_AGENTS.golden_child.tools,
+  label: GOLDEN_AGENTS.golden_child.label,
+});
+/** The same, as a script's `agent()` options write it (it names its own
+ *  label). */
+const GOLDEN_CHILD_OPTIONS = `system: ${JSON.stringify(GOLDEN_CHILD.system)}, tools: ${JSON.stringify(GOLDEN_CHILD.tools)}`;
+
 /** The validation fan-out: three structured `agent()` calls under one
- *  `Promise.allSettled`, each answered by the `prover` agent's schema. */
+ *  `Promise.allSettled`, each to a child the script writes, answered
+ *  by the call's schema. */
 const SCRIPT_FANOUT_VALIDATION_SOURCE = `const schema = {
   type: 'object',
   additionalProperties: false,
@@ -68,14 +80,14 @@ const SCRIPT_FANOUT_VALIDATION_SOURCE = `const schema = {
 }
 section('Solve')
 const results = await Promise.allSettled([
-  agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', label: 'Solve the Diophantine equation', schema }),
-  agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', label: 'Classify the matrix', schema }),
-  agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', label: 'Compute the stopping probability', schema }),
+  agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', system: 'Solve the problem and check the answer.', label: 'Solve the Diophantine equation', schema }),
+  agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', system: 'Solve the problem and check the answer.', label: 'Classify the matrix', schema }),
+  agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', system: 'Solve the problem and check the answer.', label: 'Compute the stopping probability', schema }),
 ])
 return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
 /** The golden store's script: finds the reading tool, a read and then a
- *  command, then an agent it defines (`persona`). The calls run one after
+ *  command, then a child it writes (`system`, `tools`). The calls run one after
  *  the other so their rows commit in one order and every generation of the
  *  store is the same; concurrent calls are the crash run's script. */
 const GOLDEN_SCRIPT_SOURCE = `section('Gather')
@@ -83,12 +95,12 @@ const [found] = await searchTools('read a file', { limit: 1 })
 const declaration = await describeTool(found.name)
 const notes = await tools[found.name]({ path: 'notes.tex' })
 const shell = await tools.bash({ command: 'echo gathered', description: 'Say gathered' })
-return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, defined: (await agent('Answer from the notes.', { agentName: 'golden_reader', label: 'Defined agent', persona: { prompt: 'GOLDEN-CHILD: answer the task.', tools: ['read_file', 'executions'] } })).response }`;
+return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, defined: (await agent('Answer from the notes.', { label: 'Defined agent', system: 'GOLDEN-CHILD: answer the task.', tools: ['read_file', 'executions'] })).response }`;
 
 /** The crash suite's background script: one awaited `agent()` call, whose
  *  child the background script run owns. */
 const GOLDEN_BACKGROUND_SOURCE = `section('Deliver')
-const child = await agent('Background child: answer.', { agentName: 'golden_child', label: 'Child' })
+const child = await agent('Background child: answer.', { ${GOLDEN_CHILD_OPTIONS}, label: 'Child' })
 return { delivered: child.response }`;
 
 /** The crash-point conformance run's script: a read and a command in one
@@ -99,7 +111,7 @@ const [notes, shell] = await Promise.all([
   tools.read_file({ path: 'notes.tex' }),
   tools.bash({ command: 'echo script >> effects.log', description: 'Record the script effect' }),
 ])
-const child = await agent('Answer the conformance child task.', { agentName: 'golden_child', label: 'Child' })
+const child = await agent('Answer the conformance child task.', { ${GOLDEN_CHILD_OPTIONS}, label: 'Child' })
 return { notes: notes.output, shell: shell.output, child: child.response }`;
 
 /** The limits run's script: a `self()` child held to a spend cap its first
@@ -129,7 +141,7 @@ export const description = 'Ask a child and report its answer.';
 export const uses = ['read_file', 'agent'];
 
 export default async () => {
-  const child = await agent('Own child: answer.', { agentName: 'golden_child', label: 'Own child' });
+  const child = await agent('Own child: answer.', { ${GOLDEN_CHILD_OPTIONS}, label: 'Own child' });
   return 'own program ran; child said: ' + child.response;
 };
 `;
@@ -341,7 +353,7 @@ function goldenTurn(
       results.length === 0
         ? [
             call('agent', {
-              agentName: 'golden_child',
+              ...GOLDEN_CHILD,
               prompt: 'Delivery child: answer.',
               background: true,
             }),
@@ -544,7 +556,7 @@ function goldenTurn(
     () => call('plan', { objective: 'Read the notes and ask a child.' }),
     () =>
       call('agent', {
-        agentName: 'golden_child',
+        ...GOLDEN_CHILD,
         prompt: 'Answer the delegated child task.',
       }),
   ];

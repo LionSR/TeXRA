@@ -1,4 +1,4 @@
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { ModelAccessStatus } from '@texra/controllers/modelAccess/modelAccessPreference';
 import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuthStatus';
 import {

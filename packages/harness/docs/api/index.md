@@ -1,8 +1,8 @@
-# `@texra-ai/harness`
+# `@texra-ai/worldline`
 
 <!-- Generated from `packages/harness/src/index.ts` by `npm run docgen`; do not edit. -->
 
-`@texra-ai/harness`: run an agent from a Node program, stated in Effect.
+`@texra-ai/worldline`: run an agent from a Node program, stated in Effect.
 
 > **Guide:** Read [Philosophy & Architecture](/api/) and
 > [Durable Protocol & Recovery](/api/durable-protocol) for how the runtime
@@ -15,7 +15,8 @@ What an embedder needs to know, in order:
    `harnessBuiltins` from `./builtins`, plus any plugin of your own;
    `client` names your app to the model providers (`{ name, id }`).
 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
-3. `session.start({ agent, instruction, model })` gives a {@link Run}: read
+3. `session.start({ system, tools, instruction, model })` gives a
+   {@link Run}: read
    `run.events` for its progress (`run.events.pipe(responseText)` for
    just the answer's text) and `run.result` for how it ended.
 4. `session.resume(runId)` continues a run a persistent session stored.
@@ -32,81 +33,20 @@ with the ones on `./schemas` (`RequestError`).
 
 ### Companion subpaths
 
-- [`@texra-ai/harness/schemas`](./schemas): browser-safe Effect Schemas, view
+- [`@texra-ai/worldline/schemas`](./schemas): browser-safe Effect Schemas, view
   types (`SessionView`, `RunView`, `TranscriptView`), and pure view queries.
-- [`@texra-ai/harness/transcript`](./transcript): browser-safe transcript row
+- [`@texra-ai/worldline/transcript`](./transcript): browser-safe transcript row
   projections and `RemoteSessionView` for UI renderers.
-- [`@texra-ai/harness/builtins`](./builtins): the built-in plugins
+- [`@texra-ai/worldline/builtins`](./builtins): the built-in plugins
   (`harnessBuiltins`, or one by one).
-- [`@texra-ai/harness/plugins`](./plugins): what a tool or plugin is
+- [`@texra-ai/worldline/plugins`](./plugins): what a tool or plugin is
   written with (`defineTool`, `definePlugin`, `ToolContext`, `Settings`,
   `WorkspaceFs`).
-- [`@texra-ai/harness/node`](./node): `nodePlatform(options)` and Node.js
+- [`@texra-ai/worldline/node`](./node): `nodePlatform(options)` and Node.js
   filesystem, SQLite, and process building blocks.
-- [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's
+- [`@texra-ai/worldline/host`](./host): what a full application host (TeXRA's
   editor, desktop and terminal apps) composes beyond this entry:
-  `processLayer`, the agent catalog, skills and installed plugins.
-
-## AgentDirectoriesFailed
-
-A host could not resolve one of its agent directories: the configured
-custom directory is not an absolute path, its parent is gone, it cannot be
-created, or the platform refused the filesystem call behind either.
-
-{@link AgentDirectoriesPort}'s readers raise it as the failure of the
-read itself, for the same reason `StateWriteFailed` exists: the reads
-travel with the agent-catalog load beside them, so a caller inside a program
-composes the read rather than adopting a rejection it cannot type.
-
-```ts
-class AgentDirectoriesFailed extends Schema.TaggedError<AgentDirectoriesFailed>()(
-  'AgentDirectoriesFailed',
-  {
-    /** Which of the port's readers failed. */
-    source: AgentSourceSchema,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-)
-```
-
-## AgentDirectoriesPort
-
-Host-provided agent directory paths. All are `Effect`s (not Promises)
-so the readers that can fault — `custom`, which creates the directory it
-resolves, and `customConfigured`, which validates the setting — carry their
-failure into the program that asked instead of rejecting an await that
-cannot name it.
-
-`custom` takes the process's {@link GlobalStorageFs} and the process
-`FileSystem` from context: the default custom-agents directory lives under
-the cross-workspace storage root, and a configured one is an absolute path
-outside every root, so the view that names each is the one the process
-runtime provides.
-
-```ts
-interface AgentDirectoriesPort {
-  custom(): Effect.Effect<
-    string,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  >;
-  /** Whether `custom` resolves to a directory the user configured, rather
-   *  than falling back to the default one under global storage. */
-  customConfigured(): Effect.Effect<
-    boolean,
-    AgentDirectoriesFailed,
-    FileSystem.FileSystem
-  >;
-  builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
-  /**
-   * The packaged resources root a host ships its bundled agents under,
-   * the tool plugins' agent directories among them. Absent where none ships:
-   * an embedder's own directories.
-   */
-  readonly resourcesRoot?: string;
-}
-```
+  `processLayer`, the installed plugins, and the config and state stores.
 
 ## AgentEvent
 
@@ -126,8 +66,9 @@ embedder supplying its own names its workspace roots beside them.
 
 ```ts
 interface AgentPlatform {
-  /** The agent directories this process's `AgentDirectories` service serves. */
-  readonly agentDirectories: AgentDirectoriesPort;
+  /** The packaged resources root this process's `HostResources` service
+   *  serves; absent for an embedder that ships none. */
+  readonly resourcesRoot?: string;
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
@@ -334,9 +275,8 @@ type LaunchError = LaunchRefused | ToolsRefused;
 ## LaunchRefused
 
 A launch refused before its run exists, for an input its caller supplied:
-an unknown agent or model (each with the `notice` a host shows in place of
-the message), a persona or configuration its schema rejects, or a run id
-already in use.
+an unknown model (with the `notice` a host shows in place of the
+message), a configuration its schema rejects, or a run id already in use.
 
 ```ts
 class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
@@ -421,7 +361,7 @@ run's project.
 
 ```ts
 class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
-  '@texra-ai/harness/ModelFetch',
+  '@texra-ai/worldline/ModelFetch',
 )
 ```
 
@@ -545,7 +485,10 @@ run was started with, whether it stays open for follow-ups, and the
 provider keys of the environment it resumes from.
 
 ```ts
-type ResumeInput = Pick<StartInput, 'tools' | 'interactive' | 'apiKeys'>;
+type ResumeInput = Pick<
+  StartInput,
+  'runTools' | 'interactive' | 'apiKeys'
+>;
 ```
 
 ## ResumeRefused
@@ -700,7 +643,6 @@ that cannot render an event logs the cause itself.
 interface RuntimePresentationEventPayloads {
   openFile: OpenFilePayload;
   requestShowInstruction: RequestShowInstructionPayload;
-  agentNotFound: AgentNotFoundPayload;
   requestShowError: RequestShowErrorPayload;
 }
 ```
@@ -754,7 +696,7 @@ interface Session {
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
    * returned to you and shown to no host: an input the launch will not run
-   * is a `LaunchRefused`, which for an unknown agent or model carries
+   * is a `LaunchRefused`, which for an unknown model carries
    * the notice a host shows for it.
    */
   readonly start: (
@@ -762,7 +704,7 @@ interface Session {
   ) => Effect.Effect<Run, LaunchError | RunFailure>;
   /**
    * Continue a stored run from where its history stops, with the same kind
-   * of handle {@link start} gives. Pass the custom `tools` it was started
+   * of handle {@link start} gives. Pass the custom `runTools` it was started
    * with. A run already running or resuming here is not started again: the
    * handle of its running activation is answered, and `input` is not read.
    * A child an open call of its parent owns resumes the parent, whose
@@ -885,7 +827,7 @@ class Sessions extends Context.Service<
       DatabaseReadFailed
     >;
   }
->()('@texra-ai/harness/Sessions')
+>()('@texra-ai/worldline/Sessions')
 ```
 
 ## SkillSourceOptions
@@ -899,15 +841,15 @@ interface SkillSourceOptions {
 ## StartInput
 
 What starting a run takes: the start as data (`StartRequestSchema`:
-an agent and its instruction, or a resolved `config`, with the optional
-`runId`, `continues`, `helperModel`, `approval` and `interactive`), and
-the run's own tools.
+a system text, the tools it declares and its instruction, or a resolved
+`config`, with the optional `runId`, `continues`, `helperModel`,
+`approval` and `interactive`), and the run's own tools.
 
 ```ts
 type StartInput = typeof StartRequestSchema.Type & {
-  /** Tools for this run only, made with `defineTool`. A resume needs the
-   *  same tools passed again. */
-  readonly tools?: readonly ITool[];
+  /** Tools for this run only, made with `defineTool`: offered whatever the
+   *  run declares. A resume needs the same tools passed again. */
+  readonly runTools?: readonly ITool[];
 };
 ```
 

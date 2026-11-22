@@ -120,8 +120,8 @@ export const multiAgent: Plugin = definePlugin({
  * `self()`, the function a script runs this agent again with, and
  * `context`, which reads and edits the run's own model view. An agent gets
  * `script` and `context` if its configuration names them, or as every run
- * that takes injected tools does (not a program's run, a text-only persona,
- * or a plugin agent that names its own tools). A step that offers `script`
+ * that takes injected tools does (not a script's run or a text-only
+ * run). A step that offers `script`
  * sends it and the run's own tools alone, so `context` is called from a
  * script there and directly elsewhere; its session layer is the code
  * sandbox the scripts run in.

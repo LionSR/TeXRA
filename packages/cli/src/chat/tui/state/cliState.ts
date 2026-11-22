@@ -8,12 +8,12 @@ import {
   APPROVAL_POLICY_DEFAULT,
   type ApprovalPolicy,
   RunIdSchema,
-  type AgentConfig,
   type RunId,
   descendantRuns,
   FACT_SEPARATOR,
-} from '@texra-ai/harness/schemas';
-import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/schemas';
+import { compareByNewestCreationTime } from '@texra-ai/worldline/transcript';
+import type { ChatLaunch } from '@texra/shared/session/surface';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 import {
   applySurfaceAction,
@@ -31,8 +31,8 @@ import type { RootLaunch } from './sessionRunState';
 import type { LocalNotice } from './transcript';
 import type { FormSlot } from './formSlot';
 import type { ApprovalSurface } from './approvalQueue';
-import type { RunModelDecisionReason } from '@texra-ai/harness/host';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunModelDecisionReason } from '@texra-ai/worldline/host';
+import type { RunView } from '@texra-ai/worldline/schemas';
 
 // ---------------------------------------------------------------------------
 // types
@@ -43,9 +43,9 @@ import type { RunView } from '@texra-ai/harness/schemas';
 // `Surface`, dispatched through `applySurfaceAction`.
 
 export interface SessionMeta {
-  readonly agent: string;
-  /** The source of the entry `agent` resolved to, pinned on every root run. */
-  readonly agentSource?: NonNullable<AgentConfig['agentSource']>;
+  /** What the chat's root runs are: their name, system text and tools,
+   *  the entry agent's or a resumed run's. */
+  readonly chat: ChatLaunch;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
@@ -54,7 +54,7 @@ export interface SessionMeta {
 }
 
 const EMPTY_SESSION_META: SessionMeta = {
-  agent: '',
+  chat: { label: '', system: '', tools: [] },
   model: '',
   modelSource: 'builtin-default',
   cwd: '',

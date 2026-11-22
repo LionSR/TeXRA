@@ -18,15 +18,15 @@ const apiSidebar = [
     ],
   },
   {
-    text: '@texra-ai/harness Reference',
+    text: '@texra-ai/worldline Reference',
     items: [
-      { text: 'harness', link: '/api/harness/' },
-      { text: 'harness/schemas', link: '/api/harness/schemas' },
-      { text: 'harness/transcript', link: '/api/harness/transcript' },
-      { text: 'harness/plugins', link: '/api/harness/plugins' },
-      { text: 'harness/builtins', link: '/api/harness/builtins' },
-      { text: 'harness/node', link: '/api/harness/node' },
-      { text: 'harness/host', link: '/api/harness/host' },
+      { text: 'worldline', link: '/api/harness/' },
+      { text: 'worldline/schemas', link: '/api/harness/schemas' },
+      { text: 'worldline/transcript', link: '/api/harness/transcript' },
+      { text: 'worldline/plugins', link: '/api/harness/plugins' },
+      { text: 'worldline/builtins', link: '/api/harness/builtins' },
+      { text: 'worldline/node', link: '/api/harness/node' },
+      { text: 'worldline/host', link: '/api/harness/host' },
     ],
   },
   {
@@ -49,14 +49,14 @@ const guideSidebar = [
     ],
   },
   {
-    text: 'Agent System',
+    text: 'Assistant and programs',
     items: [
-      { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
+      { text: 'The assistant and programs', link: '/guide/programs' },
       {
-        text: 'Programs',
-        link: '/guide/agent-architecture.md',
+        text: 'How programs work',
+        link: '/guide/agent-architecture',
       },
-      { text: 'Custom Agents', link: '/guide/custom-agents' },
+      { text: 'Tailoring TeXRA', link: '/guide/customizing' },
       {
         text: 'Multi-agent workflows',
         link: '/guide/multi-agent-workflows',
@@ -76,7 +76,7 @@ const guideSidebar = [
       { text: 'LaTeX Tools', link: '/guide/latex-tools' },
       {
         text: 'Working with Figures',
-        link: '/guide/working-with-figures.md',
+        link: '/guide/working-with-figures',
       },
       { text: 'TikZ Figures', link: '/guide/tikz-figures' },
       { text: 'Multiple Output', link: '/guide/multiple-output' },
@@ -100,10 +100,10 @@ const guideSidebar = [
     text: 'Reference',
     items: [
       { text: 'Configuration', link: '/guide/configuration' },
-      { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
-      { text: 'Best Practices', link: '/guide/best-practices.md' },
+      { text: 'LaTeX Compilation', link: '/guide/latex-compilation' },
+      { text: 'Best Practices', link: '/guide/best-practices' },
       { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-      { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
+      { text: 'Acknowledgments', link: '/guide/acknowledgments' },
       { text: 'Open Source Projects', link: '/guide/open-source' },
       { text: 'Work produced with TeXRA', link: '/work-using-texra' },
     ],
@@ -114,7 +114,7 @@ const baseConfig = {
   title: 'TeXRA',
   base,
   description:
-    'An AI theorist for advancing theoretical science. A team of specialist agents derives results, checks derivations in Wolfram, formalizes proofs in Lean 4, and helps you do good work, in VS Code and the terminal.',
+    'An AI theorist for advancing theoretical science. One assistant derives results, checks derivations in Wolfram, formalizes proofs in Lean 4, splits large jobs across helper agents and programs, and helps you do good work, in VS Code and the terminal.',
   head: [
     ['link', { rel: 'icon', href: `${base}favicon.svg` }],
     [
@@ -202,12 +202,12 @@ const baseConfig = {
       {
         text: 'Docs',
         link: '/guide/',
-        activeMatch: '/guide/(?!built-in-agents)',
+        activeMatch: '/guide/(?!programs)',
       },
       {
-        text: 'Agents',
-        link: '/guide/built-in-agents',
-        activeMatch: '/guide/built-in-agents',
+        text: 'Programs',
+        link: '/guide/programs',
+        activeMatch: '/guide/programs',
       },
       { text: 'Launch', link: '/launch' },
       { text: 'Work', link: '/work-using-texra' },

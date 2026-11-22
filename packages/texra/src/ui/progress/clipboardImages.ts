@@ -4,7 +4,7 @@
 
 import * as Base64 from 'effect/encoding/Base64';
 
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/worldline/schemas';
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',

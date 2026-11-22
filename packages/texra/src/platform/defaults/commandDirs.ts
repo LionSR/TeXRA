@@ -7,8 +7,8 @@ import * as path from 'node:path';
 
 import { globSync } from 'glob';
 
-import { existsAtAbsolute, writeLogLine } from '@texra-ai/harness/node';
-import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
+import { existsAtAbsolute, writeLogLine } from '@texra-ai/worldline/node';
+import { normalizeFilePath, toErrorMessage } from '@texra-ai/worldline/schemas';
 
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;

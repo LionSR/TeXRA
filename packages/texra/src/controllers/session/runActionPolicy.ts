@@ -11,9 +11,9 @@ import {
   type Run,
   type RunFailure,
   type Session,
-} from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
-import { Unavailable } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline';
+import type { RunId } from '@texra-ai/worldline/schemas';
+import { Unavailable } from '@texra-ai/worldline/schemas';
 import {
   isRequestRefusal,
   type RequestRefusal,

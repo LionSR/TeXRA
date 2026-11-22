@@ -12,7 +12,7 @@
  */
 import { Effect, Result } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   type RequestDecision,
   type RequestPayload,
@@ -20,7 +20,7 @@ import {
   type UserQuestionAnswers,
   type UserQuestionRequest,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
@@ -52,7 +52,11 @@ import {
   toolEditDiffLabel,
 } from '@ui/copy/toolEditPreview';
 import { CliPromptFailed, writeTextStderr } from '../platform/logSinks';
-import type { Session, SessionHost, HostInteractions } from '@texra-ai/harness';
+import type {
+  Session,
+  SessionHost,
+  HostInteractions,
+} from '@texra-ai/worldline';
 
 const CHANNEL = 'cli.approval';
 

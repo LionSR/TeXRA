@@ -11,7 +11,7 @@ import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import { textInputEditingHelp } from '../input/textInputBindings';
 
 import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
-import { DETAIL_SEPARATOR } from '@texra-ai/harness/schemas';
+import { DETAIL_SEPARATOR } from '@texra-ai/worldline/schemas';
 
 // Help sections in display order; `undefined` collects uncategorized
 // commands into a trailing "Other" section.

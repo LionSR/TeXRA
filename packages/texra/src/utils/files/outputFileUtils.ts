@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { normalizeFilePath } from '@texra-ai/worldline/schemas';
 
 import { modelConfig } from '@texra-ai/llm';
 import { DOCUMENT_OUTPUT_BASENAME } from '@texra/shared/constants/revisionLayout';

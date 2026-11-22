@@ -2,9 +2,9 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { entryTypeIn } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
+import { entryTypeIn } from '@texra-ai/worldline/node';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import type { FileFilterConfig } from '@texra/common/files/fileListingRules';
 import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';

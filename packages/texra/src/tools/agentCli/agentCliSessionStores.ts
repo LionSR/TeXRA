@@ -1,6 +1,6 @@
 import { Context, Deferred, Effect, Layer, Scope } from 'effect';
 
-import { PluginHold } from '@texra-ai/harness/plugins';
+import { PluginHold } from '@texra-ai/worldline/plugins';
 
 /**
  * Claim an agent-CLI thread (a Codex thread, a Claude Code session) for one

@@ -8,7 +8,7 @@ import { Box } from 'ink';
 import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
-import { planOf, type RunId } from '@texra-ai/harness/schemas';
+import { planOf, type RunId } from '@texra-ai/worldline/schemas';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 
 // Local imports - conversation panes and layout

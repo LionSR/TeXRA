@@ -4,7 +4,12 @@
 // hook reads and prints is `./hookProtocol`'s.
 
 // Third-party imports
-import { Predicate, Record as EffectRecord, Schema } from 'effect';
+import {
+  Number as Num,
+  Predicate,
+  Record as EffectRecord,
+  Schema,
+} from 'effect';
 
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
@@ -81,7 +86,7 @@ export function configuredHooks(source: string, config: HooksConfig) {
   const unsupported: string[] = [];
   for (const [event, groups] of Object.entries(config.hooks)) {
     if (!isSupportedEvent(event)) {
-      const count = groups.reduce((sum, group) => sum + group.hooks.length, 0);
+      const count = Num.sumAll(groups.map((group) => group.hooks.length));
       unsupported.push(
         `${event}: ${formatResultCount(count, 'hook')}, an event this build does not run`,
       );

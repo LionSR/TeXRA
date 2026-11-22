@@ -1,6 +1,6 @@
 # The durable protocol
 
-This document specifies the durable protocol of `@texra-ai/harness`: what the
+This document specifies the durable protocol of `@texra-ai/worldline`: what the
 session store guarantees, what a run writes and when, how a run continues from
 its rows, and what survives a crash. It describes the code as it is. It does not
 describe planned behavior.
@@ -390,7 +390,9 @@ also read by `applyRunRows`.
   provenance, launch approval policy.
 - `run.activate` (folded: yes): One activation: the first launch or a resume.
 - `run.config` (folded: yes): What the run runs on: configuration, model,
-  binding.
+  binding. A chat run's configuration holds its own system text, declared
+  tools and display label, so a resume consults no agent
+  directory (there is none).
 - `run.stop` (folded: yes): A stop asked of the run, and why: `user`, or
   `released` by the call that awaited it.
 - `run.end` (folded: yes): The terminal fact: outcome, classified error,

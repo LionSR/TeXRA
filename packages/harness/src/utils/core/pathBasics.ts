@@ -1,7 +1,7 @@
 /**
  * Browser-safe path basics on 'pathe', a dependency-free reimplementation of
  * node:path: this module is reached from browser code through
- * `@texra-ai/harness/schemas`. Real filesystem-path semantics (containment,
+ * `@texra-ai/worldline/schemas`. Real filesystem-path semantics (containment,
  * `.`/`..` resolution) are `@utils/core/pathCore`'s, which needs node:path.
  */
 import { basename as pathBasename, extname as pathExtname } from 'pathe';

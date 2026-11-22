@@ -14,7 +14,7 @@
  * the key a run of that project would use, and reads and writes the flags
  * below through its `AppState` store. The terminal has no funnel: its chat
  * opens on the "Connect a model" panel when no credential is usable and
- * otherwise on the default agent. Every process that opens a session still
+ * otherwise on the assistant. Every process that opens a session still
  * records the first completed run ({@link recordFirstCompletedRun}).
  *
  * The derivation is {@link deriveOnboardingFunnelState}; each window's host
@@ -24,20 +24,19 @@
 import { Effect, Schema, type Scope, Stream } from 'effect';
 import {
   decodingDefault,
-  agentName,
   type SessionView,
   type StateKey,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   Settings,
   logFailure,
   type StateStore,
   type StateWriteFailed,
-} from '@texra-ai/harness/plugins';
-import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
+} from '@texra-ai/worldline/plugins';
+import { SETUP_AGENT_NAME } from '@texra/agent/entryAgent';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = decodingDefault(Schema.Boolean, false);
@@ -84,7 +83,7 @@ function hasCompletedRun(view: SessionView): boolean {
     if (
       run.outcome === 'completed' &&
       run.identity.kind === 'agent' &&
-      agentName(run.identity.agent) !== SETUP_AGENT_NAME
+      run.identity.agent !== SETUP_AGENT_NAME
     )
       return true;
   }

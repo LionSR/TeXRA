@@ -12,52 +12,49 @@ TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moon
 
 <p class="hero-caption">The model picker: one entry per model, named by its model reference, with a <code>T</code> badge on models that think, and a hover popover showing context window and per-1M token pricing.</p>
 
-**Model references.** A model is named `provider/id`, where `id` is the provider's own API model ID: `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`. Wherever you type a model (an agent's `model`, `--model`, or `.texra/config.json`), you can add:
+**Model references.** A model is named `provider/id`, where `id` is the provider's own API model ID: `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`. Wherever you type a model (`--model` or `.texra/config.json`), you can add:
 
 - `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`); a few models, such as Muse Spark, also take `@minimal`
 - `@none` to turn thinking off, on models that allow it (for example `deepseek/deepseek-v4-pro@none`)
 - `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-6.1-sol+pro`)
 
-Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. The CLI's `--model` and `texra models show` also take a model's bare API ID or label when it names exactly one model (`claude-opus-5-5`, `Opus 5.5`, or `opus55`); agent files and `.texra/config.json` take the reference.
+Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. The CLI's `--model` and `texra models show` also take a model's bare API ID or label when it names exactly one model (`claude-opus-5-5`, `Opus 5.5`, or `opus55`); `.texra/config.json` takes the reference.
 
 ## Anthropic models
 
-| Model                         | Use Case                                  | Cost | Speed  |
-| :---------------------------- | :---------------------------------------- | :--- | :----- |
-| `anthropic/claude-fable-5-1`  | Most capable, always-on adaptive thinking | $$$$ | Slow   |
-| `anthropic/claude-opus-5-5`   | Long-running agentic work                 | $$$  | Medium |
-| `anthropic/claude-sonnet-5-5` | All-rounder, always-on adaptive thinking  | $$$  | Medium |
-| `anthropic/claude-haiku-5-5`  | Fast; `@none` for fastest responses       | $    | Fast   |
+| Model                         | Use Case                                         | Cost | Speed  |
+| :---------------------------- | :----------------------------------------------- | :--- | :----- |
+| `anthropic/claude-fable-5-2`  | Newest flagship, 1M context, adaptive thinking   | $$$$ | Slow   |
+| `anthropic/claude-fable-5-1`  | Previous flagship, 1M context, adaptive thinking | $$$$ | Slow   |
+| `anthropic/claude-opus-5-5`   | Long-running agentic work                        | $$$  | Medium |
+| `anthropic/claude-sonnet-5-5` | All-rounder, always-on adaptive thinking         | $$$  | Medium |
+| `anthropic/claude-haiku-5-5`  | Fast; `@none` for fastest responses              | $    | Fast   |
 
-Fable 5.1, Opus 5.5, and Sonnet 5.5 (and the older Opus 4.6 through Opus 5, Sonnet 4.6, and Sonnet 5) include the full 1M context window at standard pricing, with no opt-in or
+Fable 5.2, Fable 5.1, Opus 5.5, and Sonnet 5.5 (and the older Opus 4.6 through Opus 5, Sonnet 4.6, and Sonnet 5) include the full 1M context window at standard pricing, with no opt-in or
 beta header required. Haiku 5.5 (`anthropic/claude-haiku-5-5`) also has a 1M context window, billed at $0.10 / $0.50 per 1M tokens up to 100K input tokens ($0.50 / $2.50 above 100K), with adaptive thinking on by default and `@none` to turn thinking off. Haiku 4.5, Opus 4.5, and Sonnet 4.5 use a 200K context window.
 
-Claude Fable 5.1 (`anthropic/claude-fable-5-1`) is Anthropic's most capable model. Thinking is always on (adaptive, with summarized reasoning), so it does not take `@none`. It supports the full reasoning-effort range up to `@xhigh` and the top `@max` tier, and is eligible for context compaction in tool-use mode.
+Claude Fable 5.2 (`anthropic/claude-fable-5-2`, $8 / $40 per 1M tokens) and Fable 5.1 (`anthropic/claude-fable-5-1`, $10 / $50) are Anthropic's most capable models. Thinking is always on (adaptive, with summarized reasoning), so they do not take `@none`. Both support the full reasoning-effort range up to `@xhigh` and `@max`, and are eligible for context compaction in tool-use mode.
 
 Claude Sonnet 5.5 (`anthropic/claude-sonnet-5-5`) costs $2 / $10 per 1M tokens with a 1M context window. Thinking is always on (adaptive), so it does not take `@none`. It supersedes Sonnet 5 (`anthropic/claude-sonnet-5`), which is now deprecated.
 
-Claude Opus 5.5 (`anthropic/claude-opus-5-5`) is built for long-running agentic coding and knowledge work at $4 / $20 per 1M tokens, below Opus 5. Like Fable 5.1, thinking is always on, and it accepts the full effort range up to `@max`.
+Claude Opus 5.5 (`anthropic/claude-opus-5-5`) is built for long-running agentic coding and knowledge work at $4 / $20 per 1M tokens, below Opus 5. Like Fable, thinking is always on, and it accepts the full effort range up to `@max`.
 
-TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically: pick `anthropic/claude-opus-5-5` with Extra High (`@xhigh`) or the top Max tier (`@max`) for the strongest agentic coding and long-horizon tasks. Opus 5.5 reads dense charts, diagrams, and screenshots more precisely than earlier models. TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting to send higher-resolution figures.
+TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically: pick `anthropic/claude-opus-5-5` or `anthropic/claude-fable-5-2` with Extra High (`@xhigh`) or Max (`@max`) for the strongest agentic coding and long-horizon tasks. Opus 5.5 and Fable read dense charts, diagrams, and screenshots more precisely than earlier models. TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting to send higher-resolution figures.
 
 ## OpenAI models
 
-| Model                  | Use Case                 | Cost | Speed |
-| :--------------------- | :----------------------- | :--- | :---- |
-| `openai/gpt-6-astra`   | Most capable, 1M context | $$$$ | Fast  |
-| `openai/gpt-6.1-sol`   | Agentic coding           | $$$  | Fast  |
-| `openai/gpt-6.1-terra` | Lower-cost reasoning     | $$   | Fast  |
-| `openai/gpt-6-luna`    | Budget reasoning         | $    | Fast  |
+| Model                  | Use Case                           | Cost | Speed |
+| :--------------------- | :--------------------------------- | :--- | :---- |
+| `openai/gpt-6.2-astra` | Latest flagship, 1M context        | $$$$ | Fast  |
+| `openai/gpt-6-astra`   | Flagship (API & Codex), 1M context | $$$$ | Fast  |
+| `openai/gpt-6.2-sol`   | Latest agentic coding, 1M context  | $$$  | Fast  |
+| `openai/gpt-6.1-sol`   | Agentic coding (default & Codex)   | $$$  | Fast  |
+| `openai/gpt-6.1-terra` | Lower-cost reasoning               | $$   | Fast  |
+| `openai/gpt-6-luna`    | Budget reasoning                   | $    | Fast  |
 
-GPT-6 Astra (`openai/gpt-6-astra`) is OpenAI's most capable model for the hardest end-to-end work; it is
-available in the API and in Codex for Pro, Enterprise, and Business Premium subscribers, and
-supports reasoning effort up to `@max`.
-Note its long-context pricing: prompts above 272K input tokens bill at 2x input/cache and 1.5x
-output for the full request.
+GPT-6.2 Astra (`openai/gpt-6.2-astra`, $8 / $40 per 1M tokens) and GPT-6 Astra (`openai/gpt-6-astra`, $10 / $50) are OpenAI's most capable models for the hardest end-to-end work; both support reasoning effort up to `@max`. GPT-6 Astra is also available in Codex for Pro, Enterprise, and Business Premium subscribers. Note the long-context pricing across the GPT-6 series: prompts above 272K input tokens bill at 2x input/cache and 1.5x output for the full request.
 
-GPT-6.1 Sol (`openai/gpt-6.1-sol`), GPT-6.1 Terra (`openai/gpt-6.1-terra`), and GPT-6 Luna (`openai/gpt-6-luna`) bring Astra's advances to faster, cheaper models: Sol costs $2 / $10 per 1M tokens (half of GPT-5.6 Sol), Terra $1 / $5 (half of GPT-5.6 Terra on input, less than half on output), and Luna $0.10 / $0.50 (half of GPT-5.6 Luna on input, less than half on output). All three take reasoning effort up to `@max` and use the same long-context pricing threshold (above 272K input tokens) as Astra. GPT-6.1 Sol supersedes GPT-6 Sol (`openai/gpt-6-sol`) at the same price with cheaper cached input.
-
-GPT-6.1 Sol, GPT-6.1 Terra, and GPT-6 Luna supersede the GPT-5.6 series (`openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, and `openai/gpt-5.6-luna`). The [Codex integration](./agent-integrations.md#openai-codex) runs GPT-6.1 Sol unless you pick another model.
+GPT-6.2 Sol (`openai/gpt-6.2-sol`, $2 / $10), GPT-6.1 Sol (`openai/gpt-6.1-sol`, $2 / $10), GPT-6.1 Terra (`openai/gpt-6.1-terra`, $1 / $5), and GPT-6 Luna (`openai/gpt-6-luna`, $0.10 / $0.50) bring Astra's advances to faster, lower-cost tiers with reasoning effort up to `@max` and the same 272K long-context threshold. `openai/gpt-6.1-sol` is TeXRA's default model for new tasks and the default for the [Codex integration](./agent-integrations.md#openai-codex).
 
 **Pro mode.** Add `+pro` to a supported GPT model (for example `openai/gpt-6.1-sol+pro`) to run it in the Responses API's pro reasoning mode, billed at standard token rates
 rather than a premium tier, for the hardest planning and long-horizon tasks.
@@ -67,13 +64,17 @@ full capabilities.
 
 ## Google models
 
-| Model                           | Use Case                       | Cost | Speed  |
-| :------------------------------ | :----------------------------- | :--- | :----- |
-| `google/gemini-4-argon`         | Most capable, 1M context       | $$$  | Medium |
-| `google/gemini-3.1-pro-preview` | Pro with reasoning, 1M context | $$$  | Medium |
-| `google/gemini-3.8-flash`       | Flash model with 1M context    | $$   | Fast   |
+| Model                           | Use Case                                    | Cost | Speed  |
+| :------------------------------ | :------------------------------------------ | :--- | :----- |
+| `google/gemini-4-neon`          | Top Gemini 4 tier, up to `@xhigh`, 1M ctx   | $$$  | Medium |
+| `google/gemini-4-carbon`        | Balanced Gemini 4, 1M context               | $$$  | Medium |
+| `google/gemini-4-argon`         | Complex coding, math & science, 1M context  | $$$  | Medium |
+| `google/gemini-4-hydrogen`      | Lower-cost Gemini 4, up to `@xhigh`, 1M ctx | $$   | Fast   |
+| `google/gemini-3.8-flash`       | Flash model with 1M context                 | $$   | Fast   |
+| `google/gemini-3.5-flash-lite`  | Lightweight Flash, 1M context               | $    | Fast   |
+| `google/gemini-3.1-pro-preview` | Previous Pro with reasoning, 1M context     | $$$  | Medium |
 
-Gemini 4 Argon (`google/gemini-4-argon`) is Google's most capable model for complex coding, agentic, math, and science work. Input, thinking, and output share a 1M-token window, and a single response can be up to 65,536 tokens. It thinks at `@low`, `@medium` (the default), or `@high` and does not take `@none`. It is billed at an introductory $2 / $10 per 1M tokens, with cached input at $0.10, until November 30, 2026, then $4 / $20. Caching is automatic, and Argon is not available on Google's Free tier.
+The Gemini 4 family shares a 1M-token window across input, thinking, and output (up to 65,536 output tokens per response) with native vision, PDF, and audio support. Gemini 4 Neon ($3 / $15 per 1M tokens) and Gemini 4 Hydrogen ($1.50 / $7.50) support reasoning effort up to `@xhigh`; Gemini 4 Carbon ($2 / $10) and Gemini 4 Argon ($2 / $10 introductory pricing, cached input at $0.10, until November 30, 2026, then $4 / $20) support `@low`, `@medium`, and `@high`. None of the Gemini 4 models take `@none`. Caching is automatic, and Gemini 4 models are not available on Google's Free tier.
 
 ## DeepSeek models
 
@@ -86,24 +87,31 @@ DeepSeek offers `low`, `high`, and `max` effort, so the medium default runs at `
 
 ## Moonshot Kimi models
 
-| Model              | Use Case                | Cost | Speed  |
-| :----------------- | :---------------------- | :--- | :----- |
-| `moonshot/kimi-k3` | K3 flagship, 1M context | $$$  | Medium |
+| Model                    | Use Case                                 | Cost | Speed  |
+| :----------------------- | :--------------------------------------- | :--- | :----- |
+| `moonshot/kimi-k3.1-pro` | K3.1 Pro flagship, 1M context ($2 / $10) | $$$  | Medium |
+| `moonshot/kimi-k3`       | K3 flagship, 1M context ($3 / $15)       | $$$  | Medium |
+
+Kimi Code plan keys (`KIMI_CODE_API_KEY`) also unlock `moonshot/kimi-for-coding` and `moonshot/kimi-for-coding-highspeed` (256K context).
 
 ## DashScope Qwen models
 
-| Model                         | Use Case                    | Cost | Speed  |
-| :---------------------------- | :-------------------------- | :--- | :----- |
-| `dashscope/qwen-plus`         | Hybrid thinking, 1M context | $$   | Medium |
-| `dashscope/qwen-turbo-latest` | Fast, 128K context          | $    | Fast   |
+| Model                     | Use Case                               | Cost | Speed  |
+| :------------------------ | :------------------------------------- | :--- | :----- |
+| `dashscope/qwen4-max`     | Qwen4 Max flagship, vision, 1M context | $$   | Medium |
+| `dashscope/qwen3.8-max`   | Qwen 3.8 Max, vision, 1M context       | $$   | Medium |
+| `dashscope/qwen3.7-plus`  | Balanced Qwen 3.7, vision, 1M context  | $    | Medium |
+| `dashscope/qwen3.8-flash` | Fast Qwen 3.8, vision, 1M context      | $    | Fast   |
+| `dashscope/qwen-plus`     | Hybrid thinking, 1M context            | $    | Medium |
 
 TeXRA sends Qwen no reasoning setting: each model thinks or not by its own default, and an `@effort` suffix (other than `@none`) is rejected.
 
 ## MiniMax models
 
-| Model                | Use Case                                       | Cost | Speed  |
-| :------------------- | :--------------------------------------------- | :--- | :----- |
-| `minimax/MiniMax-M3` | Flagship with interleaved thinking, 1M context | $    | Medium |
+| Model                        | Use Case                                       | Cost | Speed  |
+| :--------------------------- | :--------------------------------------------- | :--- | :----- |
+| `minimax/MiniMax-M3.1-Flash` | Fast M3.1 Flash, 1M context ($0.15 / $0.60)    | $    | Fast   |
+| `minimax/MiniMax-M3`         | Flagship with interleaved thinking, 1M context | $    | Medium |
 
 MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimax.cn) are not interchangeable. Expand the MiniMax row in **Models → API keys** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's and Kimi/Moonshot's are on by default).
 
@@ -125,14 +133,15 @@ Responses API each region serves at `/api/v1`.
 - **China (BigModel)**: Get your API key at [open.bigmodel.cn](https://open.bigmodel.cn/); endpoint: open.bigmodel.cn (default)
 - **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. A Coding Plan key uses the same endpoint as an API key in its region. Turn on the **GLM Coding Plan** toggle on the GLM row of the Models page. [Subscribe to the GLM Coding Plan](https://z.ai/subscribe).
 
-## Meta (Muse Spark) models
+## Meta (Muse) models
 
-| Model                 | Use Case                                      | Cost | Speed  |
-| :-------------------- | :-------------------------------------------- | :--- | :----- |
-| `meta/muse-spark-1.3` | Flagship reasoning + vision + PDF, 1M context | $$   | Medium |
-| `meta/muse-spark-1.1` | Older release, now deprecated                 | $$   | Medium |
+| Model                  | Use Case                                               | Cost | Speed  |
+| :--------------------- | :----------------------------------------------------- | :--- | :----- |
+| `meta/muse-wonder-1.0` | Flagship reasoning + vision + PDF, 1M ($4 / $20)       | $$$  | Medium |
+| `meta/muse-spark-1.3`  | Balanced reasoning + vision + PDF, 1M ($1.25/$4.25)    | $$   | Medium |
+| `meta/muse-ember-1.0`  | Fast budget reasoning + vision + PDF, 1M ($0.10/$0.50) | $    | Fast   |
 
-Muse Spark always reasons (effort is adjustable, but it does not take `@none`). TeXRA
+Muse models always reason (effort is adjustable from `@minimal` to `@max`, and they do not take `@none`). TeXRA
 uses the Meta Model API's Responses surface, which carries reasoning across
 turns and supports tool calling. The API is in public preview for US-based
 developers.
@@ -141,9 +150,10 @@ developers.
 
 ## Grok / xAI models
 
-| Model          | Use Case           | Cost | Speed  |
-| :------------- | :----------------- | :--- | :----- |
-| `xai/grok-4.7` | Reasoning + vision | $$$  | Medium |
+| Model                | Use Case                                  | Cost | Speed  |
+| :------------------- | :---------------------------------------- | :--- | :----- |
+| `xai/grok-4.7`       | Flagship reasoning + vision, 500K context | $$$  | Medium |
+| `xai/grok-build-0.1` | Agentic coding, 256K context ($1 / $2)    | $$   | Fast   |
 
 Direct xAI models (API key or Grok subscription) use xAI's Responses API. xAI
 keeps each response for 30 days, so each model request in a chat sends only what is new
@@ -193,9 +203,9 @@ above what your plan allows fails and triggers compaction recovery.
 
 ## Customizing the model list
 
-Choose which models appear in the model picker from **Settings → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in TeXRA's user-wide state, not in a settings file).
+Choose which models appear in the model picker from **Settings → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in TeXRA's user-wide state, not in a settings file, and applies across the extension, desktop app, CLI `/model`, and assistant delegation). When you sign in to ChatGPT, every model your subscription serves appears automatically without toggling them on one by one.
 
-In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
+In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`.
 
 For headless CLI runs, list what is available with `texra models list` (or `texra models show <model>` for details), then pick a default for your project by setting the `texra.model` key in `.texra/config.json`, or override per run with `--model <model>` (an `@effort` or `+pro` suffix works here too):
 
@@ -205,5 +215,5 @@ For headless CLI runs, list what is available with `texra models list` (or `texr
 
 ## Next steps
 
-- [Built-in agents](./built-in-agents.md): see which agents work with which models
+- [The assistant and programs](./programs.md): what the assistant and its programs do
 - [Configuration](./configuration.md): model-related settings

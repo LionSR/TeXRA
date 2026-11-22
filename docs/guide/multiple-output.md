@@ -67,6 +67,6 @@ This is the part that matters for generating multiple distinct files:
 
 ## Next steps
 
-- [Built-in agents](./built-in-agents.md#programs): the programs and what each writes.
+- [The assistant and programs](./programs.md#document-programs): the programs and what each writes.
 - [File management](./file-management.md): the file selection UI in detail.
-- [Agent architecture](./agent-architecture.md): how a program's revisions run.
+- [Programs: how they work](./agent-architecture.md): how a program's revisions run.

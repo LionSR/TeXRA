@@ -55,7 +55,7 @@ import type {
   SessionView,
   RuntimeCommand,
   RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 type Outcome = typeof OutcomeSchema.Type;
 /** How a request ended: its outcome, or the error it failed with. */
@@ -344,7 +344,7 @@ export function createSessionSurfaces(options: {
         if (launch.instruction === request.launch.instruction) {
           act(entry, {
             kind: 'launch',
-            patch: { instruction: '', skills: [] },
+            patch: { instruction: '', skills: [], chat: null },
           });
         }
         return;

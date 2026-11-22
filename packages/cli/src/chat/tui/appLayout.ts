@@ -1,7 +1,7 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
 import { Number as Num } from 'effect';
-import { type RunId } from '@texra-ai/harness/schemas';
+import { type RunId } from '@texra-ai/worldline/schemas';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 

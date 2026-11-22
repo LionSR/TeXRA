@@ -7,39 +7,39 @@ import RunParityHero from '../.vitepress/components/RunParityHero.vue';
 An open-source AI theorist for VS Code and the terminal. It
 attempts real theory work: deriving results, checking derivations in
 Wolfram, and formalizing proofs in Lean 4. It takes on open problems in
-long autonomous runs with a team of specialist agents, helping you do
-good, verifiable work. Manuscript preparation, LaTeX tooling, and figures
+long autonomous runs, splitting large jobs across helper agents and
+programs, helping you do good, verifiable work. Manuscript preparation, LaTeX tooling, and figures
 serve as supporting capabilities within your research project.
 
 <GuideIntroHero />
 
-<p class="hero-caption">A single task, split across three specialists in the TeXRA view. Select a delegation to see what it produced.</p>
+<p class="hero-caption">A single task, split across three programs in the TeXRA view. Select a delegation to see what it produced.</p>
 
 ## Get started
 
 - [**Installation**](./installation.md): VS Code extension or the `texra` CLI
-- [**First run**](./first-run.md): open a `.tex` file, watch one agent work
+- [**First run**](./first-run.md): open a `.tex` file, watch one program work
 - [**Quick start**](./quick-start.md): the longer walkthrough in VS Code
 
 ## Use it
 
-| Task                                       | Workflow                                                               |
-| ------------------------------------------ | ---------------------------------------------------------------------- |
-| Verify proofs and derivations              | `review`, see [Built-in agents](./built-in-agents.md)                  |
-| Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                             |
-| Search literature, no fabricated citations | `assistant`, see [Research tools](./research-tools.md)                 |
-| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)                        |
-| Fix typos, grammar and notation            | `edit` program, see [Built-in agents](./built-in-agents.md#programs)   |
-| Build slides from a paper                  | `slides` program, see [Built-in agents](./built-in-agents.md#programs) |
-| Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                                      |
+| Task                                       | Workflow                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------- |
+| Verify proofs and derivations              | `review` program, see [Programs](./programs.md#task-programs)                |
+| Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                                   |
+| Search literature, no fabricated citations | the assistant or `search` program, see [Research tools](./research-tools.md) |
+| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)                              |
+| Fix typos, grammar and notation            | `edit` program, see [Programs](./programs.md#document-programs)              |
+| Build slides from a paper                  | `slides` program, see [Programs](./programs.md#document-programs)            |
+| Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                                            |
 
 ## Understand the system
 
-- [**Built-in agents**](./built-in-agents.md): the full catalog
-- [**Agent architecture**](./agent-architecture.md): programs vs. chats, reflection, planning
-- [**Multi-agent workflows**](./multi-agent-workflows.md): how a lead agent fans work out to specialists in parallel
+- [**The assistant and programs**](./programs.md): what you can ask for, and every program
+- [**Programs: how they work**](./agent-architecture.md): revisions, the critic, run storage
+- [**Multi-agent workflows**](./multi-agent-workflows.md): how the assistant fans work out in parallel
 - [**Models**](./models.md): picking a model for the job
-- [**Custom agents**](./custom-agents.md): define your own in YAML
+- [**Tailoring TeXRA**](./customizing.md): project instructions, skills, plugins and your own programs
 
 ## Why multi-agent
 
@@ -56,13 +56,12 @@ General-purpose chatbots struggle with this:
 - **No verification**: raw text output gives you no way to check an algebra step, type-check a proof, or diff what changed.
 - **No tools**: no WolframScript, no Mathlib search by type signature, no compiler in the loop.
 
-TeXRA splits the work across specialist agents that call real tools and return
-verifiable output.
+TeXRA's assistant and programs call real tools and return verifiable output.
 
 ## Three surfaces, one system
 
 The VS Code extension, the desktop app, and the `texra` CLI share the same
-agents, credentials, and run history. A run started in the CLI appears live in
+assistant, programs, credentials, and run history. A run started in the CLI appears live in
 the extension's **Tasks** list, and vice versa.
 
 <RunParityHero />
@@ -71,9 +70,10 @@ the extension's **Tasks** list, and vice versa.
 
 ```mermaid
 graph TB
-    User[User] --> |asks an agent| Orchestrator[Agent Orchestrator]
-    Orchestrator --> WA[Programs]
-    Orchestrator --> IA[Chat Agents]
+    User[User] --> |asks| Assistant[Assistant]
+    Assistant --> WA[Programs]
+    Assistant --> IA[Helper agents]
+    Assistant --> Tools
 
     WA --> |edit, annotate, merge| Output[Versioned Output Files]
     Output --> Diff[Color-Coded Diff]
@@ -87,14 +87,14 @@ graph TB
     Shell --> Wolfram[WolframScript]
 ```
 
-TeXRA's agents run in two ways:
+TeXRA works in two ways:
 
 <AgentClasses />
 
-<p class="hero-caption">A program runs a structured pipeline and returns a diff; a chat works conversationally with grounded tools.</p>
+<p class="hero-caption">A document program runs a structured pipeline and returns a diff; the assistant works conversationally with grounded tools and starts task programs.</p>
 
-Agents combine three mechanisms: **reflection** (critiquing and revising their
-own output), **tool use** (checking work against compilers, language servers,
+TeXRA combines three mechanisms: **reflection** (critiquing and revising output),
+**tool use** (checking work against compilers, language servers,
 and search APIs), and **planning** (breaking a problem into steps and adapting
 as results come back).
 

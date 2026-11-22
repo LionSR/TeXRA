@@ -38,7 +38,7 @@ import type { UsageLog } from '@shared/usageLog';
 import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { AgentDirectories, AppState, AppStateStore } from './interfaces';
+import type { HostResources, AppState, AppStateStore } from './interfaces';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
@@ -51,7 +51,7 @@ import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 export class GlobalValues extends Context.Service<
   GlobalValues,
   CurrentValues
->()('@texra-ai/harness/GlobalValues') {}
+>()('@texra-ai/worldline/GlobalValues') {}
 
 /** The settings stores a host opens for each project it shows. */
 export class StateStores extends Context.Service<
@@ -69,7 +69,7 @@ export class StateStores extends Context.Service<
       workspaceRoot: string | undefined,
     ) => Effect.Effect<AppStateStore>;
   }
->()('@texra-ai/harness/StateStores') {}
+>()('@texra-ai/worldline/StateStores') {}
 
 /**
  * The platform- and shared-owned services every process serves, merged once
@@ -98,7 +98,7 @@ export type PlatformServices =
   | Secrets
   | SubscriptionAccounts
   | AppState
-  | AgentDirectories
+  | HostResources
   | GlobalValues
   | StateStores
   | UsageLog

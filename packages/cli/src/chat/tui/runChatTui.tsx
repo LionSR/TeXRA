@@ -7,6 +7,7 @@
 
 import {
   Cause,
+  Duration,
   Effect,
   Exit,
   FiberHandle,
@@ -17,7 +18,7 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { AgentCatalog, appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/worldline/host';
 import {
   APPROVAL_POLICY_SETTING,
   type RuntimeCommand,
@@ -25,11 +26,13 @@ import {
   type AgentConfig,
   type ApprovalPolicy,
   toErrorMessage,
-} from '@texra-ai/harness/schemas';
-import { isWorking } from '@texra-ai/harness/schemas';
-import { SESSION_CLOSE_DEADLINE_MS, Settings } from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/schemas';
+import { isWorking } from '@texra-ai/worldline/schemas';
 import {
-  CliUsageError,
+  SESSION_CLOSE_DEADLINE_MS,
+  Settings,
+} from '@texra-ai/worldline/plugins';
+import {
   effectiveApprovalPolicy,
   launchApprovalNotice,
   projectApprovalPolicy,
@@ -43,7 +46,7 @@ import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { silentLogSink, writeTextStderr } from '@cli/runtime/platform/logSinks';
-import { setLogSink } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/worldline/node';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
   acquireTuiTerminal,
@@ -58,7 +61,9 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { resolveChatToolUseAgent } from './commands/handlers/agentModelCommands';
+import { setupAgent } from '@texra/agent/entryAgent';
+import { type ChatLaunch, chatOf } from '@texra/shared/session/surface';
+import { cliEntryAgent } from '@cli/runtime/cliEntryAgent';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { builtinSlashCommands } from './commands/registerBuiltins';
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
@@ -112,8 +117,8 @@ interface ChatResult {
 type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
 
 export interface RunChatInit {
-  /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
-  readonly agentOverride?: string;
+  /** The setup conversation: the entry agent with the setup tools. */
+  readonly setup?: boolean;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
   readonly modelOverride?: string;
   /** Startup resume from `texra resume <id>`, with the run's persisted
@@ -176,25 +181,20 @@ export async function runChat(
       // waits for the connection instead of ending the process.
       const credential = yield* checkModelConnection(services);
       if (credential.notice) startupNotices.push(credential.notice);
-      const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
       const defaults = resolveChatDefaults({
         stores: services,
-        agentOverride: explicitAgent,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
-        envAgent: context.envAgent,
         envModel: context.envModel,
-        visibleToolUseAgents: yield* (yield* AgentCatalog)
-          .workspaceAgents(services)
-          .visible(),
       });
-      const agentEntry = yield* resolveChatToolUseAgent(
-        services,
-        defaults.agent,
-      );
-      if (agentEntry instanceof CliUsageError) {
-        writeTextStderr(agentEntry.message);
-        return { exitCode: CliExitCode.Usage };
-      }
+      // A resumed conversation keeps the system text and tools its run
+      // recorded.
+      const resumed = initialResume?.config;
+      const chat: ChatLaunch =
+        resumed === undefined
+          ? init.setup
+            ? setupAgent()
+            : yield* cliEntryAgent
+          : chatOf(resumed);
       const modelSelectionExit = yield* Effect.exit(
         credential.ready
           ? selectCliRunnableModel(
@@ -209,8 +209,7 @@ export async function runChat(
       }
       const modelSelection = modelSelectionExit.value;
       sessionMetaSignal.set({
-        agent: defaults.agent,
-        agentSource: { kind: agentEntry.source },
+        chat,
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,
@@ -619,7 +618,7 @@ export async function runChat(
         orElse: () =>
           Effect.fail(
             new Cause.TimeoutError(
-              `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+              `the session's rows were not all written within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
             ),
           ),
       }),

@@ -6,10 +6,10 @@ import {
   runBypasses,
   formatResultCount,
   type RunView,
-} from '@texra-ai/harness/schemas';
-import { type Session } from '@texra-ai/harness';
-import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
-import { readModelOptions } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { type Session } from '@texra-ai/worldline';
+import { compareByNewestCreationTime } from '@texra-ai/worldline/transcript';
+import { readModelOptions } from '@texra-ai/worldline/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import {
   formatCliSessionStatus,
@@ -86,7 +86,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({
-        agent: meta.agent,
+        agent: meta.chat.label,
         model,
         // A completed request's route cannot change, so it outranks the
         // prospective one.

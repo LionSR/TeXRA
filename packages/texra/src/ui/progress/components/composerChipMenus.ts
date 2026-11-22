@@ -1,9 +1,9 @@
 /**
- * The new-task composer's chips: agent, model, approval, and the working
+ * The new-task composer's chips: model, approval, and the working
  * directory when there are two or more roots. Each chip is a menu over the
  * launcher's selections; the composer renders them and owns the dispatch.
  * Open on a proposal, the form approves another run's launch, so it offers
- * agent and model only: that run's approval and directory apply.
+ * the model only: that run's approval and directory apply.
  */
 import { html, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
@@ -12,11 +12,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import {
   getModelLabel,
   isModelOptionAvailable,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { modelRefOf } from '@texra-ai/llm';
-import type { AgentOptionData } from '@texra/shared/pickerOptions';
-import { isAgentOption } from '@texra/shared/pickerOptions';
-import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -26,8 +23,7 @@ import {
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
-import { UNLISTED_AGENT_LABEL } from '@ui/copy/taskAgent';
-import { launchPolicy, type ApprovalPolicy } from '@texra-ai/harness/schemas';
+import { launchPolicy, type ApprovalPolicy } from '@texra-ai/worldline/schemas';
 
 export interface ChipMenu {
   readonly id: string;
@@ -40,26 +36,6 @@ export interface ChipMenu {
 }
 
 type Launch = Surface['launch'];
-
-/** The launcher's agent in the catalog. No selection (empty) is the default
- *  of the listed agents, the one the host's launch starts
- *  (`prepareSurfaceLaunch`). Imported selections can be bare names; catalog
- *  options are source-qualified. A bare name matches against the effective
- *  catalog, while an explicitly chosen source stays exact. A selection
- *  naming no option (an agent hidden or removed since it was chosen) is no
- *  agent, and the host's launch keeps to the same options: it refuses an
- *  agent hidden since. */
-function launchAgentOption(
-  launch: Launch,
-  host: HostSnapshot,
-): AgentOptionData | undefined {
-  const agent =
-    launch.agent ||
-    pickDefaultToolUseAgent(
-      host.agentOptions.map(({ label }) => ({ name: label })),
-    );
-  return host.agentOptions.find((option) => isAgentOption(option.value, agent));
-}
 
 /**
  * The model menu over `selected`: its label, and the host's models as items
@@ -118,38 +94,8 @@ export function launcherChipMenus(
   },
   editing: boolean,
 ): ChipMenu[] {
-  const agent = launchAgentOption(launch, host);
   const model = modelMenu(launch.model, host);
   const menus: ChipMenu[] = [
-    {
-      id: 'composer-agent',
-      icon: 'robot',
-      label: agent?.label ?? UNLISTED_AGENT_LABEL,
-      title: 'Agent',
-      items: html`
-        ${repeat(
-          host.agentOptions,
-          (option) => option.value,
-          (option) =>
-            html`<wa-dropdown-item
-              value=${`agent:${option.value}`}
-              type="checkbox"
-              .checked=${live(option.value === agent?.value)}
-              >${option.label}</wa-dropdown-item
-            >`,
-        )}
-        <wa-dropdown-item value="settings:agents"
-          >Browse all agents…</wa-dropdown-item
-        >
-      `,
-      onSelect: (value) => {
-        if (value.startsWith('agent:')) {
-          actions.setLaunch({ agent: value.slice(6) });
-        } else if (value === 'settings:agents') {
-          actions.openSettings('agents/library');
-        }
-      },
-    },
     {
       id: 'composer-model',
       icon: 'bolt',
@@ -202,7 +148,7 @@ export function launcherChipMenus(
   return menus;
 }
 
-/** Approval sits beside agent and model because it is chosen per task, at
+/** Approval sits beside the model because it is chosen per task, at
  *  the moment of delegating; the run header then shows it and can revoke it. */
 function approvalMenu(
   launch: Launch,

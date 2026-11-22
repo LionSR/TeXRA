@@ -9,17 +9,14 @@
  */
 import { Schema, Struct } from 'effect';
 import {
-  decodingDefault,
   SUBSCRIPTION_AUTH_PROVIDERS,
-  AgentScanIssueSchema,
-  AgentSourceSchema,
   RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   ToolDependencyStatusSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import {
   API_KEY_PROVIDER_IDS,
@@ -130,34 +127,6 @@ const UpdateSettingsSnapshotMessageSchema = Schema.Union([
   ...otherDerivedSnapshots.map(snapshotMessage),
 ]);
 
-// ==================== Agent selection data schema ====================
-
-/** Agent selection data for the settings view: one catalog agent. */
-const AgentSelectionItemSchema = Schema.Struct({
-  /** Its catalog name: its own, or `<plugin>:<name>` for an installed
-   *  plugin's agent. */
-  name: Schema.Trim.check(Schema.isMinLength(1)).check(
-    Schema.isPattern(/^(?:[a-z0-9][a-z0-9-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*$/u),
-  ),
-  description: Schema.optional(Schema.String),
-  source: AgentSourceSchema,
-  filePath: Schema.optional(Schema.String),
-  tools: Schema.optional(Schema.Array(Schema.String)),
-  /**
-   * On a customized copy: the source of the bundled agent it overrides, when
-   * an update changed that agent since the copy was taken.
-   */
-  newerBuiltIn: Schema.optional(AgentSourceSchema),
-  enabled: Schema.Boolean,
-});
-export type AgentSelectionItem = typeof AgentSelectionItemSchema.Type;
-
-/** Outbound: backend → frontend agent selection data */
-const AgentSelectionPageSchema = Schema.Struct({
-  agents: Schema.Array(AgentSelectionItemSchema),
-  customAgentIssues: decodingDefault(Schema.Array(AgentScanIssueSchema), []),
-});
-
 // ==================== Model selection data schema ====================
 
 /**
@@ -204,16 +173,6 @@ const ModelSelectionPageSchema = Schema.Struct({
   helperModel: Schema.String,
 });
 export type ModelSelectionPage = typeof ModelSelectionPageSchema.Type;
-
-// ============================================================
-// Custom agent directory data schema
-// ============================================================
-
-/** Outbound: backend → frontend custom agent directory info */
-const CustomAgentDirPageSchema = Schema.Struct({
-  path: Schema.String,
-  isDefault: Schema.Boolean,
-});
 
 // ============================================================
 // Tool dashboard data schemas
@@ -280,24 +239,21 @@ export type ToolDashboardItem = typeof ToolDashboardItemSchema.Type;
  * tools or agents, built once (`@texra/controllers/settingsView/pluginRows`). A
  * TeXRA plugin carries its dashboard card, an installed Claude Code or Codex
  * plugin its listing, and an MCP server from the user's `mcp.json` its name
- * and command. `usedBy` names the agents whose tool lists reach the row.
+ * and command.
  */
 const PluginRowSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('texra'),
     item: ToolDashboardItemSchema,
-    usedBy: Schema.Array(Schema.String),
   }),
   Schema.Struct({
     kind: Schema.Literal('installed'),
     plugin: PluginListItemSchema,
-    usedBy: Schema.Array(Schema.String),
   }),
   Schema.Struct({
     kind: Schema.Literal('mcp'),
     name: Schema.NonEmptyString,
     command: Schema.NonEmptyString,
-    usedBy: Schema.Array(Schema.String),
   }),
 ]);
 export type PluginRow = typeof PluginRowSchema.Type;
@@ -425,8 +381,6 @@ const LatexStatusPageSchema = Schema.Struct({
 const SettingsHostStateSchema = Schema.Struct({
   profile: ProfilePageSchema,
   models: ModelSelectionPageSchema,
-  agents: AgentSelectionPageSchema,
-  customAgentDir: CustomAgentDirPageSchema,
   skills: SkillsPageSchema,
   plugins: PluginsPageSchema,
   githubToken: GitHubTokenPageSchema,
@@ -473,15 +427,6 @@ function modelCommand<T extends string>(command: T) {
   });
 }
 
-/** Inbound message addressed to an agent by name and source. */
-function agentCommand<T extends string>(command: T) {
-  return Schema.Struct({
-    command: Schema.Literal(command),
-    agentName: Schema.NonEmptyString,
-    agentSource: AgentSourceSchema,
-  });
-}
-
 // Provider key inbound messages (settings-only)
 const SetProviderKeyMessageSchema = providerCommand(
   SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
@@ -509,48 +454,6 @@ const SetModelReasoningLevelMessageSchema = modelCommand(
     /** The reasoning level to set, or undefined/null to reset to model default. */
     level: Schema.NullOr(ReasoningEffortSchema),
   }),
-);
-
-// Agent selection inbound messages
-const OpenAgentYamlMessageSchema = agentCommand(
-  SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
-);
-const SetAgentEnabledMessageSchema = agentCommand(
-  SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-).mapFields(Struct.assign({ enabled: Schema.Boolean }));
-
-const SetAllAgentsEnabledMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
-  source: AgentSourceSchema,
-  enabled: Schema.Boolean,
-});
-const OpenAgentFolderMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER),
-});
-const CreateAgentMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
-});
-const CustomizeAgentMessageSchema = agentCommand(
-  SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
-);
-const DeleteCustomAgentMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
-  agentName: Schema.NonEmptyString,
-});
-const KeepCustomAgentMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT),
-  agentName: Schema.NonEmptyString,
-});
-const RevealAgentFileMessageSchema = agentCommand(
-  SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
-);
-
-// Custom agent directory inbound messages
-const SetCustomAgentDirMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
-);
-const ResetCustomAgentDirMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR,
 );
 
 // Tool dashboard inbound messages
@@ -681,19 +584,6 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   // Model selection messages
   SetModelEnabledMessageSchema,
   SetModelReasoningLevelMessageSchema,
-  // Agent selection messages
-  OpenAgentYamlMessageSchema,
-  SetAgentEnabledMessageSchema,
-  SetAllAgentsEnabledMessageSchema,
-  OpenAgentFolderMessageSchema,
-  CreateAgentMessageSchema,
-  CustomizeAgentMessageSchema,
-  DeleteCustomAgentMessageSchema,
-  KeepCustomAgentMessageSchema,
-  RevealAgentFileMessageSchema,
-  // Custom agent directory messages
-  SetCustomAgentDirMessageSchema,
-  ResetCustomAgentDirMessageSchema,
   // GitHub token messages
   SetGitHubTokenMessageSchema,
   RemoveGitHubTokenMessageSchema,

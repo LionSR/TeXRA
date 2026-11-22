@@ -12,7 +12,7 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 // Local imports - platform
-import { JsonStore } from '@texra-ai/harness/node';
+import { JsonStore } from '@texra-ai/worldline/node';
 
 async function readStoredJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));

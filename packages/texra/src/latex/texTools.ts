@@ -9,12 +9,12 @@ import {
   WorkspaceFs,
   Settings,
   type SettingsStores,
-} from '@texra-ai/harness/plugins';
-import { meansAbsent } from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/plugins';
+import { meansAbsent } from '@texra-ai/worldline/node';
 import {
   splitContentLines,
   type FileLocation,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';

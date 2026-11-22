@@ -3,7 +3,7 @@
  *
  * Which sections a call produces — its file links, diffs, agent identifiers,
  * MCP structured content, and the generic input fallback — is decided once in
- * `@texra-ai/harness/transcript` (`toolRowModel`). This module only turns those data
+ * `@texra-ai/worldline/transcript` (`toolRowModel`). This module only turns those data
  * sections into Lit templates, and picks the two presentation details the
  * model deliberately leaves to a host: the highlight language behind the
  * `file`/`shell` hints, and the glyph on a badge. The code and terminal
@@ -14,7 +14,7 @@
 import { absurd } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename } from '@texra-ai/worldline/schemas';
 import {
   buildToolUseSection,
   wrapInPre,
@@ -34,7 +34,7 @@ import type {
   ToolFileListSection,
   ToolFileSection,
   ToolSection,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/worldline/transcript';
 
 // Side-effect import to register <terminal-output> custom element
 import '@ui/progress/components/TerminalOutput';

@@ -4,13 +4,13 @@
  * stores that remain (`readStorageInventory`), and delete them once the user
  * confirms.
  */
-import { Effect } from 'effect';
+import { Effect, Number as Num } from 'effect';
 
 import {
   deleteStorageInventory,
   readStorageInventory,
-} from '@texra-ai/harness/host';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/host';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 import { formatBytes } from '@ui/copy/format';
 
 import { CliExitCode } from './platform/exitCodes';
@@ -37,7 +37,7 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
     count: string,
     rows: readonly { bytes: number; line: string }[],
   ) => [
-    `${count}, ${formatBytes(rows.reduce((sum, row) => sum + row.bytes, 0))}:`,
+    `${count}, ${formatBytes(Num.sumAll(rows.map((row) => row.bytes)))}:`,
     ...rows.map(
       (row) => `  ${formatBytes(row.bytes).padStart(9)}  ${row.line}`,
     ),

@@ -17,7 +17,7 @@ import {
   type RequestDecision,
   type PendingRequest,
   type RuntimeCommand,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import type { HostCommand } from './hostRequest';
 

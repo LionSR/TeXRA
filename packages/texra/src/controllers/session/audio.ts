@@ -12,20 +12,20 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { normalizeProviderError } from '@texra-ai/harness/host';
-import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
+import { normalizeProviderError } from '@texra-ai/worldline/host';
+import { withLogChannel, Settings } from '@texra-ai/worldline/plugins';
 import {
   inheritedEnv,
   withCommandDirs,
   meansAbsent,
   pathExists,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 import { SOX_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 import {
   findCommand,
   type FoundCommand,
 } from '@texra/utils/system/binaryResolver';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type {
   ChildProcessHandle,
   ChildProcessSpawner,

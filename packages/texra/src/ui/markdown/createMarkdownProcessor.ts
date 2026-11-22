@@ -7,7 +7,7 @@
 
 import { LRUCache } from 'lru-cache';
 
-import { escapeAttr, escapeText } from '@texra-ai/harness/schemas';
+import { escapeAttr, escapeText } from '@texra-ai/worldline/schemas';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
 
 import {

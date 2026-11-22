@@ -60,11 +60,9 @@ never a log payload.
 
 ```
 packages/harness/src/agent/trace/        ← agent-general (no TeXRA)
-├── events.ts          ← AgentEvent: the session event schema's trace arms
 ├── AgentTrace.ts      ← the interface and its handles
 ├── TraceEmitter.ts    ← the implementation, and runEventDraft
-├── helpers.ts         ← TeXRA helpers as functions over AgentTrace
-└── index.ts           ← the module's public surface
+└── traceLogs.ts       ← shared helpers as functions over AgentTrace
 
 packages/harness/src/controllers/session/runTrace.ts
                        ← each run's trace sink: rows in publisher order,
@@ -108,8 +106,8 @@ carries its text instead.
    (`packages/harness/src/shared/session/sessionView.ts`) and in any renderer
    that switches on the row type.
 3. Add a sugar method on `AgentTrace` that reduces to `emit({type:'…'})`
-   only when many call sites need it, or, if the case is TeXRA-specific, a
-   helper function over `AgentTrace` in `helpers.ts`.
+   only when many call sites need it, or, if the case is shared across call
+   sites, a helper function over `AgentTrace` in `traceLogs.ts`.
 
 The schema is the single source of truth: a renderer that switches
 exhaustively on the row type fails to compile until it handles the new case.

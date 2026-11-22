@@ -31,7 +31,6 @@ import {
   SKILL_SOURCES_CONFIG,
 } from './_helpers/cliCommand';
 
-import { agentsCommand } from './agents';
 import { authCommand } from './auth';
 import { chatCommand, chatOptions } from './chat';
 import { cloneCommand } from './clone';
@@ -61,18 +60,13 @@ const EXAMPLES = [
     'clone an Overleaf or ShareLaTeX project',
   ],
   [
-    'texra run <program|agent> --input file.tex --instruction "<text>"',
-    'run a program or an agent headless',
+    'texra run <program> --input file.tex --instruction "<text>"',
+    'run a program headless',
   ],
   ['texra tasks list', "list every project's tasks"],
   [
     'texra tasks attach <id>',
     'follow a task live, whichever window started it',
-  ],
-  ['texra agents list', 'list the available agents'],
-  [
-    'texra config agents --agents all',
-    'make every agent visible in this workspace',
   ],
   [
     'texra plugin install github.com/<owner>/<repo>',
@@ -118,7 +112,7 @@ const startChatOrHelp = Effect.fn('startChatOrHelp')(function* (input: {
   return yield* selectCliCommand(
     'chat',
     chatOptions,
-  )({ ...input, agent: Option.none(), model: Option.none() });
+  )({ ...input, model: Option.none() });
 });
 
 const rootCommand = Command.make(
@@ -142,7 +136,6 @@ const rootCommand = Command.make(
     configCommand,
     installGithubActionCommand,
     historyCommand,
-    agentsCommand,
     skillsCommand,
     pluginCommand,
     modelsCommand,

@@ -18,7 +18,7 @@ import {
   pluralize,
   joinFacts,
   isLive,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   formatLoopPositionLabel,
   runStatus,
@@ -32,7 +32,7 @@ import {
 } from '../terminal/terminalText';
 import { getStderrColumns, writeRawStderr } from '../platform/logSinks';
 import { isQuiet, type CliContext } from '../platform/cliContext';
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 
 const CLEAR_LINE = '\r\x1b[2K';
 const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
@@ -251,7 +251,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const root = this.root();
     if (!root) return { line: '', state: '' };
     // The session view's turn; a run whose loop has not moved yet carries none.
-    // The agent as the cards name it (`runIdentityDisplayName`): a program
+    // The agent as the cards name it (`runIdentityName`): a program
     // launch's `source:name` key reads as its name.
     const agentName = root.identity.kind === 'agent' ? root.label : undefined;
     const parts: string[] = [];

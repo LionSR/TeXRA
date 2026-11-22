@@ -2,7 +2,7 @@ import { Effect, Schema, SubscriptionRef, Context } from 'effect';
 import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
-import { RunIdSchema, AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema, AgentConfigSchema } from '@texra-ai/worldline/schemas';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -58,7 +58,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             Effect.gen(function* () {
               const records = getRunRecords(runId);
               const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-                agent: 'worker',
+                label: 'worker',
                 model: 'openai/gpt-6.1-sol',
                 instruction: 'private instruction',
               });
@@ -92,7 +92,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               session,
               runId,
               Schema.decodeUnknownSync(AgentConfigSchema)({
-                agent: 'worker',
+                label: 'worker',
                 model: 'openai/gpt-6.1-sol',
               }),
             );

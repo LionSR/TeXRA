@@ -87,7 +87,7 @@ export async function pathExists(path: string): Promise<boolean> {
 
 /**
  * A `GlobalStorageFs` no program under test reaches: a suite whose fake host
- * answers `agentDirectories.custom()` from a directory of its own still names
+ * answers `hostResources.custom()` from a directory of its own still names
  * the service in its requirements, and this satisfies that type without
  * standing up a root nothing reads.
  */

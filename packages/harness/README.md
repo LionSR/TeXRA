@@ -1,4 +1,4 @@
-# `@texra-ai/harness`
+# Worldline (`@texra-ai/worldline`)
 
 An embeddable agent runtime in Effect, from [TeXRA](https://texra.ai): run an
 agent from a Node program and consume its trace as a stream.
@@ -14,7 +14,7 @@ Requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later. The
 package is ESM only.
 
 ```bash
-npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
+npm install @texra-ai/worldline @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
 ```
 
 [`@texra-ai/llm`](https://www.npmjs.com/package/@texra-ai/llm), the model
@@ -34,7 +34,7 @@ patch while `@effect/*` packages float.
   "dependencies": {
     "@effect/platform-node": "^4.1.3",
     "@effect/sql-sqlite-node": "^4.1.3",
-    "@texra-ai/harness": "^0.1.0",
+    "@texra-ai/worldline": "^0.1.0",
     "@texra-ai/llm": "^0.1.0",
     "effect": "^4.1.3",
   },
@@ -55,29 +55,28 @@ The package's surface is Effect: `Sessions.layer({ platform, plugins, client })`
 composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
-plugin of the embedder's own beside them. `session.start` runs an agent as a conversation. A plugin can also register
+plugin of the embedder's own beside them. `session.start` runs a conversation: its system text, the tools it declares and the instruction. A plugin can also register
 a program (`Plugin.programs`): one of its script modules, started by name
 with the `program` tool or a `script` of kind `program`, whose run is that
 module's default export called with the launch's arguments, instruction
 and files.
-`@texra-ai/harness` ships no built-in programs.
+`@texra-ai/worldline` ships no built-in programs.
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { responseText, Sessions } from '@texra-ai/harness';
-import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
+import { responseText, Sessions } from '@texra-ai/worldline';
+import { nodePlatform } from '@texra-ai/worldline/node';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 
-const platform = nodePlatform({
-  agentsDir: './agents',
-  storageDir: './.agent-storage',
-});
+const platform = nodePlatform({ storageDir: './.agent-storage' });
 
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions;
   const session = yield* sessions.open(platform.roots);
   const run = yield* session.start({
-    agent: 'polish',
+    label: 'polish',
+    system: 'You edit prose for concision. Keep every claim.',
+    tools: ['read_file', 'edit_file'],
     instruction: 'Tighten the summary in notes.md.',
     model: 'anthropic/claude-sonnet-5-5',
   });
@@ -102,86 +101,67 @@ const result = await Effect.runPromise(program);
 console.log(result.outcome);
 ```
 
-`agent: 'polish'` names the file `polish.yaml` in `agentsDir`, which you
-write: `name`, `description`, `prompt` and `tools`, the fields the next
-section lists. Until that file exists, `session.start` fails with
-`LaunchRefused`; the inline form below needs no file. `model` is a
-`provider/model` id from the catalog `@texra-ai/llm` exports (`MODELS`), and
-its key is read from the provider's environment variable
-(`ANTHROPIC_API_KEY`, …).
+### What a run is
 
-### An inline persona
+There are no agent files. Each `session.start` call describes the run directly
+(`StartRequestSchema` from `@texra-ai/worldline/schemas`):
 
-`agent` names an agent file in the platform's agent directories, or it is the
-persona itself, written in the same format as the file
-(`InlinePersonaSchema` from `@texra-ai/harness/schemas`): `name`,
-`description`, `prompt`, `tools` and `temperature`. The run records the
-persona with its configuration, so nothing has to be written to disk. An
-inline persona has no bundled original, so a `basedOn` is refused with a
-`RunFailure`. A tool
-it names that no plugin offers fails the run before any model call, as it
-would in a file.
+- `system`: the run's own system text, placed before what the harness appends
+  (the user's and project's `AGENTS.md`, tool-use instructions, memory indexes,
+  and active plugin sections). `system` is a
+  [Nunjucks](https://mozilla.github.io/nunjucks/) template rendered once at
+  launch with `CWD` (the run's working directory) among its variables. Because
+  its expressions are evaluated in your process, treat `system` as author-owned
+  code: pass end-user text as `instruction`, never inside `system`. Nothing else
+  the system prompt carries (workspace paths and git branch, `AGENTS.md`, memory
+  indexes) is rendered as a template.
+- `tools`: the tool names the run declares (`mcp__<server>__*` expands to every
+  tool of a configured MCP server; omit or leave empty for text-only replies).
+  Naming a tool that no plugin provides fails the run before any model call.
+- `label`: the display label shown on cards, listings, and the run directory.
+- `runTools`: custom tools built with `defineTool` for this run alone (pass the
+  same `runTools` again when calling `session.resume`).
 
-A `prompt`, in a file or inline, is a [Nunjucks](https://mozilla.github.io/nunjucks/)
-template rendered once when the run launches, with `CWD` (the run's working
-directory) among its variables. Its expressions are evaluated in your
-process, so a prompt is its author's code: pass an end user's text as the
-`instruction`, never as part of a persona's `prompt`. Nothing else the system
-prompt carries (the workspace's path and branch, `AGENTS.md`, the memory
-indexes) is rendered.
+The run stores its configuration in history, so resuming it reads nothing else
+from disk. When a run spawns a child via `agent`, it records the child's
+`system`, `tools`, and `label` the same way. Passing `agentName`
+(`<plugin>:<name>`) reads an installed Claude Code or Codex plugin's agent once
+at call time and writes it into the child's configuration.
 
-```ts
-const program = Effect.gen(function* () {
-  const session = yield* (yield* Sessions).open(platform.roots);
-  const run = yield* session.start({
-    agent: {
-      name: 'summary_editor',
-      description: 'Reviews summaries.',
-      prompt: 'You review summaries for concision. Keep every claim.',
-      tools: ['read_file', 'grep'],
-    },
-    instruction: 'Suggest a tighter summary for notes.md.',
-    model: 'anthropic/claude-sonnet-5-5',
-  });
-  return yield* run.result;
-});
-```
-
-Nothing in the package calls `Effect.runPromise` itself: the
-`Effect.runPromise` above is the embedder's own boundary, as is any host
-entry that runs the program.
+Nothing in the package calls `Effect.runPromise` itself: the `Effect.runPromise`
+call above belongs to the embedder's entry point, just as it does in any host.
 
 ### A persistent session, and resume
 
-`sessions.open(roots, { persistent: true })` keeps the session's history in
-the root's SQLite store under the platform's `storageDir`. Without
-`persistent: true`, the store is in memory and ends with the session. Reopening
-an already-open workspace root returns the existing session; passing a
-different `persistent` option fails with `SessionOptionsConflict` until the
-session is closed.
+`sessions.open(roots, { persistent: true })` keeps session history in the root's
+SQLite store under the platform's `storageDir`. Without `persistent: true`, the
+store is in memory and ends with the session. Reopening an already-open
+workspace root returns the existing session; passing a different `persistent`
+option fails with `SessionOptionsConflict` until the session is closed.
 
 A later process can open the same root and call `session.resume(runId)` to
-continue a run from its committed history, returning the same `Run` handle that
-`start` returns. A run that cannot continue fails with `ResumeRefused`, whose
-`reason` is a `ResumeRefusal`: its `kind` is `finished`, `blocked` (the agent or plugin
-named by `name` is missing, off or not trusted), `unusableCheckpoint`,
-`earlierBuild` (with its `cause`), `pluginUnavailable` (a `plugin` the run
-used did not load, with its `cause`), or `notResumable` (it was deleted). If
-`runId` belongs to a child run owned by an active parent call,
-`session.resume` resumes the parent and sets `run.redirectedFrom` to the
-requested child `runId`. Pass the same custom `tools` to `resume` that were
-passed to `start`. Calling `resume` on a run already running or resuming in
-this process starts nothing: it returns the `Run` of the activation running,
-and reads no input. `run.activation` is that activation's commit;
-`session.run(runId, activation)` gives the same handle again, which a host
-uses to answer a handle it carried across a process boundary.
+continue a run from its committed history, returning the same `Run` handle as
+`start` (pass the same `runTools` that were given to `start`):
+
+- **Unresumable runs:** Fails with `ResumeRefused`, whose `reason` is a
+  `ResumeRefusal` with `kind` set to `finished`, `unusableCheckpoint`,
+  `earlierBuild` (with its `cause`), `pluginUnavailable` (naming the missing
+  `plugin` whose facts the run holds), or `notResumable` (the run was deleted).
+- **Owned child runs:** If `runId` belongs to a child owned by an active parent
+  call, `session.resume` resumes the parent instead and sets
+  `run.redirectedFrom` to the requested child `runId`.
+- **Already active runs:** Calling `resume` on a run already active in this
+  process starts nothing—it returns the live activation's `Run` handle and reads
+  no input. `run.activation` identifies that activation's commit, and
+  `session.run(runId, activation)` recovers the same handle across a process
+  boundary.
 
 ```ts
 const program = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots, {
     persistent: true,
   });
-  const run = yield* session.resume(runId, { tools });
+  const run = yield* session.resume(runId, { runTools });
   return yield* run.result;
 });
 ```
@@ -235,7 +215,9 @@ const program = Effect.gen(function* () {
       ),
   });
   const run = yield* session.start({
-    agent: 'polish',
+    label: 'polish',
+    system: 'You edit prose for concision. Keep every claim.',
+    tools: ['read_file', 'edit_file'],
     instruction: 'Tighten the summary in notes.md.',
     model: 'anthropic/claude-sonnet-5-5',
   });
@@ -262,11 +244,11 @@ so a reader's chunks always add up to each stream's final text.
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
 surface names: `LaunchRefused` for an input the launch will not run (an
-unknown agent or model, a persona or config its schema rejects, a run id
+unknown model, a config its schema rejects, a run id
 already in use), or `ToolsRefused`. A launch that fails for any other reason
 before its run enters the session fails `start` with `RunFailure`, whose
 `cause` is exactly what the launch path threw. No host is shown such a
-failure: an unknown agent or model's `LaunchRefused` carries the `notice`
+failure: an unknown model's `LaunchRefused` carries the `notice`
 to show for it. A run that fails after entering stores a failed end, which
 `run.result` returns.
 
@@ -455,7 +437,7 @@ workspace-relative files its tool calls edited, and the `structured` value of
 a `submit_output` tool when the run used one. A program's run (`script.kind:
 'program'`) ends with its script's return value as `structured`; how the run
 reads to whoever launched it is the program's registered result
-(`ProgramResult`, exported from `@texra-ai/harness/plugins`: the schema of
+(`ProgramResult`, exported from `@texra-ai/worldline/plugins`: the schema of
 the plugin's fact it reads, its delivery body, and the files it changed). There is no category to switch on.
 
 `run.result` is terminal-only. A run of this package runs one cycle and
@@ -473,15 +455,15 @@ files.
 
 ## Entry points
 
-| Entry                          | Contents                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                         |
-| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                             |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                       |
-| `@texra-ai/harness/builtins`   | The built-in plugins: `harnessBuiltins`, or one by one (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                                                                                                                                                                                                                              |
-| `@texra-ai/harness/plugins`    | What a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                      |
-| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise           |
+| Entry                            | Contents                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@texra-ai/worldline`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                         |
+| `@texra-ai/worldline/schemas`    | Browser-safe: Effect schemas + derived types for run configurations and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                                      |
+| `@texra-ai/worldline/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                       |
+| `@texra-ai/worldline/builtins`   | The built-in plugins: `harnessBuiltins`, or one by one (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                                                                                                                                                                                                                              |
+| `@texra-ai/worldline/plugins`    | What a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
+| `@texra-ai/worldline/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                      |
+| `@texra-ai/worldline/host`       | What a full application host composes beyond the root: `processLayer`, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise                              |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
 exports, with their TSDoc and declarations, are listed in its API reference
@@ -491,43 +473,40 @@ version of the usage program against a packed tarball is in
 
 ## The platform
 
-Every run needs an `AgentPlatform`: the process services the package
-composes (the agent directories, secrets and the resume
-port) plus the `WorkspaceRoots` of the folder the runs
-work in (workspace path, its storage path, config, workspace state, and the
-process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under (stdio servers
-speaking MCP 2025-11-25; one answering an older revision does not start), and a run's
-system prompt carries the storage root's `AGENTS.md` (the person's own, for
-every workspace) and then the workspace's.
+Every run needs an `AgentPlatform`: the process services the package composes
+(its secret store and an optional `resourcesRoot` for plugin assets) plus the
+`WorkspaceRoots` for the target folder (workspace path, storage path, config,
+workspace state, and process-wide global state).
 
-**Memory.** While the `memory.enabled` setting is on (the default), a run
-with file tools has two folders of Markdown notes it reads and writes with
-those tools: `<storageDir>/memories`, for what holds across workspaces, and
-`memories/` under the workspace's own storage directory. The run's system
-text says where they are and carries each folder's `MEMORY.md`, its index,
-as it reads at every request (the first 16,000 characters). There is no
-memory tool and nothing else is loaded: a note is read when the model opens
-it. `memoryFolders(platform.roots)` from `./plugins` names the two folders.
-Turn memory off with `Settings.set(platform.roots, MEMORY_ENABLED_SETTING,
-false)`.
-`nodePlatform()` supplies all of them: process-local config and state,
-the ordinary storage layout under the `storageDir` you name (required; the
-package never falls back to a per-user directory), that directory's `mcp.json`
-and `AGENTS.md`, and environment-variable secrets (so provider API keys are read from
-the environment; nothing is persisted). The environment a run reads is the
-workspace's `.env` file over `process.env`, read again as each run launches:
-a variable the file sets wins over the process's, a provider key and the
-proxy variables included, and reaches the commands the run starts. Point
-`workspaceDir` only at a folder whose `.env` you would load yourself. The setting rows your own plugins read
-go to it as `nodePlatform({ settings })`, a catalog built with
-`settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which
-resolves them after the harness's own; a platform with its own
-`ConfigProvider` carries that catalog as its `catalog`. Keys are relative to
-the namespace (`'memory.enabled'`), which the stores add to every key they
-write. Code reads and
-writes a setting through `Settings` (`get`, `set`, `reset`) against the
-stores it holds.
+- **MCP servers and project rules:** The tool registry reads stdio MCP servers
+  from `mcp.json` at the storage root (`roots.storageRoot` / `storageDir`, not
+  `roots.globalStorage`; servers must speak MCP revision `2025-11-25`, and those
+  answering an older revision do not start). Each run's system prompt carries
+  the storage root's `AGENTS.md` (the person's own, for every workspace) and
+  then the workspace's.
+- **Memory:** While the `memory.enabled` setting is on (the default), a run with
+  file tools has two folders of Markdown notes it reads and writes with those
+  tools: `<storageDir>/memories`, for what holds across workspaces, and
+  `memories/` under the workspace's own storage directory. The run's system text
+  names both folders and carries each folder's `MEMORY.md` index as it reads at
+  every request (the first 16,000 characters). There is no memory tool and
+  nothing else is loaded automatically: a note is read when the model opens it.
+  `memoryFolders(platform.roots)` from `./plugins` names the two folders. Turn
+  memory off with `Settings.set(platform.roots, MEMORY_ENABLED_SETTING, false)`.
+- **`nodePlatform(options)`:** Supplies ready-made defaults—process-local config
+  and state, the standard layout under the required `storageDir` (the package
+  never falls back to a per-user directory), that directory's `mcp.json` and
+  `AGENTS.md`, and environment-variable secrets (nothing persisted). The harness
+  reads provider keys and proxy variables from the workspace's `.env` file over
+  `process.env` at each launch, while commands a run starts inherit `.env` over
+  `process.env` with provider keys withheld. Point `workspaceDir` only at a
+  folder whose `.env` you would load yourself.
+- **Custom settings:** Pass plugin settings via `nodePlatform({ settings })`,
+  using `settingsCatalog({ namespace, rows })` from `@texra-ai/worldline/schemas`
+  (or attach the catalog to your own `ConfigProvider` as `catalog`). Keys are
+  relative to the namespace (such as `'memory.enabled'`), which the stores
+  prepend on write. Code reads and writes settings through `Settings` (`get`,
+  `set`, `reset`).
 
 Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
@@ -539,7 +518,7 @@ it, and it owns the proxy policy and timeouts too:
 
 ```ts
 import { Effect, Layer } from 'effect';
-import { ModelFetch, Sessions } from '@texra-ai/harness';
+import { ModelFetch, Sessions } from '@texra-ai/worldline';
 
 const scripted: typeof fetch = async () =>
   new Response(/* the provider's wire reply */);
@@ -568,7 +547,7 @@ run's warnings) go through the loggers, minimum level and tracer your program
 provides. Effect's default logger prints `Info` and above to the console;
 provide your own with `Logger.layer([...])`, or `Logger.layer([])` to drop
 them. To send them through the harness's sink instead, which redacts secrets,
-provide `effectDiagnosticsLayer(level)` from `@texra-ai/harness/node` around
+provide `effectDiagnosticsLayer(level)` from `@texra-ai/worldline/node` around
 the program and name a destination with `setLogSink({ write(entry) { … } })`:
 it receives each `LogEntry`, Effect's structured record (level, message,
 cause, annotations), and `entryLine` / `entryDetail` from `./schemas` word
@@ -596,7 +575,7 @@ interrupts tool work when the run stops. `defineTool` validates the input and
 normalizes ordinary failures into tool feedback; `execute` implements the work.
 
 ```ts
-import { defineTool } from '@texra-ai/harness/plugins';
+import { defineTool } from '@texra-ai/worldline/plugins';
 import { Effect, Schema } from 'effect';
 
 const EchoTool = defineTool({
@@ -614,7 +593,7 @@ const tools = [EchoTool];
 also reports a summary, attachments or facts. Failing with an `Error` gives
 the model its message as the tool's error.
 
-Pass `tools` to `session.start`. A custom tool that requires
+Pass `tools` to `session.start` as `runTools`. A custom tool that requires
 approval runs only on a session with an approval handler attached
 (`session.attach`); on any other session it fails the launch with
 `ToolsRefused`. A directly implemented `ITool` also returns an Effect from

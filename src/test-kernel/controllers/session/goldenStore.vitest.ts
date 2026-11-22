@@ -52,9 +52,9 @@ import {
   type RunId,
   RunIdSchema,
   type SessionView,
-} from '@texra-ai/harness/schemas';
-import { Sessions } from '@texra-ai/harness';
-import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/schemas';
+import { Sessions } from '@texra-ai/worldline';
+import { ValidationModel } from '@texra-ai/worldline/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/makeRunHistory';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
@@ -117,7 +117,7 @@ const JUDGE = 'af2b42e263afafa73834e36b';
 /** The chat's Codex child, which ended on its own before the user's stop. */
 const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000d');
-/** The agent the script defined (`persona`), named by its `agent()` call. */
+/** The child the script wrote (`system`, `tools`), named by its `agent()` call. */
 const DEFINED = '23fd96e0ed29f5316b23ba6a';
 /** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
@@ -351,7 +351,6 @@ describe('the golden 1.0 store', () => {
           [
             'read_file',
             'executions',
-            'memory',
             'wake',
             'plugin_manager',
             'resources',
@@ -427,13 +426,13 @@ describe('the golden 1.0 store', () => {
       expect(runsOf(folded)).toEqual([
         run(PARENT, 'golden_parent', { children: [DELEGATED] }),
         run(DELEGATED, 'golden_child', { parent: PARENT }),
-        run('a00000000003', 'review'),
-        run('a00000000004', 'review'),
+        run('a00000000003', 'assistant'),
+        run('a00000000004', 'assistant'),
         // The document task and the two revisions its program ran.
         run(DOCUMENT_TASK, 'edit', { children: REVISIONS }),
         // Listed in start order, while the parent names them sorted.
-        ...REVISIONS.toReversed().map((id) =>
-          run(id, 'edit', { parent: DOCUMENT_TASK }),
+        ...REVISIONS.toReversed().map((id, index) =>
+          run(id, `Revision ${index + 1}`, { parent: DOCUMENT_TASK }),
         ),
         // The user stopped its held turn with Ctrl-C, after its Codex
         // child's turn had ended.
@@ -446,7 +445,7 @@ describe('the golden 1.0 store', () => {
         run(JUDGE, 'golden_chat', { parent: GOAL }),
         run(CODEX, 'codex', { parent: CHAT }),
         run(SCRIPTED, 'golden_script', { children: [DEFINED] }),
-        run(DEFINED, 'golden_reader', { parent: SCRIPTED }),
+        run(DEFINED, 'Defined agent', { parent: SCRIPTED }),
         run(FORK_SOURCE, 'golden_fork'),
         // The resumed chat over the fork, exited at its idle prompt: the
         // exit wrote nothing, so it still reads as waiting, its owner gone.
@@ -559,7 +558,6 @@ describe('the golden 1.0 store', () => {
  * outcome, which the model reads, and the line stays one line.
  */
 describe('the golden run killed after its effect', () => {
-  const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
   const EFFECT = resolve(
     REPO_ROOT,
     'src/test-kernel/fixtures/storage/golden-effect/approved.txt',
@@ -570,8 +568,7 @@ describe('the golden run killed after its effect', () => {
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   /** The test's host as the kill left it: the golden store and the effect on
-   *  a temp-dir host whose agents are the fixtures', loaded into the block's
-   *  catalog, with the validation model answering. The release puts the
+   *  a temp-dir host, with the validation model answering. The release puts the
    *  environment back. */
   const killedHost = Layer.effectDiscard(
     Effect.gen(function* () {
@@ -601,27 +598,12 @@ describe('the golden run killed after its effect', () => {
         ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
       });
       writeFileSync(flag, VALIDATION_FLAG_CONTENT);
-      yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
     }),
   ).pipe(
     Layer.provideMerge(
-      FakeHost.layer(async () => {
-        const host = await createTempDirPlatform(
-          'texra-golden-kill-',
-          tempDirs,
-          TEXRA_APP,
-        );
-        const agents = {
-          custom: () => Effect.succeed(AGENTS),
-          customConfigured: () => Effect.succeed(false),
-          builtIn: () => Effect.succeed(AGENTS),
-          builtInToolUse: () => Effect.succeed(AGENTS),
-        };
-        return {
-          ...host,
-          platform: { ...host.platform, agentDirectories: agents },
-        };
-      }),
+      FakeHost.layer(() =>
+        createTempDirPlatform('texra-golden-kill-', tempDirs, TEXRA_APP),
+      ),
     ),
   );
 

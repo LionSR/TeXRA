@@ -58,7 +58,6 @@ import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import {
   sameIdentity,
   type OfferedTool,
-  type Persona,
   type ToolDefinition,
 } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
@@ -85,12 +84,13 @@ export const asksApproval = <E, R>(
 export class HostCapabilities extends Context.Service<
   HostCapabilities,
   { readonly of: (storage: string) => ReadonlySet<string> }
->()('@texra-ai/harness/agent/HostCapabilities') {}
+>()('@texra-ai/worldline/agent/HostCapabilities') {}
 
 /** What a step resolves its tools from: fixed at the run's open, but the
  *  approval flag the step reads live. */
 export interface StepToolInputs {
-  readonly tools: Persona['tools'];
+  /** The tool names the run declares (`AgentConfig.tools`, or a script's). */
+  readonly tools: readonly string[];
   /** When true, approval-gated tools are withheld: read live each step. */
   readonly approvalPromptsUnavailable: boolean;
   /** What the session's host serves now, read live each step: a tool that
@@ -101,7 +101,7 @@ export interface StepToolInputs {
   /** Whether the plugins' injected tools join (step 2). */
   readonly injectTools: boolean;
   /** Whether the installed plugins' tools join (step 2): a top-level run's,
-   *  unless it is a plugin agent that names its own tools. */
+   *  a `self()` child's. */
   readonly injectInstalled: boolean;
   /** The loaded plugins the run holds, from its open. */
   readonly held: HeldPlugins;
@@ -110,12 +110,6 @@ export interface StepToolInputs {
    *  step. */
   readonly directToolCalls: boolean;
 }
-
-/** A declaration's tool names, in order. */
-export const declaredToolNames = (tools: Persona['tools']): readonly string[] =>
-  (Array.isArray(tools) ? tools : []).map((toolConfig) =>
-    typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
-  );
 
 /** Resolve the tools one step offers from the catalog entries it pinned,
  *  reading the settings and the probes of the session it runs in. */
@@ -263,9 +257,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     definitions.push(entry.tool.definition);
     resolvedNames.add(name);
   };
-  for (const name of [...new Set(declaredToolNames(input.tools))].flatMap(
-    expandDeclared,
-  ))
+  for (const name of [...new Set(input.tools)].flatMap(expandDeclared))
     offer(name, true);
   for (const name of injected)
     if (!(input.directToolCalls && isScript(name))) offer(name, false);

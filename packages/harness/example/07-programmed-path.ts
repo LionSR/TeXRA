@@ -1,10 +1,10 @@
 /**
- * Example 07 — A programmed path: an agent file, a plugin tool, a script
- * module, `self()` twice and a SQL query over the run history.
+ * Example 07 — A programmed path: a run written inline, a plugin tool, a
+ * script module, `self()` twice and a SQL query over the run history.
  *
- * 1. Writes a flat persona YAML into the agent directory the platform serves
- *    and starts the run by the agent's name. The model sees the same system
- *    text and tools as for the equivalent inline persona.
+ * 1. Starts the run with its system text and tools written inline, twice:
+ *    the run records them on its config, and the model sees the same system
+ *    text and tools both times.
  * 2. Offers a plugin tool (`definePlugin` + `defineTool`) beside
  *    `harnessBuiltins`, with a script module (`scriptModules`) over it.
  * 3. The model's first turn calls `script`. The program imports the module,
@@ -15,13 +15,10 @@
  *    structured value and a long text cell), each `self()` child's status
  *    (`runs`, joined to the call that launched it), and a write refused.
  */
-import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import { Effect, Layer, Schema } from 'effect';
-import { HISTORY_TABLES, Sessions } from '@texra-ai/harness';
-import { harnessBuiltins } from '@texra-ai/harness/builtins';
-import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
+import { HISTORY_TABLES, Sessions } from '@texra-ai/worldline';
+import { harnessBuiltins } from '@texra-ai/worldline/builtins';
+import { definePlugin, defineTool } from '@texra-ai/worldline/plugins';
 
 import {
   EXAMPLE_CLIENT,
@@ -58,10 +55,9 @@ const latexPlugin = definePlugin({
   },
 });
 
-const PERSONA = {
-  name: 'programmed_path',
-  description: 'Outlines a draft and reviews it in two rounds.',
-  prompt: 'Outline the draft with a script, then review it twice.',
+const RUN = {
+  label: 'programmed_path',
+  system: 'Outline the draft with a script, then review it twice.',
   tools: ['script', 'executions', 'outline_sections'],
 };
 const TEX = '\\section{Setup}\\section{Main bound}';
@@ -106,8 +102,8 @@ return {
   write,
 };`;
 
-const { platform, agentsDir, requests, route } = await makeExampleWorkspace([
-  { text: 'Inline persona reply.', expect: 'Inline start.' },
+const { platform, requests, route } = await makeExampleWorkspace([
+  { text: 'First run reply.', expect: 'Inline start.' },
   {
     expect: 'Outline and review.',
     toolCalls: [{ id: 'call_script', name: 'script', input: { code: CODE } }],
@@ -122,16 +118,6 @@ const { platform, agentsDir, requests, route } = await makeExampleWorkspace([
   },
   { expect: 'The script returned', text: 'Both rounds passed.' },
 ]);
-await writeFile(
-  join(agentsDir, 'programmed-path.yaml'),
-  [
-    `name: ${PERSONA.name}`,
-    `description: ${PERSONA.description}`,
-    `prompt: ${PERSONA.prompt}`,
-    `tools: [${PERSONA.tools.join(', ')}]`,
-    '',
-  ].join('\n'),
-);
 
 /** What a request tells the model: its system text and its tools' names. */
 const shape = (request: Readonly<Record<string, unknown>> | undefined) =>
@@ -148,14 +134,14 @@ const program = Effect.gen(function* () {
   const { model } = route;
 
   const inline = yield* session.start({
-    agent: PERSONA,
+    ...RUN,
     instruction: 'Inline start.',
     model,
   });
   yield* inline.result;
 
   const run = yield* session.start({
-    agent: PERSONA.name,
+    ...RUN,
     instruction: 'Outline and review.',
     model,
   });
@@ -163,20 +149,24 @@ const program = Effect.gen(function* () {
   if (end.outcome !== 'completed')
     throw new Error(`run ended ${end.outcome}: ${JSON.stringify(end)}`);
 
-  // 1. The run named a file agent, and the model was told and offered
-  // exactly what the inline persona gets.
+  // 1. The run recorded what it is, and the model was told and offered
+  // exactly what the first run was.
   const config = yield* session.records(run.runId).readConfig;
-  const fromFile = shape(requests[1]);
-  if (config?.agent !== PERSONA.name || fromFile !== shape(requests[0]))
-    throw new Error(`file persona differs from inline: ${fromFile}`);
+  const second = shape(requests[1]);
+  if (
+    config?.label !== RUN.label ||
+    config.system !== RUN.system ||
+    second !== shape(requests[0])
+  )
+    throw new Error(`the second run differs from the first: ${second}`);
   // `self` comes with the script tool, but only a script calls it: the
   // model is sent the script's declaration of it, never a tool of its own.
   const sentNames = (requests[1]?.tools as { name: string }[] | undefined)?.map(
     ({ name }) => name,
   );
   if (sentNames?.includes('self'))
-    throw new Error(`the model was sent self as a tool: ${fromFile}`);
-  console.log(`[07] agent file ${config.agent} = inline persona`);
+    throw new Error(`the model was sent self as a tool: ${second}`);
+  console.log(`[07] run ${config.label} recorded its system text and tools`);
 
   // 2-4. What the script returned, read back from the stored conversation.
   // The script's return is its result node's structured `value`.

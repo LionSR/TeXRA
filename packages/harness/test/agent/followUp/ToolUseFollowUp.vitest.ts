@@ -7,7 +7,7 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Fiber, Scheduler } from 'effect';
 import { expect } from 'vitest';
 
-import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import { RunIdSchema, type RunId } from '@texra-ai/worldline/schemas';
 import { Inbox } from '@agent/followUp/Inbox';
 import type { FollowUpReader } from '@agent/followUp/FollowUpReader';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';

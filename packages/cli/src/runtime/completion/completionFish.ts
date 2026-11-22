@@ -14,16 +14,11 @@ function dynamicListSource(source: CompletionSource): string {
   return `(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra ${source.command} 2>/dev/null | awk "{print \\$1}")`;
 }
 
-const TOP_LEVEL_RUN_CONDITION =
-  "-n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents'";
-
-// Positional agent/model completions, in emission order. Each source-backed
+// Positional model completions, in emission order. Each source-backed
 // path resolves its listing source from POSITIONAL_COMPLETION_SOURCES.
 const DYNAMIC_POSITIONAL_COMPLETIONS: readonly (readonly [string, string])[] =
   Object.entries(POSITIONAL_COMPLETION_SOURCES).map(([commandPath, source]) => [
-    commandPath === 'run'
-      ? TOP_LEVEL_RUN_CONDITION
-      : fishCondition(commandPath.split(' ')),
+    fishCondition(commandPath.split(' ')),
     dynamicListSource(source),
   ]);
 

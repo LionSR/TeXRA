@@ -10,7 +10,7 @@ import {
   type RunId,
   Rejected,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   Cause,
   Deferred,
@@ -37,7 +37,7 @@ import {
   type RunRecords,
   type Session,
   type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
   type ITool,
   StateReadFailed,
@@ -45,8 +45,8 @@ import {
   type StateStore,
   logFailure,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
-import { activationView, replayTrace } from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/plugins';
+import { activationView, replayTrace } from '@texra-ai/worldline/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import {
@@ -73,7 +73,7 @@ import {
   type TaskFailed,
   type TaskRecordsFailed,
 } from './protocol';
-import type { CommitOrdinal } from '@texra-ai/harness/transcript';
+import type { CommitOrdinal } from '@texra-ai/worldline/transcript';
 
 const CHANNEL = 'serviceSession';
 
@@ -565,13 +565,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         client['session.deleteRuns']({ workspace, target }),
       ),
     request,
-    start: ({ tools, ...start }) => {
+    start: ({ runTools, ...start }) => {
       if (!('config' in start))
         // The service takes a host's whole configuration.
         return Effect.fail(
           new LaunchRefused({ message: 'A service task needs its config.' }),
         );
-      const refused = windowTools(tools);
+      const refused = windowTools(runTools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
         client['task.start']({
@@ -586,7 +586,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ).pipe(Effect.flatMap(runOf));
     },
     resume: (runId, input) => {
-      const refused = windowTools(input?.tools);
+      const refused = windowTools(input?.runTools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
         client['task.resume']({

@@ -31,13 +31,13 @@ import {
 } from 'effect';
 import which from 'which';
 
-import { logFailure } from '@texra-ai/harness/plugins';
+import { logFailure } from '@texra-ai/worldline/plugins';
 import {
   executeCommand,
   IS_WINDOWS,
   withCommandDirs,
-} from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/node';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'VendorPackages';

@@ -1,4 +1,4 @@
-// Installs the packed `@texra-ai/llm` and `@texra-ai/harness` the way a
+// Installs the packed `@texra-ai/llm` and `@texra-ai/worldline` the way a
 // consumer off the registry gets them, then type-checks and runs
 // `example/`. With `--acceptance`, runs `acceptance.ts` instead of the
 // ladder, against the real route `TEXRA_EXAMPLE_MODEL` names, and writes
@@ -57,7 +57,7 @@ for (const file of readdirSync(exampleDir)) {
 // Each pack runs its package's `prepack`, which builds what it publishes.
 for (const [name, file] of [
   ['@texra-ai/llm', 'llm.tgz'],
-  ['@texra-ai/harness', 'harness.tgz'],
+  ['@texra-ai/worldline', 'harness.tgz'],
 ]) {
   run(
     'corepack',

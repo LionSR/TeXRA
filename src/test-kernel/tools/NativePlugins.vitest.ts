@@ -56,7 +56,7 @@ import {
   AgentConfigSchema,
   generateRunId,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   answersOf,
   persistentTestSession,
@@ -302,14 +302,9 @@ const start = Effect.fn('start')(function* (
     runId,
     interactive: true,
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'golden_native',
-      agentSource: {
-        kind: 'inline',
-        persona: {
-          prompt: 'GOLDEN-NATIVE: equip yourself with a plugin.',
-          tools: ['read_file'],
-        },
-      },
+      label: 'golden_native',
+      system: 'GOLDEN-NATIVE: equip yourself with a plugin.',
+      tools: ['read_file'],
       model: 'openai/gpt-5.6-sol',
       instruction: `Install the plugin at ${dir}. ${task}`,
     }),
@@ -513,7 +508,7 @@ describe(
                   'native_die of plugin echoes failed: a defect',
                   'native_throw of plugin echoes failed: a synchronous throw',
                   'native_raw of plugin echoes failed: a throw outside any effect',
-                  'native_hang of plugin echoes did not finish within 60s.',
+                  'native_hang of plugin echoes did not finish within 1m.',
                 ]);
                 // The run went on, on the layer whose fiber died.
                 expect(toolOutputs(roots.storage, runId).at(-1)).toBe(
@@ -572,8 +567,8 @@ describe(
                   runId: program,
                   interactive: true,
                   config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                    agent: 'echo_program',
-                    agentSource: { kind: 'inline', persona: {} },
+                    label: 'echo_program',
+
                     model: 'openai/gpt-5.6-sol',
                     script: { kind: 'program', name: 'echo_program', args: {} },
                   }),

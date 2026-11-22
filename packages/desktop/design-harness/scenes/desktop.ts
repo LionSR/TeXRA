@@ -20,7 +20,7 @@ import {
   type RunId,
   type RunView,
   type SessionView,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import {
   BOARD_NOW,
   buildScenario,

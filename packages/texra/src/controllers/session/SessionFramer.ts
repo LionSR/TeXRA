@@ -17,7 +17,7 @@
  */
 import { Stream } from 'effect';
 
-import { listingTypeOf } from '@texra-ai/harness/schemas';
+import { listingTypeOf } from '@texra-ai/worldline/schemas';
 import type {
   EventsFrame,
   Subscribe,
@@ -25,8 +25,8 @@ import type {
 import type {
   CommitOrdinal,
   SessionViewInput,
-} from '@texra-ai/harness/transcript';
-import type { Session } from '@texra-ai/harness';
+} from '@texra-ai/worldline/transcript';
+import type { Session } from '@texra-ai/worldline';
 
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;

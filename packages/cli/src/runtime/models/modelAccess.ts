@@ -1,12 +1,12 @@
 // Third-party imports
 import { Effect } from 'effect';
 
-import { LaunchRefused } from '@texra-ai/harness';
+import { LaunchRefused } from '@texra-ai/worldline';
 
 // Local imports
-import type { RunModelCandidate } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
-import { isModelOptionAvailable, joinFacts } from '@texra-ai/harness/schemas';
+import type { RunModelCandidate } from '@texra-ai/worldline/host';
+import type { SettingsStores } from '@texra-ai/worldline/plugins';
+import { isModelOptionAvailable, joinFacts } from '@texra-ai/worldline/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import {

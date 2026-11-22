@@ -10,23 +10,23 @@ import type {
   StartInput,
   WorkspaceRoots,
   Notices,
-} from '@texra-ai/harness';
+} from '@texra-ai/worldline';
 import {
   type ProcessServices,
   type readModelOptions,
   presentRunFailure,
   workspaceEnvironmentLayer,
   programLaunch,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 import {
   logFailure,
   withLogChannel,
   StateReadFailed,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { Effect, Scope } from 'effect';
 
 import {
-  agentFileName,
+  labelFileName,
   toErrorMessage,
   runActionRefusal,
   type RunAction,
@@ -35,7 +35,7 @@ import {
   Rejected,
   Unavailable,
   type RequestError,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
@@ -55,7 +55,10 @@ import {
   planCompileFixer,
   type CompileFixerPlanFailed,
 } from '@texra/agent/output/compileFixer';
-import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
+import type {
+  AgentConfig,
+  AgentConfigInput,
+} from '@texra-ai/worldline/schemas';
 import {
   isRequestRefusal,
   type RequestRefusal,
@@ -413,7 +416,7 @@ export const createHostRunActions = Effect.fn(
                   // don't collide.
                   to: path.posix.join(
                     PACKED_RUNS_DIRECTORY,
-                    `${yield* fileNameTimestamp}_${path.parse(inputFile).name}_${agentFileName(config.agent)}_${modelFileName(config.model)}_${runId.replaceAll('-', '').slice(0, 8)}`,
+                    `${yield* fileNameTimestamp}_${path.parse(inputFile).name}_${labelFileName(config.label)}_${modelFileName(config.model)}_${runId.replaceAll('-', '').slice(0, 8)}`,
                   ),
                 }
               : { op: 'remove' },

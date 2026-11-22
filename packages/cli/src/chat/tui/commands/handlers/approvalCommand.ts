@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { type RunId, parseApprovalPolicy } from '@texra-ai/harness/schemas';
+import { type RunId, parseApprovalPolicy } from '@texra-ai/worldline/schemas';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
@@ -10,7 +10,7 @@ import type { SessionRequests } from '@cli/chat/tui/state/approvalQueue';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
 import { type SlashCommandContext } from './slashContext';
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
 const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 

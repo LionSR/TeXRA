@@ -7,7 +7,7 @@ import {
   entryDetail,
   entryLine,
   truncateSummary,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import { postToMain } from './messageRoutes';
 import { LOG_LEVEL_LOOK, type LogLevelLook } from '@ui/copy/logLevels';
 import type { IconName } from '@ui/wa/iconNames';

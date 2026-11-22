@@ -11,8 +11,6 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, Result, Schema } from 'effect';
 import {
-  AGENT_SOURCE,
-  AgentSourceSchema,
   OWN_PROGRAM_PREFIX,
   SkillNameSchema,
   type InstalledPlugin,
@@ -154,16 +152,12 @@ const nameTaken = (name: string) =>
   });
 
 function claimName(run: InstallRun, name: string) {
-  // A plugin's agent and its program are `<plugin>:<name>`, so a plugin
-  // named like an agent source would read as that source's agent, and one
-  // named like the prefix of an agent's own programs as their writer.
-  if (
-    name === OWN_PROGRAM_PREFIX ||
-    Result.isSuccess(Schema.decodeUnknownResult(AgentSourceSchema)(name))
-  )
+  // A plugin's program is `<plugin>:<name>`, so a plugin named like the
+  // prefix of an agent's own programs would read as their writer.
+  if (name === OWN_PROGRAM_PREFIX)
     return Effect.fail(
       new PluginRequestError({
-        message: `A plugin cannot be named "${name}": that name is reserved (${[...Object.values(AGENT_SOURCE), OWN_PROGRAM_PREFIX].join(', ')}).`,
+        message: `A plugin cannot be named "${name}": that name is reserved for an agent's own programs.`,
       }),
     );
   if (run.taken.has(name)) return Effect.fail(nameTaken(name));

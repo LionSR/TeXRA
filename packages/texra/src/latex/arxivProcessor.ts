@@ -4,11 +4,11 @@ import {
   randomizedExponentialBackoff,
   isTransientHttpStatus,
   withLogChannel,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import {
   readDirectoryTypedTolerant,
   entryTypeIn,
-} from '@texra-ai/harness/node';
+} from '@texra-ai/worldline/node';
 
 import * as NodeStream from '@effect/platform-node/NodeStream';
 import { parse as parseContentDisposition } from 'content-disposition';
@@ -30,8 +30,8 @@ import { Tar } from 'effect/encoding';
 import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
+import type { WorkspaceRoots } from '@texra-ai/worldline';
+import { toErrorMessage, hasExtension } from '@texra-ai/worldline/schemas';
 import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { LatexProgress } from './progress';

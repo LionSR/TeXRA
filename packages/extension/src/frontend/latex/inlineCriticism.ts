@@ -22,14 +22,14 @@ import { Effect, FileSystem, Predicate, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { readNormalizedFile } from '@texra-ai/harness/node';
-import { toErrorMessage, hasExtension } from '@texra-ai/harness/schemas';
+import { readNormalizedFile } from '@texra-ai/worldline/node';
+import { toErrorMessage, hasExtension } from '@texra-ai/worldline/schemas';
 import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import type { Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/worldline';
 import {
   withLogChannel,
   Settings,
@@ -37,7 +37,7 @@ import {
   AppState,
   type PerKeyLane,
   withPerKeyLane,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 
 const CHANNEL = 'InlineCriticism';

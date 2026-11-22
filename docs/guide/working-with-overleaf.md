@@ -6,11 +6,11 @@ import OverleafEditActions from '../.vitepress/components/OverleafEditActions.vu
 
 # Working with Overleaf: a Git-based workflow
 
-Overleaf's Git integration lets you clone an Overleaf project locally, run TeXRA's agents and `latexdiff` in VS Code or the terminal, and push commits back to Overleaf for your coauthors.
+Overleaf's Git integration lets you clone an Overleaf project locally, run TeXRA and `latexdiff` in VS Code or the terminal, and push commits back to Overleaf for your coauthors.
 
 ::: tip Works from the CLI too
 The clone → edit → push loop below works in the terminal as well. After
-cloning, run agents with the [`texra` CLI](./texra-cli.md) (e.g.
+cloning, run TeXRA with the [`texra` CLI](./texra-cli.md) (e.g.
 `texra run edit --input main.tex`) instead of the VS Code panel, then commit
 and push as usual.
 :::
@@ -32,7 +32,7 @@ The whole loop is a round trip: pull your project down from Overleaf, edit it lo
 
 <OverleafRoundTripFlow />
 
-<p class="hero-caption">Clone or pull brings the project into VS Code, where TeXRA's agents do the editing; <code>git push</code> sends your committed changes back to Overleaf for your collaborators.</p>
+<p class="hero-caption">Clone or pull brings the project into VS Code, where TeXRA does the editing; <code>git push</code> sends your committed changes back to Overleaf for your collaborators.</p>
 
 ### 1. Clone your Overleaf project
 
@@ -77,11 +77,11 @@ accepted by the same command.
 
 ### 2. Edit locally with TeXRA in VS Code
 
-Open `your-local-folder` in VS Code and run your agents and programs (`research`, `latexDiff`, `edit`, `merge`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
+Open `your-local-folder` in VS Code and work with the assistant and its programs (`edit`, `latexdiff`, `merge`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
 
 <OverleafEditActions />
 
-<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Start task</code>, reviewing outputs, and <code>latexdiff</code>/merge.</p>
+<p class="hero-caption">Each action in the local edit loop, from picking a model and writing instructions through <code>Start task</code>, reviewing outputs, and <code>latexdiff</code>/merge.</p>
 
 ### 3. Commit local changes
 

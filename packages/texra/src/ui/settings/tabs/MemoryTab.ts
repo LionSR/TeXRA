@@ -10,7 +10,7 @@ import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
-import { MEMORY_ENABLED_SETTING } from '@texra-ai/harness/schemas';
+import { MEMORY_ENABLED_SETTING } from '@texra-ai/worldline/schemas';
 
 /** A button that opens one memory folder in the system's file manager. */
 const openFolderButton = (folder: MemoryFolderScope, text: string) =>

@@ -4,12 +4,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, type ApiKeyProviderId } from '@texra-ai/llm';
-import { withSessionFs } from '@texra-ai/harness/host';
+import { withSessionFs } from '@texra-ai/worldline/host';
 import {
   withLogChannel,
   type StorageFs,
   type WorkspaceFs,
-} from '@texra-ai/harness/plugins';
+} from '@texra-ai/worldline/plugins';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
@@ -42,12 +42,12 @@ import {
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { SettingsViewProvider } from './settingsView/SettingsViewProvider';
-import type { Sessions, WorkspaceRoots } from '@texra-ai/harness';
+import type { Sessions, WorkspaceRoots } from '@texra-ai/worldline';
 import type {
   ProcessRuntime,
   ProcessServices,
   ScopedFork,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/worldline/host';
 
 /** The log channel of the command registration's own failures. */
 const REGISTRY_CHANNEL = 'ExtensionCommandRegistry';

@@ -13,6 +13,8 @@
  */
 import { Option, Schema, SchemaGetter, Struct } from 'effect';
 import {
+  AgentConfigSchema,
+  type AgentConfig,
   decodingDefault,
   FileFieldsSchema,
   RunIdSchema,
@@ -24,14 +26,14 @@ import {
   type SessionView,
   type RunView,
   type StoredMediaSchema,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 
 import { modelRefOf } from '@texra-ai/llm';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 
 import type { BridgeError } from './bridgeErrors';
 import { markShownRunSeen } from './unseenRuns';
-import type { CommitOrdinal } from '@texra-ai/harness/transcript';
+import type { CommitOrdinal } from '@texra-ai/worldline/transcript';
 import type { HostSnapshot } from './hostSnapshot';
 
 /** The launcher's file lists; an absent or null `editedFile` reads ''. */
@@ -49,23 +51,39 @@ const UIFileFieldsSchema = FileFieldsSchema.mapFields(
   }),
 );
 
+/** The fields of a run's config that say what chat it is. */
+const CHAT_FIELDS = ['label', 'system', 'tools', 'toolScope'] as const;
+
+/** A chat as a launch names it: its name, system text, tools and tool
+ *  scope, as a run's config records them. */
+const ChatLaunchSchema = Schema.Struct(
+  Struct.pick(AgentConfigSchema.fields, CHAT_FIELDS),
+);
+export type ChatLaunch = typeof ChatLaunchSchema.Type;
+
+/** The chat a stored run's config describes: what Run again…, a resumed
+ *  terminal chat and the conversation the terminal adopts start again. */
+export const chatOf = (config: AgentConfig): ChatLaunch =>
+  Struct.pick(config, CHAT_FIELDS);
+
 /**
  * The new-task composer's selections, separate from host-derived state:
- * one agent and one instruction, which chats. The file lists are what a
+ * one instruction for the entry agent, which chats. The file lists are what a
  * program's proposal, opened in the form, is edited with.
  */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
   Struct.assign({
     workingDirectory: decodingDefault(Schema.String, ''),
-    /** Empty until the person chooses one: the launch starts the default
-     *  of the agents the form lists (`pickDefaultToolUseAgent`). */
-    agent: decodingDefault(Schema.String, ''),
     model: decodingDefault(Schema.String, DEFAULT_AGENT_MODEL),
     commit: decodingDefault(Schema.String, 'HEAD'),
     instruction: decodingDefault(Schema.String, ''),
     /** The skills of the run Run again… opened the form on, which its
      *  launch activates again; a new task clears them. */
     skills: decodingDefault(Schema.Array(Schema.String), []),
+    /** The run Run again… opened the form on, as its config records it
+     *  ({@link chatOf}), which its launch starts again; null, the entry
+     *  agent. A new task clears it. */
+    chat: decodingDefault(Schema.NullOr(ChatLaunchSchema), null),
     baseFile: decodingDefault(Schema.String, ''),
     /** Per-task approval, applied at launch by `launchApprovalOptions`. */
     approval: decodingDefault(
@@ -596,7 +614,7 @@ export function applySurfaceAction(
         arriving: null,
         drawerOpen: false,
         requestError: null,
-        launch: { ...surface.launch, instruction: '', skills: [] },
+        launch: { ...surface.launch, instruction: '', skills: [], chat: null },
       };
     case 'editProposal':
       return {

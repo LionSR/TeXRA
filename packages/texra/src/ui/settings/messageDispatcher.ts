@@ -25,7 +25,7 @@ import {
   settingSignal,
   settingsSnapshotRevisions,
 } from './settingsState';
-import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
+import { HELPER_MODEL_SETTING } from '@texra-ai/worldline/schemas';
 
 /** Ask the host for something: one member of the union the host decodes
  *  every settings message against, so a command and its fields are checked

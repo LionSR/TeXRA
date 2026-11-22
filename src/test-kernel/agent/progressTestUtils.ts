@@ -8,20 +8,20 @@ import {
 } from 'effect';
 
 // Local imports
-import { defineTool } from '@texra-ai/harness/plugins';
+import { defineTool } from '@texra-ai/worldline/plugins';
 import {
   type BashRequest,
   type DisplayRow,
   type RequestDecision,
   type RunId,
-} from '@texra-ai/harness/schemas';
+} from '@texra-ai/worldline/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import type { HostInteractions } from '@texra-ai/harness';
+import type { HostInteractions } from '@texra-ai/worldline';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens the
