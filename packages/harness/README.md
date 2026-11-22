@@ -112,8 +112,7 @@ There are no agent files. Each `session.start` call describes the run directly
 - `tools`: the tool names the run declares (`mcp__<server>__*` expands to every
   tool of a configured MCP server; omit or leave empty for text-only replies).
   Naming a tool that no plugin provides fails the run before any model call.
-- `temperature` and `label`: the sampling temperature and display label shown on
-  cards, listings, and the run directory.
+- `label`: the display label shown on cards, listings, and the run directory.
 - `runTools`: custom tools built with `defineTool` for this run alone (pass the
   same `runTools` again when calling `session.resume`).
 

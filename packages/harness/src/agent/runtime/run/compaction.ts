@@ -7,7 +7,9 @@
  * `context` tool (cause `edit`), which calls no model. The request each
  * precedes waits for it. A summary, made through the invoker's priced
  * `call` (no row records its attempts), is one user message; so is an
- * agent's replacement. Every edit, skip and failure is logged and shown as
+ * agent's replacement. A threshold summary replaces the middle of the view
+ * alone (`rangeOf`): the summaries before it and the newest messages stay
+ * as they were written. Every edit, skip and failure is logged and shown as
  * a compaction activity. The fork seed (`forkRun.ts`) is the one other
  * writer of a `context.edit`, as a run's first row.
  */
@@ -59,9 +61,76 @@ const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
 
 Write a structured summary with enough context to continue the task. Output only the summary.`;
 
-/** Final user instruction that makes the compaction task explicit after history. */
-const COMPACTION_USER_PROMPT =
-  'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.';
+/** Final user instruction that makes the compaction task explicit after
+ *  history that opens with `kept` summaries the view keeps. */
+const compactionUserPrompt = (kept: number) =>
+  kept === 0
+    ? 'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.'
+    : `The conversation above opens with ${kept} earlier ${kept === 1 ? 'summary' : 'summaries'}, each marked "${COMPACTION_SUMMARY_PREFIX.trim()}". They stay in the conversation as they are: summarize only what comes after them, and do not repeat what they already say. Follow the compaction instructions exactly and output only the summary.`;
+
+/** The share of the threshold a threshold summary leaves as written: the
+ *  newest messages, which the model goes on reading whole. */
+const TAIL_SHARE = 1 / 3;
+
+/** Whether an earlier compaction left `message` as its summary. */
+const isSummary = (message: HistoryMessage): boolean => {
+  if (message.role !== 'user') return false;
+  const [first] = message.content;
+  return (
+    first?.kind === 'text' && first.text.startsWith(COMPACTION_SUMMARY_PREFIX)
+  );
+};
+
+/**
+ * The messages `[from, to)` a summary replaces. A `/compact` and an
+ * overflow summarize everything. A threshold summary leaves two parts of
+ * the view as they were written:
+ *
+ * - the summaries earlier compactions left at its start, each written once
+ *   from the messages it replaced and never summarized again, until
+ *   together they outgrow `tail`, when this summary takes them too;
+ * - the newest messages, as many as fit in `tail` tokens and never fewer
+ *   than the newest exchange: the last assistant message and what follows
+ *   it (the results of its calls, or the input that came after), which the
+ *   model has not answered yet.
+ *
+ * The tail never starts on a tool message, whose calls are in the assistant
+ * message before it.
+ */
+function rangeOf(
+  state: RunState,
+  trigger: Trigger,
+  tail: number,
+): { readonly from: number; readonly to: number } {
+  const { messages } = state;
+  if (trigger !== 'context-limit') return { from: 0, to: messages.length };
+  // The estimate is four characters a token, and text that is not English
+  // prose (another script, LaTeX, code) is several times off it, so a
+  // slice is measured as its share of the run's own size, which holds the
+  // provider's count of the view. The system text and tool declarations
+  // are in that count and not in the estimate, so a slice reads a little
+  // large and the tail a little short of `tail`, never over it.
+  const scale =
+    contextTokens(state) / Math.max(1, estimateMessageTokens(messages));
+  const tokens = (slice: readonly HistoryMessage[]) =>
+    scale * estimateMessageTokens(slice);
+  const first = messages.findIndex((message) => !isSummary(message));
+  const summaries = first === -1 ? messages.length : first;
+  const from = tokens(messages.slice(0, summaries)) > tail ? 0 : summaries;
+  let to = Math.max(
+    messages.findLastIndex(({ role }) => role === 'assistant'),
+    from,
+  );
+  let kept = tokens(messages.slice(to));
+  while (to > from) {
+    const next = kept + tokens(messages.slice(to - 1, to));
+    if (next > tail) break;
+    to -= 1;
+    kept = next;
+  }
+  while (messages[to]?.role === 'tool') to += 1;
+  return { from, to };
+}
 
 /** What a compaction of a run reads: the run's own services, and the cell
  *  and binding of the request it precedes. */
@@ -88,18 +157,19 @@ const TRIGGER_DEBUG = {
 
 type Trigger = keyof typeof TRIGGER_DEBUG;
 
-/** A summary the bound model produced of messages `[0, to)`. */
+/** A summary the bound model produced of messages `[from, to)`. */
 interface Summary {
   readonly replacement: RunState['messages'][number];
   readonly usage: ModelCallResult['usage'];
+  readonly from: number;
   readonly to: number;
   readonly contextWindow: number;
   readonly activity: ReturnType<typeof startCompactionActivity>;
 }
 
-/** Whether the history has reached the threshold share of the window. */
-const overThreshold = Effect.fn('compaction.overThreshold')(function* (
-  state: RunState,
+/** The tokens the history may reach before a summary, the threshold share
+ *  of the window: 0 with the threshold off or the window unknown. */
+const thresholdTokens = Effect.fn('compaction.thresholdTokens')(function* (
   input: Pick<CompactionInput, 'stores' | 'bound'>,
 ) {
   const percent = yield* Settings.get(
@@ -107,41 +177,36 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
     MODEL_COMPACTION_THRESHOLD_SETTING,
   );
   const contextWindow = input.bound.config.contextWindow;
-  return (
-    percent > 0 &&
-    contextWindow > 0 &&
-    contextTokens(state) > Math.floor((percent / 100) * contextWindow)
-  );
+  return contextWindow > 0 ? Math.floor((percent / 100) * contextWindow) : 0;
 });
 
 /**
- * Summarize the whole history `state` holds, or null when it is too short
- * to summarize or the summary failed, each logged and shown as the
- * compaction's activity, never silent.
+ * Summarize the part of the history `rangeOf` names, or null when that part
+ * is too short to summarize or the summary failed, each logged and shown as
+ * the compaction's activity, never silent.
  */
 const summarize = Effect.fn('compaction.summarize')(function* (
   state: RunState,
   input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker' | 'cell'>,
   trigger: Trigger,
+  /** The tokens a threshold summary leaves as written. */
+  tail: number,
 ): Effect.fn.Return<Summary | null> {
   const { logger, bound } = input;
-  // A threshold summary leaves the newest exchange as it is: the last
-  // assistant message and what follows it (the results of its calls, or the
-  // input that came after), which the model has not answered yet and reads
-  // whole. A `/compact` and an overflow summarize everything.
-  const answered = state.messages.findLastIndex(
-    ({ role }) => role === 'assistant',
-  );
-  const conversation =
-    trigger === 'context-limit'
-      ? state.messages.slice(0, Math.max(answered, 0))
-      : state.messages;
-  if (conversation.length <= 2) {
+  const { from, to } = rangeOf(state, trigger, tail);
+  // A threshold summary's range leaves the tail out, and the threshold is
+  // three tails, so a range that holds anything holds most of the view:
+  // one long message (a file read whole) is worth its summary. A `/compact`
+  // or an overflow of a prompt and its reply has nothing to summarize.
+  if (trigger === 'context-limit' ? to === from : to - from <= 2) {
     if (trigger !== 'context-limit') {
       logger.debug('Conversation too short for compaction, skipping');
     }
     return null;
   }
+  // The summarizer reads the summaries the view keeps, for what came
+  // before, and is told they stay.
+  const conversation = state.messages.slice(0, to);
   const contextWindow = bound.config.contextWindow;
   const tokensBefore = contextTokens(state);
   logger.debug(`Compacting conversation (${TRIGGER_DEBUG[trigger]})`, {
@@ -168,7 +233,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
         ...conversation.filter(({ role }) => role !== 'system'),
         {
           role: 'user',
-          content: [{ kind: 'text', text: COMPACTION_USER_PROMPT }],
+          content: [{ kind: 'text', text: compactionUserPrompt(from) }],
         },
       ],
       tools: [],
@@ -208,16 +273,17 @@ const summarize = Effect.fn('compaction.summarize')(function* (
       ],
     },
     usage: summarized.value.usage,
-    to: conversation.length,
+    from,
+    to,
     contextWindow,
     activity,
   };
 });
 
 /**
- * Land `summary`, made of `state`: messages `[0, summary.to)` are replaced
- * by it, and a provider-side continuation over the old history is dropped
- * with them.
+ * Land `summary`, made of `state`: messages `[summary.from, summary.to)`
+ * are replaced by it, and a provider-side continuation over the old history
+ * is dropped with them.
  */
 const land = Effect.fn('compaction.land')(function* (
   input: Pick<CompactionInput, 'runId' | 'logger' | 'cell'>,
@@ -235,14 +301,13 @@ const land = Effect.fn('compaction.land')(function* (
       payload: {
         cause: 'compaction',
         trigger,
-        range: { from: 0, to: summary.to },
+        range: { from: summary.from, to: summary.to },
         messages: [summary.replacement],
         usage: summary.usage,
       },
     },
   ]);
-  // The summary replaced everything it measured: the estimate of the new
-  // view is what remains.
+  // No count measures the edited view yet: what remains is its estimate.
   completed(
     summary.activity,
     contextTokens(state),
@@ -331,9 +396,10 @@ const compact = Effect.fn('compaction.compact')(function* (
   input: CompactionInput,
   trigger: Trigger,
   answers: readonly RunHistoryDraft[],
+  tail = 0,
 ) {
   const state = yield* input.cell.current;
-  const summary = yield* summarize(state, input, trigger);
+  const summary = yield* summarize(state, input, trigger, tail);
   if (summary === null) return yield* input.cell.current; // nothing landed
   return yield* land(input, answers, summary, state, trigger);
 });
@@ -350,8 +416,9 @@ export const compactAtBoundary = Effect.fn('compaction.atBoundary')(function* (
 ) {
   if (requests.length > 0) return yield* compact(input, 'user', requests);
   const state = yield* input.cell.current;
-  if (!(yield* overThreshold(state, input))) return state;
-  return yield* compact(input, 'context-limit', []);
+  const threshold = yield* thresholdTokens(input);
+  if (threshold === 0 || contextTokens(state) <= threshold) return state;
+  return yield* compact(input, 'context-limit', [], TAIL_SHARE * threshold);
 });
 
 /**

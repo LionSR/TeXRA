@@ -5,11 +5,6 @@ import { decodingDefault } from './schemaDefaults.js';
 import { ActivatedSkillsSchema } from './activeSkills';
 import { FileFieldsSchema } from './fileFields';
 
-/** A run's sampling temperature; the model's own range is narrower. */
-export const TemperatureSchema = Schema.Number.check(
-  Schema.isGreaterThanOrEqualTo(0),
-).check(Schema.isLessThanOrEqualTo(1));
-
 /** What Windows rejects in a file name, besides control characters. */
 const UNSAFE_FILE_NAME_CHARACTERS = '<>:"/\\|?*';
 /** Windows' device names, which no file may take, with or without an
@@ -59,7 +54,6 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
     /** The tools the run declares, by name; `mcp__<server>__*` is every
      *  tool that server lists. A run that declares none writes text only. */
     tools: decodingDefault(Schema.Array(Schema.NonEmptyString), []),
-    temperature: decodingDefault(TemperatureSchema, 1.0),
     /**
      * Which tools join the ones the run declares, decided by its launch.
      * Absent: a top-level run is offered the plugins' injected tools and the

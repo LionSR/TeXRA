@@ -105,8 +105,8 @@ export function blobRows(
 /** The recorded context of a request that sends `resolved`, and the
  *  resolved agent definition it names. */
 function recorded(run: Pick<AgentRunShape, 'config'>, resolved: ResolvedTurn) {
-  const { label, system, tools, temperature } = run.config;
-  const agent = { label, system, tools, temperature };
+  const { label, system, tools } = run.config;
+  const agent = { label, system, tools };
   const request = {
     mode: resolved.mode,
     system: resolved.system === undefined ? null : sha256(resolved.system),

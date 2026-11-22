@@ -126,7 +126,6 @@ const acceptInput = Effect.fn('acceptInput')(function* (
     label: input.label ?? 'agent',
     system: input.system,
     tools: input.tools ?? [],
-    temperature: input.temperature,
     instruction: input.instruction,
     model: input.model,
   }).pipe(Effect.mapError(inputRefused));

@@ -83,7 +83,9 @@ export interface BindRequest {
   /** The routes the run declined, as its rows record them. */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   readonly textOnly: boolean;
-  readonly temperature: number;
+  /** The temperature of a call that must not be sampled (a helper's
+   *  one-shot text). A run names none: its model samples at its own. */
+  readonly temperature?: number;
 }
 
 /** Model access for one project's runs. */

@@ -2031,13 +2031,12 @@ async function validateMidTurnDelivery() {
  * Threshold compaction end to end: at a 1% threshold, a long first message
  * puts the conversation over it. The message starts a task in the service,
  * which takes messages as a chat's run does (a headless `texra run` takes
- * none). A threshold summary leaves the newest exchange as it is, so the
- * chat that resumes it runs a turn with nothing older to summarize, which
- * sends the whole history (the reply names the first message); the turn
- * after waits for the summary of the three messages before its own
- * exchange and sends the summary with that exchange (the reply names the
- * summary and the new message only). The store's `context.edit` rows are
- * kept as the artifact.
+ * none). A threshold summary replaces what does not fit in the tail it
+ * leaves as written, here the long first message alone, so the chat that
+ * resumes the task waits for that summary before its first turn (the reply
+ * names the summary and the new message), and the turn after sends the
+ * summary with both exchanges, with no second summary. The store's
+ * `context.edit` rows are kept as the artifact.
  */
 async function validateThresholdCompaction() {
   const cwd = makeScratch('texra-cli-compaction-');
@@ -2077,9 +2076,12 @@ async function validateThresholdCompaction() {
     } finally {
       await observed.close();
     }
+    // The first message alone is over the threshold, so the summary lands
+    // before the second turn and replaces that one message; the exchanges
+    // after it stay as written.
     const replies = [
-      'First message | Second message',
-      'Earlier turns, summarized. | Third message',
+      'Earlier turns, summarized. | Second message',
+      'Earlier turns, summarized. | Second message | Third message',
     ];
     await project.chat(
       [source],
@@ -2100,8 +2102,8 @@ async function validateThresholdCompaction() {
       edits.length === 1 &&
         edits[0].cause === 'compaction' &&
         edits[0].trigger === 'context-limit' &&
-        JSON.parse(edits[0].range).to === 3,
-      `the summary should land as one edit of the three messages before the third turn's exchange (artifact: ${artifactPath})`,
+        JSON.parse(edits[0].range).to === 1,
+      `the summary should land as one edit of the long first message (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);

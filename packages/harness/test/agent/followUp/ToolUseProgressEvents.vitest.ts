@@ -207,6 +207,89 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         }),
       );
 
+      // Failure modes of a threshold summary: it summarized the summary an
+      // earlier one left, so a long run's early history was rewritten at
+      // every compaction; and it kept the newest exchange alone, so the
+      // model lost the wording of everything else it had just read.
+      it.effect(
+        'a threshold summary keeps earlier summaries and the newest messages',
+        () =>
+          Effect.gen(function* () {
+            const session = yield* quietSession();
+            const runId = yield* startedRun(session);
+            // Each result is about 20k tokens of the 200k window: the
+            // threshold (150k) is passed after eight of them, and the tail
+            // it leaves (50k) holds two.
+            const probe = {
+              definition: { name: 'probe' },
+              call: () =>
+                Effect.succeed({
+                  status: 'executed' as const,
+                  output: 'x'.repeat(80_000),
+                }),
+            };
+            const probes = (from: number, to: number) =>
+              Array.from({ length: to - from + 1 }, (_, i) =>
+                toolCallTurn([{ id: `call-${from + i}`, name: 'probe' }]),
+              );
+            const { result, state } = yield* runScript({
+              runId,
+              session,
+              tools: { probe },
+              script: [
+                ...probes(1, 8),
+                textTurn('First summary.'),
+                ...probes(9, 14),
+                textTurn('Second summary.'),
+                textTurn('Done.'),
+              ],
+            });
+            expect(result).toMatchObject({
+              outcome: RUN_OUTCOME.COMPLETED,
+              output: { response: 'Done.' },
+            });
+            const edits = yield* Context.get(session, SessionLog).history(
+              runId,
+              undefined,
+              ['context.edit'],
+            );
+            // The first replaces the task and six exchanges; the second
+            // starts after the first's summary.
+            expect(edits).toMatchObject([
+              {
+                payload: {
+                  trigger: 'context-limit',
+                  range: { from: 0, to: 13 },
+                },
+              },
+              {
+                payload: {
+                  trigger: 'context-limit',
+                  range: { from: 1, to: 13 },
+                },
+              },
+            ]);
+            assert(state !== null);
+            expect(
+              state.messages.map((message) =>
+                message.role === 'user'
+                  ? message.content.flatMap((part) =>
+                      part.kind === 'text' ? [part.text] : [],
+                    )
+                  : message.role,
+              ),
+            ).toEqual([
+              ['[Previous conversation summary]\n\nFirst summary.'],
+              ['[Previous conversation summary]\n\nSecond summary.'],
+              'assistant',
+              'tool',
+              'assistant',
+              'tool',
+              'assistant',
+            ]);
+          }),
+      );
+
       // Failure modes of an agent's own context edit (`context` replace):
       // a range reaching into the response that asked for it; a range that
       // leaves a tool result without its call; two ranges of one response,

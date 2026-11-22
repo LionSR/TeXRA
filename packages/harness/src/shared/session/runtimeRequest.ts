@@ -27,7 +27,6 @@ import {
   RunIdSchema,
   StoredMediaSchema,
   RunStopReasonSchema,
-  TemperatureSchema,
   ToolEditContentSchema,
 } from '@shared/schemas';
 
@@ -326,8 +325,6 @@ export const StartRequestSchema = Schema.Union([
       tools: Schema.optional(Schema.Array(Schema.NonEmptyString)),
       /** The run's display name. Absent, `agent`. */
       label: Schema.optional(Schema.String),
-      /** Its sampling temperature, 0 to 1. Absent, 1. */
-      temperature: Schema.optional(TemperatureSchema),
       instruction: Schema.String,
       /** The model the run starts on; the harness names no default. */
       model: Schema.String,

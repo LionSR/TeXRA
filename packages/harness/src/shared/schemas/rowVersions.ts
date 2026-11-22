@@ -160,7 +160,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // display `label`; no `agent` name, `agentSource` or
     // `delegationAgentScope` (an earlier build's row names an agent this
     // build cannot look up, so it would fail as damaged).
-    'run.config': Object.freeze({ version: 13, listing: 'own' }),
+    // v14: no `temperature`: a run's model samples at its own (an earlier
+    // build's row that named one would resume without it, unsaid).
+    'run.config': Object.freeze({ version: 14, listing: 'own' }),
     // v2: no `shutdown` reason: a process that exits writes nothing for its
     // runs (an earlier build's shutdown stop would fail as damaged).
     'run.stop': Object.freeze({ version: 3, listing: 'own' }),
