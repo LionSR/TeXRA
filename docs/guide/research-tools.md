@@ -5,18 +5,18 @@ import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
 import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
 
-TeXRA's research agents connect to arXiv, Zotero, DuckDuckGo, WolframScript, and Lean 4 so you can search literature, manage BibTeX references, and check symbolic or formal math from your workspace.
+TeXRA's assistant connects to arXiv, Zotero, DuckDuckGo, WolframScript, and Lean 4 so you can search literature, manage BibTeX references, and check symbolic or formal math from your workspace.
 
 <wa-callout variant="brand">
   <wa-icon slot="icon" library="texra" name="shield"></wa-icon>
-  Every citation comes from a real <strong>arXiv</strong> lookup or your <strong>Zotero</strong> library. TeXRA's research agents search grounded sources and never fabricate references.
+  Every citation comes from a real <strong>arXiv</strong> lookup or your <strong>Zotero</strong> library. TeXRA searches grounded sources and never fabricates references.
 </wa-callout>
 
 ## What you can do
 
 ### <wa-icon library="texra" name="mortar-board"></wa-icon> Find papers
 
-Ask `search` or `assistant` to find papers. They search **arXiv**, the web, and your Zotero library (`presenter` searches arXiv and the web, `review` arXiv only):
+Ask the assistant to find papers, or start the `search` program. Both search **arXiv**, the web, and your Zotero library:
 
 ```
 Find recent papers on transformer architectures for document understanding.
@@ -25,13 +25,13 @@ Focus on work from 2023-2024 that handles mathematical equations.
 
 <SearchResultsHero />
 
-<p class="hero-caption">A typical <code>search</code> result set: each preprint carries its title, authors, and an arXiv source tag. Every row is a real lookup, never fabricated.</p>
+<p class="hero-caption">A typical search result set: each preprint carries its title, authors, and an arXiv source tag. Every row is a real lookup, never fabricated.</p>
 
 The same search streams in a terminal, with each lookup shown as a tool call:
 
 <CliSearchChatHero />
 
-<p class="hero-caption">A search in <code>texra chat --agent search</code>: each grounded lookup surfaces as a tool-call row, with results streaming under it.</p>
+<p class="hero-caption">A search in <code>texra chat</code>: each grounded lookup surfaces as a tool-call row, with results streaming under it.</p>
 
 ### <wa-icon library="texra" name="cloud-download"></wa-icon> Download paper sources
 
@@ -79,60 +79,34 @@ Add this arXiv paper to my Zotero library.
   ]"
 />
 
-<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
+<p class="hero-caption">How the assistant drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
 
 ::: tip Default bibliography path
-Name your project's main `.bib` file once so agents know where to look up citations: they are told its path and search it with `grep` or `read_file`. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
+Name your project's main `.bib` file once so the assistant knows where to look up citations: they are told its path and search it with `grep` or `read_file`. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
 :::
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram
 
-The `research` agent runs Wolfram Language through `wolframscript` in the shell (`wolframscript -code '...'` or `wolframscript -file`) to check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on its **Wolfram Language** row under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
+The assistant (and the `derive` program) runs Wolfram Language through `wolframscript` in the shell (`wolframscript -code '...'` or `wolframscript -file`) to check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on its **Wolfram Language** row under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ### <wa-icon library="texra" name="beaker"></wa-icon> Formalize proofs in Lean 4
 
-The `lean` agent formalizes mathematical statements and proofs directly in Lean 4. It searches Mathlib lemmas using Loogle, inspects live proof states and tactic goals, reads compiler diagnostics, and iterates on tactic scripts until the theorem compiles without `sorry`. Read the [Lean 4 proofs guide](./lean.md) for full details.
+The assistant formalizes mathematical statements and proofs directly in Lean 4. It searches Mathlib lemmas using Loogle, inspects live proof states and tactic goals, reads compiler diagnostics, and iterates on tactic scripts until the theorem compiles without `sorry`. Read the [Lean 4 proofs guide](./lean.md) for full details.
 
-## Which agent to use
+## Which program to use
 
-Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="robot"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
+You can ask the assistant for any of this directly. When you want a fixed
+procedure, or a run from the terminal, start a program:
 
-<DropdownMenu
-  label="Agent"
-  value="search"
-  valueIcon="robot"
-  maxWidth="320px"
-  :groups="[{ label: 'Research & Verification', items: [
-    { name: 'search', icon: 'mortar-board', badge: 'chat', badgeVariant: 'info', active: true },
-    { name: 'research', icon: 'symbol-operator', badge: 'chat', badgeVariant: 'info' },
-    { name: 'lean', icon: 'beaker', badge: 'chat', badgeVariant: 'info' },
-  ] }]"
-/>
+| Program  | For                                                                                     |
+| :------- | :-------------------------------------------------------------------------------------- |
+| `search` | Finding papers and web sources, with citations; adds to Zotero, edits no workspace file |
+| `derive` | An analytical derivation or symbolic computation, checked with `wolframscript`          |
+| `review` | Auditing a manuscript's derivations, notation, references and code                      |
+| `solve`  | A research-level problem: literature, small cases, counterexamples, a checkable proof   |
+| `prove`  | Completing Lean proofs until Lean reports no error and no `sorry`                       |
 
-<FeatureCards
-  min="220px"
-  :cards="[
-    { icon: 'mortar-board', title: 'search', desc: 'Finding papers, literature reviews, fact-checking. Built in; the assistant agent has the same tools.', chips: [
-      { text: 'arxiv_search', variant: 'neutral' },
-      { text: 'web_search', variant: 'neutral' },
-      { text: 'web_fetch', variant: 'neutral' },
-      { text: 'zotero_search', variant: 'neutral' },
-    ] },
-    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification with wolframscript in the shell, plus file edits and reading figures.', chips: [
-      { text: 'bash', variant: 'info' },
-      { text: 'edit_file', variant: 'neutral' },
-      { text: 'read_file', variant: 'neutral' },
-    ] },
-    { icon: 'beaker', title: 'lean', desc: 'Formal proof engineering in Lean 4 and Mathlib with live diagnostic verification.', chips: [
-      { text: 'lean_diagnostics', variant: 'info' },
-      { text: 'lean_inspect', variant: 'info' },
-      { text: 'lean_loogle', variant: 'neutral' },
-      { text: 'lean_project', variant: 'neutral' },
-    ] },
-  ]"
-/>
-
-<p class="hero-caption">Each research agent and the tools it has enabled. Check <code>Settings → Agents</code> (<wa-icon library="texra" name="robot"></wa-icon>) for the exact set.</p>
+Read [The assistant and programs](./programs.md) for the full list.
 
 ## Next steps
 

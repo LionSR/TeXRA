@@ -1,8 +1,8 @@
 <script setup>
 // Quick Start product slice: the New task view as you'd fill it for a first
-// run (an instruction, an agent and a model, and Start task) beside the open
-// .tex. Mirrors the composer: the Polish, Dictate and Attach actions, the
-// instruction text, the agent and model menus, and the Start task button.
+// run (an instruction, a model, and Start task) beside the open .tex.
+// Mirrors the composer: the Polish, Dictate and Attach actions, the
+// instruction text, the model menu, and the Start task button.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
@@ -39,19 +39,6 @@ import MockupFrame from './MockupFrame.vue';
         </div>
 
         <div class="footer">
-          <div class="sgroup">
-            <span class="iact settings" title="Agent"
-              ><wa-icon library="texra" name="sparkle"></wa-icon
-            ></span>
-            <div class="select">
-              <span class="s-val">assistant</span>
-              <wa-icon
-                class="s-caret"
-                library="texra"
-                name="chevron-down"
-              ></wa-icon>
-            </div>
-          </div>
           <div class="sgroup">
             <span class="iact settings" title="Model"
               ><wa-icon library="texra" name="robot"></wa-icon

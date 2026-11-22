@@ -4,7 +4,7 @@
 // `lake env lean --server` (one per Lake project, as the section explains),
 // then the same lean_* tools run against it. The tool name and the chat-TUI
 // row vocabulary (`● tool (preview)` + dim `⎿ ` output) are real
-// (packages/extension/resources/plugins/lean4/agents/lean.yaml,
+// (packages/texra/src/tools/lean/plugin.ts,
 // packages/cli/src/chat/tui/panes/toolRenderers.tsx).
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
@@ -17,9 +17,7 @@
   >
     <div class="mk-term-prompt">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd"
-        >texra chat <span class="mk-term-flag">--agent</span> lean</span
-      >
+      <span class="mk-term-cmd">texra chat</span>
     </div>
 
     <div class="cln-user">

@@ -9,16 +9,16 @@ On a fresh install, the **setup assistant** walks you through connecting a model
 
 <QuickStartHero />
 
-<p class="hero-caption">The New task view: pick an agent and a model, write one sentence that names your file, and select Start task.</p>
+<p class="hero-caption">The New task view: pick a model, write one sentence that names your file, and select Start task.</p>
 
 ## Overview
 
 Editing a document typically takes five steps:
 
-1. Pick an agent and model
+1. Pick a model
 2. Write a short instruction that names your file
 3. Select **Start task**
-4. Approve the program run the agent proposes
+4. Approve the program run the assistant proposes
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
@@ -27,10 +27,9 @@ Editing a document typically takes five steps:
 
 ::: tip Prefer the terminal?
 This guide walks through the VS Code extension. If you installed the
-[CLI](./texra-cli.md), the same agents run from the command line: start an
+[CLI](./texra-cli.md), the same assistant runs from the command line: start an
 interactive session with `texra chat`, or run a single program with
-`texra run edit --input draft.tex`. Run `texra agents list` to see the agents
-available.
+`texra run edit --input draft.tex`.
 :::
 
 ## Add a key or connect a subscription
@@ -50,7 +49,7 @@ TeXRA panel offers the two main access choices; other subscriptions connect from
 The full per-provider key reference (the **API keys** list, its Set / Get / Remove actions, and per-provider settings) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
 ::: tip No TeXRA account
-There is no TeXRA sign-in. Every agent and program ships
+There is no TeXRA sign-in. The assistant and every program ship
 bundled and runs on the credential you configured above.
 :::
 
@@ -63,7 +62,7 @@ for a Grok (xAI) subscription, or `/login` in a chat to manage the ChatGPT and
 Grok sign-ins. Running `texra` without any of these opens the chat with a
 **Connect a model** panel instead of an error. `texra setup` is the terminal counterpart of the setup
 assistant: it walks you through a ChatGPT sign-in or an API key, then your
-environment, agents, and first task. Read the
+environment and first task. Read the
 [Authentication section](./texra-cli.md#authentication) of the CLI guide.
 :::
 
@@ -72,13 +71,12 @@ environment, agents, and first task. Read the
 Open the TeXRA panel from the TeXRA icon in the Secondary Side Bar, or run **TeXRA: New Task**
 (`Ctrl+Alt+M`, `Cmd+Option+M` on macOS).
 
-### Choose agent, model, and instruction
+### Choose a model and write the instruction
 
-The dropdown menus at the bottom of the instruction box pick the agent and the
-model (e.g. **Sonnet 5.5**, whose id is `anthropic/claude-sonnet-5-5`). The
-agent menu lists each agent once, the default first. Every agent chats; the
-default, `assistant`, can be asked for a document edit, and `orchestrator`
-splits a larger job across other agents.
+The menu at the bottom of the instruction box picks the model (e.g.
+**Sonnet 5.5**, whose id is `anthropic/claude-sonnet-5-5`). There is no agent
+to pick: one assistant takes every task, and splits a larger job across helper
+agents and [programs](./programs.md) itself.
 
 Then say what you want, and on which file, in the text area:
 
@@ -89,7 +87,7 @@ Keep the terminology consistent and do not change the equations.
 ```
 
 ::: tip Effective Instructions
-Be specific about your objectives: state both what the agent should improve and what constraints (notation, theorem numbering, environment structures) it must preserve.
+Be specific about your objectives: state both what the assistant should improve and what constraints (notation, theorem numbering, environment structures) it must preserve.
 :::
 
 To send figures or other media along, use **Attach** in the instruction box.
@@ -97,8 +95,8 @@ To send figures or other media along, use **Attach** in the instruction box.
 ### Approve the program run
 
 The New task view does not list programs and has no file section of its own.
-For a document edit, the agent proposes a run of one of the
-[programs](./built-in-agents.md#programs) (`edit` for a polish), and the
+For a document edit, the assistant proposes a run of one of the
+[programs](./programs.md) (`edit` for a polish), and the
 proposal card shows the program, the instruction and the files. Approve it,
 or select **Edit** to change it first: the launch form opens on the proposal
 with a **Documents and attachments** section.
@@ -160,7 +158,7 @@ For details on how LaTeX diff works, read the [LaTeX diff guide](./latex-diff.md
 
 ## From the CLI
 
-The same agents and programs run from the terminal. After
+The same assistant and programs run from the terminal. After
 `npm install -g @texra-ai/cli` (Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later) or
 `brew install texra-ai/tap/texra`:
 
@@ -289,9 +287,9 @@ sign-in, workspace defaults, and headless output formats.
 
 ## Common quick tasks
 
-Some common tasks to try with TeXRA. Ask the agent in the New task view, or run the program from the terminal:
+Some common tasks to try with TeXRA. Ask the assistant in the New task view, or run the program from the terminal:
 
-| Task                        | Ask the agent                                                         | From the terminal                                                                  |
+| Task                        | Ask the assistant                                                     | From the terminal                                                                  |
 | :-------------------------- | :-------------------------------------------------------------------- | :--------------------------------------------------------------------------------- |
 | Proofread a draft           | "Proofread draft.tex: fix typos, grammar and LaTeX formatting only."  | `texra run edit --input draft.tex`                                                 |
 | Polish writing style        | "Polish draft.tex for clarity and flow; keep the math and citations." | `texra run edit --input draft.tex --instruction "Polish for clarity and flow"`     |
@@ -317,7 +315,7 @@ project's storage folder under `~/.texra`, which VS Code shares. Read [First run
 
 After your first task with TeXRA, you can:
 
-- Explore more [built-in agents](./built-in-agents.md) for specialized tasks
+- Explore the [programs](./programs.md) for specialized tasks
 - Learn about [LaTeX diff](./latex-diff.md) for comparing document versions
 - Use [intelligent merge](./intelligent-merge.md) to combine changes
 - Tune your workflow with [custom configuration](./configuration.md)

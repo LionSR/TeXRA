@@ -94,12 +94,12 @@ The header provides a summary and actions for the selected stream:
 Reviewed outputs are accepted per file: each row under **Generated files** has
 an **Accept** action that copies the edited version into your workspace.
 
-### Checking an agent's launch
+### Checking a launch
 
-When an agent asks to start another agent, its card shows the agent, the
-model, the instruction and the files it would run; for a program run it
+When the assistant asks to start a helper agent or a program, its card shows
+the model, the instruction and the files it would run; for a program run it
 names the program. **Edit** (`e`) opens the
-New task form filled with that proposal. Change the files, the instruction, the model or (for an agent) the agent, then press **Approve** to start it
+New task form filled with that proposal. Change the files, the instruction or the model, then press **Approve** to start it
 with your changes. It still runs as the asking agent's child, and its
 result goes back to that agent. **Back to …** returns to the asking task and
 leaves the proposal waiting.
