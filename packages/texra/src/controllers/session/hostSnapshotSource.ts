@@ -364,11 +364,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Effect.forkScoped,
       );
     // The agent catalog reloaded or the agent list was edited
-    // (`workspaceAgentsChanged`).
-    yield* follow(
-      yield* subscribeAppSignal('workspaceAgentsChanged'),
-      catalogs,
-    );
+    // (`agentsChanged`).
+    yield* follow(yield* subscribeAppSignal('agentsChanged'), catalogs);
     // Any secret written (`credentialChanged`) may change the credential;
     // only a provider's API key, or a model-access preference or
     // enabled-model write (`modelAccessChanged`), changes the models listed,

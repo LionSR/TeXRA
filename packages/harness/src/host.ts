@@ -56,8 +56,8 @@ export { scopedFork, type ScopedFork } from '@platform/processRuntime';
 // What a run's program requires of the process, beneath `ProcessServices`.
 export type { RunServices } from '@agent/runtime/ToolServices';
 export type { AgentCatalogServices } from '@agent/index/agentEntry';
-// The agent catalog: reads, launch resolution, custom copies, the workspace's
-// selection, and the agent directories a host serves it.
+// The agent catalog: reads, launch resolution, custom copies, and the agent
+// directories a host serves it.
 export {
   AgentCatalog,
   AgentCatalogLoadError,

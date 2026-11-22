@@ -68,7 +68,7 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      */
     launch: Schema.optional(Schema.Record(Schema.String, Schema.Json)),
     /** The agents this run and its children may delegate to, pinned at its
-     *  launch; absent, the workspace's visible agents. */
+     *  launch; absent, every agent. */
     delegationAgentScope: Schema.optional(AgentDelegationScopeSchema),
     /**
      * JSON Schema (a plain object) describing a structured output the agent must
