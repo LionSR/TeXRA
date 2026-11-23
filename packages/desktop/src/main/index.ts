@@ -229,6 +229,11 @@ export const startDesktop = (mainDir: string): void => {
           // A sheet on the window, not an app-modal box: an app-modal one on
           // a fresh profile keeps the first window from appearing.
           if (notice) yield* noticeIn(processScope)('info', notice);
+          yield* Effect.forEach(
+            platformInit.configWarnings,
+            (message) => noticeIn(processScope)('warning', message),
+            { discard: true },
+          );
           app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
           });

@@ -5,10 +5,11 @@ import { type WorkspaceRoots } from '@texra-ai/worldline';
 import { type ProcessServices } from '@texra-ai/worldline/host';
 import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
 import { nodeFileServices } from '@texra-ai/worldline/node';
-import { openProjectRoots } from '@texra/controllers/session/openProjectSession';
+import {
+  openGlobalConfig,
+  openProjectRoots,
+} from '@texra/controllers/session/openProjectSession';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   checkResourcesPath,
   texraProcessLayer,
@@ -31,6 +32,9 @@ interface ElectronPlatformInitResult {
    * setting changed from one project is what the others read.
    */
   globalConfigStore: ConfigStore;
+  /** What opening the global config file and the no-workspace roots found
+   *  wrong, to show once a window exists. */
+  configWarnings: readonly string[];
   /**
    * Desktop's memory/history/executions data root, the CLI's `~/.texra`.
    * Threaded out so the project registry gets it from one owner instead of
@@ -99,24 +103,25 @@ export const initializeElectronPlatform = Effect.fn(
     // The process roots are the no-workspace roots. Each open project gets
     // its own roots (desktopProjects.ts); these only back the window before
     // a folder is open.
-    const global = yield* openTexraGlobalConfigStore(
-      TEXRA_SETTINGS.catalog,
-      dataRoot,
-    );
-    const { roots: processRoots, warnings } = yield* openProjectRoots(
+    // No window exists yet, so what these opens find is kept for the entry
+    // to show once one does.
+    const configWarnings: string[] = [];
+    const warn = (message: string) =>
+      Effect.sync(() => {
+        configWarnings.push(message);
+      });
+    const globalConfigStore = yield* openGlobalConfig(dataRoot, warn);
+    const processRoots = yield* openProjectRoots(
       dataRoot,
       undefined,
-      global.store,
+      globalConfigStore,
       undefined,
+      warn,
     ).pipe(Scope.provide(processScope));
-    yield* Effect.forEach(
-      [...global.warnings, ...warnings],
-      (message) => Effect.logWarning(message).pipe(withLogChannel('desktop')),
-      { discard: true },
-    );
     return {
       processRoots,
-      globalConfigStore: global.store,
+      globalConfigStore,
+      configWarnings,
       dataRoot,
       layout,
     };
