@@ -14,7 +14,6 @@ const workflow = [
   'annotate',
   'enhance',
   'apply',
-  'merge',
   'transcribe',
   'slides',
   'poster',

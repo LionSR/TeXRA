@@ -40,7 +40,6 @@ import { faCloudArrowUp } from '@fortawesome/free-solid-svg-icons/faCloudArrowUp
 import { faCode } from '@fortawesome/free-solid-svg-icons/faCode';
 import { faCodeBranch } from '@fortawesome/free-solid-svg-icons/faCodeBranch';
 import { faCodeCompare } from '@fortawesome/free-solid-svg-icons/faCodeCompare';
-import { faCodeMerge } from '@fortawesome/free-solid-svg-icons/faCodeMerge';
 import { faCompass } from '@fortawesome/free-solid-svg-icons/faCompass';
 import { faComment } from '@fortawesome/free-solid-svg-icons/faComment';
 import { faComments } from '@fortawesome/free-solid-svg-icons/faComments';
@@ -150,7 +149,6 @@ const icons = {
   code: faCode,
   'code-branch': faCodeBranch,
   'code-compare': faCodeCompare,
-  'code-merge': faCodeMerge,
   comment: faComment,
   comments: faComments,
   compass: faCompass,
@@ -256,7 +254,6 @@ const CODICON_ALIASES = {
   history: 'clock-rotate-left',
   info: 'circle-info',
   library: 'book',
-  merge: 'code-merge',
   mic: 'microphone',
   'mortar-board': 'graduation-cap',
   'new-file': 'file-circle-plus',

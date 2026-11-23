@@ -66,7 +66,7 @@ function createDeps(
     },
     storageRoot: '/storage',
     workspace: '/workspace',
-    runs: { merge: () => Effect.void, followUpLauncher: () => Effect.void },
+    runs: { followUpLauncher: () => Effect.void },
     latexdiff: () => Effect.void,
   };
 }

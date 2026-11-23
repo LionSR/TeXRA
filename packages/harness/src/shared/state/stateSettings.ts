@@ -463,7 +463,7 @@ export const HELPER_MODEL_SETTING = {
   schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
   description:
-    "Model for quick helper steps like task titles and merges. Leave empty to use the task's own model.",
+    "Model for quick helper steps like task titles and LaTeX fixes. Leave empty to use the task's own model.",
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {

@@ -18,7 +18,6 @@ import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
 
 import {
   ChildRuns,
-  ToolRegistry,
   type ToolRun,
   ToolError,
   sourceLocationUnder,
@@ -26,7 +25,6 @@ import {
   HostResources,
 } from '@texra-ai/worldline/plugins';
 import {
-  programOf,
   toErrorMessage,
   fileLocationDisplayPath,
   type FileListEntry,
@@ -40,7 +38,6 @@ import {
 } from '@texra/shared/constants/revisionLayout';
 import {
   DOCUMENTS_OUTPUT_KIND,
-  MERGE_EDITED_FILE,
   type DocumentTaskSpec,
 } from '@texra/shared/plugins/documents';
 import {
@@ -253,38 +250,21 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   const { task, run, deps } = docs;
   const { config } = run;
   const workspace = deps.roots.workspace;
-  // A partial edit of the input, which a merge puts back into it: the file
-  // argument its launch named, read only from a program that registers it
-  // as one (`Program.fileArgs`), so the launch checked it where it was
-  // accepted.
-  const program = programOf(config);
-  const editedFile =
-    program !== null &&
-    (yield* ToolRegistry).programs
-      .get(program.name)
-      ?.fileArgs?.includes(MERGE_EDITED_FILE) === true
-      ? program.args[MERGE_EDITED_FILE]
-      : undefined;
   // The launch's files as they read now; one that does not read changes
   // what the model sees, so it is reported on the run's own channel.
-  const [contexts, inputs, edited] = yield* Effect.all(
+  const [contexts, inputs] = yield* Effect.all(
     [
       readFilesAsPromptXml(workspace, config.contextFiles),
       readFilesAsPromptXml(workspace, config.inputFiles),
-      readFilesAsPromptXml(
-        workspace,
-        typeof editedFile === 'string' ? [editedFile] : [],
-      ),
     ],
     { concurrency: 'unbounded' },
   );
-  for (const { file, reason } of [contexts, inputs, edited].flatMap(
+  for (const { file, reason } of [contexts, inputs].flatMap(
     (read) => read.skipped,
   ))
     deps.logger.warn(
       `Skipping unreadable file in prompt context: ${file} (${reason})`,
     );
-  const editedDocument = edited.readable[0];
   const templates = yield* readTemplates(task);
   const fs = yield* FileSystem.FileSystem;
   const parts: string[] = [];
@@ -304,12 +284,6 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     task.intro.trim(),
     ...(documents.length > 0
       ? [`<documents>\n${documents.join('\n')}\n</documents>`]
-      : []),
-    // A partial edit of the input, which a merge puts back into it.
-    ...(editedDocument?.content
-      ? [
-          `The edited version, ${editedDocument.file}:\n<edited_document>\n${editedDocument.content}\n</edited_document>`,
-        ]
       : []),
     ...(instruction
       ? [

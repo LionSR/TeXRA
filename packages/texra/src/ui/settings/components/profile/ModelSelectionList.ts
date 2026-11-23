@@ -352,7 +352,7 @@ export class ModelSelectionList extends TexraSignalElement {
         >
           <span slot="label" class="visually-hidden">Helper model</span>
           <span slot="hint" class="visually-hidden"
-            >Used for quick helper steps such as Merge.</span
+            >Used for quick helper steps like task titles and LaTeX fixes.</span
           >
           ${helperOptions.map(
             (m) => html`
@@ -363,7 +363,7 @@ export class ModelSelectionList extends TexraSignalElement {
           )}
         </wa-select>
         <span class="helper-model-help" aria-hidden="true">
-          Used for quick helper steps such as Merge.
+          Used for quick helper steps like task titles and LaTeX fixes.
         </span>
       </div>
     `;

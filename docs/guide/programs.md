@@ -62,7 +62,6 @@ and from which point of view it reads.
 | `annotate`   | Reviews the documents by adding `\criticize{}` comments. It never rewrites.                        | The point of view, for example a first-time reader. With none it reads as a referee of the mathematics.                    |
 | `enhance`    | Improves the substance: makes the changes it can carry out in full and annotates the rest.         | What to look at: the mathematics, the logical structure, or the notation.                                                  |
 | `apply`      | Implements the fixes that inline comments from an earlier review ask for.                          | Which comments to handle. With none it handles them all.                                                                   |
-| `merge`      | Merges a partial edit back into the full original document.                                        | Started by the [Merge action](./intelligent-merge.md).                                                                     |
 | `transcribe` | Turns media files into a LaTeX document: handwriting or scans, or audio, by the media file's type. | Anything specific about the content, such as who the speakers are.                                                         |
 | `slides`     | Turns a paper into a Beamer slide deck on the bundled template.                                    | Length, emphasis and audience.                                                                                             |
 | `poster`     | Turns a paper into a Beamer poster on the bundled template.                                        | Emphasis and audience.                                                                                                     |
@@ -173,13 +172,6 @@ writes `poster.tex`.
 ```
 A 20-minute seminar talk for non-specialists: spend more slides on motivation and state the main theorem without its proof.
 ```
-
-### `merge`
-
-Takes a partially edited document (one that shows only the changed parts and
-marks the rest "unchanged") and rebuilds the complete document, copying the
-unchanged parts from your original verbatim. Read
-[Intelligent merge](./intelligent-merge.md).
 
 ## Task programs
 

@@ -17,7 +17,6 @@ import { Effect, Result, Schema, ScopedRef } from 'effect';
 // Local imports
 import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
 import { capReached } from '@agent/runtime/spendCap';
-import { ToolRegistry } from '@tools/toolTable';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
@@ -388,22 +387,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         boolean
       >
     )[programOrigin(caller.name)];
-  const fileArgs =
-    program === null
-      ? []
-      : ((yield* ToolRegistry).programs.get(program.name)?.fileArgs ?? []);
   const resolved = yield* Effect.result(
     Effect.all(
       [
         ['Input file', files.inputFiles] as const,
         ['Context file', files.contextFiles] as const,
         ['Media file', files.mediaFiles] as const,
-        ...fileArgs.flatMap((key) => {
-          const value = program?.args[key];
-          return typeof value === 'string'
-            ? [[`Argument ${key}`, [value]] as const]
-            : [];
-        }),
       ].map(([label, list]) =>
         verbatim
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
@@ -414,8 +403,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   if (Result.isFailure(resolved))
     return errorResult(toErrorMessage(resolved.failure));
-  const [inputs = [], contexts = [], media = [], ...fileArgFiles] =
-    resolved.success;
+  const [inputs = [], contexts = [], media = []] = resolved.success;
   const contextFiles = contexts.map(({ file }) => file);
 
   // Awaited in a script unless sent to the background, and always in a
@@ -455,7 +443,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
           files: yield* fingerprint(
-            [inputs, contexts, media, ...fileArgFiles].map((group) =>
+            [inputs, contexts, media].map((group) =>
               group.map(({ absolutePath }) => absolutePath),
             ),
           ),

@@ -70,8 +70,7 @@ Lean 4 proofs, and splits large jobs across helper agents.
 `texra run <program> --input <file>`.
 
 - Document programs revise or create LaTeX and return reviewable diffs:
-  `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`,
-  `poster`.
+  `edit`, `annotate`, `enhance`, `apply`, `transcribe`, `slides`, `poster`.
 - Task programs delegate a focused job with its own checklist:
   `review`, `search`, `derive`, `solve`, `experiment`, `code`,
   `review-code`, `simplify`, `test`, `fix-latex`, `latexdiff`.

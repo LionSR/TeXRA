@@ -14,17 +14,13 @@
  * program it started with.
  */
 import type { Program } from '@texra-ai/worldline/plugins';
-import {
-  MERGE_EDITED_FILE,
-  type DocumentsOutput,
-} from '@texra/shared/plugins/documents';
+import type { DocumentsOutput } from '@texra/shared/plugins/documents';
 import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
 
 import annotate from './programs/annotate.js?raw';
 import apply from './programs/apply.js?raw';
 import edit from './programs/edit.js?raw';
 import enhance from './programs/enhance.js?raw';
-import merge from './programs/merge.js?raw';
 import poster from './programs/poster.js?raw';
 import revise from './programs/revise.js?raw';
 import slides from './programs/slides.js?raw';
@@ -63,7 +59,6 @@ export const THEORY_MODULES = Object.freeze({
   annotate,
   enhance,
   apply,
-  merge,
   transcribe,
   slides,
   poster,
@@ -87,12 +82,6 @@ export const THEORY_PROGRAMS = Object.freeze({
   apply: program(
     'Implement the fixes that inline annotations from an earlier review ask for.',
   ),
-  merge: Object.freeze({
-    ...program(
-      'Merge a partial edit (`args.editedFile`) back into the full original document, its one input. Started by the Merge action, which supplies the edited file.',
-    ),
-    fileArgs: Object.freeze([MERGE_EDITED_FILE]),
-  }),
   transcribe: program(
     'Turn `mediaFiles` (handwriting or scans, or audio) into a LaTeX document.',
     ['transcript.tex'],

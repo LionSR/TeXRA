@@ -1082,7 +1082,7 @@ the run's own model. An app names its own (`settingsCatalog`'s
 `defaults`).
 
 ```ts
-const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model for quick helper steps like task titles and merges. Leave empty to use the task's own model."; }
+const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model for quick helper steps like task titles and LaTeX fixes. Leave empty to use the task's own model."; }
 ```
 
 ## HookEvent

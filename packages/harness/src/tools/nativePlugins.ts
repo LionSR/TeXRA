@@ -220,7 +220,6 @@ const NativeShape = Schema.Struct({
         description: Schema.String,
         tools: Schema.Array(Schema.String),
         outputs: Schema.optional(Schema.Array(Schema.String)),
-        fileArgs: Schema.optional(Schema.Array(Schema.String)),
       }),
     ),
   ),

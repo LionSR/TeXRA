@@ -58,7 +58,7 @@ texra clone <project> ./project
 
 `texra run <program>` runs one of the [programs](./programs.md) over `--input`
 files, without a chat. The document programs (`edit`, `annotate`, `enhance`,
-`apply`, `merge`, `transcribe`, `slides`, `poster`) revise or create
+`apply`, `transcribe`, `slides`, `poster`) revise or create
 documents; the task programs (`review`, `search`, `derive`, `code`,
 `review-code`, `simplify`, `test`, `experiment`, `solve`, `fix-latex`,
 `latexdiff`) answer with a report; the Lean programs `prove`,

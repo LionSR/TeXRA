@@ -77,11 +77,11 @@ accepted by the same command.
 
 ### 2. Edit locally with TeXRA in VS Code
 
-Open `your-local-folder` in VS Code and work with the assistant and its programs (`edit`, `latexdiff`, `merge`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
+Open `your-local-folder` in VS Code and work with the assistant and its programs (`edit`, `latexdiff`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
 
 <OverleafEditActions />
 
-<p class="hero-caption">Each action in the local edit loop, from picking a model and writing instructions through <code>Start task</code>, reviewing outputs, and <code>latexdiff</code>/merge.</p>
+<p class="hero-caption">Each action in the local edit loop, from picking a model and writing instructions through <code>Start task</code>, reviewing outputs, and <code>latexdiff</code>/accept.</p>
 
 ### 3. Commit local changes
 
@@ -117,4 +117,3 @@ git commit -m "Refine methodology section with TeXRA"
 
 - [Best practices](./best-practices.md): get more out of TeXRA.
 - [LaTeX Diff](./latex-diff.md): change comparison in detail.
-- [Intelligent Merge](./intelligent-merge.md): AI-assisted merging.

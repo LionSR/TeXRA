@@ -53,7 +53,6 @@ export const ICON_NAMES = Object.freeze([
   'code',
   'code-branch',
   'code-compare',
-  'code-merge',
   'comment',
   'comments',
   'compress',

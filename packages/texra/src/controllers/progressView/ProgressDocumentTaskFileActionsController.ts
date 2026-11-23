@@ -86,8 +86,8 @@ interface ProgressDocumentTaskFileActionsControllerDeps {
   storageRoot: string;
   /** The window's workspace, which an accepted file's location is in. */
   workspace: string | undefined;
-  /** The window's run actions this controller starts or follows up. */
-  runs: Pick<HostRunActions, 'merge' | 'followUpLauncher'>;
+  /** The window's run actions this controller follows up. */
+  runs: Pick<HostRunActions, 'followUpLauncher'>;
   /** The window's latexdiff of two files. */
   latexdiff: ReturnType<typeof latexdiffVerbs>['file'];
   /** The session's writer of project files (`GuiSession.writeFile`). */
@@ -161,8 +161,6 @@ export class ProgressDocumentTaskFileActionsController {
           base,
           request.base.kind === 'runOutput' ? request.base.runId : undefined,
         );
-      case 'merge':
-        return yield* this.deps.runs.merge(base, file);
       case 'latexdiff':
         return yield* this.deps.latexdiff(base, file);
     }
@@ -171,8 +169,8 @@ export class ProgressDocumentTaskFileActionsController {
   /**
    * The base a verb over a run's output takes: Compare and Accept the file
    * the output is compared with and accepted into ({@link compareTarget}),
-   * latexdiff and Merge the run's snapshot of what it revises, the text the
-   * model edited.
+   * latexdiff the run's snapshot of what it revises, the text the model
+   * edited.
    */
   private baseOf({ action, file, base }: FileActionRequest) {
     if (base.kind === 'file') return base.path;

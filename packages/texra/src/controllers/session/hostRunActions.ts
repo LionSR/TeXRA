@@ -16,7 +16,6 @@ import {
   type readModelOptions,
   presentRunFailure,
   workspaceEnvironmentLayer,
-  programLaunch,
 } from '@texra-ai/worldline/host';
 import {
   logFailure,
@@ -36,7 +35,6 @@ import {
   Unavailable,
   type RequestError,
 } from '@texra-ai/worldline/schemas';
-import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { PACKED_RUNS_DIRECTORY } from '@texra/common/files/fileHandlingRules';
@@ -45,7 +43,6 @@ import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import {
   documentRoundsOf,
   isDocumentTaskRun,
-  MERGE_EDITED_FILE,
 } from '@texra/shared/plugins/documents';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
@@ -116,12 +113,6 @@ export interface HostRunActions {
     config: AgentConfig,
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, LaunchError | RunFailure, ProcessServices>;
-  /** Merge `editedFile` into `baseFile`: the `merge` program on the helper
-   *  model, answering once its run is started. */
-  merge(
-    baseFile: string,
-    editedFile: string,
-  ): Effect.Effect<void, RequestRefusal | StateReadFailed, ProcessServices>;
   resume(runId: RunId): Effect.Effect<void, RequestRefusal, ProcessServices>;
   /** The saved setup Run again… opens the launch form on. */
   runAgain(runId: RunId): Effect.Effect<AgentConfig, RequestRefusal>;
@@ -360,37 +351,6 @@ export const createHostRunActions = Effect.fn(
     }),
     runAgain: (runId) => nativeAgentRun(runId, 'runAgain'),
     runValidated,
-    merge: Effect.fn('HostRunActions.merge')(function* (baseFile, editedFile) {
-      const inputFiles = [baseFile];
-      const launch = yield* programLaunch(
-        'merge',
-        { [MERGE_EDITED_FILE]: editedFile },
-        { inputFiles, outputFiles: [] },
-        roots,
-      ).pipe(
-        // No merge program is registered: said beside the merge docs, and
-        // logged.
-        Effect.catchTag('ProgramNotRegistered', ({ message }) =>
-          Effect.logWarning(message).pipe(
-            withLogChannel(CHANNEL),
-            Effect.andThen(
-              ports.present.emit('requestShowError', {
-                message,
-                docsPage: 'intelligent-merge',
-              }),
-            ),
-            Effect.as(null),
-          ),
-        ),
-      );
-      // The helper model while it can serve, as every helper launch decides
-      // (`helperModel`), else the default agent model.
-      if (launch !== null)
-        yield* startAgentRequest(
-          { ...launch, model: DEFAULT_AGENT_MODEL, inputFiles },
-          { helperModel: true },
-        );
-    }),
     documentTaskFileOperation: Effect.fn(
       'HostRunActions.documentTaskFileOperation',
     )(function* (runId, operation) {

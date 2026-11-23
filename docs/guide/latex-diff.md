@@ -42,9 +42,8 @@ This section provides:
 2. **Edited file selection**: Select a modified version
 3. **Diff vs. edited button**: Run `latexdiff` on the base and edited files and open the marked-up result
 4. **Compare button**: Open the base and edited files side by side in VS Code's diff editor
-5. **Merge button**: Merge changes from the edited file into the base file. Read the [Intelligent Merge workflow](./intelligent-merge.md) guide for details.
-6. **Accept button**: Accept the changes from the edited file and overwrite the base file with them
-7. **Git integration**: Pick a commit and use its Diff vs. commit, Move to Diffs folder, and Delete diff files buttons to compare with previous versions using Git history
+5. **Accept button**: Accept the changes from the edited file and overwrite the base file with them
+6. **Git integration**: Pick a commit and use its Diff vs. commit, Move to Diffs folder, and Delete diff files buttons to compare with previous versions using Git history
 
 ## Basic file comparison
 
@@ -117,7 +116,7 @@ By default, latexdiff wraps each edit in a markup command that is defined in the
 ### Math markup and multi-file projects
 
 - **Math environments**: The **Math markup in diffs** setting on **Settings → LaTeX** (`texra.latexdiff.mathMarkup`) controls how changes inside equations are marked (suppress markup, equation-level, within equations, or small changes inside equations) across every diff route.
-- **Comparing multiple files**: For documents split across several files, use the [`merge`](./intelligent-merge.md) program on each original/edited file pair, then diff the merged output against its original.
+- **Comparing multiple files**: For documents split across several files, pass all relevant files to a program so TeXRA generates per-file diffs, or pick each base/edited pair in the **latexdiff** sheet.
 
 ## Troubleshooting
 
@@ -239,6 +238,5 @@ By default, latexdiff wraps each edit in a markup command that is defined in the
 
 ## Next steps
 
-- [Intelligent Merge](/guide/intelligent-merge): combine changes from two versions
 - [File management](/guide/file-management): organize your files
 - [Best practices](/guide/best-practices): recommended workflows using diff features
