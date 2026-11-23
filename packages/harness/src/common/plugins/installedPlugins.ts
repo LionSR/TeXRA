@@ -57,6 +57,10 @@ export type PluginOrigin =
 const pluginsDir = ({ globalStorage }: Pick<PluginEnv, 'globalStorage'>) =>
   path.join(globalStorage, 'plugins');
 
+/** The managed directory a fetched plugin named `name` lives in. */
+const managedDir = (env: Pick<PluginEnv, 'globalStorage'>, name: string) =>
+  path.join(pluginsDir(env), name);
+
 /** Where the processes over `globalStorage` copy the native code they load
  *  (`@tools/nativePlugins`): beside the managed plugins, under a name no
  *  plugin has. */
@@ -216,7 +220,7 @@ const installFromRoot = Effect.fn('installFromRoot')(function* (
     }
     // Each fetched plugin gets its own managed copy of the checkout, so
     // update and remove act on one plugin without touching another.
-    const dest = path.join(pluginsDir(run.env), plugin.name);
+    const dest = managedDir(run.env, plugin.name);
     // A plain mkdir claims the directory: it fails if anything is there.
     yield* fs.makeDirectory(dest).pipe(
       Effect.mapError((error) =>
@@ -356,7 +360,7 @@ const removePlugin = Effect.fn('removePlugin')(function* (
   name: string,
   env: PluginEnv,
 ) {
-  const dir = path.join(pluginsDir(env), name);
+  const dir = managedDir(env, name);
   const dataDir = pluginDataDir(env.globalStorage, name);
   const plugin = yield* modifyInstalled(env, (current) => {
     const found = current.find((entry) => entry.name === name);
@@ -425,7 +429,7 @@ const updatePlugins = Effect.fn('updatePlugins')(function* (
         );
   const updates: PluginUpdate[] = [];
   for (const plugin of targets) {
-    const dir = path.join(pluginsDir(env), plugin.name);
+    const dir = managedDir(env, plugin.name);
     const commit =
       plugin.commit === undefined
         ? undefined
