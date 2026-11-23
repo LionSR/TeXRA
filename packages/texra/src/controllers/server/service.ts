@@ -99,6 +99,19 @@ export const runsAtWork = (session: LocalSession): number => {
     .filter(({ runId }) => runs.get(runId)?.position !== 'waiting').length;
 };
 
+/**
+ * Whether a run of `session` holds a wake not yet due: a note it wrote to
+ * itself (`wake`) waits in its queued messages, read from its due time by
+ * its own reader or by the resume the session starts then. A queued message
+ * is that note, as the session reads it at open (`wakePendingNotes`): a
+ * message to a run that is not at work starts it, so none other waits.
+ */
+export const holdsWake = (session: LocalSession): boolean => {
+  for (const run of session.view.current().runs.values())
+    if (run.queuedFollowUps.length > 0) return true;
+  return false;
+};
+
 /** The tasks the service runs now, across its open projects: every run
  *  its registries hold live, or with `atWork` only those at work
  *  ({@link runsAtWork}). */

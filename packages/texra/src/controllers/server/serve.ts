@@ -12,7 +12,8 @@
  *   before it starts the next build's (`ensureService`), so a project is
  *   never held by two processes;
  * - idleness: no project open (each is released once nothing has held it
- *   for `idleAfter`, a run at work included) and no task starting, for
+ *   for `idleAfter`, a run at work or a wake not yet due included) and no
+ *   task starting, for
  *   `idleAfter` more (a conversation waiting for its next message stops
  *   with it, resumable, as in a drain).
  *
@@ -83,6 +84,7 @@ import {
   type ServiceProjects,
   serviceHandlers,
   runningTasks,
+  holdsWake,
   runsAtWork,
 } from './service';
 import {
@@ -137,9 +139,10 @@ const CHANNEL = 'service';
  * The service's projects over `storageRoot`, opened in the caller's scope
  * and closed with it. A project is its session, opened on first use and
  * released once nothing has held it for `idleAfter` (`RcMap`): a client's
- * lease is its scope on `open`, and a run at work holds a lease of the
- * project's own, taken as the view shows one and let go as none is left,
- * so a project with a task running never idles out.
+ * lease is its scope on `open`, and a run at work or a wake not yet due
+ * holds a lease of the project's own, taken as the view shows one and let
+ * go as none is left, so a project with a task running or a turn arranged
+ * never idles out.
  */
 const openProjects = Effect.fn('server.openProjects')(function* (
   storageRoot: string,
@@ -242,8 +245,9 @@ const openProjects = Effect.fn('server.openProjects')(function* (
     );
     // A run at work holds the project through a lease of the project's
     // own (not one waiting for its next message, which the service's close
-    // stops, resumable). The lease closes before the count drops, and the
-    // view ending counts as idle.
+    // stops, resumable), and so does a run's wake not yet due, so its turn
+    // runs on time with no window open. The lease closes before the count
+    // drops, and the view ending counts as idle.
     const held = Effect.acquireRelease(count(0, 1), () => count(0, -1)).pipe(
       // The entry exists: this runs inside its own lookup's scope.
       Effect.andThen(RcMap.get(projects, root)),
@@ -254,7 +258,7 @@ const openProjects = Effect.fn('server.openProjects')(function* (
     );
     yield* Effect.forkScoped(
       session.view.changes.pipe(
-        Stream.map(() => runsAtWork(session) > 0),
+        Stream.map(() => runsAtWork(session) > 0 || holdsWake(session)),
         Stream.concat(Stream.succeed(false)),
         Stream.changes,
         Stream.switchMap((busy) => (busy ? held : Stream.empty)),
