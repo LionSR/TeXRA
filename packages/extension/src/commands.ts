@@ -164,7 +164,7 @@ export function registerCommands(
     ),
     // New Task is the header's "+": the New-task state into view with the
     // launcher's selections as they are.
-    'texra.showMainView': () => progressViewProvider.showLauncher(),
+    'texra.showMainView': () => progressViewProvider.startOver(),
     'texra.cleanBuild': () => confirmCleanBuild,
     'texra.auth.chatgpt.signIn': () =>
       settingsViewProvider.signInSubscription('chatgpt'),

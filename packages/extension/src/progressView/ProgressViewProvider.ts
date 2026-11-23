@@ -686,9 +686,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   });
 
-  /** The New-task state in the sidebar (`texra.showMainView`): Start
-   *  over, as the view's own New task is. */
+  /** The New-task state in the sidebar, as the first-run welcome reveals
+   *  it: the project's agent stays recorded. */
   public readonly showLauncher = Effect.fn('ProgressViewProvider.showLauncher')(
+    { self: this },
+    function* () {
+      yield* showInSidebar;
+      this.bridge.surfaceAction({ kind: 'selectNew' });
+    },
+  );
+
+  /** The New Task command (`texra.showMainView`): the person's Start over,
+   *  as the view's own New task is, in the sidebar. */
+  public readonly startOver = Effect.fn('ProgressViewProvider.startOver')(
     { self: this },
     function* () {
       yield* showInSidebar;
