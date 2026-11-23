@@ -13,7 +13,7 @@ providers and 140+ models, from [TeXRA](https://texra.ai).
 [![Catalog: llm-zoo](https://img.shields.io/badge/Catalog-llm--zoo-6F387A?style=flat)](https://github.com/texra-ai/llm-zoo)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-270939?style=flat)](https://github.com/LionSR/TeXRA/blob/main/LICENSE)
 
-[Example](#example) · [Errors](#errors) · [Entries](#the-entries) · [Turn Contract](#the-contract) · [Testing](#what-the-tests-prove-and-what-they-do-not) · [API Reference](./docs/api/index.md)
+[Protocols](#protocols-and-providers) · [Example](#example) · [Errors](#errors) · [Entries](#the-entries) · [Turn Contract](#the-contract) · [Testing](#what-the-tests-prove-and-what-they-do-not) · [API Reference](./docs/api/index.md)
 
 </div>
 
@@ -46,6 +46,17 @@ credentials through `CredentialStore`.
 
 > **0.x: the API may change in any minor release.** This package is versioned on
 > its own, not with the TeXRA app.
+
+## Protocols and providers
+
+| Wire protocol           | Providers                                                                                                                                                                                                                   | Transport & notes                        |
+| :---------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------- |
+| **OpenAI Responses**    | OpenAI (API + ChatGPT subscription), DeepSeek, xAI Grok (API + Grok subscription), Moonshot Kimi (API + Kimi Code), Alibaba Qwen (DashScope), Zhipu GLM (API + Coding Plan), MiniMax, Meta Muse, custom Responses endpoints | HTTP + WebSocket; OpenAI runtime bundled |
+| **Anthropic Messages**  | Anthropic Claude, custom Messages endpoints                                                                                                                                                                                 | `@anthropic-ai/sdk` loaded on demand     |
+| **Google Interactions** | Google Gemini, custom Interactions endpoints                                                                                                                                                                                | `@google/genai` loaded on demand         |
+
+All 140+ models, context windows, reasoning effort levels, and token pricing
+come from [`llm-zoo`](https://github.com/texra-ai/llm-zoo).
 
 ## Install
 
