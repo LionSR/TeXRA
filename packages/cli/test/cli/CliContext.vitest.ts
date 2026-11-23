@@ -24,6 +24,7 @@ const ambient = {
   stdinIsTty: false,
   stdoutIsTty: false,
   stderrIsTty: false,
+  termIsDumb: false,
   stdoutColorEnabled: false,
   stderrColorEnabled: false,
 };
@@ -181,6 +182,7 @@ describe('CLI color/no-input flag wiring', () => {
         stdinIsTty: true,
         stdoutIsTty: true,
         stderrIsTty: true,
+        termIsDumb: false,
         stdoutColorEnabled: true,
         stderrColorEnabled: true,
       },
