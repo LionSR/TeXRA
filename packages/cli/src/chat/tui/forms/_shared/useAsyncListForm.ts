@@ -33,9 +33,6 @@ interface AsyncResource<T, R = ProcessServices> {
   readonly refresh: () => Effect.Effect<void, never, R>;
   /** Re-run the read, keeping the current data on screen until it returns. */
   readonly reload: () => void;
-  /** Surface a failure that is not a read failure (e.g. a mutation write)
-   *  through the same error state and `onError` hook. */
-  readonly reportError: (error: unknown) => void;
 }
 
 interface AsyncListFormState<T> extends AsyncResource<T> {
@@ -50,8 +47,8 @@ interface UseAsyncListFormOptions<T> {
   /** Close handler invoked when `Esc` is pressed in a non-actionable state. */
   readonly onClose: () => void;
   /**
-   * Invoked alongside {@link AsyncListFormState.error} whenever a load or a
-   * reported error fails, so the host can log/notify outside the form frame.
+   * Invoked alongside {@link AsyncListFormState.error} whenever a load
+   * fails, so the host can log/notify outside the form frame.
    */
   readonly onError?: (error: unknown) => void;
   /**
@@ -202,8 +199,8 @@ export function runFormWrite<A>(
  */
 export function useAsyncResource<T, R extends ProcessServices>(options: {
   readonly load: () => Effect.Effect<T, Error, R>;
-  /** Invoked alongside the error state whenever a read or a reported error
-   *  fails, so the host can log/notify outside the form frame. */
+  /** Invoked alongside the error state whenever a read fails, so the host
+   *  can log/notify outside the form frame. */
   readonly onError?: (error: unknown) => void;
 }): AsyncResource<T, R> {
   const [data, setData] = useState<T | undefined>(undefined);
@@ -213,11 +210,6 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   latest.current = options;
   const mount = useMountScope();
   const [reads] = useState(() => mount.sync(FiberHandle.make<void>()));
-
-  const reportError = useCallback((err: unknown) => {
-    setError(toErrorMessage(err));
-    latest.current.onError?.(err);
-  }, []);
 
   // A caller that sequences a read after its own write waits for that read,
   // whether it lands or a newer one supersedes it.
@@ -235,14 +227,16 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
                 setLoading(false);
               },
               onFailure: (cause) => {
-                reportError(Cause.squash(cause));
+                const failure = Cause.squash(cause);
+                setError(toErrorMessage(failure));
+                latest.current.onError?.(failure);
                 setLoading(false);
               },
             }),
           );
         }),
       ).pipe(Effect.flatMap(Fiber.await), Effect.asVoid),
-    [reads, reportError],
+    [reads],
   );
 
   const reload = useCallback(() => {
@@ -253,7 +247,7 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
     reload();
   }, []);
 
-  return { data, setData, loading, error, refresh, reload, reportError };
+  return { data, setData, loading, error, refresh, reload };
 }
 
 /**
