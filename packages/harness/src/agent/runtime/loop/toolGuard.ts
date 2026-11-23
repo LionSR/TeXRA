@@ -340,11 +340,11 @@ export const callRequests = (call: {
         const answered = answer?.request;
         if (
           answered != null &&
-          answered.decision !== null &&
+          answered.decided !== null &&
           isDeepStrictEqual(askOf(answered.payload), askOf(payload))
         ) {
           answer = null;
-          return recordedDecision(payload, answered.decision).pipe(
+          return recordedDecision(payload, answered.decided.decision).pipe(
             Effect.map((decision) => ({
               // cast: the stored request asks what this payload asks, so it
               // is of its kind; its row holds the blobs it names.

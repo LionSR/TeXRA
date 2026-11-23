@@ -200,7 +200,7 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
             const answered: SessionRowDraft[] = [];
             for (const [requestId, decision] of runs.heldAnswers(runId)) {
               runs.dropAnswer(runId, requestId);
-              if (state.requests[requestId]?.decision !== null) continue;
+              if (state.requests[requestId]?.decided !== null) continue;
               answered.push({
                 type: 'request.decided',
                 aggregateId: runId,

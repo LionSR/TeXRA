@@ -232,8 +232,9 @@ export function nextAttempt(
     case 'ask': {
       const { requestId } = failed.next;
       const request = requests[requestId];
-      const decision = request?.decision ?? null;
-      if (decision === null) return { kind: 'await', requestId };
+      const decided = request?.decided ?? null;
+      if (decided === null) return { kind: 'await', requestId };
+      const { decision } = decided;
       if (decision.action === 'retry') {
         const credentials = decision.credentials ?? 'configured';
         const offer =
@@ -258,10 +259,7 @@ export function nextAttempt(
       // activation those a dead process left, and a person's cancel ended
       // the lifecycle it was given in. Resuming the run is the person's
       // word to go on, so the request is sent again, unasked.
-      const decidedAt = request?.decidedAt ?? null;
-      return activatedAt !== null &&
-        decidedAt !== null &&
-        decidedAt < activatedAt
+      return activatedAt !== null && decided.at < activatedAt
         ? SEND
         : { kind: 'cancel' };
     }
@@ -399,13 +397,12 @@ export function resumedAttempt(
 ): ResumedAttempt {
   const asked = (attempt: number) => {
     const requests = attemptRequests(state.requests, { ...at, attempt });
-    const { decision, decidedAt } = requests.last?.request ?? {};
+    const decided = requests.last?.request.decided ?? null;
     const unread =
-      decision != null &&
-      decision.action !== 'cancel' &&
-      decidedAt != null &&
+      decided !== null &&
+      decided.decision.action !== 'cancel' &&
       state.activatedAt !== null &&
-      decidedAt > state.activatedAt;
+      decided.at > state.activatedAt;
     return {
       attempt,
       mayHaveRun: false,
@@ -416,7 +413,7 @@ export function resumedAttempt(
   const next = asked(attemptOf(status) + 1);
   if (status.kind === 'issued' || next.raised > 0) return next;
   const started = asked(status.attempt);
-  const decision = started.last?.request.decision ?? null;
+  const decision = started.last?.request.decided?.decision ?? null;
   const waiting =
     started.last !== null &&
     (decision === null ||

@@ -49,7 +49,7 @@ import { addressedMessages } from './providerMessages';
 const isQuiet = (state: RunState): boolean =>
   state.invocation === null &&
   state.pendingResponse === null &&
-  Object.values(state.requests).every((request) => request.decision !== null);
+  Object.values(state.requests).every((request) => request.decided !== null);
 
 /**
  * Whether the run stands at a finished position: at a turn boundary,

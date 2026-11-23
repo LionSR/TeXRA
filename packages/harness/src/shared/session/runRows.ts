@@ -204,8 +204,7 @@ export function applyRunRow(
       requests[row.requestId] = {
         payload: row.payload,
         answeredBy: row.answeredBy,
-        decision: null,
-        decidedAt: null,
+        decided: null,
       };
       return applied({ requests });
     }
@@ -218,8 +217,7 @@ export function applyRunRow(
       const requests = ownCopy(copies, current.requests, copyById);
       requests[row.requestId] = {
         ...request,
-        decision: row.decision,
-        decidedAt: row.seq,
+        decided: { decision: row.decision, at: row.seq },
       };
       return applied({ requests });
     }

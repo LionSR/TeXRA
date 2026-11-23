@@ -348,7 +348,7 @@ export const decideRequest = (
       Effect.gen(function* () {
         const aggregateId = runId;
         const { requests } = yield* log.runRows(aggregateId, 'requests');
-        if (requests[requestId]?.decision !== null) return false;
+        if (requests[requestId]?.decided !== null) return false;
         yield* runStateAppend(tx.append)([
           { type: 'request.decided', aggregateId, requestId, decision },
         ]);

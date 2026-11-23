@@ -175,10 +175,9 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   const { requests } = yield* log.runRows(runId, 'requests');
   const { raised, last } = attemptRequests(requests, shared);
   if (last !== null) {
-    const { decision } = last.request;
-    if (decision === null)
-      return yield* decisionOf(runId, last.requestId, from);
-    if (decision.action !== 'cancel') return decision;
+    const { decided } = last.request;
+    if (decided === null) return yield* decisionOf(runId, last.requestId, from);
+    if (decided.decision.action !== 'cancel') return decided.decision;
   }
   const calls = yield* script.calls;
   return yield* call.requests
