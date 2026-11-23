@@ -1,4 +1,4 @@
-import { Box, Text } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 import type { ReactNode } from 'react';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -13,26 +13,30 @@ import {
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { isCompactRows } from '@cli/tui/ui/theme';
 
-import { FormFrame, renderAsyncListFormTransient } from './FormFrame';
+import {
+  FormFrame,
+  formFrameChromeRows,
+  formFrameContentWidth,
+  renderAsyncListFormTransient,
+} from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
 import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { Effect } from 'effect';
 
-const LIST_FORM_FRAME_ROWS = 3;
-const LIST_FORM_FOOTER_ROWS = 2;
 /** At or below this many rows a form drops to its one-row compact layout. */
 const COMPACT_FORM_MAX_ROWS = 9;
 
 /**
  * How many list rows the form's `Select` may show and whether to spend rows
  * on overflow markers. With no row budget it shows everything. Otherwise the
- * frame, footer, description and detail rows come off the budget first; on a
- * very short terminal (fewer than 3 list rows) the active choice stays
- * visible instead of the whole budget going to overflow markers.
+ * frame (`frameRows`), description and detail rows come off the budget
+ * first; on a very short terminal (fewer than 3 list rows) the active choice
+ * stays visible instead of the whole budget going to overflow markers.
  */
 function listFormSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
+  readonly frameRows: number;
   readonly hasDescription?: boolean;
   readonly detailRows?: number;
   readonly selectMarginTop?: number;
@@ -44,8 +48,7 @@ function listFormSelectWindow(args: {
     return { maxVisibleItems: undefined, showOverflow: false };
   }
   const chromeRows =
-    LIST_FORM_FRAME_ROWS +
-    LIST_FORM_FOOTER_ROWS +
+    args.frameRows +
     (args.hasDescription ? 1 : 0) +
     Math.max(0, args.detailRows ?? 0) +
     Math.max(0, args.selectMarginTop ?? 0);
@@ -85,6 +88,7 @@ interface ListFormProps<T> {
 
 /** Common list-picker layout, geometry, compact mode, and key vocabulary. */
 export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
+  const { columns } = useWindowSize();
   if (props.items.length === 0 && props.emptyMessage !== undefined) {
     return (
       <FormFrame
@@ -126,18 +130,21 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     );
   }
 
+  const hints = [NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape];
   const selectWindow = listFormSelectWindow({
     availableRows: props.availableRows,
     itemCount: props.items.length,
+    frameRows: formFrameChromeRows(
+      props.title,
+      hints,
+      formFrameContentWidth(columns),
+    ),
     hasDescription: props.description !== undefined,
     detailRows: props.detailRows,
     selectMarginTop: props.selectMarginTop,
   });
   return (
-    <FormFrame
-      title={props.title}
-      hints={[NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape]}
-    >
+    <FormFrame title={props.title} hints={hints}>
       {props.description}
       {props.detail}
       <Box

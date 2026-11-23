@@ -15,17 +15,10 @@ export const BORDERED_PANEL_CHROME_COLUMNS = 4;
 const BORDER_ROWS = 2;
 const FOOTER_MARGIN_ROWS = 1;
 
-/** Rows the border and a `hints` footer (behind its default margin) take at
- *  `contentWidth`, beside the panel's title and body. */
-export function borderedPanelChromeRows(
-  hints: readonly KeyHint[],
-  contentWidth: number,
-): number {
-  return (
-    BORDER_ROWS +
-    FOOTER_MARGIN_ROWS +
-    wrappedRowCount(keyHintsText(hints), contentWidth)
-  );
+/** Rows the border and a footer of `footerRows` rows (behind its default
+ *  margin; no footer at 0) take, beside the panel's title and body. */
+export function borderedPanelChromeRows(footerRows: number): number {
+  return BORDER_ROWS + (footerRows > 0 ? FOOTER_MARGIN_ROWS + footerRows : 0);
 }
 
 interface BorderedPanelProps {
@@ -108,7 +101,8 @@ export function readerLayout({
   }
   const contentWidth = Math.max(1, frameWidth - BORDERED_PANEL_CHROME_COLUMNS);
   const bareRows = BORDER_ROWS + extraRows;
-  const footerRows = borderedPanelChromeRows(hints, contentWidth) - BORDER_ROWS;
+  const footerRows =
+    FOOTER_MARGIN_ROWS + wrappedRowCount(keyHintsText(hints), contentWidth);
   const showFooter = rows >= bareRows + footerRows + 1;
   const fixedRows = bareRows + (showFooter ? footerRows : 0);
   const titleRows = wrappedRowCount(title, contentWidth);

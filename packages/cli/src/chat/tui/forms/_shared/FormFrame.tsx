@@ -9,7 +9,9 @@ import { CLOSE_HINTS, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import {
   BORDERED_PANEL_CHROME_COLUMNS,
   BorderedPanel,
+  borderedPanelChromeRows,
 } from '@cli/tui/ui/BorderedPanel';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 
@@ -38,6 +40,20 @@ function formFrameWidth(columns: number | undefined): number {
 /** Width a form frame's body paints at, inside the border. */
 export function formFrameContentWidth(columns: number | undefined): number {
   return Math.max(1, formFrameWidth(columns) - BORDERED_PANEL_CHROME_COLUMNS);
+}
+
+/** Rows a form frame paints besides its body at `contentWidth`: the border,
+ *  the wrapped title and, behind its margin, the one-row footer (`KeyHints`
+ *  truncates rather than wraps). */
+export function formFrameChromeRows(
+  title: string,
+  hints: readonly KeyHint[],
+  contentWidth: number,
+): number {
+  return (
+    borderedPanelChromeRows(hints.length === 0 ? 0 : 1) +
+    wrappedRowCount(title, contentWidth)
+  );
 }
 
 export function FormFrame(props: FormFrameProps): React.JSX.Element {
