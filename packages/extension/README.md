@@ -1,18 +1,16 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/LionSR/TeXRA/main/packages/extension/resources/logo-512x512.png" alt="TeXRA" width="88" />
+<img src="https://raw.githubusercontent.com/LionSR/TeXRA/main/packages/extension/resources/logo-512x512.png" alt="TeXRA" width="84" />
 
 # TeXRA
 
 **Derive it, check it, prove it.**<br />
-An open-source AI theorist for VS Code, Cursor, Windsurf, and Antigravity.
+Open-source AI theorist for VS Code, Cursor, Windsurf, and Antigravity.
 
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Installs](https://vsmarketplacebadges.dev/installs-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
-[![Downloads](https://vsmarketplacebadges.dev/downloads-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Rating](https://vsmarketplacebadges.dev/rating-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
-[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-6F387A)](https://github.com/LionSR/TeXRA/blob/main/LICENSE)
 
 [Quick Start](https://texra.ai/guide/quick-start) · [Programs](https://texra.ai/guide/programs) · [Lean 4](https://texra.ai/guide/lean) · [Models](https://texra.ai/guide/models) · [Desktop App](https://github.com/texra-ai/texra-desktop-releases/releases) · [GitHub](https://github.com/LionSR/TeXRA)
@@ -21,10 +19,10 @@ An open-source AI theorist for VS Code, Cursor, Windsurf, and Antigravity.
 
 ---
 
-TeXRA runs models inside your editor with the tools theoretical research needs:
-arXiv and Zotero, Wolfram and Python, a live Lean 4 server, LaTeX compilation,
-and parallel helper agents. Document edits come back as diffs you inspect line
-by line.
+TeXRA connects frontier models inside your editor to Wolfram and Python, a live
+Lean 4 server with Loogle, arXiv and Zotero, LaTeX compilation with `latexdiff`
+PDFs, and parallel multi-agent scripts. Every document edit arrives as a diff
+you inspect line by line.
 
 Apache 2.0, with no TeXRA account. Bring your own API keys or provider
 subscriptions; model calls go straight from your machine to the provider.
@@ -32,47 +30,37 @@ subscriptions; model calls go straight from your machine to the provider.
 ## Quick start
 
 1. Open a project folder in VS Code (1.125+) and click the **TeXRA** icon in the
-   Secondary Side Bar (or run **`TeXRA: New Task`**).
-2. Add an API key under **Settings → Models → API keys** (or run
-   **`TeXRA: Set API Key`**), add a project `.env`, or sign in under
-   **Settings → Models → Subscriptions** with a ChatGPT or Grok plan. Kimi Code
-   and GLM Coding Plan subscriptions use their plan API keys.
-3. Run **`TeXRA: Run Setup Assistant`** on first launch to check your LaTeX
-   tools and run a quick test edit ending at a diff.
-4. Describe what you want in **New task**, then inspect results in **Tasks**, VS
-   Code's diff editor, or compiled `latexdiff` PDFs.
+   Secondary Side Bar.
+2. Connect a model in **Settings → Models** (API keys, project `.env`, or
+   ChatGPT / Grok / Kimi Code / GLM subscriptions).
+3. Run **`TeXRA: Run Setup Assistant`** to check your LaTeX tools, then describe
+   your task in **New task** and review results in **Tasks**, VS Code's diff
+   editor, or compiled `latexdiff` PDFs.
 
-TeXRA also ships as a standalone
-[Desktop App](https://github.com/texra-ai/texra-desktop-releases/releases)
-(macOS, Windows, Linux) and a terminal CLI (`npm install -g @texra-ai/cli` or
-`brew install texra-ai/tap/texra`). All three share credentials
-(`~/.texra/secrets/`), settings (`.texra/config.json` and `~/.texra`), and
-SQLite task history. On macOS and Linux, a shared background service keeps tasks
-running when a window closes so any TeXRA app can follow them live.
+Also available as a standalone
+[Desktop App](https://github.com/texra-ai/texra-desktop-releases/releases) and
+[terminal CLI](https://www.npmjs.com/package/@texra-ai/cli); all three share
+credentials, settings, SQLite task history, and a background service on macOS
+and Linux.
 
-## One assistant, scripts, programs, and goals
+## What it does
 
 There is one assistant and no agent menu. Tell it what you need and which files
-to work on; it reads and edits your project, runs shell commands (including
-`wolframscript` and `texcount`), searches arXiv, the web, and Zotero, runs a
-headless Lean 4 language server (`lake env lean --server`) with Loogle, compiles
-LaTeX, and can hand coding work to local OpenAI Codex or Claude Code installs.
+to work on; it runs shell commands, searches arXiv and Zotero, drives Lean 4,
+delegates coding to Codex or Claude Code, fans large jobs out across parallel
+helper agents, and runs autonomous multi-round goals verified by an independent
+judge. Interrupted runs resume from SQLite without repeating finished work, and
+any task or message can be forked.
 
-For parallel or multi-step work, the assistant writes a sandboxed JavaScript
-script that calls helper agents, programs, and tools in parallel; finished calls
-are cached in SQLite and reused on retry or resume.
+| Family       | Programs                                                                                                                 | What it returns                                               |
+| :----------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ |
+| **Document** | `edit`, `annotate`, `enhance`, `apply`, `transcribe`, `slides`, `poster`                                                 | Compiled LaTeX and `latexdiff` PDFs                           |
+| **Task**     | `review`, `search`, `derive`, `solve`, `experiment`, `code`, `review-code`, `simplify`, `test`, `fix-latex`, `latexdiff` | Research report or verified project edits                     |
+| **Lean 4**   | `prove`, `lean-simplify`, `blueprint`, `lean-search`                                                                     | Proofs verified with zero errors, zero `sorry`, no new axioms |
 
-| Family       | Programs                                                                                                                 | Output / check                                                                                 |
-| :----------- | :----------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
-| **Document** | `edit`, `annotate`, `enhance`, `apply`, `transcribe`, `slides`, `poster`                                                 | Compiled LaTeX and diffs (`reflect: true` adds a critic pass)                                  |
-| **Task**     | `review`, `search`, `derive`, `solve`, `experiment`, `code`, `review-code`, `simplify`, `test`, `fix-latex`, `latexdiff` | Helper agent report or verified project edits                                                  |
-| **Lean 4**   | `prove`, `lean-simplify`, `blueprint`, `lean-search`                                                                     | Checked against Lean diagnostics (zero errors, zero `sorry`, no new axioms) or `leanblueprint` |
-
-Approve a plan with **Run as goal** to run autonomous rounds until a separate
-judge checks every requirement with tools (stopped at `texra.goal.maxCostUsd`,
-default `$5`). Interrupted tasks resume from SQLite without repeating finished
-tool calls, and any task or message can be forked while leaving the original
-untouched.
+Tailor TeXRA with `AGENTS.md`, Markdown memory, `SKILL.md` skills, Claude Code /
+Codex plugins, MCP servers, and per-project approval controls
+([Tailoring guide](https://texra.ai/guide/customizing)).
 
 ## Models
 
@@ -87,52 +75,24 @@ untouched.
 [![MiniMax](https://img.shields.io/badge/MiniMax-M3-191919?style=flat)](https://texra.ai/guide/models#minimax-models)
 [![Meta](https://img.shields.io/badge/Meta-Muse-191919?style=flat)](https://texra.ai/guide/models#meta-muse-models)
 
-Direct routes to all ten providers plus custom endpoints speaking OpenAI
-Responses, Anthropic Messages, or Gemini Interactions. Paid Claude Max/Team and
-ChatGPT Pro/Business plans also include monthly API credits usable with standard
-Anthropic or OpenAI keys. Each helper agent or program can run a different
-model.
+Direct routes to all ten providers plus custom OpenAI Responses, Anthropic
+Messages, or Gemini Interactions endpoints. Mix models across helper agents and
+programs ([Models guide](https://texra.ai/guide/models)).
 
-## Tailoring and approvals
+## Requirements & Docs
 
-- Put personal rules in `~/.texra/AGENTS.md` and project rules in `AGENTS.md`
-  (both apply), and keep Markdown notes in **Settings → Memory**.
-- Manage built-in plugins, installed Claude Code / Codex plugins (skills,
-  commands, agents, custom programs, and stdio MCP `2025-11-25` servers), and
-  coding-agent integrations in **Settings → Plugins**.
-- New projects default to **Auto-approve**; switch to **Ask** or **Block**
-  anytime in **Settings → General → Approval**.
+- **VS Code 1.125+** (or Cursor, Windsurf, Antigravity); **LaTeX + Perl** for
+  compiling and diffing `.tex` files; optional Lean 4 (`lake`), WolframScript,
+  ImageMagick/GraphicsMagick + Ghostscript, Codex CLI, Claude Code CLI.
+- **Upgrading from 0.40?** 1.0 starts with fresh SQLite state and shared
+  credentials (your research files are untouched); see the
+  [Changelog](https://github.com/LionSR/TeXRA/blob/main/CHANGELOG.md).
+- **Documentation:** [texra.ai/guide](https://texra.ai/guide/) ·
+  [Work produced with TeXRA](https://texra.ai/work-using-texra)
 
-## Requirements
-
-- VS Code 1.125+ (also runs in Cursor, Windsurf, and Antigravity)
-- LaTeX distribution (TeX Live, MiKTeX, or MacTeX) and Perl (for `latexindent`
-  and `latexdiff`) when compiling or diffing `.tex` files
-- Optional: GraphicsMagick or ImageMagick + Ghostscript, `git`, `gh`, Lean 4 +
-  `lake` (on `PATH`), WolframScript, Codex CLI, Claude Code CLI
-
-## Upgrading from 0.40
-
-TeXRA 1.0 starts with fresh SQLite task history (0.40 JSON history and your
-research files are untouched). Add API keys and sign in to subscriptions again
-under **Settings → Models** (now shared across all TeXRA apps in
-`~/.texra/secrets/`). Custom agent YAML files, `.texrarules`, TeXRA accounts,
-OpenRouter, and Copilot routes are removed; move project rules to `AGENTS.md`.
-See the [Changelog](https://github.com/LionSR/TeXRA/blob/main/CHANGELOG.md).
-
-## Documentation & Support
+## Support & License
 
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub_Sponsors-EA4AAA?style=flat&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/texra-ai)
 [![Buy Me a Coffee](https://img.shields.io/badge/Support-Buy_Me_a_Coffee-FFDD00?style=flat&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/texra.ai)
 
-Full documentation at [texra.ai/guide](https://texra.ai/guide/) ·
-[Work produced with TeXRA](https://texra.ai/work-using-texra) ·
-[GitHub Issues](https://github.com/LionSR/TeXRA/issues) ·
-[contact@texra.ai](mailto:contact@texra.ai)
-
-Licensed under the
-[Apache License, Version 2.0](https://github.com/LionSR/TeXRA/blob/main/LICENSE).
-© TeXRA Team 2024–2026.
-
-[Terms of Service](https://texra.ai/terms) ·
-[Provider list](https://texra.ai/providers)
+[GitHub Issues](https://github.com/LionSR/TeXRA/issues) · [contact@texra.ai](mailto:contact@texra.ai) · [Apache-2.0](https://github.com/LionSR/TeXRA/blob/main/LICENSE) · [Terms](https://texra.ai/terms) · [Providers](https://texra.ai/providers)
