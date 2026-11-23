@@ -39,14 +39,18 @@ export function scriptCallsView(
   const shown = sections
     .toSorted((left, right) => left.rank - right.rank)
     .slice(0, MAX_ENTRIES);
-  const callView = (call: ScriptCallCard) => ({
-    seq: call.seq,
-    tool: call.toolName,
-    status: status(call),
-    attempt: call.attempt,
-    ...(call.reusedFrom !== null && { reusedFrom: call.reusedFrom }),
-    ...(call.error !== null && { error: compactText(call.error) }),
-  });
+  const callView = (call: ScriptCallCard) => {
+    const result = call.result?.result;
+    return {
+      seq: call.seq,
+      tool: call.toolName,
+      status: status(call),
+      attempt: call.result?.attempt ?? 1,
+      ...(result?.status === 'executed' &&
+        result.reusedFrom !== undefined && { reusedFrom: result.reusedFrom }),
+      ...(result?.status === 'error' && { error: compactText(result.error) }),
+    };
+  };
   return {
     calls: calls.length,
     sections: shown.map(({ title, members }) => {

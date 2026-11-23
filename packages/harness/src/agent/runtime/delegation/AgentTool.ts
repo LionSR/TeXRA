@@ -528,28 +528,22 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     ...programConfig,
   });
   const runId = agentChildRunId(call);
+  const registration = { grants, maxCostUsd: launch.maxCostUsd };
   if (!awaited) {
-    const receipt = yield* launchDetachedSubagent(call, config, {
+    const receipt = yield* launchDetachedSubagent(
+      call,
       runId,
-      grants,
-      maxCostUsd: launch.maxCostUsd,
-      approvalMeta: decided.approvalMeta,
-    });
+      config,
+      registration,
+      decided.approvalMeta,
+    );
     // What a script's `await` gets for a child sent to the background.
     return { ...receipt, value: { runId } };
   }
   const launched = yield* Effect.result(
     withinTime(
       launch.timeoutMs,
-      executeSubagentInBand({
-        runId,
-        parentId,
-        config,
-        parentCall: { callId: call.callId, card: call.logId },
-        grants,
-        maxCostUsd: launch.maxCostUsd,
-        notify,
-      }),
+      executeSubagentInBand(call, runId, config, registration, notify),
     ),
   );
   return Result.isFailure(launched)

@@ -17,6 +17,7 @@ import {
 import { CodexTool } from './codex';
 import { findCodexBinaryPath, importCodexClass } from './codexImport';
 import type { TexraPlugin } from '../registry';
+import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 
 /** A global npm install leaves Windows only shims TeXRA cannot spawn, so
@@ -80,20 +81,25 @@ export const codex: TexraPlugin = texraPlugin({
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
     settings: CODEX_SETTINGS,
     setup: {
-      installGuide:
-        'Install the Codex CLI (choose one):\n\n' +
-        `${installCommandLines(CODEX_INSTALL)}\n\n` +
-        'On Windows, use the Windows command: it installs a native codex.exe,\n' +
-        'which TeXRA needs (a global npm install there leaves only shell shims).\n' +
-        'See: https://developers.openai.com/codex/cli\n\n' +
-        'Authentication (choose one):\n' +
-        '  • codex login       : sign in with ChatGPT account (recommended)\n' +
-        '  • OPENAI_API_KEY    : environment variable with API key',
-      installUrl: 'https://github.com/openai/codex',
-      get installCommand(): string {
-        return preferredInstallCommand(CODEX_INSTALL);
+      get actions(): readonly ToolInstallAction[] {
+        return [
+          {
+            kind: 'guide',
+            text:
+              'Install the Codex CLI (choose one):\n\n' +
+              `${installCommandLines(CODEX_INSTALL)}\n\n` +
+              'On Windows, use the Windows command: it installs a native codex.exe,\n' +
+              'which TeXRA needs (a global npm install there leaves only shell shims).\n' +
+              'See: https://developers.openai.com/codex/cli\n\n' +
+              'Authentication (choose one):\n' +
+              '  • codex login       : sign in with ChatGPT account (recommended)\n' +
+              '  • OPENAI_API_KEY    : environment variable with API key',
+          },
+          { kind: 'command', command: preferredInstallCommand(CODEX_INSTALL) },
+          { kind: 'auth', command: 'codex login' },
+          { kind: 'url', url: 'https://github.com/openai/codex' },
+        ];
       },
-      authCommand: 'codex login',
       configNotes:
         'Requires the native `codex` binary, which @openai/codex-sdk drives.',
       authNote: 'Uses ChatGPT subscription (included with Plus/Pro)',

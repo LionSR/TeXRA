@@ -101,17 +101,25 @@ export const zotero: TexraPlugin = texraPlugin({
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
     setup: {
-      installGuide:
-        'Requires Zotero with the Better BibTeX plugin installed.\n\n' +
-        'Setup:\n' +
-        '  1. Install Zotero (zotero.org)\n' +
-        '  2. Install Better BibTeX plugin:\n' +
-        '     - Download from retorque.re/zotero-better-bibtex\n' +
-        '     - In Zotero: Tools > Add-ons > Install from File\n' +
-        '  3. Keep Zotero running while using TeXRA\n\n' +
-        'Better BibTeX exposes a JSON-RPC API on localhost:23119\n' +
-        'that TeXRA uses to communicate with your library.',
-      installUrl: 'https://retorque.re/zotero-better-bibtex/installation/',
+      actions: [
+        {
+          kind: 'guide',
+          text:
+            'Requires Zotero with the Better BibTeX plugin installed.\n\n' +
+            'Setup:\n' +
+            '  1. Install Zotero (zotero.org)\n' +
+            '  2. Install Better BibTeX plugin:\n' +
+            '     - Download from retorque.re/zotero-better-bibtex\n' +
+            '     - In Zotero: Tools > Add-ons > Install from File\n' +
+            '  3. Keep Zotero running while using TeXRA\n\n' +
+            'Better BibTeX exposes a JSON-RPC API on localhost:23119\n' +
+            'that TeXRA uses to communicate with your library.',
+        },
+        {
+          kind: 'url',
+          url: 'https://retorque.re/zotero-better-bibtex/installation/',
+        },
+      ],
       configNotes:
         'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
     },

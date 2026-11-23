@@ -26,11 +26,10 @@ import {
   type ExecuteAgentOptions,
 } from '@agent/runtime/executeAgent';
 import { openResume } from '@agent/runtime/resumeRun';
-import { RunCall } from '@agent/runtime/RunCall';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
-import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   runEndErrorMessage,
   RUN_OUTCOME,
@@ -38,7 +37,6 @@ import {
   type CommitOrdinal,
   type RunEnd,
   type RunId,
-  type RunParent,
   type SubagentProgressUpdate,
   type AgentConfig,
 } from '@shared/schemas';
@@ -49,6 +47,16 @@ export interface ChildRunEnd {
   readonly runId: RunId;
   readonly result: RunEnd;
 }
+
+/** The parent edge of a child `call` launches: the calling run, and the
+ *  call and its card, which await the child or send it to the background. */
+export const childOf = (
+  call: RunToolCall,
+  awaited: boolean,
+): NonNullable<RegisterRunOptions['parent']> => ({
+  id: call.run.runId,
+  call: { callId: call.callId, card: call.logId, awaited },
+});
 
 /**
  * Start a fresh native child on the session's registry, forked under its
@@ -89,14 +97,14 @@ const CHANNEL = 'childLaunch';
 const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   runId: RunId,
   parentId: RunId,
-  options: Pick<ExecuteAgentOptions, 'onProgress'>,
+  onProgress: ExecuteAgentOptions['onProgress'],
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
   const { opened } = yield* (yield* RunRegistry).start(
     runId,
     executeAgent(
       runId,
       parentId,
-      openResume(runId, options, parentId).pipe(
+      openResume(runId, { onProgress }, parentId).pipe(
         Effect.catchTag('ResumeNotOpened', ({ answer }) =>
           Effect.fail(
             new ToolError(
@@ -120,13 +128,12 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
  * its run's awaited-call permits throughout (`AgentRun.awaitedCalls`): at
  * most the child-run budget of a run's awaited children run at once.
  */
-const awaitChildRun = Effect.fn('awaitChildRun')(function* (
+const awaitChildRun = (
+  call: RunToolCall,
   runId: RunId,
   start: Effect.Effect<unknown, Error, AgentRunServices>,
-): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices | RunCall> {
-  const call = yield* RunCall;
-  return yield* call.run.awaitedCalls.withPermits(1)(childRunEnd(runId, start));
-});
+): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
+  call.run.awaitedCalls.withPermits(1)(childRunEnd(runId, start));
 
 /** {@link awaitChildRun}'s wait, under its permit. */
 const childRunEnd = Effect.fn('childRunEnd')(function* (
@@ -176,65 +183,47 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   return { runId, result };
 });
 
-/** What an awaited child's launch takes. */
-interface AwaitedChildLaunch {
-  /** The launching run: the child's parent edge. */
-  readonly parentId: RunId;
-  /** The run this attempt executes under; the caller owns its derivation. */
-  readonly runId: RunId;
-  readonly config: AgentConfig;
-  /** The parent's call that launches the child, which owns it and awaits
-   *  its end, and its tool card. */
-  readonly parentCall: Omit<NonNullable<RunParent['call']>, 'awaited'>;
-  /** The grants a fresh child is registered with. */
-  readonly grants?: ApprovalGrants;
-  /** The spend cap a fresh child is registered with. */
-  readonly maxCostUsd?: number | null;
-  /** The history a fresh child is born on: a fork's (`forkSeed`). */
-  readonly seed?: RegisterRunOptions['seed'];
-  /** Live progress for the call's card; absent means silent. */
-  readonly notify?: (update: SubagentProgressUpdate) => void;
-}
+/** What a fresh child's `run.start` carries beyond its identity and its
+ *  parent edge, as its launching call decided it. */
+export type ChildRegistration = Pick<
+  RegisterRunOptions,
+  'grants' | 'maxCostUsd' | 'seed'
+>;
 
-/** Launch one child under the run id its caller derived and read its end
- *  back; recovering an earlier attempt belongs to the caller that owns the
- *  call identity (`recoverAgentChild`). The child takes the keys the
- *  calling run's launch brought. */
+/** Launch one child of `call` under the run id the call derived and read
+ *  its end back; recovering an earlier attempt belongs to the caller that
+ *  owns the call identity (`recoverAgentChild`). The child takes the keys
+ *  the calling run's launch brought, and `notify` gets its progress for
+ *  the call's card. */
 export const executeSubagentInBand = (
-  launch: AwaitedChildLaunch,
-): Effect.Effect<ChildRunEnd, Error, AgentRunServices | RunCall> =>
+  call: RunToolCall,
+  runId: RunId,
+  config: AgentConfig,
+  registration: ChildRegistration,
+  notify: (update: SubagentProgressUpdate) => void,
+): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
   awaitChildRun(
-    launch.runId,
-    Effect.gen(function* () {
-      const definition = yield* prepareAgentDefinition({
-        config: launch.config,
-      });
-      return yield* startChildRun(
-        launch.runId,
+    call,
+    runId,
+    Effect.flatMap(prepareAgentDefinition({ config }), (definition) =>
+      startChildRun(
+        runId,
         definition,
         {
+          ...registration,
           identity: { kind: 'agent', agent: definition.config.label },
-          parent: {
-            id: launch.parentId,
-            call: { ...launch.parentCall, awaited: true },
-          },
-          grants: launch.grants,
-          maxCostUsd: launch.maxCostUsd,
-          seed: launch.seed,
+          parent: childOf(call, true),
         },
-        { onProgress: launch.notify },
-      );
-    }),
+        { onProgress: notify },
+      ),
+    ),
   );
 
-/** Resume a persisted child under the run id it already has and await it
- *  as {@link executeSubagentInBand} awaits a launch. */
+/** Resume the persisted child `runId` of `call` under the id it already
+ *  has and await it as {@link executeSubagentInBand} awaits a launch. */
 export const resumeSubagentInBand = (
-  launch: Pick<AwaitedChildLaunch, 'runId' | 'parentId' | 'notify'>,
-): Effect.Effect<ChildRunEnd, Error, AgentRunServices | RunCall> =>
-  awaitChildRun(
-    launch.runId,
-    resumeOwnedChild(launch.runId, launch.parentId, {
-      onProgress: launch.notify,
-    }),
-  );
+  call: RunToolCall,
+  runId: RunId,
+  notify: (update: SubagentProgressUpdate) => void,
+): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
+  awaitChildRun(call, runId, resumeOwnedChild(runId, call.run.runId, notify));

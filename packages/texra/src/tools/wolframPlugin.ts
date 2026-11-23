@@ -27,16 +27,21 @@ export const wolfram: TexraPlugin = texraPlugin({
     description:
       'Wolfram Language through wolframscript, which agents run from the shell for symbolic math, computation, and data analysis.',
     setup: {
-      installGuide:
-        'Requires the "wolframscript" command-line tool.\n\n' +
-        'Install the free Wolfram Engine:\n' +
-        '  Mac:     brew install --cask wolfram-engine\n' +
-        '  Ubuntu:  Download from wolfram.com/engine\n' +
-        '  Windows: Download from wolfram.com/engine\n\n' +
-        'Note: A Mathematica installation alone is not enough: you\n' +
-        'need WolframScript on your PATH. The Wolfram Engine includes\n' +
-        'it automatically. Free licenses are available for development use.',
-      installUrl: 'https://www.wolfram.com/engine/',
+      actions: [
+        {
+          kind: 'guide',
+          text:
+            'Requires the "wolframscript" command-line tool.\n\n' +
+            'Install the free Wolfram Engine:\n' +
+            '  Mac:     brew install --cask wolfram-engine\n' +
+            '  Ubuntu:  Download from wolfram.com/engine\n' +
+            '  Windows: Download from wolfram.com/engine\n\n' +
+            'Note: A Mathematica installation alone is not enough: you\n' +
+            'need WolframScript on your PATH. The Wolfram Engine includes\n' +
+            'it automatically. Free licenses are available for development use.',
+        },
+        { kind: 'url', url: 'https://www.wolfram.com/engine/' },
+      ],
       configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
     },
   },

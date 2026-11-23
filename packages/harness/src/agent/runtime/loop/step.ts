@@ -522,6 +522,7 @@ const openStep = Effect.fn('Step.open')(function* (
     memory: step.memory,
     contributing: step.contributing,
     skills,
+    installed: step.skills.plugins,
     changed: toolsChanged || skillsChanged,
   };
 });
@@ -585,7 +586,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
   );
   const { tools, skills } = step;
   const roots = yield* SessionRoots;
-  const delegation = yield* readDelegationTargets(tools, roots);
+  const delegation = yield* readDelegationTargets(tools, step.installed, roots);
   const offered = tools.definitions.map(({ name }) => name);
   const context = {
     ...stepInstructions(

@@ -57,9 +57,9 @@ const DEFAULT_MAX_BUFFER = 100_000_000;
  * its lines as before.
  */
 const withLifeline = (command: string): string =>
-  '(read x <&3 || kill -s KILL 0) >/dev/null 2>&1 & texra_lifeline=$!; exec 3<&-; (\n' +
+  '(read x <&3 || kill -s KILL 0) >/dev/null 2>&1 & _lifeline_pid=$!; exec 3<&-; (\n' +
   `${command}\n)\n` +
-  'texra_status=$?; exec >/dev/null 2>&1; wait $texra_lifeline; exit $texra_status\n';
+  '_command_status=$?; exec >/dev/null 2>&1; wait $_lifeline_pid; exit $_command_status\n';
 
 /**
  * Sends {@link withLifeline}'s sentinel its line and ends the lifeline, so the

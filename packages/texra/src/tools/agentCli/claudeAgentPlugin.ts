@@ -28,6 +28,7 @@ import {
   importClaudeAgentSdk,
 } from './claudeAgentImport';
 import type { TexraPlugin } from '../registry';
+import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 
 const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
@@ -126,21 +127,29 @@ export const claudeAgent: TexraPlugin = texraPlugin({
       'Claude Code agent runtime for delegating code exploration, editing, and shell tasks.',
     settings: CLAUDE_AGENT_SETTINGS,
     setup: {
-      installGuide:
-        'Install the Claude Code CLI (choose one):\n\n' +
-        `${installCommandLines(CLAUDE_CODE_INSTALL)}\n\n` +
-        'Or use the native installer from https://claude.com/code (recommended).\n' +
-        'See: https://code.claude.com/docs/en/setup\n\n' +
-        'Authentication (choose one):\n' +
-        '  • Store an Anthropic API key in TeXRA, or set ANTHROPIC_API_KEY\n' +
-        '  • claude login         : OAuth sign-in (Pro/Max subscription, recommended)\n' +
-        '  • claude setup-token   : long-lived OAuth token (CLAUDE_CODE_OAUTH_TOKEN)\n' +
-        '  • ANTHROPIC_API_KEY    : environment variable with Console API key',
-      installUrl: 'https://code.claude.com/docs/en/setup',
-      get installCommand(): string {
-        return preferredInstallCommand(CLAUDE_CODE_INSTALL);
+      get actions(): readonly ToolInstallAction[] {
+        return [
+          {
+            kind: 'guide',
+            text:
+              'Install the Claude Code CLI (choose one):\n\n' +
+              `${installCommandLines(CLAUDE_CODE_INSTALL)}\n\n` +
+              'Or use the native installer from https://claude.com/code (recommended).\n' +
+              'See: https://code.claude.com/docs/en/setup\n\n' +
+              'Authentication (choose one):\n' +
+              '  • Store an Anthropic API key in TeXRA, or set ANTHROPIC_API_KEY\n' +
+              '  • claude login         : OAuth sign-in (Pro/Max subscription, recommended)\n' +
+              '  • claude setup-token   : long-lived OAuth token (CLAUDE_CODE_OAUTH_TOKEN)\n' +
+              '  • ANTHROPIC_API_KEY    : environment variable with Console API key',
+          },
+          {
+            kind: 'command',
+            command: preferredInstallCommand(CLAUDE_CODE_INSTALL),
+          },
+          { kind: 'auth', command: 'claude login' },
+          { kind: 'url', url: 'https://code.claude.com/docs/en/setup' },
+        ];
       },
-      authCommand: 'claude login',
       configNotes: 'Requires the native `claude` binary.',
       authNote: 'OAuth, OAuth token, or API key',
     },

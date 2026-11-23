@@ -13,15 +13,17 @@ import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 
 // Local imports - common
 import { AgentError } from '@common/errors/agentErrors';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import {
+  readInstalledPluginLoad,
+  type LoadablePlugin,
+} from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import {
   CLAUDE_COUNTERPART_TOOLS,
-  texraToolOfClaudeTool,
+  harnessToolOfClaudeTool,
 } from '@common/plugins/hookConfig';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
-import { AppState } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -87,7 +89,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
           .map((entry) => entry.trim())
           .filter(Boolean);
   const mapped = (declared ?? []).map((tool) =>
-    tool.startsWith('mcp__') ? tool : texraToolOfClaudeTool(tool),
+    tool.startsWith('mcp__') ? tool : harnessToolOfClaudeTool(tool),
   );
   // Naming only tools the harness lacks must not read as naming none, which
   // would widen the agent to everything it inherits.
@@ -114,38 +116,14 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
 });
 
 /**
- * A plugin agent (`agent`, named `<plugin>:<name>` as {@link readPluginAgent}
- * writes it) runs only while its plugin loads (enabled, and trusted as it
- * is): a launch asks the install record, and fails naming the plugin and
- * why it does not load: an enabled plugin the load holds back carries the
- * load's reason; any other is off or gone.
+ * The agents of `loadable`, installed plugins that load (enabled, and
+ * trusted as they are), and the files that did not read: no entry, logged,
+ * and returned so a launch that misses one names why. A tool a file names
+ * that the harness has no counterpart for is dropped and logged.
  */
-const requirePluginLoads = Effect.fn('requirePluginLoads')(function* (
-  agent: string,
-  stores: Pick<SettingsStores, 'globalState'>,
+export const pluginAgentsOf = Effect.fn('pluginAgents.of')(function* (
+  loadable: readonly LoadablePlugin[],
 ) {
-  const plugin = agent.slice(0, agent.indexOf(':'));
-  const load = yield* readInstalledPluginLoad(stores);
-  if (load.loadable.some(({ record }) => record.name === plugin)) return;
-  const withheld = load.withheld.find((held) => held.plugin === plugin);
-  return yield* new AgentError({
-    message: `Agent ${agent} does not run: ${
-      withheld?.reason ?? `plugin ${plugin} is not installed or not enabled.`
-    }`,
-  });
-});
-
-/**
- * The agents of the installed plugins that load now (enabled, and trusted
- * as they are), and the files that did not read: no entry, logged, and
- * returned so a launch that misses one names why. A tool
- * a file names that the harness has no counterpart for is dropped and
- * logged.
- */
-export const scanPluginAgents = Effect.gen(function* () {
-  const { loadable } = yield* readInstalledPluginLoad({
-    globalState: yield* AppState,
-  });
   const entries: PluginAgent[] = [];
   const issues: { readonly path: string; readonly message: string }[] = [];
   // The files are read concurrently, then recorded in their listed order.
@@ -198,8 +176,19 @@ export const pluginAgent = Effect.fn('pluginAgent')(function* (
     return yield* new AgentError({
       message: `'${name}' is not an installed plugin's agent (those are named <plugin>:<name>). Write the child with \`system\` and \`tools\` instead.`,
     });
-  yield* requirePluginLoads(name, stores);
-  const { entries, issues } = yield* scanPluginAgents;
+  // A plugin agent runs only while its plugin loads: one read of the
+  // install records answers both whether it does and what its agents are.
+  const load = yield* readInstalledPluginLoad(stores);
+  const plugin = name.slice(0, name.indexOf(':'));
+  if (!load.loadable.some(({ record }) => record.name === plugin)) {
+    const withheld = load.withheld.find((held) => held.plugin === plugin);
+    return yield* new AgentError({
+      message: `Agent ${name} does not run: ${
+        withheld?.reason ?? `plugin ${plugin} is not installed or not enabled.`
+      }`,
+    });
+  }
+  const { entries, issues } = yield* pluginAgentsOf(load.loadable);
   const entry = entries.find((agent) => agent.name === name);
   if (entry === undefined) {
     const issue = issues.find(({ path: file }) =>

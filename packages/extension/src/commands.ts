@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Record as EffectRecord, Schema, Struct } from 'effect';
+import { Effect, Record as EffectRecord, Result, Schema, Struct } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -29,11 +29,6 @@ import {
   settingsTabByCommand,
   type CommandId,
 } from '@texra/shared/commands/catalog';
-import {
-  definedHandler,
-  dispatchCommandFromRegistry,
-  type CommandHandler,
-} from '@commands/registry';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
@@ -71,19 +66,48 @@ type CommandProgram = Effect.Effect<
  */
 type RegisteredCommandId = Exclude<CommandId, CommentCommandId>;
 
+/**
+ * A command's handler: its program, for a command without arguments, or
+ * what `definedHandler` builds, which decodes the positional arguments
+ * first.
+ */
+type CommandHandler =
+  | (() => CommandProgram)
+  | {
+      readonly dispatch: (
+        rawArgs: readonly unknown[],
+      ) => Result.Result<CommandProgram, Schema.SchemaError>;
+    };
+
+/**
+ * A handler whose positional arguments decode against `argsSchema` before
+ * `run` sees them; an argument object carrying a key its schema does not
+ * declare is refused, not stripped.
+ */
+function definedHandler<S extends Schema.Codec<readonly unknown[], unknown>>(
+  argsSchema: S,
+  run: (...args: [...S['Type']]) => CommandProgram,
+): CommandHandler {
+  const decode = Schema.decodeUnknownResult(argsSchema, {
+    onExcessProperty: 'error',
+  });
+  return {
+    dispatch: (rawArgs) => Result.map(decode(rawArgs), (args) => run(...args)),
+  };
+}
+
 /** `texra.setApiKey`, optionally naming the provider to start on: one row
  *  for the folder's window and the window without one. */
 export const setApiKeyHandler = (roots: WorkspaceRoots) =>
   definedHandler(
     Schema.Tuple([Schema.optional(Schema.Literals(API_KEY_PROVIDER_IDS))]),
-    (_: void, provider?: ApiKeyProviderId) => setApiKey(roots, provider),
+    (provider?: ApiKeyProviderId) => setApiKey(roots, provider),
   );
 
 /**
- * Register a table of catalog commands against `vscode.commands`, routing
- * each invocation through `dispatchCommandFromRegistry` so the dispatch path
- * is identical to the desktop's: arguments are decoded and a bad payload is
- * reported. The registered callback is the command's one execution
+ * Register a table of catalog commands against `vscode.commands`. A
+ * command's arguments are decoded first, and a bad payload is reported and
+ * answers `false`. The registered callback is the command's one execution
  * boundary: it runs the handler's program over the window's rooted
  * filesystems and returns that promise, so VS Code forwards the program's
  * value and rejection to `executeCommand` callers (the bug fixed by #3782
@@ -94,37 +118,26 @@ export function registerHandlers(
   runtime: ProcessRuntime,
   fork: ScopedFork<ProcessServices | Sessions>,
   roots: WorkspaceRoots,
-  handlers: Partial<
-    Record<RegisteredCommandId, CommandHandler<void, CommandProgram>>
-  >,
+  handlers: Partial<Record<RegisteredCommandId, CommandHandler>>,
 ): void {
   for (const id of Struct.keys(handlers)) {
+    const handler = handlers[id];
+    if (handler === undefined) continue;
     context.subscriptions.push(
       vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
-        const program = dispatchCommandFromRegistry(
-          id,
-          handlers,
-          undefined,
-          (failure) => {
-            if (failure.kind === 'invalidArguments') {
-              fork(
-                showLoggedMessage(
-                  `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
-                ).pipe(withLogChannel(REGISTRY_CHANNEL)),
-              );
-              return;
-            }
-            fork(
-              Effect.logError(
-                `No handler is registered for command ${failure.id}`,
-              ).pipe(withLogChannel(REGISTRY_CHANNEL)),
-            );
-          },
-          ...rawArgs,
-        );
-        return program === false
-          ? false
-          : runtime.runPromise(withSessionFs(roots, program));
+        const program =
+          typeof handler === 'function'
+            ? Result.succeed(handler())
+            : handler.dispatch(rawArgs);
+        if (Result.isFailure(program)) {
+          fork(
+            showLoggedMessage(
+              `Invalid arguments for command ${id}: ${program.failure.message}`,
+            ).pipe(withLogChannel(REGISTRY_CHANNEL)),
+          );
+          return false;
+        }
+        return runtime.runPromise(withSessionFs(roots, program.success));
       }),
     );
   }
@@ -159,7 +172,7 @@ export function registerCommands(
     // An optional target (`'models/keys'`) lets a caller land on one section.
     'texra.showDashboard': definedHandler(
       Schema.Tuple([Schema.optional(SettingsTargetSchema)]),
-      (_, target?: SettingsTarget) =>
+      (target?: SettingsTarget) =>
         settingsViewProvider.showSettingsView(target),
     ),
     // New Task is the header's "+": the New-task state into view with the
@@ -190,7 +203,7 @@ export function registerCommands(
     // launch's rejection.
     'texra.execute': definedHandler(
       Schema.Tuple([Schema.optional(Schema.Unknown)]),
-      (_, config?: unknown) =>
+      (config?: unknown) =>
         config === undefined
           ? progressViewProvider.submit()
           : decodeLaunchConfig(config).pipe(
@@ -198,10 +211,7 @@ export function registerCommands(
               Effect.flatMap((run) => run.result),
             ),
     ),
-  } as const satisfies Record<
-    RegisteredCommandId,
-    CommandHandler<void, CommandProgram>
-  >;
+  } as const satisfies Record<RegisteredCommandId, CommandHandler>;
 
   registerHandlers(context, runtime, fork, roots, handlers);
 

@@ -20,13 +20,10 @@ import type { ExternalToolCheckResult } from '@texra-ai/worldline/host';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type {
   ToolCommandKind,
+  ToolInstallAction,
   ToolDashboardItem,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import type {
-  PluginCard,
-  TexraPlugin,
-  ToolPluginSetup,
-} from '@texra/tools/registry';
+import type { PluginCard, TexraPlugin } from '@texra/tools/registry';
 
 // ============================================================
 // Tool terminal actions
@@ -65,13 +62,18 @@ export const planToolTerminalAction = (input: {
     if (card?.setup === undefined)
       return { kind: 'none', reason: 'unknownTool' };
 
-    const command =
-      input.commandKind === 'install'
-        ? card.setup.installCommand
-        : card.setup.authCommand;
-    if (!command) return { kind: 'none', reason: 'missingCommand' };
+    const kind = input.commandKind === 'install' ? 'command' : 'auth';
+    const action = card.setup.actions?.find(
+      (each): each is Extract<ToolInstallAction, { command: string }> =>
+        each.kind === kind,
+    );
+    if (action === undefined) return { kind: 'none', reason: 'missingCommand' };
 
-    return { kind: 'terminal', name: `TeXRA: ${card.name}`, command };
+    return {
+      kind: 'terminal',
+      name: `TeXRA: ${card.name}`,
+      command: action.command,
+    };
   });
 
 /** The card's inline settings rows, as the dashboard item carries them. */
@@ -136,15 +138,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
       const result = resultById.get(plugin.id);
       if (result === undefined) continue;
       const { tools, status, statusLabel, statusDetail } = result;
-      const {
-        installGuide,
-        installCommand,
-        authCommand,
-        installExtensionId,
-        installUrl,
-        configNotes,
-        authNote,
-      }: ToolPluginSetup = card.setup ?? {};
+      const { actions = [], configNotes, authNote } = card.setup ?? {};
       externalItems.push({
         id: plugin.id,
         name: card.name,
@@ -153,29 +147,12 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         setup: {
           status,
           statusLabel,
-          installActions: [
-            ...(installGuide
-              ? [{ kind: 'guide' as const, text: installGuide }]
-              : []),
-            ...(installCommand
-              ? [{ kind: 'command' as const, command: installCommand }]
-              : []),
-            ...(authCommand
-              ? [{ kind: 'auth' as const, command: authCommand }]
-              : []),
-            // Only a host with an editor gets an "Install Extension" button;
-            // the install guide and URL still describe the standalone path
-            // (Lean 4's `lake` build, for one).
-            ...(installExtensionId && editor
-              ? [
-                  {
-                    kind: 'extension' as const,
-                    extensionId: installExtensionId,
-                  },
-                ]
-              : []),
-            ...(installUrl ? [{ kind: 'url' as const, url: installUrl }] : []),
-          ],
+          // Only a host with an editor gets an "Install Extension" button;
+          // the install guide and URL still describe the standalone path
+          // (Lean 4's `lake` build, for one).
+          installActions: actions.filter(
+            (action) => action.kind !== 'extension' || editor !== undefined,
+          ),
           configNotes,
           statusDetail,
           authNote,

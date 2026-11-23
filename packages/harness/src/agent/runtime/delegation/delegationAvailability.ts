@@ -19,13 +19,14 @@ import { Array as Arr, Effect } from 'effect';
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
 import type { StepTools } from '@agent/runtime/loop/step';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import {
   readModelOptions,
   type ModelVerdict,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
-import { scanPluginAgents } from './pluginAgents';
+import { pluginAgentsOf } from './pluginAgents';
 import {
   AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
@@ -53,16 +54,18 @@ const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
 
 /**
  * What the `agent` tool can launch, or `undefined` when the step's tools
- * hold none: the agents the installed plugins that load now provide, the
- * models a child can run, and whether worktrees are on.
+ * hold none: the agents of the installed plugins the step loaded (so they
+ * come and go with the plugin's tools and programs in the same request),
+ * the models a child can run, and whether worktrees are on.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
     { registry }: Pick<StepTools, 'registry'>,
+    installed: readonly LoadablePlugin[],
     stores: SettingsStores,
   ) {
     if (registry.get(AGENT_TOOL_NAME) === undefined) return undefined;
-    const agents = (yield* scanPluginAgents).entries.map((entry) => ({
+    const agents = (yield* pluginAgentsOf(installed)).entries.map((entry) => ({
       name: entry.name,
       // One line per agent: a blank line in a description would otherwise
       // read as the end of the list.
