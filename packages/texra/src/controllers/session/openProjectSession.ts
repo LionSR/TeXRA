@@ -31,7 +31,10 @@ import {
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
 import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
-import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
+import {
+  openTexraGlobalConfigStore,
+  openTexraWorkspaceConfigStores,
+} from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   runsHereOnlyMessage,
@@ -42,27 +45,61 @@ import type { GuiSession } from './openGuiWindow';
 
 const CHANNEL = 'openProjectSession';
 
+/** How a host shows a warning, without waiting for the person. */
+type Warn = (message: string) => Effect.Effect<void>;
+
+/** What a config file's open found wrong is logged and shown, on every
+ *  host and for every file. */
+const tellConfigWarnings = (warnings: readonly string[], warn: Warn) =>
+  Effect.forEach(
+    warnings,
+    (message) =>
+      Effect.logWarning(message).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(warn(message)),
+      ),
+    { discard: true },
+  );
+
+/**
+ * Open the store over the process's global config file under `storageRoot`,
+ * the one every project's roots layer their own stores over. `warn` shows
+ * what the open found wrong with the file.
+ */
+export const openGlobalConfig = Effect.fn('openGlobalConfig')(function* (
+  storageRoot: string,
+  warn: Warn,
+) {
+  const { store, warnings } = yield* openTexraGlobalConfigStore(
+    TEXRA_SETTINGS.catalog,
+    storageRoot,
+  );
+  yield* tellConfigWarnings(warnings, warn);
+  return store;
+});
+
 /**
  * Open the roots of the project at `workspaceRoot` (undefined: a window with
  * no folder) for the caller's scope: its project and local config stores
  * over the process's `globalConfig`, and its state. A project whose host
  * reached the background service (`service`) keeps its state there, so this
- * process opens no store of it. `warnings` is what the config open found,
- * for the host to show in its own place. The one open of a project's roots
- * the windows and the service make.
+ * process opens no store of it. `warn` shows what the config open found
+ * wrong. The one open of a project's roots the windows and the service make.
  */
 export const openProjectRoots = Effect.fn('openProjectRoots')(function* (
   storageRoot: string,
   workspaceRoot: string | undefined,
   globalConfig: ConfigStore,
   service: ServiceLink | undefined,
+  warn: Warn,
 ) {
   const { warnings, ...configs } = yield* openTexraWorkspaceConfigStores(
     TEXRA_SETTINGS.catalog,
     storageRoot,
     workspaceRoot,
   );
-  const roots = yield* openNodeWorkspaceRoots({
+  yield* tellConfigWarnings(warnings, warn);
+  return yield* openNodeWorkspaceRoots({
     workspaceRoot,
     storageRoot,
     config: {
@@ -77,7 +114,6 @@ export const openProjectRoots = Effect.fn('openProjectRoots')(function* (
     stateStores: yield* StateStores,
     globalState: yield* AppState,
   });
-  return { roots, warnings };
 });
 
 /**
@@ -89,7 +125,7 @@ export const openProjectRoots = Effect.fn('openProjectRoots')(function* (
 export const openProjectSession = Effect.fn('openProjectSession')(function* (
   roots: WorkspaceRoots,
   reached: Result.Result<ServiceLink, Error>,
-  warn: (message: string) => Effect.Effect<void>,
+  warn: Warn,
 ): Effect.fn.Return<GuiSession, Error, Scope.Scope | Sessions | HostWindows> {
   if (roots.workspace !== undefined && Result.isSuccess(reached))
     return {

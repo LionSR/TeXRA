@@ -43,17 +43,8 @@ interface DesktopHostRequestsOptions {
 export const createDesktopHostRequests = (
   options: DesktopHostRequestsOptions,
 ) =>
-  Effect.sync(() => {
+  Effect.sync((): GuiWindowHost => {
     const { host } = options;
-    /** Each notice answers with the program that presents it; the session
-     *  forks it and warn-logs its failure. */
-    const notices: GuiWindowHost['notices'] = {
-      ...host.notices,
-      // Desktop has no editor integration to preview through, so the
-      // resolved path goes to the preview-with-fallback host directly.
-      openFile: (data) => host.openPath(data.location.absolutePath),
-    };
-
     /** This window's half of the shared body's binding table: every verb
      *  mapped onto the window's dialogs, its preview host, its settings
      *  view, and the project's launch path. */
@@ -122,9 +113,12 @@ export const createDesktopHostRequests = (
     return {
       bindings,
       own,
-      notices,
+      // Desktop has no editor integration to preview through, so the
+      // resolved path goes to the preview-with-fallback host directly.
+      openFile: (data) => host.openPath(data.location.absolutePath),
       window: {},
       notify: host.notify,
+      ask: host.ask,
       runs: {
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.

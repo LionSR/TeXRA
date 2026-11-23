@@ -69,11 +69,10 @@ import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { HostTelemetrySwitch } from '@telemetry/UsageLogService';
-import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import {
+  openGlobalConfig,
   openProjectRoots,
   openProjectSession,
 } from '@texra/controllers/session/openProjectSession';
@@ -218,25 +217,16 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             );
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
-      const global = yield* openTexraGlobalConfigStore(
-        TEXRA_SETTINGS.catalog,
-        defaultNodeStorageRoot(),
-      );
-      const { roots, warnings } = yield* openProjectRoots(
+      // Forked: a notification waits for the person, and activation does not.
+      const warn = (message: string) =>
+        Effect.sync(() => fork(vscodeUi.notify('warning', message)));
+      const roots = yield* openProjectRoots(
         defaultNodeStorageRoot(),
         workspaceRoot,
-        global.store,
+        yield* openGlobalConfig(defaultNodeStorageRoot(), warn),
         Result.getOrUndefined(reached),
+        warn,
       ).pipe(Scope.provide(projectScope));
-      // Forked: a notification waits for the person, and activation does not.
-      for (const message of [...global.warnings, ...warnings]) {
-        fork(
-          Effect.logWarning(message).pipe(
-            withLogChannel(EXTENSION_CHANNEL),
-            Effect.andThen(vscodeUi.notify('warning', message)),
-          ),
-        );
-      }
       // The one-time telemetry notice, one information message.
       const notice = yield* telemetryNoticeIfDue(roots.config);
       if (notice) yield* vscodeUi.notify('info', notice);

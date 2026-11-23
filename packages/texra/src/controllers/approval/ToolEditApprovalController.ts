@@ -176,17 +176,24 @@ export interface ToolEditPreview {
    * Close the view and remove everything staged for this request. When the
    * request ended without the proposed content as the user left it here,
    * that content is `unapplied`: the host keeps it where the user can still
-   * reach it, and tells the user it was not applied and where it is.
+   * reach it, and says through the `warn` it was staged with that it was
+   * not applied and where it is.
    */
   dispose(unapplied?: string): PreviewCall<void>;
 }
 
 export interface ToolEditApprovalHost {
-  /** Materialize the original and proposed content for the host's view. */
-  stagePreview(request: ToolEditPreviewRequest): PreviewCall<ToolEditPreview>;
+  /** Materialize the original and proposed content for the host's view.
+   *  `warn` logs and shows a warning the preview has for the user. */
+  stagePreview(
+    request: ToolEditPreviewRequest,
+    warn: (message: string) => Effect.Effect<void>,
+  ): PreviewCall<ToolEditPreview>;
   /** The host's build display, which the LaTeX preview programs yield. */
   readonly openBuildDisplay: BuildDisplayFn;
-  reportError(message: string): void;
+  /** Show a notice without waiting for the user to read it. The controller
+   *  has logged it. */
+  notify(level: 'error' | 'warning', message: string): void;
   /** Whether the user works in this window now: only that window opens a
    *  new request's diff on its own. */
   focused(): boolean;
@@ -325,7 +332,9 @@ export class ToolEditApprovalController {
     return Effect.gen({ self: this }, function* () {
       if (read.kind === 'unavailable') {
         // The card still answers from its payload; there is no diff to show.
-        host.reportError(
+        // `readToolEditPreview` has logged the reason.
+        host.notify(
+          'error',
           `No diff of the edit to ${pending.payload.data.relativePath}: ${read.reason}.`,
         );
         return;
@@ -339,7 +348,9 @@ export class ToolEditApprovalController {
       // that fails, as it can at window teardown.
       const files = yield* Scope.fork(scope);
       const preview = yield* Effect.acquireRelease(
-        host.stagePreview({ ...pending.payload.data, ...content }),
+        host.stagePreview({ ...pending.payload.data, ...content }, (message) =>
+          this.tell('warning', message),
+        ),
         (staged) =>
           this.unapplied(
             pending,
@@ -363,7 +374,7 @@ export class ToolEditApprovalController {
         proposedContent: content.proposedContent,
         files,
         operation: yield* Semaphore.make(1),
-        onError: (message) => host.reportError(message),
+        onError: (message) => this.tell('error', message),
       };
       yield* Effect.acquireRelease(
         Effect.sync(() => this.staged.set(requestId, entry)),
@@ -463,8 +474,19 @@ export class ToolEditApprovalController {
   }
 
   private report(failure: unknown): Effect.Effect<void> {
-    return Effect.sync(() =>
-      this.options.host.reportError(toErrorMessage(failure)),
+    return this.tell('error', toErrorMessage(failure));
+  }
+
+  /** Log a notice and show it: every host's log holds what its window
+   *  said about a tool edit. */
+  private tell(level: 'error' | 'warning', message: string) {
+    return (
+      level === 'error' ? Effect.logError(message) : Effect.logWarning(message)
+    ).pipe(
+      withLogChannel(CHANNEL),
+      Effect.andThen(
+        Effect.sync(() => this.options.host.notify(level, message)),
+      ),
     );
   }
 }

@@ -47,7 +47,8 @@ export interface SettingsHostBindings {
   ): Effect.Effect<void, E | Error, R>;
   readonly dialogs: Dialogs;
   readonly externalOpener: ExternalOpener;
-  /** Open a file to read or edit it. */
+  /** Open a file to read or edit it. The body reports a failed open, so
+   *  the host shows nothing of its own. */
   openPath(filePath: string): HostEffect;
   /** Show a file or folder in the system file manager. */
   revealPath(filePath: string): HostEffect;
