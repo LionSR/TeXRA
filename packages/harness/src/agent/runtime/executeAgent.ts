@@ -285,7 +285,7 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
         agentRunLayer(launch, {
           modelConfig: definition.modelConfig,
           tools: options.tools,
-          callbacks: { onProgress: options.onProgress },
+          onProgress: options.onProgress,
         }),
       ),
     ),
