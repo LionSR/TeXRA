@@ -259,18 +259,25 @@ function runStatus(run: RunView): string {
   return isInterrupted(run) ? 'interrupted' : run.position;
 }
 
+/** What a store was last fed of one run: its view and the `seq` of the last
+ *  of its rows read, or why none could be read. */
+export type FedRun =
+  | { readonly view: RunView; readonly seq: number }
+  | { readonly unreadable: string };
+
 /** The writes that replace the runs table with the view's `runs` and read
- *  the open calls against it: `calls` places each tool card's call,
- *  `unreadable` says why a run's calls are missing. */
+ *  the open calls against it: `calls` places each tool card's call, and
+ *  a fed run that could not be read says why its calls are missing. */
 export const replaceRuns = (
   runs: SessionView['runs'],
   fed: {
     readonly calls: { readonly byCard: ReadonlyMap<string, number> };
-    readonly unreadable: ReadonlyMap<string, string>;
+    readonly fed: ReadonlyMap<string, FedRun>;
   },
 ): HistoryWrite[] => [
   { statement: 'clearRuns', params: {} },
   ...Array.from(runs.values(), (run): HistoryWrite => {
+    const fedRun = fed.fed.get(run.id);
     // Every cell is cut as the store holds it: a run's texts may be long.
     const params: HistoryParams['run'] = {
       id: cutText(run.id),
@@ -291,7 +298,11 @@ export const replaceRuns = (
       cost: run.usage.cost,
       input_tokens: run.usage.inputTokens,
       output_tokens: run.usage.outputTokens,
-      calls_unreadable: cutText(fed.unreadable.get(run.id) ?? null),
+      calls_unreadable: cutText(
+        fedRun !== undefined && 'unreadable' in fedRun
+          ? fedRun.unreadable
+          : null,
+      ),
     };
     return { statement: 'run', params };
   }),

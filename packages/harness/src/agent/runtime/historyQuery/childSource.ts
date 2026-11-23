@@ -20,9 +20,9 @@ import {
   HistoryQueryFailed,
   HistoryQueryRefused,
 } from '@shared/session/runHistory';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import type { SessionView } from '@shared/session/sessionView';
 
-import { HISTORY_SCHEMA_SQL, HISTORY_WRITE_SQL } from './views';
+import { HISTORY_SCHEMA_SQL, HISTORY_WRITE_SQL, type FedRun } from './views';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
@@ -137,13 +137,12 @@ export interface Store {
   cursor: CommitOrdinal;
   /** The view's `runs` the store's `runs` table was last filled from. */
   runs?: SessionView['runs'];
-  /** Each fed run's view and the `seq` of the last of its rows read. */
-  readonly fed: Map<RunId, { readonly view: RunView; readonly seq: number }>;
+  /** Each fed run's view and the `seq` of the last of its rows read, or
+   *  why its calls are missing: its history does not decode here. */
+  readonly fed: Map<RunId, FedRun>;
   /** The `tool_calls` positions issued so far, and each tool card's: what
    *  a child's `parent_call_position` reads. */
   readonly calls: CallPositions;
-  /** Why a run's calls are missing: its history does not decode here. */
-  readonly unreadable: Map<RunId, string>;
 }
 
 /** Replaces an effect's failure with a `HistoryQueryFailed` carrying it. */
@@ -241,7 +240,6 @@ export const spawnQueryStore = Effect.fn('HistoryQuery.spawn')(function* (
       cursor: 0,
       fed: new Map(),
       calls: { last: 0, byCard: new Map() },
-      unreadable: new Map(),
     };
     yield* request(store, {
       kind: 'init',
