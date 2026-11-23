@@ -21,12 +21,14 @@ import { type PresentationEventHandlers } from '@texra-ai/worldline/host';
 import { isPathWithin } from '@texra-ai/worldline/node';
 
 import {
+  Array as Arr,
   Cause,
   Clock,
   Context,
   Effect,
   Equal,
   Layer,
+  Order,
   Queue,
   RcMap,
   Ref,
@@ -128,15 +130,15 @@ export const makeWindowTable = () => {
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
-    let best: Window | undefined;
-    for (const window of windows)
-      if (
-        window.key === key &&
-        window.capabilities.has(capability) &&
-        (best === undefined || window.focusedAt > best.focusedAt)
-      )
-        best = window;
-    return best;
+    const able = [...windows].filter(
+      (window) => window.key === key && window.capabilities.has(capability),
+    );
+    return Arr.isArrayNonEmpty(able)
+      ? Arr.max(
+          able,
+          Order.mapInput(Order.Number, (window: Window) => window.focusedAt),
+        )
+      : undefined;
   };
   const offers = (key: string, capability: HostCapability) =>
     target(key, capability) !== undefined;

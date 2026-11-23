@@ -3,6 +3,7 @@
  * comment list is polled with, and `getNewestTimestamp` reads the cursor a
  * list advances it to.
  */
+import { Array as Arr, Order } from 'effect';
 
 /**
  * Append a `since=` query param to a poll URL, choosing `?` or `&` based on
@@ -21,10 +22,10 @@ export function getNewestTimestamp(
     updated_at?: string | null;
   }>,
 ): string | undefined {
-  let best: string | undefined;
-  for (const it of items) {
-    const t = it.updated_at ?? it.created_at;
-    if (t && (!best || t > best)) best = t;
-  }
-  return best;
+  const stamps = items
+    .flatMap((it) => it.updated_at ?? it.created_at ?? [])
+    .filter((stamp) => stamp !== '');
+  return Arr.isArrayNonEmpty(stamps)
+    ? Arr.max(stamps, Order.String)
+    : undefined;
 }

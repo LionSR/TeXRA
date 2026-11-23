@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Predicate } from 'effect';
+import { Array as Arr, Order, Predicate } from 'effect';
 
 import { isPathWithin } from '@utils/core/pathCore';
 import { meansAbsent } from '@utils/files/fsEntryExists';
@@ -128,11 +128,14 @@ export function findExternalRoot(
     return null;
   }
 
-  let best: StepRoot | null = null;
-  for (const root of stepRoots) {
-    if (!isPathWithin(root.absolutePath, resolved)) continue;
-    if (best === null || root.absolutePath.length > best.absolutePath.length)
-      best = root;
-  }
-  return best === null ? null : { ...best, writable: best.writable ?? false };
+  const within = stepRoots.filter((root) =>
+    isPathWithin(root.absolutePath, resolved),
+  );
+  if (!Arr.isReadonlyArrayNonEmpty(within)) return null;
+  // The deepest root that holds the path, the first of several as deep.
+  const best = Arr.max(
+    within,
+    Order.mapInput(Order.Number, (root: StepRoot) => root.absolutePath.length),
+  );
+  return { ...best, writable: best.writable ?? false };
 }
