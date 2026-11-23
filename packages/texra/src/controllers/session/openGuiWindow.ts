@@ -34,6 +34,7 @@ import { commitExists, workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   AppSignals,
   pathToLocationIn,
+  Secrets,
   ToolRegistry,
   type StorageFs,
   WorkspaceFs,
@@ -88,6 +89,7 @@ import {
 import { openHostSnapshotSource } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
+import { windowNotices, type AskNotice } from './windowNotices';
 import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 import type { RunId } from '@texra-ai/worldline/schemas';
@@ -184,8 +186,11 @@ export interface SharedHostCommandBindings {
   openSettings(target: SettingsTarget | undefined): HostVerb<void>;
   /** Ask for a provider API key, `provider`'s when a retry names one: a
    *  prompt on one host, the Models tab on the other. The caller re-reads
-   *  the secret store after this returns. */
-  setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
+   *  the secret store after this returns. It reads only the key store, so
+   *  a notice's button, which runs outside a request, can run it too. */
+  setApiKey(
+    provider?: ApiKeyProviderId,
+  ): Effect.Effect<void, HostCommandFailure, Secrets>;
   /** Open a web address in the browser. A failed open is answered, in the
    *  body below, as a rejection naming the address. */
   readonly openExternal: ExternalOpener['openExternal'];
@@ -214,13 +219,15 @@ export interface SharedHostCommandBindings {
 export interface GuiWindowHost {
   /** The window's notices. */
   readonly notify: Dialogs['notify'];
+  /** A notice with one button per label, behind the failure and
+   *  instruction notices the body words and wires. */
+  readonly ask: AskNotice;
   readonly bindings: SharedHostCommandBindings;
   readonly own: OwnHostHandlers;
-  /** The runtime's notices this host presents its own way. */
-  readonly notices: PresentationEventHandlers<
-    RuntimePresentationEventPayloads,
-    HostPresentation
-  >;
+  /** Show a file a run asks to be opened, built when it is a document. */
+  openFile(
+    payload: RuntimePresentationEventPayloads['openFile'],
+  ): HostPresentation;
   /** What the window's editor does for its project's runs, here or in the
    *  service. Announcing the files a service task wrote is the same on
    *  every host, so the window's opening adds it. */
@@ -330,7 +337,32 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // itself.
   const workspace = roots.workspace ?? roots.storage;
   const signals = yield* AppSignals;
-  const { notices } = host;
+  const secrets = yield* Secrets;
+  const { bindings } = host;
+  // A notice's buttons run the verbs the window's requests run. The session
+  // forks a notice outside any request, so the key store the set-key verb
+  // reads is handed over here.
+  const notices: PresentationEventHandlers<
+    RuntimePresentationEventPayloads,
+    HostPresentation
+  > = {
+    openFile: host.openFile,
+    ...windowNotices({
+      ask: host.ask,
+      setApiKey: bindings
+        .setApiKey()
+        .pipe(Effect.provideService(Secrets, secrets)),
+      // The button was pressed, so a guide that does not open is said in
+      // the window.
+      openGuide: (page) =>
+        bindings
+          .openExternal(texraGuideUrl(page))
+          .pipe(
+            Effect.tapError((failed) => host.notify('error', failed.message)),
+          ),
+      globalState: roots.globalState,
+    }),
+  };
   const window: WindowHost = {
     ...host.window,
     emit: (event, payload) => notices[event](payload),
@@ -391,7 +423,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     session,
     notify: host.notify,
   });
-  const { bindings } = host;
   const runSetup = yield* openWindowSetup({
     session,
     roots,

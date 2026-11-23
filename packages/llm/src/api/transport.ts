@@ -144,6 +144,21 @@ export const wireFail = (
   Effect.fail(new ModelError({ kind, message }));
 
 /**
+ * The rejection for a stream event whose `type` this version does not
+ * support. The provider sends that event again on every repeat of the
+ * request, so it is not retried.
+ */
+export const unsupportedStreamEvent = (
+  provider: string,
+  type: string,
+): ModelError =>
+  new ModelError({
+    kind: 'provider-rejection',
+    retryable: false,
+    message: `${provider} sent a stream event of a type this version does not support: ${type}.`,
+  });
+
+/**
  * Fails when `raw` is a stream event whose `key` names a type outside
  * `known`. The provider sends that event again on every repeat of the
  * request, so the failure is not retried; a malformed event of a known type
@@ -158,13 +173,7 @@ export const refuseUnknownEvent = (
   const type = Predicate.hasProperty(raw, key) ? raw[key] : undefined;
   return typeof type !== 'string' || known.has(type)
     ? Effect.void
-    : Effect.fail(
-        new ModelError({
-          kind: 'provider-rejection',
-          retryable: false,
-          message: `${provider} sent a stream event of a type this version does not support: ${type}.`,
-        }),
-      );
+    : Effect.fail(unsupportedStreamEvent(provider, type));
 };
 
 /**

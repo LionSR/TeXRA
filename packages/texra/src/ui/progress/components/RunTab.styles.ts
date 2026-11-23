@@ -2,16 +2,12 @@
 import { css } from 'lit';
 
 // Local imports - shared styles
-import {
-  disclosureChevronStyles,
-  truncateDeclarations,
-} from '@ui/styles/commonViewStyles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 
 /** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
   ${statusIndicatorStyles}
-  ${disclosureChevronStyles}
 
   :host {
     display: block;

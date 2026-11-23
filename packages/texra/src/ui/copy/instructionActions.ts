@@ -66,9 +66,6 @@ export const INSTRUCTION_ACTION_BUTTON_LABELS: Readonly<
   [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model documentation',
 });
 
-/** The button beside a failure that names a guide page. */
-export const READ_GUIDE_BUTTON_LABEL = 'Read the guide';
-
 const CLI_INSTRUCTION_ACTION_HINTS: Record<InstructionAction, string> = {
   [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra setup)',
   [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',

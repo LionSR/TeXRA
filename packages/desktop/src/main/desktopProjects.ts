@@ -24,7 +24,6 @@ import {
 } from '@texra-ai/worldline/node';
 import { ensureError, toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
-  withLogChannel,
   AppState,
   StateStores,
   withPerKeyLane,
@@ -319,21 +318,18 @@ export const openDesktopProjectRegistry: (
         if (existing) return existing;
         const projectScope = yield* Scope.make();
         return yield* Effect.gen(function* () {
-          const { roots, warnings } = yield* openProjectRoots(
+          const roots = yield* openProjectRoots(
             options.dataRoot,
             root,
             options.globalConfigStore,
             Result.isSuccess(options.service)
               ? options.service.success
               : undefined,
+            warn,
           ).pipe(
             Effect.provideService(StateStores, stateStores),
             Effect.provideService(AppState, appState),
           );
-          for (const message of warnings) {
-            yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
-            yield* warn(message);
-          }
           // Acquire the session, remember it for the next launch and
           // install its registry owner before interruption can leave this
           // operation; a failed write closes the session again.

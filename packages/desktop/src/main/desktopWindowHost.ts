@@ -10,9 +10,6 @@ import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
-import { windowNotices } from '@texra/controllers/session/windowNotices';
-import { texraGuideUrl } from '@ui/copy/guide';
-import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { choose, createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
@@ -176,17 +173,8 @@ export function createDesktopWindowHost(options: {
         openPath: (filePath) => presented(previewHost.openPath(filePath)),
         confirm: (question) => dialogs.confirm(question, name),
         notify: (level, message) => notify(level, message, name),
-        notices: windowNotices({
-          ask: (level, message, labels) =>
-            dialogs.ask(level, message, labels, name),
-          setApiKey: Effect.sync(() =>
-            postDesktopSettingsView(post, 'models/keys'),
-          ),
-          // A guide that does not open is shown in the window.
-          openGuide: (page) =>
-            presented(previewHost.openExternal(texraGuideUrl(page))),
-          globalState: roots.globalState,
-        }),
+        ask: (level, message, labels) =>
+          dialogs.ask(level, message, labels, name),
         pickTranscriptExportFormat: () =>
           dialogs.pickTranscriptExportFormat(name),
       };

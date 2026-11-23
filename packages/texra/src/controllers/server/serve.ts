@@ -60,11 +60,10 @@ import {
 } from '@texra-ai/worldline/plugins';
 import { ensureError } from '@texra-ai/worldline/schemas';
 import {
+  openGlobalConfig,
   openLocalSession,
   openProjectRoots,
 } from '@texra/controllers/session/openProjectSession';
-import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import {
   probeService,
@@ -151,13 +150,9 @@ const openProjects = Effect.fn('server.openProjects')(function* (
   // The windows and the CLI write these files while the service runs: a
   // store's read serves what they hold now, so a setting changed in any
   // client reaches the next task and the next turn.
-  const { store: globalConfig, warnings: globalWarnings } =
-    yield* openTexraGlobalConfigStore(TEXRA_SETTINGS.catalog, storageRoot);
-  yield* Effect.forEach(
-    globalWarnings,
-    (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
-    { discard: true },
-  );
+  // The service has no window: what a config open finds is in its log.
+  const logged = () => Effect.void;
+  const globalConfig = yield* openGlobalConfig(storageRoot, logged);
   // What opening a project reads, captured once: `open` is called from
   // handlers that hold no process context of their own. Exactly these
   // services, never the service's scope with them: provided over a
@@ -215,17 +210,13 @@ const openProjects = Effect.fn('server.openProjects')(function* (
     // with its scope.
     yield* Effect.acquireRelease(count(1, 0), () => count(-1, 0));
     // The service is the process that holds each project's state.
-    const { roots, warnings } = yield* openProjectRoots(
+    const roots = yield* openProjectRoots(
       storageRoot,
       root,
       globalConfig,
       undefined,
+      logged,
     ).pipe(Scope.provide(projectScope));
-    yield* Effect.forEach(
-      warnings,
-      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
-      { discard: true },
-    );
     // A project store is held by one process, and one service serves a
     // storage root at a time (the client that replaces a service waits for
     // its exit), so a held store is another process's to answer for. The

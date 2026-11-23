@@ -1,5 +1,6 @@
 // A chat's slash command table, built from plugin contributions.
 
+import { Array as Arr, Order } from 'effect';
 import { createContext, useContext } from 'react';
 
 import { API_KEY_PATTERN_SOURCE } from '@texra-ai/llm';
@@ -113,6 +114,19 @@ export interface SlashCommands {
   readonly shouldRedact: (text: string) => boolean;
 }
 
+interface NearCandidate {
+  readonly command: SlashCommand;
+  readonly candidate: string;
+  readonly distance: number;
+}
+
+/** A typo's candidates, nearest first; among equally near ones the name
+ *  that sorts first. */
+const NEAREST_CANDIDATE = Order.combine(
+  Order.mapInput(Order.Number, (near: NearCandidate) => near.distance),
+  Order.mapInput(Order.String, (near: NearCandidate) => near.candidate),
+);
+
 /**
  * The slash commands of these contributions. A duplicate plugin id, or a
  * name or alias claimed twice, is a wiring bug and throws.
@@ -157,29 +171,21 @@ export function slashCommands(
 
   const suggest = (nameOrAlias: string): SlashCommand | undefined => {
     const token = nameOrAlias.toLowerCase();
-    let best:
-      | {
-          readonly command: SlashCommand;
-          readonly candidate: string;
-          readonly distance: number;
-        }
-      | undefined;
-
-    for (const command of list) {
-      for (const candidate of commandCandidates(command)) {
-        const distance = editDistance(token, candidate);
-        if (distance > typoSuggestionThreshold(token, candidate)) continue;
-        if (
-          best === undefined ||
-          distance < best.distance ||
-          (distance === best.distance && candidate < best.candidate)
-        ) {
-          best = { command, candidate, distance };
-        }
-      }
-    }
-
-    return best?.command;
+    const near = list.flatMap((command) =>
+      commandCandidates(command)
+        .map((candidate) => ({
+          command,
+          candidate,
+          distance: editDistance(token, candidate),
+        }))
+        .filter(
+          ({ candidate, distance }) =>
+            distance <= typoSuggestionThreshold(token, candidate),
+        ),
+    );
+    return Arr.isArrayNonEmpty(near)
+      ? Arr.min(near, NEAREST_CANDIDATE).command
+      : undefined;
   };
 
   const redactedCommandForToken = (token: string): SlashCommand | undefined => {

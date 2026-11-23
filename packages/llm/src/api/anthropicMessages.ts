@@ -11,6 +11,7 @@ import {
   Clock,
   DateTime,
   Effect,
+  Record,
   Result,
   Schema,
   type Scope,
@@ -447,7 +448,7 @@ function anthropicWire() {
       if (
         (block.type === 'text' && (block.citations?.length ?? 0) > 0) ||
         (block.type === 'tool_use' &&
-          (block.toolset_name != null || Object.keys(block.input).length !== 0))
+          (block.toolset_name != null || !Record.isEmptyRecord(block.input)))
       )
         return yield* fail(
           'Anthropic citations, toolsets and nonempty streamed argument placeholders are unsupported.',

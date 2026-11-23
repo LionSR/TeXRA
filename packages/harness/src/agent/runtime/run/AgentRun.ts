@@ -101,11 +101,6 @@ export interface ToolPolicy {
   readonly stopAfterCycle?: boolean;
 }
 
-interface RunCallbacks {
-  /** Fires on meaningful progress: plan changes, tool call milestones. */
-  readonly onProgress?: (update: SubagentProgressUpdate) => void;
-}
-
 /** What a launch resolved for its run (`buildAgentLaunchContext`), which
  *  the run's `AgentRun` carries whole. */
 export interface RunLaunch {
@@ -163,7 +158,8 @@ export interface AgentRunShape extends RunLaunch {
    * together rather than one after another.
    */
   readonly scope: Scope.Scope;
-  readonly callbacks: RunCallbacks;
+  /** Fires on meaningful progress: plan changes, tool call milestones. */
+  readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /**
    * The calls this run awaits children in, at most the child-run budget of
    * them at once (`childRunConcurrencyBudget`). An awaited child rides its
@@ -185,7 +181,8 @@ interface AgentRunLayerInput {
   readonly modelConfig: ModelConfig;
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
-  readonly callbacks: RunCallbacks;
+  /** Fires on meaningful progress; carried onto the run's `onProgress`. */
+  readonly onProgress?: (update: SubagentProgressUpdate) => void;
 }
 
 /**
@@ -309,7 +306,7 @@ export const agentRunLayer = (
         script,
         model,
         scope,
-        callbacks: input.callbacks,
+        onProgress: input.onProgress,
         awaitedCalls: Semaphore.makeUnsafe(
           yield* resolveChildRunConcurrencyBudget(roots),
         ),

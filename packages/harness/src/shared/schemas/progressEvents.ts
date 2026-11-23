@@ -59,9 +59,6 @@ export const LaunchNoticeSchema = Schema.Union([
 /** Show an error message via a host notification. */
 export const RequestShowErrorPayloadSchema = Schema.Struct({
   message: Schema.String,
-  /** Docs page of the refusing request (e.g. 'file-management'); the host
-   *  offers it as a guide link or action beside the message. */
-  docsPage: Schema.optional(Schema.String),
   /** The model call's failure `message` words, as its verdict: a host
    *  with words of its own for it shows them in place of `message`. */
   failure: Schema.optional(ModelFailureSchema),

@@ -663,7 +663,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
               // one a surface answered meanwhile stands.
               const { last } = resumedAttempt(state, at, status);
               const withdrawn =
-                last === null || last.request.decision !== null
+                last === null || last.request.decided !== null
                   ? Effect.void
                   : decideRequest(run.runId, last.requestId, {
                       action: 'cancel',

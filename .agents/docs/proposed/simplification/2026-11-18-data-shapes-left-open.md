@@ -99,6 +99,10 @@ Moot since 2026-11-19: the external inquiry and its records were removed.
   input typed after the shell exits still reaches `sendInput`. Recently
   changed (#15026), so let it settle first.
 
+The terminal's shell state landed 2026-11-23: one `shell` union (`waiting`
+with its held input, `running`, `exited`), and input typed at an exited
+shell is dropped in the pane.
+
 `SubscriptionAuthStatus` landed 2026-11-19: `email` and `accountId` are
 plain optional, and the label helpers take the names a session carries.
 

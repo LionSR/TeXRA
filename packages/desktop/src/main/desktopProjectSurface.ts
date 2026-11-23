@@ -96,11 +96,12 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         },
         // The one browser hand-off every settings URL takes. Its failure
         // reaches the settings body's own report, so the opener shows no
-        // dialog of its own: one failed open, one dialog.
+        // dialog of its own: one failed open, one dialog. The same holds
+        // for a file the body opens.
         externalOpener: {
           openExternal: host.openExternalUrl,
         },
-        openPath: (filePath) => host.presented(previewHost.openPath(filePath)),
+        openPath: (filePath) => previewHost.openPath(filePath),
         revealPath: (filePath) =>
           Effect.sync(() => shell.showItemInFolder(filePath)),
         // The run verbs of the project these settings belong to, even while

@@ -13,7 +13,7 @@ import {
   Stream,
 } from 'effect';
 
-import { scopedFork } from '@texra-ai/worldline/host';
+import { scopedFork, withProcessServices } from '@texra-ai/worldline/host';
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   attentionOf,
@@ -23,7 +23,6 @@ import {
   type RunId,
 } from '@texra-ai/worldline/schemas';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -33,6 +32,7 @@ import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import { sectionCountLabel } from '@ui/copy/runStatus';
 import {
   fromHost,
+  fromHostSync,
   hostFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
@@ -283,7 +283,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         }).pipe(
           Effect.map((requests) => ({
             ...requests,
-            notices: createAgentPresentationHost(roots, runtime, showBuilt),
+            // The open-and-build program takes this window's file services
+            // from the runtime's context, which the session that forks it
+            // does not carry.
+            openFile: (payload) =>
+              withProcessServices(
+                runtime,
+                showBuilt([payload.location], {
+                  preserveFocus: payload.preserveFocus,
+                }),
+              ),
             window: editor,
             runs: {
               openFinalOutput: previewFinalOutput,
@@ -568,17 +577,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   private reveal(preserveFocus: boolean): Effect.Effect<void, HostFailed> {
     const { editor, sidebar } = this.surfaces;
-    const host = (member: string, call: () => void) =>
-      Effect.try({
-        try: call,
-        catch: (cause) => hostFailed(member, cause),
-      });
     if (editor)
-      return host('reveal', () => editor.view.reveal(undefined, preserveFocus));
+      return fromHostSync('reveal', () =>
+        editor.view.reveal(undefined, preserveFocus),
+      );
     // A quiet reveal shows a resolved sidebar in place; one that takes focus
     // runs the focus command, which also opens a collapsed container.
     if (sidebar && preserveFocus)
-      return host('reveal', () => sidebar.view.show(true));
+      return fromHostSync('reveal', () => sidebar.view.show(true));
     return showInSidebar;
   }
 
