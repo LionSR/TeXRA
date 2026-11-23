@@ -8,15 +8,15 @@
  * (`mcp__<server>__<tool>`, or `mcp__<server>__*` for every tool the server
  * lists), and only the servers the declarations name become plugins, so a
  * run that declares none reads nothing and starts nothing. Each is plugin
- * `mcp:<server>`; its spec (name, command, args and env names) and a keyed
- * digest of its env values key its process, so an edited entry is a new
- * process beside the one open runs keep, and both are its recorded
- * revision: an edited entry gives its tools a new identity, and an
- * unchanged one keeps it across restarts.
+ * `mcp:<server>`; its revision, a digest of its spec (name, command, args
+ * and env names) and of a keyed digest of its env values, keys its process,
+ * so an edited entry is a new process beside the one open runs keep, and is
+ * what its tools record: an edited entry gives its tools a new identity,
+ * and an unchanged one keeps it across restarts.
  *
  * A project's servers run in its session's server pool (`projectServers`,
- * held by `@tools/sessionTools`): one process per server key (spec and
- * revision, an installed plugin's load key, the project's `.env`), shared
+ * held by `@tools/sessionTools`): one process per server key (its revision,
+ * an installed plugin's load key, the project's `.env`), shared
  * by the project's runs and steps, kept 30 minutes past its last holder
  * and stopped with the session; a start that failed stays failed until
  * the project's next root run, so one task waits on a dead start once.
@@ -90,19 +90,17 @@ export interface LoadedPluginTools {
 
 /**
  * One MCP server as a plugin: its tools are known only once it is up, so a
- * run that names it holds its `spec` and revision in its project's catalog,
+ * run that names it holds it by its revision in its project's catalog,
  * whose steps offer its tools while the run holds them.
  */
 interface McpServerPlugin {
   /** `mcp:<server>`, or the installed plugin's id. */
   readonly id: string;
-  /** What the holds are counted by, with the revision. */
-  readonly spec: Readonly<Record<string, unknown>>;
   /**
-   * A keyed digest of the env values the spec leaves out: a changed
-   * revision is a new process beside the open ones. Keyed per install, so it
-   * reveals nothing about the values, and never recorded: an offered tool
-   * records its spec's digest.
+   * The digest of its spec (name, command, args, env names, cwd) and of a
+   * keyed digest of its env values, which its offered tools record: a
+   * changed one is a new process beside the open ones. The env key is per
+   * install, so the revision reveals nothing about the values.
    */
   readonly revision: string;
   readonly config: McpServerConfig;
@@ -153,16 +151,17 @@ export function mcpPlugin(
   key: string,
   id = mcpPluginId(config.name),
 ): McpServerPlugin {
+  const spec = {
+    name: config.name,
+    command: config.command,
+    args: [...config.args],
+    envKeys: Object.keys(config.env).toSorted(),
+    ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
+  };
   return {
     id,
-    spec: {
-      name: config.name,
-      command: config.command,
-      args: [...config.args],
-      envKeys: Object.keys(config.env).toSorted(),
-      ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
-    },
-    revision: envDigest(key, config.env),
+    // These bytes are every MCP tool's recorded identity: keep them.
+    revision: sha256({ spec, env: envDigest(key, config.env) }),
     config,
   };
 }
@@ -234,7 +233,7 @@ interface HeldServer extends LoadedPluginTools {
   readonly revision: string;
 }
 
-/** One MCP server process, equal by its plugin's spec and revision, the
+/** One MCP server process, equal by its plugin's id and revision, the
  *  installed plugin's load key ('' if configured) and the project
  *  variables: a changed one is a new process beside the open ones. */
 class ServerKey implements Equal.Equal {
@@ -249,7 +248,7 @@ class ServerKey implements Equal.Equal {
   ) {
     this.plugin = plugin;
     this.env = env;
-    this.id = sha256([plugin.id, plugin.spec, plugin.revision, load, env]);
+    this.id = sha256([plugin.id, plugin.revision, load, env]);
   }
 
   [Equal.symbol](that: Equal.Equal): boolean {
@@ -293,8 +292,7 @@ export const projectServers = Effect.fnUntraced(function* (
       const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
       const { tools, failure } = yield* RcMap.get(servers, key);
       if (failure !== undefined) failed.add(key);
-      const revision = sha256({ spec: plugin.spec, env: plugin.revision });
-      return { failure, tools, revision };
+      return { failure, tools, revision: plugin.revision };
     });
   const hold: ProjectServers['hold'] = Effect.fn('ToolCatalog.hold')(
     function* (declared, root) {
