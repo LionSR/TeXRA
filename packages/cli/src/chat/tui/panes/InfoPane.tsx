@@ -3,11 +3,13 @@ import { useLayoutEffect } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI layout, input, and markdown rendering
-import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
-import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS } from '@cli/tui/ui/KeyHints';
-import { FormFrame, formFrameContentWidth } from '../forms/_shared/FormFrame';
+import {
+  FormFrame,
+  formFrameChromeRows,
+  formFrameContentWidth,
+} from '../forms/_shared/FormFrame';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { Markdown } from '../render/Markdown';
 
@@ -16,15 +18,12 @@ function infoPaneRequiredRows(
   lines: readonly string[],
   width: number,
 ): number {
-  const titleRows = wrappedRowCount(title, width);
   const rendered = renderAnsiMarkdown(lines.join('\n'), {
     colorEnabled: false,
     width,
   });
   return (
-    borderedPanelChromeRows(CLOSE_HINTS, width) +
-    titleRows +
-    rendered.split('\n').length
+    formFrameChromeRows(title, CLOSE_HINTS, width) + rendered.split('\n').length
   );
 }
 

@@ -7,12 +7,15 @@ import { useLayoutEffect, useState } from 'react';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { osc } from '@cli/runtime/terminal/ansiEscapes';
-import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
 import { CANCEL_HINT } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
-import { FormFrame, formFrameContentWidth } from '../forms/_shared/FormFrame';
+import {
+  FormFrame,
+  formFrameChromeRows,
+  formFrameContentWidth,
+} from '../forms/_shared/FormFrame';
 import { formProgress, type FormProgress } from '../state/cliState';
 import { takeActiveForm } from '../state/formSlot';
 import { useSignal } from '../state/useSignal';
@@ -52,7 +55,7 @@ function copyToClipboard(text: string): void {
 /** Submit-side busy/finished surface for the active registered form. */
 function FormBusyFrame(props: {
   readonly progress: FormProgress;
-  readonly availableRows?: number;
+  readonly availableRows: number;
 }): React.JSX.Element {
   const { progress } = props;
   const { columns } = useWindowSize();
@@ -94,17 +97,15 @@ function FormBusyFrame(props: {
   // and can leave a copyable message on screen that does not fit.
   const wrappedRows = (text: string): number =>
     wrappedRowCount(text.replaceAll('\t', '    '), innerWidth);
-  // The border and key hints, plus the title, message, and copyable block.
+  // The frame, plus the message and the copyable block.
   const requiredRows = (copyableMessage: string): number =>
-    borderedPanelChromeRows(hints, innerWidth) +
-    wrappedRows(title) +
+    formFrameChromeRows(title, hints, innerWidth) +
     wrappedRows(progress.message ?? 'working…') +
     (copyableMessage === progress.message
       ? 0
       : 1 + wrappedRows(copyableMessage));
   const copyableDoesNotFit =
     liveCopyable !== undefined &&
-    props.availableRows !== undefined &&
     requiredRows(liveCopyable) > props.availableRows;
   useLayoutEffect(() => {
     if (copyableDoesNotFit) progress.archiveCopyable();

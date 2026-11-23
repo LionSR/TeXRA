@@ -37,7 +37,7 @@ export type AccountAccessFormValue =
   | { readonly kind: 'key' };
 
 interface AccountAccessFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   /** No model is connected yet: the form is the chat's "Connect a model"
    *  panel rather than account management. */
   readonly connecting?: boolean;

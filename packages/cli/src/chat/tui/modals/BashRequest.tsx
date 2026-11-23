@@ -17,7 +17,7 @@ import type {
 } from '@texra-ai/worldline/schemas';
 
 interface BashRequestProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: Extract<RequestPayload, { kind: 'bash' }>['data'];
   /** The run grant the request offers (`offeredGrant`). */
   readonly grant: ApprovalBypassKind | null;

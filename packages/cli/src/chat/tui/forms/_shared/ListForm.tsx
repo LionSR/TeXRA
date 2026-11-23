@@ -1,4 +1,4 @@
-import { Box, Text } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 import type { ReactNode } from 'react';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -11,41 +11,40 @@ import {
   NAVIGATE_HINT,
 } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { isCompactRows } from '@cli/tui/ui/theme';
 
-import { FormFrame, renderAsyncListFormTransient } from './FormFrame';
+import {
+  FormFrame,
+  formFrameChromeRows,
+  formFrameContentWidth,
+  renderAsyncListFormTransient,
+} from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
 import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { Effect } from 'effect';
 
-const LIST_FORM_FRAME_ROWS = 3;
-const LIST_FORM_FOOTER_ROWS = 2;
 /** At or below this many rows a form drops to its one-row compact layout. */
 const COMPACT_FORM_MAX_ROWS = 9;
 
 /**
  * How many list rows the form's `Select` may show and whether to spend rows
- * on overflow markers. With no row budget it shows everything. Otherwise the
- * frame, footer, description and detail rows come off the budget first; on a
- * very short terminal (fewer than 3 list rows) the active choice stays
- * visible instead of the whole budget going to overflow markers.
+ * on overflow markers. The frame (`frameRows`), description and detail rows
+ * come off the budget first; on a very short terminal (fewer than 3 list
+ * rows) the active choice stays visible instead of the whole budget going to
+ * overflow markers.
  */
 function listFormSelectWindow(args: {
-  readonly availableRows: number | undefined;
+  readonly availableRows: number;
   readonly itemCount: number;
+  readonly frameRows: number;
   readonly hasDescription?: boolean;
   readonly detailRows?: number;
   readonly selectMarginTop?: number;
 }): {
-  readonly maxVisibleItems: number | undefined;
+  readonly maxVisibleItems: number;
   readonly showOverflow: boolean;
 } {
-  if (args.availableRows == null) {
-    return { maxVisibleItems: undefined, showOverflow: false };
-  }
   const chromeRows =
-    LIST_FORM_FRAME_ROWS +
-    LIST_FORM_FOOTER_ROWS +
+    args.frameRows +
     (args.hasDescription ? 1 : 0) +
     Math.max(0, args.detailRows ?? 0) +
     Math.max(0, args.selectMarginTop ?? 0);
@@ -62,7 +61,7 @@ function listFormSelectWindow(args: {
 interface ListFormProps<T> {
   readonly title: string;
   readonly compactTitle?: string;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly items: ReadonlyArray<SelectItem<T>>;
   readonly activeValue?: T;
   readonly description?: ReactNode;
@@ -85,6 +84,7 @@ interface ListFormProps<T> {
 
 /** Common list-picker layout, geometry, compact mode, and key vocabulary. */
 export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
+  const { columns } = useWindowSize();
   if (props.items.length === 0 && props.emptyMessage !== undefined) {
     return (
       <FormFrame
@@ -106,7 +106,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
   };
   const escape = props.escape ?? CLOSE_HINT;
 
-  if (isCompactRows(props.availableRows, COMPACT_FORM_MAX_ROWS)) {
+  if (props.availableRows <= COMPACT_FORM_MAX_ROWS) {
     return (
       <FormFrame title={props.compactTitle ?? props.title} hints={[]}>
         {props.compactDetail}
@@ -126,18 +126,21 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     );
   }
 
+  const hints = [NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape];
   const selectWindow = listFormSelectWindow({
     availableRows: props.availableRows,
     itemCount: props.items.length,
+    frameRows: formFrameChromeRows(
+      props.title,
+      hints,
+      formFrameContentWidth(columns),
+    ),
     hasDescription: props.description !== undefined,
     detailRows: props.detailRows,
     selectMarginTop: props.selectMarginTop,
   });
   return (
-    <FormFrame
-      title={props.title}
-      hints={[NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape]}
-    >
+    <FormFrame title={props.title} hints={hints}>
       {props.description}
       {props.detail}
       <Box
@@ -181,8 +184,6 @@ interface AsyncListFormProps<TData, TValue> extends Omit<
   readonly isEmpty?: (data: TData) => boolean;
   /** `false` renders a read-only list where selecting closes the form. */
   readonly selectable?: boolean;
-  /** The active row's value, one of `items` (Select matches by identity). */
-  readonly activeValueFor?: (data: TData) => TValue | undefined;
   readonly detailFor?: (data: TData) => ReactNode;
   readonly detailRowsFor?: (data: TData) => number;
   readonly compactDetailFor?: (data: TData) => ReactNode;
@@ -207,7 +208,6 @@ export function AsyncListForm<TData, TValue>(
     items: itemsFor,
     isEmpty,
     selectable = true,
-    activeValueFor,
     detailFor,
     detailRowsFor,
     compactDetailFor,
@@ -243,7 +243,6 @@ export function AsyncListForm<TData, TValue>(
     <ListForm
       {...listProps}
       items={items}
-      activeValue={activeValueFor?.(data) ?? listProps.activeValue}
       detail={detailFor?.(data) ?? listProps.detail}
       detailRows={detailRowsFor?.(data) ?? listProps.detailRows}
       compactDetail={compactDetailFor?.(data) ?? listProps.compactDetail}

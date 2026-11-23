@@ -33,7 +33,7 @@ interface SkillsSettingsData {
 }
 
 interface SkillsSettingsFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
 }
 

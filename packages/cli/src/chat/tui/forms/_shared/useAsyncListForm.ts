@@ -9,7 +9,7 @@ import { useInput, useStdin, type Key, type StdinProps } from 'ink';
 import { Cause, Effect, Fiber, FiberHandle } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { toErrorMessage } from '@texra-ai/worldline/schemas';
+import { joinFacts, toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   isEscapeInput,
   isPlainReturnInput,
@@ -33,9 +33,32 @@ interface AsyncResource<T, R = ProcessServices> {
   readonly refresh: () => Effect.Effect<void, never, R>;
   /** Re-run the read, keeping the current data on screen until it returns. */
   readonly reload: () => void;
-  /** Surface a failure that is not a read failure (e.g. a mutation write)
-   *  through the same error state and `onError` hook. */
-  readonly reportError: (error: unknown) => void;
+}
+
+/** What a status line reads of a resource: its value once loaded, whether a
+ *  read is in flight, and the last read's error. */
+export type ResourceStatus<T> = Pick<
+  AsyncResource<T>,
+  'data' | 'loading' | 'error'
+>;
+
+/** A status line for a resource: before it loads there is no label, so the
+ *  summary is the `checking` placeholder while loading (unless the read
+ *  failed) and 'Status unavailable' otherwise; once loaded, a failed or
+ *  running refresh annotates the loaded label. */
+export function resourceStatusSummary<T>(
+  status: ResourceStatus<T>,
+  checking: string,
+  label: (data: T) => string,
+): string {
+  const failed = status.error !== undefined;
+  if (status.data === undefined) {
+    return status.loading && !failed ? checking : 'Status unavailable';
+  }
+  return joinFacts([
+    label(status.data),
+    failed ? 'status unavailable' : status.loading && 'refreshing',
+  ]);
 }
 
 interface AsyncListFormState<T> extends AsyncResource<T> {
@@ -50,8 +73,8 @@ interface UseAsyncListFormOptions<T> {
   /** Close handler invoked when `Esc` is pressed in a non-actionable state. */
   readonly onClose: () => void;
   /**
-   * Invoked alongside {@link AsyncListFormState.error} whenever a load or a
-   * reported error fails, so the host can log/notify outside the form frame.
+   * Invoked alongside {@link AsyncListFormState.error} whenever a load
+   * fails, so the host can log/notify outside the form frame.
    */
   readonly onError?: (error: unknown) => void;
   /**
@@ -202,8 +225,8 @@ export function runFormWrite<A>(
  */
 export function useAsyncResource<T, R extends ProcessServices>(options: {
   readonly load: () => Effect.Effect<T, Error, R>;
-  /** Invoked alongside the error state whenever a read or a reported error
-   *  fails, so the host can log/notify outside the form frame. */
+  /** Invoked alongside the error state whenever a read fails, so the host
+   *  can log/notify outside the form frame. */
   readonly onError?: (error: unknown) => void;
 }): AsyncResource<T, R> {
   const [data, setData] = useState<T | undefined>(undefined);
@@ -213,11 +236,6 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   latest.current = options;
   const mount = useMountScope();
   const [reads] = useState(() => mount.sync(FiberHandle.make<void>()));
-
-  const reportError = useCallback((err: unknown) => {
-    setError(toErrorMessage(err));
-    latest.current.onError?.(err);
-  }, []);
 
   // A caller that sequences a read after its own write waits for that read,
   // whether it lands or a newer one supersedes it.
@@ -235,14 +253,16 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
                 setLoading(false);
               },
               onFailure: (cause) => {
-                reportError(Cause.squash(cause));
+                const failure = Cause.squash(cause);
+                setError(toErrorMessage(failure));
+                latest.current.onError?.(failure);
                 setLoading(false);
               },
             }),
           );
         }),
       ).pipe(Effect.flatMap(Fiber.await), Effect.asVoid),
-    [reads, reportError],
+    [reads],
   );
 
   const reload = useCallback(() => {
@@ -253,7 +273,7 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
     reload();
   }, []);
 
-  return { data, setData, loading, error, refresh, reload, reportError };
+  return { data, setData, loading, error, refresh, reload };
 }
 
 /**
