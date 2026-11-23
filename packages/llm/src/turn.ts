@@ -100,8 +100,9 @@ const PROVIDER_USAGE_PROTOCOL = Object.freeze({
   typeof TurnProtocolSchema.Type
 >);
 
-/** The thinking levels Google's Interactions request takes. */
-export const ThinkingLevelSchema = Schema.Literals([
+/** The thinking levels Google's Interactions request takes: the effort
+ *  vocabulary ({@link ReasoningEffortLevelSchema}) without `none` or `max`. */
+export const ThinkingLevelSchema = ReasoningEffortLevelSchema.pick([
   'minimal',
   'low',
   'medium',
